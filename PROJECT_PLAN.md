@@ -24,7 +24,7 @@
 - **Observable by Design**: Built-in telemetry, metrics, logging, and tracing
 - **Cloud-Native**: Microservices architecture with container orchestration
 
-### Unified .NET Architecture
+### Simplified Single-Service .NET Architecture
 
 ```
                            ┌─────────────────────────────────────────┐
@@ -44,7 +44,7 @@
         │                                     │                                     │
         ▼                                     ▼                                     ▼
 ┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
-│ 🔵 .NET Core APIs │                │ � .NET Core    │                │ 🔴 Python AI/ML │
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
 │                  │                │   Orchestration │                │    Services     │
 │ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
 │ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
@@ -85,7 +85,7 @@
                            └─────────────────────────────────────────┘
                                               │
                            ┌─────────────────────────────────────────┐
-                           │      Observability & Telemetry         │
+                           │      Observability & Telemetry          │
                            │                                         │
                            │  ┌─────────────┐   ┌─────────────────┐  │
                            │  │   Metrics   │   │     Logging     │  │
@@ -103,31 +103,46 @@
                            └─────────────────────────────────────────┘
 ```
 
-### Service Architecture
+### Simplified Service Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  API Services   │    │ Processing      │    │  Data Services  │
-│                 │    │   Services      │    │                 │
-│ • Search API    │    │ • Feature       │    │ • Vector Store  │
-│ • Upload API    │    │   Extractor     │    │ • Metadata DB   │
-│ • Admin API     │    │ • Similarity    │    │ • Cache Layer   │
-│ • Health API    │    │   Matcher       │    │ • File Store    │
-│                 │    │ • Indexer       │    │                 │
-└─────────────────┘    │ • Deduplicator  │    └─────────────────┘
-         │             └─────────────────┘              │
-         │                       │                      │
-         └───────────────────────┼──────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │  Cross-Cutting  │
-                    │    Services     │
-                    │                 │
-                    │ • Monitoring    │
-                    │ • Logging       │
-                    │ • Config Mgmt   │
-                    │ • Service Mesh  │
-                    └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     DeepLens Core Service (.NET)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
 ```
 
 ## Technical Stack Recommendations
@@ -136,7 +151,7 @@
 
 #### Service Layer Distribution
 
-**🔵 .NET Core Services (APIs & Orchestration)**
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
 
 - **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
 - **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
@@ -147,7 +162,7 @@
 - **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
 - **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
 
-**� .NET Core Services (Orchestration & Workflow)**
+**� Additional Unified Service Features**
 
 - **Framework**: ASP.NET Core with Minimal APIs and Worker Services
 - **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
@@ -172,23 +187,24 @@
 
 #### Cross-Service Communication
 
-**🔀 Inter-Service Communication**
+**🔀 Simplified Communication Architecture**
 
-- **Primary**: gRPC for internal service-to-service communication
-- **Secondary**: REST APIs with OpenAPI/Swagger documentation
-- **Message Queue**: RabbitMQ or Apache Kafka for async processing
-- **Service Mesh**: Istio or Linkerd for advanced traffic management
-- **API Contracts**: Protocol Buffers for gRPC, JSON Schema for REST
-- **Service Discovery**: Kubernetes DNS or Consul
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
 
 **📊 Observability & Telemetry (Built-in)**
 
 - **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
-- **Metrics Collection**: Prometheus with custom metrics from all services
-- **Structured Logging**: Serilog (.NET), structlog (Python)
-- **APM**: Application Insights, New Relic, or Datadog
-- **Health Checks**: Built-in health endpoints for all services
-- **Correlation IDs**: Request tracing across service boundaries
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
 
 ## Comprehensive Instrumentation & Telemetry Strategy
 
@@ -196,48 +212,48 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          TELEMETRY COLLECTION LAYER                          │
+│                          TELEMETRY COLLECTION LAYER                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │ .NET APIs   │    │ Node.js     │    │ Python AI   │    │Infrastructure│  │
-│  │             │    │ Services    │    │ Services    │    │ Components   │  │
-│  │ • Serilog   │    │ • Winston   │    │ • structlog │    │ • Prometheus │  │
-│  │ • OpenTel   │    │ • OpenTel   │    │ • OpenTel   │    │ • Node Exp   │  │
-│  │ • Metrics   │    │ • Pino      │    │ • Uvicorn   │    │ • cAdvisor   │  │
-│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
+│  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
 │           │                 │                 │                 │           │
 └───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
             │                 │                 │                 │
             ▼                 ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         TELEMETRY AGGREGATION                                │
+│                         TELEMETRY AGGREGATION                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐ │
-│ │    METRICS      │  │    LOGGING      │  │        TRACING              │ │
-│ │                 │  │                 │  │                             │ │
-│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │ │
-│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │ │
-│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │ │
-│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │ │
-│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │ │
-│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘ │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
             │                 │                               │
             ▼                 ▼                               ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      VISUALIZATION & ALERTING                                │
+│                      VISUALIZATION & ALERTING                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐ │
-│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │ │
-│ │                 │  │                 │  │                             │ │
-│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │ │
-│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │ │
-│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │ │
-│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │ │
-│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘ │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -263,7 +279,7 @@ builder.Services.AddOpenTelemetry()
         .AddRuntimeInstrumentation()
         .AddPrometheusExporter());
 
-// Structured logging with Serilog
+// Modern observability: Serilog + OpenTelemetry integration
 builder.Host.UseSerilog((context, configuration) =>
     configuration
         .ReadFrom.Configuration(context.Configuration)
@@ -271,10 +287,11 @@ builder.Host.UseSerilog((context, configuration) =>
         .Enrich.WithCorrelationId()
         .Enrich.WithEnvironmentName()
         .WriteTo.Console(new JsonFormatter())
-        .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri("http://elasticsearch:9200"))
+        .WriteTo.OpenTelemetry(options =>  // ← Serilog sends to OpenTelemetry
         {
-            IndexFormat = "deeplens-logs-{0:yyyy.MM.dd}",
-            AutoRegisterTemplate = true
+            options.Endpoint = "http://otel-collector:4317";
+            options.Protocol = OtlpProtocol.Grpc;
+            options.ResourceAttributes.Add("service.name", "deeplens-core");
         }));
 
 // Health checks
@@ -1131,28 +1148,32 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deeplens-api
+  name: deeplens-core
 spec:
-  replicas: 3
+  replicas: 2
   selector:
     matchLabels:
-      app: deeplens-api
+      app: deeplens-core
   template:
     spec:
       containers:
-        - name: api
-          image: deeplens/api:latest
+        - name: deeplens-core
+          image: deeplens/core:latest
           ports:
-            - containerPort: 8000
+            - containerPort: 80 # HTTP API
+            - containerPort: 443 # HTTPS API
+            - containerPort: 8080 # Hangfire Dashboard
           env:
             - name: CLOUD_PROVIDER
               value: "aws" # or "azure", "gcp", "local"
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
           resources:
             requests:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 1
+              memory: 2Gi
             limits:
-              cpu: 2
+              cpu: 4
               memory: 4Gi
 ```
 
@@ -1196,9 +1217,9 @@ class ScalingMetrics:
 - **Automated Scaling**: Scale out/in based on demand patterns
 - **Circuit Breakers**: Prevent cascade failures during high load
 
-## Implementation Phases (Hybrid Multi-Language Approach)
+## Implementation Phases (Simplified Unified Approach)
 
-### Phase 1: Foundation & MVP (Hybrid Core)
+### Phase 1: Foundation & MVP (Unified Single-Service)
 
 **🔵 .NET Core Components:**
 
@@ -1474,7 +1495,7 @@ deeplens/
 │   ├── global.json                       # .NET SDK version
 │   └── nuget.config                      # NuGet package sources
 │
-├── � orchestration-services/           # .NET Core Orchestration & Workflow Services
+├── � # Orchestration integrated into DeepLens.Api (unified architecture)           # .NET Core Orchestration & Workflow Services
 │   ├── src/
 │   │   ├── DeepLens.Orchestration.Api/   # Workflow & Orchestration API
 │   │   │   ├── Controllers/
@@ -1844,29 +1865,44 @@ deeplens/
 
 ---
 
-**Last Updated**: November 17, 2025
-**Version**: 3.0 - Hybrid Multi-Language Architecture with Full Observability
-**Status**: Planning Phase - Optimized for .NET/JS/Python Expertise
+**Last Updated**: November 18, 2025
+**Version**: 3.1 - Unified .NET Architecture with Specialized Python AI/ML
+**Status**: Planning Phase - Optimized for Single-Service .NET Architecture
 
 ### 🎯 Key Enhancements in v3.0:
 
-- 🚀 **Hybrid Architecture**: .NET APIs + Node.js Orchestration + Python AI/ML
+- 🚀 **Simplified Architecture**: Single .NET Core service + Python AI/ML (reduced complexity)
 - 🔍 **Full Observability**: OpenTelemetry, Prometheus, Grafana, Jaeger
 - 📊 **Built-in Telemetry**: Structured logging, metrics, tracing from day one
-- ⚡ **Best Performance**: Each language used for its strengths
-- 🔧 **Developer Experience**: Leverage your .NET and JavaScript expertise
-- 🐍 **AI/ML Excellence**: Python services for cutting-edge ML capabilities
+- ⚡ **Unified Performance**: .NET Core for all backend services with consistent patterns
+- 🔧 **Developer Experience**: Focus on your .NET expertise with consistent tooling
+- 🐍 **AI/ML Excellence**: Python services for specialized ML capabilities only
 - 🏗️ **Production Ready**: Enterprise-grade monitoring and instrumentation
-- 🌐 **Platform Agnostic**: Deploy anywhere with container orchestration
+- 🌐 **Platform Agnostic**: Deploy anywhere with simplified container orchestration
 - 📈 **Auto-Scaling**: Intelligent scaling based on custom metrics
 - 🔄 **Service Mesh**: Advanced traffic management and security
 
-### 📋 Technology Stack Summary:
+### 📋 Simplified Technology Stack Summary:
 
-| **Layer** | **Technology** | **Purpose** | **Your Expertise** |
-|-----------|----------------|-------------|-------------------|
-| **API Layer** | .NET Core + YARP | High-performance APIs & Gateway | ✅ Primary Skill |
-| **Orchestration** | Node.js + NestJS | Workflow & Storage Management | ✅ Primary Skill |
-| **AI/ML Layer** | Python + FastAPI | Feature Extraction & ML Models | 🎓 Learn as Needed |
-| **Observability** | OpenTelemetry + Prometheus | Full-stack monitoring | 🆕 Built-in from Start |
+| **Layer** | **Technology** | **Purpose** | **Benefits** |
+|-----------|----------------|-------------|--------------|
+| **Backend** | .NET Core (Single Service) | APIs + Orchestration + Real-time | Unified, consistent, high-performance |
+| **Background** | Hangfire + SignalR | Jobs + Real-time updates | Built-in .NET tooling, dashboard |
+| **AI/ML Layer** | Python + FastAPI | Feature Extraction & ML Models | Specialized for ML workloads only |
+| **Observability** | OpenTelemetry + Prometheus | Full-stack monitoring | Built-in from start |
+
+### 🔄 **Architectural Decision: Single Service vs Microservices**
+
+**Why we chose a unified .NET service:**
+- ✅ **Simpler Development**: One codebase, one deployment, one configuration
+- ✅ **Better Performance**: Direct method calls instead of HTTP/gRPC overhead
+- ✅ **Easier Debugging**: All backend logic in one place with unified logging
+- ✅ **Cost Effective**: Fewer resources, simpler infrastructure
+- ✅ **Rapid Iteration**: Faster development cycles and testing
+- ✅ **Consistent Patterns**: Single set of libraries, patterns, and practices
+
+**When to consider splitting later:**
+- High load requiring independent scaling of different components
+- Team growth requiring separate ownership of different domains
+- Performance bottlenecks in specific areas needing specialized optimization
 ```
