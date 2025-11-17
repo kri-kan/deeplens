@@ -15,7 +15,7 @@
 
 ### Design Principles
 
-- **Hybrid Multi-Language**: Best language for each domain (.NET for APIs, JS for orchestration, Python for AI/ML)
+- **Unified .NET Backend**: .NET Core for all backend services (APIs & orchestration) with Python for specialized AI/ML tasks
 - **Platform Agnostic**: Deploy on any cloud provider, on-premises, or hybrid environments
 - **Horizontal Scaling**: Add more nodes to handle increased load
 - **Load Balancing**: Distribute workload across multiple instances
@@ -24,7 +24,7 @@
 - **Observable by Design**: Built-in telemetry, metrics, logging, and tracing
 - **Cloud-Native**: Microservices architecture with container orchestration
 
-### Hybrid Multi-Language Architecture
+### Unified .NET Architecture
 
 ```
                            ┌─────────────────────────────────────────┐
@@ -44,7 +44,7 @@
         │                                     │                                     │
         ▼                                     ▼                                     ▼
 ┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
-│ 🔵 .NET Core APIs │                │ 🟡 Node.js      │                │ 🔴 Python AI/ML │
+│ 🔵 .NET Core APIs │                │ � .NET Core    │                │ 🔴 Python AI/ML │
 │                  │                │   Orchestration │                │    Services     │
 │ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
 │ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
@@ -132,11 +132,11 @@
 
 ## Technical Stack Recommendations
 
-### Hybrid Multi-Language Technology Stack
+### Unified .NET + Python Technology Stack
 
 #### Service Layer Distribution
 
-**🔵 .NET Core Services (High-Performance APIs)**
+**🔵 .NET Core Services (APIs & Orchestration)**
 
 - **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
 - **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
@@ -147,16 +147,17 @@
 - **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
 - **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
 
-**🟡 Node.js Services (Orchestration & Workflow)**
+**� .NET Core Services (Orchestration & Workflow)**
 
-- **Framework**: NestJS (enterprise-grade) or Fastify (high-performance)
-- **Workflow Engine**: Temporal.io or Bull Queue for job orchestration
-- **File Processing**: Sharp for image manipulation, multer for uploads
-- **Event Streaming**: Kafka.js or RabbitMQ integration
-- **Task Scheduling**: node-cron, agenda, or bee-queue
-- **Storage Connectors**: AWS SDK, Azure SDK, Google Cloud SDK
-- **WebSocket**: Socket.io for real-time updates
-- **Process Management**: PM2 for production deployment
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
 
 **🔴 Python Services (AI/ML Specialized)**
 
@@ -184,7 +185,7 @@
 
 - **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
 - **Metrics Collection**: Prometheus with custom metrics from all services
-- **Structured Logging**: Serilog (.NET), Winston (Node.js), structlog (Python)
+- **Structured Logging**: Serilog (.NET), structlog (Python)
 - **APM**: Application Insights, New Relic, or Datadog
 - **Health Checks**: Built-in health endpoints for all services
 - **Correlation IDs**: Request tracing across service boundaries
@@ -1207,11 +1208,11 @@ class ScalingMetrics:
 - [ ] **Infrastructure**: EF Core with PostgreSQL, Redis caching
 - [ ] **Basic Telemetry**: Serilog structured logging, health checks
 
-**🟡 Node.js Components:**
+**� .NET Core Orchestration Components:**
 
-- [ ] **Storage Connector**: Local file system scanner
-- [ ] **Workflow Service**: Basic job queue with Bull
-- [ ] **File Processing**: Image metadata extraction with Sharp
+- [ ] **Storage Connector**: Local file system scanner using System.IO
+- [ ] **Workflow Service**: Background job processing with Hangfire
+- [ ] **File Processing**: Image metadata extraction with ImageSharp
 
 **🔴 Python Components:**
 
@@ -1236,12 +1237,12 @@ class ScalingMetrics:
 - [ ] **ONNX Integration**: Direct model inference in .NET
 - [ ] **Performance Optimization**: Async patterns and connection pooling
 
-**🟡 Node.js Enhancements:**
+**� .NET Core Advanced Features:**
 
-- [ ] **Multi-Cloud Connectors**: AWS S3, Azure Blob, GCP Storage
-- [ ] **Advanced Workflows**: Temporal.io integration for complex processes
-- [ ] **Real-time API**: WebSocket support for live updates
-- [ ] **Batch Processing**: Large-scale file processing pipelines
+- [ ] **Multi-Cloud Connectors**: AWS SDK, Azure SDK, Google Cloud SDK integration
+- [ ] **Advanced Workflows**: Elsa Workflows for complex orchestration processes
+- [ ] **Real-time API**: SignalR WebSocket support for live updates
+- [ ] **Batch Processing**: Large-scale file processing with BackgroundService
 
 **🔴 Python AI Enhancements:**
 
@@ -1473,20 +1474,20 @@ deeplens/
 │   ├── global.json                       # .NET SDK version
 │   └── nuget.config                      # NuGet package sources
 │
-├── 🟡 nodejs-services/                  # Node.js Services (Orchestration & Workflow)
-│   ├── apps/
-│   │   ├── workflow-orchestrator/        # NestJS Workflow Engine
-│   │   │   ├── src/
-│   │   │   │   ├── controllers/
-│   │   │   │   │   ├── workflow.controller.ts
-│   │   │   │   │   └── job.controller.ts
-│   │   │   │   ├── services/
-│   │   │   │   │   ├── workflow.service.ts
-│   │   │   │   │   ├── queue.service.ts
-│   │   │   │   │   └── scheduler.service.ts
-│   │   │   │   ├── processors/
-│   │   │   │   │   ├── image-ingestion.processor.ts
-│   │   │   │   │   └── storage-scanner.processor.ts
+├── � orchestration-services/           # .NET Core Orchestration & Workflow Services
+│   ├── src/
+│   │   ├── DeepLens.Orchestration.Api/   # Workflow & Orchestration API
+│   │   │   ├── Controllers/
+│   │   │   │   ├── WorkflowController.cs
+│   │   │   │   └── JobController.cs
+│   │   │   ├── Services/
+│   │   │   │   ├── IWorkflowService.cs
+│   │   │   │   ├── WorkflowService.cs
+│   │   │   │   ├── IJobQueueService.cs
+│   │   │   │   └── HangfireJobService.cs
+│   │   │   ├── BackgroundServices/
+│   │   │   │   ├── ImageIngestionService.cs
+│   │   │   │   └── StorageScannerService.cs
 │   │   │   │   ├── middleware/
 │   │   │   │   │   ├── correlation-id.middleware.ts
 │   │   │   │   │   ├── logging.middleware.ts
