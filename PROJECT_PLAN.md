@@ -155,9 +155,13 @@
 
 - **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
 - **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
-- **Authentication**: IdentityServer/Duende, Azure AD, OAuth 2.0/OpenID Connect
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
 - **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
-- **Caching**: StackExchange.Redis for distributed caching
+- **Caching**: StackExchange.Redis for distributed caching and session state
 - **HTTP Client**: HttpClientFactory with Polly for resilience
 - **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
 - **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
@@ -205,6 +209,290 @@
 - **APM**: Application Insights, New Relic, or Datadog via OTLP
 - **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
 - **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+```csharp
+// Program.cs - Duende IdentityServer Integration
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options =>
+    {
+        options.Authority = "https://deeplens-auth.yourdomain.com";
+        options.Audience = "deeplens-api";
+        options.RequireHttpsMetadata = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateAudience = true,
+            ValidateIssuer = true,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(5)
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    // Scope-based authorization policies
+    options.AddPolicy("SearchImages", policy =>
+        policy.RequireScope("deeplens.search"));
+
+    options.AddPolicy("ManageStorage", policy =>
+        policy.RequireScope("deeplens.admin"));
+
+    options.AddPolicy("UploadImages", policy =>
+        policy.RequireScope("deeplens.upload"));
+
+    options.AddPolicy("ViewMetrics", policy =>
+        policy.RequireScope("deeplens.metrics"));
+});
+
+// Add HTTP client for IdentityServer admin API
+builder.Services.AddHttpClient<IIdentityServerAdminClient, IdentityServerAdminClient>(client =>
+{
+    client.BaseAddress = new Uri("https://deeplens-auth.yourdomain.com/admin/api/");
+});
+```
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+```csharp
+// JWT Token Validation & Refresh
+[ApiController]
+[Authorize(Policy = "SearchImages")]
+public class SearchController : ControllerBase
+{
+    [HttpPost("similarity")]
+    [RequiredScope("search:images")]
+    public async Task<ActionResult<SimilarityResponse>> SearchSimilar(
+        [FromForm] IFormFile image)
+    {
+        var userId = User.FindFirst("sub")?.Value;
+        var scopes = User.FindAll("scope").Select(c => c.Value);
+
+        // Rate limiting per user
+        await _rateLimiter.CheckLimitAsync(userId, "search", TimeSpan.FromMinutes(1), 100);
+
+        // Audit logging
+        _logger.LogInformation("Image search requested by user {UserId} with scopes {Scopes}",
+            userId, string.Join(", ", scopes));
+
+        // Implementation...
+    }
+}
+
+// Custom Authorization Attributes
+public class RequiredScopeAttribute : AuthorizeAttribute, IAuthorizationFilter
+{
+    private readonly string _scope;
+
+    public RequiredScopeAttribute(string scope)
+    {
+        _scope = scope;
+    }
+
+    public void OnAuthorization(AuthorizationFilterContext context)
+    {
+        var user = context.HttpContext.User;
+        if (!user.HasClaim("scope", _scope))
+        {
+            context.Result = new ForbidResult();
+        }
+    }
+}
+```
+
+#### Role-Based Access Control (RBAC)
+
+```csharp
+// User roles and permissions
+public enum DeepLensRole
+{
+    Viewer,      // Can search and view images
+    Uploader,    // Can upload and search images
+    Admin,       // Can manage storage and users
+    SystemAdmin  // Full system access
+}
+
+public static class DeepLensScopes
+{
+    public const string SearchImages = "deeplens:search";
+    public const string UploadImages = "deeplens:upload";
+    public const string ManageStorage = "deeplens:storage";
+    public const string ViewMetrics = "deeplens:metrics";
+    public const string SystemAdmin = "deeplens:admin";
+}
+
+// Role-based authorization
+services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole(nameof(DeepLensRole.Admin), nameof(DeepLensRole.SystemAdmin)));
+
+    options.AddPolicy("UploaderOrAdmin", policy =>
+        policy.RequireRole(
+            nameof(DeepLensRole.Uploader),
+            nameof(DeepLensRole.Admin),
+            nameof(DeepLensRole.SystemAdmin)));
+});
+```
+
+#### Duende IdentityServer Deployment
+
+**Docker Compose Configuration:**
+
+```yaml
+# docker-compose.auth.yml
+version: "3.8"
+services:
+  deeplens-identityserver:
+    image: deeplens/identityserver:latest
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=auth-db;Database=IdentityServer;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true
+      - IdentityServer__IssuerUri=https://deeplens-auth.yourdomain.com
+      - IdentityServer__PublicOrigin=https://deeplens-auth.yourdomain.com
+    ports:
+      - "5000:80"
+      - "5001:443"
+    depends_on:
+      - auth-db
+    volumes:
+      - ./certs:/app/certs:ro
+    networks:
+      - deeplens-network
+
+  auth-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+    volumes:
+      - auth-db-data:/var/opt/mssql
+    networks:
+      - deeplens-network
+
+volumes:
+  auth-db-data:
+
+networks:
+  deeplens-network:
+    external: true
+```
+
+**API Authentication Examples:**
+
+```bash
+# Get access token
+curl -X POST https://deeplens-auth.yourdomain.com/connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials&client_id=deeplens-api-client&client_secret=api-client-secret&scope=deeplens.search"
+
+# Use token for API calls
+curl -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." \
+     -X POST https://api.deeplens.com/v1/search/similarity \
+     -F "image=@photo.jpg"
+```
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
+```
+
+#### User Management Features
+
+```csharp
+// Custom User Store Implementation
+public class DeepLensUserStore : IUserStore<DeepLensUser>
+{
+    private readonly DeepLensDbContext _context;
+
+    public async Task<DeepLensUser> FindByNameAsync(string normalizedUserName)
+    {
+        return await _context.Users
+            .Include(u => u.Roles)
+            .Include(u => u.Claims)
+            .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedUserName);
+    }
+
+    public async Task<DeepLensUser> FindByEmailAsync(string normalizedEmail)
+    {
+        return await _context.Users
+            .Include(u => u.Roles)
+            .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
+    }
+
+    // Additional user management methods...
+}
+
+// Profile Service for Custom Claims
+public class DeepLensProfileService : IProfileService
+{
+    private readonly UserManager<DeepLensUser> _userManager;
+
+    public async Task GetProfileDataAsync(ProfileDataRequestContext context)
+    {
+        var user = await _userManager.GetUserAsync(context.Subject);
+        if (user != null)
+        {
+            var claims = new List<Claim>
+            {
+                new Claim("email", user.Email),
+                new Claim("name", user.UserName),
+                new Claim("role", user.Role),
+                new Claim("organization", user.Organization ?? ""),
+                new Claim("storage_quota", user.StorageQuotaGB.ToString())
+            };
+
+            context.IssuedClaims.AddRange(claims);
+        }
+    }
+
+    public async Task IsActiveAsync(IsActiveContext context)
+    {
+        var user = await _userManager.GetUserAsync(context.Subject);
+        context.IsActive = user?.IsActive == true;
+    }
+}
+```
 
 ## Comprehensive Instrumentation & Telemetry Strategy
 
@@ -1229,7 +1517,18 @@ class ScalingMetrics:
 - [ ] **Infrastructure**: EF Core with PostgreSQL, Redis caching
 - [ ] **Basic Telemetry**: Serilog structured logging, health checks
 
-**� .NET Core Orchestration Components:**
+**🔐 Authentication & Authorization (Duende IdentityServer):**
+
+- [ ] **IdentityServer Setup**: Duende IdentityServer host application with SQL Server
+- [ ] **Client Configuration**: Web app, API, and SPA client configurations
+- [ ] **User Store Implementation**: Custom user store with DeepLens-specific claims
+- [ ] **JWT Token Validation**: RSA256 signature validation and scope verification
+- [ ] **RBAC Implementation**: Role-based permissions with custom scopes
+- [ ] **Security Middleware**: Authentication and authorization pipeline integration
+- [ ] **User Management**: Registration, profile management, and password reset flows
+- [ ] **Admin Interface**: Basic user and client management UI
+
+**🔷 .NET Core Orchestration Components:**
 
 - [ ] **Storage Connector**: Local file system scanner using System.IO
 - [ ] **Workflow Service**: Background job processing with Hangfire
@@ -1300,10 +1599,14 @@ class ScalingMetrics:
   - [ ] Centralized logging with ELK stack
   - [ ] Custom dashboards and alerting
 - [ ] **Security & Compliance**:
-  - [ ] Authentication and authorization
-  - [ ] API rate limiting and throttling
-  - [ ] Network policies and encryption
-  - [ ] Audit logging and compliance
+  - [ ] **OAuth 2.0/OpenID Connect**:
+    - [ ] Multiple identity provider support
+    - [ ] JWT token validation and refresh
+    - [ ] Scope-based API authorization
+    - [ ] Admin panel for user/role management
+  - [ ] API rate limiting and throttling per user/API key
+  - [ ] Network policies and encryption (TLS 1.3)
+  - [ ] Audit logging and compliance (SOC 2, GDPR)
 
 **Estimated Time**: 5-6 weeks
 
@@ -1420,6 +1723,41 @@ winget install Google.CloudSDK
 deeplens/
 ├── 🔵 dotnet-services/                  # .NET Core Services (High-Performance APIs)
 │   ├── src/
+│   │   ├── DeepLens.IdentityServer/      # Duende IdentityServer Authentication Service
+│   │   │   ├── Configuration/
+│   │   │   │   ├── Config.cs             # Clients, scopes, resources configuration
+│   │   │   │   └── SeedData.cs           # Initial data seeding
+│   │   │   ├── Data/
+│   │   │   │   ├── ApplicationDbContext.cs
+│   │   │   │   └── Migrations/
+│   │   │   ├── Models/
+│   │   │   │   ├── DeepLensUser.cs       # Custom user model
+│   │   │   │   └── UserViewModels.cs     # UI view models
+│   │   │   ├── Services/
+│   │   │   │   ├── ProfileService.cs     # Custom claims provider
+│   │   │   │   └── UserStore.cs          # Custom user store
+│   │   │   ├── Controllers/
+│   │   │   │   ├── AccountController.cs  # Login/logout/register
+│   │   │   │   └── AdminController.cs    # User management
+│   │   │   ├── Views/                    # Razor views for UI
+│   │   │   ├── Program.cs
+│   │   │   ├── Dockerfile
+│   │   │   └── DeepLens.IdentityServer.csproj
+│   │   │
+│   │   │   ├── Models/
+│   │   │   │   ├── DeepLensUser.cs       # Custom user model
+│   │   │   │   └── UserViewModels.cs     # UI view models
+│   │   │   ├── Services/
+│   │   │   │   ├── ProfileService.cs     # Custom claims provider
+│   │   │   │   └── UserStore.cs          # Custom user store
+│   │   │   ├── Controllers/
+│   │   │   │   ├── AccountController.cs  # Login/logout/register
+│   │   │   │   └── AdminController.cs    # User management
+│   │   │   ├── Views/                    # Razor views for UI
+│   │   │   ├── Program.cs
+│   │   │   ├── Dockerfile
+│   │   │   └── DeepLens.IdentityServer.csproj
+│   │   │
 │   │   ├── DeepLens.ApiGateway/          # YARP-based API Gateway
 │   │   │   ├── Configuration/
 │   │   │   │   ├── routes.json           # Route configuration
