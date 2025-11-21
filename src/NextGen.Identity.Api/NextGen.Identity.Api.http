@@ -1,0 +1,6 @@
+@NextGen.Identity.Api_HostAddress = http://localhost:5198
+
+GET {{NextGen.Identity.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,426 @@
+version: "3.8"
+
+# DeepLens Infrastructure Stack
+# Containerized databases with persistent storage for local development
+
+services:
+  # =============================================================================
+  # PostgreSQL - Identity & Metadata Databases
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: deeplens-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-deeplens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-DeepLens123!}
+      POSTGRES_DB: ${POSTGRES_DB:-deeplens}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d
+    networks:
+      - deeplens-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-deeplens}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+          cpus: "1.0"
+        reservations:
+          memory: 512MB
+          cpus: "0.5"
+
+  # =============================================================================
+  # Qdrant - Vector Database
+  # =============================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.7.0
+    container_name: deeplens-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333" # HTTP API
+      - "6334:6334" # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./config/qdrant:/qdrant/config
+    networks:
+      - deeplens-network
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4GB
+          cpus: "2.0"
+        reservations:
+          memory: 1GB
+          cpus: "0.5"
+
+  # =============================================================================
+  # InfluxDB - Time Series Database
+  # =============================================================================
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: deeplens-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - ./init-scripts/influxdb:/docker-entrypoint-initdb.d
+    networks:
+      - deeplens-network
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD:-DeepLens123!}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-deeplens}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-metrics}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN:-deeplens-admin-token}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2GB
+          cpus: "1.0"
+        reservations:
+          memory: 512MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # Apache Kafka - Message Queue
+  # =============================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: deeplens-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+          cpus: "0.5"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: deeplens-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - deeplens-network
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2GB
+          cpus: "1.0"
+        reservations:
+          memory: 1GB
+          cpus: "0.5"
+
+  # =============================================================================
+  # Kafka UI - Management Interface
+  # =============================================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: deeplens-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    networks:
+      - deeplens-network
+    environment:
+      KAFKA_CLUSTERS_0_NAME: deeplens-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+
+  # =============================================================================
+  # Redis - Cache Layer
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: deeplens-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - deeplens-network
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+          cpus: "0.5"
+        reservations:
+          memory: 256MB
+          cpus: "0.1"
+
+  # =============================================================================
+  # MinIO - Object Storage (for BYOS testing)
+  # =============================================================================
+  minio:
+    image: minio/minio:RELEASE.2023-10-16T04-13-43Z
+    container_name: deeplens-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-deeplens}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-DeepLens123!}
+    volumes:
+      - minio_data:/data
+    networks:
+      - deeplens-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+          cpus: "0.5"
+        reservations:
+          memory: 256MB
+          cpus: "0.1"
+
+  # =============================================================================
+  # Infisical - Self-hosted Secret Management
+  # =============================================================================
+  infisical-postgres:
+    image: postgres:16-alpine
+    container_name: deeplens-infisical-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${INFISICAL_DB_USER:-infisical}
+      POSTGRES_PASSWORD: ${INFISICAL_DB_PASSWORD:-InfisicalDb123!}
+      POSTGRES_DB: ${INFISICAL_DB_NAME:-infisical}
+    volumes:
+      - infisical_postgres_data:/var/lib/postgresql/data
+    networks:
+      - deeplens-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${INFISICAL_DB_USER:-infisical}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+
+  infisical-redis:
+    image: redis:7-alpine
+    container_name: deeplens-infisical-redis
+    restart: unless-stopped
+    volumes:
+      - infisical_redis_data:/data
+    networks:
+      - deeplens-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+          cpus: "0.25"
+
+  infisical:
+    image: infisical/infisical:latest
+    container_name: deeplens-infisical
+    restart: unless-stopped
+    depends_on:
+      - infisical-postgres
+      - infisical-redis
+    ports:
+      - "8082:8080"
+    environment:
+      # Database Configuration
+      DB_CONNECTION_URI: postgresql://${INFISICAL_DB_USER:-infisical}:${INFISICAL_DB_PASSWORD:-InfisicalDb123!}@infisical-postgres:5432/${INFISICAL_DB_NAME:-infisical}
+
+      # Redis Configuration
+      REDIS_URL: redis://infisical-redis:6379
+
+      # Security Configuration
+      ENCRYPTION_KEY: ${INFISICAL_ENCRYPTION_KEY:-your-32-character-encryption-key-here-change-me}
+      JWT_SIGNUP_SECRET: ${INFISICAL_JWT_SIGNUP_SECRET:-your-jwt-signup-secret-change-me}
+      JWT_REFRESH_SECRET: ${INFISICAL_JWT_REFRESH_SECRET:-your-jwt-refresh-secret-change-me}
+      JWT_AUTH_SECRET: ${INFISICAL_JWT_AUTH_SECRET:-your-jwt-auth-secret-change-me}
+      JWT_SERVICE_SECRET: ${INFISICAL_JWT_SERVICE_SECRET:-your-jwt-service-secret-change-me}
+
+      # Application Configuration
+      SITE_URL: ${INFISICAL_SITE_URL:-http://localhost:8082}
+      SMTP_HOST: ${INFISICAL_SMTP_HOST:-}
+      SMTP_USERNAME: ${INFISICAL_SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${INFISICAL_SMTP_PASSWORD:-}
+      SMTP_PORT: ${INFISICAL_SMTP_PORT:-587}
+      SMTP_SECURE: ${INFISICAL_SMTP_SECURE:-false}
+      SMTP_FROM_ADDRESS: ${INFISICAL_SMTP_FROM:-noreply@deeplens.local}
+      SMTP_FROM_NAME: ${INFISICAL_SMTP_FROM_NAME:-DeepLens Infisical}
+
+      # Feature Flags
+      TELEMETRY_ENABLED: "false"
+      LOOP_MODE: "standalone"
+    volumes:
+      - infisical_data:/app/data
+    networks:
+      - deeplens-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+          cpus: "1.0"
+        reservations:
+          memory: 512MB
+          cpus: "0.5"
+
+  # =============================================================================
+  # Identity Server - Authentication & Authorization
+  # =============================================================================
+  # NOTE: This service is commented out as it requires application build
+  # Uncomment and configure when DeepLens.IdentityServer is ready
+  #
+  # identity-server:
+  #   image: deeplens/identity-server:latest
+  #   container_name: deeplens-identity-server
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5000:80"
+  #     - "5001:443"
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - ConnectionStrings__DefaultConnection=Host=postgres;Database=deeplens_identity;Username=${POSTGRES_USER:-deeplens};Password=${POSTGRES_PASSWORD:-DeepLens123!}
+  #   depends_on:
+  #     - postgres
+  #     - infisical
+  #   networks:
+  #     - deeplens-network
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 512MB
+  #         cpus: "0.5"
+
+  # =============================================================================
+  # Persistent Volumes
+  # =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+    name: deeplens_postgres_data
+  qdrant_data:
+    driver: local
+    name: deeplens_qdrant_data
+  influxdb_data:
+    driver: local
+    name: deeplens_influxdb_data
+  kafka_data:
+    driver: local
+    name: deeplens_kafka_data
+  zookeeper_data:
+    driver: local
+    name: deeplens_zookeeper_data
+  zookeeper_logs:
+    driver: local
+    name: deeplens_zookeeper_logs
+  redis_data:
+    driver: local
+    name: deeplens_redis_data
+  infisical_postgres_data:
+    driver: local
+    name: deeplens_infisical_postgres_data
+  infisical_redis_data:
+    driver: local
+    name: deeplens_infisical_redis_data
+  infisical_data:
+    driver: local
+    name: deeplens_infisical_data
+  minio_data:
+    driver: local
+    name: deeplens_minio_data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  deeplens-network:
+    driver: bridge
+    name: deeplens-network

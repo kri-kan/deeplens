@@ -1,0 +1,140 @@
+# DeepLens OpenTelemetry Collector Configuration
+# Centralized telemetry collection and routing
+
+receivers:
+  # OTLP receiver for application telemetry
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:5000"
+            - "http://localhost:8080"
+
+  # Prometheus receiver for infrastructure metrics
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: "otel-collector"
+          static_configs:
+            - targets: ["localhost:8888"]
+          scrape_interval: 10s
+
+  # Filelog receiver for application logs
+  filelog:
+    include:
+      - /var/log/deeplens/*.log
+    operators:
+      - type: json_parser
+        id: json_parser
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: "2006-01-02T15:04:05.000Z"
+
+processors:
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: 5s
+
+  # Batch processor for efficiency
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Resource processor to add deployment info
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: insert
+      - key: service.namespace
+        value: deeplens
+        action: insert
+
+  # Filter processor for sampling
+  probabilistic_sampler:
+    sampling_percentage: 100 # 100% for development, reduce for production
+
+exporters:
+  # Prometheus exporter for metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: deeplens
+    const_labels:
+      environment: development
+
+  # Jaeger exporter for traces
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  # Loki exporter for logs
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    labels:
+      attributes:
+        service.name: service_name
+        service.version: service_version
+        deployment.environment: environment
+
+  # OTLP exporter for chaining
+  otlp:
+    endpoint: http://downstream-collector:4317
+    tls:
+      insecure: true
+
+  # Logging exporter for debugging
+  logging:
+    loglevel: info
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Performance profiler
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # Memory ballast for stability
+  memory_ballast:
+    size_mib: 64
+
+service:
+  extensions:
+    - health_check
+    - pprof
+    - memory_ballast
+
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, probabilistic_sampler, batch]
+      exporters: [jaeger, logging]
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus, logging]
+
+    # Logs pipeline
+    logs:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, resource, batch]
+      exporters: [loki, logging]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888

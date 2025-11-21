@@ -1,0 +1,49 @@
+# DeepLens Grafana Datasource Configuration
+# Automatically configures Prometheus and InfluxDB as data sources
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "5s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
+
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    database: deeplens
+    user: admin
+    secureJsonData:
+      password: DeepLens123!
+    jsonData:
+      timeInterval: "10s"
+      queryTimeout: "60s"
+      version: "InfluxQL"
+
+  - name: InfluxDB-Flux
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    jsonData:
+      version: "Flux"
+      organization: deeplens
+      defaultBucket: metrics
+      tlsSkipVerify: true
+    secureJsonData:
+      token: deeplens-admin-token
+
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki

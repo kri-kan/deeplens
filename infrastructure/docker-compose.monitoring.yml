@@ -1,0 +1,338 @@
+version: "3.8"
+
+# DeepLens Monitoring & Visualization Stack
+# Container health monitoring, metrics collection, and management dashboards
+
+services:
+  # =============================================================================
+  # Prometheus - Metrics Collection
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: deeplens-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./config/prometheus:/etc/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    networks:
+      - deeplens-network
+    depends_on:
+      - cadvisor
+      - node-exporter
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+          cpus: "1.0"
+        reservations:
+          memory: 512MB
+          cpus: "0.5"
+
+  # =============================================================================
+  # Grafana - Visualization Dashboard
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: deeplens-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-DeepLens123!}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel,grafana-clock-panel,grafana-simple-json-datasource
+      - GF_SERVER_DOMAIN=localhost
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - deeplens-network
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+        reservations:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # cAdvisor - Container Metrics
+  # =============================================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: deeplens-cadvisor
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+
+  # =============================================================================
+  # Node Exporter - System Metrics
+  # =============================================================================
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: deeplens-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # Portainer - Container Management UI
+  # =============================================================================
+  portainer:
+    image: portainer/portainer-ce:2.19.1
+    container_name: deeplens-portainer
+    restart: unless-stopped
+    ports:
+      - "9443:9443"
+      - "8000:8000"
+    volumes:
+      - portainer_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # AlertManager - Alert Management (Optional)
+  # =============================================================================
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    container_name: deeplens-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./config/alertmanager:/etc/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:9093"
+    networks:
+      - deeplens-network
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # OpenTelemetry Collector - Centralized Telemetry Collection
+  # =============================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.88.0
+    container_name: deeplens-otel-collector
+    restart: unless-stopped
+    ports:
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "8888:8888" # Prometheus metrics
+      - "8889:8889" # Prometheus metrics endpoint
+    volumes:
+      - ./config/otel-collector:/etc/otelcol-contrib
+    command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
+    networks:
+      - deeplens-network
+    depends_on:
+      - prometheus
+      - jaeger
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+        reservations:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # Loki - Log Aggregation
+  # =============================================================================
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: deeplens-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ./config/loki:/etc/loki
+    command: -config.file=/etc/loki/loki.yml
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+        reservations:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # Promtail - Log Collection Agent
+  # =============================================================================
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: deeplens-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./config/promtail:/etc/promtail
+    command: -config.file=/etc/promtail/promtail.yml
+    networks:
+      - deeplens-network
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 256MB
+          cpus: "0.25"
+
+  # =============================================================================
+  # Redis Exporter - Redis Metrics
+  # =============================================================================
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: deeplens-redis-exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 128MB
+          cpus: "0.1"
+
+  # =============================================================================
+  # Postgres Exporter - PostgreSQL Metrics
+  # =============================================================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: deeplens-postgres-exporter
+    restart: unless-stopped
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://deeplens:DeepLens123!@postgres:5432/deeplens?sslmode=disable
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 128MB
+          cpus: "0.1"
+
+  # =============================================================================
+  # Jaeger - Distributed Tracing (Optional)
+  # =============================================================================
+  jaeger:
+    image: jaegertracing/all-in-one:1.49
+    container_name: deeplens-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # HTTP collector
+      - "14250:14250" # gRPC collector
+      - "6831:6831/udp" # UDP agent
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+      - COLLECTOR_OTLP_GRPC_HOST_PORT=0.0.0.0:14250
+      - COLLECTOR_OTLP_HTTP_HOST_PORT=0.0.0.0:14268
+      - JAEGER_DISABLED=false
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 512MB
+          cpus: "0.5"
+
+# =============================================================================
+# Persistent Volumes
+# =============================================================================
+volumes:
+  prometheus_data:
+    driver: local
+    name: deeplens_prometheus_data
+  grafana_data:
+    driver: local
+    name: deeplens_grafana_data
+  portainer_data:
+    driver: local
+    name: deeplens_portainer_data
+  alertmanager_data:
+    driver: local
+    name: deeplens_alertmanager_data
+  loki_data:
+    driver: local
+    name: deeplens_loki_data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  deeplens-network:
+    external: true
+    name: deeplens-network

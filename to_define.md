@@ -9,16 +9,19 @@ This document tracks planning items that need further definition and refinement.
 
 ## 📦 Data Management & Storage Strategy
 
-### Database Strategy
+### Database Strategy ✅ DECIDED - MOVED TO PROJECT_PLAN.md
 
+- [x] **Database Vendors**: PostgreSQL (Identity + Metadata), Qdrant (Vectors), InfluxDB (Time-series), Kafka (Messaging)
+- [x] **Container Strategy**: All databases containerized with persistent volumes
 - [ ] **Migration Strategy**: Database schema evolution and versioning approach
 - [ ] **Data Retention Policies**: How long to keep image metadata, vectors, and user data
 - [ ] **Backup Strategy**: Automated backup schedules and recovery procedures
 - [ ] **Disaster Recovery**: Cross-region backup and failover procedures
 - [ ] **Data Archival**: Cold storage strategies for older images and metadata
 
-### Vector Database Optimization
+### Vector Database Optimization (Qdrant) ✅ VENDOR SELECTED
 
+- [x] **Vendor Selection**: Qdrant chosen for vector database
 - [ ] **Sizing Guidelines**: Memory and storage requirements per million images
 - [ ] **Partitioning Strategy**: How to partition vectors across shards/nodes
 - [ ] **Index Optimization**: HNSW parameters, recall vs performance trade-offs
@@ -37,21 +40,37 @@ This document tracks planning items that need further definition and refinement.
 
 ## 🛡️ Security Deep Dive
 
+### Image Ingestion API ✅ DEFINED - ADDED TO PROJECT_PLAN.md
+
+- [x] **API Endpoints**: Upload, batch, URL ingestion, status tracking, deletion
+- [x] **Multi-Tenant Storage**: NFS, Azure Blob, AWS S3, GCS, MinIO support
+- [x] **Processing Pipeline**: Validation, routing, feature extraction, indexing
+- [x] **Batch Processing**: Parallel processing and queue management
+- [x] **Error Handling**: Retry mechanisms and dead letter queues
+- [ ] **File Format Support**: Extended formats (RAW, HEIC, SVG, animated GIF)
+- [ ] **Compression Strategies**: Lossless compression for originals, optimization for web
+- [ ] **Duplicate Prevention**: Advanced duplicate detection before storage
+- [ ] **Quota Management**: Per-tenant storage limits and usage tracking
+- [ ] **Content Moderation**: NSFW detection, copyright infringement checking
+
 ### API Security
 
 - [ ] **Rate Limiting Specifics**: Limits per endpoint, user tier, and time window
   - Search API: X requests per minute per user
   - Upload API: Y requests per hour per user
   - Admin API: Z requests per day per admin
+  - Ingestion API: Z uploads per hour per tenant
 - [ ] **Throttling Policies**: Burst limits and progressive penalties
 - [ ] **API Versioning Security**: Deprecation and security patches for old versions
 - [ ] **Request Validation**: Input sanitization and size limits
 
-### Data Protection
+### Data Protection & Secret Management ✅ INFISICAL INTEGRATED
 
+- [x] **Secret Management**: Infisical self-hosted vault for secrets and configuration
+- [x] **Key Management**: Infisical for database passwords, API keys, JWT secrets
+- [x] **Environment Separation**: Development, staging, production secret isolation
 - [ ] **Encryption at Rest**: Database encryption, file storage encryption keys
 - [ ] **Encryption in Transit**: TLS versions, certificate management
-- [ ] **Key Management**: Azure Key Vault, AWS KMS, or HashiCorp Vault integration
 - [ ] **Secrets Rotation**: Automated rotation of database passwords, API keys
 - [ ] **Certificate Management**: SSL certificate renewal and deployment
 

@@ -1,0 +1,13 @@
+# DeepLens Grafana Dashboard Provisioning
+# Automatically imports dashboards for infrastructure monitoring
+
+apiVersion: 1
+
+providers:
+  - name: "DeepLens Infrastructure"
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    foldersFromFilesStructure: true

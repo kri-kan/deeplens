@@ -1,0 +1,99 @@
+# DeepLens Prometheus Configuration
+# Metrics collection for all infrastructure services
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "deeplens-local"
+    replica: "prometheus-1"
+
+# Rule files
+rule_files:
+  - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    scrape_interval: 5s
+
+  # System metrics via Node Exporter
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+    scrape_interval: 10s
+
+  # Container metrics via cAdvisor
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+    scrape_interval: 10s
+
+  # PostgreSQL metrics
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:5432"]
+    scrape_interval: 30s
+    metrics_path: "/metrics"
+
+  # Redis metrics
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+    scrape_interval: 30s
+
+  # Qdrant metrics
+  - job_name: "qdrant"
+    static_configs:
+      - targets: ["qdrant:6333"]
+    scrape_interval: 30s
+    metrics_path: "/metrics"
+
+  # InfluxDB metrics
+  - job_name: "influxdb"
+    static_configs:
+      - targets: ["influxdb:8086"]
+    scrape_interval: 30s
+    metrics_path: "/metrics"
+
+  # Kafka metrics (when JMX exporter is configured)
+  - job_name: "kafka"
+    static_configs:
+      - targets: ["kafka:9092"]
+    scrape_interval: 30s
+
+  # Infisical metrics
+  - job_name: "infisical"
+    static_configs:
+      - targets: ["infisical:8080"]
+    scrape_interval: 30s
+    metrics_path: "/api/status"
+
+  # Application services (when deployed)
+  - job_name: "nextgen-identity"
+    static_configs:
+      - targets: ["nextgen-identity:80"]
+    scrape_interval: 15s
+    metrics_path: "/metrics"
+
+  - job_name: "deeplens-api"
+    static_configs:
+      - targets: ["deeplens-api:80"]
+    scrape_interval: 15s
+    metrics_path: "/metrics"
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Storage configuration
+storage:
+  tsdb:
+    retention_time: 30d
+    retention_size: 10GB

@@ -1,0 +1,74 @@
+# DeepLens Qdrant Configuration
+# Vector database configuration for image similarity search
+
+service:
+  # Service settings
+  host: 0.0.0.0
+  http_port: 6333
+  grpc_port: 6334
+
+  # Enable CORS for development
+  enable_cors: true
+
+  # Max request size (for large image uploads)
+  max_request_size_mb: 32
+
+  # Enable gRPC reflection
+  grpc_reflaction: true
+
+storage:
+  # Storage optimization for image vectors
+
+  # Collections configuration
+  optimizers:
+    # Memory threshold for segment optimization
+    memmap_threshold: 20000
+
+    # Indexing threshold
+    indexing_threshold: 10000
+
+    # Flush interval in seconds
+    flush_interval_sec: 30
+
+    # Max segment size
+    max_segment_size: 100000
+
+  # Performance settings
+  performance:
+    # Maximum indexing threads
+    max_indexing_threads: 2
+
+    # Maximum search threads
+    max_search_threads: 4
+
+  # WAL (Write-Ahead Log) settings
+  wal:
+    wal_capacity_mb: 32
+    wal_segments_ahead: 2
+
+# Cluster settings (for future scaling)
+cluster:
+  enabled: false
+  # When enabled in production:
+  # p2p:
+  #   port: 6335
+  # consensus:
+  #   max_message_queue_size: 16384
+
+# Telemetry and logging
+telemetry:
+  disabled: true # Disable for privacy in development
+
+log_level: INFO
+
+# Development-specific settings
+debug: false
+
+# TLS settings (disabled for development)
+tls:
+  cert: ""
+  key: ""
+# Collections that will be created by the application:
+# - "image_vectors" - Main image feature vectors (dimension: 2048 for ResNet50)
+# - "text_vectors" - Text description vectors (dimension: 768 for sentence transformers)
+# - "hybrid_vectors" - Combined image-text vectors for multimodal search
