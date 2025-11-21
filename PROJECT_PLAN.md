@@ -24,7 +24,7 @@
 - **Observable by Design**: Built-in telemetry, metrics, logging, and tracing
 - **Cloud-Native**: Microservices architecture with container orchestration
 
-### Simplified Single-Service .NET Architecture
+### Event-Driven Architecture with Kafka
 
 ```
                            ┌─────────────────────────────────────────┐
@@ -57,14 +57,18 @@
         │                                     │                                     │
         └─────────────────────────────────────┼─────────────────────────────────────┘
                                               │
-                                   ┌─────────────────┐
-                                   │   Message Bus   │
-                                   │                 │
-                                   │ • RabbitMQ      │
-                                   │ • Apache Kafka  │
-                                   │ • Azure Service │
-                                   │   Bus/AWS SQS   │
-                                   └─────────────────┘
+                           ┌─────────────────────────────────────────┐
+                           │        Apache Kafka Event Bus           │
+                           │                                         │
+                           │  📋 Topics:                             │
+                           │  • images.uploaded    → Processing      │
+                           │  • images.validated   → Feature Extract │
+                           │  • images.processed   → Vector Index    │
+                           │  • images.indexed     → Search Ready    │
+                           │  • duplicates.found   → Duplicate Mgmt  │
+                           │  • tenant.usage       → Analytics       │
+                           │  • images.failed      → Error Handling  │
+                           └─────────────────────────────────────────┘
                                               │
                            ┌─────────────────────────────────────────┐
                            │         Data & Storage Layer            │
@@ -102,6 +106,76 @@
                            │  └─────────────────────────────────┘    │
                            └─────────────────────────────────────────┘
 ```
+
+## 🔄 Event-Driven Architecture with Apache Kafka
+
+### Kafka-Powered Processing Pipeline
+
+DeepLens uses **Apache Kafka 7.5.0** as the backbone for asynchronous, event-driven image processing. This architecture ensures scalability, fault tolerance, and loose coupling between services.
+
+```mermaid
+graph TD
+    A[Image Upload API] -->|images.uploaded| B[Validation Service]
+    B -->|images.validated| C[Feature Extraction Service]
+    B -->|images.failed| F[Error Handler]
+    C -->|images.processed| D[Vector Indexing Service]
+    C -->|images.processed| E[Duplicate Detection Service]
+    D -->|images.indexed| G[Search API Ready]
+    E -->|duplicates.found| H[Duplicate Management]
+    F -->|Dead Letter Queue| I[Manual Review]
+    G -->|tenant.usage| J[Analytics & Billing]
+```
+
+### Core Kafka Topics
+
+```yaml
+# Image Processing Pipeline Topics
+Topics:
+  images.uploaded: # New image uploaded and stored
+    partitions: 3
+    retention: 7d
+    consumers: ["validation-service", "analytics-service"]
+
+  images.validated: # Image passed validation checks
+    partitions: 3
+    retention: 7d
+    consumers: ["feature-extraction-service"]
+
+  images.processed: # Features extracted, vectors generated
+    partitions: 3
+    retention: 7d
+    consumers: ["vector-indexing-service", "duplicate-detection-service"]
+
+  images.indexed: # Image indexed in vector database
+    partitions: 3
+    retention: 7d
+    consumers: ["search-service", "analytics-service"]
+
+  # Specialized Processing Topics
+  duplicates.found: # Potential duplicate images detected
+    partitions: 1
+    retention: 30d
+    consumers: ["duplicate-management-service"]
+
+  tenant.usage: # Usage analytics and metrics per tenant
+    partitions: 6 # Partition by tenant_id for parallel processing
+    retention: 90d
+    consumers: ["analytics-service", "billing-service"]
+
+  images.failed: # Processing failures and errors
+    partitions: 1
+    retention: 30d
+    consumers: ["error-handler-service", "monitoring-service"]
+```
+
+### Event-Driven Benefits
+
+✅ **Scalability**: Process thousands of images concurrently across multiple workers
+✅ **Fault Tolerance**: Failed messages retry automatically, no data loss
+✅ **Loose Coupling**: Services are independent, can be developed and scaled separately
+✅ **Real-time Processing**: Event-driven architecture enables real-time image processing
+✅ **Multi-Tenant**: Partition topics by tenant for isolated processing
+✅ **Observability**: Full audit trail of every image processing step
 
 ### Simplified Service Architecture
 
@@ -2290,9 +2364,10 @@ Tenant D → Local FS (path: /data/tenants/tenant-d/)
 4. Validate file size limits (per tenant configuration)
 5. Perform virus/malware scanning (optional)
 6. Generate unique image ID and job ID
+7. 🔥 Publish to Kafka: "images.uploaded" topic
 ```
 
-**Step 2: Storage Routing**
+**Step 2: Storage Routing & Event Publishing**
 
 ```csharp
 1. Query tenant storage configuration
@@ -2301,34 +2376,107 @@ Tenant D → Local FS (path: /data/tenants/tenant-d/)
 4. Apply storage-specific settings (encryption, compression)
 5. Upload to configured storage backend
 6. Generate storage metadata (path, size, checksum)
+7. 🔥 Kafka Event: ImageUploadedEvent {
+     TenantId, ImageId, StoragePath, FileSize, MimeType, UploadedAt
+   }
 ```
 
-**Step 3: Processing Pipeline**
+**Step 3: Asynchronous Processing Pipeline (Kafka-Driven)**
 
 ```csharp
-1. Queue image for processing in Kafka/RabbitMQ
-2. Extract EXIF metadata (camera, GPS, timestamp)
-3. Generate multiple thumbnail sizes (150x150, 300x300, 600x600)
-4. Extract visual features using AI/ML models:
+// Validation Service (Consumer: images.uploaded)
+1. 🎧 Consume from "images.uploaded" topic
+2. Validate image integrity and format
+3. Extract EXIF metadata (camera, GPS, timestamp)
+4. Generate multiple thumbnail sizes (150x150, 300x300, 600x600)
+5. 🔥 Publish to "images.validated" (success) or "images.failed" (error)
+
+// Feature Extraction Service (Consumer: images.validated)
+1. 🎧 Consume from "images.validated" topic
+2. Extract visual features using AI/ML models:
    - ResNet50 for general features (2048-dim vector)
    - CLIP for multimodal features (768-dim vector)
    - Custom models for domain-specific features
-5. Store vectors in Qdrant with metadata
-6. Update PostgreSQL with image record
-7. Update search indexes (Elasticsearch if used)
-8. Send completion notification
+3. 🔥 Publish to "images.processed" topic with feature vectors
+
+// Vector Indexing Service (Consumer: images.processed)
+1. 🎧 Consume from "images.processed" topic
+2. Store vectors in Qdrant with metadata
+3. Update PostgreSQL with image record
+4. 🔥 Publish to "images.indexed" topic
+
+// Duplicate Detection Service (Consumer: images.processed)
+1. 🎧 Consume from "images.processed" topic (parallel to indexing)
+2. Search for similar vectors in Qdrant
+3. Calculate similarity scores
+4. 🔥 Publish to "duplicates.found" if matches detected
 ```
 
-**Step 4: Duplicate Detection**
+**Step 4: Kafka-Driven Duplicate Detection**
 
 ```csharp
-1. Calculate perceptual hash (pHash, aHash, dHash)
-2. Search existing vectors for similar images
-3. If duplicates found (similarity > threshold):
-   - Flag as potential duplicate
+// Duplicate Detection Service (Consumer: images.processed)
+1. 🎧 Consume from "images.processed" topic (parallel to indexing)
+2. Calculate perceptual hash (pHash, aHash, dHash)
+3. Search existing vectors for similar images in Qdrant
+4. If duplicates found (similarity > threshold):
    - Create duplicate relationship records
-   - Optionally notify tenant
-4. Store duplicate analysis results
+   - 🔥 Publish to "duplicates.found" topic
+   - Optionally notify tenant via WebSocket/email
+5. Store duplicate analysis results in PostgreSQL
+```
+
+### Kafka Service Integration Examples
+
+**Producer Example (.NET Upload API)**
+
+```csharp
+// After successful file upload
+var imageUploadedEvent = new ImageUploadedEvent
+{
+    TenantId = tenantId,
+    ImageId = imageId,
+    OriginalFileName = fileName,
+    StorageProvider = provider,
+    StoragePath = path,
+    FileSize = size,
+    MimeType = mimeType,
+    Checksum = checksum,
+    UploadedAt = DateTime.UtcNow
+};
+
+await _kafkaProducer.SendAsync("images.uploaded", imageUploadedEvent);
+```
+
+**Consumer Example (Python Feature Extraction)**
+
+```python
+# Feature Extraction Service
+from kafka import KafkaConsumer, KafkaProducer
+import json
+
+consumer = KafkaConsumer(
+    'images.validated',
+    bootstrap_servers=['localhost:9092'],
+    group_id='feature-extraction-group',
+    value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+)
+
+for message in consumer:
+    image_event = message.value
+
+    # Extract features using ResNet50/CLIP
+    features = await extract_features(image_event['storage_path'])
+
+    # Publish processed event
+    processed_event = {
+        **image_event,
+        'features': features.tolist(),
+        'feature_model': 'resnet50',
+        'processed_at': datetime.utcnow().isoformat()
+    }
+
+    producer.send('images.processed', processed_event)
 ```
 
 ### Batch Processing Optimizations
@@ -2341,6 +2489,113 @@ Tenant D → Local FS (path: /data/tenants/tenant-d/)
 - Implement progressive processing status updates
 
 **Queue Management:**
+
+📋 **Kafka Implementation Details:**
+
+**Producer Configuration (.NET)**
+
+```csharp
+// Startup.cs - Kafka Producer Setup
+services.Configure<KafkaProducerOptions>(options =>
+{
+    options.BootstrapServers = "localhost:9092";
+    options.Acks = Acks.Leader;
+    options.Retries = 3;
+    options.EnableIdempotence = true;
+    options.CompressionType = CompressionType.Lz4;
+    options.MessageTimeoutMs = 30000;
+});
+
+services.AddSingleton<IKafkaProducer<string, ImageUploadedEvent>, KafkaProducer<string, ImageUploadedEvent>>();
+```
+
+**Consumer Configuration (.NET)**
+
+```csharp
+// Background Service for Processing
+public class ImageProcessingWorker : BackgroundService
+{
+    private readonly IKafkaConsumer<string, ImageUploadedEvent> _consumer;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await foreach (var message in _consumer.ConsumeAsync("images.uploaded", stoppingToken))
+        {
+            var imageEvent = message.Value;
+
+            try
+            {
+                // Process the image
+                await ProcessImageAsync(imageEvent);
+
+                // Publish success event
+                await _producer.SendAsync("images.validated", imageEvent);
+
+                // Commit the message
+                _consumer.Commit(message);
+            }
+            catch (Exception ex)
+            {
+                // Publish failure event
+                await _producer.SendAsync("images.failed", new ImageFailedEvent
+                {
+                    OriginalEvent = imageEvent,
+                    ErrorMessage = ex.Message,
+                    FailedAt = DateTime.UtcNow
+                });
+            }
+        }
+    }
+}
+```
+
+**Python Consumer for AI/ML Services**
+
+```python
+# Feature Extraction Service
+from kafka import KafkaConsumer, KafkaProducer
+import json
+
+consumer = KafkaConsumer(
+    'images.validated',
+    bootstrap_servers=['localhost:9092'],
+    group_id='feature-extraction-group',
+    value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+)
+
+producer = KafkaProducer(
+    bootstrap_servers=['localhost:9092'],
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+for message in consumer:
+    image_event = message.value
+
+    try:
+        # Extract features using ResNet50/CLIP
+        features = await extract_features(image_event['storage_path'])
+
+        # Publish processed event
+        processed_event = {
+            **image_event,
+            'features': features.tolist(),
+            'feature_model': 'resnet50',
+            'vector_dimension': len(features),
+            'processed_at': datetime.utcnow().isoformat()
+        }
+
+        producer.send('images.processed', processed_event)
+
+    except Exception as e:
+        # Send to failed topic
+        failed_event = {
+            'original_event': image_event,
+            'error_message': str(e),
+            'failed_at': datetime.utcnow().isoformat(),
+            'service': 'feature-extraction'
+        }
+        producer.send('images.failed', failed_event)
+```
 
 📋 **Implementation Details:** See [Processing Queue Configuration](CODE_EXAMPLES.md#processing-queue-configuration) for complete queue management and worker scaling setup.
 

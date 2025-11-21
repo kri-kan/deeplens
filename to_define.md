@@ -40,13 +40,23 @@ This document tracks planning items that need further definition and refinement.
 
 ## 🛡️ Security Deep Dive
 
+### Event-Driven Architecture ✅ DEFINED - KAFKA INTEGRATION COMPLETE
+
+- [x] **Message Queue**: Apache Kafka 7.5.0 with Zookeeper
+- [x] **Topic Design**: 7 core topics for image processing pipeline
+- [x] **Event Flow**: Upload → Validation → Feature Extraction → Indexing
+- [x] **Producer/Consumer**: .NET and Python service integration patterns
+- [x] **Error Handling**: Failed events routing and dead letter queues
+- [x] **Monitoring**: Kafka metrics integrated with Prometheus/Grafana
+- [x] **Scalability**: Partitioned topics for parallel processing
+
 ### Image Ingestion API ✅ DEFINED - ADDED TO PROJECT_PLAN.md
 
 - [x] **API Endpoints**: Upload, batch, URL ingestion, status tracking, deletion
 - [x] **Multi-Tenant Storage**: NFS, Azure Blob, AWS S3, GCS, MinIO support
-- [x] **Processing Pipeline**: Validation, routing, feature extraction, indexing
-- [x] **Batch Processing**: Parallel processing and queue management
-- [x] **Error Handling**: Retry mechanisms and dead letter queues
+- [x] **Processing Pipeline**: Kafka-driven validation, routing, feature extraction, indexing
+- [x] **Batch Processing**: Parallel processing via Kafka topic partitions
+- [x] **Error Handling**: Kafka-based retry mechanisms and dead letter queues
 - [ ] **File Format Support**: Extended formats (RAW, HEIC, SVG, animated GIF)
 - [ ] **Compression Strategies**: Lossless compression for originals, optimization for web
 - [ ] **Duplicate Prevention**: Advanced duplicate detection before storage

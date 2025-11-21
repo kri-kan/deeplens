@@ -1544,20 +1544,394 @@ groups:
           description: "Vector database has been down for more than 1 minute"
 ```
 
-### Processing Queue Configuration
+### Kafka Processing Queue Configuration
 
 ```yaml
-Processing Queues:
-  - high_priority: Real-time uploads (< 5MB)
-  - standard: Regular batch uploads
-  - low_priority: Background bulk imports
-  - retry: Failed processing attempts
+# Kafka Topics for DeepLens Processing Pipeline
+Kafka Topics:
+  images.uploaded:
+    partitions: 3
+    replication-factor: 1
+    retention.ms: 604800000 # 7 days
+    cleanup.policy: delete
+
+  images.validated:
+    partitions: 3
+    replication-factor: 1
+    retention.ms: 604800000 # 7 days
+
+  images.processed:
+    partitions: 3
+    replication-factor: 1
+    retention.ms: 604800000 # 7 days
+
+  images.indexed:
+    partitions: 3
+    replication-factor: 1
+    retention.ms: 604800000 # 7 days
+
+  duplicates.found:
+    partitions: 1
+    replication-factor: 1
+    retention.ms: 2592000000 # 30 days
+
+  tenant.usage:
+    partitions: 6 # Partition by tenant_id
+    replication-factor: 1
+    retention.ms: 7776000000 # 90 days
+
+  images.failed:
+    partitions: 1
+    replication-factor: 1
+    retention.ms: 2592000000 # 30 days
+
+Consumer Groups:
+  - deeplens-validation-group: Validation workers
+  - deeplens-feature-extraction-group: AI/ML Python workers
+  - deeplens-indexing-group: Vector database workers
+  - deeplens-duplicate-detection-group: Duplicate analysis workers
+  - deeplens-analytics-group: Usage analytics workers
 
 Worker Configuration:
-  - Feature extraction workers: 4-8 parallel
-  - Thumbnail generation: 2-4 parallel
-  - Storage upload workers: 6-12 parallel
-  - Duplicate detection: 2-4 parallel
+  - Validation workers: 2-4 parallel (.NET)
+  - Feature extraction workers: 4-8 parallel (Python + GPU)
+  - Vector indexing workers: 2-4 parallel (.NET + Qdrant)
+  - Duplicate detection: 2-4 parallel (.NET)
+  - Analytics workers: 1-2 parallel (.NET)
+```
+
+### Kafka Producer/Consumer Examples
+
+#### .NET Kafka Producer (Image Upload API)
+
+```csharp
+// Services/KafkaImageEventProducer.cs
+public class KafkaImageEventProducer : IImageEventProducer
+{
+    private readonly IProducer<string, ImageUploadedEvent> _producer;
+    private readonly ILogger<KafkaImageEventProducer> _logger;
+
+    public KafkaImageEventProducer(IProducer<string, ImageUploadedEvent> producer, ILogger<KafkaImageEventProducer> logger)
+    {
+        _producer = producer;
+        _logger = logger;
+    }
+
+    public async Task PublishImageUploadedAsync(ImageUploadedEvent imageEvent)
+    {
+        try
+        {
+            var result = await _producer.ProduceAsync("images.uploaded", new Message<string, ImageUploadedEvent>
+            {
+                Key = imageEvent.TenantId.ToString(), // Partition by tenant
+                Value = imageEvent,
+                Headers = new Headers
+                {
+                    { "tenant-id", Encoding.UTF8.GetBytes(imageEvent.TenantId.ToString()) },
+                    { "event-type", Encoding.UTF8.GetBytes("ImageUploaded") },
+                    { "timestamp", Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString()) }
+                }
+            });
+
+            _logger.LogInformation($"Image uploaded event published: {result.TopicPartitionOffset}");
+        }
+        catch (ProduceException<string, ImageUploadedEvent> ex)
+        {
+            _logger.LogError(ex, $"Failed to publish image uploaded event for {imageEvent.ImageId}");
+            throw;
+        }
+    }
+}
+
+// Models/Events/ImageUploadedEvent.cs
+public class ImageUploadedEvent
+{
+    public Guid TenantId { get; set; }
+    public Guid ImageId { get; set; }
+    public string OriginalFileName { get; set; }
+    public string StorageProvider { get; set; }
+    public string StoragePath { get; set; }
+    public long FileSize { get; set; }
+    public string MimeType { get; set; }
+    public string Checksum { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public Dictionary<string, object> Metadata { get; set; } = new();
+}
+```
+
+#### .NET Kafka Consumer (Validation Service)
+
+```csharp
+// Workers/ImageValidationWorker.cs
+public class ImageValidationWorker : BackgroundService
+{
+    private readonly IConsumer<string, ImageUploadedEvent> _consumer;
+    private readonly IImageValidationService _validationService;
+    private readonly IImageEventProducer _eventProducer;
+    private readonly ILogger<ImageValidationWorker> _logger;
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _consumer.Subscribe("images.uploaded");
+
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var consumeResult = _consumer.Consume(stoppingToken);
+
+                    if (consumeResult.IsPartitionEOF)
+                        continue;
+
+                    var imageEvent = consumeResult.Message.Value;
+                    _logger.LogInformation($"Processing validation for image {imageEvent.ImageId}");
+
+                    // Validate the image
+                    var validationResult = await _validationService.ValidateAsync(imageEvent);
+
+                    if (validationResult.IsValid)
+                    {
+                        // Extract EXIF metadata
+                        var metadata = await _validationService.ExtractMetadataAsync(imageEvent.StoragePath);
+
+                        // Generate thumbnails
+                        var thumbnails = await _validationService.GenerateThumbnailsAsync(imageEvent.StoragePath);
+
+                        var validatedEvent = new ImageValidatedEvent
+                        {
+                            TenantId = imageEvent.TenantId,
+                            ImageId = imageEvent.ImageId,
+                            OriginalFileName = imageEvent.OriginalFileName,
+                            StoragePath = imageEvent.StoragePath,
+                            FileSize = imageEvent.FileSize,
+                            MimeType = imageEvent.MimeType,
+                            Checksum = imageEvent.Checksum,
+                            UploadedAt = imageEvent.UploadedAt,
+                            ValidatedAt = DateTime.UtcNow,
+                            ExifMetadata = metadata,
+                            ThumbnailPaths = thumbnails,
+                            ImageDimensions = validationResult.Dimensions
+                        };
+
+                        await _eventProducer.PublishImageValidatedAsync(validatedEvent);
+                    }
+                    else
+                    {
+                        var failedEvent = new ImageFailedEvent
+                        {
+                            OriginalEvent = imageEvent,
+                            ErrorMessage = validationResult.ErrorMessage,
+                            FailedAt = DateTime.UtcNow,
+                            FailureStage = "Validation",
+                            Retryable = validationResult.IsRetryable
+                        };
+
+                        await _eventProducer.PublishImageFailedAsync(failedEvent);
+                    }
+
+                    // Commit the message
+                    _consumer.Commit(consumeResult);
+                }
+                catch (ConsumeException ex)
+                {
+                    _logger.LogError(ex, "Error consuming message from images.uploaded topic");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error in image validation worker");
+                }
+            }
+        }
+        finally
+        {
+            _consumer.Close();
+        }
+    }
+}
+```
+
+#### Python Kafka Consumer (Feature Extraction Service)
+
+```python
+# services/feature_extraction_service.py
+from kafka import KafkaConsumer, KafkaProducer
+import json
+import logging
+import traceback
+from datetime import datetime
+from typing import Dict, Any
+import numpy as np
+from .models import ResNet50FeatureExtractor, CLIPFeatureExtractor
+
+class FeatureExtractionService:
+    def __init__(self, kafka_config: Dict[str, Any]):
+        self.consumer = KafkaConsumer(
+            'images.validated',
+            bootstrap_servers=kafka_config['bootstrap_servers'],
+            group_id='deeplens-feature-extraction-group',
+            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+            auto_offset_reset='earliest',
+            enable_auto_commit=False
+        )
+
+        self.producer = KafkaProducer(
+            bootstrap_servers=kafka_config['bootstrap_servers'],
+            value_serializer=lambda v: json.dumps(v, default=str).encode('utf-8')
+        )
+
+        self.resnet_extractor = ResNet50FeatureExtractor()
+        self.clip_extractor = CLIPFeatureExtractor()
+        self.logger = logging.getLogger(__name__)
+
+    async def start_processing(self):
+        """Start consuming messages and processing images"""
+        self.logger.info("Starting feature extraction service...")
+
+        try:
+            for message in self.consumer:
+                try:
+                    image_event = message.value
+                    self.logger.info(f"Processing features for image {image_event['image_id']}")
+
+                    # Extract features using both models
+                    resnet_features = await self.resnet_extractor.extract(
+                        image_event['storage_path']
+                    )
+
+                    clip_features = await self.clip_extractor.extract(
+                        image_event['storage_path']
+                    )
+
+                    # Create processed event
+                    processed_event = {
+                        **image_event,
+                        'features': {
+                            'resnet50': {
+                                'vector': resnet_features.tolist(),
+                                'dimension': len(resnet_features),
+                                'model_version': '1.0'
+                            },
+                            'clip': {
+                                'vector': clip_features.tolist(),
+                                'dimension': len(clip_features),
+                                'model_version': '1.0'
+                            }
+                        },
+                        'processed_at': datetime.utcnow().isoformat(),
+                        'processing_time_ms': 0,  # Calculate actual time
+                        'gpu_used': True
+                    }
+
+                    # Publish to processed topic
+                    self.producer.send('images.processed', processed_event)
+                    self.producer.flush()
+
+                    # Commit the message
+                    self.consumer.commit()
+
+                    self.logger.info(f"Successfully processed image {image_event['image_id']}")
+
+                except Exception as e:
+                    self.logger.error(f"Error processing image: {str(e)}")
+                    self.logger.error(traceback.format_exc())
+
+                    # Send to failed topic
+                    failed_event = {
+                        'original_event': image_event,
+                        'error_message': str(e),
+                        'error_traceback': traceback.format_exc(),
+                        'failed_at': datetime.utcnow().isoformat(),
+                        'service': 'feature-extraction',
+                        'retryable': self._is_retryable_error(e)
+                    }
+
+                    self.producer.send('images.failed', failed_event)
+                    self.producer.flush()
+
+        except KeyboardInterrupt:
+            self.logger.info("Shutting down feature extraction service...")
+        finally:
+            self.consumer.close()
+            self.producer.close()
+
+    def _is_retryable_error(self, error: Exception) -> bool:
+        """Determine if an error is retryable"""
+        retryable_errors = [
+            'ConnectionError',
+            'TimeoutError',
+            'TemporaryFailure'
+        ]
+        return any(err in str(type(error)) for err in retryable_errors)
+```
+
+#### Kafka Startup Configuration
+
+```csharp
+// Program.cs - .NET Service Configuration
+builder.Services.Configure<KafkaConfig>(builder.Configuration.GetSection("Kafka"));
+
+// Producer configuration
+builder.Services.AddSingleton<IProducer<string, ImageUploadedEvent>>(provider =>
+{
+    var config = provider.GetRequiredService<IOptions<KafkaConfig>>().Value;
+    return new ProducerBuilder<string, ImageUploadedEvent>(config.ProducerConfig)
+        .SetValueSerializer(new JsonSerializer<ImageUploadedEvent>())
+        .SetErrorHandler((_, e) => Console.WriteLine($"Error: {e.Reason}"))
+        .Build();
+});
+
+// Consumer configuration
+builder.Services.AddSingleton<IConsumer<string, ImageUploadedEvent>>(provider =>
+{
+    var config = provider.GetRequiredService<IOptions<KafkaConfig>>().Value;
+    return new ConsumerBuilder<string, ImageUploadedEvent>(config.ConsumerConfig)
+        .SetValueDeserializer(new JsonDeserializer<ImageUploadedEvent>())
+        .SetErrorHandler((_, e) => Console.WriteLine($"Error: {e.Reason}"))
+        .Build();
+});
+
+// Register background services
+builder.Services.AddHostedService<ImageValidationWorker>();
+builder.Services.AddHostedService<VectorIndexingWorker>();
+builder.Services.AddHostedService<DuplicateDetectionWorker>();
+```
+
+#### Kafka Health Checks
+
+```csharp
+// Health/KafkaHealthCheck.cs
+public class KafkaHealthCheck : IHealthCheck
+{
+    private readonly IAdminClient _adminClient;
+
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var metadata = _adminClient.GetMetadata(TimeSpan.FromSeconds(10));
+
+            if (metadata.Brokers.Count == 0)
+                return HealthCheckResult.Unhealthy("No Kafka brokers available");
+
+            // Check specific topics exist
+            var requiredTopics = new[] { "images.uploaded", "images.validated", "images.processed" };
+            var existingTopics = metadata.Topics.Select(t => t.Topic).ToHashSet();
+
+            var missingTopics = requiredTopics.Where(topic => !existingTopics.Contains(topic)).ToList();
+
+            if (missingTopics.Any())
+                return HealthCheckResult.Degraded($"Missing topics: {string.Join(", ", missingTopics)}");
+
+            return HealthCheckResult.Healthy($"Kafka is healthy with {metadata.Brokers.Count} brokers");
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy("Kafka connection failed", ex);
+        }
+    }
+}
 ```
 
 ### Kubernetes Horizontal Pod Autoscaler
