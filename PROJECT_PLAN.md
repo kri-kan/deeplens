@@ -3018,7 +3018,11 @@ winget install Amazon.AWSCLI
 winget install Google.CloudSDK
 ```
 
-### Multi-Solution Project Structure (Separate NextGen Identity Service)
+### Multi-Solution Project Structure (Actual Implementation)
+
+> **Note:** The actual implementation follows **Clean Architecture** with Domain-Driven Design (DDD) principles,
+> providing better separation of concerns than initially planned. See [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)
+> and [src/README.md](src/README.md) for detailed architectural decisions.
 
 ```
 deeplens/
@@ -3061,7 +3065,7 @@ deeplens/
 │   │   └── NextGen.Identity.Data.csproj
 │   │
 │   │
-│   │ # 🔵 DeepLens API Service Projects
+│   │ # 🔵 DeepLens API Service Projects (Clean Architecture)
 │   ├── DeepLens.ApiGateway/            # YARP-based API Gateway
 │   │   ├── Configuration/
 │   │   │   ├── routes.json           # Route configuration
@@ -3069,29 +3073,31 @@ deeplens/
 │   │   ├── Middleware/
 │   │   │   ├── AuthenticationMiddleware.cs
 │   │   │   ├── RateLimitingMiddleware.cs
+│   │   │   ├── DynamicRateLimitPolicy.cs
 │   │   │   ├── CorrelationIdMiddleware.cs
 │   │   │   └── TelemetryMiddleware.cs
 │   │   ├── Program.cs
 │   │   └── DeepLens.ApiGateway.csproj
 │   │
-│   ├── DeepLens.Search/                # Search & Query Service
+│   ├── DeepLens.SearchApi/             # Search & Ingestion Service
 │   │   ├── Controllers/
 │   │   │   ├── SearchController.cs   # Image similarity search
-│   │   │   ├── UploadController.cs   # Image upload
-│   │   │   ├── CollectionController.cs # Manage image collections
+│   │   │   ├── ImageController.cs    # Image upload/ingestion
+│   │   │   ├── MetadataController.cs # Image metadata queries
 │   │   │   └── HealthController.cs   # Health checks
 │   │   ├── Services/
 │   │   │   ├── SearchService.cs      # Main search orchestration
 │   │   │   ├── VectorSearchService.cs # Vector similarity search
 │   │   │   ├── ImageIngestionService.cs # Image processing pipeline
-│   │   │   └── CollectionService.cs  # Collection management
+│   │   │   └── DuplicateDetectionService.cs # Duplicate detection
 │   │   ├── Program.cs
 │   │   ├── Dockerfile
-│   │   └── DeepLens.Search.csproj
+│   │   └── DeepLens.SearchApi.csproj
 │   │
-│   ├── DeepLens.Admin/                 # Administration Service
+│   ├── DeepLens.AdminApi/              # Administration Service
 │   │   ├── Controllers/
 │   │   │   ├── TenantController.cs   # Multi-tenant management
+│   │   │   ├── TenantRateLimitController.cs # Rate limit management
 │   │   │   ├── IndexingController.cs # Manage indexing
 │   │   │   ├── StorageController.cs  # Storage management
 │   │   │   └── MetricsController.cs  # System metrics
@@ -3100,64 +3106,156 @@ deeplens/
 │   │   │   └── StorageConfigurationService.cs
 │   │   ├── Program.cs
 │   │   ├── Dockerfile
-│   │   └── DeepLens.Admin.csproj
+│   │   └── DeepLens.AdminApi.csproj
 │   │
-│   ├── DeepLens.Core/                  # Shared business logic (API Services)
+│   ├── DeepLens.OrchestrationService/  # Background Worker Service
+│   │   ├── Workers/
+│   │   │   ├── KafkaConsumerWorker.cs
+│   │   │   ├── ImageProcessingWorker.cs
+│   │   │   ├── IndexingWorker.cs
+│   │   │   └── StorageScanWorker.cs
+│   │   ├── Services/
+│   │   │   ├── WorkflowService.cs
+│   │   │   └── JobSchedulerService.cs
+│   │   ├── Program.cs
+│   │   ├── Worker.cs
+│   │   ├── Dockerfile
+│   │   └── DeepLens.OrchestrationService.csproj
+│   │
+│   │ # 🎯 Core Layer (Clean Architecture / DDD)
+│   ├── DeepLens.Domain/                # Domain Layer (No dependencies)
+│   │   ├── Entities/
+│   │   │   ├── Image.cs
+│   │   │   ├── ImageMetadata.cs
+│   │   │   ├── SearchResult.cs
+│   │   │   ├── TenantRateLimitConfig.cs
+│   │   │   ├── RateLimitTier.cs
+│   │   │   └── Tenant.cs
+│   │   ├── ValueObjects/
+│   │   │   ├── ImageHash.cs
+│   │   │   ├── SimilarityScore.cs
+│   │   │   └── Vector.cs
+│   │   ├── Enums/
+│   │   │   ├── ImageStatus.cs
+│   │   │   ├── TierType.cs
+│   │   │   └── StorageProvider.cs
+│   │   ├── Events/
+│   │   │   ├── ImageUploadedEvent.cs
+│   │   │   └── DuplicateFoundEvent.cs
+│   │   └── DeepLens.Domain.csproj
+│   │
+│   ├── DeepLens.Application/           # Application Layer (Business Logic)
 │   │   ├── Interfaces/
-│   │   │   ├── IImageProcessor.cs
-│   │   │   ├── ISimilarityMatcher.cs
-│   │   │   ├── IVectorStore.cs
-│   │   │   └── IStorageConnector.cs
+│   │   │   ├── IImageSearchService.cs
+│   │   │   ├── ITenantRateLimitService.cs
+│   │   │   ├── IVectorStoreService.cs
+│   │   │   ├── IStorageService.cs
+│   │   │   └── IFeatureExtractionClient.cs
 │   │   ├── Services/
 │   │   │   ├── ImageProcessingService.cs
 │   │   │   ├── MetadataService.cs
 │   │   │   └── DeduplicationService.cs
-│   │   ├── Models/
-│   │   │   ├── Domain/               # Domain entities
-│   │   │   ├── DTOs/                 # Data transfer objects
-│   │   │   └── Configuration/        # Configuration models
-│   │   └── DeepLens.Core.csproj
+│   │   ├── UseCases/
+│   │   │   ├── UploadImageUseCase.cs
+│   │   │   ├── SearchSimilarImagesUseCase.cs
+│   │   │   └── FindDuplicatesUseCase.cs
+│   │   ├── DTOs/
+│   │   │   └── Internal transfer objects
+│   │   └── DeepLens.Application.csproj
 │   │
-│   ├── DeepLens.Infrastructure/        # Infrastructure layer
+│   ├── DeepLens.Contracts/             # API Contracts & DTOs
+│   │   ├── Requests/
+│   │   │   ├── SearchRequest.cs
+│   │   │   ├── UploadImageRequest.cs
+│   │   │   ├── UpdateRateLimitsRequest.cs
+│   │   │   └── BulkSearchRequest.cs
+│   │   ├── Responses/
+│   │   │   ├── SearchResponse.cs
+│   │   │   ├── ImageMetadataResponse.cs
+│   │   │   └── RateLimitConfigResponse.cs
+│   │   ├── Events/
+│   │   │   ├── ImageUploadedEvent.cs
+│   │   │   └── ImageProcessedEvent.cs
+│   │   └── DeepLens.Contracts.csproj
+│   │
+│   │ # 🏗️ Infrastructure Layer
+│   ├── DeepLens.Infrastructure/        # Infrastructure implementations
 │   │   ├── Data/
 │   │   │   ├── Repositories/         # Repository implementations
 │   │   │   ├── Entities/             # EF Core entities
 │   │   │   └── DeepLensDbContext.cs
+│   │   ├── Services/
+│   │   │   ├── TenantRateLimitService.cs
+│   │   │   ├── ImageSearchService.cs
+│   │   │   └── VectorStoreService.cs
 │   │   ├── Storage/
 │   │   │   ├── Connectors/           # Storage connectors
+│   │   │   │   ├── AzureBlobConnector.cs
+│   │   │   │   ├── S3Connector.cs
+│   │   │   │   └── MinIOConnector.cs
 │   │   │   └── Adapters/             # Cloud provider adapters
 │   │   ├── AI/
 │   │   │   ├── OnnxModelRunner.cs    # ONNX Runtime integration
-│   │   │   └── FeatureExtractorClient.cs # AI service client
+│   │   │   └── FeatureExtractionClient.cs # AI service client
 │   │   ├── Messaging/
-│   │   │   ├── RabbitMQClient.cs
-│   │   │   └── ServiceBusClient.cs
+│   │   │   ├── KafkaProducer.cs
+│   │   │   ├── KafkaConsumer.cs
+│   │   │   └── MessageSerializer.cs
+│   │   ├── Caching/
+│   │   │   ├── RedisCacheService.cs
+│   │   │   └── DistributedCacheProvider.cs
 │   │   ├── Telemetry/
 │   │   │   ├── MetricsCollector.cs
 │   │   │   ├── TracingService.cs
 │   │   │   └── HealthCheckExtensions.cs
 │   │   └── DeepLens.Infrastructure.csproj
 │   │
-│   ├── DeepLens.Shared/                # Shared contracts and DTOs
-│   │   ├── Models/
-│   │   │   └── UserDto.cs           # User data transfer objects
-│   │   ├── Contracts/
-│   │   │   └── IAuthenticationService.cs # Auth service contracts
-│   │   └── DeepLens.Shared.csproj
+│   │ # 📦 Shared Libraries (Cross-Cutting Concerns)
+│   ├── DeepLens.Shared.Telemetry/      # OpenTelemetry integration
+│   │   ├── Configuration/
+│   │   │   └── TelemetryConfiguration.cs
+│   │   ├── Extensions/
+│   │   │   └── TelemetryServiceExtensions.cs
+│   │   ├── Metrics/
+│   │   │   └── MetricsDefinitions.cs
+│   │   └── DeepLens.Shared.Telemetry.csproj
 │   │
+│   ├── DeepLens.Shared.Messaging/      # Kafka abstractions
+│   │   ├── Interfaces/
+│   │   │   ├── IMessageProducer.cs
+│   │   │   └── IMessageConsumer.cs
+│   │   ├── Configuration/
+│   │   │   └── KafkaConfiguration.cs
+│   │   └── DeepLens.Shared.Messaging.csproj
+│   │
+│   ├── DeepLens.Shared.Common/         # Common utilities
+│   │   ├── Extensions/
+│   │   │   ├── StringExtensions.cs
+│   │   │   └── DateTimeExtensions.cs
+│   │   ├── Helpers/
+│   │   │   └── ValidationHelper.cs
+│   │   ├── Constants/
+│   │   │   └── ApplicationConstants.cs
+│   │   └── DeepLens.Shared.Common.csproj
+│   │
+│   │ # 🧪 Tests (To be added)
 │   ├── tests/
-│   │   ├── DeepLens.Tests/              # Unit tests
-│   │   ├── DeepLens.Integration.Tests/  # Cross-service integration tests
-│   │   └── DeepLens.Performance.Tests/  # Load and performance tests
+│   │   ├── DeepLens.Domain.Tests/       # Domain unit tests
+│   │   ├── DeepLens.Application.Tests/  # Application unit tests
+│   │   ├── DeepLens.SearchApi.Tests/    # API unit tests
+│   │   ├── DeepLens.Integration.Tests/  # Integration tests
+│   │   └── DeepLens.Performance.Tests/  # Load tests
 │   │
-│   ├── DeepLens.sln                     # Main solution file
-│   ├── Directory.Build.props            # MSBuild global properties
-│   ├── global.json                      # .NET SDK version
-│   ├── nuget.config                     # NuGet package sources
-│   ├── docker-compose.yml               # Local development (APIs + dependencies)
-│   └── README.md                        # DeepLens services documentation
+│   │ # 📄 Solution Files
+│   ├── DeepLens.sln                     # Main DeepLens solution
+│   ├── NextGen.Identity.sln             # Identity service solution
+│   ├── Directory.Build.props            # MSBuild global properties (To be added)
+│   ├── global.json                      # .NET SDK version (To be added)
+│   ├── nuget.config                     # NuGet package sources (To be added)
+│   ├── docker-compose.yml               # Local development (To be added)
+│   └── README.md                        # Solution documentation
 │
-├── 🟠 deeplens-orchestration/          # .NET Core Orchestration & Workflow Services
+├── � python-services/                  # Python AI/ML Services (Separate)
 │   ├── src/
 │   │   ├── DeepLens.Orchestration.Api/   # Workflow & Orchestration API
 │   │   │   ├── Controllers/
@@ -3349,6 +3447,39 @@ deeplens/
 ├── docker-compose.override.yml         # Development overrides
 └── README.md
 ```
+
+### Key Architectural Improvements (Actual vs. Original Plan)
+
+The implemented solution structure improves upon the initial plan:
+
+**1. Clean Architecture with DDD** - Replaces single `DeepLens.Core` with:
+
+- `DeepLens.Domain` - Pure domain logic (zero dependencies)
+- `DeepLens.Application` - Business logic and interfaces
+- `DeepLens.Contracts` - API contracts and DTOs
+
+**2. Modular Shared Libraries** - Replaces single `DeepLens.Shared` with:
+
+- `DeepLens.Shared.Telemetry` - OpenTelemetry integration
+- `DeepLens.Shared.Messaging` - Kafka abstractions
+- `DeepLens.Shared.Common` - Utilities
+
+**3. Integrated Orchestration** - `DeepLens.OrchestrationService` integrated in main solution (simpler deployment)
+
+**4. Consistent Naming** - API suffix for clarity:
+
+- `DeepLens.SearchApi` (was `DeepLens.Search`)
+- `DeepLens.AdminApi` (was `DeepLens.Admin`)
+
+**5. Combined Search + Ingestion** - Per ADR-003, image upload is in SearchApi (related operations)
+
+**References:**
+
+- [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) - Complete ADR records
+- [src/README.md](src/README.md) - Detailed solution documentation
+- [docs/RATE_LIMITING_IMPLEMENTATION.md](docs/RATE_LIMITING_IMPLEMENTATION.md) - Rate limiting guide
+
+---
 
 ### Alternative: Node.js/TypeScript Structure
 

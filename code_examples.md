@@ -8,12 +8,48 @@ This file contains all implementation code samples, pseudo code, and configurati
 
 ## Table of Contents
 
+- [⚡ Rate Limiting & Tenant Management](#-rate-limiting--tenant-management)
 - [🏛️ Database Integration](#️-database-integration)
 - [🏢 Multi-Tenant Architecture](#-multi-tenant-architecture)
 - [🤖 AI/ML Services](#-aiml-services)
 - [🔐 Authentication & Security](#-authentication--security)
 - [🐳 Docker & Infrastructure](#-docker--infrastructure)
 - [📊 Observability & Telemetry](#-observability--telemetry)
+
+---
+
+## ⚡ Rate Limiting & Tenant Management
+
+### Overview
+
+DeepLens implements a **multi-level, database-backed rate limiting system** that supports:
+
+- Dynamic per-tenant rate limits
+- Multiple pricing tiers (free, basic, pro, enterprise)
+- Runtime configuration updates without service restart
+- Endpoint-specific limits
+- Redis caching for performance
+
+**Related ADR:** See [ARCHITECTURE_DECISIONS.md#adr-004](ARCHITECTURE_DECISIONS.md#adr-004) and [ADR-005](ARCHITECTURE_DECISIONS.md#adr-005)
+
+For complete implementation details including database schema, service layer, and API endpoints, see the dedicated [Rate Limiting Implementation Guide](docs/RATE_LIMITING_IMPLEMENTATION.md).
+
+**Key Components:**
+
+- PostgreSQL tables for tenant limits and tier configurations
+- Redis caching with 5-minute TTL for fast lookups
+- Dynamic rate limiter policy for API Gateway
+- Endpoint-specific rate checks in individual services
+- Admin API for runtime configuration updates
+
+**Example Tiers:**
+
+| Tier       | Requests/Min | Searches/Min | Uploads/Min | Monthly Price |
+| ---------- | ------------ | ------------ | ----------- | ------------- |
+| Free       | 100          | 50           | 5           | $0            |
+| Basic      | 1,000        | 500          | 50          | $29           |
+| Pro        | 5,000        | 2,500        | 200         | $99           |
+| Enterprise | 50,000       | 25,000       | 1,000       | $499          |
 
 ---
 
