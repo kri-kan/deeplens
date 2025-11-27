@@ -64,9 +64,9 @@ Request with tenant_id
            │
            ▼
 ┌─────────────────────┐        ┌──────────────┐
-│ Check Redis Cache   │───────>│  Cache Hit   │──┐
-│ Key: ratelimit:     │        │  Return fast │  │
-│      tenant:{id}    │        └──────────────┘  │
+│ Check Redis Cache   │───────>│  Cache Hit   │───┐
+│ Key: ratelimit:     │        │  Return fast │   │
+│      tenant:{id}    │        └──────────────┘   │
 └──────────┬──────────┘                           │
            │ Cache Miss                           │
            ▼                                      │

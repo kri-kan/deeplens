@@ -1,5 +1,11 @@
 # DeepLens - Image Similarity Search Engine
 
+📋 **See also:**
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
+- [RBAC Plan](docs/RBAC_PLAN.md)
+- [Admin & Impersonation Features](docs/ADMIN_IMPERSONATION_PLAN.md)
+- [Storage Architecture](docs/STORAGE_ARCHITECTURE.md)
+
 ## Project Overview
 
 **Vision**: Build a comprehensive image similarity search engine that can find visually similar images across multiple storage locations (network shares, cloud storage, blob storage) and help optimize storage by identifying duplicates.
@@ -10,88 +16,11 @@
 - Find similar/duplicate images from indexed storage locations
 - Return ranked similarity results with image IDs/locations
 - Enable storage optimization through duplicate detection and management
+For storage and database architecture details, see [STORAGE_ARCHITECTURE.md](docs/STORAGE_ARCHITECTURE.md).
 
 ## Architecture Overview
 
-### Design Principles
-
-- **Unified .NET Backend**: .NET Core for all backend services (APIs & orchestration) with Python for specialized AI/ML tasks
-- **Platform Agnostic**: Deploy on any cloud provider, on-premises, or hybrid environments
-- **Horizontal Scaling**: Add more nodes to handle increased load
-- **Load Balancing**: Distribute workload across multiple instances
-- **Fault Tolerance**: System continues operating despite component failures
-- **Service Decoupling**: Independent services communicating via APIs and message queues
-- **Observable by Design**: Built-in telemetry, metrics, logging, and tracing
-- **Cloud-Native**: Microservices architecture with container orchestration
-
-### Event-Driven Architecture with Kafka
-
-```
-                           ┌─────────────────────────────────────────┐
-                           │         Load Balancer + WAF             │
-                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
-                           └──────────────────┬──────────────────────┘
-                                              │
-                           ┌─────────────────────────────────────────┐
-                           │         API Gateway (.NET Core)         │
-                           │  • Authentication & Authorization       │
-                           │  • Rate Limiting & Circuit Breakers     │
-                           │  • Request Routing & Load Balancing     │
-                           │  • Telemetry Collection & Correlation   │
-                           └──────────────────┬──────────────────────┘
-                                              │
-        ┌─────────────────────────────────────┼─────────────────────────────────────┐
-        │                                     │                                     │
-        ▼                                     ▼                                     ▼
-┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
-│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
-│                  │                │   Orchestration │                │    Services     │
-│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
-│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
-│ • Upload API     │                │ • Event Routing │                │   Extraction    │
-│ • Health API     │                │ • Task Queue    │                │ • Model         │
-│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
-│                  │                │ • File Watcher  │                │ • Training      │
-└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
-        │                           └─────────────────┘                └─────────────────┘
-        │                                     │                                     │
-        └─────────────────────────────────────┼─────────────────────────────────────┘
-                                              │
-                           ┌─────────────────────────────────────────┐
-                           │        Apache Kafka Event Bus           │
-                           │                                         │
-                           │  📋 Topics:                             │
-                           │  • images.uploaded    → Processing      │
-                           │  • images.validated   → Feature Extract │
-                           │  • images.processed   → Vector Index    │
-                           │  • images.indexed     → Search Ready    │
-                           │  • duplicates.found   → Duplicate Mgmt  │
-                           │  • tenant.usage       → Analytics       │
-                           │  • images.failed      → Error Handling  │
-                           └─────────────────────────────────────────┘
-                                              │
-                           ┌─────────────────────────────────────────┐
-                           │         Data & Storage Layer            │
-                           │                                         │
-                           │  ┌─────────────┐   ┌─────────────────┐  │
-                           │  │ Vector DBs  │   │ Metadata Store  │  │
-                           │  │ • Qdrant    │   │ • PostgreSQL    │  │
-                           │  │ • Weaviate  │   │ • MongoDB       │  │
-                           │  │ • Pinecone  │   │ • Redis Cache   │  │
-                           │  └─────────────┘   └─────────────────┘  │
-                           │                                         │
-                           │  ┌─────────────────────────────────┐    │
-                           │  │        Object Storage           │    │
-                           │  │ • AWS S3 / Azure Blob / GCS     │    │
-                           │  │ • MinIO (on-premises)           │    │
-                           │  │ • Local/Network File Systems    │    │
-                           │  └─────────────────────────────────┘    │
-                           └─────────────────────────────────────────┘
-                                              │
-                           ┌─────────────────────────────────────────┐
-                           │      Observability & Telemetry          │
-                           │                                         │
-                           │  ┌─────────────┐   ┌─────────────────┐  │
+For a detailed architecture overview, see [ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md).
                            │  │   Metrics   │   │     Logging     │  │
                            │  │ • Prometheus│   │ • ELK/EFK Stack │  │
                            │  │ • Grafana   │   │ • Fluentd       │  │
@@ -221,6 +150,96 @@ Topics:
 
 ## Technical Stack Recommendations
 
+For technical stack details, see:
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
+- [Storage Architecture](docs/STORAGE_ARCHITECTURE.md)
+- [RBAC Plan](docs/RBAC_PLAN.md)
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+For authentication, authorization, and user management details, see:
+- [RBAC Plan](docs/RBAC_PLAN.md)
+- [Admin & Impersonation Features](docs/ADMIN_IMPERSONATION_PLAN.md)
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+📋 **Implementation Details:** See [Admin & Impersonation Features](docs/ADMIN_IMPERSONATION_PLAN.md) for the complete design and implementation of global admin access, impersonation, tenant context switching, and audit trail features.
+
+#### Duende IdentityServer Deployment
+
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
+```
+
+#### User Management Features
+
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
+
+## Comprehensive Instrumentation & Telemetry Strategy
+
+For observability, telemetry, and monitoring details, see [OBSERVABILITY_PLAN.md](docs/OBSERVABILITY_PLAN.md).
+
+## 🏗️ System Architecture Diagrams
+
+For system architecture diagrams and technical stack details, see [ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md).
+
+## Technical Stack Recommendations
+
 ### Unified .NET + Python Technology Stack
 
 #### Service Layer Distribution
@@ -311,7 +330,8 @@ DeepLens uses Duende IdentityServer as the primary authentication and user manag
 
 #### Role-Based Access Control (RBAC)
 
-📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+For RBAC details, see [RBAC_PLAN.md](docs/RBAC_PLAN.md).
+For admin and impersonation features, see [ADMIN_IMPERSONATION_PLAN.md](docs/ADMIN_IMPERSONATION_PLAN.md).
 
 #### Duende IdentityServer Deployment
 
@@ -484,2024 +504,1743 @@ sequenceDiagram
                          └─────────────────┘
 ```
 
-### Observability & Monitoring Architecture
+## Technical Stack Recommendations
+
+### Unified .NET + Python Technology Stack
+
+#### Service Layer Distribution
+
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
+
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
+
+**� Additional Unified Service Features**
+
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
+
+**🔴 Python Services (AI/ML Specialized)**
+
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
+
+#### Cross-Service Communication
+
+**🔀 Simplified Communication Architecture**
+
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions, tenant) but does not change actual assignments. All impersonation actions are logged and clearly indicated in the UI.
+- **Tenant Context Switching**: Global admins can select and view any tenant’s interface using a tenant selector. The backend and frontend use this context to filter and display data accordingly.
+- **Audit Trail**: All admin and impersonation actions are logged for compliance and troubleshooting.
+
+#### Duende IdentityServer Deployment
+
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
+```
+
+#### User Management Features
+
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
+
+## Comprehensive Instrumentation & Telemetry Strategy
+
+### Observable Architecture Design
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        DEEPLENS OBSERVABILITY STACK                         │
+│                          TELEMETRY COLLECTION LAYER                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
-│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ Container   │  │
-│  │ Services    │    │ Services    │    │ Components   │    │ Metrics     │  │
-│  │             │    │             │    │              │    │             │  │
-│  │ • Serilog   │    │ • structlog │    │ • Prometheus │    │ • cAdvisor  │  │
-│  │ • OpenTel   │    │ • OpenTel   │    │ • Node Exp   │    │ • Redis Exp │  │
-│  │ • Custom    │    │ • FastAPI   │    │ • DB Export  │    │ • PG Export │  │
-│  │   Metrics   │    │ • Uvicorn   │    │ • OTLP       │    │ • System    │  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
 │  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
 │           │                 │                 │                 │           │
 └───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
             │                 │                 │                 │
-            └─────────────────┐│┌────────────────┘                 │
-                              │││                                  │
-            ┌─────────────────┘││└──────────────────────────────────┘
-            │                 ││
-            ▼                 ▼▼
+            ▼                 ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      OPENTELEMETRY COLLECTOR                                │
-│  • Receives telemetry from all sources (OTLP gRPC/HTTP)                    │
-│  • Processes, filters, and enriches data                                   │
-│  • Routes to appropriate storage backends                                  │
-│  • Provides unified telemetry pipeline                                     │
-└─────────────────────────────┬───────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
-┌──────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│   Prometheus     │ │     Jaeger      │ │      Loki       │
-│   (Metrics)      │ │   (Tracing)     │ │   (Logging)     │
-│                  │ │                 │ │                 │
-│ • 30-day retain  │ │ • Distributed   │ │ • Log aggreg.   │
-│ • Alert rules    │ │   tracing       │ │ • Structured    │
-│ • Multi-targets  │ │ • OTLP support  │ │   logs          │
-│ • Exporters      │ │ • Span analysis │ │ • Query logs    │
-└──────────────────┘ └─────────────────┘ └─────────────────┘
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         VISUALIZATION LAYER                                 │
+│                         TELEMETRY AGGREGATION                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │    Grafana      │  │  AlertManager   │  │         Portainer           │  │
-│  │ (Dashboards)    │  │   (Alerts)      │  │      (Management)           │  │
-│  │                 │  │                 │  │                             │  │
-│  │ • Multi-source  │  │ • Route alerts  │  │ • Container mgmt            │  │
-│  │   dashboards    │  │ • Slack/Email   │  │ • Resource monitoring       │  │
-│  │ • Real-time     │  │ • Escalation    │  │ • Docker management         │  │
-│  │   monitoring    │  │ • Grouping      │  │ • Volume management         │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+            │                 │                               │
+            ▼                 ▼                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      VISUALIZATION & ALERTING                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Telemetry Data Flow
+## 🏗️ System Architecture Diagrams
+
+### Updated DeepLens Architecture with OpenTelemetry
 
 ```
-┌─ APPLICATION LAYER ─────────────────────────────────────────────────────────┐
-│                                                                             │
-│  .NET Core APIs          Python AI Services         Infrastructure         │
-│  ┌─────────────┐         ┌─────────────┐            ┌─────────────┐         │
-│  │ • HTTP APIs │ OTLP    │ • FastAPI   │ OTLP       │ • PostgreSQL│ /metrics│
-│  │ • Serilog   │ ────┐   │ • structlog │ ────┐      │ • Redis     │ ────┐   │
-│  │ • Custom    │     │   │ • OpenTel   │     │      │ • Containers│     │   │
-│  │   Metrics   │     │   │ • Uvicorn   │     │      │ • System    │     │   │
-│  └─────────────┘     │   └─────────────┘     │      └─────────────┘     │   │
-│                      │                       │                          │   │
-└──────────────────────┼───────────────────────┼──────────────────────────┼───┘
-                       │                       │                          │
-                       ▼                       ▼                          ▼
-┌─ COLLECTION LAYER ──────────────────────────────────────────────────────────┐
-│                                                                             │
-│               OpenTelemetry Collector (Port 4317/4318)                     │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                      RECEIVERS                                      │   │
-│  │  • OTLP (gRPC/HTTP)  • Prometheus  • Filelog  • Jaeger             │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                     PROCESSORS                                      │   │
-│  │  • Batch  • Filter  • Transform  • Enrich  • Sample               │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                      EXPORTERS                                      │   │
-│  │  • Prometheus  • Jaeger  • Loki  • OTLP  • Logging                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                       │               │               │
-                       ▼               ▼               ▼
-┌─ STORAGE LAYER ─────────────────────────────────────────────────────────────┐
-│                                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                     │
-│  │ Prometheus  │    │   Jaeger    │    │    Loki     │                     │
-│  │             │    │             │    │             │                     │
-│  │ • Metrics   │    │ • Traces    │    │ • Logs      │                     │
-│  │ • 30d retain│    │ • Spans     │    │ • Structured│                     │
-│  │ • PromQL    │    │ • Dependencies    │ • LogQL     │                     │
-│  │ • Alerts    │    │ • Performance│    │ • Retention │                     │
-│  └─────────────┘    └─────────────┘    └─────────────┘                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─ VISUALIZATION LAYER ──────────────────────────────────────────────────────┐
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                           Grafana                                   │   │
-│  │  • Unified dashboards from all data sources                        │   │
-│  │  • Real-time monitoring and alerting                               │   │
-│  │  • Custom business metrics visualization                           │   │
-│  │  • SLA/SLO tracking and reporting                                  │   │
-│  │  └─────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
+                           ┌─────────────────────────────────────────┐
+                           │         Load Balancer + WAF             │
+                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
+                           └──────────────────┬──────────────────────┘
+                                              │
+                           ┌─────────────────────────────────────────┐
+                           │         API Gateway (.NET Core)         │
+                           │  • Authentication & Authorization       │
+                           │  • Rate Limiting & Circuit Breakers     │
+                           │  • Request Routing & Load Balancing     │
+                           │  • OpenTelemetry Integration           │
+                           └──────────────────┬──────────────────────┘
+                                              │
+        ┌─────────────────────────────────────┼─────────────────────────────────────┐
+        │                                     │                                     │
+        ▼                                     ▼                                     ▼
+┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
+│                  │                │   Orchestration │                │    Services     │
+│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
+│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
+│ • Upload API     │                │ • Event Routing │                │   Extraction    │
+│ • Health API     │                │ • Task Queue    │                │ • Model         │
+│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
+│                  │                │ • File Watcher  │                │ • Training      │
+└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
+        │                           └─────────────────┘                └─────────────────┘
+        │                                     │                                     │
+        └─────────────────────────────────────┼─────────────────────────────────────┘
+                                              │
+                                   ┌─────────────────┐
+                                   │   Message Bus   │
+                                   │                 │
+                                   │ • RabbitMQ      │
+                                   │ • Apache Kafka  │
+                                   │ • Azure Service │
+                                   │   Bus/AWS SQS   │
+                                   └─────────────────┘
 ```
 
-### Service-Specific Telemetry Implementation
-
-#### .NET Core Services Instrumentation
-
-```csharp
-// Program.cs - Comprehensive telemetry setup
-var builder = WebApplication.CreateBuilder(args);
-
-// OpenTelemetry configuration
-builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => tracing
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddEntityFrameworkCoreInstrumentation()
-        .AddRedisInstrumentation()
-        .AddJaegerExporter())
-    .WithMetrics(metrics => metrics
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddRuntimeInstrumentation()
-        .AddPrometheusExporter());
-
-// Modern observability: Serilog + OpenTelemetry integration
-builder.Host.UseSerilog((context, configuration) =>
-    configuration
-        .ReadFrom.Configuration(context.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithCorrelationId()
-        .Enrich.WithEnvironmentName()
-        .WriteTo.Console(new JsonFormatter())
-        .WriteTo.OpenTelemetry(options =>  // ← Serilog sends to OpenTelemetry
-        {
-            options.Endpoint = "http://otel-collector:4317";
-            options.Protocol = OtlpProtocol.Grpc;
-            options.ResourceAttributes.Add("service.name", "deeplens-core");
-        }));
-
-// Health checks
-builder.Services.AddHealthChecks()
-    .AddDbContext<DeepLensDbContext>()
-    .AddRedis(builder.Configuration.GetConnectionString("Redis"))
-    .AddRabbitMQ(builder.Configuration.GetConnectionString("RabbitMQ"))
-    .AddCheck<FeatureExtractionHealthCheck>("feature-extraction")
-    .AddCheck<VectorDbHealthCheck>("vector-database");
-
-// Custom metrics
-builder.Services.AddSingleton<IMetrics, CustomMetrics>();
-
-var app = builder.Build();
-
-// Correlation ID middleware
-app.UseCorrelationId();
-
-// Request/response logging
-app.UseSerilogRequestLogging(options =>
-{
-    options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
-    {
-        diagnosticContext.Set("UserId", httpContext.User.FindFirst("sub")?.Value);
-        diagnosticContext.Set("UserAgent", httpContext.Request.Headers["User-Agent"]);
-        diagnosticContext.Set("RequestId", httpContext.TraceIdentifier);
-    };
-});
-
-// Health check endpoints
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-});
-```
-
-#### Node.js Service Instrumentation
-
-```typescript
-// app.ts - NestJS with comprehensive telemetry
-import { NestFactory } from "@nestjs/core";
-import { Logger } from "nestjs-pino";
-import { trace, metrics } from "@opentelemetry/api";
-import { NodeSDK } from "@opentelemetry/auto-instrumentations-node";
-import { PrometheusExporter } from "@opentelemetry/exporter-prometheus";
-import { JaegerExporter } from "@opentelemetry/exporter-jaeger";
-
-// Initialize OpenTelemetry
-const sdk = new NodeSDK({
-  traceExporter: new JaegerExporter({
-    endpoint: process.env.JAEGER_ENDPOINT || "http://jaeger:14268/api/traces",
-  }),
-  metricExporter: new PrometheusExporter({
-    port: 9090,
-  }),
-  instrumentations: [
-    getNodeAutoInstrumentations({
-      "@opentelemetry/instrumentation-fs": { enabled: false },
-    }),
-  ],
-});
-
-sdk.start();
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    logger: false, // Use Pino instead
-  });
-
-  // Structured logging
-  app.useLogger(app.get(Logger));
-
-  // Correlation ID middleware
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const correlationId = req.headers["x-correlation-id"] || uuidv4();
-    req.correlationId = correlationId;
-    res.setHeader("x-correlation-id", correlationId);
-    next();
-  });
-
-  // Custom metrics middleware
-  app.use(metricsMiddleware);
-
-  // Health checks
-  app.use("/health", healthCheckRouter);
-
-  await app.listen(3000);
-}
-
-// Custom metrics collection
-class CustomMetrics {
-  private readonly httpRequestsTotal = metrics.createCounter(
-    "http_requests_total",
-    {
-      description: "Total number of HTTP requests",
-    }
-  );
-
-  private readonly imageProcessingDuration = metrics.createHistogram(
-    "image_processing_duration_seconds",
-    {
-      description: "Duration of image processing operations",
-    }
-  );
-
-  recordHttpRequest(method: string, route: string, statusCode: number) {
-    this.httpRequestsTotal.add(1, {
-      method,
-      route,
-      status_code: statusCode.toString(),
-    });
-  }
-
-  recordImageProcessing(duration: number, operation: string) {
-    this.imageProcessingDuration.record(duration, { operation });
-  }
-}
-```
-
-#### Python AI Service Instrumentation
-
-```python
-# main.py - FastAPI with comprehensive telemetry
-from fastapi import FastAPI, Request
-from opentelemetry import trace, metrics
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentator
-from opentelemetry.instrumentation.requests import RequestsInstrumentator
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-from opentelemetry.exporter.prometheus import PrometheusMetricExporter
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.metrics import MeterProvider
-import structlog
-import uvicorn
-import time
-import uuid
-
-# Configure structured logging
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-
-logger = structlog.get_logger()
-
-# OpenTelemetry setup
-trace.set_tracer_provider(TracerProvider())
-tracer = trace.get_tracer(__name__)
-
-jaeger_exporter = JaegerExporter(
-    agent_host_name="jaeger",
-    agent_port=6831,
-)
-
-# Metrics setup
-metrics.set_meter_provider(MeterProvider())
-meter = metrics.get_meter(__name__)
-
-# Custom metrics
-feature_extraction_counter = meter.create_counter(
-    "feature_extraction_total",
-    description="Total number of feature extractions"
-)
-
-model_inference_histogram = meter.create_histogram(
-    "model_inference_duration_seconds",
-    description="Duration of model inference operations"
-)
-
-app = FastAPI(title="DeepLens AI Service")
-
-# Instrument FastAPI
-FastAPIInstrumentator.instrument_app(app)
-RequestsInstrumentator().instrument()
-
-@app.middleware("http")
-async def correlation_middleware(request: Request, call_next):
-    correlation_id = request.headers.get("x-correlation-id", str(uuid.uuid4()))
-
-    # Add to structured log context
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        correlation_id=correlation_id,
-        request_path=request.url.path,
-        request_method=request.method
-    )
-
-    start_time = time.time()
-    response = await call_next(request)
-    duration = time.time() - start_time
-
-    # Log request completion
-    logger.info(
-        "Request completed",
-        status_code=response.status_code,
-        duration=duration
-    )
-
-    response.headers["x-correlation-id"] = correlation_id
-    return response
-
-@app.post("/extract-features")
-async def extract_features(image_data: bytes):
-    with tracer.start_as_current_span("extract_features") as span:
-        start_time = time.time()
-
-        try:
-            # Feature extraction logic here
-            features = await perform_feature_extraction(image_data)
-
-            # Record metrics
-            feature_extraction_counter.add(1, {"status": "success"})
-            model_inference_histogram.record(
-                time.time() - start_time,
-                {"model": "resnet50", "status": "success"}
-            )
-
-            span.set_attribute("features.count", len(features))
-            span.set_attribute("image.size", len(image_data))
-
-            logger.info("Feature extraction completed", features_count=len(features))
-
-            return {"features": features}
-
-        except Exception as e:
-            feature_extraction_counter.add(1, {"status": "error"})
-            span.record_exception(e)
-            logger.error("Feature extraction failed", error=str(e))
-            raise
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "service": "ai-service",
-        "version": "1.0.0",
-        "timestamp": time.time()
-    }
-```
-
-### Monitoring & Alerting Configuration
-
-#### Prometheus Configuration
-
-📋 **Implementation Details:** See [Prometheus Configuration](CODE_EXAMPLES.md#prometheus-configuration) for complete monitoring setup with 30-day retention and multi-service scraping.
-
-- job_name: "redis-exporter"
-  static_configs:
-
-  - targets: ["redis-exporter:9121"]
-    scrape_interval: 15s
-
-- job_name: "influxdb"
-  static_configs:
-  - targets: ["influxdb:8086"]
-    metrics_path: "/metrics"
-    scrape_interval: 30s
-
-# Kubernetes Metrics (when deployed)
-
-- job_name: "kubernetes-apiservers"
-  kubernetes_sd_configs:
-  - role: endpoints
-    scheme: https
-    tls_config:
-    ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-
-# Remote write to InfluxDB for long-term storage
-
-remote_write:
-
-- url: "http://influxdb:8086/api/v1/prom/write?db=prometheus_metrics"
-  queue_config:
-  max_samples_per_send: 1000
-  max_shards: 200
-  capacity: 2500
-
-alerting:
-alertmanagers: - static_configs: - targets: - alertmanager:9093
-
-````
-
-#### Alert Rules
-
-📋 **Implementation Details:** See [Alert Rules Configuration](CODE_EXAMPLES.md#alert-rules-configuration) for complete Prometheus alerting rules covering error rates, response times, and system health.
-
-#### Technical Capabilities Comparison
-
-| Capability               | .NET Core                               | Node.js/TypeScript               | Python                               | Advantage                                                    |
-| ------------------------ | --------------------------------------- | -------------------------------- | ------------------------------------ | ------------------------------------------------------------ |
-| **API Performance**      | ✅ Excellent (AOT, minimal APIs)        | ✅ Very Good (V8 engine)         | ⚠️ Good (async frameworks)           | **.NET Core** - Superior throughput and memory efficiency    |
-| **Image Processing**     | ✅ ImageSharp, OpenCvSharp              | ✅ Sharp, Jimp, Canvas           | ✅ PIL, OpenCV, scikit-image         | **Equal** - All have excellent libraries                     |
-| **ML Model Integration** | ✅ ML.NET, ONNX Runtime, TensorFlow.NET | ✅ TensorFlow.js, ONNX.js        | ✅ Native PyTorch/TF                 | **Python** slight edge for training, **Equal** for inference |
-| **Vector Operations**    | ✅ System.Numerics.Tensors, ML.NET      | ✅ ml-matrix, TensorFlow.js      | ✅ NumPy, SciPy                      | **Equal** - All support efficient vector ops                 |
-| **Concurrency/Scaling**  | ✅ Async/await, channels, TPL           | ✅ Event loop, workers, clusters | ⚠️ Async/await, threading challenges | **.NET/Node.js** - Better concurrent performance             |
-| **Container Size**       | ✅ Minimal (50-100MB with AOT)          | ✅ Small (100-200MB Alpine)      | ⚠️ Larger (200-500MB)                | **.NET/Node.js** - Smaller containers                        |
-| **Cold Start**           | ✅ Fast (especially AOT)                | ✅ Very Fast                     | ⚠️ Slower                            | **.NET/Node.js** - Faster serverless starts                  |
-| **Memory Usage**         | ✅ Efficient GC, AOT options            | ✅ V8 optimization               | ⚠️ Higher memory usage               | **.NET/Node.js** - More memory efficient                     |
-| **Development Speed**    | ✅ Strong typing, IntelliSense          | ✅ TypeScript, great tooling     | ✅ Dynamic, REPL                     | **Equal** - All have excellent DX                            |
-| **Ecosystem Maturity**   | ✅ Enterprise-ready                     | ✅ Vast NPM ecosystem            | ✅ Rich ML/AI ecosystem              | **Context-dependent**                                        |
-| **Cross-Platform**       | ✅ True cross-platform                  | ✅ True cross-platform           | ✅ True cross-platform               | **Equal**                                                    |
-| **Cloud Integration**    | ✅ Native Azure, good AWS/GCP           | ✅ Excellent all clouds          | ✅ Excellent all clouds              | **Equal**                                                    |
-
-#### Recommended Architecture Decision
-
-**For your .NET/JS background: .NET Core Primary with Node.js AI Services**
-
-```csharp
-// Example: High-performance .NET API with AI service integration
-[ApiController]
-[Route("api/v1/[controller]")]
-public class SearchController : ControllerBase
-{
-    private readonly IFeatureExtractionService _featureService;
-    private readonly ISimilarityMatcher _similarityMatcher;
-
-    [HttpPost("similarity")]
-    public async Task<ActionResult<SimilarityResponse>> SearchSimilar(
-        [FromForm] IFormFile image,
-        [FromQuery] SimilarityRequest request)
-    {
-        // Use ML.NET for basic image processing
-        var processedImage = await _imageProcessor.ProcessAsync(image);
-
-        // Extract features using ONNX Runtime
-        var features = await _featureService.ExtractFeaturesAsync(processedImage);
-
-        // Find similar images using vector search
-        var results = await _similarityMatcher.FindSimilarAsync(features, request.Threshold);
-
-        return Ok(new SimilarityResponse { Results = results });
-    }
-}
-````
-
-**AI Microservice in Node.js/TypeScript**:
-
-```typescript
-// Specialized AI service for complex ML operations
-import * as tf from "@tensorflow/tfjs-node";
-import { createCanvas, loadImage } from "canvas";
-
-class FeatureExtractionService {
-  private model: tf.LayersModel;
-
-  async extractFeatures(imageBuffer: Buffer): Promise<number[]> {
-    const image = await loadImage(imageBuffer);
-    const canvas = createCanvas(224, 224);
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(image, 0, 0, 224, 224);
-
-    const tensor = tf.browser
-      .fromPixels(canvas)
-      .expandDims(0)
-      .cast("float32")
-      .div(255.0);
-
-    const features = (await this.model.predict(tensor)) as tf.Tensor;
-    return Array.from(await features.data());
-  }
-}
-```
-
-### Storage & Database Architecture ✅ DECIDED
-
-#### Multi-Tenant Database Architecture ✅ REDESIGNED
-
-**🏢 Platform-Wide (Shared) Databases:**
-
-- **`nextgen_identity`**: **PostgreSQL 16** - User accounts, authentication, authorization, JWT tokens
-- **`deeplens_platform`**: **PostgreSQL 16** - Tenant registry, storage configurations, billing, API usage tracking
-- **`tenant_metadata_template`**: **PostgreSQL 16** - Template database cloned for each new tenant
-- **Time-Series Analytics**: **InfluxDB** - Business metrics, tenant usage analytics, billing data, long-term storage
-- **Infrastructure Metrics**: **Prometheus** - Real-time monitoring, alerting, short-term retention (30 days)
-- **Message Queue**: **Apache Kafka** - Cross-tenant event streaming and async processing
-- **Platform Cache**: **Redis** - Session state, authentication tokens, platform configurations
-- **Secret Management**: **Infisical** - Platform secrets, tenant storage credentials
-
-**🏠 Tenant-Specific (Isolated) Databases:**
-
-- **Tenant Metadata**: **PostgreSQL 16** - Per-tenant databases (e.g., `tenant_acme_metadata`) cloned from template
-- **Tenant Vectors**: **Qdrant Collections** - Isolated vector spaces per tenant with access control
-- **Tenant Cache**: **Redis Databases** - Tenant-specific caching (DB 0-15 per tenant)
-
-> **💡 Provisioning Model**: Each new tenant gets their own PostgreSQL database cloned from `tenant_metadata_template`, ensuring complete data isolation while maintaining shared platform services for cost efficiency.
-
-**🗄️ Tenant-Owned Storage (BYOS):**
-
-- **Azure Blob Storage** - Tenant-provided containers with managed access
-- **AWS S3 Buckets** - Tenant-owned buckets with cross-account IAM roles
-- **Google Cloud Storage** - Tenant GCS buckets with service account delegation
-- **NFS/SMB Shares** - On-premises network storage with tenant credentials
-- **MinIO/S3-Compatible** - Self-hosted object storage with tenant buckets
-
-**🏗️ Kubernetes Infrastructure Metadata (PostgreSQL):**
-
-- **`k8s_clusters`** - Multi-cluster registry with connection endpoints and health status
-- **`k8s_nodes`** - Node inventory, capacity tracking, and resource availability
-- **`k8s_namespaces`** - Namespace organization and tenant isolation boundaries
-- **`k8s_workloads`** - Deployments, StatefulSets, DaemonSets, and Jobs tracking
-- **`k8s_pods`** - Pod lifecycle, placement decisions, and resource consumption
-- **`k8s_services`** - Service discovery, load balancing, and network configuration
-- **`k8s_resource_metrics`** - Real-time CPU, memory, disk, and network usage metrics
-- **`k8s_events`** - Cluster events, troubleshooting data, and operational insights
-
-**Why PostgreSQL for Kubernetes Metadata?**
-
-- **Complex Relationships**: K8s objects have rich relationships (Pod → Node, Service → Endpoints, Deployment → ReplicaSet → Pods)
-- **ACID Transactions**: Ensures data consistency when updating related objects
-- **Complex Queries**: JOIN operations across clusters, nodes, namespaces, workloads
-- **JSON Support**: Native JSONB for storing K8s manifests and configurations
-- **Indexing**: Advanced indexing on labels, annotations, resource types
-- **Schema Evolution**: Easy to add new K8s resource types and fields
-
-**Example Kubernetes Metadata Queries:**
-
-```sql
--- Find all pods for a tenant across clusters
-SELECT p.name, p.namespace, n.name as node, c.name as cluster
-FROM k8s_pods p
-JOIN k8s_nodes n ON p.node_id = n.id
-JOIN k8s_clusters c ON n.cluster_id = c.id
-WHERE p.labels ->> 'tenant' = 'acme-corp';
-
--- Capacity planning: nodes with high resource utilization
-SELECT c.name as cluster, n.name as node,
-       n.cpu_capacity, n.memory_capacity,
-       COUNT(p.id) as pod_count
-FROM k8s_nodes n
-JOIN k8s_clusters c ON n.cluster_id = c.id
-LEFT JOIN k8s_pods p ON p.node_id = n.id
-WHERE n.cpu_utilization > 0.8
-GROUP BY c.id, n.id;
-```
-
-#### Time-Series Database Strategy ✅ DUAL APPROACH
-
-**🔥 Prometheus (Infrastructure Monitoring)**
-
-- **Purpose**: Real-time infrastructure metrics, alerting, operational monitoring
-- **Retention**: 30 days (configurable)
-- **Data Sources**: Application metrics, container metrics, Kubernetes metrics, system metrics
-- **Query Language**: PromQL for real-time queries and alerting
-- **Integration**: Native Grafana integration, AlertManager for notifications
-- **Scraping Model**: Pull-based metrics collection from /metrics endpoints
-- **Data Input**: Automatic scraping from `/metrics` endpoints
-
-**📊 InfluxDB (Business Analytics)**
-
-- **Purpose**: Long-term business metrics, tenant analytics, billing data, compliance reporting
-- **Retention**: Configurable (months to years)
-- **Data Sources**: Tenant usage patterns, API call metrics, storage utilization, custom business events
-- **Query Language**: InfluxQL and Flux for complex analytics and data processing
-- **Integration**: Grafana dashboards, custom analytics applications, reporting tools
-- **Data Model**: Optimized for high-cardinality tenant data and time-based aggregations
-- **Data Input**: Both Prometheus remote write + custom application code
-
-**🔄 Data Flow Architecture**
+### Simplified Service Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    DATA SOURCES                                 │
+│                     DeepLens Core Service (.NET)                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Application Metrics    Infrastructure Metrics                  │
-│  (Custom Business Data) (System/Container Data)                 │
-│         │                       │                               │
-│         ▼                       ▼                               │
-│  ┌─────────────┐         ┌─────────────┐                        │
-│  │ Custom Code │         │ Prometheus  │                        │
-│  │ (.NET/Python│         │ (30 days)   │                        │
-│  │  Services)  │         │             │                        │
-│  └─────────────┘         └─────────────┘                        │
-│         │                       │                               │
-│         │                       │ (remote_write)                │
-│         ▼                       ▼                               │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │              InfluxDB (Long-term Storage)                   │ │
-│  │  • Prometheus metrics (infrastructure)                     │ │
-│  │  • Business analytics (custom)                             │ │
-│  │  │  - Tenant usage patterns                               │ │
-│  │  │  - API call metrics                                    │ │
-│  │  │  - Storage utilization                                 │ │
-│  │  │  - Search operation metrics                            │ │
-│  │  │  - Billing data                                        │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-│                              │                                   │
-│                              ▼                                   │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │               Grafana Visualization                         │ │
-│  │  • Infrastructure dashboards (Prometheus data)             │ │
-│  │  • Business analytics dashboards (InfluxDB data)           │ │
-│  │  • Unified multi-tenant monitoring                         │ │
-│  └─────────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
 ```
 
-**Integration Pattern**:
+## Technical Stack Recommendations
 
-- **Prometheus**: Scrapes `/metrics` endpoints, stores in TSDB, triggers alerts
-- **InfluxDB**: Receives business events via HTTP API, stores tenant-specific metrics
-- **Grafana**: Queries both sources, combines infrastructure + business views
-- **Data Retention**: Prometheus → InfluxDB for long-term storage of critical metrics
+### Unified .NET + Python Technology Stack
 
-**Custom Application Code → InfluxDB Examples:**
+#### Service Layer Distribution
 
-```csharp
-// .NET Service writing business metrics to InfluxDB
-public class BusinessMetricsService
-{
-    private readonly IInfluxDBClient _influxClient;
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
 
-    public async Task RecordTenantUsage(string tenantId, int apiCalls, long storageUsed)
-    {
-        var point = PointData
-            .Measurement("tenant_usage")
-            .Tag("tenant_id", tenantId)
-            .Field("api_calls", apiCalls)
-            .Field("storage_bytes", storageUsed)
-            .Timestamp(DateTime.UtcNow);
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
 
-        await _influxClient.GetWriteApiAsync().WritePointAsync(point);
-    }
+**� Additional Unified Service Features**
 
-    public async Task RecordSearchOperation(string tenantId, TimeSpan duration, int resultsCount)
-    {
-        var point = PointData
-            .Measurement("search_operations")
-            .Tag("tenant_id", tenantId)
-            .Field("duration_ms", (int)duration.TotalMilliseconds)
-            .Field("results_count", resultsCount)
-            .Timestamp(DateTime.UtcNow);
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
 
-        await _influxClient.GetWriteApiAsync().WritePointAsync(point);
-    }
+**🔴 Python Services (AI/ML Specialized)**
 
-    public async Task RecordImageProcessing(string tenantId, string operation, TimeSpan duration, bool success)
-    {
-        var point = PointData
-            .Measurement("image_processing")
-            .Tag("tenant_id", tenantId)
-            .Tag("operation", operation)
-            .Tag("status", success ? "success" : "error")
-            .Field("duration_ms", (int)duration.TotalMilliseconds)
-            .Timestamp(DateTime.UtcNow);
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
 
-        await _influxClient.GetWriteApiAsync().WritePointAsync(point);
-    }
-}
+#### Cross-Service Communication
+
+**🔀 Simplified Communication Architecture**
+
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions, tenant) but does not change actual assignments. All impersonation actions are logged and clearly indicated in the UI.
+- **Tenant Context Switching**: Global admins can select and view any tenant’s interface using a tenant selector. The backend and frontend use this context to filter and display data accordingly.
+- **Audit Trail**: All admin and impersonation actions are logged for compliance and troubleshooting.
+
+#### Duende IdentityServer Deployment
+
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
 ```
 
-**Why Dual Database Strategy?**
+#### User Management Features
 
-1. **Different Data Models**: PostgreSQL excels at relational data with complex joins, while InfluxDB is optimized for time-series data with high write throughput
-2. **Performance Optimization**: Using PostgreSQL for complex metadata queries and InfluxDB for time-series analytics prevents performance interference
-3. **Data Retention**: InfluxDB can efficiently handle long-term retention policies and data compression for historical analytics
-4. **Query Patterns**: Business intelligence queries on time-series data are fundamentally different from transactional metadata operations
-5. **Specialized Tools**: Each database is optimized for its specific use case, providing better performance and easier maintenance
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
 
-**Data Input Sources Summary:**
+## Comprehensive Instrumentation & Telemetry Strategy
 
-- **PostgreSQL**: Application code via Entity Framework Core, direct SQL operations
-- **Prometheus**: Automatic scraping from `/metrics` endpoints (applications, infrastructure)
-- **InfluxDB**: Both Prometheus remote write (infrastructure metrics) + custom application code (business analytics)
-- **Result**: Unified monitoring with specialized storage for each data type
-
-#### Container Strategy
-
-- **All databases containerized** with Docker
-- **Persistent volumes** for data storage
-- **Docker Compose** for local development
-- **Kubernetes StatefulSets** for production deployment
-
-#### Storage Architecture
+### Observable Architecture Design
 
 ```
-
-#### Multi-Tenant Data Architecture
-
-```
-
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 🏢 PLATFORM DATABASES (Shared) │
+│                          TELEMETRY COLLECTION LAYER                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ nextgen*identity│ │ deeplens* │ │ tenant*metadata*│ │
-│ │ (PostgreSQL) │ │ platform │ │ template │ │
-│ │ │ │ (PostgreSQL) │ │ (PostgreSQL) │ │
-│ │ • Users │ │ • Tenant Registry│ │ • Schema Template│ │
-│ │ • Roles │ │ • Storage Configs│ │ • Table Structure│ │
-│ │ • Permissions │ │ • API Usage Logs│ │ • Indexes & RLS │ │
-│ │ • JWT Tokens │ │ • Platform Config│ │ • Cloned per Tenant│ │
-│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ InfluxDB │ │ Prometheus │ │ Kafka │ │
-│ │ (Business │ │ (Infrastructure │ │ (Messaging) │ │
-│ │ Analytics) │ │ Monitoring) │ │ │ │
-│ │ • Tenant Usage │ │ • Real-time │ │ • System Events │ │
-│ │ • Billing Data │ │ • Alerting │ │ • Notifications │ │
-│ │ • Long-term │ │ • 30-day Retention│ │ • Job Queue │ │
-│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ Infisical │ │ Grafana │ │
-│ │ (Secrets) │ │ (Visualization) │ │
-│ │ │ │ │ │
-│ │ • DB Credentials│ │ • Dashboards │ │
-│ │ • Storage Keys │ │ • Both Sources │ │
-│ │ • API Secrets │ │ • Multi-tenant │ │
-│ └─────────────────┘ └─────────────────┘ │
-│ │
-│ ┌─────────────────────────────────────────────────────────────┐ │
-│ │ Kubernetes Infrastructure Metadata (deeplens_platform) │ │
-│ │ • Cluster Registry & Multi-Cluster Management │ │
-│ │ • Node Inventory & Capacity Planning │ │
-│ │ • Workload Tracking & Resource Optimization │ │
-│ │ • Real-time Metrics & Performance Monitoring │ │
-│ │ • Event Logging & Troubleshooting Data │ │
-│ └─────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────┘
-│
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
+│  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
+│           │                 │                 │                 │           │
+└───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 🏠 TENANT-SPECIFIC DATABASES (Isolated) │
+│                         TELEMETRY AGGREGATION                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ tenant*acme* │ │ tenant*corp* │ │ tenant*startup* │ │
-│ │ metadata │ │ metadata │ │ metadata │ │
-│ │ (PostgreSQL) │ │ (PostgreSQL) │ │ (PostgreSQL) │ │
-│ │ • Images │ │ • Images │ │ • Images │ │
-│ │ • Collections │ │ • Collections │ │ • Collections │ │
-│ │ • Search Sessions│ │ • Search Sessions│ │ • Search Sessions│ │
-│ │ • User Prefs │ │ • User Prefs │ │ • User Prefs │ │
-│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ Qdrant │ │ Redis Cache │ │ Storage Factory │ │
-│ │ Collections │ │ Databases │ │ Pattern │ │
-│ │ │ │ │ │ │ │
-│ │ • acme_vectors │ │ • DB 0: acme │ │ • BYOS Configs │ │
-│ │ • corp_vectors │ │ • DB 1: corp │ │ • Provider APIs │ │
-│ │ • startup_vectors│ │ • DB 2: startup │ │ • Access Tokens │ │
-│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
-│
+            │                 │                               │
+            ▼                 ▼                               ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 🗄️ TENANT-OWNED STORAGE (BYOS - External) │
+│                      VISUALIZATION & ALERTING                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ Tenant A │ │ Tenant B │ │ Tenant C │ │
-│ │ Azure Blob │ │ AWS S3 │ │ GCS Bucket │ │
-│ │ │ │ │ │ │ │
-│ │ • Images │ │ • Images │ │ • Images │ │
-│ │ • Thumbnails │ │ • Thumbnails │ │ • Thumbnails │ │
-│ │ • Originals │ │ • Originals │ │ • Originals │ │
-│ │ • Backups │ │ • Backups │ │ • Backups │ │
-│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
-│ │
-│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│ │ Alternative │ │ Alternative │ │ Alternative │ │
-│ │ NFS/SMB Share │ │ MinIO Instance │ │ Local Storage │ │
-│ │ │ │ │ │ │ │
-│ │ • Mount Points │ │ • S3 Compatible │ │ • File Shares │ │
-│ │ • Credentials │ │ • Self-hosted │ │ • Network Paths │ │
-│ │ • Access Rules │ │ • Full Control │ │ • Direct Access │ │
-│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
-
 ```
 
-#### Monitoring & Visualization Stack ✅ ADDED
+## 🏗️ System Architecture Diagrams
 
-**Container Health & Metrics:**
-
-- **Prometheus**: Metrics collection and alerting
-- **Grafana**: Visualization dashboards and monitoring
-- **cAdvisor**: Container resource metrics
-- **Node Exporter**: System-level metrics
-- **AlertManager**: Alert routing and notifications
-
-**Container Management:**
-
-- **Portainer**: Web-based container management UI
-- **Jaeger**: Distributed tracing and performance monitoring
-
-**Monitoring Architecture:**
+### Updated DeepLens Architecture with OpenTelemetry
 
 ```
-
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│ Prometheus │ │ Grafana │ │ Portainer │
-│ (Metrics) │ │ (Visualization) │ │ (Management) │
-│ │ │ │ │ │
-│ Port: 9090 │ │ Port: 3000 │ │ Port: 9443 │
-│ │ │ admin/pass │ │ Web UI │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│ cAdvisor │ │ Node Exporter │ │ Jaeger │
-│ (Container │ │ (System Metrics)│ │ (Distributed │
-│ Metrics) │ │ │ │ Tracing) │
-│ Port: 8081 │ │ Port: 9100 │ │ Port: 16686 │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
-
-````
-
-**Key Features:**
-
-- **Real-time Monitoring**: Live container health, resource usage, performance metrics
-- **Custom Dashboards**: Pre-configured dashboards for DeepLens infrastructure
-- **Alerting**: Automated alerts for service failures, resource exhaustion
-- **Container Management**: Start/stop/restart containers, view logs, inspect configurations
-- **Distributed Tracing**: Track requests across microservices
-- **Multi-Platform**: Support for both Docker and Podman with Kubernetes
-- **Kubernetes Integration**: Cluster metadata storage, multi-cluster management
-- **Infrastructure Analytics**: Node capacity planning, workload optimization
-- **Cross-Platform Deployment**: Unified monitoring across container platforms
-
-### Platform-Agnostic Infrastructure
-
-#### Container & Orchestration
-
-- **Containerization**: Docker with multi-arch support (AMD64, ARM64)
-  - **.NET Images**: Use official Microsoft .NET runtime images (mcr.microsoft.com/dotnet/aspnet)
-  - **Node.js Images**: Use official Node.js Alpine images for smaller footprint
-- **Container Registry**: Support for any registry (Docker Hub, AWS ECR, Azure ACR, Harbor)
-- **Orchestration Options**:
-  - **Kubernetes**: Primary choice for cloud-native deployments
-  - **Docker Swarm**: Lightweight alternative for smaller deployments
-  - **Cloud Native**:
-    - **Azure**: Container Apps, AKS, App Service for Containers
-    - **AWS**: ECS, EKS, Lambda (with container support)
-    - **GCP**: Cloud Run, GKE, App Engine flexible
-  - **Bare Metal**: Docker Compose for simple deployments
-
-#### Load Balancing & Service Discovery
-
-- **External Load Balancers**:
-  - Cloud: AWS ALB, Azure Load Balancer, GCP Load Balancer
-  - On-premises: HAProxy, NGINX, Traefik
-- **Internal Load Balancing**: Kubernetes Services, Consul Connect
-- **Service Discovery**: Kubernetes DNS, Consul, etcd
-- **API Gateway**: Kong, Ambassador, Istio Gateway
-
-#### Message Queue & Event Streaming
-
-- **Message Brokers**:
-  - RabbitMQ (AMQP protocol)
-  - Apache Kafka (high-throughput streaming)
-  - Redis Streams (lightweight option)
-  - Cloud options: AWS SQS, Azure Service Bus, Google Pub/Sub
-- **Event Processing**: Apache Pulsar, NATS
-
-#### Storage Abstraction
-
-- **Object Storage**: S3-compatible APIs (AWS S3, MinIO, Azure Blob, GCS)
-- **Block Storage**: Kubernetes Persistent Volumes with CSI drivers
-- **Database Options**:
-  - Vector DB: Qdrant, Weaviate, Pinecone (cloud), Milvus
-  - Metadata: PostgreSQL, MongoDB, CockroachDB (distributed)
-  - Cache: Redis Cluster, KeyDB, Hazelcast
-
-#### Monitoring & Observability
-
-- **Metrics**: Prometheus + Grafana (standard), OpenTelemetry
-- **Logging**: ELK Stack, Fluentd, Loki, or cloud-native solutions
-- **Tracing**: Jaeger, Zipkin, AWS X-Ray, Azure Application Insights
-- **Health Checks**: Kubernetes probes, custom health endpoints
-- **Infrastructure Metadata**: Kubernetes cluster state stored in PostgreSQL for analytics and capacity planning
-
-#### Configuration Management & Secret Vault
-
-**Self-Hosted Secret Management with Infisical:**
-
-- **Secret Storage**: Database passwords, API keys, encryption keys, JWT secrets
-- **Environment Separation**: Development, staging, production secret isolation
-- **Access Control**: Role-based access to secrets, audit logging
-- **Secret Rotation**: Automated rotation of sensitive credentials
-- **Integration**: Native .NET SDK, REST API, CLI tools
-
-**Configuration Sources:**
-
-- **Infisical Vault**: Secrets and sensitive configuration
-- **Environment Variables**: Non-sensitive runtime configuration
-- **ConfigMaps/Files**: Static configuration files
-- **Feature Flags**: LaunchDarkly, Flagr, or custom implementation
-
-**Infisical Integration Example:**
-
-```csharp
-// .NET Integration with Infisical
-services.AddInfisical(options =>
-{
-    options.ClientId = Environment.GetEnvironmentVariable("INFISICAL_CLIENT_ID");
-    options.ClientSecret = Environment.GetEnvironmentVariable("INFISICAL_CLIENT_SECRET");
-    options.ProjectId = "deeplens-production";
-    options.Environment = "prod";
-});
-
-// Retrieve secrets at runtime
-var dbConnectionString = await _infisical.GetSecretAsync("DATABASE_CONNECTION_STRING");
-var jwtSecret = await _infisical.GetSecretAsync("JWT_SECRET_KEY");
-````
-
-**Secret Categories:**
-
-- **Database Credentials**: PostgreSQL, Redis, InfluxDB connection strings
-- **Authentication**: JWT signing keys, OAuth client secrets
-- **Storage**: Cloud storage access keys, encryption keys
-- **External APIs**: Third-party service API keys
-- **Certificates**: TLS certificates, signing certificates
-
-**Deployment Architecture:**
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   NextGen       │───▶│    Infisical    │───▶│   PostgreSQL    │
-│   Identity      │    │   Secret Vault  │    │   (Secrets DB)  │
-│                 │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐              │
-         └─────────────▶│  DeepLens API   │◀─────────────┘
-                        │   Services      │
-                        └─────────────────┘
+                           ┌─────────────────────────────────────────┐
+                           │         Load Balancer + WAF             │
+                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
+                           └──────────────────┬──────────────────────┘
+                                              │
+                           ┌─────────────────────────────────────────┐
+                           │         API Gateway (.NET Core)         │
+                           │  • Authentication & Authorization       │
+                           │  • Rate Limiting & Circuit Breakers     │
+                           │  • Request Routing & Load Balancing     │
+                           │  • OpenTelemetry Integration           │
+                           └──────────────────┬──────────────────────┘
+                                              │
+        ┌─────────────────────────────────────┼─────────────────────────────────────┐
+        │                                     │                                     │
+        ▼                                     ▼                                     ▼
+┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
+│                  │                │   Orchestration │                │    Services     │
+│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
+│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
+│ • Upload API     │                │ • Event Routing │                │   Extraction    │
+│ • Health API     │                │ • Task Queue    │                │ • Model         │
+│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
+│                  │                │ • File Watcher  │                │ • Training      │
+└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
+        │                           └─────────────────┘                └─────────────────┘
+        │                                     │                                     │
+        └─────────────────────────────────────┼─────────────────────────────────────┘
+                                              │
+                                   ┌─────────────────┐
+                                   │   Message Bus   │
+                                   │                 │
+                                   │ • RabbitMQ      │
+ │ • Apache Kafka  │
+                                   │ • Azure Service │
+                                   │   Bus/AWS SQS   │
+                                   └─────────────────┘
 ```
 
-- **Service Mesh**: Istio, Linkerd for advanced traffic management and mTLS
-
-## Multi-Tenant Architecture & BYOS Implementation
-
-### Tenant Data Isolation Strategy
-
-**Database Isolation Patterns:**
-
-1. **Schema-per-Tenant**: Each tenant gets isolated PostgreSQL schema
-2. **Database-per-Tenant**: Separate PostgreSQL databases for large tenants
-3. **Collection-per-Tenant**: Qdrant collections with access control
-4. **Redis DB Separation**: Dedicated Redis database numbers (0-15)
-
-```csharp
-// Tenant Context Service
-public class TenantContext : ITenantContext
-{
-    public string TenantId { get; set; }
-    public string DatabaseName => $"tenant_{TenantId}_metadata";
-    public string QdrantCollection => $"tenant_{TenantId}_vectors";
-    public int RedisDatabase => GetTenantRedisDb(TenantId);
-    public StorageConfiguration Storage { get; set; }
-}
-
-// Multi-tenant DbContext
-public class TenantDbContext : DbContext
-{
-    private readonly ITenantContext _tenantContext;
-
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        var connectionString = $"Host=localhost;Database={_tenantContext.DatabaseName};Username=tenant_user;Password=***";
-        optionsBuilder.UseNpgsql(connectionString);
-    }
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        // Add tenant ID as global query filter
-        modelBuilder.Entity<Image>().HasQueryFilter(e => e.TenantId == _tenantContext.TenantId);
-        modelBuilder.Entity<Collection>().HasQueryFilter(e => e.TenantId == _tenantContext.TenantId);
-    }
-}
-```
-
-### Bring Your Own Storage (BYOS) Implementation
-
-**Supported Storage Providers:**
-
-```csharp
-public enum StorageProvider
-{
-    AzureBlob,
-    AmazonS3,
-    GoogleCloudStorage,
-    MinIO,
-    NFS,
-    SMB,
-    LocalFileSystem
-}
-
-public class StorageConfiguration
-{
-    public string TenantId { get; set; }
-    public StorageProvider Provider { get; set; }
-    public Dictionary<string, string> Settings { get; set; }
-    public StorageCredentials Credentials { get; set; }
-    public string BasePath { get; set; }
-    public bool IsActive { get; set; }
-    public DateTime ConfiguredAt { get; set; }
-}
-
-// Azure Blob Storage Configuration
-public class AzureBlobStorageConfig : StorageConfiguration
-{
-    public string ConnectionString { get; set; }
-    public string ContainerName { get; set; }
-    public string AccountName { get; set; }
-    public bool UseManagedIdentity { get; set; }
-}
-
-// AWS S3 Configuration
-public class S3StorageConfig : StorageConfiguration
-{
-    public string BucketName { get; set; }
-    public string Region { get; set; }
-    public string AccessKeyId { get; set; }
-    public string SecretAccessKey { get; set; }
-    public string RoleArn { get; set; } // For cross-account access
-}
-
-// Google Cloud Storage Configuration
-public class GcsStorageConfig : StorageConfiguration
-{
-    public string BucketName { get; set; }
-    public string ProjectId { get; set; }
-    public string ServiceAccountJson { get; set; }
-}
-
-// NFS/SMB Configuration
-public class NetworkStorageConfig : StorageConfiguration
-{
-    public string ServerAddress { get; set; }
-    public string SharePath { get; set; }
-    public string Username { get; set; }
-    public string Password { get; set; }
-    public string Domain { get; set; }
-}
-```
-
-### Storage Factory Pattern
-
-```csharp
-public interface IStorageService
-{
-    Task<string> UploadImageAsync(string tenantId, Stream imageStream, string fileName);
-    Task<Stream> DownloadImageAsync(string tenantId, string imagePath);
-    Task<bool> DeleteImageAsync(string tenantId, string imagePath);
-    Task<StorageMetadata> GetMetadataAsync(string tenantId, string imagePath);
-}
-
-public class StorageServiceFactory : IStorageServiceFactory
-{
-    private readonly ITenantStorageConfigService _configService;
-    private readonly IServiceProvider _serviceProvider;
-
-    public async Task<IStorageService> CreateStorageServiceAsync(string tenantId)
-    {
-        var config = await _configService.GetStorageConfigAsync(tenantId);
-
-        return config.Provider switch
-        {
-            StorageProvider.AzureBlob => new AzureBlobStorageService(config),
-            StorageProvider.AmazonS3 => new S3StorageService(config),
-            StorageProvider.GoogleCloudStorage => new GcsStorageService(config),
-            StorageProvider.MinIO => new MinIOStorageService(config),
-            StorageProvider.NFS => new NfsStorageService(config),
-            _ => throw new NotSupportedException($"Storage provider {config.Provider} not supported")
-        };
-    }
-}
-
-// Azure Blob Implementation
-public class AzureBlobStorageService : IStorageService
-{
-    private readonly BlobServiceClient _blobServiceClient;
-    private readonly AzureBlobStorageConfig _config;
-
-    public async Task<string> UploadImageAsync(string tenantId, Stream imageStream, string fileName)
-    {
-        var containerClient = _blobServiceClient.GetBlobContainerClient(_config.ContainerName);
-        var blobPath = $"{_config.BasePath}/{tenantId}/{DateTime.UtcNow:yyyy/MM/dd}/{fileName}";
-
-        var blobClient = containerClient.GetBlobClient(blobPath);
-
-        var uploadOptions = new BlobUploadOptions
-        {
-            Metadata = new Dictionary<string, string>
-            {
-                ["tenant_id"] = tenantId,
-                ["uploaded_at"] = DateTime.UtcNow.ToString("O"),
-                ["original_filename"] = fileName
-            }
-        };
-
-        await blobClient.UploadAsync(imageStream, uploadOptions);
-        return blobPath;
-    }
-}
-```
-
-### Tenant Management API
-
-```csharp
-[ApiController]
-[Route("api/v1/admin/tenants")]
-[Authorize(Policy = "SystemAdmin")]
-public class TenantManagementController : ControllerBase
-{
-    [HttpPost]
-    public async Task<ActionResult<TenantResponse>> CreateTenant(CreateTenantRequest request)
-    {
-        var tenant = new Tenant
-        {
-            Id = Guid.NewGuid().ToString(),
-            Name = request.Name,
-            Domain = request.Domain,
-            PlanType = request.PlanType,
-            CreatedAt = DateTime.UtcNow,
-            IsActive = true
-        };
-
-        // Create tenant-specific database
-        await _tenantService.CreateTenantDatabaseAsync(tenant.Id);
-
-        // Create Qdrant collection
-        await _vectorService.CreateTenantCollectionAsync(tenant.Id);
-
-        // Setup Redis database
-        await _cacheService.InitializeTenantCacheAsync(tenant.Id);
-
-        return Ok(new TenantResponse { Tenant = tenant });
-    }
-
-    [HttpPost("{tenantId}/storage")]
-    public async Task<ActionResult> ConfigureStorage(string tenantId, StorageConfigurationRequest request)
-    {
-        // Validate tenant access
-        if (!await _tenantService.CanManageTenant(tenantId, User))
-            return Forbid();
-
-        // Test storage connection
-        var testResult = await _storageValidator.ValidateConfigurationAsync(request.Configuration);
-        if (!testResult.IsValid)
-            return BadRequest(testResult.Errors);
-
-        // Store encrypted configuration
-        await _storageConfigService.SaveConfigurationAsync(tenantId, request.Configuration);
-
-        // Initialize storage structure
-        var storageService = await _storageFactory.CreateStorageServiceAsync(tenantId);
-        await storageService.InitializeTenantStorageAsync(tenantId);
-
-        return Ok();
-    }
-
-    [HttpGet("{tenantId}/storage/test")]
-    public async Task<ActionResult<StorageTestResult>> TestStorageConfiguration(string tenantId)
-    {
-        var config = await _storageConfigService.GetConfigurationAsync(tenantId);
-        var testResult = await _storageValidator.TestConnectionAsync(config);
-
-        return Ok(testResult);
-    }
-}
-```
-
-### Tenant Storage Admin Interface
-
-```typescript
-// React Admin Interface for Storage Configuration
-interface StorageConfigFormProps {
-  tenantId: string;
-  onSave: (config: StorageConfiguration) => Promise<void>;
-}
-
-const StorageConfigForm: React.FC<StorageConfigFormProps> = ({
-  tenantId,
-  onSave,
-}) => {
-  const [provider, setProvider] = useState<StorageProvider>(
-    StorageProvider.AzureBlob
-  );
-  const [config, setConfig] = useState<Partial<StorageConfiguration>>({});
-  const [testing, setTesting] = useState(false);
-
-  const handleTest = async () => {
-    setTesting(true);
-    try {
-      const result = await api.testStorageConfig(tenantId, config);
-      if (result.success) {
-        notification.success({ message: "Storage connection successful!" });
-      } else {
-        notification.error({ message: `Connection failed: ${result.error}` });
-      }
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <Form layout="vertical" onFinish={onSave}>
-      <Form.Item label="Storage Provider">
-        <Select value={provider} onChange={setProvider}>
-          <Option value={StorageProvider.AzureBlob}>Azure Blob Storage</Option>
-          <Option value={StorageProvider.AmazonS3}>Amazon S3</Option>
-          <Option value={StorageProvider.GoogleCloudStorage}>
-            Google Cloud Storage
-          </Option>
-          <Option value={StorageProvider.MinIO}>MinIO</Option>
-          <Option value={StorageProvider.NFS}>NFS Share</Option>
-        </Select>
-      </Form.Item>
-
-      {provider === StorageProvider.AzureBlob && (
-        <>
-          <Form.Item label="Connection String" required>
-            <Input.Password
-              placeholder="DefaultEndpointsProtocol=https;AccountName=..."
-              onChange={(e) =>
-                setConfig({ ...config, connectionString: e.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item label="Container Name" required>
-            <Input
-              placeholder="images"
-              onChange={(e) =>
-                setConfig({ ...config, containerName: e.target.value })
-              }
-            />
-          </Form.Item>
-        </>
-      )}
-
-      {provider === StorageProvider.AmazonS3 && (
-        <>
-          <Form.Item label="Bucket Name" required>
-            <Input
-              placeholder="my-tenant-images"
-              onChange={(e) =>
-                setConfig({ ...config, bucketName: e.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item label="Region" required>
-            <Input
-              placeholder="us-east-1"
-              onChange={(e) => setConfig({ ...config, region: e.target.value })}
-            />
-          </Form.Item>
-          <Form.Item label="Access Key ID">
-            <Input
-              placeholder="AKIA..."
-              onChange={(e) =>
-                setConfig({ ...config, accessKeyId: e.target.value })
-              }
-            />
-          </Form.Item>
-          <Form.Item label="Secret Access Key">
-            <Input.Password
-              placeholder="..."
-              onChange={(e) =>
-                setConfig({ ...config, secretAccessKey: e.target.value })
-              }
-            />
-          </Form.Item>
-          <Alert
-            message="IAM Role Recommended"
-            description="For production, use IAM roles instead of access keys for better security."
-            type="info"
-            showIcon
-          />
-        </>
-      )}
-
-      <Space>
-        <Button onClick={handleTest} loading={testing}>
-          Test Connection
-        </Button>
-        <Button type="primary" htmlType="submit">
-          Save Configuration
-        </Button>
-      </Space>
-    </Form>
-  );
-};
-```
-
-### Data Migration & Tenant Onboarding
-
-```csharp
-public class TenantOnboardingService : ITenantOnboardingService
-{
-    public async Task<OnboardingResult> OnboardTenantAsync(TenantOnboardingRequest request)
-    {
-        var onboardingId = Guid.NewGuid();
-
-        try
-        {
-            // Step 1: Create tenant record
-            var tenant = await CreateTenantAsync(request);
-
-            // Step 2: Provision database resources
-            await ProvisionTenantDatabaseAsync(tenant.Id);
-
-            // Step 3: Setup storage configuration
-            if (request.StorageConfiguration != null)
-            {
-                await ConfigureTenantStorageAsync(tenant.Id, request.StorageConfiguration);
-            }
-
-            // Step 4: Create default collections and settings
-            await InitializeTenantDefaultsAsync(tenant.Id);
-
-            // Step 5: Import existing data (if provided)
-            if (request.ExistingDataLocation != null)
-            {
-                await ImportExistingDataAsync(tenant.Id, request.ExistingDataLocation);
-            }
-
-            // Step 6: Send welcome email and setup instructions
-            await SendWelcomeEmailAsync(tenant, request.AdminEmail);
-
-            return new OnboardingResult
-            {
-                Success = true,
-                TenantId = tenant.Id,
-                ApiEndpoint = $"https://api.deeplens.com/{tenant.Id}",
-                AdminPanelUrl = $"https://admin.deeplens.com/tenants/{tenant.Id}"
-            };
-        }
-        catch (Exception ex)
-        {
-            // Cleanup on failure
-            await CleanupFailedOnboardingAsync(onboardingId);
-            throw;
-        }
-    }
-}
-```
-
-This multi-tenant architecture provides:
-
-1. **🔒 Complete Data Isolation**: Each tenant's data is completely separated
-2. **🗄️ BYOS Flexibility**: Tenants can use their own storage (Azure, AWS, GCS, NFS, etc.)
-3. **🛡️ Security**: Encrypted credentials, access controls, audit logging
-4. **⚡ Performance**: Tenant-specific caching and database optimization
-5. **📊 Admin Control**: Comprehensive tenant management interface
-6. **🔧 Easy Onboarding**: Automated tenant provisioning and data migration
-
-## Core Engine Components
-
-### 1. Image Ingestion Pipeline
-
-```python
-# Pseudo-code structure
-class ImageIngestionPipeline:
-    - scan_storage_locations()
-    - validate_image_files()
-    - extract_metadata()
-    - generate_thumbnails()
-    - queue_for_processing()
-```
-
-**Features**:
-
-- Multi-threaded scanning of storage locations
-- Image format validation and conversion
-- Metadata extraction (EXIF, file info)
-- Thumbnail generation for quick preview
-- Progress tracking and error handling
-
-### 2. Feature Extraction Engine
-
-```python
-class FeatureExtractor:
-    - load_models() # Multiple model support
-    - preprocess_image()
-    - extract_visual_features()
-    - extract_semantic_features()
-    - normalize_features()
-```
-
-**Models to Implement**:
-
-- **Perceptual Hash**: For exact/near-duplicate detection
-- **Deep Features**: CNN-based features for semantic similarity
-- **Color Histograms**: For color-based matching
-- **Edge Features**: For structural similarity
-- **CLIP Features**: For text-to-image and semantic search
-
-### 3. Similarity Matching Engine
-
-```python
-class SimilarityMatcher:
-    - compute_similarity_scores()
-    - rank_results()
-    - apply_filters()
-    - deduplicate_results()
-```
-
-**Similarity Metrics**:
-
-- Cosine similarity for deep features
-- Hamming distance for perceptual hashes
-- Euclidean distance for color features
-- Weighted combination of multiple metrics
-
-### 4. Storage Connectors
-
-```python
-class StorageConnector:
-    - list_files()
-    - read_file()
-    - get_metadata()
-    - check_accessibility()
-```
-
-**Supported Storage Types**:
-
-- Local file systems
-- Network file shares (SMB/CIFS)
-- Cloud storage (AWS S3, Azure Blob, Google Cloud)
-- FTP/SFTP servers
-- Database BLOBs
-
-## Database Schema Design
-
-### Vector Storage
-
-```sql
--- Vector embeddings table
-CREATE TABLE image_vectors (
-    id UUID PRIMARY KEY,
-    image_id UUID REFERENCES images(id),
-    model_name VARCHAR(50),
-    vector_data VECTOR(512), -- Depends on model output size
-    created_at TIMESTAMP
-);
-```
-
-### Metadata Storage
-
-```sql
--- Main images table
-CREATE TABLE images (
-    id UUID PRIMARY KEY,
-    file_path TEXT,
-    storage_location VARCHAR(100),
-    storage_type VARCHAR(20),
-    file_size BIGINT,
-    width INTEGER,
-    height INTEGER,
-    format VARCHAR(10),
-    hash_md5 VARCHAR(32),
-    hash_perceptual VARCHAR(64),
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    indexed_at TIMESTAMP
-);
-
--- Similarity results cache
-CREATE TABLE similarity_cache (
-    query_hash VARCHAR(64) PRIMARY KEY,
-    results JSONB,
-    created_at TIMESTAMP,
-    expires_at TIMESTAMP
-);
-```
-
-## API Design
-
-### REST Endpoints
-
-```yaml
-POST /api/v1/search/similarity
-- Upload image or provide image URL
-- Returns ranked similar images
-
-POST /api/v1/search/duplicates
-- Find exact or near-duplicate images
-- Returns grouped duplicates with confidence scores
-
-GET /api/v1/images/{id}
-- Get image metadata and thumbnail
-
-POST /api/v1/index/scan
-- Trigger scanning of storage locations
-- Returns job ID for progress tracking
-
-GET /api/v1/index/status/{job_id}
-- Get indexing job status and progress
-
-POST /api/v1/storage/add
-- Add new storage location for indexing
-
-GET /api/v1/stats/overview
-- Get system statistics and health metrics
-
-# Image Ingestion & Index API
-POST /api/v1/ingest/upload
-- Upload and index single image
-- Supports multipart file upload
-- Auto-detects storage configuration per tenant
-
-POST /api/v1/ingest/batch
-- Upload and index multiple images in batch
-- Returns job ID for tracking progress
-
-POST /api/v1/ingest/url
-- Ingest image from URL
-- Downloads and processes image
-
-GET /api/v1/ingest/status/{job_id}
-- Get ingestion job status and progress
-
-DELETE /api/v1/ingest/{image_id}
-- Remove image from index and optionally from storage
-
-# Tenant Storage Configuration API
-POST /api/v1/tenants/{tenant_id}/storage/configure
-- Configure storage backend for tenant (NFS, Blob, S3, etc.)
-
-GET /api/v1/tenants/{tenant_id}/storage/config
-- Get current storage configuration for tenant
-
-PUT /api/v1/tenants/{tenant_id}/storage/config
-- Update storage configuration for tenant
-```
-
-### Request/Response Examples
-
-```json
-// Similarity Search Request
-{
-  "image": "base64_encoded_image_data",
-  "similarity_threshold": 0.8,
-  "max_results": 50,
-  "include_metadata": true,
-  "storage_locations": ["location1", "location2"]
-}
-
-// Response
-{
-  "query_id": "uuid",
-  "results": [
-    {
-      "image_id": "uuid",
-      "similarity_score": 0.95,
-      "file_path": "/path/to/image.jpg",
-      "storage_location": "aws-s3-bucket",
-      "metadata": {
-        "width": 1920,
-        "height": 1080,
-        "file_size": 2048576,
-        "format": "JPEG"
-      },
-      "thumbnail_url": "/api/v1/thumbnails/uuid"
-    }
-  ],
-  "total_results": 25,
-  "processing_time_ms": 150
-}
-
-// Image Ingestion - Single Upload Request
-{
-  "tenant_id": "tenant-uuid",
-  "collection_id": "collection-uuid",
-  "metadata": {
-    "tags": ["product", "catalog"],
-    "description": "Product image for catalog",
-    "category": "electronics"
-  },
-  "processing_options": {
-    "generate_thumbnails": true,
-    "extract_features": true,
-    "duplicate_check": true
-  }
-}
-
-// Image Ingestion - Single Upload Response
-{
-  "image_id": "img-uuid",
-  "status": "processing",
-  "job_id": "job-uuid",
-  "storage_path": "tenant-uuid/collection-uuid/img-uuid.jpg",
-  "estimated_processing_time_ms": 2000,
-  "created_at": "2025-11-19T01:00:00Z"
-}
-
-// Batch Upload Request
-{
-  "tenant_id": "tenant-uuid",
-  "collection_id": "collection-uuid",
-  "images": [
-    {
-      "filename": "image1.jpg",
-      "metadata": {"tags": ["tag1"]},
-      "content_type": "image/jpeg"
-    },
-    {
-      "filename": "image2.png",
-      "metadata": {"tags": ["tag2"]},
-      "content_type": "image/png"
-    }
-  ],
-  "processing_options": {
-    "parallel_processing": true,
-    "batch_size": 10
-  }
-}
-
-// Batch Upload Response
-{
-  "batch_id": "batch-uuid",
-  "job_id": "job-uuid",
-  "total_images": 2,
-  "estimated_completion": "2025-11-19T01:05:00Z",
-  "status": "queued",
-  "images": [
-    {
-      "filename": "image1.jpg",
-      "image_id": "img1-uuid",
-      "status": "queued"
-    },
-    {
-      "filename": "image2.png",
-      "image_id": "img2-uuid",
-      "status": "queued"
-    }
-  ]
-}
-
-// URL Ingestion Request
-{
-  "tenant_id": "tenant-uuid",
-  "collection_id": "collection-uuid",
-  "image_url": "https://example.com/image.jpg",
-  "metadata": {
-    "source": "web_scraping",
-    "original_url": "https://example.com/page"
-  },
-  "processing_options": {
-    "validate_url": true,
-    "timeout_ms": 30000
-  }
-}
-
-// Tenant Storage Configuration Request
-{
-  "storage_type": "azure_blob",
-  "configuration": {
-    "connection_string": "DefaultEndpointsProtocol=https;AccountName=...",
-    "container_name": "images",
-    "base_path": "tenant/{tenant_id}",
-    "redundancy": "geo_redundant"
-  },
-  "settings": {
-    "auto_create_containers": true,
-    "enable_cdn": true,
-    "compression": "gzip",
-    "encryption": "aes256"
-  }
-}
-
-// Alternative NFS Configuration
-{
-  "storage_type": "nfs",
-  "configuration": {
-    "mount_point": "/mnt/tenant-storage",
-    "server": "nfs.example.com",
-    "export_path": "/exports/images",
-    "base_path": "tenant/{tenant_id}"
-  },
-  "settings": {
-    "auto_create_directories": true,
-    "permissions": "0755",
-    "backup_enabled": true
-  }
-}
-
-// Job Status Response (Ingestion Progress)
-{
-  "job_id": "job-uuid",
-  "status": "processing",
-  "progress": {
-    "total_images": 100,
-    "processed": 45,
-    "failed": 2,
-    "remaining": 53,
-    "percentage": 45.0
-  },
-  "timing": {
-    "started_at": "2025-11-19T01:00:00Z",
-    "estimated_completion": "2025-11-19T01:10:00Z",
-    "average_processing_time_ms": 1500
-  },
-  "results": {
-    "successful_uploads": 43,
-    "duplicates_found": 5,
-    "errors": [
-      {
-        "image_id": "img-failed-uuid",
-        "error": "Invalid image format",
-        "details": "Unsupported format: WEBP"
-      }
-    ]
-  }
-}
-```
-
-## Image Ingestion Pipeline Architecture
-
-### Multi-Tenant Storage Strategy
+### Simplified Service Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Image Ingestion API                         │
-│  ┌───────────────┐  ┌────────────────┐  ┌───────────────────┐  │
-│  │ Upload        │  │ Validation &   │  │ Metadata          │  │
-│  │ Endpoint      │─→│ Processing     │─→│ Extraction        │  │
-│  │               │  │                │  │                   │  │
-│  └───────────────┘  └────────────────┘  └───────────────────┘  │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  │
-                ┌─────────────────────────────────────────┐
-                │         Tenant Router                   │
-                │   • Determines storage backend          │
-                │   • Applies tenant-specific settings    │
-                │   • Routes to appropriate storage       │
-                └─────────────────┬───────────────────────┘
-                                  │
-        ┌─────────────────────────┼─────────────────────────┐
-        │                         │                         │
-        ▼                         ▼                         ▼
-┌──────────────┐        ┌──────────────┐        ┌──────────────┐
-│   NFS/SMB    │        │  Azure Blob  │        │   AWS S3     │
-│   Storage    │        │   Storage    │        │   Storage    │
-│              │        │              │        │              │
-│ • On-premise │        │ • Cloud blob │        │ • S3 bucket  │
-│ • Network    │        │ • CDN ready  │        │ • CloudFront │
-│   shares     │        │ • Geo-replic │        │ • Multi-AZ   │
-└──────────────┘        └──────────────┘        └──────────────┘
-        │                         │                         │
-        └─────────────────────────┼─────────────────────────┘
-                                  │
-                ┌─────────────────────────────────────────┐
-                │        Processing Pipeline              │
-                │                                         │
-                │  ┌──────────────┐  ┌─────────────────┐  │
-                │  │ Feature      │  │ Vector          │  │
-                │  │ Extraction   │─→│ Generation      │  │
-                │  │ (AI/ML)      │  │ & Storage       │  │
-                │  └──────────────┘  └─────────────────┘  │
-                │           │                 │           │
-                │           ▼                 ▼           │
-                │  ┌──────────────┐  ┌─────────────────┐  │
-                │  │ Thumbnail    │  │ Index Update    │  │
-                │  │ Generation   │  │ (Qdrant/Vector │  │
-                │  │              │  │ Database)       │  │
-                │  └──────────────┘  └─────────────────┘  │
-                └─────────────────────────────────────────┘
-                                  │
-                ┌─────────────────────────────────────────┐
-                │         Metadata Storage                │
-                │                                         │
-                │  ┌──────────────┐  ┌─────────────────┐  │
-                │  │ PostgreSQL   │  │ Search Index    │  │
-                │  │ • Image meta │  │ • Elasticsearch │  │
-                │  │ • Collections│  │ • Text search   │  │
-                │  │ • Tenants    │  │ • Faceted       │  │
-                │  └──────────────┘  └─────────────────┘  │
-                └─────────────────────────────────────────┘
+│                     DeepLens Core Service (.NET)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
 ```
 
-### Storage Configuration Per Tenant
+## Technical Stack Recommendations
 
-The system supports multiple storage backends per tenant, configured through the tenant management API:
+### Unified .NET + Python Technology Stack
 
-**Supported Storage Types:**
+#### Service Layer Distribution
 
-- **NFS/SMB**: Network file shares for on-premises deployments
-- **Azure Blob Storage**: Cloud storage with CDN integration
-- **AWS S3**: S3 buckets with CloudFront distribution
-- **Google Cloud Storage**: GCS buckets with Cloud CDN
-- **MinIO**: Self-hosted S3-compatible storage
-- **Local File System**: For development and small deployments
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
 
-**Tenant Storage Routing:**
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
 
-```
-Tenant A → Azure Blob Storage (container: tenant-a-images)
-Tenant B → AWS S3 (bucket: tenant-b-media)
-Tenant C → NFS Mount (path: /mnt/storage/tenant-c/)
-Tenant D → Local FS (path: /data/tenants/tenant-d/)
-```
+**� Additional Unified Service Features**
 
-### Ingestion Workflow Process
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
 
-**Step 1: Upload & Validation**
+**🔴 Python Services (AI/ML Specialized)**
 
-```csharp
-1. Receive image upload request
-2. Validate authentication & tenant permissions
-3. Check file format (JPEG, PNG, WEBP, TIFF, BMP)
-4. Validate file size limits (per tenant configuration)
-5. Perform virus/malware scanning (optional)
-6. Generate unique image ID and job ID
-7. 🔥 Publish to Kafka: "images.uploaded" topic
-```
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
 
-**Step 2: Storage Routing & Event Publishing**
+#### Cross-Service Communication
 
-```csharp
-1. Query tenant storage configuration
-2. Determine target storage backend
-3. Generate storage path: {tenant_id}/{collection_id}/{image_id}.{ext}
-4. Apply storage-specific settings (encryption, compression)
-5. Upload to configured storage backend
-6. Generate storage metadata (path, size, checksum)
-7. 🔥 Kafka Event: ImageUploadedEvent {
-     TenantId, ImageId, StoragePath, FileSize, MimeType, UploadedAt
-   }
-```
+**🔀 Simplified Communication Architecture**
 
-**Step 3: Asynchronous Processing Pipeline (Kafka-Driven)**
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
 
-```csharp
-// Validation Service (Consumer: images.uploaded)
-1. 🎧 Consume from "images.uploaded" topic
-2. Validate image integrity and format
-3. Extract EXIF metadata (camera, GPS, timestamp)
-4. Generate multiple thumbnail sizes (150x150, 300x300, 600x600)
-5. 🔥 Publish to "images.validated" (success) or "images.failed" (error)
+**📊 Observability & Telemetry (Built-in)**
 
-// Feature Extraction Service (Consumer: images.validated)
-1. 🎧 Consume from "images.validated" topic
-2. Extract visual features using AI/ML models:
-   - ResNet50 for general features (2048-dim vector)
-   - CLIP for multimodal features (768-dim vector)
-   - Custom models for domain-specific features
-3. 🔥 Publish to "images.processed" topic with feature vectors
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
 
-// Vector Indexing Service (Consumer: images.processed)
-1. 🎧 Consume from "images.processed" topic
-2. Store vectors in Qdrant with metadata
-3. Update PostgreSQL with image record
-4. 🔥 Publish to "images.indexed" topic
+## Authentication & Authorization Strategy
 
-// Duplicate Detection Service (Consumer: images.processed)
-1. 🎧 Consume from "images.processed" topic (parallel to indexing)
-2. Search for similar vectors in Qdrant
-3. Calculate similarity scores
-4. 🔥 Publish to "duplicates.found" if matches detected
-```
+### Self-Hosted Authentication with Duende IdentityServer
 
-**Step 4: Kafka-Driven Duplicate Detection**
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
 
-```csharp
-// Duplicate Detection Service (Consumer: images.processed)
-1. 🎧 Consume from "images.processed" topic (parallel to indexing)
-2. Calculate perceptual hash (pHash, aHash, dHash)
-3. Search existing vectors for similar images in Qdrant
-4. If duplicates found (similarity > threshold):
-   - Create duplicate relationship records
-   - 🔥 Publish to "duplicates.found" topic
-   - Optionally notify tenant via WebSocket/email
-5. Store duplicate analysis results in PostgreSQL
-```
+#### Duende IdentityServer Implementation
 
-### Kafka Service Integration Examples
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
 
-**Producer Example (.NET Upload API)**
+#### Authentication Options
 
-```csharp
-// After successful file upload
-var imageUploadedEvent = new ImageUploadedEvent
-{
-    TenantId = tenantId,
-    ImageId = imageId,
-    OriginalFileName = fileName,
-    StorageProvider = provider,
-    StoragePath = path,
-    FileSize = size,
-    MimeType = mimeType,
-    Checksum = checksum,
-    UploadedAt = DateTime.UtcNow
-};
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
 
-await _kafkaProducer.SendAsync("images.uploaded", imageUploadedEvent);
-```
+#### Security Features
 
-**Consumer Example (Python Feature Extraction)**
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
 
-```python
-# Feature Extraction Service
-from kafka import KafkaConsumer, KafkaProducer
-import json
+#### Role-Based Access Control (RBAC)
 
-consumer = KafkaConsumer(
-    'images.validated',
-    bootstrap_servers=['localhost:9092'],
-    group_id='feature-extraction-group',
-    value_deserializer=lambda m: json.loads(m.decode('utf-8'))
-)
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
 
-for message in consumer:
-    image_event = message.value
+#### Admin Access, Impersonation, and Tenant Context Switching
 
-    # Extract features using ResNet50/CLIP
-    features = await extract_features(image_event['storage_path'])
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions, tenant) but does not change actual assignments. All impersonation actions are logged and clearly indicated in the UI.
+- **Tenant Context Switching**: Global admins can select and view any tenant’s interface using a tenant selector. The backend and frontend use this context to filter and display data accordingly.
+- **Audit Trail**: All admin and impersonation actions are logged for compliance and troubleshooting.
 
-    # Publish processed event
-    processed_event = {
-        **image_event,
-        'features': features.tolist(),
-        'feature_model': 'resnet50',
-        'processed_at': datetime.utcnow().isoformat()
-    }
+#### Duende IdentityServer Deployment
 
-    producer.send('images.processed', processed_event)
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
 ```
 
-### Batch Processing Optimizations
+#### User Management Features
 
-**Parallel Processing Strategy:**
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
 
-- Process multiple images concurrently using worker threads
-- Batch feature extraction for efficiency
-- Use streaming uploads for large files
-- Implement progressive processing status updates
+## Comprehensive Instrumentation & Telemetry Strategy
 
-**Queue Management:**
+### Observable Architecture Design
 
-📋 **Kafka Implementation Details:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          TELEMETRY COLLECTION LAYER                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
+│  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
+│           │                 │                 │                 │           │
+└───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         TELEMETRY AGGREGATION                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+            │                 │                               │
+            ▼                 ▼                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      VISUALIZATION & ALERTING                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-**Producer Configuration (.NET)**
+## 🏗️ System Architecture Diagrams
 
-```csharp
-// Startup.cs - Kafka Producer Setup
-services.Configure<KafkaProducerOptions>(options =>
-{
-    options.BootstrapServers = "localhost:9092";
-    options.Acks = Acks.Leader;
-    options.Retries = 3;
-    options.EnableIdempotence = true;
+### Updated DeepLens Architecture with OpenTelemetry
+
+```
+                           ┌─────────────────────────────────────────┐
+                           │         Load Balancer + WAF             │
+                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
+                           └──────────────────┬──────────────────────┘
+                                              │
+                           ┌─────────────────────────────────────────┐
+                           │         API Gateway (.NET Core)         │
+                           │  • Authentication & Authorization       │
+                           │  • Rate Limiting & Circuit Breakers     │
+                           │  • Request Routing & Load Balancing     │
+                           │  • OpenTelemetry Integration           │
+                           └──────────────────┬──────────────────────┘
+                                              │
+        ┌─────────────────────────────────────┼─────────────────────────────────────┐
+        │                                     │                                     │
+        ▼                                     ▼                                     ▼
+┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
+│                  │                │   Orchestration │                │    Services     │
+│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
+│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
+│ • Upload API     │                │ • Event Routing │                │   Extraction    │
+│ • Health API     │                │ • Task Queue    │                │ • Model         │
+│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
+│                  │                │ • File Watcher  │                │ • Training      │
+└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
+        │                           └─────────────────┘                └─────────────────┘
+        │                                     │                                     │
+        └─────────────────────────────────────┼─────────────────────────────────────┘
+                                              │
+                                   ┌─────────────────┐
+                                   │   Message Bus   │
+                                   │                 │
+                                   │ • RabbitMQ      │
+                                   │ • Apache Kafka  │
+                                   │ • Azure Service │
+                                   │   Bus/AWS SQS   │
+                                   └─────────────────┘
+```
+
+### Simplified Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     DeepLens Core Service (.NET)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
+```
+
+## Technical Stack Recommendations
+
+### Unified .NET + Python Technology Stack
+
+#### Service Layer Distribution
+
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
+
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
+
+**� Additional Unified Service Features**
+
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
+
+**🔴 Python Services (AI/ML Specialized)**
+
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
+
+#### Cross-Service Communication
+
+**🔀 Simplified Communication Architecture**
+
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions, tenant) but does not change actual assignments. All impersonation actions are logged and clearly indicated in the UI.
+- **Tenant Context Switching**: Global admins can select and view any tenant’s interface using a tenant selector. The backend and frontend use this context to filter and display data accordingly.
+- **Audit Trail**: All admin and impersonation actions are logged for compliance and troubleshooting.
+
+#### Duende IdentityServer Deployment
+
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
+```
+
+#### User Management Features
+
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
+
+## Comprehensive Instrumentation & Telemetry Strategy
+
+### Observable Architecture Design
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          TELEMETRY COLLECTION LAYER                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
+│  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
+│           │                 │                 │                 │           │
+└───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         TELEMETRY AGGREGATION                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+            │                 │                               │
+            ▼                 ▼                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      VISUALIZATION & ALERTING                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🏗️ System Architecture Diagrams
+
+### Updated DeepLens Architecture with OpenTelemetry
+
+```
+                           ┌─────────────────────────────────────────┐
+                           │         Load Balancer + WAF             │
+                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
+                           └──────────────────┬──────────────────────┘
+                                              │
+                           ┌─────────────────────────────────────────┐
+                           │         API Gateway (.NET Core)         │
+                           │  • Authentication & Authorization       │
+                           │  • Rate Limiting & Circuit Breakers     │
+                           │  • Request Routing & Load Balancing     │
+                           │  • OpenTelemetry Integration           │
+                           └──────────────────┬──────────────────────┘
+                                              │
+        ┌─────────────────────────────────────┼─────────────────────────────────────┐
+        │                                     │                                     │
+        ▼                                     ▼                                     ▼
+┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
+│                  │                │   Orchestration │                │    Services     │
+│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
+│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
+│ • Upload API     │                │ • Event Routing │                │   Extraction    │
+│ • Health API     │                │ • Task Queue    │                │ • Model         │
+│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
+│                  │                │ • File Watcher  │                │ • Training      │
+└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
+        │                           └─────────────────┘                └─────────────────┘
+        │                                     │                                     │
+        └─────────────────────────────────────┼─────────────────────────────────────┘
+                                              │
+                                   ┌─────────────────┐
+                                   │   Message Bus   │
+                                   │                 │
+                                   │ • RabbitMQ      │
+                                   │ • Apache Kafka  │
+                                   │ • Azure Service │
+                                   │   Bus/AWS SQS   │
+                                   └─────────────────┘
+```
+
+### Simplified Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     DeepLens Core Service (.NET)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
+```
+
+## Technical Stack Recommendations
+
+### Unified .NET + Python Technology Stack
+
+#### Service Layer Distribution
+
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
+
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
+
+**� Additional Unified Service Features**
+
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
+
+**🔴 Python Services (AI/ML Specialized)**
+
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
+
+#### Cross-Service Communication
+
+**🔀 Simplified Communication Architecture**
+
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions, tenant) but does not change actual assignments. All impersonation actions are logged and clearly indicated in the UI.
+- **Tenant Context Switching**: Global admins can select and view any tenant’s interface using a tenant selector. The backend and frontend use this context to filter and display data accordingly.
+- **Audit Trail**: All admin and impersonation actions are logged for compliance and troubleshooting.
+
+#### Duende IdentityServer Deployment
+
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
+```
+
+#### User Management Features
+
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
+
+## Comprehensive Instrumentation & Telemetry Strategy
+
+### Observable Architecture Design
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          TELEMETRY COLLECTION LAYER                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
+│  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
+│           │                 │                 │                 │           │
+└───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         TELEMETRY AGGREGATION                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+            │                 │                               │
+            ▼                 ▼                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      VISUALIZATION & ALERTING                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🏗️ System Architecture Diagrams
+
+### Updated DeepLens Architecture with OpenTelemetry
+
+```
+                           ┌─────────────────────────────────────────┐
+                           │         Load Balancer + WAF             │
+                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
+                           └──────────────────┬──────────────────────┘
+                                              │
+                           ┌─────────────────────────────────────────┐
+                           │         API Gateway (.NET Core)         │
+                           │  • Authentication & Authorization       │
+                           │  • Rate Limiting & Circuit Breakers     │
+                           │  • Request Routing & Load Balancing     │
+                           │  • OpenTelemetry Integration           │
+                           └──────────────────┬──────────────────────┘
+                                              │
+        ┌─────────────────────────────────────┼─────────────────────────────────────┐
+        │                                     │                                     │
+        ▼                                     ▼                                     ▼
+┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
+│                  │                │   Orchestration │                │    Services     │
+│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
+│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
+│ • Upload API     │                │ • Event Routing │                │   Extraction    │
+│ • Health API     │                │ • Task Queue    │                │ • Model         │
+│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
+│                  │                │ • File Watcher  │                │ • Training      │
+└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
+        │                           └─────────────────┘                └─────────────────┘
+        │                                     │                                     │
+        └─────────────────────────────────────┼─────────────────────────────────────┘
+                                              │
+                                   ┌─────────────────┐
+                                   │   Message Bus   │
+                                   │                 │
+                                   │ • RabbitMQ      │
+                                   │ • Apache Kafka  │
+                                   │ • Azure Service │
+                                   │   Bus/AWS SQS   │
+                                   └─────────────────┘
+```
+
+### Simplified Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     DeepLens Core Service (.NET)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
+```
+
+## Technical Stack Recommendations
+
+### Unified .NET + Python Technology Stack
+
+#### Service Layer Distribution
+
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
+
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
+
+**� Additional Unified Service Features**
+
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
+
+**🔴 Python Services (AI/ML Specialized)**
+
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
+
+#### Cross-Service Communication
+
+**🔀 Simplified Communication Architecture**
+
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions, tenant) but does not change actual assignments. All impersonation actions are logged and clearly indicated in the UI.
+- **Tenant Context Switching**: Global admins can select and view any tenant’s interface using a tenant selector. The backend and frontend use this context to filter and display data accordingly.
+- **Audit Trail**: All admin and impersonation actions are logged for compliance and troubleshooting.
+
+#### Duende IdentityServer Deployment
+
+📋 **Implementation Details:** See [Docker Compose Configuration](CODE_EXAMPLES.md#docker-compose-configuration) for complete Duende IdentityServer deployment configuration and API authentication examples.
+
+#### Authentication Flow with Duende IdentityServer
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant DeepLens Web App
+    participant Duende IdentityServer
+    participant DeepLens API
+
+    User->>DeepLens Web App: 1. Access protected resource
+    DeepLens Web App->>Duende IdentityServer: 2. Redirect to /authorize
+    Duende IdentityServer->>User: 3. Login page
+    User->>Duende IdentityServer: 4. Enter credentials
+    Duende IdentityServer->>User: 5. Consent screen (if needed)
+    User->>Duende IdentityServer: 6. Grant consent
+    Duende IdentityServer->>DeepLens Web App: 7. Authorization code
+    DeepLens Web App->>Duende IdentityServer: 8. Exchange code for tokens
+    Duende IdentityServer->>DeepLens Web App: 9. ID token + Access token
+    DeepLens Web App->>DeepLens API: 10. API call with access token
+    DeepLens API->>Duende IdentityServer: 11. Validate token (introspection)
+    Duende IdentityServer->>DeepLens API: 12. Token validation response
+    DeepLens API->>DeepLens Web App: 13. API response
+    DeepLens Web App->>User: 14. Protected resource
+```
+
+#### User Management Features
+
+📋 **Implementation Details:** See [Custom User Store & Profile Service](CODE_EXAMPLES.md#custom-user-store--profile-service) for complete user management implementation.
+
+## Comprehensive Instrumentation & Telemetry Strategy
+
+### Observable Architecture Design
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          TELEMETRY COLLECTION LAYER                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────┐  │
+│  │ .NET Core   │    │ Python AI   │    │Infrastructure│    │ External    │  │
+│  │ Service     │    │ Services    │    │ Components   │    │ Services    │  │
+│  │ • Serilog→  │    │ • structlog │    │ • Prometheus │    │ • Load Bal. │  │
+│  │   OpenTel   │    │ • OpenTel   │    │ • OpenTel    │    │ • Node Exp  │  │
+│  │ • OTel      │    │ • FastAPI   │    │ • OTLP       │    │ • cAdvisor  │  │
+│  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────┘  │
+│           │                 │                 │                 │           │
+└───────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘
+            │                 │                 │                 │
+            ▼                 ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         TELEMETRY AGGREGATION                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    METRICS      │  │    LOGGING      │  │        TRACING              │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Prometheus    │  │ • Elasticsearch │  │ • Jaeger                    │   │
+│ │ • Victoria      │  │ • Loki          │  │ • Zipkin                    │   │
+│ │   Metrics       │  │ • Fluentd       │  │ • OpenTelemetry Collector   │   │
+│ │ • Custom        │  │ • Vector        │  │ • Tempo                     │   │
+│ │   Dashboards    │  │ • Logstash      │  │ • AWS X-Ray                 │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+            │                 │                               │
+            ▼                 ▼                               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      VISUALIZATION & ALERTING                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│ │    DASHBOARDS   │  │     ALERTS      │  │         ANALYSIS            │   │
+│ │                 │  │                 │  │                             │   │
+│ │ • Grafana       │  │ • AlertManager  │  │ • Kibana                    │   │
+│ │ • Custom UI     │  │ • PagerDuty     │  │ • Jaeger UI                 │   │
+│ │ • DataDog       │  │ • Slack/Teams   │  │ • Custom Analytics          │   │
+│ │ • New Relic     │  │ • Email/SMS     │  │ • Business Intelligence     │   │
+│ └─────────────────┘  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🏗️ System Architecture Diagrams
+
+### Updated DeepLens Architecture with OpenTelemetry
+
+```
+                           ┌─────────────────────────────────────────┐
+                           │         Load Balancer + WAF             │
+                           │    (HAProxy/NGINX/Cloud LB/Traefik)     │
+                           └──────────────────┬──────────────────────┘
+                                              │
+                           ┌─────────────────────────────────────────┐
+                           │         API Gateway (.NET Core)         │
+                           │  • Authentication & Authorization       │
+                           │  • Rate Limiting & Circuit Breakers     │
+                           │  • Request Routing & Load Balancing     │
+                           │  • OpenTelemetry Integration           │
+                           └──────────────────┬──────────────────────┘
+                                              │
+        ┌─────────────────────────────────────┼─────────────────────────────────────┐
+        │                                     │                                     │
+        ▼                                     ▼                                     ▼
+┌──────────────────┐                ┌─────────────────┐                ┌─────────────────┐
+│   .NET Core APIs │                │    .NET Core    │                │    Python AI/ML │
+│                  │                │   Orchestration │                │    Services     │
+│ • Search API     │◄──────────────►│                 │◄──────────────►│                 │
+│ • Admin API      │                │ • Workflow Mgmt │                │ • Feature       │
+│ • Upload API     │                │ • Event Routing │                │   Extraction    │
+│ • Health API     │                │ • Task Queue    │                │ • Model         │
+│ • Metadata API   │                │ • Job Scheduler │                │   Inference     │
+│                  │                │ • File Watcher  │                │ • Training      │
+└──────────────────┘                │ • Storage Mgmt  │                │ • Vector Ops    │
+        │                           └─────────────────┘                └─────────────────┘
+        │                                     │                                     │
+        └─────────────────────────────────────┼─────────────────────────────────────┘
+                                              │
+                                   ┌─────────────────┐
+                                   │   Message Bus   │
+                                   │                 │
+                                   │ • RabbitMQ      │
+                                   │ • Apache Kafka  │
+                                   │ • Azure Service │
+                                   │   Bus/AWS SQS   │
+                                   └─────────────────┘
+```
+
+### Simplified Service Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     DeepLens Core Service (.NET)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   API Layer     │    │  Orchestration  │    │ Background  │  │
+│  │                 │    │     Layer       │    │  Services   │  │
+│  │ • Search API    │    │ • Workflow Mgmt │    │ • Indexer   │  │
+│  │ • Upload API    │    │ • Job Queue     │    │ • Scanner   │  │
+│  │ • Admin API     │    │ • Event Router  │    │ • Processor │  │
+│  │ • Health API    │    │ • Storage Mgmt  │    │ • Cleanup   │  │
+│  │ • SignalR Hubs  │    │ • Task Scheduler│    │ • Monitor   │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐  │
+│  │   Data Layer    │    │  Cross-Cutting  │    │Integration  │  │
+│  │                 │    │    Services     │    │   Layer     │  │
+│  │ • EF Core       │    │ • Logging       │    │ • Cloud SDK │  │
+│  │ • Caching       │    │ • Monitoring    │    │ • Message   │  │
+│  │ • Vector Store  │    │ • Config Mgmt   │    │   Queue     │  │
+│  │ • File Storage  │    │ • Health Checks │    │ • AI/ML     │  │
+│  │ • Metadata DB   │    │ • Metrics       │    │   Client    │  │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │    Python AI/ML │
+                         │    Services     │
+                         │                 │
+                         │ • Feature       │
+                         │   Extraction    │
+                         │ • Model         │
+                         │   Inference     │
+                         │ • Vector Ops    │
+                         └─────────────────┘
+```
+
+## Technical Stack Recommendations
+
+### Unified .NET + Python Technology Stack
+
+#### Service Layer Distribution
+
+**🔵 DeepLens Core Service (.NET) - Unified APIs & Orchestration**
+
+- **API Gateway**: ASP.NET Core with YARP (Yet Another Reverse Proxy)
+- **Core APIs**: Minimal APIs for search, upload, admin, health endpoints
+- **Authentication**: Multiple OAuth 2.0/OpenID Connect providers with JWT tokens
+  - **Self-Hosted**: Duende IdentityServer for complete control
+  - **Cloud Providers**: Azure AD, AWS Cognito, Google Identity
+  - **Social Login**: GitHub, Microsoft, Google OAuth flows
+  - **API Security**: JWT Bearer tokens with scope-based authorization
+- **Data Access**: Entity Framework Core with PostgreSQL/SQL Server
+- **Caching**: StackExchange.Redis for distributed caching and session state
+- **HTTP Client**: HttpClientFactory with Polly for resilience
+- **Image Processing**: ImageSharp for basic operations, OpenCvSharp for advanced
+- **ONNX Integration**: Microsoft.ML.OnnxRuntime for model inference
+
+**� Additional Unified Service Features**
+
+- **Framework**: ASP.NET Core with Minimal APIs and Worker Services
+- **Workflow Engine**: Elsa Workflows or Hangfire for job orchestration
+- **File Processing**: ImageSharp for image manipulation, custom upload handlers
+- **Event Streaming**: MassTransit with RabbitMQ/Azure Service Bus integration
+- **Task Scheduling**: Hangfire, Quartz.NET, or NCrontab for background jobs
+- **Storage Connectors**: Azure SDK, AWS SDK for .NET, Google Cloud SDK
+- **Real-time Communication**: SignalR for WebSocket connections and real-time updates
+- **Background Services**: IHostedService and BackgroundService for long-running tasks
+- **Process Management**: Built-in Kestrel server with IIS/Docker deployment
+
+**🔴 Python Services (AI/ML Specialized)**
+
+- **Framework**: FastAPI for APIs, Ray for distributed computing
+- **Computer Vision**: OpenCV, PIL/Pillow, scikit-image
+- **Deep Learning**: PyTorch, TensorFlow, Hugging Face Transformers
+- **Vector Operations**: NumPy, SciPy, Faiss for similarity search
+- **Model Serving**: TorchServe, TensorFlow Serving, Triton Inference Server
+- **Feature Extraction**: CLIP, ResNet, EfficientNet, custom CNN models
+- **Vector Databases**: Qdrant Python client, Weaviate client
+- **Async Processing**: Celery with Redis/RabbitMQ, asyncio
+
+#### Cross-Service Communication
+
+**🔀 Simplified Communication Architecture**
+
+- **Internal**: Direct method calls within .NET service (no network overhead)
+- **External Python AI/ML**: HTTP/REST APIs with OpenAPI/Swagger documentation
+- **Async Processing**: MassTransit with RabbitMQ/Azure Service Bus for background tasks
+- **Real-time Updates**: SignalR for WebSocket communications
+- **Optional Load Balancing**: NGINX/HAProxy for multi-instance deployments
+- **Service Discovery**: Simple DNS-based discovery or Kubernetes services
+
+**📊 Observability & Telemetry (Built-in)**
+
+- **Distributed Tracing**: OpenTelemetry with Jaeger/Zipkin backend
+- **Metrics Collection**: OpenTelemetry metrics with Prometheus export
+- **Structured Logging**: Serilog (.NET) → OpenTelemetry → OTLP/Elasticsearch
+- **Log Correlation**: Automatic trace-log correlation via OpenTelemetry
+- **APM**: Application Insights, New Relic, or Datadog via OTLP
+- **Health Checks**: Built-in health endpoints with OpenTelemetry metrics
+- **Unified Export**: Single OTLP endpoint for all telemetry data
+
+## Authentication & Authorization Strategy
+
+### Self-Hosted Authentication with Duende IdentityServer
+
+DeepLens uses Duende IdentityServer as the primary authentication and user management service, providing complete control over user identity, security policies, and integration patterns.
+
+#### Duende IdentityServer Implementation
+
+📋 **Implementation Details:** See [Authentication & Security Examples](CODE_EXAMPLES.md#-authentication--security-examples) for complete Duende IdentityServer integration code.
+
+#### Authentication Options
+
+| **Provider**              | **Use Case**       | **Implementation**        | **Benefits**                   |
+| ------------------------- | ------------------ | ------------------------- | ------------------------------ |
+| **Azure AD**              | Enterprise SSO     | Built-in .NET support     | Seamless Microsoft integration |
+| **Google Identity**       | Consumer apps      | Google.Apis.Auth library  | Wide user adoption             |
+| **GitHub OAuth**          | Developer tools    | Custom implementation     | Developer-friendly             |
+| **AWS Cognito**           | AWS deployments    | AWSSDK.Extensions.NETCore | Native AWS integration         |
+| **Duende IdentityServer** | Self-hosted        | Full control              | Complete customization         |
+| **API Keys**              | Service-to-service | Custom middleware         | Simple B2B integration         |
+
+#### Security Features
+
+📋 **Implementation Details:** See [JWT Token Validation & Custom Authorization](CODE_EXAMPLES.md#jwt-token-validation--custom-authorization) for complete security implementation.
+
+#### Role-Based Access Control (RBAC)
+
+📋 **Implementation Details:** See [Role-Based Access Control (RBAC)](CODE_EXAMPLES.md#role-based-access-control-rbac) for complete role and scope definitions.
+
+#### Admin Access, Impersonation, and Tenant Context Switching
+
+- **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
+- **Tenant Admins**: Restricted to their own tenant’s resources and interface.
+- **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions,
     options.CompressionType = CompressionType.Lz4;
     options.MessageTimeoutMs = 30000;
 });
