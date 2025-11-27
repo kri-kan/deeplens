@@ -13,6 +13,9 @@ This document captures key architectural decisions made for the DeepLens image s
 - [ADR-005: Dynamic Tenant Configuration](#adr-005-dynamic-tenant-configuration)
 - [ADR-006: Data Access Strategy (EF Core vs ADO.NET)](#adr-006-data-access-strategy-ef-core-vs-adonet)
 - [ADR-007: BYOS (Bring Your Own Storage) with Azure AD-Style RBAC](#adr-007-byos-bring-your-own-storage-with-azure-ad-style-rbac)
+- [ADR-008: Hybrid .NET + Python Architecture for Image Similarity](#adr-008-hybrid-net--python-architecture-for-image-similarity)
+- [ADR-009: JWT Authentication Strategy (Hybrid Approach)](#adr-009-jwt-authentication-strategy-hybrid-approach)
+- [ADR-010: Development-First, Authentication-Later Strategy](#adr-010-development-first-authentication-later-strategy)
 
 ---
 
@@ -1508,14 +1511,466 @@ StorageContributor (resource_type='storage')
 
 ---
 
+## ADR-008: Hybrid .NET + Python Architecture for Image Similarity
+
+**Date:** 2025-11-27  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+The image similarity service requires:
+- AI/ML capabilities (feature extraction, vector operations)
+- High-performance APIs for user-facing operations
+- Business logic orchestration
+- Integration with existing .NET ecosystem
+
+We need to decide whether to:
+1. Build everything in .NET (using ML.NET/ONNX Runtime)
+2. Build everything in Python (FastAPI + ML libraries)
+3. Use a hybrid approach
+
+### Decision
+
+We will implement a **hybrid .NET + Python architecture**:
+
+**🔵 .NET Services (.NET 8) - APIs & Orchestration:**
+- API Gateway (YARP) - routing, authentication, rate limiting
+- Similarity API - public REST endpoints
+- Admin API - system management
+- Core business logic - domain models, validation, workflows
+- Data persistence - PostgreSQL metadata, Redis caching
+- Orchestration - background services, Kafka producers/consumers
+- Integration layer - storage connectors, HTTP clients
+
+**🔴 Python Services (FastAPI) - AI/ML Specialized:**
+- Feature Extraction Service - ResNet50, CLIP, EfficientNet with ONNX Runtime
+- Vector Similarity Service - Qdrant client, cosine similarity, duplicate detection
+
+**Communication:**
+- .NET → Python: HTTP/REST APIs with JSON
+- Async processing: Kafka events
+- Authentication: JWT token propagation
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────┐
+│     .NET Similarity API                 │
+│  • User-facing REST endpoints           │
+│  • JWT authentication                   │
+│  • Business logic & validation          │
+│  • PostgreSQL persistence               │
+│  • Kafka event producers                │
+└─────────────┬───────────────────────────┘
+              │ HTTP/REST
+              │ Forward JWT
+     ┌────────┼─────────┐
+     │                  │
+     ▼                  ▼
+┌──────────────┐  ┌──────────────┐
+│ Python       │  │ Python       │
+│ Feature      │  │ Vector       │
+│ Extraction   │  │ Similarity   │
+│ (FastAPI)    │  │ (FastAPI)    │
+│ • ResNet50   │  │ • Qdrant     │
+│ • CLIP       │  │ • Cosine Sim │
+└──────────────┘  └──────────────┘
+```
+
+### Rationale
+
+**Why .NET for APIs:**
+- ✅ Better performance for HTTP APIs (Kestrel is faster than uvicorn)
+- ✅ Strong typing and compile-time safety
+- ✅ Excellent async/await support
+- ✅ Native integration with IdentityServer
+- ✅ Better tooling (Visual Studio, Rider)
+- ✅ Existing team expertise
+- ✅ Easier deployment and monitoring
+
+**Why Python for AI/ML:**
+- ✅ Superior AI/ML ecosystem (PyTorch, TensorFlow, Hugging Face)
+- ✅ Better GPU support and optimization
+- ✅ Faster ML model development and experimentation
+- ✅ Rich computer vision libraries (OpenCV, Pillow)
+- ✅ Direct access to latest models and research
+- ✅ ONNX Runtime performs better with Python bindings
+
+**Why NOT pure .NET:**
+- ❌ ML.NET limited compared to Python ML ecosystem
+- ❌ Fewer pre-trained models available
+- ❌ Harder to integrate latest research
+- ❌ Less mature computer vision libraries
+
+**Why NOT pure Python:**
+- ❌ Slower HTTP API performance
+- ❌ Weaker typing (even with type hints)
+- ❌ Less robust for large-scale orchestration
+- ❌ Integration with .NET identity system is harder
+- ❌ Team has more .NET expertise for business logic
+
+### Consequences
+
+**Positive:**
+- Best of both worlds - .NET for what it does best, Python for what it does best
+- Clear service boundaries
+- Independent scaling of services
+- Technology choice optimized per use case
+- Easier to attract specialists (ML engineers for Python, backend devs for .NET)
+
+**Negative:**
+- Multiple technology stacks to maintain
+- Cross-language integration complexity
+- Need developers familiar with both stacks
+- More complex deployment (multiple runtimes)
+
+**Mitigation:**
+- Use Docker to standardize deployment
+- Clear REST API contracts between services
+- Comprehensive integration tests
+- Good documentation for both stacks
+
+### Related Decisions
+- ADR-009: JWT Authentication Strategy
+- ADR-010: Development-First Strategy
+
+---
+
+## ADR-009: JWT Authentication Strategy (Hybrid Approach)
+
+**Date:** 2025-11-27  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+With hybrid .NET + Python architecture, we need to decide authentication between services:
+
+**Options:**
+1. **User JWT token propagation** - Forward user's JWT from .NET to Python
+2. **Service JWT tokens** - .NET gets service token for Python calls
+3. **API Keys** - Simple shared secrets
+4. **No authentication** - Trust internal network
+
+We need authentication that:
+- Preserves user context for audit trails
+- Supports multi-tenancy (tenant isolation)
+- Works for both user-initiated and system-initiated operations
+- Is secure but not overly complex
+
+### Decision
+
+We will implement a **hybrid JWT authentication strategy**:
+
+**Scenario 1: User-Initiated Operations → User JWT Token**
+- User uploads image, searches, views results
+- .NET API validates user JWT (from IdentityServer)
+- .NET forwards **same JWT** to Python services
+- Python services validate **same JWT** against IdentityServer
+
+**Scenario 2: System/Background Operations → Service JWT Token**
+- Kafka consumers, scheduled jobs, system tasks
+- .NET worker gets **service JWT** (client credentials flow)
+- Service calls Python with **service JWT**
+- Python validates **service JWT**
+
+### Implementation Details
+
+#### User JWT Flow (Synchronous)
+```
+User → .NET API (validate JWT) → Python Service (validate same JWT)
+         ↓                              ↓
+    Check scopes                   Check scopes
+    (images:write)                 (images:write)
+```
+
+#### Service JWT Flow (Asynchronous)
+```
+Kafka Event → .NET Worker (get service JWT) → Python Service
+                    ↓                              ↓
+            Client credentials              Validate service JWT
+            (service account)               (internal-service scope)
+```
+
+#### Token Validation
+
+Both .NET and Python validate tokens against **same IdentityServer**:
+
+```yaml
+# Shared Configuration
+IdentityServer: https://identity.deeplens.local
+JWKS Endpoint: /.well-known/openid-configuration/jwks
+Algorithm: RS256
+Audience (User): deeplens-services
+Audience (Service): deeplens-internal-services
+```
+
+**User Token Claims:**
+```json
+{
+  "sub": "user-123",
+  "tenant_id": "tenant-abc",
+  "email": "user@example.com",
+  "scope": "images:read images:write search:execute",
+  "aud": "deeplens-services"
+}
+```
+
+**Service Token Claims:**
+```json
+{
+  "sub": "deeplens-similarity-api",
+  "client_id": "internal-service",
+  "scope": "feature-extraction:invoke vector-store:access",
+  "aud": "deeplens-internal-services"
+}
+```
+
+### Rationale
+
+**Why User JWT Propagation:**
+- ✅ Preserves user identity across all services
+- ✅ Enables proper audit trails (who did what)
+- ✅ Enforces tenant isolation (tenant_id in token)
+- ✅ User permissions apply consistently
+- ✅ Simpler architecture (one token flows through)
+- ✅ Better compliance (GDPR, SOC 2)
+
+**Why Service JWT for Background:**
+- ✅ No user context for system operations
+- ✅ Different permission model (service vs user)
+- ✅ Longer token lifetime (no user session)
+- ✅ Service identity for audit ("System" did this)
+- ✅ Background jobs don't fail if user logs out
+
+**Why NOT API Keys:**
+- ❌ No user context
+- ❌ All services have same permissions
+- ❌ Harder to audit
+- ❌ Manual rotation required
+
+**Why NOT no authentication:**
+- ❌ Security risk even on internal network
+- ❌ No audit trail
+- ❌ Zero-trust architecture requirement
+
+### Consequences
+
+**Positive:**
+- Clear security model
+- User context preserved where it matters
+- Service context for background operations
+- Supports both synchronous and asynchronous patterns
+- Compliance-friendly
+
+**Negative:**
+- More complex than API keys
+- Both services need JWT validation logic
+- Need to manage service accounts in IdentityServer
+- Token caching required for performance
+
+**Mitigation:**
+- Implement token validation once, reuse
+- Cache JWKS responses (1 hour TTL)
+- Clear documentation of token types
+- Optional auth mode for development (ENABLE_AUTH=false)
+
+### Implementation Phases
+
+**Phase 1 (MVP):**
+- ✅ User JWT propagation only
+- ✅ Skip service tokens initially
+- ✅ Docker network isolation for security
+
+**Phase 2 (Enhanced):**
+- ✅ Add service JWT support
+- ✅ Implement Kafka consumers with service tokens
+- ✅ Background jobs use service accounts
+
+**Phase 3 (Production):**
+- ✅ Full dual-token support
+- ✅ Token type detection in Python services
+- ✅ Comprehensive audit logging
+
+### Related Decisions
+- ADR-008: Hybrid .NET + Python Architecture
+- ADR-010: Development-First Strategy
+
+---
+
+## ADR-010: Development-First, Authentication-Later Strategy
+
+**Date:** 2025-11-27  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+With Python microservices being built first, we need to decide the order of implementation:
+
+**Options:**
+1. **Authentication first** - Build JWT validation, then add features
+2. **Features first** - Build core AI/ML, then add authentication
+3. **Parallel** - Build both simultaneously
+
+Considerations:
+- Time to first working demo
+- Testing complexity
+- Development velocity
+- Team learning curve
+
+### Decision
+
+We will **build core functionality first, add authentication later**:
+
+**Phase 1A: Core Development (No Auth)**
+- Build Python feature extraction service (ResNet50, CLIP)
+- Build Python vector similarity service (Qdrant, cosine similarity)
+- Build .NET API endpoints
+- Focus on AI/ML functionality
+
+**Phase 1B: Add Authentication**
+- Implement JWT validation in Python services
+- Add token forwarding in .NET clients
+- Make authentication **optional** via environment variable
+
+### Implementation Pattern
+
+#### Python Services - Optional Auth Middleware
+
+```python
+# Environment variable controls auth
+ENABLE_AUTH = os.getenv("ENABLE_AUTH", "false").lower() == "true"
+
+async def optional_verify_token(authorization: Optional[str] = Header(None)):
+    if not ENABLE_AUTH:
+        # Development mode - no auth required
+        return {"type": "development", "user_id": "dev-user"}
+    
+    if not authorization:
+        raise HTTPException(401, "Authorization required")
+    
+    # Production mode - validate JWT
+    return await validate_jwt_token(authorization)
+
+@app.post("/extract-features")
+async def extract_features(
+    image: UploadFile,
+    token_data: dict = Depends(optional_verify_token)
+):
+    # Core logic unchanged
+    features = await extractor.extract(image)
+    return {"features": features}
+```
+
+#### Docker Compose Configuration
+
+```yaml
+# Development
+services:
+  feature-extraction:
+    environment:
+      - ENABLE_AUTH=false  # No auth in dev
+
+# Production
+services:
+  feature-extraction:
+    environment:
+      - ENABLE_AUTH=true   # Auth required in prod
+```
+
+### Rationale
+
+**Why Core First:**
+- ✅ Faster time to working demo
+- ✅ Easier testing (no auth headers in dev)
+- ✅ Better debugging (isolate issues)
+- ✅ Focus on business value first
+- ✅ Auth is infrastructure, not core value
+- ✅ Can prove AI/ML functionality independently
+
+**Why Add Auth Later:**
+- ✅ Non-breaking change (optional middleware)
+- ✅ Core logic remains unchanged
+- ✅ Can test with and without auth
+- ✅ Production-ready when needed
+- ✅ Flexibility to change auth strategy
+
+**Why NOT Auth First:**
+- ❌ Slower initial development
+- ❌ More complex testing early on
+- ❌ Harder to debug (is it auth or the model?)
+- ❌ Auth details may change as we learn
+
+**Why NOT Parallel:**
+- ❌ Context switching overhead
+- ❌ Risk of over-engineering early
+- ❌ Harder to change auth strategy later
+
+### Consequences
+
+**Positive:**
+- Faster MVP delivery
+- Easier onboarding for developers
+- Core functionality proven early
+- Flexibility in auth strategy
+- Can demo without IdentityServer dependency
+
+**Negative:**
+- Need to ensure auth is added before production
+- Risk of shipping without auth (process mitigation needed)
+- Slight code duplication (optional vs required auth)
+
+**Mitigation:**
+- Clear checklist for production readiness
+- Environment variable enforces auth in production
+- Automated tests for auth scenarios
+- Documentation on when to enable auth
+
+### Development Timeline
+
+```
+Week 1-2: Python Core Services (ENABLE_AUTH=false)
+├── Feature extraction with ResNet50
+├── Vector similarity with Qdrant
+└── Unit tests for core functionality
+
+Week 3-4: .NET Integration (No auth)
+├── .NET API endpoints
+├── HTTP clients to Python (no auth headers)
+└── End-to-end tests
+
+Week 5: Add Authentication (ENABLE_AUTH=true)
+├── JWT validation in Python
+├── Token forwarding in .NET
+└── Integration tests with auth
+```
+
+### Production Readiness Checklist
+
+Before production deployment:
+- [ ] ENABLE_AUTH=true in all environments except dev
+- [ ] JWT validation tested with IdentityServer
+- [ ] Token expiration handling implemented
+- [ ] Service accounts configured for background jobs
+- [ ] Audit logging captures user context
+- [ ] Security review completed
+
+### Related Decisions
+- ADR-008: Hybrid .NET + Python Architecture
+- ADR-009: JWT Authentication Strategy
+
+---
+
 ## Future Decisions
 
 The following architectural decisions are pending:
 
-- **ADR-008:** Vector database selection (Qdrant vs alternatives)
-- **ADR-009:** External identity provider integration strategy (Azure AD vs Okta vs Google)
-- **ADR-010:** AI model selection and deployment
-- **ADR-011:** Kubernetes vs Docker Swarm for orchestration
+- **ADR-011:** Kafka topic design and event schemas
+- **ADR-012:** Vector database configuration (Qdrant optimization)
+- **ADR-013:** Model versioning and deployment strategy
+- **ADR-014:** Kubernetes resource allocation and scaling policies
 
 ---
 
@@ -1529,6 +1984,9 @@ The following architectural decisions are pending:
 | 2025-11-27 | 1.2     | Added ADR-007 (BYOS + RBAC Strategy)                     | Architecture Team |
 | 2025-11-27 | 1.3     | Updated ADR-007 to Centralized Identity via NextGen      | Architecture Team |
 | 2025-11-27 | 1.4     | Updated ADR-007: Added resource_type to role definitions | Architecture Team |
+| 2025-11-27 | 1.5     | Added ADR-008: Hybrid .NET + Python Architecture         | Architecture Team |
+| 2025-11-27 | 1.6     | Added ADR-009: JWT Authentication Strategy               | Architecture Team |
+| 2025-11-27 | 1.7     | Added ADR-010: Development-First Strategy                | Architecture Team |
 
 ```
 
