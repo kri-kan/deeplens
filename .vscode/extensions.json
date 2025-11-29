@@ -1,0 +1,31 @@
+{
+    // Recommended extensions for DeepLens project
+    "recommendations": [
+        // Python Development (for Python services)
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        
+        // .NET Development (for .NET services)
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        
+        // Docker & Containers
+        "ms-azuretools.vscode-docker",
+        
+        // YAML & Configuration
+        "redhat.vscode-yaml",
+        
+        // REST API Testing
+        "humao.rest-client",
+        
+        // Git
+        "eamodio.gitlens",
+        
+        // Markdown
+        "yzhang.markdown-all-in-one"
+    ],
+    
+    // Extensions to avoid conflicts
+    "unwantedRecommendations": []
+}

@@ -1,4 +1,4 @@
-namespace DeepLens.OrchestrationService;
+namespace DeepLens.WorkerService;
 
 public class Worker : BackgroundService
 {

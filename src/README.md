@@ -35,7 +35,7 @@ src/
 │   │                                     # - System configuration
 │   │                                     # - User/role management
 │   │
-│   └── DeepLens.OrchestrationService/    # Background Service
+│   └── DeepLens.WorkerService/    # Background Service
 │                                         # - Kafka message processing
 │                                         # - Workflow orchestration
 │                                         # - Background job scheduling
@@ -53,7 +53,7 @@ src/
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Presentation Layer                     │
-│  (ApiGateway, SearchApi, AdminApi, OrchestrationService)    │
+│  (ApiGateway, SearchApi, AdminApi, WorkerService)    │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
@@ -129,7 +129,7 @@ cd DeepLens.AdminApi
 dotnet run
 
 # Run Orchestration Service
-cd DeepLens.OrchestrationService
+cd DeepLens.WorkerService
 dotnet run
 ```
 
@@ -222,7 +222,7 @@ dotnet watch run --project DeepLens.SearchApi/DeepLens.SearchApi/DeepLens.Search
   - `POST /api/admin/tenants/{id}/suspend` - Suspend tenant
   - `GET /api/admin/system/health` - System health
 
-#### DeepLens.OrchestrationService
+#### DeepLens.WorkerService
 
 - **Type:** Background Worker Service (not an API)
 - **Purpose:** Asynchronous processing and workflow orchestration
@@ -235,7 +235,7 @@ dotnet watch run --project DeepLens.SearchApi/DeepLens.SearchApi/DeepLens.Search
 - **Example Flow:**
   1. User uploads image via SearchApi
   2. SearchApi publishes `ImageUploadedEvent` to Kafka and returns immediately (fast response)
-  3. OrchestrationService consumes the event
+  3. WorkerService consumes the event
   4. Orchestrates: generate embeddings → store in Qdrant → update metadata in PostgreSQL → publish `ImageProcessedEvent`
 
 ### Shared Libraries

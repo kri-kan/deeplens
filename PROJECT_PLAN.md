@@ -2675,7 +2675,7 @@ class ScalingMetrics:
 - [ ] **Enhanced AI Capabilities**:
   - [ ] Text-to-image search (CLIP integration)
   - [ ] Custom model training pipeline
-  - [ ] A/B testing for model performance
+  - [ ] Model performance monitoring and validation
   - [ ] Continuous learning and model updates
 - [ ] **Analytics & Intelligence**:
   - [ ] Usage analytics and reporting

@@ -726,7 +726,7 @@ INSERT INTO platform_configs (key, value, description) VALUES
 ('supported_image_formats', '["jpg", "jpeg", "png", "gif", "bmp", "webp"]', 'Supported image formats'),
 ('tenant_provisioning_enabled', 'true', 'Whether new tenant provisioning is enabled'),
 ('redis_databases_per_tenant', '16', 'Number of Redis databases available for tenant allocation'),
-('qdrant_default_vector_size', '768', 'Default vector dimension for Qdrant collections'),
+('qdrant_default_vector_size', '2048', 'Default vector dimension for Qdrant collections (ResNet50)'),
 ('infisical_enabled', 'true', 'Whether Infisical secret management is enabled'),
 ('monitoring_enabled', 'true', 'Whether monitoring and observability stack is enabled'),
 ('kafka_enabled', 'true', 'Whether Kafka message queue is enabled'),

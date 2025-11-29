@@ -13,13 +13,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.Infrastructure", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.ApiGateway", "DeepLens.ApiGateway\DeepLens.ApiGateway.csproj", "{124AB6C2-B748-45EE-B697-BBC3DD10D03D}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DeepLens.SearchApi", "DeepLens.SearchApi", "{82532EB2-305C-C828-1C82-CFAF6BED95DC}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.SearchApi", "DeepLens.SearchApi\DeepLens.SearchApi\DeepLens.SearchApi.csproj", "{3F920D3A-EECC-4475-B4B8-D1A8FF482C66}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.SearchApi", "DeepLens.SearchApi\DeepLens.SearchApi.csproj", "{3F920D3A-EECC-4475-B4B8-D1A8FF482C66}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.AdminApi", "DeepLens.AdminApi\DeepLens.AdminApi.csproj", "{87BCAEA6-E926-4DE3-BF65-8D79AD28EB01}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.OrchestrationService", "DeepLens.OrchestrationService\DeepLens.OrchestrationService.csproj", "{43116B42-B008-4988-8BB8-F5B0328B23CA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.WorkerService", "DeepLens.WorkerService\DeepLens.WorkerService.csproj", "{43116B42-B008-4988-8BB8-F5B0328B23CA}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeepLens.Shared.Telemetry", "DeepLens.Shared.Telemetry\DeepLens.Shared.Telemetry.csproj", "{447B4B54-7E3D-4025-B868-1C564C5D5F84}"
 EndProject

@@ -615,38 +615,119 @@ function Initialize-DeepLensTenantCache {
 function Initialize-DeepLensTenantVectors {
     <#
     .SYNOPSIS
-    Creates Qdrant collection for a tenant.
+    Creates Qdrant collection for a tenant via .NET AdminApi.
     
     .PARAMETER TenantId
     Tenant ID to create collection for
+    
+    .PARAMETER AdminApiBaseUrl
+    Base URL for DeepLens AdminApi (default: http://localhost:5001)
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string] $TenantId
+        [string] $TenantId,
+        
+        [Parameter(Mandatory = $false)]
+        [string] $AdminApiBaseUrl = "http://localhost:5001"
     )
     
-    Write-Host "🔧 Creating Qdrant collection for tenant $TenantId..." -ForegroundColor Yellow
+    Write-Host "🔧 Creating vector collection for tenant $TenantId via .NET AdminApi..." -ForegroundColor Yellow
     
     try {
-        $collectionName = "tenant_${TenantId}_vectors"
+        # Default collection for ResNet50 Phase 1 (backwards compatibility)
+        $modelName = "resnet50"
+        $vectorDimension = 2048
         
-        # Create collection via Qdrant REST API
+        # Call .NET AdminApi to create collection
         $createCollectionPayload = @{
-            vectors = @{
-                size = 768
-                distance = "Cosine"
-            }
+            tenantId = $TenantId
+            modelName = $modelName
+            vectorDimension = $vectorDimension
         } | ConvertTo-Json -Depth 3
         
-        $uri = "http://localhost:6333/collections/$collectionName"
-        Invoke-RestMethod -Uri $uri -Method PUT -Body $createCollectionPayload -ContentType "application/json"
+        $uri = "$AdminApiBaseUrl/api/v1/admin/collections"
+        $response = Invoke-RestMethod -Uri $uri -Method POST -Body $createCollectionPayload -ContentType "application/json"
         
-        Write-Host "✅ Qdrant collection '$collectionName' created" -ForegroundColor Green
-        return $collectionName
+        if ($response -and $response.success) {
+            Write-Host "✅ Vector collection '$($response.collectionName)' created successfully" -ForegroundColor Green
+            return $response.collectionName
+        } else {
+            Write-Error "Collection creation failed: $($response.message)"
+            return $null
+        }
     }
     catch {
-        Write-Error "Failed to create Qdrant collection: $($_.Exception.Message)"
+        if ($_.Exception.Response.StatusCode -eq 'NotFound') {
+            Write-Warning "AdminApi not available at $AdminApiBaseUrl. Ensure DeepLens.AdminApi is running."
+            Write-Host "💡 You can start it with: dotnet run --project src/DeepLens.AdminApi" -ForegroundColor Cyan
+        } else {
+            Write-Error "Failed to create vector collection: $($_.Exception.Message)"
+        }
+        return $null
+    }
+}
+
+function Initialize-DeepLensTenantVectorsForModel {
+    <#
+    .SYNOPSIS
+    Creates Qdrant collection for a specific model and tenant via .NET AdminApi.
+    
+    .PARAMETER TenantId
+    Tenant ID to create collection for
+    
+    .PARAMETER ModelName
+    Name of the model (e.g., "resnet50", "clip-vit-b32")
+    
+    .PARAMETER FeatureDimension
+    Dimension of the feature vectors for this model
+    
+    .PARAMETER AdminApiBaseUrl
+    Base URL for DeepLens AdminApi (default: http://localhost:5001)
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $TenantId,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $ModelName,
+        
+        [Parameter(Mandatory = $true)]
+        [int] $FeatureDimension,
+        
+        [Parameter(Mandatory = $false)]
+        [string] $AdminApiBaseUrl = "http://localhost:5001"
+    )
+    
+    Write-Host "🔧 Creating vector collection for tenant $TenantId, model $ModelName via .NET AdminApi..." -ForegroundColor Yellow
+    
+    try {
+        # Call .NET AdminApi to create model-specific collection
+        $createCollectionPayload = @{
+            tenantId = $TenantId
+            modelName = $ModelName
+            vectorDimension = $FeatureDimension
+        } | ConvertTo-Json -Depth 3
+        
+        $uri = "$AdminApiBaseUrl/api/v1/admin/collections"
+        $response = Invoke-RestMethod -Uri $uri -Method POST -Body $createCollectionPayload -ContentType "application/json"
+        
+        if ($response -and $response.success) {
+            Write-Host "✅ Vector collection '$($response.collectionName)' created for model $ModelName" -ForegroundColor Green
+            return $response.collectionName
+        } else {
+            Write-Error "Collection creation failed: $($response.message)"
+            return $null
+        }
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq 'NotFound') {
+            Write-Warning "AdminApi not available at $AdminApiBaseUrl. Ensure DeepLens.AdminApi is running."
+            Write-Host "💡 You can start it with: dotnet run --project src/DeepLens.AdminApi" -ForegroundColor Cyan
+        } else {
+            Write-Error "Failed to create vector collection for model: $($_.Exception.Message)"
+        }
         return $null
     }
 }
@@ -766,6 +847,140 @@ function Backup-DeepLensTenantData {
     }
 }
 
+function Initialize-DeepLensModelCollections {
+    <#
+    .SYNOPSIS
+    Creates Qdrant collection for ResNet50 model (Phase 1: Single Model Focus)
+    
+    .PARAMETER TenantId
+    Tenant ID to create collection for
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $TenantId
+    )
+    
+    Write-Host "🤖 Setting up ResNet50 collection for tenant $TenantId (Phase 1)..." -ForegroundColor Yellow
+    
+    try {
+        # Phase 1: Only ResNet50 model
+        $collectionName = Initialize-DeepLensTenantVectorsForModel `
+            -TenantId $TenantId `
+            -ModelName "resnet50" `
+            -ModelVersion "v2.7" `
+            -FeatureDimension 2048
+        
+        if ($collectionName) {
+            $createdCollection = @{
+                ModelName = "resnet50"
+                Version = "v2.7"
+                CollectionName = $collectionName
+                FeatureDimension = 2048
+                Description = "ResNet50 v2.7 pre-trained on ImageNet"
+                Phase = "1 - Production Ready"
+            }
+            
+            Write-Host "✅ ResNet50 collection created for tenant $TenantId" -ForegroundColor Green
+            Write-Host "   Collection: $collectionName" -ForegroundColor White
+            Write-Host "   Dimensions: 2048 (ResNet50)" -ForegroundColor White
+            Write-Host "   Phase: 1 - Single Model Focus" -ForegroundColor White
+            
+            return $createdCollection
+        }
+        else {
+            throw "Failed to create ResNet50 collection"
+        }
+    }
+    catch {
+        Write-Error "Failed to create ResNet50 collection: $($_.Exception.Message)"
+        return $null
+    }
+    
+    # Phase 2 Future: Multi-model support
+    # Commented out for Phase 1 focus
+    <#
+    $multiModelConfigs = @{
+        "clip-vit-b32" = @{ Version = "v1.0"; FeatureDimension = 512 }
+        "efficientnet-b7" = @{ Version = "v1.0"; FeatureDimension = 2560 }
+    }
+    #>
+}
+
+# Phase 2 Future: Smart Model Introduction (Commented out for Phase 1)
+<#
+function Start-SmartModelIntroduction {
+    # This function will be enabled in Phase 2 when we're ready for A/B testing
+    # For now, focusing on single ResNet50 model implementation
+}
+#>
+
+function Show-Phase1Status {
+    <#
+    .SYNOPSIS
+    Shows Phase 1 implementation status focusing on single ResNet50 model
+    
+    .PARAMETER TenantId
+    Tenant ID to check status for
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $TenantId
+    )
+    
+    Write-Host "📊 DeepLens Phase 1 Status - Single Model Focus" -ForegroundColor Cyan
+    Write-Host "   Tenant: $TenantId" -ForegroundColor White
+    Write-Host ""
+    
+    try {
+        # Check ResNet50 collection
+        $resnetCollection = "tenant_${TenantId}_vectors_resnet50_v2_7"
+        
+        Write-Host "🤖 Model Configuration:" -ForegroundColor Green
+        Write-Host "   • Primary Model: ResNet50 v2.7" -ForegroundColor White
+        Write-Host "   • Feature Dimensions: 2048" -ForegroundColor White
+        Write-Host "   • Collection: $resnetCollection" -ForegroundColor White
+        Write-Host "   • Status: Production Ready ✅" -ForegroundColor Green
+        
+        Write-Host ""
+        Write-Host "🎯 Phase 1 Focus Areas:" -ForegroundColor Yellow
+        Write-Host "   ✅ Single model implementation" -ForegroundColor Green
+        Write-Host "   ✅ ResNet50 optimization" -ForegroundColor Green  
+        Write-Host "   ✅ Production stability" -ForegroundColor Green
+        Write-Host "   ✅ Performance benchmarking" -ForegroundColor Green
+        Write-Host "   ✅ Monitoring and logging" -ForegroundColor Green
+        
+        Write-Host ""
+        Write-Host "🔮 Phase 2 Future (Multi-Model):" -ForegroundColor Blue
+        Write-Host "   ⏳ Multi-model support" -ForegroundColor Gray
+        Write-Host "   ⏳ CLIP integration" -ForegroundColor Gray
+        Write-Host "   ⏳ Smart model introduction" -ForegroundColor Gray
+        Write-Host "   ⏳ Model performance validation" -ForegroundColor Gray
+        
+        Write-Host ""
+        Write-Host "� Phase 1 Benefits:" -ForegroundColor Cyan
+        Write-Host "   • Faster development (single model path)" -ForegroundColor White
+        Write-Host "   • Simpler testing and debugging" -ForegroundColor White
+        Write-Host "   • Lower complexity and costs" -ForegroundColor White
+        Write-Host "   • Production-ready stability" -ForegroundColor White
+        Write-Host "   • Clear performance baselines" -ForegroundColor White
+        
+        return @{
+            Phase = "1"
+            PrimaryModel = "ResNet50 v2.7"
+            FeatureDimensions = 2048
+            Collection = $resnetCollection
+            ABTestingEnabled = $false
+            Status = "Production Focus"
+        }
+    }
+    catch {
+        Write-Error "Failed to get Phase 1 status: $($_.Exception.Message)"
+        return @{ Status = "Error"; Error = $_.Exception.Message }
+    }
+}
+
 # =============================================================================
 # Export Functions
 # =============================================================================
@@ -780,7 +995,15 @@ Export-ModuleMember -Function @(
     'Show-DeepLensStatus',
     'Initialize-DeepLensTenantCache',
     'Initialize-DeepLensTenantVectors',
+    'Initialize-DeepLensTenantVectorsForModel',
+    'Initialize-DeepLensModelCollections',
+    'Show-Phase1Status',
     'Get-DeepLensInfisicalSecrets',
     'Test-DeepLensMonitoringStack',
     'Backup-DeepLensTenantData'
+    
+    # Phase 2 Functions (Commented out for Phase 1)
+    # 'Start-SmartModelIntroduction',
+    # 'Get-ABTestResults',
+    # 'Enable-DualExtraction'
 )

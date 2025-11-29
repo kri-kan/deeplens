@@ -19,14 +19,19 @@
 
 ## 🏗️ **Architecture Overview**
 
-DeepLens uses a microservices architecture with:
+DeepLens uses an **asynchronous event-driven microservices architecture** with:
 
-- **.NET Core Services** - API Gateway, Search APIs, Admin services, Identity management
-- **Python AI Services** - Feature extraction, similarity matching, model inference
-- **Vector Database** - Qdrant for fast similarity search
+- **.NET Core Services** - API Gateway, Search APIs, Admin services, WorkerService for background processing
+- **Python AI Services** - Stateless feature extraction and similarity matching
+- **Vector Database** - Qdrant for fast similarity search with multi-tenant isolation
+- **Event Streaming** - Apache Kafka with SAGA Choreography for async image processing
 - **Multi-Database Strategy** - PostgreSQL for metadata, Redis for caching, InfluxDB for metrics
-- **Message Queue** - Apache Kafka for event streaming
-- **Complete Observability** - OpenTelemetry, Prometheus, Grafana stack
+- **Complete Observability** - OpenTelemetry, Prometheus, Grafana, Loki stack
+
+### Performance Highlights
+- **< 700ms** image upload response (6-9x faster than synchronous processing)
+- **Async Processing Pipeline** for feature extraction and vector storage
+- **Multi-tenant isolation** at every architectural layer
 
 ## 🚀 **Quick Start**
 
@@ -81,18 +86,27 @@ Test-DeepLensServices
 
 ```
 deeplens/
-├── 🔵 dotnet-services/           # .NET Core microservices
-│   ├── DeepLens.ApiGateway/      # YARP-based API Gateway
-│   ├── DeepLens.Search/          # Search & query service
-│   ├── DeepLens.Admin/           # Administration service
-│   ├── DeepLens.Core/            # Shared business logic
-│   └── NextGen.Identity/         # Duende IdentityServer
-├── 🐍 python-services/           # Python AI/ML services
-│   ├── feature-extraction/       # Image feature extraction
-│   └── vector-similarity/        # Similarity matching
-├── 🐳 infrastructure/            # Docker & configuration
-│   ├── docker-compose.infrastructure.yml
-│   ├── docker-compose.monitoring.yml
+├── � Core Documentation
+│   ├── README.md                           # This file
+│   ├── PROJECT_PLAN.md                     # Project roadmap
+│   ├── ARCHITECTURE_DECISIONS.md           # ADR with key decisions
+│   ├── DEVELOPMENT_PLAN.md                 # Development workflow
+│   └── OBSERVABILITY_PLAN.md               # Monitoring strategy
+├── 🔵 src/                                 # .NET Core microservices  
+│   ├── DeepLens.sln                        # Main solution
+│   ├── DeepLens.ApiGateway/                # YARP-based API Gateway
+│   ├── DeepLens.SearchApi/                 # Image search & upload APIs
+│   ├── DeepLens.AdminApi/                  # Administration & collection management
+│   ├── DeepLens.WorkerService/             # Background Kafka consumers
+│   ├── DeepLens.FeatureExtractionService/  # Python FastAPI ML service
+│   └── NextGen.Identity.*/                 # Duende IdentityServer
+├── � infrastructure/                      # Docker & infrastructure
+│   ├── docker-compose.infrastructure.yml   # Core services (Kafka, Qdrant, etc.)
+│   ├── docker-compose.monitoring.yml       # Observability stack
+│   └── setup-infrastructure.ps1            # Windows setup script
+├── 📖 docs/                                # Detailed documentation
+│   ├── working-notes/                      # Session notes & explorations
+│   └── *.md                                # Architecture & implementation docs
 │   ├── config/                   # Service configurations
 │   └── powershell/               # Management scripts
 ├── 📊 monitoring/                # Observability configurations

@@ -1,4 +1,4 @@
-# DeepLens - Architecture Decisions Record (ADR)
+ # DeepLens - Architecture Decisions Record (ADR)
 
 This document captures key architectural decisions made for the DeepLens image similarity search engine project.
 
@@ -16,6 +16,11 @@ This document captures key architectural decisions made for the DeepLens image s
 - [ADR-008: Hybrid .NET + Python Architecture for Image Similarity](#adr-008-hybrid-net--python-architecture-for-image-similarity)
 - [ADR-009: JWT Authentication Strategy (Hybrid Approach)](#adr-009-jwt-authentication-strategy-hybrid-approach)
 - [ADR-010: Development-First, Authentication-Later Strategy](#adr-010-development-first-authentication-later-strategy)
+- [ADR-011: Asynchronous Processing with Kafka Event Streaming](#adr-011-asynchronous-processing-with-kafka-event-streaming)
+- [ADR-012: SAGA Choreography Pattern for Image Processing Pipeline](#adr-012-saga-choreography-pattern-for-image-processing-pipeline)
+- [ADR-013: Stateless Service Architecture and Separation of Concerns](#adr-013-stateless-service-architecture-and-separation-of-concerns)
+- [ADR-014: Model Versioning and Smart Multi-Model Introduction Strategy](#adr-014-model-versioning-and-smart-multi-model-introduction-strategy)
+- [ADR-015: Portable Python Development Environment Strategy](#adr-015-portable-python-development-environment-strategy)
 
 ---
 
@@ -51,7 +56,7 @@ src/
 │   ├── DeepLens.ApiGateway/              # API Gateway (routing, auth, rate limiting)
 │   ├── DeepLens.SearchApi/               # Search & Ingestion API
 │   ├── DeepLens.AdminApi/                # Administrative API
-│   └── DeepLens.OrchestrationService/    # Background jobs, workflow management
+│   └── DeepLens.WorkerService/    # Background jobs, workflow management
 └── Shared Libraries
     ├── DeepLens.Shared.Telemetry/        # OpenTelemetry, logging, metrics
     ├── DeepLens.Shared.Messaging/        # Kafka producers/consumers
@@ -125,7 +130,7 @@ We will implement **THREE main API services**:
    - Monitoring and health endpoints
    - User/role management
 
-4. **DeepLens.OrchestrationService** (Background Service)
+4. **DeepLens.WorkerService** (Background Service)
    - Kafka message processing
    - Workflow orchestration
    - Background job scheduling
@@ -1963,14 +1968,450 @@ Before production deployment:
 
 ---
 
+## ADR-011: Asynchronous Processing with Kafka Event Streaming
+
+**Date:** 2025-11-28  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+The initial synchronous image processing pipeline was causing:
+- 4-6 second blocking user experiences during upload
+- Timeouts under load
+- Poor scalability due to tight coupling between upload, ML processing, and vector storage
+
+### Decision
+
+Transform to **asynchronous event-driven architecture** using Kafka:
+
+```
+Upload API (< 700ms) → Kafka Event → Background Workers → Vector Storage
+```
+
+#### Key Components:
+- **Immediate Upload Response**: < 700ms confirmation with correlation ID
+- **Kafka Topics**: `image.uploaded`, `feature.extraction.requested`, `vector.indexing.requested`, `processing.completed`
+- **SAGA Choreography**: Stateless workers handle pipeline steps independently
+- **WorkerService**: Background consumers for ML processing tasks
+
+### Alternatives Considered
+
+1. **Synchronous Processing**: Rejected due to poor UX and scalability
+2. **Queue-based (RabbitMQ)**: Rejected in favor of Kafka for event streaming capabilities
+3. **Database Polling**: Rejected due to inefficiency
+
+### Consequences
+
+**Positive:**
+- 6-9x faster perceived response times (< 700ms vs 4-6s)
+- Better scalability and fault tolerance
+- Proper separation of concerns between upload and processing
+
+**Negative:**
+- Increased system complexity
+- Eventually consistent processing
+- Requires correlation ID tracking for status updates
+
+---
+
+## ADR-012: SAGA Choreography Pattern for Image Processing Pipeline
+
+**Date:** 2025-11-28  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+The async image processing pipeline requires coordination between multiple services:
+- Image upload and validation
+- Feature extraction (Python ML service)
+- Vector storage (Qdrant)
+- Status updates and notifications
+
+### Decision
+
+Implement **SAGA Choreography pattern** where each service:
+- Consumes relevant events from Kafka
+- Performs its business logic
+- Publishes new events for downstream services
+- Maintains no central orchestrator
+
+#### Event Flow:
+```
+ImageUploaded → FeatureExtractionRequested → VectorIndexingRequested → ProcessingCompleted
+```
+
+### Alternatives Considered
+
+1. **SAGA Orchestration**: Rejected due to central orchestrator complexity
+2. **Direct Service Calls**: Rejected due to tight coupling
+3. **Workflow Engines**: Rejected as overkill for linear pipeline
+
+### Consequences
+
+**Positive:**
+- Loose coupling between services
+- Each service owns its domain logic
+- Natural fault isolation
+- Easy to add new processing steps
+
+**Negative:**
+- Distributed tracing complexity
+- Error handling requires compensation events
+- No central visibility into pipeline state
+
+---
+
+## ADR-013: Stateless Service Architecture and Separation of Concerns
+
+**Date:** 2025-11-29  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+With hybrid .NET + Python architecture, we need clear boundaries between:
+- Stateless compute services (ML inference, API routing)
+- Stateful data services (databases, storage, caching)
+- Service responsibilities and ownership
+
+### Decision
+
+Implement **strict stateless/stateful service separation**:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    STATELESS SERVICES                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐                    │
+│  │ Feature Extract │    │   API Gateway   │                    │
+│  │                 │    │                 │                    │
+│  │ • Pure ML only  │    │ • Route only    │                    │
+│  │ • No storage    │    │ • Auth/RateLimit│                    │
+│  │ • Horizontally  │    │ • Load Balance  │                    │
+│  │   scalable      │    │ • Circuit Break │                    │
+│  └─────────────────┘    └─────────────────┘                    │
+│      Python FastAPI          .NET YARP                         │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    STATEFUL DATA SERVICES                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐ │
+│  │ Vector Storage  │    │ Metadata Store  │    │ Cache Layer │ │
+│  │                 │    │                 │    │             │ │
+│  │ • Qdrant Mgmt   │    │ • PostgreSQL    │    │ • Redis     │ │
+│  │ • Collection    │    │ • Entity Track  │    │ • Session   │ │
+│  │ • Similarity    │    │ • Relationships │    │ • Results   │ │
+│  │ • Multi-Tenant  │    │ • Transactions  │    │ • Rate Limit│ │
+│  └─────────────────┘    └─────────────────┘    └─────────────┘ │
+│      .NET Service            .NET EF Core        .NET Service  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Service Responsibilities
+
+#### Stateless Services (.NET + Python):
+- **Feature Extraction (Python)**: Pure ML inference, no data persistence
+- **API Gateway (.NET)**: Routing, auth, rate limiting only
+- **Background Workers (.NET)**: Event processing, no direct data access
+
+#### Stateful Data Services (.NET):
+- **VectorStoreService**: Qdrant management, multi-tenant collections
+- **Repository Layer**: PostgreSQL operations, EF Core entities
+- **Cache Layer**: Redis session and result caching
+│  • Horizontally scale  │    • Orchestration   │   • Retry logic  │
+└─────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    STATEFUL DATA SERVICES                      │
+├─────────────────────────────────────────────────────────────────┤
+│  VectorStoreService    │   Repository Layer   │   Cache Layer   │
+│  • Qdrant operations   │   • PostgreSQL ops   │   • Redis ops   │
+│  • Multi-tenant colls  │   • EF Core entities │   • Session mgmt │
+│  • Collection lifecycle│   • Transactions     │   • Rate limits  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Request Flow Examples
+
+#### Image Upload & Indexing
+```
+1. Client uploads image to /api/v1/images
+   ├─▶ DeepLens.SearchApi (.NET)
+       ├─▶ Validate tenant, auth, rate limits
+       ├─▶ Store metadata in PostgreSQL
+       └─▶ HTTP POST to Python Feature Service
+           ├─▶ Generate 2048-dim vector
+           └─▶ Return vector + metadata
+       ├─▶ VectorStoreService.IndexVectorAsync()
+           └─▶ Store in Qdrant collection
+       └─▶ Return image ID + status
+```
+
+#### Similarity Search
+```  
+2. Client searches similar images /api/v1/search
+   ├─▶ DeepLens.SearchApi (.NET)
+       ├─▶ HTTP POST to Python Feature Service
+           └─▶ Generate query vector from uploaded image
+       ├─▶ VectorStoreService.SearchSimilarAsync()
+           ├─▶ Query Qdrant collection
+           └─▶ Return top-K matches with scores
+       ├─▶ Enrich with metadata from PostgreSQL
+       └─▶ Return complete search results
+```
+
+### Configuration Strategy
+
+**Python Services (Minimal):**
+```python
+# Only ML-related configuration
+class Settings(BaseSettings):
+    service_name: str = "feature-extraction-service"
+    model_name: str = "resnet50" 
+    vector_dimension: int = 2048
+    # NO database or storage configurations
+```
+
+**.NET Services (Comprehensive):**
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Database=deeplens;...",
+    "Qdrant": "http://localhost:6333",
+    "Redis": "localhost:6379"
+  },
+  "FeatureExtraction": {
+    "ServiceUrl": "http://localhost:8001",
+    "TimeoutSeconds": 30,
+    "RetryCount": 3
+  }
+}
+```
+
+### Consequences
+
+**Positive:**
+- Clear separation of concerns between compute and data
+- Python services remain lightweight and scalable  
+- Data consistency managed in .NET layer
+- Easier testing with stateless services
+- Technology alignment (ML in Python, business logic in .NET)
+- Consistent multi-tenant isolation at data layer
+
+**Negative:**
+- More network calls between services
+- Requires careful error handling across service boundaries
+- Additional complexity in service coordination
+
+---
+
+---
+
+## ADR-014: Model Versioning and Smart Multi-Model Introduction Strategy
+
+**Date:** 2025-11-29  
+**Status:** Accepted  
+**Decision Makers:** Architecture Team
+
+### Context
+
+As DeepLens grows, we need to introduce new AI models (CLIP, EfficientNet, custom models) without:
+- Re-vectorizing millions of existing images ($1000s in compute costs)
+- Blocking tenant operations during migration
+- Breaking existing search functionality
+
+### Decision
+
+Implement **Smart Model Introduction Strategy** with progressive deployment:
+
+#### Phase 1: Immediate New Model Deployment
+- **Dual Extraction**: All NEW images get vectors from both old and new models
+- **Smart Sampling**: Strategically re-vectorize 1-2% of existing images for validation
+- **Gradual Rollout**: Monitor performance and gradually increase new model usage
+
+#### Phase 2: Optional Background Migration  
+- **Low Priority**: Gradually re-vectorize remaining images during off-peak hours
+- **Cost Control**: Tenant decides migration speed vs cost trade-offs
+- **Interruption Free**: No impact on production operations
+
+#### Phase 3: Model Graduation
+- **Performance Based**: Promote new model to primary based on validation results
+- **Rollback Capable**: Maintain old vectors until confidence is achieved
+- **Clean Migration**: Remove old vectors once new model is stable
+
+### Smart Sampling Strategy
+
+```python
+# Representative sample selection across multiple dimensions:
+sampling_strategy = {
+    "temporal_distribution": {
+        "last_30_days": 0.4,      # 40% recent uploads
+        "last_6_months": 0.3,     # 30% medium-term  
+        "older_than_6m": 0.3      # 30% historical
+    },
+    "quality_distribution": {
+        "high_resolution": 0.4,   # Focus on quality images
+        "medium_resolution": 0.4,
+        "low_resolution": 0.2
+    },
+    "usage_distribution": {
+        "frequently_searched": 0.5, # Images in search results
+        "moderately_searched": 0.3,
+        "rarely_searched": 0.2
+    }
+}
+```
+
+### Cost Impact Analysis
+
+| **Approach** | **1M Images** | **10M Images** | **Time** |
+|--------------|---------------|----------------|----------|
+| **Full Re-vectorization** | $1,000 | $10,000 | 2-4 weeks |
+| **Smart Introduction** | $20 | $200 | 2-3 days |
+| **Savings** | **98%** | **98%** | **90%** |
+
+### Alternatives Considered
+
+1. **Full Re-vectorization**: Rejected due to cost and downtime
+2. **New Collections Only**: Rejected due to operational complexity  
+3. **Manual Migration**: Rejected due to operational complexity
+
+### Unified Vector Space Strategy
+
+All models use projection to a unified 2048-dimensional space for consistent search:
+
+```python
+# Unified search interface across all models
+def search_with_model(query_image, model_name="resnet50"):
+    # Extract features using specified model
+    features = extract_features(query_image, model_name)
+    
+    # Project to unified 2048-dimensional space if needed
+    unified_query = project_to_2048(features)
+    
+    # Search unified collection
+    results = search_unified_collection(unified_query, tenant_collection)
+    return results
+```
+
+### Consequences
+
+**Positive:**
+- 98% cost reduction for model introduction
+- Zero production downtime
+- Tenant controls migration pace
+- Unified search interface across all models
+- Comparable similarity scores between models
+- Simplified architecture without complex testing infrastructure
+
+**Negative:**  
+- Temporary mixed vector spaces complexity during migration
+- Requires careful sampling strategy for validation
+- Projection overhead for non-2048 dimensional models
+
+---
+
+## ADR-015: Portable Python Development Environment Strategy
+
+**Date:** 2025-11-29  
+**Status:** Accepted  
+**Decision Makers:** Development Team
+
+### Context
+
+DeepLens requires Python services for ML inference but faces challenges:
+- Windows development environments vary (no Python, different versions)
+- Admin rights not always available for system installations
+- Multiple Python versions can conflict
+- Team needs consistent, reproducible development setup
+
+### Decision
+
+Implement **Portable Python Strategy** with project-local installation:
+
+#### Core Components:
+- **Python 3.12.10 Embeddable Package**: Downloaded to `tools/python/`
+- **Project-Local Virtual Environment**: Created in service directories
+- **Automated Setup Scripts**: PowerShell scripts for consistent setup
+- **Multi-Location Detection**: Fallback strategy for Python discovery
+
+#### Setup Process:
+```powershell
+# 1. Download embeddable Python (if not exists)
+Invoke-WebRequest -Uri "python-3.12.10-embed-amd64.zip" -OutFile "python.zip"
+Expand-Archive -Path "python.zip" -DestinationPath "tools\python"
+
+# 2. Enable pip (modify python312._pth)
+# Uncomment "import site" line
+
+# 3. Install pip and virtualenv
+.\tools\python\python.exe get-pip.py
+.\tools\python\python.exe -m pip install virtualenv
+
+# 4. Automated service setup
+.\setup-dev-environment.ps1 -PythonPath "tools\python\python.exe"
+```
+
+#### Python Discovery Priority:
+1. Custom path (via parameter)
+2. Project `tools\python\` (portable)
+3. System PATH
+4. Microsoft Store installation  
+5. Common directories (`%LOCALAPPDATA%\Programs\Python`)
+
+### Implementation Examples
+
+**File Structure:**
+```
+deeplens/
+  tools/
+    python/
+      python.exe          # Portable Python 3.12.10
+      python312._pth      # Modified: "import site" uncommented
+      Scripts/pip.exe
+  src/
+    DeepLens.FeatureExtractionService/
+      setup-dev-environment.ps1   # Automated setup
+      venv/                       # Project virtual environment
+      requirements.txt
+```
+
+**Setup Script Features:**
+- Version validation (Python 3.11+ required)
+- Automatic dependency installation
+- Environment file creation from template
+- Optional model download
+- VS Code integration setup
+
+### Consequences
+
+**Positive:**
+- No admin rights required for Python setup
+- Consistent environment across development machines
+- Isolated from system Python installations
+- Reproducible builds and deployments
+- Works offline after initial download
+
+**Negative:**
+- Additional 50MB per project (Python embeddable package)
+- Requires PowerShell execution policy adjustment
+- Initial setup complexity higher than system Python
+
+---
+
 ## Future Decisions
 
 The following architectural decisions are pending:
 
-- **ADR-011:** Kafka topic design and event schemas
-- **ADR-012:** Vector database configuration (Qdrant optimization)
-- **ADR-013:** Model versioning and deployment strategy
-- **ADR-014:** Kubernetes resource allocation and scaling policies
+- **ADR-016:** Kubernetes resource allocation and scaling policies
+- **ADR-017:** Advanced observability and performance monitoring strategies
 
 ---
 

@@ -21,9 +21,9 @@ project.fragment.lock.json
 artifacts/
 TestResults/
 .vs/
-.vscode/settings.json
-.vscode/launch.json
-.vscode/tasks.json
+# .vscode/settings.json
+# .vscode/launch.json
+# .vscode/tasks.json
 *.DotSettings.user
 
 # NuGet packages
@@ -274,6 +274,8 @@ charts/
 .vscode/
 !.vscode/extensions.json
 !.vscode/recommended-extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
 
 # Visual Studio
 .vs/

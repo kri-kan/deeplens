@@ -1,0 +1,6 @@
+# Ignore all files in this directory (portable Python installation)
+*
+
+# Except this gitignore and README
+!.gitignore
+!README.md

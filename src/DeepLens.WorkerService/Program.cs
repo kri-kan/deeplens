@@ -1,4 +1,4 @@
-using DeepLens.OrchestrationService;
+using DeepLens.WorkerService;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<Worker>();

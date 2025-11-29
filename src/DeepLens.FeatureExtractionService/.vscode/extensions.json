@@ -1,0 +1,22 @@
+{
+    // Recommended extensions for DeepLens Python services
+    "recommendations": [
+        // Python Development (Required)
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        
+        // Code Quality (Recommended)
+        "ms-python.black-formatter",
+        "ms-python.flake8",
+        
+        // Testing (Recommended)
+        "littlefoxteam.vscode-python-test-adapter",
+        
+        // Additional Python Tools (Optional but useful)
+        "njpwerner.autodocstring",
+        "donjayamanne.python-environment-manager"
+    ],
+    
+    // Extensions that are essential for this project
+    "unwantedRecommendations": []
+}
