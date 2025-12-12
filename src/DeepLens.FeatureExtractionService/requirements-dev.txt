@@ -1,0 +1,25 @@
+# Development Dependencies for Feature Extraction Service
+# Install with: pip install -r requirements-dev.txt
+
+# Include production dependencies
+-r requirements.txt
+
+# Testing Framework
+pytest==7.4.3
+pytest-cov==4.1.0           # Test coverage
+pytest-mock==3.12.0         # Enhanced mocking
+pytest-asyncio==0.21.1      # Async test support
+pytest-xdist==3.3.1         # Parallel test execution
+
+# Code Quality
+black==23.11.0               # Code formatting
+flake8==6.1.0               # Linting
+isort==5.12.0               # Import sorting
+mypy==1.7.1                 # Type checking
+
+# Development Tools
+ipython==8.18.1             # Enhanced REPL
+jupyter==1.0.0              # Notebooks for experimentation
+
+# HTTP Testing
+httpx==0.25.2               # Async HTTP client for testing
