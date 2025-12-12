@@ -1,6 +1,7 @@
 # DeepLens - Image Similarity Search Engine
 
 📋 **See also:**
+
 - [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
 - [RBAC Plan](docs/RBAC_PLAN.md)
 - [Admin & Impersonation Features](docs/ADMIN_IMPERSONATION_PLAN.md)
@@ -16,25 +17,26 @@
 - Find similar/duplicate images from indexed storage locations
 - Return ranked similarity results with image IDs/locations
 - Enable storage optimization through duplicate detection and management
-For storage and database architecture details, see [STORAGE_ARCHITECTURE.md](docs/STORAGE_ARCHITECTURE.md).
+  For storage and database architecture details, see [STORAGE_ARCHITECTURE.md](docs/STORAGE_ARCHITECTURE.md).
 
 ## Architecture Overview
 
 For a detailed architecture overview, see [ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md).
-                           │  │   Metrics   │   │     Logging     │  │
-                           │  │ • Prometheus│   │ • ELK/EFK Stack │  │
-                           │  │ • Grafana   │   │ • Fluentd       │  │
-                           │  │ • Custom    │   │ • Loki          │  │
-                           │  └─────────────┘   └─────────────────┘  │
-                           │                                         │
-                           │  ┌─────────────────────────────────┐    │
-                           │  │        Tracing & APM            │    │
-                           │  │ • Jaeger / Zipkin               │    │
-                           │  │ • OpenTelemetry                 │    │
-                           │  │ • Application Insights          │    │
-                           │  └─────────────────────────────────┘    │
-                           └─────────────────────────────────────────┘
-```
+│ │ Metrics │ │ Logging │ │
+│ │ • Prometheus│ │ • ELK/EFK Stack │ │
+│ │ • Grafana │ │ • Fluentd │ │
+│ │ • Custom │ │ • Loki │ │
+│ └─────────────┘ └─────────────────┘ │
+│ │
+│ ┌─────────────────────────────────┐ │
+│ │ Tracing & APM │ │
+│ │ • Jaeger / Zipkin │ │
+│ │ • OpenTelemetry │ │
+│ │ • Application Insights │ │
+│ └─────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+
+````
 
 ## 🔄 Event-Driven Architecture with Apache Kafka
 
@@ -53,7 +55,7 @@ graph TD
     E -->|duplicates.found| H[Duplicate Management]
     F -->|Dead Letter Queue| I[Manual Review]
     G -->|tenant.usage| J[Analytics & Billing]
-```
+````
 
 ### Core Kafka Topics
 
@@ -151,6 +153,7 @@ Topics:
 ## Technical Stack Recommendations
 
 For technical stack details, see:
+
 - [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
 - [Storage Architecture](docs/STORAGE_ARCHITECTURE.md)
 - [RBAC Plan](docs/RBAC_PLAN.md)
@@ -171,6 +174,7 @@ For technical stack details, see:
 ## Authentication & Authorization Strategy
 
 For authentication, authorization, and user management details, see:
+
 - [RBAC Plan](docs/RBAC_PLAN.md)
 - [Admin & Impersonation Features](docs/ADMIN_IMPERSONATION_PLAN.md)
 
@@ -2241,12 +2245,13 @@ DeepLens uses Duende IdentityServer as the primary authentication and user manag
 - **Global Admins**: Can access and manage any tenant, including viewing tenant-specific interfaces and resources. Bypass resource-level assignments for universal access, with all actions logged for audit.
 - **Tenant Admins**: Restricted to their own tenant’s resources and interface.
 - **Impersonation**: Product admins can impersonate any user for debugging and support. Impersonation sets a runtime context (user id, name, roles, permissions,
-    options.CompressionType = CompressionType.Lz4;
-    options.MessageTimeoutMs = 30000;
-});
+  options.CompressionType = CompressionType.Lz4;
+  options.MessageTimeoutMs = 30000;
+  });
 
 services.AddSingleton<IKafkaProducer<string, ImageUploadedEvent>, KafkaProducer<string, ImageUploadedEvent>>();
-```
+
+````
 
 **Consumer Configuration (.NET)**
 
@@ -2286,7 +2291,7 @@ public class ImageProcessingWorker : BackgroundService
         }
     }
 }
-```
+````
 
 **Python Consumer for AI/ML Services**
 
@@ -2545,9 +2550,208 @@ class ScalingMetrics:
 - **Automated Scaling**: Scale out/in based on demand patterns
 - **Circuit Breakers**: Prevent cascade failures during high load
 
-## Implementation Phases (Simplified Unified Approach)
+## 🎯 Development Priority (Updated: December 2025)
 
-### Phase 1: Foundation & MVP (Unified Single-Service)
+**CURRENT PRIORITY: Image Upload & Storage Infrastructure**
+
+The project focus has shifted to prioritize the core image upload and storage capabilities as the foundation. This enables immediate value delivery and provides the infrastructure for all downstream processing.
+
+### Priority Order:
+
+1. **📤 Image Upload & Storage** ← **CURRENT FOCUS**
+
+   - Multi-tenant storage routing (BYOS - Bring Your Own Storage)
+   - Support for multiple storage backends (Azure Blob, AWS S3, GCS, MinIO, NFS)
+   - **Multi-Storage Configuration**: Each tenant can configure multiple storage backends
+     - **Use Cases**:
+       - **Hot/Cold Storage Tiering**: MinIO for frequently accessed images, S3 Glacier for archives
+       - **Multi-Cloud Strategy**: Primary in Azure, backup in AWS for disaster recovery
+       - **Compliance Requirements**: EU data in Azure West Europe, US data in AWS us-east-1
+       - **Performance Optimization**: Regional storage backends close to end users
+       - **Cost Optimization**: Use cheaper storage for infrequently accessed images
+     - **Features**:
+       - One storage backend marked as default for new uploads
+       - Ability to add/remove storage configurations dynamically
+       - Storage migration support (move images between backends)
+       - Per-backend usage analytics
+   - Secure image upload API with authentication
+   - Metadata storage in PostgreSQL
+   - Basic validation and file handling
+
+2. **🔐 Identity & Authentication**
+
+   - Duende IdentityServer integration
+   - Multi-tenant user management
+   - JWT token-based authentication
+   - RBAC (Role-Based Access Control)
+
+3. **🔄 Event-Driven Processing Pipeline**
+
+   - Kafka integration for async processing
+   - Validation service
+   - Event publishing and consumption
+
+4. **🤖 AI/ML Feature Extraction**
+
+   - Python-based feature extraction service
+   - ResNet50, CLIP model integration
+   - Vector generation
+
+5. **🔍 Search & Similarity**
+   - Vector database integration (Qdrant)
+   - Similarity search API
+   - Duplicate detection
+
+---
+
+## Implementation Phases (Updated for Storage-First Approach)
+
+### Phase 1: Image Upload & Storage Foundation ⭐ **CURRENT PHASE**
+
+**Goal**: Build robust, multi-tenant image upload and storage infrastructure
+
+**🔵 .NET Core Upload API:**
+
+- [ ] **Upload API Endpoints**:
+
+  - [ ] POST /api/v1/images/upload - Single image upload
+  - [ ] POST /api/v1/images/batch - Batch image upload
+  - [ ] POST /api/v1/images/url - Upload from URL
+  - [ ] GET /api/v1/images/{id}/status - Upload status tracking
+  - [ ] DELETE /api/v1/images/{id} - Delete uploaded image (soft delete)
+  - [ ] POST /api/v1/images/{id}/restore - Restore soft-deleted image
+  - [ ] POST /api/v1/images/restore-batch - Restore multiple soft-deleted images
+  - [ ] GET /api/v1/images/deleted - List soft-deleted images (with pagination)
+
+- [ ] **Image Retrieval API Endpoints**:
+
+  - [ ] GET /api/v1/images/{id} - Get single image by ID
+  - [ ] GET /api/v1/images/{id}/download - Download original image file
+  - [ ] GET /api/v1/images/{id}/thumbnail?size={size} - Get thumbnail (size: small/medium/large/custom)
+  - [ ] GET /api/v1/images/{id}/metadata - Get image metadata only
+  - [ ] GET /api/v1/images - List images with pagination and filtering
+  - [ ] POST /api/v1/images/bulk - Bulk retrieve images by IDs
+  - [ ] GET /api/v1/images/search - Search images by metadata filters (date, size, format, tags)
+
+- [ ] **Thumbnail Management API Endpoints**:
+
+  - [ ] GET /api/v1/images/{id}/thumbnails - List all available thumbnails for an image
+  - [ ] POST /api/v1/images/{id}/thumbnails/generate - Force regenerate thumbnails for an image
+  - [ ] DELETE /api/v1/images/{id}/thumbnails/{spec} - Delete specific thumbnail specification
+  - [ ] POST /api/v1/images/thumbnails/batch-regenerate - Batch regenerate thumbnails
+  - [ ] 📋 **Full API reference**: [Thumbnail Management Guide](docs/THUMBNAIL_MANAGEMENT.md#api-endpoints)
+
+- [ ] **Tenant Thumbnail Configuration API Endpoints**:
+
+  - [ ] GET /api/v1/tenants/{tenantId}/thumbnail-config - Get tenant thumbnail preferences
+  - [ ] PUT /api/v1/tenants/{tenantId}/thumbnail-config - Update tenant thumbnail preferences
+  - [ ] POST /api/v1/tenants/{tenantId}/thumbnail-config/apply - Apply new config to existing images
+
+- [ ] **Multi-Tenant Storage Routing**:
+
+  - [ ] Storage provider abstraction layer (IStorageProvider)
+  - [ ] Azure Blob Storage connector
+  - [ ] AWS S3 connector
+  - [ ] Google Cloud Storage connector
+  - [ ] MinIO connector
+  - [ ] NFS/Local file system connector
+  - [ ] Tenant configuration storage (PostgreSQL)
+  - [ ] Per-tenant storage routing logic
+  - [ ] **Multi-Storage Configuration** ⭐ **NEW**:
+    - [x] Support for multiple storage backends per tenant (primary + additional)
+    - [x] Default storage selection for new uploads
+    - [x] Storage configuration with Id, Name, IsDefault flag
+    - [ ] API endpoints for managing additional storage configurations:
+      - [x] POST /api/v1/tenants/{id}/storage-config - Add additional storage
+      - [x] GET /api/v1/tenants/{id}/storage-configs - List all storage configs
+      - [x] PUT /api/v1/tenants/{id}/storage-config/{configId}/set-default - Set default
+      - [x] DELETE /api/v1/tenants/{id}/storage-config/{configId} - Remove storage config
+    - [ ] Storage migration support (move images between storage backends)
+    - [ ] Usage analytics per storage backend
+  - [ ] **MinIO Lifecycle Rules**:
+    - [ ] Auto-delete objects tagged with "deleted=true" after 30 days
+    - [ ] Transition old thumbnails to cold storage after 90 days (optional)
+    - [ ] Cleanup incomplete multipart uploads after 7 days
+
+- [ ] **File Upload Handling**:
+
+  - [ ] Multipart form-data processing
+  - [ ] Streaming uploads for large files (>100MB)
+  - [ ] File type validation (JPEG, PNG, WEBP, TIFF, BMP)
+  - [ ] File size validation per tenant limits
+  - [ ] Checksum/hash calculation (SHA256)
+  - [ ] Temporary storage cleanup
+
+- [ ] **Metadata Management**:
+
+  - [ ] PostgreSQL schema for image metadata
+  - [ ] Image metadata extraction (dimensions, format, size)
+  - [ ] Storage location tracking
+  - [ ] Upload timestamp and user tracking
+  - [ ] Entity Framework Core models and migrations
+
+- [ ] **Basic Security**:
+
+  - [ ] API key authentication (temporary)
+  - [ ] Tenant isolation validation
+  - [ ] Storage access permissions
+  - [ ] Input sanitization and validation
+
+- [ ] **Observability**:
+  - [ ] Upload metrics (count, size, duration)
+  - [ ] Storage backend health checks
+  - [ ] Structured logging with Serilog
+  - [ ] Error tracking and monitoring
+
+**📋 Kafka Event Publishing** (Preparation for Phase 3):
+
+- [ ] Kafka producer setup
+- [ ] Publish "images.uploaded" events after successful upload
+- [ ] Event schema definition
+
+**🗄️ PostgreSQL Database**:
+
+- [ ] **Tenants table**:
+  - [ ] Storage configuration (JSONB with provider, credentials, paths)
+  - [ ] Thumbnail configuration (JSONB with specifications array)
+  - [ ] Quotas and limits
+  - [ ] 📋 **Schema details**: [Database Schema Design](docs/THUMBNAIL_SCHEMA_DESIGN.md)
+- [ ] **Images table**:
+  - [ ] Metadata and storage paths
+  - [ ] Processing status and audit fields
+  - [ ] Soft delete support (deleted_at timestamp)
+- [ ] EF Core migrations and seed data
+
+**Note**: Thumbnails managed via storage paths + tenant config. See:
+
+- [Thumbnail Management Guide](docs/THUMBNAIL_MANAGEMENT.md)
+- [Thumbnail Path Convention](docs/THUMBNAIL_PATH_CONVENTION.md)
+
+**Upload Flow**:
+
+1. User uploads image with optional `StorageConfigurationId` parameter
+2. If not specified, use tenant's default storage configuration
+3. Store original image at: `{tenant-id}/images/{year}/{month}/{image-id}.{ext}`
+4. Read tenant's active `ThumbnailConfiguration.Specifications[]`
+5. Generate and store all thumbnails at: `{tenant-id}/thumbnails/{spec-name}/{year}/{month}/{image-id}.{format}`
+6. Record `StorageConfigurationId` in `Image` entity for retrieval
+7. All thumbnails stored in **same storage backend** as original image
+
+**Retrieval Flow**:
+
+1. API receives request: `GET /api/v1/images/{id}/thumbnail?spec=medium-webp`
+2. Query `Image` table to get `StorageConfigurationId`
+3. Calculate thumbnail path programmatically from image ID + spec name
+4. Fetch from appropriate storage backend
+5. Cache in Redis for subsequent requests
+
+**Estimated Time**: 2-3 weeks
+
+---
+
+### Phase 2: Authentication & Authorization
+
+**🔐 Duende IdentityServer Integration:**
 
 **🔵 .NET Core Components:**
 
@@ -2557,7 +2761,7 @@ class ScalingMetrics:
 - [ ] **Infrastructure**: EF Core with PostgreSQL, Redis caching
 - [ ] **Basic Telemetry**: Serilog structured logging, health checks
 
-**🔐 Authentication & Authorization (Duende IdentityServer):**
+**🔐 Duende IdentityServer Integration:**
 
 - [ ] **IdentityServer Setup**: Duende IdentityServer host application with SQL Server
 - [ ] **Client Configuration**: Web app, API, and SPA client configurations
@@ -2568,13 +2772,69 @@ class ScalingMetrics:
 - [ ] **User Management**: Registration, profile management, and password reset flows
 - [ ] **Admin Interface**: Basic user and client management UI
 
-**🔷 .NET Core Orchestration Components:**
+**🔒 API Security Enhancement:**
 
-- [ ] **Storage Connector**: Local file system scanner using System.IO
-- [ ] **Workflow Service**: Background job processing with Hangfire
-- [ ] **File Processing**: Image metadata extraction with ImageSharp
+- [ ] Replace API key authentication with JWT tokens
+- [ ] Implement OAuth 2.0 flows (Authorization Code, Client Credentials)
+- [ ] Add refresh token support
+- [ ] Implement tenant-scoped authorization
+- [ ] Add role-based endpoint protection
+
+**Estimated Time**: 2-3 weeks
+
+---
+
+### Phase 3: Event-Driven Processing Pipeline
+
+**🔄 Kafka Integration:**
+
+- [ ] Kafka consumer infrastructure
+- [ ] Image validation service (.NET)
+- [ ] **Thumbnail Generation**:
+  - [ ] Tenant-configurable thumbnail specifications (format, size, quality)
+  - [ ] On-demand generation with storage and Redis caching
+  - [ ] Initial generation during upload based on tenant config
+  - [ ] Support for JPEG, WebP, PNG, AVIF, JPEG XL formats
+  - [ ] Aspect ratio preservation (Google Image Search style)
+  - [ ] Background job for configuration change cleanup
+  - [ ] 📋 **See detailed documentation**: [Thumbnail Management Guide](docs/THUMBNAIL_MANAGEMENT.md)
+- [ ] EXIF metadata extraction
+- [ ] Event publishing to downstream services
+
+**📊 Monitoring & Analytics:**
+
+- [ ] Upload analytics and reporting
+- [ ] Storage usage tracking per tenant
+- [ ] Processing pipeline monitoring
+
+**Estimated Time**: 2-3 weeks
+
+---
+
+### Phase 4: AI/ML Feature Extraction
 
 **🔴 Python Components:**
+
+- [ ] **Feature Extraction Service**: ResNet-50, CLIP model integration
+- [ ] **Kafka Consumer**: Consume "images.validated" events
+- [ ] **Vector Generation**: Generate embeddings from images
+- [ ] **Kafka Producer**: Publish "images.processed" events
+- [ ] **GPU Support**: CUDA acceleration for model inference
+
+**Estimated Time**: 3-4 weeks
+
+---
+
+### Phase 5: Search & Similarity Detection
+
+**🔍 Search Components:**
+
+- [ ] **Vector Database**: Qdrant integration
+- [ ] **Search API**: Similarity search endpoints
+- [ ] **Duplicate Detection**: Perceptual hashing and vector similarity
+- [ ] **Result Ranking**: Similarity scoring and filtering
+
+**🔵 .NET Core Search API:**
 
 - [ ] **Feature Extraction**: ResNet-50 with ONNX Runtime
 - [ ] **Similarity Service**: Cosine similarity with NumPy
