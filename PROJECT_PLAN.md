@@ -2639,7 +2639,7 @@ The project focus has shifted to prioritize the core image upload and storage ca
   - [ ] POST /api/v1/images/{id}/thumbnails/generate - Force regenerate thumbnails for an image
   - [ ] DELETE /api/v1/images/{id}/thumbnails/{spec} - Delete specific thumbnail specification
   - [ ] POST /api/v1/images/thumbnails/batch-regenerate - Batch regenerate thumbnails
-  - [ ] 📋 **Full API reference**: [Thumbnail Management Guide](docs/THUMBNAIL_MANAGEMENT.md#api-endpoints)
+  - [ ] 📋 **Full API reference**: [Thumbnail Documentation](docs/THUMBNAILS.md)
 
 - [ ] **Tenant Thumbnail Configuration API Endpoints**:
 
@@ -2715,17 +2715,14 @@ The project focus has shifted to prioritize the core image upload and storage ca
   - [ ] Storage configuration (JSONB with provider, credentials, paths)
   - [ ] Thumbnail configuration (JSONB with specifications array)
   - [ ] Quotas and limits
-  - [ ] 📋 **Schema details**: [Database Schema Design](docs/THUMBNAIL_SCHEMA_DESIGN.md)
+  - [ ] 📋 **Schema details**: [Thumbnail Documentation](docs/THUMBNAILS.md)
 - [ ] **Images table**:
   - [ ] Metadata and storage paths
   - [ ] Processing status and audit fields
   - [ ] Soft delete support (deleted_at timestamp)
 - [ ] EF Core migrations and seed data
 
-**Note**: Thumbnails managed via storage paths + tenant config. See:
-
-- [Thumbnail Management Guide](docs/THUMBNAIL_MANAGEMENT.md)
-- [Thumbnail Path Convention](docs/THUMBNAIL_PATH_CONVENTION.md)
+**Note**: Thumbnails managed via storage paths + tenant config. See [Thumbnail Documentation](docs/THUMBNAILS.md)
 
 **Upload Flow**:
 
@@ -2793,15 +2790,15 @@ The project focus has shifted to prioritize the core image upload and storage ca
 - [ ] **Thumbnail Generation**:
   - [ ] Tenant-configurable thumbnail specifications (format, size, quality)
   - [ ] On-demand generation with storage and Redis caching
+- [ ] **Thumbnail Generation**:
+  - [ ] Tenant-configurable thumbnail specifications (format, size, quality)
+  - [ ] On-demand generation with storage and Redis caching
   - [ ] Initial generation during upload based on tenant config
   - [ ] Support for JPEG, WebP, PNG, AVIF, JPEG XL formats
   - [ ] Aspect ratio preservation (Google Image Search style)
   - [ ] Background job for configuration change cleanup
-  - [ ] 📋 **See detailed documentation**: [Thumbnail Management Guide](docs/THUMBNAIL_MANAGEMENT.md)
+  - [ ] 📋 **See detailed documentation**: [Thumbnail Documentation](docs/THUMBNAILS.md)
 - [ ] EXIF metadata extraction
-- [ ] Event publishing to downstream services
-
-**📊 Monitoring & Analytics:**
 
 - [ ] Upload analytics and reporting
 - [ ] Storage usage tracking per tenant
