@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-  <TargetFramework>net10.0</TargetFramework>
+  <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-DeepLens.WorkerService-469ba976-5562-4b8a-958e-df9efb86ff3f</UserSecretsId>
