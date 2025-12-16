@@ -1,7 +1,11 @@
 version: "3.8"
 
 # DeepLens Infrastructure Stack
-# Containerized databases with persistent storage for local development
+# Containerized databases with persistent storage
+#
+# Environment Variables:
+#   DEEPLENS_DATA_PATH - Base path for data storage (default: ./data)
+#   DEEPLENS_LOGS_PATH - Base path for logs (default: ./logs)
 
 services:
   # =============================================================================
@@ -18,7 +22,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${DEEPLENS_DATA_PATH:-./data}/postgres:/var/lib/postgresql/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/postgres:/var/log/postgresql
       - ./init-scripts/postgres:/docker-entrypoint-initdb.d
     networks:
       - deeplens-network
@@ -47,7 +52,7 @@ services:
       - "6333:6333" # HTTP API
       - "6334:6334" # gRPC API
     volumes:
-      - qdrant_data:/qdrant/storage
+      - ${DEEPLENS_DATA_PATH:-./data}/qdrant:/qdrant/storage
       - ./config/qdrant:/qdrant/config
     networks:
       - deeplens-network
@@ -79,7 +84,8 @@ services:
     ports:
       - "8086:8086"
     volumes:
-      - influxdb_data:/var/lib/influxdb2
+      - ${DEEPLENS_DATA_PATH:-./data}/influxdb:/var/lib/influxdb2
+      - ${DEEPLENS_LOGS_PATH:-./logs}/influxdb:/var/log
       - ./init-scripts/influxdb:/docker-entrypoint-initdb.d
     networks:
       - deeplens-network
@@ -115,8 +121,8 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-      - zookeeper_logs:/var/lib/zookeeper/log
+      - ${DEEPLENS_DATA_PATH:-./data}/zookeeper/data:/var/lib/zookeeper/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/zookeeper:/var/lib/zookeeper/log
     networks:
       - deeplens-network
     deploy:
@@ -134,7 +140,8 @@ services:
     ports:
       - "9092:9092"
     volumes:
-      - kafka_data:/var/lib/kafka/data
+      - ${DEEPLENS_DATA_PATH:-./data}/kafka:/var/lib/kafka/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/kafka:/var/log/kafka
     networks:
       - deeplens-network
     environment:
@@ -202,7 +209,8 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ${DEEPLENS_DATA_PATH:-./data}/redis:/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/redis:/var/log/redis
       - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - deeplens-network
@@ -235,7 +243,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-deeplens}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-DeepLens123!}
     volumes:
-      - minio_data:/data
+      - ${DEEPLENS_DATA_PATH:-./data}/minio:/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/minio:/var/log/minio
     networks:
       - deeplens-network
     command: server /data --console-address ":9001"
@@ -265,7 +274,8 @@ services:
       POSTGRES_PASSWORD: ${INFISICAL_DB_PASSWORD:-InfisicalDb123!}
       POSTGRES_DB: ${INFISICAL_DB_NAME:-infisical}
     volumes:
-      - infisical_postgres_data:/var/lib/postgresql/data
+      - ${DEEPLENS_DATA_PATH:-./data}/infisical/postgres:/var/lib/postgresql/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/infisical/postgres:/var/log/postgresql
     networks:
       - deeplens-network
     healthcheck:
@@ -284,7 +294,8 @@ services:
     container_name: deeplens-infisical-redis
     restart: unless-stopped
     volumes:
-      - infisical_redis_data:/data
+      - ${DEEPLENS_DATA_PATH:-./data}/infisical/redis:/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/infisical/redis:/var/log/redis
     networks:
       - deeplens-network
     healthcheck:
@@ -335,7 +346,8 @@ services:
       TELEMETRY_ENABLED: "false"
       LOOP_MODE: "standalone"
     volumes:
-      - infisical_data:/app/data
+      - ${DEEPLENS_DATA_PATH:-./data}/infisical:/app/data
+      - ${DEEPLENS_LOGS_PATH:-./logs}/infisical:/app/logs
     networks:
       - deeplens-network
     healthcheck:
@@ -378,44 +390,6 @@ services:
   #       limits:
   #         memory: 512MB
   #         cpus: "0.5"
-
-  # =============================================================================
-  # Persistent Volumes
-  # =============================================================================
-volumes:
-  postgres_data:
-    driver: local
-    name: deeplens_postgres_data
-  qdrant_data:
-    driver: local
-    name: deeplens_qdrant_data
-  influxdb_data:
-    driver: local
-    name: deeplens_influxdb_data
-  kafka_data:
-    driver: local
-    name: deeplens_kafka_data
-  zookeeper_data:
-    driver: local
-    name: deeplens_zookeeper_data
-  zookeeper_logs:
-    driver: local
-    name: deeplens_zookeeper_logs
-  redis_data:
-    driver: local
-    name: deeplens_redis_data
-  infisical_postgres_data:
-    driver: local
-    name: deeplens_infisical_postgres_data
-  infisical_redis_data:
-    driver: local
-    name: deeplens_infisical_redis_data
-  infisical_data:
-    driver: local
-    name: deeplens_infisical_data
-  minio_data:
-    driver: local
-    name: deeplens_minio_data
 
 # =============================================================================
 # Networks

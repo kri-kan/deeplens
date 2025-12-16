@@ -7,6 +7,122 @@
 - [Admin & Impersonation Features](docs/ADMIN_IMPERSONATION_PLAN.md)
 - [Storage Architecture](docs/STORAGE_ARCHITECTURE.md)
 
+---
+
+## 🚀 Recent Infrastructure Enhancements (December 16-17, 2025)
+
+### Portable Infrastructure & NFS Migration
+
+DeepLens infrastructure now supports **fully portable storage** with comprehensive NFS/bind mount capabilities for easy migration between machines.
+
+#### Key Achievements
+
+✅ **PostgreSQL Backup Provisioning**
+
+- Automated backup containers for tenant databases
+- NFS/bind mount support for backup storage
+- Configurable schedules (cron-based) and retention policies
+- Compression support (gzip) for space efficiency
+
+✅ **Hybrid Storage Architecture** (Windows + Podman)
+
+- Core services: Podman named volumes (PostgreSQL, Redis, Qdrant)
+- Tenant data: Bind mounts to Windows filesystem
+- Migration via `podman volume export/import` + directory copy
+
+✅ **Complete Documentation**
+
+- [NFS Migration Guide](infrastructure/README-NFS-MIGRATION.md) - 500+ lines
+- [PostgreSQL Backup Guide](infrastructure/README-TENANT-POSTGRESQL-BACKUP.md) - 700+ lines
+- [MinIO Provisioning Guide](infrastructure/README-TENANT-MINIO-PROVISIONING.md)
+
+✅ **Management Scripts**
+
+- [`setup-with-nfs.ps1`](infrastructure/setup-with-nfs.ps1) - Start/stop/status/clean infrastructure
+- [`provision-tenant-backup.ps1`](infrastructure/provision-tenant-backup.ps1) - Automated backup setup
+- [`export-infrastructure-state.ps1`](infrastructure/export-infrastructure-state.ps1) - Export for migration
+- [`restore-infrastructure.ps1`](infrastructure/restore-infrastructure.ps1) - Restore on new machine
+
+#### Technical Implementation
+
+**Container Runtime**: Podman 5.7.0 on Windows
+
+- Network: `deeplens-network` (bridge)
+- Core services: PostgreSQL 16-alpine, Redis 7-alpine, Qdrant v1.7.0
+- Backup containers: postgres:16-alpine running crond for scheduled backups
+
+**Storage Strategy**:
+
+```
+Windows Development (Podman):
+  - Core: Named volumes → podman volume export/import for migration
+  - Tenants: Bind mounts → direct directory copy for migration
+
+Linux Production (Docker/Podman):
+  - All services: Bind mounts to NFS → instant portability
+```
+
+**Why Hybrid on Windows**:
+
+- PostgreSQL requires `chmod 700` on data directory
+- Windows filesystem cannot honor Unix permissions from containers
+- Solution: Named volumes work perfectly, tenant files use bind mounts
+
+#### Files Created/Modified
+
+1. **Documentation** (NEW)
+
+   - `infrastructure/README-NFS-MIGRATION.md` - Complete migration procedures
+   - `infrastructure/README-TENANT-POSTGRESQL-BACKUP.md` - Backup provisioning
+   - `infrastructure/README-TENANT-MINIO-PROVISIONING.md` - MinIO storage
+
+2. **Infrastructure Scripts** (NEW)
+
+   - `infrastructure/setup-with-nfs.ps1` - Main infrastructure management
+   - `infrastructure/provision-tenant-backup.ps1` - Backup container setup
+   - `infrastructure/export-infrastructure-state.ps1` - Export for migration
+   - `infrastructure/restore-infrastructure.ps1` - Restore on new machine
+   - `infrastructure/test-vayyari-setup.ps1` - Validation script
+
+3. **PowerShell Module** (FIXED)
+
+   - `infrastructure/powershell/DeepLensTenantManager.psm1`
+   - Fixed Unicode issues (curly quotes → straight quotes)
+   - Fixed PowerShell parser errors (ternary operators, inline if statements)
+   - Added 4 PostgreSQL backup functions (lines 1450-1810)
+
+4. **Docker Compose** (UPDATED)
+   - `infrastructure/docker-compose.infrastructure.yml`
+   - Added `DEEPLENS_DATA_PATH` and `DEEPLENS_LOGS_PATH` variables
+   - All services support custom paths via environment variables
+
+#### Production Validation
+
+**Successfully Tested**:
+
+- Core infrastructure running with named volumes
+- Vayyari tenant database created (`tenant_vayyari_metadata`)
+- Backup container provisioned (`deeplens-backup-vayyari`)
+- Daily backups scheduled at 2 AM with 30-day retention
+- All 4 containers healthy: postgres, redis, qdrant, backup-vayyari
+
+**Migration Paths Documented**:
+
+- Windows → Windows: Volume export/import + directory copy
+- Linux → Linux: Direct NFS share copy
+- Windows → Linux: Volume extract + permission fix
+- WSL2 option available but not required
+
+#### Future Enhancements
+
+- [ ] Switch to WSL2 + Docker for full bind mount support on Windows (optional)
+- [ ] Prometheus metrics for backup monitoring
+- [ ] Grafana dashboards for storage usage
+- [ ] Automated backup verification
+- [ ] Multi-region NFS replication
+
+---
+
 ## Project Overview
 
 **Vision**: Build a comprehensive image similarity search engine that can find visually similar images across multiple storage locations (network shares, cloud storage, blob storage) and help optimize storage by identifying duplicates.
