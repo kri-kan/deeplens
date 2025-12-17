@@ -1,4 +1,14 @@
-import { Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Divider, Box, Typography } from '@mui/material';
+import {
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Box,
+  Typography,
+} from "@mui/material";
 import {
   Dashboard,
   Business,
@@ -6,36 +16,36 @@ import {
   Image,
   Settings,
   Analytics,
-} from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+} from "@mui/icons-material";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 
 const drawerWidth = 260;
 
 const menuItems = [
-  { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-  { text: 'Tenants', icon: <Business />, path: '/tenants', adminOnly: true },
-  { text: 'Users', icon: <People />, path: '/users' },
-  { text: 'Images', icon: <Image />, path: '/images' },
-  { text: 'Analytics', icon: <Analytics />, path: '/analytics' },
+  { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
+  { text: "Tenants", icon: <Business />, path: "/tenants", adminOnly: true },
+  { text: "Users", icon: <People />, path: "/users" },
+  { text: "Images", icon: <Image />, path: "/images" },
+  { text: "Analytics", icon: <Analytics />, path: "/analytics" },
 ];
 
 const bottomItems = [
-  { text: 'Settings', icon: <Settings />, path: '/settings' },
+  { text: "Settings", icon: <Settings />, path: "/settings" },
 ];
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'Admin' || user?.role === 'TenantOwner';
+  const isAdmin = user?.role === "Admin" || user?.role === "TenantOwner";
 
   const handleNavigation = (path: string) => {
     navigate(path);
   };
 
-  const filteredMenuItems = menuItems.filter(item => 
-    !item.adminOnly || isAdmin
+  const filteredMenuItems = menuItems.filter(
+    (item) => !item.adminOnly || isAdmin
   );
 
   return (
@@ -44,12 +54,12 @@ const Sidebar = () => {
       sx={{
         width: drawerWidth,
         flexShrink: 0,
-        '& .MuiDrawer-paper': {
+        "& .MuiDrawer-paper": {
           width: drawerWidth,
-          boxSizing: 'border-box',
-          bgcolor: 'background.paper',
-          borderRight: '1px solid',
-          borderColor: 'divider',
+          boxSizing: "border-box",
+          bgcolor: "background.paper",
+          borderRight: "1px solid",
+          borderColor: "divider",
         },
       }}
     >
@@ -73,21 +83,19 @@ const Sidebar = () => {
               sx={{
                 mx: 1,
                 borderRadius: 2,
-                '&.Mui-selected': {
-                  bgcolor: 'primary.main',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
+                "&.Mui-selected": {
+                  bgcolor: "primary.main",
+                  color: "white",
+                  "&:hover": {
+                    bgcolor: "primary.dark",
                   },
-                  '& .MuiListItemIcon-root': {
-                    color: 'white',
+                  "& .MuiListItemIcon-root": {
+                    color: "white",
                   },
                 },
               }}
             >
-              <ListItemIcon sx={{ minWidth: 40 }}>
-                {item.icon}
-              </ListItemIcon>
+              <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
             </ListItemButton>
           </ListItem>
@@ -105,28 +113,26 @@ const Sidebar = () => {
               sx={{
                 mx: 1,
                 borderRadius: 2,
-                '&.Mui-selected': {
-                  bgcolor: 'primary.main',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
+                "&.Mui-selected": {
+                  bgcolor: "primary.main",
+                  color: "white",
+                  "&:hover": {
+                    bgcolor: "primary.dark",
                   },
-                  '& .MuiListItemIcon-root': {
-                    color: 'white',
+                  "& .MuiListItemIcon-root": {
+                    color: "white",
                   },
                 },
               }}
             >
-              <ListItemIcon sx={{ minWidth: 40 }}>
-                {item.icon}
-              </ListItemIcon>
+              <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
             </ListItemButton>
           </ListItem>
         ))}
       </List>
 
-      <Box sx={{ p: 2, bgcolor: 'background.default' }}>
+      <Box sx={{ p: 2, bgcolor: "background.default" }}>
         <Typography variant="caption" color="text.secondary">
           Version 0.1.0
         </Typography>

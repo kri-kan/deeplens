@@ -187,14 +187,13 @@ uvicorn app.main:app --reload --port 8001
 
 ### Web UI
 
-| Project                | Type           | Purpose                                      | Key Dependencies                           |
-| ---------------------- | -------------- | -------------------------------------------- | ------------------------------------------ |
-| **DeepLens.WebUI**     | React/Vite     | Unified web interface for all roles          | React 18, Material-UI 5, TypeScript, Axios |
+| Project            | Type       | Purpose                             | Key Dependencies                           |
+| ------------------ | ---------- | ----------------------------------- | ------------------------------------------ |
+| **DeepLens.WebUI** | React/Vite | Unified web interface for all roles | React 18, Material-UI 5, TypeScript, Axios |
 
 **Purpose:** Single-page application for system admins, tenant owners, and regular users  
 **Features:** Role-based navigation, JWT authentication, tenant/user/image management  
 **Technology:** React 18.2 + TypeScript 5.3 + Vite + Material-UI 5.15
-
 
 ---
 

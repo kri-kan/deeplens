@@ -32,6 +32,7 @@ Last Updated: December 18, 2025
 DeepLens Web UI is a comprehensive React-based web application for managing DeepLens tenants, users, and image data. Built with Material-UI (MUI) components, it provides a modern, responsive interface for both system administrators and tenant users.
 
 **Key Capabilities:**
+
 - 🔐 **Authentication** - JWT-based login with automatic token refresh
 - 🏢 **Tenant Management** - Create, view, edit, and manage tenant organizations
 - 👥 **User Management** - Manage users across all tenants (admin) or within tenant (tenant users)
@@ -46,6 +47,7 @@ DeepLens Web UI is a comprehensive React-based web application for managing Deep
 ### Implemented Features ✅
 
 **Authentication System**
+
 - Login page with JWT authentication
 - Automatic token refresh on expiration
 - Protected routes with authentication guards
@@ -53,18 +55,21 @@ DeepLens Web UI is a comprehensive React-based web application for managing Deep
 - Logout functionality
 
 **Layout & Navigation**
+
 - Responsive sidebar navigation
 - Top app bar with user menu
 - Material-UI theming (light mode)
 - Role-based menu visibility
 
 **Dashboard**
+
 - Welcome screen with user greeting
 - System statistics cards (Tenants, Users, Images, API Calls)
 - Quick action buttons
 - Real-time data display
 
 **Tenant Management (Admin Only)**
+
 - List all tenants with key information
 - Create new tenants with admin user
 - View tenant details (infrastructure, limits, etc.)
@@ -72,6 +77,7 @@ DeepLens Web UI is a comprehensive React-based web application for managing Deep
 - Status indicators (Active/Suspended/PendingSetup)
 
 **Placeholder Pages**
+
 - Users management page
 - Images management page
 - Settings page with profile information
@@ -85,27 +91,33 @@ See [Planned Features](#planned-features) section below.
 ## 🛠️ Technology Stack
 
 ### Core Framework
+
 - **React 18.2.0** - UI framework with hooks
 - **TypeScript 5.3.3** - Type-safe JavaScript
 - **Vite 5.0.8** - Build tool and dev server
 
 ### UI Framework
+
 - **Material-UI (MUI) 5.15.0** - Component library
 - **@mui/icons-material** - Icon set
 - **@emotion/react & @emotion/styled** - CSS-in-JS styling
 
 ### Routing & State
+
 - **React Router 6.21.0** - Client-side routing
 - **React Query 3.39.3** - Server state management & caching
 
 ### HTTP & API
+
 - **Axios 1.6.2** - HTTP client with interceptors
 - **jwt-decode 4.0.0** - JWT token parsing
 
 ### Utilities
+
 - **date-fns 3.0.6** - Date formatting and manipulation
 
 ### Development Tools
+
 - **ESLint** - Code linting
 - **TypeScript** - Type checking
 
@@ -177,24 +189,28 @@ DeepLens.WebUI/
 ### Installation
 
 1. **Navigate to project directory:**
+
    ```powershell
    cd c:\productivity\deeplens\src\DeepLens.WebUI
    ```
 
 2. **Install dependencies:**
+
    ```powershell
    npm install
    ```
 
 3. **Configure environment:**
+
    ```powershell
    # Copy example env file
    Copy-Item .env.example .env
-   
+
    # Edit .env with your API URLs (defaults should work for local development)
    ```
 
 4. **Start development server:**
+
    ```powershell
    npm run dev
    ```
@@ -250,8 +266,8 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
+      "/api": {
+        target: "http://localhost:5000",
         changeOrigin: true,
       },
     },
@@ -289,9 +305,10 @@ npm run lint
 ### Adding a New Page
 
 1. **Create page component:**
+
    ```typescript
    // src/pages/NewFeature/NewFeaturePage.tsx
-   import { Box, Typography } from '@mui/material';
+   import { Box, Typography } from "@mui/material";
 
    const NewFeaturePage = () => {
      return (
@@ -306,6 +323,7 @@ npm run lint
    ```
 
 2. **Add route in App.tsx:**
+
    ```typescript
    <Route path="/new-feature" element={<NewFeaturePage />} />
    ```
@@ -315,7 +333,7 @@ npm run lint
    // src/components/Layout/Sidebar.tsx
    const menuItems = [
      // ...
-     { text: 'New Feature', icon: <Icon />, path: '/new-feature' },
+     { text: "New Feature", icon: <Icon />, path: "/new-feature" },
    ];
    ```
 
@@ -325,7 +343,7 @@ All API calls go through service modules:
 
 ```typescript
 // src/services/exampleService.ts
-import apiClient from './apiClient';
+import apiClient from "./apiClient";
 
 export interface ExampleEntity {
   id: string;
@@ -334,7 +352,7 @@ export interface ExampleEntity {
 
 export const exampleService = {
   getAll: async (): Promise<ExampleEntity[]> => {
-    const response = await apiClient.get('/api/examples');
+    const response = await apiClient.get("/api/examples");
     return response.data;
   },
 
@@ -344,7 +362,7 @@ export const exampleService = {
   },
 
   create: async (data: Partial<ExampleEntity>): Promise<ExampleEntity> => {
-    const response = await apiClient.post('/api/examples', data);
+    const response = await apiClient.post("/api/examples", data);
     return response.data;
   },
 };
@@ -388,6 +406,7 @@ const ExampleComponent = () => {
 ### Role Hierarchy
 
 1. **Admin** (System Administrator)
+
    - Access: ALL features
    - Can manage ALL tenants
    - Can create new tenants
@@ -395,6 +414,7 @@ const ExampleComponent = () => {
    - Full system analytics
 
 2. **TenantOwner** (Tenant Administrator)
+
    - Access: Own tenant features
    - Can manage users within tenant
    - Can view tenant analytics
@@ -415,12 +435,12 @@ Routes are protected based on authentication and role:
 // Protected route - requires authentication
 <Route element={<ProtectedRoute />}>
   <Route path="/dashboard" element={<DashboardPage />} />
-</Route>
+</Route>;
 
 // Role-specific visibility
 const menuItems = [
-  { text: 'Tenants', path: '/tenants', adminOnly: true }, // Only for Admin
-  { text: 'Users', path: '/users' }, // All authenticated users
+  { text: "Tenants", path: "/tenants", adminOnly: true }, // Only for Admin
+  { text: "Users", path: "/users" }, // All authenticated users
 ];
 ```
 
@@ -432,32 +452,42 @@ const menuItems = [
 
 The Admin UI integrates with these DeepLens APIs:
 
-| API                          | Port | Purpose                     | Endpoints Used                    |
-| ---------------------------- | ---- | --------------------------- | --------------------------------- |
-| **NextGen.Identity API**     | 5000 | Authentication & tenants    | `/api/auth/*`, `/api/tenants/*`   |
-| **DeepLens.SearchApi**       | 5001 | Image upload & search       | `/api/images/*`                   |
-| **DeepLens.AdminApi**        | 5002 | Admin operations            | `/api/collections/*`, `/api/analytics/*` |
-| **Feature Extraction**       | 8001 | CNN feature extraction      | `/extract`, `/health`             |
+| API                      | Port | Purpose                  | Endpoints Used                           |
+| ------------------------ | ---- | ------------------------ | ---------------------------------------- |
+| **NextGen.Identity API** | 5000 | Authentication & tenants | `/api/auth/*`, `/api/tenants/*`          |
+| **DeepLens.SearchApi**   | 5001 | Image upload & search    | `/api/images/*`                          |
+| **DeepLens.AdminApi**    | 5002 | Admin operations         | `/api/collections/*`, `/api/analytics/*` |
+| **Feature Extraction**   | 8001 | CNN feature extraction   | `/extract`, `/health`                    |
 
 ### Authentication Flow
 
 1. **Login:**
+
    ```typescript
-   POST /api/auth/login
-   Body: { email, password }
-   Response: { accessToken, refreshToken, user }
+   POST / api / auth / login;
+   Body: {
+     email, password;
+   }
+   Response: {
+     accessToken, refreshToken, user;
+   }
    ```
 
 2. **Token Storage:**
+
    - Access token → `localStorage.accessToken`
    - Refresh token → `localStorage.refreshToken`
 
 3. **Authenticated Requests:**
+
    ```typescript
-   Headers: { Authorization: `Bearer ${accessToken}` }
+   Headers: {
+     Authorization: `Bearer ${accessToken}`;
+   }
    ```
 
 4. **Token Refresh (Automatic):**
+
    - When 401 response received
    - POST `/api/auth/refresh` with refresh token
    - Update stored tokens
@@ -494,6 +524,7 @@ this.client.interceptors.response.use(
 ## 🎯 Planned Features
 
 ### Phase 1: User Management (Next)
+
 - [ ] User list page with pagination
 - [ ] Create/edit/delete users
 - [ ] User role assignment
@@ -502,6 +533,7 @@ this.client.interceptors.response.use(
 - [ ] User activity logs
 
 ### Phase 2: Image Management
+
 - [ ] Image upload with drag-and-drop
 - [ ] Image gallery with thumbnails
 - [ ] Image search by similarity
@@ -510,6 +542,7 @@ this.client.interceptors.response.use(
 - [ ] Image analytics (upload trends, popular images)
 
 ### Phase 3: Advanced Analytics
+
 - [ ] Tenant usage dashboard
   - Storage consumption charts
   - API call statistics
@@ -522,6 +555,7 @@ this.client.interceptors.response.use(
 - [ ] Export analytics to CSV/PDF
 
 ### Phase 4: Enhanced Tenant Management
+
 - [ ] Tenant tier upgrades/downgrades
 - [ ] Resource usage visualization
 - [ ] Tenant suspension/activation workflows
@@ -529,6 +563,7 @@ this.client.interceptors.response.use(
 - [ ] Tenant billing information
 
 ### Phase 5: Settings & Customization
+
 - [ ] User profile editing
 - [ ] Password change
 - [ ] Email preferences
@@ -537,6 +572,7 @@ this.client.interceptors.response.use(
 - [ ] API key management
 
 ### Phase 6: Advanced Features
+
 - [ ] Real-time notifications (SignalR)
 - [ ] Activity audit logs
 - [ ] Advanced search filters
@@ -545,6 +581,7 @@ this.client.interceptors.response.use(
 - [ ] Multi-language support (i18n)
 
 ### Phase 7: Mobile Responsiveness
+
 - [ ] Mobile-optimized layouts
 - [ ] Touch gesture support
 - [ ] Progressive Web App (PWA)
@@ -590,20 +627,24 @@ src/
 ### Common Issues
 
 **1. CORS Errors**
+
 - Ensure backend APIs are running
 - Check Vite proxy configuration
 - Verify API URLs in `.env`
 
 **2. Authentication Fails**
+
 - Check if NextGen.Identity API is accessible
 - Verify JWT token format
 - Check browser localStorage for tokens
 
 **3. 404 on Refresh**
+
 - Vite dev server handles this automatically
 - For production, configure server for SPA routing
 
 **4. Module Not Found**
+
 - Run `npm install` to ensure all dependencies are installed
 - Check TypeScript path aliases in `tsconfig.json`
 
@@ -614,17 +655,20 @@ src/
 ### Development Workflow
 
 1. **Create feature branch:**
+
    ```powershell
    git checkout -b feature/new-feature
    ```
 
 2. **Make changes and test:**
+
    ```powershell
    npm run dev
    npm run lint
    ```
 
 3. **Commit with descriptive message:**
+
    ```powershell
    git commit -m "feat: Add user management page"
    ```
@@ -649,11 +693,13 @@ src/
 ## 📚 Additional Resources
 
 ### Documentation Links
+
 - **Main Project:** [../PROJECT_PLAN.md](../../PROJECT_PLAN.md)
 - **Backend API:** [../NextGen.Identity.Api/README.md](../NextGen.Identity.Api/README.md)
 - **Infrastructure:** [../../infrastructure/README.md](../../infrastructure/README.md)
 
 ### External Resources
+
 - [React Documentation](https://react.dev/)
 - [Material-UI Documentation](https://mui.com/)
 - [React Router Documentation](https://reactrouter.com/)
@@ -670,18 +716,19 @@ src/
 
 ### Feature Completion
 
-| Feature Category      | Status | Completion |
-| --------------------- | ------ | ---------- |
-| Authentication        | ✅      | 100%       |
-| Layout & Navigation   | ✅      | 100%       |
-| Dashboard             | ✅      | 80%        |
-| Tenant Management     | ✅      | 70%        |
-| User Management       | 🚧      | 10%        |
-| Image Management      | 🚧      | 5%         |
-| Analytics             | 🚧      | 20%        |
-| Settings              | 🚧      | 30%        |
+| Feature Category    | Status | Completion |
+| ------------------- | ------ | ---------- |
+| Authentication      | ✅     | 100%       |
+| Layout & Navigation | ✅     | 100%       |
+| Dashboard           | ✅     | 80%        |
+| Tenant Management   | ✅     | 70%        |
+| User Management     | 🚧     | 10%        |
+| Image Management    | 🚧     | 5%         |
+| Analytics           | 🚧     | 20%        |
+| Settings            | 🚧     | 30%        |
 
 **Legend:**
+
 - ✅ Complete
 - 🚧 In Progress
 - ⏳ Planned
