@@ -1,0 +1,274 @@
+// ============================================
+// Base Styles - DeepLens WebUI
+// ============================================
+// Global base styles and resets
+
+@import './variables';
+@import './mixins';
+
+// ============================================
+// CSS Reset & Normalization
+// ============================================
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+body {
+  margin: 0;
+  font-family: $font-family;
+  font-size: $font-size-base;
+  font-weight: $font-weight-regular;
+  line-height: $line-height-normal;
+  color: $text-primary;
+  background-color: $bg-default;
+  @include font-smoothing;
+}
+
+// ============================================
+// Typography Base
+// ============================================
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: $font-weight-medium;
+  line-height: $line-height-tight;
+}
+
+p {
+  margin: 0;
+  margin-bottom: $spacing-2;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+a {
+  color: $primary-main;
+  text-decoration: none;
+  @include transition(color);
+
+  &:hover {
+    color: $primary-dark;
+    text-decoration: underline;
+  }
+}
+
+strong,
+b {
+  font-weight: $font-weight-bold;
+}
+
+small {
+  font-size: $font-size-sm;
+}
+
+code,
+pre {
+  font-family: $font-family-monospace;
+  font-size: $font-size-sm;
+}
+
+// ============================================
+// Lists
+// ============================================
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+// ============================================
+// Forms & Inputs
+// ============================================
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+
+button {
+  border-radius: 0;
+}
+
+button:focus {
+  outline: 1px dotted;
+  outline: 5px auto -webkit-focus-ring-color;
+}
+
+input,
+textarea,
+select {
+  &:focus {
+    outline: none;
+  }
+}
+
+// ============================================
+// Images & Media
+// ============================================
+
+img,
+svg {
+  vertical-align: middle;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+// ============================================
+// Tables
+// ============================================
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+// ============================================
+// Scrollbar Customization
+// ============================================
+
+// Custom scrollbar for webkit browsers
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: $gray-200;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $gray-400;
+  border-radius: $border-radius-base;
+
+  &:hover {
+    background: $gray-500;
+  }
+}
+
+// Firefox scrollbar
+* {
+  scrollbar-width: thin;
+  scrollbar-color: $gray-400 $gray-200;
+}
+
+// ============================================
+// Selection
+// ============================================
+
+::selection {
+  background-color: rgba($primary-main, 0.2);
+  color: inherit;
+}
+
+::-moz-selection {
+  background-color: rgba($primary-main, 0.2);
+  color: inherit;
+}
+
+// ============================================
+// Focus Visible (Accessibility)
+// ============================================
+
+*:focus-visible {
+  outline: 2px solid $primary-main;
+  outline-offset: 2px;
+}
+
+// ============================================
+// Root Container
+// ============================================
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+// ============================================
+// Accessibility
+// ============================================
+
+// Skip to main content link
+.skip-to-main {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  padding: $spacing-2;
+  background: $primary-main;
+  color: $primary-contrast;
+  text-decoration: none;
+  z-index: 9999;
+
+  &:focus {
+    top: 0;
+  }
+}
+
+// Screen reader only
+.sr-only {
+  @include visually-hidden;
+}
+
+// ============================================
+// Print Styles
+// ============================================
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  a,
+  a:visited {
+    text-decoration: underline;
+  }
+
+  img {
+    page-break-inside: avoid;
+  }
+
+  p,
+  h2,
+  h3 {
+    orphans: 3;
+    widows: 3;
+  }
+
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}

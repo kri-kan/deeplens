@@ -15,7 +15,7 @@ const DashboardPage = () => {
   return (
     <Box>
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
           Welcome back, {user?.firstName}!
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -23,7 +23,7 @@ const DashboardPage = () => {
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         {stats.map((stat) => (
           <Grid item xs={12} sm={6} md={3} key={stat.title}>
             <Card>
@@ -59,18 +59,18 @@ const DashboardPage = () => {
           Quick Actions
         </Typography>
         <Grid container spacing={2}>
-          <Grid item>
-            <Button variant="contained" startIcon={<Business />}>
+          <Grid item xs={12} sm="auto">
+            <Button variant="contained" startIcon={<Business />} fullWidth>
               Create New Tenant
             </Button>
           </Grid>
-          <Grid item>
-            <Button variant="outlined" startIcon={<People />}>
+          <Grid item xs={12} sm="auto">
+            <Button variant="outlined" startIcon={<People />} fullWidth>
               Manage Users
             </Button>
           </Grid>
-          <Grid item>
-            <Button variant="outlined" startIcon={<ImageIcon />}>
+          <Grid item xs={12} sm="auto">
+            <Button variant="outlined" startIcon={<ImageIcon />} fullWidth>
               View Images
             </Button>
           </Grid>

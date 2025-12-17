@@ -1,0 +1,278 @@
+// ============================================
+// Main SCSS Entry Point - DeepLens WebUI
+// ============================================
+// Import order matters!
+
+// 1. Variables (must be first)
+@import './variables';
+
+// 2. Mixins (depends on variables)
+@import './mixins';
+
+// 3. Base styles & resets
+@import './base';
+
+// 4. Utility classes
+@import './utilities';
+
+// 5. Component-specific styles (optional, for custom non-MUI components)
+// @import './components/custom-components';
+
+// ============================================
+// Custom Global Styles
+// ============================================
+
+// Loading spinner overlay
+.loading-overlay {
+  @include fixed-fill;
+  @include flex-center;
+  background: rgba(255, 255, 255, 0.9);
+  z-index: $z-index-modal;
+
+  &--dark {
+    background: rgba(0, 0, 0, 0.8);
+  }
+}
+
+// Page transitions
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity $transition-base, transform $transition-base;
+}
+
+.page-transition-exit {
+  opacity: 1;
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transition: opacity $transition-fast;
+}
+
+// Error boundary fallback
+.error-boundary {
+  @include flex-column-center;
+  min-height: 100vh;
+  padding: $spacing-4;
+  text-align: center;
+
+  &__icon {
+    font-size: 64px;
+    color: $error-main;
+    margin-bottom: $spacing-3;
+  }
+
+  &__title {
+    font-size: $font-size-3xl;
+    font-weight: $font-weight-bold;
+    margin-bottom: $spacing-2;
+  }
+
+  &__message {
+    color: $text-secondary;
+    margin-bottom: $spacing-4;
+    max-width: 600px;
+  }
+}
+
+// Empty state
+.empty-state {
+  @include flex-column-center;
+  padding: $spacing-8 $spacing-4;
+  text-align: center;
+
+  &__icon {
+    font-size: 48px;
+    color: $gray-400;
+    margin-bottom: $spacing-3;
+  }
+
+  &__title {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-semibold;
+    margin-bottom: $spacing-2;
+  }
+
+  &__description {
+    color: $text-secondary;
+    margin-bottom: $spacing-3;
+    max-width: 500px;
+  }
+}
+
+// Skeleton loading
+.skeleton {
+  @include skeleton-loading;
+  border-radius: $border-radius-base;
+
+  &--text {
+    height: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  &--circular {
+    border-radius: $border-radius-full;
+    width: 40px;
+    height: 40px;
+  }
+
+  &--rectangular {
+    height: 200px;
+  }
+}
+
+// Toast notification custom styles (if not using MUI Snackbar)
+.toast {
+  @include elevation-8;
+  padding: $spacing-2 $spacing-3;
+  border-radius: $border-radius-lg;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  min-width: 300px;
+  max-width: 500px;
+
+  &--success {
+    background: $success-main;
+  }
+
+  &--error {
+    background: $error-main;
+  }
+
+  &--warning {
+    background: $warning-main;
+  }
+
+  &--info {
+    background: $info-main;
+  }
+}
+
+// Responsive container
+.container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 $spacing-2;
+
+  @include breakpoint-sm {
+    padding: 0 $spacing-3;
+  }
+
+  @include breakpoint-md {
+    max-width: 900px;
+  }
+
+  @include breakpoint-lg {
+    max-width: 1200px;
+  }
+
+  @include breakpoint-xl {
+    max-width: 1536px;
+  }
+
+  &--fluid {
+    max-width: 100%;
+  }
+}
+
+// Card component
+.card {
+  @include card;
+
+  &--hover {
+    @include card-hover;
+  }
+
+  &__header {
+    padding: $spacing-2;
+    border-bottom: 1px solid $border-color;
+  }
+
+  &__body {
+    padding: $spacing-2;
+  }
+
+  &__footer {
+    padding: $spacing-2;
+    border-top: 1px solid $border-color;
+    background: $gray-50;
+  }
+}
+
+// Badge component
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  border-radius: $border-radius-full;
+  line-height: 1;
+
+  &--primary {
+    background: rgba($primary-main, 0.1);
+    color: $primary-dark;
+  }
+
+  &--success {
+    background: rgba($success-main, 0.1);
+    color: $success-dark;
+  }
+
+  &--error {
+    background: rgba($error-main, 0.1);
+    color: $error-dark;
+  }
+
+  &--warning {
+    background: rgba($warning-main, 0.1);
+    color: $warning-dark;
+  }
+
+  &--info {
+    background: rgba($info-main, 0.1);
+    color: $info-dark;
+  }
+}
+
+// Divider
+.divider {
+  border: 0;
+  height: 1px;
+  background: $border-color;
+  margin: $spacing-2 0;
+
+  &--vertical {
+    width: 1px;
+    height: auto;
+    margin: 0 $spacing-2;
+  }
+}
+
+// Responsive helpers for Material-UI components
+.MuiContainer-root {
+  @include breakpoint-down-md {
+    padding-left: $spacing-2;
+    padding-right: $spacing-2;
+  }
+}
+
+// Custom scrollbar for specific components
+.custom-scrollbar {
+  @include custom-scrollbar;
+}
+
+// Print utilities
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

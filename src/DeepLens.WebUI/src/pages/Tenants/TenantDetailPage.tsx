@@ -44,10 +44,13 @@ const TenantDetailPage = () => {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" gutterBottom sx={{ 
+          fontSize: { xs: '1.75rem', sm: '2.125rem' },
+          wordBreak: 'break-word'
+        }}>
           {tenant.name}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Chip label={tenant.tier} color="primary" />
           <Chip label={tenant.status} color={tenant.status === 'Active' ? 'success' : 'default'} />
         </Box>

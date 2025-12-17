@@ -101,9 +101,16 @@ const TenantsPage = () => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        gap: 2,
+        mb: 3 
+      }}>
         <div>
-          <Typography variant="h4" gutterBottom>
+          <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
             Tenants
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -114,14 +121,16 @@ const TenantsPage = () => {
           variant="contained"
           startIcon={<Add />}
           onClick={() => setOpenDialog(true)}
+          fullWidth={false}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           Create Tenant
         </Button>
       </Box>
 
       <Card>
-        <TableContainer>
-          <Table>
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table sx={{ minWidth: { xs: 650, md: 750 } }}>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
@@ -188,7 +197,19 @@ const TenantsPage = () => {
       </Card>
 
       {/* Create Tenant Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={openDialog} 
+        onClose={() => setOpenDialog(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={false}
+        PaperProps={{
+          sx: {
+            m: { xs: 2, sm: 3 },
+            maxHeight: { xs: '90vh', sm: '80vh' }
+          }
+        }}
+      >
         <DialogTitle>Create New Tenant</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>

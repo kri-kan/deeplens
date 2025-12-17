@@ -22,6 +22,12 @@ import { useAuth } from "../../contexts/AuthContext";
 
 const drawerWidth = 260;
 
+interface SidebarProps {
+  isMobile: boolean;
+  mobileOpen: boolean;
+  onDrawerToggle: () => void;
+}
+
 const menuItems = [
   { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
   { text: "Tenants", icon: <Business />, path: "/tenants", adminOnly: true },
@@ -34,7 +40,7 @@ const bottomItems = [
   { text: "Settings", icon: <Settings />, path: "/settings" },
 ];
 
-const Sidebar = () => {
+const Sidebar: React.FC<SidebarProps> = ({ isMobile, mobileOpen, onDrawerToggle }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -42,27 +48,17 @@ const Sidebar = () => {
 
   const handleNavigation = (path: string) => {
     navigate(path);
+    if (isMobile) {
+      onDrawerToggle();
+    }
   };
 
   const filteredMenuItems = menuItems.filter(
     (item) => !item.adminOnly || isAdmin
   );
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        "& .MuiDrawer-paper": {
-          width: drawerWidth,
-          boxSizing: "border-box",
-          bgcolor: "background.paper",
-          borderRight: "1px solid",
-          borderColor: "divider",
-        },
-      }}
-    >
+  const drawerContent = (
+    <>
       <Box sx={{ p: 3 }}>
         <Typography variant="h5" fontWeight="bold" color="primary">
           🔍 DeepLens
@@ -137,7 +133,53 @@ const Sidebar = () => {
           Version 0.1.0
         </Typography>
       </Box>
-    </Drawer>
+    </>
+  );
+
+  return (
+    <Box
+      component="nav"
+      sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+    >
+      {/* Mobile drawer */}
+      {isMobile ? (
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={onDrawerToggle}
+          ModalProps={{
+            keepMounted: true, // Better mobile performance
+          }}
+          sx={{
+            "& .MuiDrawer-paper": {
+              width: drawerWidth,
+              boxSizing: "border-box",
+              bgcolor: "background.paper",
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      ) : (
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: drawerWidth,
+            flexShrink: 0,
+            "& .MuiDrawer-paper": {
+              width: drawerWidth,
+              boxSizing: "border-box",
+              bgcolor: "background.paper",
+              borderRight: "1px solid",
+              borderColor: "divider",
+            },
+          }}
+          open
+        >
+          {drawerContent}
+        </Drawer>
+      )}
+    </Box>
   );
 };
 

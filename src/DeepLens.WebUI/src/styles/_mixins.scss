@@ -1,0 +1,463 @@
+// ============================================
+// SCSS Mixins - DeepLens WebUI
+// ============================================
+// Reusable mixins for common patterns
+
+@import './variables';
+
+// ============================================
+// Responsive Breakpoints
+// ============================================
+
+// Mobile-first media queries
+@mixin breakpoint-sm {
+  @media (min-width: $breakpoint-sm) {
+    @content;
+  }
+}
+
+@mixin breakpoint-md {
+  @media (min-width: $breakpoint-md) {
+    @content;
+  }
+}
+
+@mixin breakpoint-lg {
+  @media (min-width: $breakpoint-lg) {
+    @content;
+  }
+}
+
+@mixin breakpoint-xl {
+  @media (min-width: $breakpoint-xl) {
+    @content;
+  }
+}
+
+// Max-width breakpoints
+@mixin breakpoint-down-sm {
+  @media (max-width: $breakpoint-sm - 1px) {
+    @content;
+  }
+}
+
+@mixin breakpoint-down-md {
+  @media (max-width: $breakpoint-md - 1px) {
+    @content;
+  }
+}
+
+@mixin breakpoint-down-lg {
+  @media (max-width: $breakpoint-lg - 1px) {
+    @content;
+  }
+}
+
+// Between breakpoints
+@mixin breakpoint-between($min, $max) {
+  @media (min-width: $min) and (max-width: $max - 1px) {
+    @content;
+  }
+}
+
+// ============================================
+// Flexbox Utilities
+// ============================================
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-center-vertical {
+  display: flex;
+  align-items: center;
+}
+
+@mixin flex-center-horizontal {
+  display: flex;
+  justify-content: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+@mixin flex-column-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+// ============================================
+// Typography
+// ============================================
+
+@mixin text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin text-clamp($lines: 2) {
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@mixin font-smoothing {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ============================================
+// Positioning
+// ============================================
+
+@mixin absolute-fill {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+@mixin absolute-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@mixin fixed-fill {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+// ============================================
+// Shadows & Elevation
+// ============================================
+
+@mixin elevation-1 {
+  box-shadow: 0px 2px 1px -1px rgba(0, 0, 0, 0.2),
+    0px 1px 1px 0px rgba(0, 0, 0, 0.14), 0px 1px 3px 0px rgba(0, 0, 0, 0.12);
+}
+
+@mixin elevation-2 {
+  box-shadow: 0px 3px 1px -2px rgba(0, 0, 0, 0.2),
+    0px 2px 2px 0px rgba(0, 0, 0, 0.14), 0px 1px 5px 0px rgba(0, 0, 0, 0.12);
+}
+
+@mixin elevation-4 {
+  box-shadow: 0px 2px 4px -1px rgba(0, 0, 0, 0.2),
+    0px 4px 5px 0px rgba(0, 0, 0, 0.14), 0px 1px 10px 0px rgba(0, 0, 0, 0.12);
+}
+
+@mixin elevation-8 {
+  box-shadow: 0px 5px 5px -3px rgba(0, 0, 0, 0.2),
+    0px 8px 10px 1px rgba(0, 0, 0, 0.14), 0px 3px 14px 2px rgba(0, 0, 0, 0.12);
+}
+
+// ============================================
+// Transitions
+// ============================================
+
+@mixin transition($properties...) {
+  transition-duration: $transition-base;
+  transition-timing-function: $transition-easing-standard;
+  transition-property: $properties;
+}
+
+@mixin transition-fast($properties...) {
+  transition-duration: $transition-fast;
+  transition-timing-function: $transition-easing-standard;
+  transition-property: $properties;
+}
+
+@mixin transition-slow($properties...) {
+  transition-duration: $transition-slow;
+  transition-timing-function: $transition-easing-standard;
+  transition-property: $properties;
+}
+
+// ============================================
+// Scrollbars
+// ============================================
+
+@mixin custom-scrollbar(
+  $size: 8px,
+  $track-color: $gray-200,
+  $thumb-color: $gray-400
+) {
+  &::-webkit-scrollbar {
+    width: $size;
+    height: $size;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: $track-color;
+    border-radius: $border-radius-base;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+    border-radius: $border-radius-base;
+
+    &:hover {
+      background: darken($thumb-color, 10%);
+    }
+  }
+}
+
+// ============================================
+// Cards & Containers
+// ============================================
+
+@mixin card {
+  background: $bg-paper;
+  border-radius: $border-radius-lg;
+  @include elevation-2;
+  padding: $card-padding;
+}
+
+@mixin card-hover {
+  @include transition(box-shadow, transform);
+
+  &:hover {
+    @include elevation-4;
+    transform: translateY(-2px);
+  }
+}
+
+// ============================================
+// Buttons
+// ============================================
+
+@mixin button-reset {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+@mixin button-base {
+  @include button-reset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 $button-padding-x;
+  height: $button-height;
+  border-radius: $border-radius-base;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-sm;
+  line-height: 1.75;
+  letter-spacing: 0.02857em;
+  text-transform: uppercase;
+  @include transition(background-color, box-shadow);
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.38;
+  }
+}
+
+// ============================================
+// Forms & Inputs
+// ============================================
+
+@mixin input-base {
+  width: 100%;
+  height: $input-height;
+  padding: 0 $spacing-2;
+  font-family: $font-family;
+  font-size: $font-size-base;
+  color: $text-primary;
+  background: $bg-paper;
+  border: $input-border-width solid $border-color;
+  border-radius: $border-radius-base;
+  @include transition(border-color, box-shadow);
+
+  &:focus {
+    outline: none;
+    border-width: $input-focus-border-width;
+    border-color: $primary-main;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    background: $gray-100;
+    color: $text-disabled;
+  }
+
+  &::placeholder {
+    color: $text-secondary;
+  }
+}
+
+@mixin form-label {
+  display: block;
+  margin-bottom: $spacing-1;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $text-secondary;
+}
+
+// ============================================
+// Loading & Skeleton
+// ============================================
+
+@mixin skeleton-loading {
+  background: linear-gradient(
+    90deg,
+    $gray-200 25%,
+    $gray-300 50%,
+    $gray-200 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+// ============================================
+// Visibility
+// ============================================
+
+@mixin visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@mixin hide-on-mobile {
+  @include breakpoint-down-md {
+    display: none !important;
+  }
+}
+
+@mixin hide-on-desktop {
+  @include breakpoint-md {
+    display: none !important;
+  }
+}
+
+// ============================================
+// Grid System
+// ============================================
+
+@mixin grid-container($gap: $spacing-3) {
+  display: grid;
+  gap: $gap;
+}
+
+@mixin grid-columns($columns: 12, $gap: $spacing-3) {
+  display: grid;
+  grid-template-columns: repeat($columns, 1fr);
+  gap: $gap;
+}
+
+// Responsive grid columns
+@mixin grid-responsive(
+  $mobile: 1,
+  $tablet: 2,
+  $desktop: 3,
+  $large: 4,
+  $gap: $spacing-3
+) {
+  display: grid;
+  grid-template-columns: repeat($mobile, 1fr);
+  gap: $gap;
+
+  @include breakpoint-sm {
+    grid-template-columns: repeat($tablet, 1fr);
+  }
+
+  @include breakpoint-md {
+    grid-template-columns: repeat($desktop, 1fr);
+  }
+
+  @include breakpoint-lg {
+    grid-template-columns: repeat($large, 1fr);
+  }
+}
+
+// ============================================
+// Animations
+// ============================================
+
+@mixin fade-in($duration: $transition-base) {
+  animation: fade-in $duration $transition-easing-ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@mixin slide-in-up($duration: $transition-base) {
+  animation: slide-in-up $duration $transition-easing-ease-out;
+}
+
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ============================================
+// Aspect Ratios
+// ============================================
+
+@mixin aspect-ratio($width, $height) {
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    display: block;
+    padding-top: ($height / $width) * 100%;
+  }
+
+  > * {
+    @include absolute-fill;
+  }
+}

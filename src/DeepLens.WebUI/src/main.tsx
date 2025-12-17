@@ -6,6 +6,7 @@ import { CssBaseline, ThemeProvider } from '@mui/material';
 import App from './App';
 import theme from './theme';
 import { AuthProvider } from './contexts/AuthContext';
+import './styles/main.scss';
 
 const queryClient = new QueryClient({
   defaultOptions: {

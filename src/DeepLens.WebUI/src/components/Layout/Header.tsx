@@ -1,10 +1,15 @@
 import { AppBar, Toolbar, Typography, IconButton, Box, Avatar, Menu, MenuItem } from '@mui/material';
-import { Notifications, AccountCircle } from '@mui/icons-material';
+import { Notifications, Menu as MenuIcon } from '@mui/icons-material';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-const Header = () => {
+interface HeaderProps {
+  onMenuClick: () => void;
+  showMenuButton: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenuButton }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -34,7 +39,19 @@ const Header = () => {
       }}
     >
       <Toolbar>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+        {showMenuButton && (
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={onMenuClick}
+            sx={{ mr: 2 }}
+          >
+            <MenuIcon />
+          </IconButton>
+        )}
+        
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }}>
           {/* Page title will be set by individual pages */}
         </Typography>
 

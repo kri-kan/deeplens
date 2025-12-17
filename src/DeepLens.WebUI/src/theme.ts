@@ -59,6 +59,15 @@ const theme = createTheme({
       fontWeight: 500,
     },
   },
+  breakpoints: {
+    values: {
+      xs: 0,      // Mobile (portrait)
+      sm: 600,    // Mobile (landscape) / Small tablets
+      md: 900,    // Tablets / Small laptops
+      lg: 1200,   // Laptops / Desktops
+      xl: 1536,   // Large monitors
+    },
+  },
   components: {
     MuiButton: {
       styleOverrides: {
@@ -80,6 +89,26 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+        },
+      },
+    },
+    MuiContainer: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 600px)': {
+            paddingLeft: 16,
+            paddingRight: 16,
+          },
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          '@media (max-width: 600px)': {
+            padding: '12px 8px',
+            fontSize: '0.875rem',
+          },
         },
       },
     },
