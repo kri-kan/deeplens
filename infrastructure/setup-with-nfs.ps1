@@ -9,46 +9,24 @@ param(
     [switch]$Clean
 )
 
-$CoreDataPath = "$DataBasePath/core/data"
-$CoreLogsPath = "$DataBasePath/core/logs"
 $TenantsPath = "$DataBasePath/tenants"
 
 function Initialize-Directories {
-    Write-Host "[INIT] Creating directory structure..." -ForegroundColor Cyan
+    Write-Host "[INIT] Creating tenant directory..." -ForegroundColor Cyan
     
-    # Core data directories
-    $dirs = @(
-        "$CoreDataPath/postgres",
-        "$CoreDataPath/redis",
-        "$CoreDataPath/qdrant",
-        "$CoreDataPath/influxdb",
-        "$CoreDataPath/kafka",
-        "$CoreDataPath/zookeeper/data",
-        "$CoreDataPath/minio",
-        "$CoreDataPath/infisical/postgres",
-        "$CoreDataPath/infisical/redis",
-        "$CoreLogsPath/postgres",
-        "$CoreLogsPath/redis",
-        "$CoreLogsPath/kafka",
-        "$CoreLogsPath/zookeeper",
-        "$TenantsPath"
-    )
+    # Only create tenants path - core services use named volumes
+    New-Item -ItemType Directory -Path $TenantsPath -Force | Out-Null
     
-    foreach ($dir in $dirs) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-    
-    Write-Host "[OK] Directory structure created at: $DataBasePath" -ForegroundColor Green
+    Write-Host "[OK] Tenant directory created at: $TenantsPath" -ForegroundColor Green
 }
 
 function Start-Infrastructure {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host " Starting DeepLens Infrastructure" -ForegroundColor Cyan
+    Write-Host " Starting DeepLens Core Infrastructure" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "[INFO] Data Path: $CoreDataPath" -ForegroundColor Yellow
-    Write-Host "[INFO] Logs Path: $CoreLogsPath" -ForegroundColor Yellow
+    Write-Host "[INFO] Tenants Path: $TenantsPath" -ForegroundColor Yellow
     Write-Host ""
     
     Initialize-Directories
@@ -90,26 +68,12 @@ function Start-Infrastructure {
     
     Write-Host "[OK] Redis started" -ForegroundColor Green
     
-    # Qdrant
-    Write-Host "`n[START] Qdrant..." -ForegroundColor Cyan
-    podman run -d `
-        --name deeplens-qdrant `
-        --restart unless-stopped `
-        --network deeplens-network `
-        -p 6333:6333 `
-        -p 6334:6334 `
-        -v deeplens_qdrant_data:/qdrant/storage `
-        qdrant/qdrant:v1.7.0
-    
-    Write-Host "[OK] Qdrant started" -ForegroundColor Green
-    
     Write-Host ""
     Write-Host "[SUCCESS] Infrastructure started!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "[NOTE] Core services use named volumes due to Podman/Windows limitations" -ForegroundColor Yellow
-    Write-Host "[NOTE] Tenant data (backups, MinIO) uses portable paths at: $TenantsPath" -ForegroundColor Yellow
-    Write-Host "[NOTE] To migrate: Use 'podman volume export/import' for core data" -ForegroundColor Yellow
-    Write-Host "       Or use this script on Linux with proper NFS mounts" -ForegroundColor Yellow
+    Write-Host "[NOTE] Core services (PostgreSQL, Redis) use named volumes" -ForegroundColor Yellow
+    Write-Host "[NOTE] Tenant data (backups, MinIO, Qdrant) uses portable paths at: $TenantsPath" -ForegroundColor Yellow
+    Write-Host "[NOTE] Per-tenant services provisioned separately (see provision-tenant-*.ps1)" -ForegroundColor Yellow
     Write-Host ""
 }
 

@@ -1,7 +1,9 @@
 # Infrastructure Enhancement Changelog
+
 ## December 16-17, 2025
 
 ### 🎯 Objective Achieved
+
 Implemented **fully portable infrastructure** with NFS/bind mount support for easy migration between machines, and automated PostgreSQL backup provisioning for multi-tenant deployments.
 
 ---
@@ -11,6 +13,7 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
 ### Documentation (1,500+ lines)
 
 1. **[README-NFS-MIGRATION.md](README-NFS-MIGRATION.md)** (500+ lines)
+
    - Storage strategy for Windows dev vs Linux production
    - Complete migration procedures (Windows→Windows, Linux→Linux, Windows→Linux)
    - NFS configuration for Windows and Linux
@@ -19,6 +22,7 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
    - Security considerations
 
 2. **[README-TENANT-POSTGRESQL-BACKUP.md](README-TENANT-POSTGRESQL-BACKUP.md)** (700+ lines)
+
    - Automated backup provisioning architecture
    - Function reference (New-TenantPostgreSQLBackup, Remove, Get-Status, Get-All)
    - Complete workflow examples
@@ -36,6 +40,7 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
 ### Infrastructure Scripts
 
 1. **[setup-with-nfs.ps1](setup-with-nfs.ps1)** (195 lines)
+
    - Main infrastructure management script
    - Functions: Start-Infrastructure, Stop-Infrastructure, Show-Status, Clean-All
    - Default path: `C:\productivity\deeplensData`
@@ -49,6 +54,7 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
      ```
 
 2. **[provision-tenant-backup.ps1](provision-tenant-backup.ps1)** (140 lines)
+
    - Automated PostgreSQL backup container provisioning
    - Creates backup script inside container (avoids Windows line ending issues)
    - Parameters: `-TenantName`, `-BackupPath`, `-Schedule`, `-RetentionDays`, `-TestBackup`
@@ -60,6 +66,7 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
      ```
 
 3. **[export-infrastructure-state.ps1](export-infrastructure-state.ps1)** (150 lines)
+
    - Export all infrastructure state for migration
    - Exports: core data, tenant data, configuration, metadata
    - Creates restoration script automatically
@@ -69,6 +76,7 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
      ```
 
 4. **[restore-infrastructure.ps1](restore-infrastructure.ps1)** (180 lines)
+
    - Restore infrastructure on new machine
    - Recreates directory structure
    - Restores volumes, databases, backup containers
@@ -87,12 +95,14 @@ Implemented **fully portable infrastructure** with NFS/bind mount support for ea
 **[powershell/DeepLensTenantManager.psm1](powershell/DeepLensTenantManager.psm1)** (1,899 lines)
 
 Fixed PowerShell parsing errors:
+
 - **Line 252, 405**: Converted inline if statements to separate variable assignments
 - **Lines 397-403**: Changed SQL here-string from `@"` to `@'` (prevents PowerShell from interpreting `@provider` as array operator)
 - **Line 1658**: Converted ternary operator to if/else statement
 - **Unicode fix**: Replaced all curly quotes (U+2018, U+2019) with straight quotes (U+0027)
 
 Added 4 new functions (lines 1450-1810):
+
 - `New-TenantPostgreSQLBackup` - Create automated backup
 - `Remove-TenantPostgreSQLBackup` - Remove backup configuration
 - `Get-TenantPostgreSQLBackupStatus` - Check backup status
@@ -101,6 +111,7 @@ Added 4 new functions (lines 1450-1810):
 **[docker-compose.infrastructure.yml](docker-compose.infrastructure.yml)** (398 lines)
 
 Updates:
+
 - Added `DEEPLENS_DATA_PATH` and `DEEPLENS_LOGS_PATH` environment variables
 - All volume definitions support custom paths: `${DEEPLENS_DATA_PATH:-./data}/postgres:/var/lib/postgresql/data`
 - Removed ~50 lines of static named volume definitions
@@ -113,6 +124,7 @@ Updates:
 ### Storage Strategy
 
 **Windows Development (Podman 5.7.0)**
+
 ```
 Core Services:
   PostgreSQL, Redis, Qdrant → Named volumes (in Podman VM)
@@ -124,6 +136,7 @@ Tenant Data:
 ```
 
 **Linux Production (Docker/Podman)**
+
 ```
 All Services:
   PostgreSQL, Redis, Qdrant, Tenant Data → Bind mounts to NFS
@@ -133,6 +146,7 @@ All Services:
 ### Why Hybrid on Windows?
 
 PostgreSQL requires `chmod 700` on `/var/lib/postgresql/data`:
+
 - Windows filesystem cannot honor Unix permissions from Linux containers
 - Bind mounts fail with: `initdb: error: could not change permissions of directory`
 - **Solution**: Named volumes work perfectly; tenant files use bind mounts
@@ -160,6 +174,7 @@ PostgreSQL requires `chmod 700` on `/var/lib/postgresql/data`:
 ```
 
 **Why backup container works with bind mounts**:
+
 - Runs crond, NOT PostgreSQL database server
 - Uses pg_dump CLIENT to connect over network
 - Only writes regular `.sql.gz` files (no chmod required)
@@ -169,6 +184,7 @@ PostgreSQL requires `chmod 700` on `/var/lib/postgresql/data`:
 ## ✅ Production Validation
 
 ### Infrastructure Status
+
 ```
 Container                Status                     Ports
 deeplens-postgres        Up 41 seconds (healthy)    5432:5432
@@ -178,17 +194,20 @@ deeplens-backup-vayyari Up 13 minutes              -
 ```
 
 ### Databases Created
+
 - `deeplens` (default)
 - `nextgen_identity` (identity management)
 - `deeplens_platform` (platform database)
 - `tenant_vayyari_metadata` ✅ (tenant database)
 
 ### Volumes
+
 - `deeplens_postgres_data` (PostgreSQL data)
 - `deeplens_redis_data` (Redis data)
 - `deeplens_qdrant_data` (Qdrant vectors)
 
 ### Tenant Data
+
 - Backups: `C:\productivity\deeplensData\tenants\vayyari\backups`
 - Schedule: Daily at 2 AM
 - Retention: 30 days
@@ -199,12 +218,14 @@ deeplens-backup-vayyari Up 13 minutes              -
 ## 📊 Metrics
 
 **Total Lines of Code**: 5,166 insertions
+
 - Documentation: 1,500+ lines
 - Scripts: 785 lines
 - Module fixes: 360 lines changed
 - Docker compose: 50 lines changed
 
 **Files Changed**: 12
+
 - 8 new files created
 - 4 files modified
 
@@ -244,14 +265,17 @@ docker-compose -f docker-compose.infrastructure.yml up -d
 ## 🎓 Lessons Learned
 
 1. **Windows + Podman Limitation**: Cannot bind mount PostgreSQL data directories
+
    - Root cause: `chmod 700` requirement on data directory
    - Windows filesystem cannot honor Unix permissions
    - Solution: Named volumes + export/import
 
 2. **Line Ending Issues**: Windows creates CRLF, containers expect LF
+
    - Solution: Create scripts inside container using `podman exec`
 
 3. **PowerShell Parser**: Very strict about syntax
+
    - Curly quotes cause failures
    - SQL `@parameters` in here-strings need single quotes `@'...'@`
    - Ternary operators not supported
