@@ -104,6 +104,16 @@ src/
         DeepLens.Shared.Common/              # Common utilities & helpers
         DeepLens.Shared.Messaging/           # Kafka messaging abstractions
         DeepLens.Shared.Telemetry/           # OpenTelemetry shared setup
+
+  Web UI
+    DeepLens.WebUI/                          # React web interface
+        src/
+           components/                       # Reusable UI components
+           pages/                            # Page components
+           services/                         # API service layer
+           contexts/                         # React contexts
+        package.json                         # Dependencies & scripts
+        README.md                            # Web UI documentation
 ```
 
 ---
@@ -174,6 +184,17 @@ uvicorn app.main:app --reload --port 8001
 | **DeepLens.Shared.Common**            | Class Library  | Common utilities                             | (None - utilities only)           |
 | **DeepLens.Shared.Messaging**         | Class Library  | Kafka messaging abstractions                 | Confluent.Kafka                   |
 | **DeepLens.Shared.Telemetry**         | Class Library  | OpenTelemetry shared setup                   | OpenTelemetry packages            |
+
+### Web UI
+
+| Project                | Type           | Purpose                                      | Key Dependencies                           |
+| ---------------------- | -------------- | -------------------------------------------- | ------------------------------------------ |
+| **DeepLens.WebUI**     | React/Vite     | Unified web interface for all roles          | React 18, Material-UI 5, TypeScript, Axios |
+
+**Purpose:** Single-page application for system admins, tenant owners, and regular users  
+**Features:** Role-based navigation, JWT authentication, tenant/user/image management  
+**Technology:** React 18.2 + TypeScript 5.3 + Vite + Material-UI 5.15
+
 
 ---
 

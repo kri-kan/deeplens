@@ -1,6 +1,6 @@
-# DeepLens Admin UI
+# DeepLens Web UI
 
-**Modern React-based admin interface for DeepLens tenant and data management**
+**Modern React-based web interface for DeepLens tenant and data management**
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![React](https://img.shields.io/badge/react-18.2.0-blue.svg)
@@ -29,7 +29,7 @@ Last Updated: December 18, 2025
 
 ## 🎯 Overview
 
-DeepLens Admin UI is a comprehensive React-based web application for managing DeepLens tenants, users, and image data. Built with Material-UI (MUI) components, it provides a modern, responsive interface for both system administrators and tenant users.
+DeepLens Web UI is a comprehensive React-based web application for managing DeepLens tenants, users, and image data. Built with Material-UI (MUI) components, it provides a modern, responsive interface for both system administrators and tenant users.
 
 **Key Capabilities:**
 - 🔐 **Authentication** - JWT-based login with automatic token refresh
@@ -114,7 +114,7 @@ See [Planned Features](#planned-features) section below.
 ## 📁 Project Structure
 
 ```
-DeepLens.AdminUI/
+DeepLens.WebUI/
 ├── public/                          # Static assets
 │   └── deeplens-icon.svg            # Application icon
 │
@@ -178,7 +178,7 @@ DeepLens.AdminUI/
 
 1. **Navigate to project directory:**
    ```powershell
-   cd c:\productivity\deeplens\src\DeepLens.AdminUI
+   cd c:\productivity\deeplens\src\DeepLens.WebUI
    ```
 
 2. **Install dependencies:**

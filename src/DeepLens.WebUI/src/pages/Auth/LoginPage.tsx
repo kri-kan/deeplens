@@ -75,7 +75,7 @@ const LoginPage = () => {
           </Box>
           
           <Typography component="h1" variant="h4" gutterBottom>
-            DeepLens Admin
+            DeepLens
           </Typography>
           
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>

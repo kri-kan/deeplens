@@ -58,7 +58,7 @@ const Sidebar = () => {
           🔍 DeepLens
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          Admin Portal
+          Web Portal
         </Typography>
       </Box>
 
