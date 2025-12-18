@@ -3,7 +3,7 @@
 // ============================================
 // Reusable mixins for common patterns
 
-@import './variables';
+@import "./variables";
 
 // ============================================
 // Responsive Breakpoints
@@ -452,7 +452,7 @@
   overflow: hidden;
 
   &::before {
-    content: '';
+    content: "";
     display: block;
     padding-top: ($height / $width) * 100%;
   }

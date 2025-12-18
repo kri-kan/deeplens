@@ -15,6 +15,15 @@
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.9.0-beta.2" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Sinks.OpenTelemetry" Version="4.1.0" />
+    
+    <!-- Duende IdentityServer -->
+    <PackageReference Include="Duende.IdentityServer" Version="7.0.9" />
+    <PackageReference Include="Duende.IdentityServer.EntityFramework" Version="7.0.9" />
+    <PackageReference Include="Duende.IdentityServer.AspNetIdentity" Version="7.0.9" />
+    
+    <!-- Authentication -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
   </ItemGroup>
 
   <ItemGroup>

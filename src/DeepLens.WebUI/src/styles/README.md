@@ -27,7 +27,7 @@ src/styles/
 
 ```scss
 // In your component SCSS file
-@import '../styles/variables';
+@import "../styles/variables";
 
 .my-component {
   color: $primary-main;
@@ -39,13 +39,13 @@ src/styles/
 ### Using Mixins
 
 ```scss
-@import '../styles/variables';
-@import '../styles/mixins';
+@import "../styles/variables";
+@import "../styles/mixins";
 
 .my-card {
   @include card;
   @include card-hover;
-  
+
   @include breakpoint-md {
     width: 50%;
   }
@@ -72,6 +72,7 @@ Utility classes are available globally:
 ## 🎨 Variables Overview
 
 ### Colors
+
 - **Primary:** `$primary-main`, `$primary-light`, `$primary-dark`
 - **Secondary:** `$secondary-main`, `$secondary-light`, `$secondary-dark`
 - **Status:** `$success-main`, `$error-main`, `$warning-main`, `$info-main`
@@ -80,6 +81,7 @@ Utility classes are available globally:
 - **Backgrounds:** `$bg-default`, `$bg-paper`, `$bg-dark`
 
 ### Spacing (8px scale)
+
 - `$spacing-0` (0px)
 - `$spacing-1` (8px)
 - `$spacing-2` (16px)
@@ -90,6 +92,7 @@ Utility classes are available globally:
 - `$spacing-8` (64px)
 
 ### Breakpoints
+
 - `$breakpoint-xs` (0px) - Mobile
 - `$breakpoint-sm` (600px) - Tablet
 - `$breakpoint-md` (900px) - Small laptop
@@ -97,6 +100,7 @@ Utility classes are available globally:
 - `$breakpoint-xl` (1536px) - Large screen
 
 ### Typography
+
 - **Font Family:** `$font-family` (Roboto)
 - **Font Weights:** `$font-weight-light` to `$font-weight-bold`
 - **Font Sizes:** `$font-size-xs` to `$font-size-4xl`
@@ -105,49 +109,67 @@ Utility classes are available globally:
 ## 🔧 Mixins Reference
 
 ### Responsive Breakpoints
-```scss
-@include breakpoint-sm { /* >= 600px */ }
-@include breakpoint-md { /* >= 900px */ }
-@include breakpoint-lg { /* >= 1200px */ }
-@include breakpoint-xl { /* >= 1536px */ }
 
-@include breakpoint-down-sm { /* < 600px */ }
-@include breakpoint-down-md { /* < 900px */ }
+```scss
+@include breakpoint-sm {
+  /* >= 600px */
+}
+@include breakpoint-md {
+  /* >= 900px */
+}
+@include breakpoint-lg {
+  /* >= 1200px */
+}
+@include breakpoint-xl {
+  /* >= 1536px */
+}
+
+@include breakpoint-down-sm {
+  /* < 600px */
+}
+@include breakpoint-down-md {
+  /* < 900px */
+}
 ```
 
 ### Flexbox
+
 ```scss
-@include flex-center;          // Center horizontally & vertically
+@include flex-center; // Center horizontally & vertically
 @include flex-center-vertical; // Center vertically only
-@include flex-between;         // Space between
-@include flex-column;          // Flex column
-@include flex-column-center;   // Column + center
+@include flex-between; // Space between
+@include flex-column; // Flex column
+@include flex-column-center; // Column + center
 ```
 
 ### Typography
+
 ```scss
-@include text-truncate;        // Single line ellipsis
-@include text-clamp(2);        // Multi-line ellipsis (2 lines)
-@include font-smoothing;       // Antialiased text
+@include text-truncate; // Single line ellipsis
+@include text-clamp(2); // Multi-line ellipsis (2 lines)
+@include font-smoothing; // Antialiased text
 ```
 
 ### Positioning
+
 ```scss
-@include absolute-fill;        // Fill parent
-@include absolute-center;      // Center in parent
-@include fixed-fill;           // Fixed full screen
+@include absolute-fill; // Fill parent
+@include absolute-center; // Center in parent
+@include fixed-fill; // Fixed full screen
 ```
 
 ### Cards & Shadows
+
 ```scss
-@include card;                 // Basic card style
-@include card-hover;           // Hover effect
-@include elevation-1;          // Light shadow
-@include elevation-2;          // Medium shadow
-@include elevation-8;          // Heavy shadow
+@include card; // Basic card style
+@include card-hover; // Hover effect
+@include elevation-1; // Light shadow
+@include elevation-2; // Medium shadow
+@include elevation-8; // Heavy shadow
 ```
 
 ### Transitions
+
 ```scss
 @include transition(opacity, transform);
 @include transition-fast(color);
@@ -155,18 +177,21 @@ Utility classes are available globally:
 ```
 
 ### Grid
+
 ```scss
-@include grid-columns(12);                    // 12 column grid
-@include grid-responsive(1, 2, 3, 4);        // 1→2→3→4 columns
+@include grid-columns(12); // 12 column grid
+@include grid-responsive(1, 2, 3, 4); // 1→2→3→4 columns
 ```
 
 ### Animations
+
 ```scss
-@include fade-in;              // Fade in animation
-@include slide-in-up;          // Slide up animation
+@include fade-in; // Fade in animation
+@include slide-in-up; // Slide up animation
 ```
 
 ### Custom Scrollbar
+
 ```scss
 @include custom-scrollbar(8px, $gray-200, $gray-400);
 ```
@@ -178,19 +203,21 @@ Utility classes are available globally:
 If you need custom styles for a specific component (not covered by Material-UI):
 
 1. Create a new SCSS file in your component folder:
+
    ```
    src/components/MyComponent/MyComponent.scss
    ```
 
 2. Import variables and mixins:
+
    ```scss
-   @import '../../styles/variables';
-   @import '../../styles/mixins';
+   @import "../../styles/variables";
+   @import "../../styles/mixins";
 
    .my-component {
      @include card;
      padding: $spacing-3;
-     
+
      &__header {
        @include flex-between;
        margin-bottom: $spacing-2;
@@ -204,12 +231,13 @@ If you need custom styles for a specific component (not covered by Material-UI):
 
 3. Import in your component:
    ```tsx
-   import './MyComponent.scss';
+   import "./MyComponent.scss";
    ```
 
 ## 🚀 Best Practices
 
 ### ✅ DO:
+
 - Use SCSS variables for all colors, spacing, and typography
 - Use mixins for common patterns (flexbox, breakpoints, transitions)
 - Follow BEM naming for custom components (`.block__element--modifier`)
@@ -218,6 +246,7 @@ If you need custom styles for a specific component (not covered by Material-UI):
 - Mobile-first responsive design
 
 ### ❌ DON'T:
+
 - Hard-code colors or spacing values
 - Use inline styles unless absolutely necessary
 - Override Material-UI styles globally (use theme customization instead)
@@ -227,9 +256,10 @@ If you need custom styles for a specific component (not covered by Material-UI):
 ## 📖 Examples
 
 ### Example 1: Custom Card Component
+
 ```scss
-@import '../styles/variables';
-@import '../styles/mixins';
+@import "../styles/variables";
+@import "../styles/mixins";
 
 .feature-card {
   @include card;
@@ -264,6 +294,7 @@ If you need custom styles for a specific component (not covered by Material-UI):
 ```
 
 ### Example 2: Responsive Grid
+
 ```scss
 .product-grid {
   @include grid-responsive(1, 2, 3, 4, $spacing-3);
@@ -276,6 +307,7 @@ If you need custom styles for a specific component (not covered by Material-UI):
 ```
 
 ### Example 3: Using Utility Classes
+
 ```tsx
 <div className="d-flex flex-column p-3 rounded-lg shadow-md">
   <h2 className="text-primary font-bold mb-2">Title</h2>
@@ -290,14 +322,23 @@ If you have existing CSS files:
 
 1. Rename `.css` to `.scss`
 2. Replace hard-coded values with variables:
+
    ```scss
    // Before (CSS)
-   .box { padding: 16px; color: #1976d2; }
+   .box {
+     padding: 16px;
+     color: #1976d2;
+   }
 
    // After (SCSS)
-   .box { padding: $spacing-2; color: $primary-main; }
+   .box {
+     padding: $spacing-2;
+     color: $primary-main;
+   }
    ```
+
 3. Use mixins for common patterns:
+
    ```scss
    // Before
    .card {
@@ -307,7 +348,9 @@ If you have existing CSS files:
    }
 
    // After
-   .card { @include flex-center; }
+   .card {
+     @include flex-center;
+   }
    ```
 
 ## 📦 Build Configuration
@@ -315,9 +358,10 @@ If you have existing CSS files:
 Vite automatically handles SCSS compilation. No additional configuration needed!
 
 Just import SCSS files:
+
 ```tsx
-import './styles/main.scss';  // Global styles
-import './MyComponent.scss';  // Component styles
+import "./styles/main.scss"; // Global styles
+import "./MyComponent.scss"; // Component styles
 ```
 
 ## 🎓 Resources

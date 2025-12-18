@@ -1,78 +1,78 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme } from "@mui/material/styles";
 
 const theme = createTheme({
   palette: {
-    mode: 'light',
+    mode: "light",
     primary: {
-      main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
-      contrastText: '#fff',
+      main: "#1976d2",
+      light: "#42a5f5",
+      dark: "#1565c0",
+      contrastText: "#fff",
     },
     secondary: {
-      main: '#9c27b0',
-      light: '#ba68c8',
-      dark: '#7b1fa2',
-      contrastText: '#fff',
+      main: "#9c27b0",
+      light: "#ba68c8",
+      dark: "#7b1fa2",
+      contrastText: "#fff",
     },
     error: {
-      main: '#d32f2f',
+      main: "#d32f2f",
     },
     warning: {
-      main: '#ed6c02',
+      main: "#ed6c02",
     },
     info: {
-      main: '#0288d1',
+      main: "#0288d1",
     },
     success: {
-      main: '#2e7d32',
+      main: "#2e7d32",
     },
     background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
+      default: "#f5f5f5",
+      paper: "#ffffff",
     },
   },
   typography: {
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
     h1: {
-      fontSize: '2.5rem',
+      fontSize: "2.5rem",
       fontWeight: 500,
     },
     h2: {
-      fontSize: '2rem',
+      fontSize: "2rem",
       fontWeight: 500,
     },
     h3: {
-      fontSize: '1.75rem',
+      fontSize: "1.75rem",
       fontWeight: 500,
     },
     h4: {
-      fontSize: '1.5rem',
+      fontSize: "1.5rem",
       fontWeight: 500,
     },
     h5: {
-      fontSize: '1.25rem',
+      fontSize: "1.25rem",
       fontWeight: 500,
     },
     h6: {
-      fontSize: '1rem',
+      fontSize: "1rem",
       fontWeight: 500,
     },
   },
   breakpoints: {
     values: {
-      xs: 0,      // Mobile (portrait)
-      sm: 600,    // Mobile (landscape) / Small tablets
-      md: 900,    // Tablets / Small laptops
-      lg: 1200,   // Laptops / Desktops
-      xl: 1536,   // Large monitors
+      xs: 0, // Mobile (portrait)
+      sm: 600, // Mobile (landscape) / Small tablets
+      md: 900, // Tablets / Small laptops
+      lg: 1200, // Laptops / Desktops
+      xl: 1536, // Large monitors
     },
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          textTransform: 'none',
+          textTransform: "none",
           borderRadius: 8,
         },
       },
@@ -81,21 +81,21 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+          boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
         },
       },
     },
     MuiContainer: {
       styleOverrides: {
         root: {
-          '@media (max-width: 600px)': {
+          "@media (max-width: 600px)": {
             paddingLeft: 16,
             paddingRight: 16,
           },
@@ -105,9 +105,9 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          '@media (max-width: 600px)': {
-            padding: '12px 8px',
-            fontSize: '0.875rem',
+          "@media (max-width: 600px)": {
+            padding: "12px 8px",
+            fontSize: "0.875rem",
           },
         },
       },

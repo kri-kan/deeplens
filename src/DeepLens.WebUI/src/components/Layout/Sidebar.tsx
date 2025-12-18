@@ -40,7 +40,11 @@ const bottomItems = [
   { text: "Settings", icon: <Settings />, path: "/settings" },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ isMobile, mobileOpen, onDrawerToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  isMobile,
+  mobileOpen,
+  onDrawerToggle,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();

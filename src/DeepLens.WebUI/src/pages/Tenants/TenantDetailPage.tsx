@@ -1,5 +1,5 @@
-import { useParams } from 'react-router-dom';
-import { useQuery } from 'react-query';
+import { useParams } from "react-router-dom";
+import { useQuery } from "react-query";
 import {
   Box,
   Typography,
@@ -13,21 +13,23 @@ import {
   List,
   ListItem,
   ListItemText,
-} from '@mui/material';
-import { tenantService } from '../../services/tenantService';
+} from "@mui/material";
+import { tenantService } from "../../services/tenantService";
 
 const TenantDetailPage = () => {
   const { id } = useParams<{ id: string }>();
-  
-  const { data: tenant, isLoading, error } = useQuery(
-    ['tenant', id],
-    () => tenantService.getTenantById(id!),
-    { enabled: !!id }
-  );
+
+  const {
+    data: tenant,
+    isLoading,
+    error,
+  } = useQuery(["tenant", id], () => tenantService.getTenantById(id!), {
+    enabled: !!id,
+  });
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
         <CircularProgress />
       </Box>
     );
@@ -44,15 +46,22 @@ const TenantDetailPage = () => {
   return (
     <Box>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" gutterBottom sx={{ 
-          fontSize: { xs: '1.75rem', sm: '2.125rem' },
-          wordBreak: 'break-word'
-        }}>
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{
+            fontSize: { xs: "1.75rem", sm: "2.125rem" },
+            wordBreak: "break-word",
+          }}
+        >
           {tenant.name}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
           <Chip label={tenant.tier} color="primary" />
-          <Chip label={tenant.status} color={tenant.status === 'Active' ? 'success' : 'default'} />
+          <Chip
+            label={tenant.status}
+            color={tenant.status === "Active" ? "success" : "default"}
+          />
         </Box>
       </Box>
 
@@ -72,12 +81,15 @@ const TenantDetailPage = () => {
                   <ListItemText primary="Slug" secondary={tenant.slug} />
                 </ListItem>
                 <ListItem>
-                  <ListItemText primary="Description" secondary={tenant.description || 'N/A'} />
+                  <ListItemText
+                    primary="Description"
+                    secondary={tenant.description || "N/A"}
+                  />
                 </ListItem>
                 <ListItem>
-                  <ListItemText 
-                    primary="Created" 
-                    secondary={new Date(tenant.createdAt).toLocaleString()} 
+                  <ListItemText
+                    primary="Created"
+                    secondary={new Date(tenant.createdAt).toLocaleString()}
                   />
                 </ListItem>
               </List>
@@ -94,22 +106,34 @@ const TenantDetailPage = () => {
               <Divider sx={{ mb: 2 }} />
               <List>
                 <ListItem>
-                  <ListItemText primary="Database" secondary={tenant.databaseName} />
-                </ListItem>
-                <ListItem>
-                  <ListItemText primary="Qdrant Container" secondary={tenant.qdrantContainerName} />
-                </ListItem>
-                <ListItem>
-                  <ListItemText 
-                    primary="Qdrant Ports" 
-                    secondary={`HTTP: ${tenant.qdrantHttpPort}, gRPC: ${tenant.qdrantGrpcPort}`} 
+                  <ListItemText
+                    primary="Database"
+                    secondary={tenant.databaseName}
                   />
                 </ListItem>
                 <ListItem>
-                  <ListItemText primary="MinIO Endpoint" secondary={tenant.minioEndpoint} />
+                  <ListItemText
+                    primary="Qdrant Container"
+                    secondary={tenant.qdrantContainerName}
+                  />
                 </ListItem>
                 <ListItem>
-                  <ListItemText primary="MinIO Bucket" secondary={tenant.minioBucketName} />
+                  <ListItemText
+                    primary="Qdrant Ports"
+                    secondary={`HTTP: ${tenant.qdrantHttpPort}, gRPC: ${tenant.qdrantGrpcPort}`}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText
+                    primary="MinIO Endpoint"
+                    secondary={tenant.minioEndpoint}
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemText
+                    primary="MinIO Bucket"
+                    secondary={tenant.minioBucketName}
+                  />
                 </ListItem>
               </List>
             </CardContent>
@@ -125,9 +149,11 @@ const TenantDetailPage = () => {
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
                     <Typography variant="h4" color="primary">
-                      {(tenant.maxStorageBytes / (1024 * 1024 * 1024)).toFixed(0)}
+                      {(tenant.maxStorageBytes / (1024 * 1024 * 1024)).toFixed(
+                        0
+                      )}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       GB Storage
@@ -135,7 +161,7 @@ const TenantDetailPage = () => {
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
                     <Typography variant="h4" color="primary">
                       {tenant.maxUsers}
                     </Typography>
@@ -145,7 +171,7 @@ const TenantDetailPage = () => {
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={4}>
-                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                  <Box sx={{ textAlign: "center", p: 2 }}>
                     <Typography variant="h4" color="primary">
                       {(tenant.maxApiCallsPerDay / 1000).toFixed(0)}K
                     </Typography>

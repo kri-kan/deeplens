@@ -59,10 +59,14 @@ public class TenantService : ITenantService
                 Name = request.Name,
                 Description = request.Description,
                 Slug = slug,
+                DatabaseName = "pending",
+                QdrantContainerName = $"qdrant-{slug}",
+                MinioEndpoint = "pending",
+                MinioBucketName = $"deeplens-{slug}",
                 Status = TenantStatus.PendingSetup,
                 Tier = tier,
                 CreatedAt = DateTime.UtcNow,
-                CreatedBy = Guid.Empty // Will be updated after admin user creation
+                CreatedBy = null // Will be updated after admin user creation
             };
 
             // Set tenant limits based on tier
@@ -223,7 +227,7 @@ public class TenantService : ITenantService
             var tenants = await _tenantRepository.GetAllAsync();
             activity?.SetTag("result.count", tenants.Count);
             
-            return tenants.Select(MapToTenantResponse).ToList();
+            return tenants.Select(t => MapToTenantResponse(t)).ToList();
         }
         catch (Exception ex)
         {

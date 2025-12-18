@@ -1,6 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authService, LoginRequest, LoginResponse } from '../services/authService';
-import { jwtDecode } from 'jwt-decode';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  authService,
+  LoginRequest,
+  LoginResponse,
+} from "../services/authService";
+import { jwtDecode } from "jwt-decode";
 
 interface User {
   id: string;
@@ -25,7 +35,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
 };
@@ -49,22 +59,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const loadUserFromToken = () => {
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem("accessToken");
     if (token && isTokenValid(token)) {
       try {
         const decoded: any = jwtDecode(token);
+        // Duende IdentityServer JWT structure
         setUser({
-          id: decoded.sub || decoded.userId,
+          id: decoded.sub, // Subject claim
           email: decoded.email,
-          firstName: decoded.firstName || '',
-          lastName: decoded.lastName || '',
-          role: decoded.role || 'User',
-          tenantId: decoded.tenantId,
+          firstName: decoded.given_name || decoded.firstName || "",
+          lastName: decoded.family_name || decoded.lastName || "",
+          role: decoded.role || "User",
+          tenantId: decoded.tenant_id || decoded.tenantId,
         });
       } catch (error) {
-        console.error('Failed to decode token:', error);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        console.error("Failed to decode token:", error);
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
       }
     }
     setIsLoading(false);
@@ -77,40 +88,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (credentials: LoginRequest) => {
     try {
       const response: LoginResponse = await authService.login(credentials);
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('refreshToken', response.refreshToken);
-      setUser(response.user);
+
+      // Store tokens from Duende IdentityServer response
+      localStorage.setItem("accessToken", response.access_token);
+      localStorage.setItem("refreshToken", response.refresh_token);
+
+      // Decode JWT to get user info
+      const decoded: any = jwtDecode(response.access_token);
+      setUser({
+        id: decoded.sub,
+        email: decoded.email,
+        firstName: decoded.given_name || "",
+        lastName: decoded.family_name || "",
+        role: decoded.role || "User",
+        tenantId: decoded.tenant_id,
+      });
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error("Login failed:", error);
       throw error;
     }
   };
 
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        await authService.logout(refreshToken);
-      }
+      await authService.logout();
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       setUser(null);
     }
   };
 
   const refreshAuth = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem("refreshToken");
     if (refreshToken) {
       try {
-        const response = await authService.refreshToken({ refreshToken });
-        localStorage.setItem('accessToken', response.accessToken);
-        localStorage.setItem('refreshToken', response.refreshToken);
-        setUser(response.user);
+        const response = await authService.refreshToken(refreshToken);
+
+        // Store new tokens
+        localStorage.setItem("accessToken", response.access_token);
+        localStorage.setItem("refreshToken", response.refresh_token);
+
+        // Decode and update user
+        const decoded: any = jwtDecode(response.access_token);
+        setUser({
+          id: decoded.sub,
+          email: decoded.email,
+          firstName: decoded.given_name || "",
+          lastName: decoded.family_name || "",
+          role: decoded.role || "User",
+          tenantId: decoded.tenant_id,
+        });
       } catch (error) {
-        console.error('Token refresh failed:', error);
+        console.error("Token refresh failed:", error);
         await logout();
       }
     }

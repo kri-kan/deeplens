@@ -18,7 +18,9 @@
     <ProjectReference Include="..\NextGen.Identity.Core\NextGen.Identity.Core.csproj" />
   </ItemGroup>
 
-
   <ItemGroup>
     <EmbeddedResource Include="Migrations\*.sql" />
   </ItemGroup>
+
+</Project>
+

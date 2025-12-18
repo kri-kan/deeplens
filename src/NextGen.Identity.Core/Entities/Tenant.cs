@@ -32,7 +32,7 @@ public class Tenant
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
     public DateTime? DeletedAt { get; set; }
-    public string? CreatedBy { get; set; }
+    public Guid? CreatedBy { get; set; } // System user ID who created this tenant
     
     // Navigation properties
     public ICollection<User> Users { get; set; } = new List<User>();

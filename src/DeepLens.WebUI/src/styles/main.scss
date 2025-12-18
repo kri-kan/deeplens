@@ -4,16 +4,16 @@
 // Import order matters!
 
 // 1. Variables (must be first)
-@import './variables';
+@import "./variables";
 
 // 2. Mixins (depends on variables)
-@import './mixins';
+@import "./mixins";
 
 // 3. Base styles & resets
-@import './base';
+@import "./base";
 
 // 4. Utility classes
-@import './utilities';
+@import "./utilities";
 
 // 5. Component-specific styles (optional, for custom non-MUI components)
 // @import './components/custom-components';

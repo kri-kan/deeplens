@@ -4,13 +4,13 @@
 
 DeepLens WebUI is fully responsive and optimized for all device sizes:
 
-| Device Type      | Screen Size | Breakpoint | Key Adaptations                              |
-| ---------------- | ----------- | ---------- | -------------------------------------------- |
+| Device Type      | Screen Size | Breakpoint | Key Adaptations                                   |
+| ---------------- | ----------- | ---------- | ------------------------------------------------- |
 | 📱 Mobile        | < 600px     | xs         | Drawer navigation, stacked layout, touch-friendly |
-| 📱 Mobile (Land) | 600-900px   | sm         | Compact spacing, optimized buttons           |
-| 💻 Tablet        | 900-1200px  | md         | Permanent sidebar, grid layouts              |
-| 🖥️ Laptop        | 1200-1536px | lg         | Full features, optimal spacing               |
-| 🖥️ Large Monitor | > 1536px    | xl         | Expanded content, wide grids                 |
+| 📱 Mobile (Land) | 600-900px   | sm         | Compact spacing, optimized buttons                |
+| 💻 Tablet        | 900-1200px  | md         | Permanent sidebar, grid layouts                   |
+| 🖥️ Laptop        | 1200-1536px | lg         | Full features, optimal spacing                    |
+| 🖥️ Large Monitor | > 1536px    | xl         | Expanded content, wide grids                      |
 
 ---
 
@@ -19,12 +19,14 @@ DeepLens WebUI is fully responsive and optimized for all device sizes:
 ### 1. **Navigation**
 
 **Mobile (< 900px):**
+
 - ✅ Hamburger menu button in header
 - ✅ Temporary drawer (swipe to open/close)
 - ✅ Auto-close after navigation
 - ✅ Full-height overlay
 
 **Tablet & Desktop (≥ 900px):**
+
 - ✅ Permanent sidebar (260px wide)
 - ✅ Always visible navigation
 - ✅ Hover states for menu items
@@ -43,8 +45,9 @@ sx={{
 ### 3. **Typography**
 
 **Responsive font sizes:**
+
 ```typescript
-<Typography variant="h4" sx={{ fontSize: { xs: '1.75rem', sm: '2.125rem' } }}>
+<Typography variant="h4" sx={{ fontSize: { xs: "1.75rem", sm: "2.125rem" } }}>
   Title
 </Typography>
 ```
@@ -56,6 +59,7 @@ sx={{
 ### 4. **Grid Layouts**
 
 **Dashboard Cards:**
+
 ```typescript
 <Grid container spacing={{ xs: 2, sm: 3 }}>
   <Grid item xs={12} sm={6} md={3}>
@@ -71,8 +75,9 @@ sx={{
 ### 5. **Buttons & Actions**
 
 **Mobile:** Full-width buttons
+
 ```typescript
-<Button fullWidth sx={{ width: { xs: '100%', sm: 'auto' } }}>
+<Button fullWidth sx={{ width: { xs: "100%", sm: "auto" } }}>
   Action
 </Button>
 ```
@@ -82,6 +87,7 @@ sx={{
 ### 6. **Tables**
 
 **Responsive table container:**
+
 ```typescript
 <TableContainer sx={{ overflowX: 'auto' }}>
   <Table sx={{ minWidth: { xs: 650, md: 750 } }}>
@@ -94,6 +100,7 @@ sx={{
 ### 7. **Dialogs**
 
 **Mobile-optimized dialogs:**
+
 ```typescript
 <Dialog
   maxWidth="sm"
@@ -118,27 +125,29 @@ sx={{
 
 ```typescript
 theme.breakpoints.values = {
-  xs: 0,      // Mobile (portrait)
-  sm: 600,    // Mobile (landscape) / Small tablets
-  md: 900,    // Tablets / Small laptops
-  lg: 1200,   // Laptops / Desktops
-  xl: 1536,   // Large monitors
-}
+  xs: 0, // Mobile (portrait)
+  sm: 600, // Mobile (landscape) / Small tablets
+  md: 900, // Tablets / Small laptops
+  lg: 1200, // Laptops / Desktops
+  xl: 1536, // Large monitors
+};
 ```
 
 ### Using Breakpoints
 
 **In Components:**
+
 ```typescript
-import { useMediaQuery, useTheme } from '@mui/material';
+import { useMediaQuery, useTheme } from "@mui/material";
 
 const theme = useTheme();
-const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
+const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
+const isDesktop = useMediaQuery(theme.breakpoints.up("lg"));
 ```
 
 **In sx prop:**
+
 ```typescript
 sx={{
   display: { xs: 'block', md: 'flex' },
@@ -151,40 +160,45 @@ sx={{
 
 ## 📏 Spacing Scale
 
-| Token | xs (mobile) | sm+ (desktop) | Usage                        |
-| ----- | ----------- | ------------- | ---------------------------- |
-| p     | 16px (2)    | 24px (3)      | Page/container padding       |
-| gap   | 16px (2)    | 24px (3)      | Grid/flex gaps               |
-| mb    | 16px (2)    | 24px (3)      | Section margins              |
-| mt    | 32px (4)    | 64px (8)      | Top margins for pages        |
+| Token | xs (mobile) | sm+ (desktop) | Usage                  |
+| ----- | ----------- | ------------- | ---------------------- |
+| p     | 16px (2)    | 24px (3)      | Page/container padding |
+| gap   | 16px (2)    | 24px (3)      | Grid/flex gaps         |
+| mb    | 16px (2)    | 24px (3)      | Section margins        |
+| mt    | 32px (4)    | 64px (8)      | Top margins for pages  |
 
 ---
 
 ## 🎨 Component-Specific Adaptations
 
 ### **Header**
+
 - Mobile: Shows hamburger menu button
 - Desktop: Hides menu button, shows full title
 - User menu: Always visible on all devices
 
 ### **Sidebar**
+
 - Mobile: Temporary drawer, overlay
 - Desktop: Permanent drawer, inline
 - Width: Fixed 260px
 - Menu items: Full-width touch targets
 
 ### **Dashboard**
+
 - Stats cards: 1 col mobile → 2 col tablet → 4 col desktop
 - Quick actions: Stacked mobile → inline desktop
 - Responsive font sizes
 
 ### **Tenants Page**
+
 - Header: Stacked mobile → row desktop
 - Create button: Full-width mobile → auto desktop
 - Table: Horizontal scroll on mobile
 - Dialogs: Full-height mobile → modal desktop
 
 ### **Login Page**
+
 - Container: Reduced padding on mobile
 - Form: Optimized touch targets
 - Logo: Responsive sizing
@@ -196,6 +210,7 @@ sx={{
 ### Browser DevTools
 
 1. **Chrome DevTools:**
+
    - Press `F12` or `Ctrl+Shift+I`
    - Click device toolbar icon (Ctrl+Shift+M)
    - Test presets: iPhone, iPad, Desktop
@@ -207,6 +222,7 @@ sx={{
 ### Test Checklist
 
 - [ ] **Mobile (320-600px)**
+
   - [ ] Hamburger menu works
   - [ ] Drawer opens/closes properly
   - [ ] All buttons are touch-friendly (44px min)
@@ -215,12 +231,14 @@ sx={{
   - [ ] Tables scroll horizontally
 
 - [ ] **Tablet (600-900px)**
+
   - [ ] Sidebar switches to permanent at 900px
   - [ ] Grid layouts adjust properly
   - [ ] Buttons show correct layout
   - [ ] Dialogs display correctly
 
 - [ ] **Desktop (900px+)**
+
   - [ ] Sidebar is always visible
   - [ ] No horizontal scrolling
   - [ ] Content doesn't stretch too wide
@@ -236,6 +254,7 @@ sx={{
 ## 💡 Best Practices
 
 ### 1. **Mobile-First Approach**
+
 Always design for mobile first, then enhance for larger screens:
 
 ```typescript
@@ -247,25 +266,31 @@ sx={{ p: 3, xs: { p: 2 } }}
 ```
 
 ### 2. **Touch Targets**
+
 Minimum touch target: **44x44px**
 
 ```typescript
-<IconButton sx={{ p: 1.5 }}> {/* 48px total */}
+<IconButton sx={{ p: 1.5 }}>
+  {" "}
+  {/* 48px total */}
   <Icon />
 </IconButton>
 ```
 
 ### 3. **Avoid Horizontal Scroll**
+
 - Use `overflowX: 'auto'` only for tables
 - Container max-width: `lg` or `xl`
 - Responsive images: `width: '100%', maxWidth: '100%'`
 
 ### 4. **Performance**
+
 - Use `useMediaQuery` sparingly
 - Prefer CSS breakpoints (sx prop) over JS
 - Keep mobile bundle size small
 
 ### 5. **Content Priority**
+
 - Show essential content first on mobile
 - Use progressive disclosure
 - Hide non-critical elements on small screens
@@ -275,24 +300,28 @@ Minimum touch target: **44x44px**
 ## 🚀 Future Enhancements
 
 ### Phase 1: Mobile UX
+
 - [ ] Swipe gestures for navigation
 - [ ] Bottom navigation for mobile
 - [ ] Pull-to-refresh on lists
 - [ ] Optimized mobile forms
 
 ### Phase 2: Touch Optimization
+
 - [ ] Larger touch targets throughout
 - [ ] Touch-friendly date/time pickers
 - [ ] Image zoom on mobile
 - [ ] Swipe actions on list items
 
 ### Phase 3: Progressive Web App
+
 - [ ] Add to home screen
 - [ ] Offline support
 - [ ] Push notifications
 - [ ] App-like experience
 
 ### Phase 4: Advanced Responsive
+
 - [ ] Responsive images (srcset)
 - [ ] Adaptive loading
 - [ ] Device-specific optimizations

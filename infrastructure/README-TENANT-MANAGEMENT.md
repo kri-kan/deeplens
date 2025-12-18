@@ -238,7 +238,9 @@ Remove-DeepLensTenant -TenantId "12345678-1234-1234-1234-123456789012" -Confirm
 }
 ```
 
-### MinIO (Self-Hosted)
+### MinIO (BYOS - Tenant-Managed)
+
+When tenant provides their own MinIO instance:
 
 ```json
 {
@@ -261,6 +263,208 @@ Remove-DeepLensTenant -TenantId "12345678-1234-1234-1234-123456789012" -Confirm
   "protocol": "nfs" // or "smb"
 }
 ```
+
+---
+
+## 🗄️ Platform-Managed MinIO Storage
+
+For tenants who don't have cloud storage (Azure/AWS/GCS) but have existing NFS infrastructure, DeepLens can provision dedicated MinIO instances. This provides a middle ground between full BYOS and shared storage.
+
+### Use Cases
+
+- **Enterprise customers with on-premise NFS storage**
+- **Customers wanting data sovereignty without cloud costs**
+- **Development/testing environments with local NFS**
+- **Customers transitioning from on-premise to cloud**
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  DeepLens Platform                           │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  Tenant A    │  │  Tenant B    │  │  Tenant C    │     │
+│  │  MinIO       │  │  MinIO       │  │  MinIO       │     │
+│  │  :9100       │  │  :9101       │  │  :9102       │     │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘     │
+│         │                 │                 │              │
+│         │ NFS Mount       │ NFS Mount       │ NFS Mount    │
+│         ▼                 ▼                 ▼              │
+└─────────────────────────────────────────────────────────────┘
+          │                 │                 │
+          ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Tenant NFS Infrastructure                       │
+│                                                              │
+│  nfs.tenantA.com:/exports/deeplens                          │
+│  nfs.tenantB.com:/exports/storage                           │
+│  10.0.1.100:/mnt/tenantC-data                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Benefits
+
+✅ **Data Sovereignty:** Tenant data stays on their infrastructure  
+✅ **Flexible:** Works with existing NFS investments  
+✅ **Isolated:** Each tenant gets dedicated MinIO instance  
+✅ **Managed:** DeepLens handles MinIO lifecycle  
+✅ **Secure:** Auto-generated credentials, isolated containers  
+✅ **Cost-Effective:** No cloud storage costs
+
+### Provision Platform-Managed MinIO
+
+```powershell
+# Import tenant management module
+Import-Module .\infrastructure\powershell\DeepLensTenantManager.psm1
+
+# Provision MinIO for tenant with NFS backend
+New-TenantMinIOStorage `
+  -TenantId "12345678-1234-1234-1234-123456789012" `
+  -TenantName "vayyari" `
+  -NFSPath "nfs.vayyari.com:/exports/deeplens-storage"
+```
+
+**Output:**
+
+```
+🗄️ Provisioning MinIO storage for tenant: vayyari
+   Tenant ID: 12345678-1234-1234-1234-123456789012
+   NFS Path: nfs.vayyari.com:/exports/deeplens-storage
+   API Port: 9100
+   Console Port: 9200
+📦 Creating NFS-backed Docker volume...
+✅ NFS volume created: deeplens_minio_vayyari_data
+🚀 Starting MinIO container...
+✅ MinIO container started: deeplens-minio-vayyari
+⏳ Waiting for MinIO to be ready...
+🪣 Creating default bucket 'images'...
+
+✅ MinIO storage provisioned successfully for tenant: vayyari
+
+📋 MinIO Configuration:
+   Container Name: deeplens-minio-vayyari
+   API Endpoint:   http://localhost:9100
+   Console URL:    http://localhost:9200
+   Access Key:     tenant-vayyari-1234
+   Secret Key:     <base64-encoded-32-byte-key>
+   Default Bucket: images
+   NFS Backend:    nfs.vayyari.com:/exports/deeplens-storage
+```
+
+### Platform-Managed MinIO Functions
+
+#### New-TenantMinIOStorage
+
+Creates a dedicated MinIO instance for a tenant with NFS storage backend.
+
+**Parameters:**
+
+| Parameter     | Required | Default             | Description                             |
+| ------------- | -------- | ------------------- | --------------------------------------- |
+| `TenantId`    | Yes      | -                   | Tenant UUID                             |
+| `TenantName`  | Yes      | -                   | Tenant name (used for container naming) |
+| `NFSPath`     | Yes      | -                   | NFS path (format: `server:/path`)       |
+| `MinIOPort`   | No       | Auto (9100+)        | API port for MinIO                      |
+| `ConsolePort` | No       | Auto (9200+)        | Console UI port                         |
+| `AccessKey`   | No       | Auto-generated      | MinIO access key                        |
+| `SecretKey`   | No       | Auto-generated      | MinIO secret key (32 bytes)             |
+| `NFSOptions`  | No       | `rw,sync,hard,intr` | NFS mount options                       |
+
+**Examples:**
+
+```powershell
+# Basic provisioning
+New-TenantMinIOStorage `
+  -TenantId "12345678-1234-1234-1234-123456789012" `
+  -TenantName "customer" `
+  -NFSPath "nfs-server.company.com:/exports/customer-data"
+
+# With custom NFS options (for compatibility issues)
+New-TenantMinIOStorage `
+  -TenantId "12345678-1234-1234-1234-123456789012" `
+  -TenantName "customer" `
+  -NFSPath "10.0.1.100:/mnt/storage/customer" `
+  -NFSOptions "rw,sync,nolock"
+
+# With specific ports
+New-TenantMinIOStorage `
+  -TenantId "12345678-1234-1234-1234-123456789012" `
+  -TenantName "customer" `
+  -NFSPath "nfs.customer.com:/exports/data" `
+  -MinIOPort 9500 `
+  -ConsolePort 9501
+```
+
+#### Get-TenantMinIOStatus
+
+Retrieves status and configuration of a tenant's MinIO instance.
+
+```powershell
+Get-TenantMinIOStatus -TenantName "vayyari"
+```
+
+**Output:**
+
+```
+📊 MinIO Status for Tenant: vayyari
+   Container:      deeplens-minio-vayyari
+   Status:         running
+   Health:         healthy
+   API Endpoint:   http://localhost:9100
+   Console URL:    http://localhost:9200
+   NFS Backend:    nfs.vayyari.com:/exports/deeplens-storage
+```
+
+#### Get-AllTenantMinIOInstances
+
+Lists all tenant MinIO instances across the platform.
+
+```powershell
+Get-AllTenantMinIOInstances
+```
+
+#### Remove-TenantMinIOStorage
+
+Removes a tenant's MinIO instance and optionally the NFS volume.
+
+```powershell
+# Remove container only (NFS volume remains)
+Remove-TenantMinIOStorage -TenantName "customer" -Confirm
+
+# Remove container and unmount NFS volume
+Remove-TenantMinIOStorage -TenantName "customer" -RemoveVolume -Confirm
+```
+
+⚠️ **Note:** Removing the volume only unmounts the NFS share from Docker. The data on the NFS server remains intact.
+
+### Tenant NFS Requirements
+
+**NFS Server Setup:**
+
+- Running NFS server (Linux: `nfs-kernel-server`, Windows: NFS Server role)
+- Exported file system accessible from Docker host
+- Adequate storage space (estimate: 100GB+ per tenant)
+- Network connectivity from Docker host
+
+**NFS Export Configuration Example (Linux):**
+
+```bash
+# /etc/exports
+/exports/tenant-vayyari 192.168.1.0/24(rw,sync,no_subtree_check,no_root_squash)
+```
+
+**Testing NFS Access:**
+
+```powershell
+# Mount test (Linux/Mac)
+sudo mount -t nfs nfs-server.company.com:/exports/vayyari/backups /mnt/test
+
+# Windows
+mount -o anon \\nfs-server.company.com\exports\vayyari\backups Z:
+```
+
+---
 
 ## 🚀 API Integration
 

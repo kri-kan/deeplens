@@ -17,6 +17,39 @@
 - **☁️ Cloud Native** - Docker containers with Kubernetes support
 - **🔄 Flexible Storage** - Support for Azure Blob, AWS S3, Google Cloud, MinIO, and NFS
 
+## 🧭 **Quick Navigation**
+
+### 👋 New to DeepLens?
+
+**Start here in this order:**
+
+1. Read this README for project overview
+2. Check [handover.md](handover.md) - Current system state & quick start
+3. Review [CREDENTIALS.md](CREDENTIALS.md) - Get access to all services
+4. Browse [DOCS_INDEX.md](DOCS_INDEX.md) - Complete documentation map
+
+### 🔧 Want to Develop?
+
+1. [infrastructure/README.md](infrastructure/README.md) - Set up local environment
+2. [src/README.md](src/README.md) - Understand codebase structure
+3. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) - Development workflow
+
+### 🐛 Troubleshooting?
+
+1. [PORTS.md](PORTS.md) - Port conflicts and service mappings
+2. [docs/OAUTH_TESTING_GUIDE.md](docs/OAUTH_TESTING_GUIDE.md) - Auth issues
+3. [CREDENTIALS.md](CREDENTIALS.md) - Login problems
+4. [infrastructure/README.md](infrastructure/README.md#troubleshooting) - Container issues
+
+### 📚 Deep Dive?
+
+- **Architecture:** [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md) + [docs/ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md)
+- **Authentication:** [docs/TOKEN_LIFECYCLE.md](docs/TOKEN_LIFECYCLE.md) + [docs/OAUTH_TESTING_GUIDE.md](docs/OAUTH_TESTING_GUIDE.md)
+- **Multi-Tenancy:** [docs/STORAGE_ARCHITECTURE.md](docs/STORAGE_ARCHITECTURE.md) + [infrastructure/README-TENANT-MANAGEMENT.md](infrastructure/README-TENANT-MANAGEMENT.md)
+- **Monitoring:** [OBSERVABILITY_PLAN.md](OBSERVABILITY_PLAN.md)
+
+---
+
 ## 🏗️ **Architecture Overview**
 
 DeepLens uses an **asynchronous event-driven microservices architecture** with:
@@ -29,6 +62,7 @@ DeepLens uses an **asynchronous event-driven microservices architecture** with:
 - **Complete Observability** - OpenTelemetry, Prometheus, Grafana, Loki stack
 
 ### Performance Highlights
+
 - **< 700ms** image upload response (6-9x faster than synchronous processing)
 - **Async Processing Pipeline** for feature extraction and vector storage
 - **Multi-tenant isolation** at every architectural layer
@@ -92,7 +126,7 @@ deeplens/
 │   ├── ARCHITECTURE_DECISIONS.md           # ADR with key decisions
 │   ├── DEVELOPMENT_PLAN.md                 # Development workflow
 │   └── OBSERVABILITY_PLAN.md               # Monitoring strategy
-├── 🔵 src/                                 # .NET Core microservices  
+├── 🔵 src/                                 # .NET Core microservices
 │   ├── DeepLens.sln                        # Main solution
 │   ├── DeepLens.ApiGateway/                # YARP-based API Gateway
 │   ├── DeepLens.SearchApi/                 # Image search & upload APIs
@@ -233,12 +267,18 @@ kubectl apply -k overlays/production/
 
 ## 📖 **Documentation**
 
-- [📋 Project Plan](PROJECT_PLAN.md) - Complete technical specifications
-- [📊 Observability Plan](OBSERVABILITY_PLAN.md) - Monitoring and alerting strategy
-- [🛠️ Infrastructure Setup](infrastructure/README.md) - Docker and service configuration
-- [🏢 Multi-Tenant Guide](infrastructure/README-TENANT-MANAGEMENT.md) - Tenant management and BYOS
-- [💻 Code Examples](code_examples.md) - Implementation examples and patterns
-- [❓ Items to Define](to_define.md) - Outstanding technical decisions
+**📚 [Complete Documentation Index](DOCS_INDEX.md)** - Your guide to all DeepLens documentation
+
+### Quick Links
+
+- [🚀 Getting Started](handover.md) - Current state and quick start
+- [🔑 Credentials](CREDENTIALS.md) - All development credentials in one place
+- [🔌 Port Reference](PORTS.md) - Service ports and conflict resolution
+- [🏗️ Architecture](ARCHITECTURE_DECISIONS.md) - Key design decisions
+- [💻 Code Structure](src/README.md) - Complete codebase guide
+- [🐳 Infrastructure](infrastructure/README.md) - Docker setup and service configuration
+- [🔐 OAuth Testing](docs/OAUTH_TESTING_GUIDE.md) - Complete authentication test suite
+- [📊 Observability](OBSERVABILITY_PLAN.md) - Monitoring and alerting strategy
 
 ## 🆘 **Support**
 

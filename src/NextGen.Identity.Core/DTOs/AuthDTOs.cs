@@ -8,11 +8,28 @@ public record LoginRequest
     public required string Password { get; init; }
 }
 
+public record LoginRequestDto
+{
+    public required string Email { get; init; }
+    public required string Password { get; init; }
+}
+
 public record LoginResponse
 {
     public required string AccessToken { get; init; }
     public required string RefreshToken { get; init; }
     public required UserInfo User { get; init; }
+}
+
+public record LoginResponseDto
+{
+    public Guid Id { get; init; }
+    public required string Email { get; init; }
+    public required string FirstName { get; init; }
+    public required string LastName { get; init; }
+    public required string Role { get; init; }
+    public Guid TenantId { get; init; }
+    public string? Message { get; init; }
 }
 
 public record RegisterRequest
@@ -37,6 +54,20 @@ public record UserInfo
     public required string FirstName { get; init; }
     public required string LastName { get; init; }
     public required string Role { get; init; }
+}
+
+public record UserProfileDto
+{
+    public Guid Id { get; init; }
+    public required string Email { get; init; }
+    public required string FirstName { get; init; }
+    public required string LastName { get; init; }
+    public required string Role { get; init; }
+    public Guid TenantId { get; init; }
+    public bool EmailConfirmed { get; init; }
+    public bool IsActive { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public DateTime? LastLoginAt { get; init; }
 }
 
 // ===== Tenant DTOs =====

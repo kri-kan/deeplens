@@ -414,7 +414,7 @@ Get-TenantPostgreSQLBackupStatus  # Check backup status and logs
 Get-AllTenantPostgreSQLBackups    # List all tenant backup configurations
 ```
 
-See [README-TENANT-POSTGRESQL-BACKUP.md](README-TENANT-POSTGRESQL-BACKUP.md) for complete documentation.
+See [README-TENANT-BACKUP.md](README-TENANT-BACKUP.md) for complete backup and disaster recovery documentation (PostgreSQL, Qdrant, MinIO).
 
 **Usage Examples:**
 
