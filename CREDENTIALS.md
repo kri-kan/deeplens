@@ -11,37 +11,37 @@ This document lists all standardized credentials for local development. All pass
 ### Main Database (postgres superuser)
 
 - **User:** `postgres`
-- **Password:** `DeepLensPassword123`
+- **Password:** `DeepLens123!`
 - **Host Port:** `5433` (mapped to container port 5432)
-- **Connection:** `Host=localhost;Port=5433;Database=postgres;Username=postgres;Password=DeepLensPassword123`
+- **Connection:** `Host=localhost;Port=5433;Database=postgres;Username=postgres;Password=DeepLens123!`
 
 ### Service Users (created by init scripts)
 
 #### NextGen Identity Service
 
 - **User:** `nextgen_identity_service`
-- **Password:** `DeepLensPassword123`
+- **Password:** `DeepLens123!`
 - **Database:** `nextgen_identity`
-- **Connection:** `Host=localhost;Port=5433;Database=nextgen_identity;Username=nextgen_identity_service;Password=DeepLensPassword123`
+- **Connection:** `Host=localhost;Port=5433;Database=nextgen_identity;Username=nextgen_identity_service;Password=DeepLens123!`
 
 #### Platform Service
 
 - **User:** `platform_service`
-- **Password:** `DeepLensPassword123`
+- **Password:** `DeepLens123!`
 - **Database:** `deeplens_platform`
-- **Connection:** `Host=localhost;Port=5433;Database=deeplens_platform;Username=platform_service;Password=DeepLensPassword123`
+- **Connection:** `Host=localhost;Port=5433;Database=deeplens_platform;Username=platform_service;Password=DeepLens123!`
 
 #### Tenant Service
 
 - **User:** `tenant_service`
-- **Password:** `DeepLensPassword123`
+- **Password:** `DeepLens123!`
 - **Privileges:** CREATEDB
 - **Connection:** `Host=localhost;Port=5433;Database=tenant_metadata_template;Username=tenant_service;Password=DeepLensPassword123`
 
 #### Analytics User (Read-Only)
 
 - **User:** `analytics_readonly`
-- **Password:** `DeepLensPassword123`
+- **Password:** `DeepLens123!`
 - **Access:** Read-only to `deeplens_platform`
 
 ---
@@ -94,7 +94,7 @@ MinIO uses **bucket-based multi-tenancy** with one shared instance.
 ### Root Admin Credentials
 
 - **Access Key:** `admin`
-- **Secret Key:** `DeepLensPassword123`
+- **Secret Key:** `DeepLens123!`
 - **Console:** `http://localhost:9001`
 - **API Endpoint:** `http://localhost:9000`
 

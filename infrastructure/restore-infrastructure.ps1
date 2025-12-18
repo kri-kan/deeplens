@@ -120,12 +120,12 @@ podman run -d `
     --name deeplens-postgres `
     --restart unless-stopped `
     --network deeplens-network `
-    -e POSTGRES_USER=deeplens `
+    -e POSTGRES_USER=postgres `
     -e POSTGRES_PASSWORD=DeepLens123! `
-    -e POSTGRES_DB=deeplens `
-    -p 5432:5432 `
+    -e POSTGRES_DB=nextgen_identity `
+    -p 5433:5432 `
     -v "${coreDataPath}/postgresql:/var/lib/postgresql/data" `
-    --health-cmd "pg_isready -U deeplens" `
+    --health-cmd "pg_isready -U postgres" `
     --health-interval 10s `
     postgres:16-alpine | Out-Null
 

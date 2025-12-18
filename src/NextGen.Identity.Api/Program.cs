@@ -38,7 +38,7 @@ try
 
     // Configure PostgreSQL connection
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLensPassword123";
+        ?? "Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLens123!";
     
     builder.Services.AddSingleton(new DbConnectionFactory(connectionString));
 
@@ -135,7 +135,7 @@ try
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-            ?? "Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLensPassword123";
+            ?? "Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLens123!";
         
         try
         {

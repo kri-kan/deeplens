@@ -42,13 +42,13 @@ function Start-Infrastructure {
         --name deeplens-postgres `
         --restart unless-stopped `
         --network deeplens-network `
-        -e POSTGRES_USER=deeplens `
+        -e POSTGRES_USER=postgres `
         -e POSTGRES_PASSWORD=DeepLens123! `
-        -e POSTGRES_DB=deeplens `
-        -p 5432:5432 `
+        -e POSTGRES_DB=nextgen_identity `
+        -p 5433:5432 `
         -v deeplens_postgres_data:/var/lib/postgresql/data `
         -v "${PWD}/init-scripts/postgres:/docker-entrypoint-initdb.d:ro" `
-        --health-cmd "pg_isready -U deeplens" `
+        --health-cmd "pg_isready -U postgres" `
         --health-interval 10s `
         --health-timeout 5s `
         --health-retries 5 `

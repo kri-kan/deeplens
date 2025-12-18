@@ -56,7 +56,7 @@ This document provides a comprehensive reference of all service ports used in th
 psql -h localhost -p 5433 -U postgres
 
 # Connection string
-Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLensPassword123
+Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLens123!
 
 # Docker/Podman run
 podman run -d --name deeplens-postgres -p 5433:5432 postgres:16-alpine
@@ -152,7 +152,7 @@ podman run -d --name deeplens-qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
 ```bash
 # MinIO Console (Web UI)
 http://localhost:9001
-# Login: admin / DeepLensPassword123
+# Login: admin / DeepLens123!
 
 # S3 API endpoint
 http://localhost:9000
@@ -161,12 +161,12 @@ http://localhost:9000
 podman run -d --name deeplens-minio \
   -p 9000:9000 -p 9001:9001 \
   -e MINIO_ROOT_USER=admin \
-  -e MINIO_ROOT_PASSWORD=DeepLensPassword123 \
+  -e MINIO_ROOT_PASSWORD=DeepLens123! \
   -v deeplens-minio-data:/data \
   minio/minio server /data --console-address ":9001"
 
 # Create tenant bucket (using MinIO client)
-mc alias set deeplens http://localhost:9000 admin DeepLensPassword123
+mc alias set deeplens http://localhost:9000 admin DeepLens123!
 mc mb deeplens/tenant-acme
 mc mb deeplens/tenant-widgets
 
@@ -240,7 +240,7 @@ http://localhost:3001
 # Docker/Podman run
 podman run -d --name deeplens-grafana \
   -p 3001:3000 \
-  -e GF_SECURITY_ADMIN_PASSWORD=DeepLensPassword123 \
+  -e GF_SECURITY_ADMIN_PASSWORD=DeepLens123! \
   grafana/grafana
 ```
 

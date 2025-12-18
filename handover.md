@@ -145,7 +145,7 @@ dotnet run --project DeepLens.SearchApi
 ### Credentials
 
 - **Admin:** admin@deeplens.local / DeepLens@Admin123!
-- **PostgreSQL:** postgres / DeepLensPassword123 @ localhost:5433
+- **PostgreSQL:** postgres / DeepLens123! @ localhost:5433
 - **Full list:** [CREDENTIALS.md](CREDENTIALS.md)
 
 ### Key URLs
