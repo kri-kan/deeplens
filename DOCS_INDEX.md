@@ -46,13 +46,15 @@ Last Updated: December 18, 2025
 
 ### 🐳 Infrastructure & Operations
 
-| Document                                                                                 | Purpose                                                       | When to Read                               |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
-| [infrastructure/README.md](infrastructure/README.md)                                     | Complete infrastructure guide                                 | When setting up services                   |
-| [infrastructure/README-TENANT-MANAGEMENT.md](infrastructure/README-TENANT-MANAGEMENT.md) | Tenant provisioning & storage (BYOS + Platform-Managed MinIO) | When managing tenants or storage           |
-| [infrastructure/README-TENANT-BACKUP.md](infrastructure/README-TENANT-BACKUP.md)         | Complete backup & DR guide (PostgreSQL, Qdrant, MinIO)        | When managing backups or disaster recovery |
-| [infrastructure/README-NFS-MIGRATION.md](infrastructure/README-NFS-MIGRATION.md)         | NFS storage migration                                         | When migrating to NFS                      |
-| [PORTS.md](PORTS.md)                                                                     | Service port reference                                        | When resolving port conflicts              |
+| Document                                                                                                         | Purpose                                                       | When to Read                               |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------ |
+| [infrastructure/README.md](infrastructure/README.md)                                                             | Complete infrastructure guide                                 | When setting up services                   |
+| [infrastructure/README-PODMAN-SETUP.md](infrastructure/README-PODMAN-SETUP.md)                                   | Step-by-step Podman setup (Windows)                           | When setting up on Windows with Podman     |
+| [infrastructure/TENANT-PROVISIONING-QUICK-REFERENCE.md](infrastructure/TENANT-PROVISIONING-QUICK-REFERENCE.md)   | Quick reference for tenant provisioning                       | When provisioning tenants (TL;DR)          |
+| [infrastructure/README-TENANT-MANAGEMENT.md](infrastructure/README-TENANT-MANAGEMENT.md)                         | Tenant provisioning & storage (BYOS + DeepLens-Managed)       | When managing tenants or storage           |
+| [infrastructure/README-TENANT-BACKUP.md](infrastructure/README-TENANT-BACKUP.md)                                 | Complete backup & DR guide (PostgreSQL, Qdrant, MinIO)        | When managing backups or disaster recovery |
+| [infrastructure/README-NFS-MIGRATION.md](infrastructure/README-NFS-MIGRATION.md)                                 | NFS storage migration                                         | When migrating to NFS                      |
+| [PORTS.md](PORTS.md)                                                                                             | Service port reference                                        | When resolving port conflicts              |
 
 ### 💻 Development
 
