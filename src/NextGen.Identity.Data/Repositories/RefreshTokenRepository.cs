@@ -71,6 +71,59 @@ public class RefreshTokenRepository : IRefreshTokenRepository
         }
     }
 
+    public async Task<List<RefreshToken>> GetByUserIdAsync(Guid userId)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseQuery);
+        activity?.SetTag(Telemetry.Tags.DbTable, "refresh_tokens");
+        activity?.SetTag(Telemetry.Tags.DbOperation, "select");
+        activity?.SetTag(Telemetry.Tags.UserId, userId);
+        activity?.SetTag(Telemetry.Tags.TokenType, "refresh");
+
+        const string sql = @"
+            SELECT id, user_id AS userid, token, expires_at AS expiresat, 
+                   created_at AS createdat, is_revoked AS isrevoked, 
+                   revoked_at AS revokedat, revoked_reason AS revokedreason,
+                   ip_address AS ipaddress, user_agent AS useragent
+            FROM refresh_tokens
+            WHERE user_id = @UserId
+            ORDER BY created_at DESC";
+
+        try
+        {
+            using var connection = _connectionFactory.CreateConnection();
+            var tokens = await connection.QueryAsync<RefreshToken>(sql, new { UserId = userId });
+            return tokens.ToList();
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag(Telemetry.Tags.ErrorMessage, ex.Message);
+            throw;
+        }
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseCommand);
+        activity?.SetTag(Telemetry.Tags.DbTable, "refresh_tokens");
+        activity?.SetTag(Telemetry.Tags.DbOperation, "delete");
+        activity?.SetTag(Telemetry.Tags.TokenType, "refresh");
+
+        const string sql = @"DELETE FROM refresh_tokens WHERE id = @Id";
+
+        try
+        {
+            using var connection = _connectionFactory.CreateConnection();
+            await connection.ExecuteAsync(sql, new { Id = id });
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag(Telemetry.Tags.ErrorMessage, ex.Message);
+            throw;
+        }
+    }
+
     public async Task UpdateAsync(RefreshToken refreshToken)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseCommand);

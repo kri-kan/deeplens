@@ -39,8 +39,10 @@ public interface IUserRepository
 {
     Task<User?> GetByIdAsync(Guid id);
     Task<User?> GetByEmailAsync(string email);
+    Task<List<User>> GetByTenantIdAsync(Guid tenantId);
     Task<User> CreateAsync(User user);
     Task UpdateAsync(User user);
+    Task DeleteAsync(Guid id);
 }
 
 public interface ITenantRepository
@@ -50,14 +52,17 @@ public interface ITenantRepository
     Task<List<Tenant>> GetAllAsync();
     Task<Tenant> CreateAsync(Tenant tenant);
     Task UpdateAsync(Tenant tenant);
+    Task DeleteAsync(Guid id);
 }
 
 public interface IRefreshTokenRepository
 {
     Task<RefreshToken?> GetByTokenAsync(string token);
+    Task<List<RefreshToken>> GetByUserIdAsync(Guid userId);
     Task<RefreshToken> CreateAsync(RefreshToken refreshToken);
     Task UpdateAsync(RefreshToken refreshToken);
     Task RevokeAllForUserAsync(Guid userId);
+    Task DeleteAsync(Guid id);
 }
 
 public record UpdateTenantRequest

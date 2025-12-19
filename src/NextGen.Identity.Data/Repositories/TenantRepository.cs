@@ -181,4 +181,26 @@ public class TenantRepository : ITenantRepository
             throw;
         }
     }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseCommand);
+        activity?.SetTag(Telemetry.Tags.DbTable, "tenants");
+        activity?.SetTag(Telemetry.Tags.DbOperation, "delete");
+        activity?.SetTag(Telemetry.Tags.TenantId, id);
+
+        const string sql = @"DELETE FROM tenants WHERE id = @Id";
+
+        try
+        {
+            using var connection = _connectionFactory.CreateConnection();
+            await connection.ExecuteAsync(sql, new { Id = id });
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag(Telemetry.Tags.ErrorMessage, ex.Message);
+            throw;
+        }
+    }
 }

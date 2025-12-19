@@ -107,6 +107,62 @@ public class UserRepository : IUserRepository
         }
     }
 
+    public async Task<List<User>> GetByTenantIdAsync(Guid tenantId)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseQuery);
+        activity?.SetTag(Telemetry.Tags.DbTable, "users");
+        activity?.SetTag(Telemetry.Tags.DbOperation, "select");
+        activity?.SetTag(Telemetry.Tags.TenantId, tenantId);
+
+        const string sql = @"
+            SELECT id, tenant_id AS tenantid, email, password_hash AS passwordhash, 
+                   first_name AS firstname, last_name AS lastname, email_confirmed AS emailconfirmed,
+                   email_confirmation_token AS emailconfirmationtoken, 
+                   email_confirmation_token_expiry AS emailconfirmationtokenexpiry,
+                   password_reset_token AS passwordresettoken, 
+                   password_reset_token_expiry AS passwordresettokenexpiry,
+                   role, is_active AS isactive, created_at AS createdat, 
+                   last_login_at AS lastloginat, updated_at AS updatedat, deleted_at AS deletedat
+            FROM users
+            WHERE tenant_id = @TenantId AND deleted_at IS NULL
+            ORDER BY created_at";
+
+        try
+        {
+            using var connection = _connectionFactory.CreateConnection();
+            var users = await connection.QueryAsync<User>(sql, new { TenantId = tenantId });
+            return users.ToList();
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag(Telemetry.Tags.ErrorMessage, ex.Message);
+            throw;
+        }
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseCommand);
+        activity?.SetTag(Telemetry.Tags.DbTable, "users");
+        activity?.SetTag(Telemetry.Tags.DbOperation, "delete");
+        activity?.SetTag(Telemetry.Tags.UserId, id);
+
+        const string sql = @"DELETE FROM users WHERE id = @Id";
+
+        try
+        {
+            using var connection = _connectionFactory.CreateConnection();
+            await connection.ExecuteAsync(sql, new { Id = id });
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            activity?.SetTag(Telemetry.Tags.ErrorMessage, ex.Message);
+            throw;
+        }
+    }
+
     public async Task UpdateAsync(User user)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.DatabaseCommand);

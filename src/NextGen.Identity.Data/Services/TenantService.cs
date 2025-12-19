@@ -30,7 +30,8 @@ public class TenantService : ITenantService
     }
 
     /// <summary>
-    /// Creates tenant record and admin user for infrastructure provisioning scripts
+    /// Creates tenant record and admin user for infrastructure provisioning scripts.
+    /// If tenant already exists, cleans up and recreates it (idempotent).
     /// </summary>
     public async Task<ProvisionTenantResponse> CreateTenantRecordWithAdminAsync(ProvisionTenantRequest request)
     {
@@ -44,18 +45,41 @@ public class TenantService : ITenantService
             var slug = GenerateSlug(request.TenantName);
             activity?.SetTag("tenant.slug", slug);
 
-            // Check if slug already exists
+            // Check if slug already exists - if so, cleanup and recreate
             var existingTenant = await _tenantRepository.GetBySlugAsync(slug);
             if (existingTenant != null)
             {
-                throw new InvalidOperationException($"A tenant with slug '{slug}' already exists");
-            }
+                activity?.SetTag("provision.mode", "recreate");
+                activity?.AddEvent(new ActivityEvent("ExistingTenantFound", 
+                    DateTimeOffset.UtcNow, 
+                    new ActivityTagsCollection { { "tenant.id", existingTenant.Id } }));
 
-            // Check if admin email already exists
-            var existingUser = await _userRepository.GetByEmailAsync(request.AdminEmail);
-            if (existingUser != null)
+                // Delete all users associated with this tenant first
+                var tenantUsers = await _userRepository.GetByTenantIdAsync(existingTenant.Id);
+                foreach (var user in tenantUsers)
+                {
+                    // Delete refresh tokens for this user
+                    var userTokens = await _refreshTokenRepository.GetByUserIdAsync(user.Id);
+                    foreach (var token in userTokens)
+                    {
+                        await _refreshTokenRepository.DeleteAsync(token.Id);
+                    }
+                    
+                    await _userRepository.DeleteAsync(user.Id);
+                    activity?.AddEvent(new ActivityEvent("UserDeleted", 
+                        DateTimeOffset.UtcNow,
+                        new ActivityTagsCollection { { "user.id", user.Id }, { "user.email", user.Email } }));
+                }
+
+                // Delete the tenant
+                await _tenantRepository.DeleteAsync(existingTenant.Id);
+                activity?.AddEvent(new ActivityEvent("TenantDeleted", 
+                    DateTimeOffset.UtcNow,
+                    new ActivityTagsCollection { { "tenant.id", existingTenant.Id } }));
+            }
+            else
             {
-                throw new InvalidOperationException($"User with email '{request.AdminEmail}' already exists");
+                activity?.SetTag("provision.mode", "create");
             }
 
             // Create tenant entity
