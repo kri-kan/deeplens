@@ -103,6 +103,31 @@ public record TenantInfrastructure
     public required string MinioBucket { get; init; }
 }
 
+// ===== Provisioning DTOs =====
+
+public record ProvisionTenantRequest
+{
+    public required string TenantName { get; init; }
+    public required string DatabaseName { get; init; }
+    public required string AdminEmail { get; init; }
+    public required string AdminPassword { get; init; }
+    public required string AdminFirstName { get; init; }
+    public required string AdminLastName { get; init; }
+    public int QdrantHttpPort { get; init; }
+    public int QdrantGrpcPort { get; init; }
+    public string? MinioEndpoint { get; init; }
+    public string? MinioBucket { get; init; }
+}
+
+public record ProvisionTenantResponse
+{
+    public required Guid TenantId { get; init; }
+    public required Guid AdminUserId { get; init; }
+    public required string TenantSlug { get; init; }
+    public required string AdminEmail { get; init; }
+    public required string Message { get; init; }
+}
+
 public record TenantSetupResponse
 {
     public required TenantResponse Tenant { get; init; }

@@ -29,6 +29,106 @@ public class TenantService : ITenantService
         _refreshTokenRepository = refreshTokenRepository;
     }
 
+    /// <summary>
+    /// Creates tenant record and admin user for infrastructure provisioning scripts
+    /// </summary>
+    public async Task<ProvisionTenantResponse> CreateTenantRecordWithAdminAsync(ProvisionTenantRequest request)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity("TenantProvision");
+        activity?.SetTag("tenant.name", request.TenantName);
+        activity?.SetTag("admin.email", request.AdminEmail);
+
+        try
+        {
+            // Generate slug from name
+            var slug = GenerateSlug(request.TenantName);
+            activity?.SetTag("tenant.slug", slug);
+
+            // Check if slug already exists
+            var existingTenant = await _tenantRepository.GetBySlugAsync(slug);
+            if (existingTenant != null)
+            {
+                throw new InvalidOperationException($"A tenant with slug '{slug}' already exists");
+            }
+
+            // Check if admin email already exists
+            var existingUser = await _userRepository.GetByEmailAsync(request.AdminEmail);
+            if (existingUser != null)
+            {
+                throw new InvalidOperationException($"User with email '{request.AdminEmail}' already exists");
+            }
+
+            // Create tenant entity
+            var tenantId = Guid.NewGuid();
+            var tenant = new Tenant
+            {
+                Id = tenantId,
+                Name = request.TenantName,
+                Description = $"Tenant: {request.TenantName}",
+                Slug = slug,
+                DatabaseName = request.DatabaseName,
+                QdrantContainerName = $"deeplens-qdrant-{slug}",
+                QdrantHttpPort = request.QdrantHttpPort,
+                QdrantGrpcPort = request.QdrantGrpcPort,
+                MinioEndpoint = request.MinioEndpoint ?? "localhost:9000",
+                MinioBucketName = request.MinioBucket ?? slug,
+                Status = TenantStatus.Active,
+                Tier = TenantTier.Free,
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = Guid.Empty // Will be updated after admin user creation
+            };
+
+            // Set default tenant limits
+            SetTenantLimits(tenant, TenantTier.Free);
+
+            activity?.SetTag("tenant.id", tenantId);
+
+            // Create tenant in database
+            var createdTenant = await _tenantRepository.CreateAsync(tenant);
+
+            // Create admin user
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.AdminPassword);
+            var adminUserId = Guid.NewGuid();
+            var adminUser = new User
+            {
+                Id = adminUserId,
+                TenantId = createdTenant.Id,
+                Email = request.AdminEmail,
+                PasswordHash = passwordHash,
+                FirstName = request.AdminFirstName,
+                LastName = request.AdminLastName,
+                Role = UserRole.TenantOwner,
+                IsActive = true,
+                EmailConfirmed = true, // Auto-confirm for provisioned admins
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var createdAdmin = await _userRepository.CreateAsync(adminUser);
+            activity?.SetTag("admin.user.id", adminUserId);
+
+            // Update tenant's CreatedBy
+            createdTenant.CreatedBy = createdAdmin.Id;
+            createdTenant.UpdatedAt = DateTime.UtcNow;
+            await _tenantRepository.UpdateAsync(createdTenant);
+
+            activity?.SetTag("provision.result", "success");
+
+            return new ProvisionTenantResponse
+            {
+                TenantId = createdTenant.Id,
+                AdminUserId = createdAdmin.Id,
+                TenantSlug = slug,
+                AdminEmail = request.AdminEmail,
+                Message = $"Tenant '{request.TenantName}' and admin user created successfully"
+            };
+        }
+        catch (Exception ex)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
+    }
+
     public async Task<TenantSetupResponse> CreateTenantWithAdminAsync(CreateTenantRequest request, string ipAddress, string userAgent)
     {
         using var activity = Telemetry.ActivitySource.StartActivity(Telemetry.Operations.TenantCreate);

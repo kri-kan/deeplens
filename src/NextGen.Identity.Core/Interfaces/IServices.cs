@@ -22,6 +22,7 @@ public interface IJwtTokenService
 public interface ITenantService
 {
     Task<TenantSetupResponse> CreateTenantWithAdminAsync(CreateTenantRequest request, string ipAddress, string userAgent);
+    Task<ProvisionTenantResponse> CreateTenantRecordWithAdminAsync(ProvisionTenantRequest request);
     Task<TenantResponse?> GetTenantByIdAsync(Guid tenantId);
     Task<TenantResponse?> GetTenantBySlugAsync(string slug);
     Task<List<TenantResponse>> GetAllTenantsAsync();

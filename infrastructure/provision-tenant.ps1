@@ -173,175 +173,58 @@ function Provision-Tenant {
         Write-Host "[WARNING] Database might already exist" -ForegroundColor Yellow
     }
     
-    # Create tenant entry in nextgen_identity database
-    Write-Host "`n[TENANT] Creating tenant entry in identity database..." -ForegroundColor Cyan
+    # Create tenant entry and admin user via Identity API
+    Write-Host "`n[IDENTITY] Creating tenant and admin user via API..." -ForegroundColor Cyan
     
-    $createTenantSQL = @"
-INSERT INTO tenants (
-    id,
-    name,
-    description,
-    slug,
-    database_name,
-    connection_string,
-    qdrant_container_name,
-    qdrant_http_port,
-    qdrant_grpc_port,
-    minio_endpoint,
-    minio_bucket_name,
-    status,
-    tier,
-    max_storage_bytes,
-    max_users,
-    max_api_calls_per_day,
-    created_at,
-    created_by
-) VALUES (
-    gen_random_uuid(),
-    '$TenantName',
-    'Tenant: $TenantName',
-    '$TenantName',
-    '$TenantDBName',
-    'Host=deeplens-postgres;Port=5432;Database=$TenantDBName;Username=postgres;Password=DeepLens123!',
-    'deeplens-qdrant-$TenantName',
-    0,  -- Will be updated with actual port
-    0,  -- Will be updated with actual port
-    'localhost:9000',
-    '$TenantName',
-    1,  -- Status: Active
-    1,  -- Tier: Free
-    10737418240,  -- 10 GB default storage
-    100,
-    100000,
-    CURRENT_TIMESTAMP,
-    '00000000-0000-0000-0000-000000000000'
-)
-ON CONFLICT (slug) DO NOTHING;
-"@
-    
-    try {
-        podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity -c $createTenantSQL 2>&1 | Out-Null
-        Write-Host "[OK] Tenant entry created in identity database" -ForegroundColor Green
-    }
-    catch {
-        Write-Host "[WARNING] Tenant entry might already exist" -ForegroundColor Yellow
-    }
-    
-    # Create default tenant admin user
-    Write-Host "`n[USER] Creating default tenant admin user..." -ForegroundColor Cyan
-    
-    # Generate credentials
     $tenantAdminEmail = "admin@${TenantName}.local"
     $tenantAdminPassword = "DeepLens@${TenantName}123!"
     
-    # Generate BCrypt hash for the password
-    Write-Host "[INFO] Generating password hash..." -ForegroundColor Yellow
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $hashGeneratorPath = Join-Path (Split-Path -Parent $scriptDir) "tools\HashGenerator"
+    # Prepare API request body
+    $apiBody = @{
+        tenantName = $TenantName
+        databaseName = $TenantDBName
+        adminEmail = $tenantAdminEmail
+        adminPassword = $tenantAdminPassword
+        adminFirstName = $TenantName
+        adminLastName = "Admin"
+        qdrantHttpPort = 0  # Will be updated later
+        qdrantGrpcPort = 0  # Will be updated later
+        minioEndpoint = "localhost:9000"
+        minioBucket = $TenantName
+    } | ConvertTo-Json
     
     try {
-        $hashOutput = & dotnet run --project "$hashGeneratorPath\HashGenerator.csproj" $tenantAdminPassword 2>&1 | Where-Object { $_ -match "^Hash:" }
-        if ($hashOutput -match "Hash: (.+)$") {
-            $passwordHash = $Matches[1]
-        }
-        else {
-            throw "Failed to generate password hash"
-        }
-    }
-    catch {
-        Write-Host "[ERROR] Failed to generate password hash: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "[INFO] Falling back to pre-computed generic hash" -ForegroundColor Yellow
-        # This is a generic hash that won't work - tenant will need to reset password
-        $passwordHash = "`$2a`$11`$3yQ0wZ5K8Vx4YvH2MpNwXuJ.K7L9R5T6W8Y2A4C6E8F1H3J5K7L9"
-    }
-    
-    $createUserSQL = @"
-DO `$`$
-DECLARE
-    tenant_uuid UUID;
-    user_uuid UUID := gen_random_uuid();
-BEGIN
-    -- Get tenant ID from nextgen_identity database
-    SELECT id INTO tenant_uuid FROM tenants WHERE slug = '$TenantName';
-    
-    -- Only create user if tenant exists and user doesn't already exist
-    IF tenant_uuid IS NOT NULL THEN
-        IF NOT EXISTS (SELECT 1 FROM users WHERE tenant_id = tenant_uuid AND email = '$tenantAdminEmail') THEN
-            -- Insert tenant admin user
-            -- Note: Password hash is generic. User should change password on first login.
-            INSERT INTO users (
-                id,
-                tenant_id,
-                email,
-                password_hash,
-                first_name,
-                last_name,
-                email_confirmed,
-                role,
-                is_active,
-                created_at
-            ) VALUES (
-                user_uuid,
-                tenant_uuid,
-                '$tenantAdminEmail',
-                '$passwordHash',
-                '$TenantName',
-                'Admin',
-                TRUE,
-                3,  -- Role: 3 = TenantOwner (full tenant access)
-                TRUE,
-                CURRENT_TIMESTAMP
-            );
-            RAISE NOTICE 'Tenant admin user created: %', '$tenantAdminEmail';
-        ELSE
-            RAISE NOTICE 'Tenant admin user already exists: %', '$tenantAdminEmail';
-        END IF;
-    ELSE
-        RAISE NOTICE 'Tenant not found in database, skipping user creation';
-    END IF;
-END `$`$;
-"@
-    
-    try {
-        # Execute in nextgen_identity database
-        $result = podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity -c $createUserSQL 2>&1
+        # Call Identity API to create tenant and admin user
+        $apiResponse = Invoke-RestMethod -Uri "http://localhost:5198/api/tenant/provision" `
+            -Method Post `
+            -Body $apiBody `
+            -ContentType "application/json"
         
-        if ($result -match "Tenant admin user created") {
-            Write-Host "[OK] Tenant admin user created: $tenantAdminEmail" -ForegroundColor Green
-            
-            # Save credentials to tenant directory
-            $credentialsFile = "$TenantPath/admin-credentials.txt"
-            @"
-Tenant Admin Credentials for: $TenantName
-Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-
-Email: $tenantAdminEmail
-Default Password: $tenantAdminPassword
-
-Role: TenantOwner (Full tenant access)
-
-⚠️  IMPORTANT SECURITY NOTES:
-  - Change this password IMMEDIATELY after first login
-  - The default password follows the pattern: DeepLens@{TenantName}123!
-  - This user has full access to the tenant's resources
-  - Store these credentials securely
-  - Delete this file after noting the credentials
-
-Login URL: http://localhost:3000
-"@ | Out-File -FilePath $credentialsFile -Encoding UTF8
-            
-            Write-Host "[INFO] Credentials saved to: $credentialsFile" -ForegroundColor Yellow
-        }
-        elseif ($result -match "already exists") {
-            Write-Host "[WARNING] Tenant admin user already exists" -ForegroundColor Yellow
-        }
-        else {
-            Write-Host "[WARNING] Could not determine user creation status" -ForegroundColor Yellow
-        }
+        Write-Host "[OK] Tenant and admin user created via API" -ForegroundColor Green
+        Write-Host "[INFO] Tenant ID: $($apiResponse.tenantId)" -ForegroundColor Cyan
+        Write-Host "[INFO] Admin User ID: $($apiResponse.adminUserId)" -ForegroundColor Cyan
+        Write-Host "[INFO] Tenant Slug: $($apiResponse.tenantSlug)" -ForegroundColor Cyan
+        
+        # Save tenant ID for later use
+        $tenantId = $apiResponse.tenantId
+        $tenantSlug = $apiResponse.tenantSlug
     }
     catch {
-        Write-Host "[ERROR] Failed to create tenant admin user: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "[INFO] You can create the user manually via the Admin Portal" -ForegroundColor Yellow
+        Write-Host "[ERROR] Failed to create tenant via API: $($_.Exception.Message)" -ForegroundColor Red
+        
+        # Check if Identity API is running
+        try {
+            $healthCheck = Invoke-RestMethod -Uri "http://localhost:5198/api/auth/health" -ErrorAction Stop
+            Write-Host "[INFO] Identity API is running but request failed" -ForegroundColor Yellow
+        }
+        catch {
+            Write-Host "[ERROR] Identity API is not responding. Please start Identity API first:" -ForegroundColor Red
+            Write-Host "  cd src\NextGen.Identity.Api" -ForegroundColor White
+            Write-Host "  dotnet run" -ForegroundColor White
+            throw "Identity API is not available"
+        }
+        
+        throw "Failed to create tenant and admin user"
     }
     
     # Provision Qdrant
@@ -382,6 +265,40 @@ Login URL: http://localhost:3000
             qdrant/qdrant:v1.7.0 | Out-Null
         
         Write-Host "[OK] Qdrant started on ports $QdrantHttpPort (HTTP) and $QdrantGrpcPort (gRPC)" -ForegroundColor Green
+        
+        # Update tenant record with actual Qdrant ports
+        Write-Host "[INFO] Updating tenant record with Qdrant ports..." -ForegroundColor Yellow
+        try {
+            $updateSQL = "UPDATE tenants SET qdrant_http_port = $QdrantHttpPort, qdrant_grpc_port = $QdrantGrpcPort, updated_at = CURRENT_TIMESTAMP WHERE slug = '$TenantName';"
+            podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity -c $updateSQL 2>&1 | Out-Null
+            Write-Host "[OK] Tenant record updated with Qdrant ports" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "[WARNING] Failed to update tenant record with Qdrant ports" -ForegroundColor Yellow
+        }
+        
+        # Save admin credentials to file
+        $credentialsFile = "$TenantPath/admin-credentials.txt"
+        @"
+Tenant Admin Credentials for: $TenantName
+Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+
+Email: $tenantAdminEmail
+Default Password: $tenantAdminPassword
+
+Role: TenantOwner (Full tenant access)
+
+⚠️  IMPORTANT SECURITY NOTES:
+  - Change this password IMMEDIATELY after first login
+  - The default password follows the pattern: DeepLens@{TenantName}123!
+  - This user has full access to the tenant's resources
+  - Store these credentials securely
+  - Delete this file after noting the credentials
+
+Login URL: http://localhost:3000
+"@ | Out-File -FilePath $credentialsFile -Encoding UTF8
+        
+        Write-Host "[INFO] Credentials saved to: $credentialsFile" -ForegroundColor Yellow
     }
     
     # Provision Storage based on type
