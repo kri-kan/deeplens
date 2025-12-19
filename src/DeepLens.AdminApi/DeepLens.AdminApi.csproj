@@ -8,6 +8,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.11" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeepLens.Contracts\DeepLens.Contracts.csproj" />
+    <ProjectReference Include="..\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

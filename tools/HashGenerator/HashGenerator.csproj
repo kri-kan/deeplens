@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-  <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DeepLens.Domain\DeepLens.Domain.csproj" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
   </ItemGroup>
 
 </Project>

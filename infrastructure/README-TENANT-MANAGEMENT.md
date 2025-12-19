@@ -32,12 +32,14 @@ DeepLens supports **three storage models** per tenant:
 #### 1. BYOS (Bring Your Own Storage) ⭐ Recommended for Enterprise
 
 Tenant provides their own cloud storage credentials:
+
 - **Azure Blob Storage**: Enterprise-grade cloud storage
-- **AWS S3**: Scalable object storage  
+- **AWS S3**: Scalable object storage
 - **Google Cloud Storage**: Multi-regional storage
 - **NFS/SMB**: Network file system shares
 
 **Benefits:**
+
 - ✅ Data sovereignty - tenant owns their data
 - ✅ Compliance - meets regulatory requirements
 - ✅ Cost control - tenant pays storage directly
@@ -49,6 +51,7 @@ Tenant provides their own cloud storage credentials:
 #### 2. DeepLens-Provisioned Storage 🔒 Isolated per Tenant
 
 Each tenant gets a **dedicated MinIO instance**:
+
 - Separate container per tenant
 - Unique ports (auto-assigned)
 - Isolated storage volumes
@@ -56,6 +59,7 @@ Each tenant gets a **dedicated MinIO instance**:
 - Full resource isolation
 
 **Benefits:**
+
 - ✅ Complete isolation - no shared resources
 - ✅ Simple setup - fully automated
 - ✅ Managed by DeepLens - backups, monitoring
@@ -69,12 +73,12 @@ Skip storage provisioning during initial setup, configure later manually.
 
 ### What Gets Provisioned
 
-| Component | Shared | Per-Tenant | Purpose |
-|-----------|--------|------------|---------|
-| PostgreSQL | ✅ | Database per tenant | Metadata storage |
-| Qdrant | ❌ | Dedicated instance | Vector search isolation |
-| MinIO | ❌ | Optional (if DeepLens storage) | Object storage |
-| Backups | ❌ | Dedicated container | Automated backups |
+| Component  | Shared | Per-Tenant                     | Purpose                 |
+| ---------- | ------ | ------------------------------ | ----------------------- |
+| PostgreSQL | ✅     | Database per tenant            | Metadata storage        |
+| Qdrant     | ❌     | Dedicated instance             | Vector search isolation |
+| MinIO      | ❌     | Optional (if DeepLens storage) | Object storage          |
+| Backups    | ❌     | Dedicated container            | Automated backups       |
 
 ## 📁 Directory Structure
 
@@ -125,10 +129,19 @@ cd infrastructure
 ```
 
 **What gets created:**
+
 - ✅ Database: `tenant_enterprise-client_metadata`
 - ✅ Qdrant: Dedicated instance on auto-assigned ports
 - ✅ Backup: Daily automated backups
+- ✅ Admin User: `admin@enterprise-client.local` (TenantOwner role)
 - ❌ Storage: Tenant configures their own
+
+**Admin Credentials:**
+- Email: `admin@enterprise-client.local`
+- Password: `DeepLens@enterprise-client123!`
+- Role: TenantOwner (full tenant access)
+- ⚠️ **Change password immediately after first login!**
+- Credentials saved to: `tenants/enterprise-client/admin-credentials.txt`
 
 #### Option 2: DeepLens-Provisioned Storage
 
@@ -141,12 +154,22 @@ cd infrastructure
 ```
 
 **What gets created:**
-- ✅ Database: `tenant_startup-co_metadata`  
+
+- ✅ Database: `tenant_startup-co_metadata`
 - ✅ Qdrant: Dedicated instance on auto-assigned ports
 - ✅ MinIO: Dedicated instance with unique credentials
 - ✅ Backup: Daily automated backups
+- ✅ Admin User: `admin@startup-co.local` (TenantOwner role)
+
+**Admin Credentials:**
+- Email: `admin@startup-co.local`
+- Password: `DeepLens@startup-co123!`
+- Role: TenantOwner (full tenant access)
+- ⚠️ **Change password immediately after first login!**
+- Credentials saved to: `tenants/startup-co/admin-credentials.txt`
 
 **Ports auto-assigned:**
+
 - Qdrant HTTP: 6333, 6335, 6337, ... (incremental)
 - Qdrant gRPC: 6334, 6336, 6338, ...
 - MinIO API: 9000, 9002, 9004, ...
@@ -698,20 +721,20 @@ podman ps --format "table {{.Names}}\t{{.Ports}}"
 # ========================================
 #  Storage Configuration
 # ========================================
-# 
+#
 # Choose storage option for tenant 'vayyari':
-# 
+#
 #   [1] BYOS (Bring Your Own Storage)
 #       Tenant provides Azure/AWS/GCS credentials
 #       No DeepLens infrastructure provisioned
-# 
+#
 #   [2] DeepLens-Provisioned Storage
 #       Dedicated MinIO instance for this tenant
 #       Fully isolated, managed by DeepLens
-# 
+#
 #   [3] None (Skip storage provisioning)
 #       Configure storage later manually
-# 
+#
 # Enter choice (1-3):
 ```
 

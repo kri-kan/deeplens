@@ -35,9 +35,12 @@
 ### Always Provisioned
 
 - ✅ **PostgreSQL Database**: `tenant_{name}_metadata`
+- ✅ **Tenant Entry**: Created in `nextgen_identity` database
+- ✅ **Admin User**: `admin@{name}.local` with TenantOwner role
 - ✅ **Qdrant Instance**: Dedicated vector database (auto-assigned ports)
 - ✅ **Backup Container**: Daily backups at 2 AM, 30-day retention
 - ✅ **Data Directory**: `C:\productivity\deeplensData\tenants/{name}/`
+- ✅ **Credentials File**: `admin-credentials.txt` with login details
 
 ### Optional (DeepLens Storage Only)
 
@@ -101,6 +104,11 @@ Ports are automatically assigned to avoid conflicts:
 # - Connection: <their Azure credentials>
 # - Container: acme-deeplens-images
 
+# Admin Credentials Created:
+# Email: admin@acme.local
+# Password: DeepLens@acme123!
+# File: C:\productivity\deeplensData\tenants\acme\admin-credentials.txt
+
 # DeepLens Never Touches Their Storage
 ```
 
@@ -110,11 +118,18 @@ Ports are automatically assigned to avoid conflicts:
 .\provision-tenant.ps1 -TenantName "startup" -StorageType "DeepLens"
 
 # Output:
+# Admin User:        admin@startup.local
+# Admin Password:    DeepLens@startup123!
 # MinIO API:         http://localhost:9002
 # MinIO Console:     http://localhost:9003
 # MinIO Credentials: C:\productivity\deeplensData\tenants\startup\minio-credentials.txt
 
-# Credentials Example:
+# Admin Credentials:
+# Email: admin@startup.local
+# Password: DeepLens@startup123!
+# Role: TenantOwner
+
+# MinIO Credentials:
 # Root User: startup-admin
 # Root Password: A7jK9mPx2qR5tYnW8vCx4bFg
 ```
@@ -182,9 +197,14 @@ explorer "C:\productivity\deeplensData\tenants\your-tenant"
 
 ### Can't Find Credentials
 
-**Location:** `C:\productivity\deeplensData\tenants/{tenant-name}/minio-credentials.txt`
+**Admin Credentials Location:** `C:\productivity\deeplensData\tenants\{tenant-name}\admin-credentials.txt`
+**MinIO Credentials Location:** `C:\productivity\deeplensData\tenants\{tenant-name}\minio-credentials.txt`
 
 ```powershell
+# View admin credentials
+Get-Content "C:\productivity\deeplensData\tenants\your-tenant\admin-credentials.txt"
+
+# View MinIO credentials (if DeepLens storage)
 Get-Content "C:\productivity\deeplensData\tenants\your-tenant\minio-credentials.txt"
 ```
 

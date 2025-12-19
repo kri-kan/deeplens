@@ -76,7 +76,7 @@ public class ImageUploadedData
     public ImageMetadata Metadata { get; set; } = new();
 
     [JsonPropertyName("storageProvider")]
-    public StorageProviderInfo StorageProvider { get; set; } = new();
+    public StorageProviderInfo StorageProvider { get; set; } = new() { Type = "minio" };
 }
 
 public class ProcessingOptions

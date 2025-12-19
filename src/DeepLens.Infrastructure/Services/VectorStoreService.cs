@@ -254,7 +254,7 @@ public class VectorStoreService : IVectorStoreService
                 {
                     Name = collectionName,
                     VectorCount = qdrantInfo?.result?.points_count ?? 0,
-                    VectorDimension = qdrantInfo?.result?.config?.params?.vectors?.size ?? 0,
+                    VectorDimension = qdrantInfo?.result?.config?.@params?.vectors?.size ?? 0,
                     Status = qdrantInfo?.result?.status ?? "unknown"
                 };
             }

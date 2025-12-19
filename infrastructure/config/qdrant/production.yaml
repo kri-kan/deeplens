@@ -19,20 +19,6 @@ service:
 storage:
   # Storage optimization for image vectors
 
-  # Collections configuration
-  optimizers:
-    # Memory threshold for segment optimization
-    memmap_threshold: 20000
-
-    # Indexing threshold
-    indexing_threshold: 10000
-
-    # Flush interval in seconds
-    flush_interval_sec: 30
-
-    # Max segment size
-    max_segment_size: 100000
-
   # Performance settings
   performance:
     # Maximum indexing threads
@@ -40,6 +26,13 @@ storage:
 
     # Maximum search threads
     max_search_threads: 4
+
+  # Optimizer settings
+  optimizers:
+    memmap_threshold_kb: 20000
+    indexing_threshold_kb: 10000
+    flush_interval_sec: 30
+    max_segment_size_kb: 100000
 
   # WAL (Write-Ahead Log) settings
   wal:
