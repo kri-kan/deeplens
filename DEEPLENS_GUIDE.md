@@ -1,8 +1,8 @@
 ﻿# DeepLens Complete Documentation Guide
 
-**Updated:** 2025-12-20 00:46:02
+**Updated:** 2025-12-20 00:48:31
 
-> **Note:** This is a consolidated version of all repository documentation. Image binary samples and raw code templates are included in the source files.
+> **Note:** This is a consolidated version of all repository documentation. Image binary samples and raw code templates have been omitted for clarity.
 
 ---
 
@@ -93,21 +93,17 @@ Last Updated: December 20, 2025
 
 1.  **Prerequisites**: Install Podman/Docker, .NET 9 SDK, Python 3.11+, and PowerShell 7+.
 2.  **Environment**: 
-    ```powershell
-    cd infrastructure
-    cp .env.example .env
-    ./setup-infrastructure.ps1 -Start
-    ```
+    
+*(Code block omitted for brevity)*
+
 3.  **Identity API**:
-    ```powershell
-    cd src/NextGen.Identity.Api
-    $env:ASPNETCORE_ENVIRONMENT="Development"
-    dotnet run --urls "http://localhost:5198"
-    ```
+    
+*(Code block omitted for brevity)*
+
 4.  **Verification**: 
-    ```powershell
-    podman ps  # Ensure Postgres, Redis, Qdrant are running
-    ```
+    
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -148,12 +144,9 @@ Last Updated: December 20, 2025
 ### Python (AI) Development
 - **Venv**: Always use a virtual environment.
 - **Setup**: 
-    ```powershell
-    cd src/DeepLens.FeatureExtractionService
-    python -m venv venv
-    ./venv/Scripts/Activate.ps1
-    pip install -r requirements.txt
-    ```
+    
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -214,21 +207,9 @@ DeepLens is a high-performance, multi-tenant image similarity search engine buil
 ## ðŸ“ Architecture Diagrams
 
 ### High-Level System Flow
-```mermaid
-graph TD
-    User([User / Client]) --> Gateway[API Gateway - .NET]
-    Gateway --> Identity[Identity API - Duende]
-    Gateway --> Search[Search API - .NET]
-    Gateway --> Admin[Admin API - .NET]
-    
-    Search --> Kafka{Apache Kafka}
-    Kafka --> Worker[Worker Service - .NET]
-    Worker --> FeatureEx[Feature Extraction - Python]
-    Worker --> VectorDB[(Qdrant Vector DB)]
-    
-    Admin --> Metadata[(PostgreSQL Metadata)]
-    Search --> Metadata
-```
+
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -361,12 +342,9 @@ DeepLens is built using a clean architecture pattern across multiple services:
 ### Data Access (Dapper)
 We use pure Dapper with raw SQL for the Identity service to ensure maximum performance. 
 Example Repository pattern:
-```csharp
-public async Task<User?> GetByEmailAsync(string email) {
-    const string sql = "SELECT * FROM users WHERE email = @Email";
-    return await connection.QuerySingleOrDefaultAsync<User>(sql, new { Email = email });
-}
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Telemetry (OpenTelemetry)
 Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiGateway` into the `SearchApi`, through `Kafka`, and finally into the `Worker` and `AI Service`.
@@ -515,12 +493,9 @@ DeepLens uses a **Bucket-per-Tenant** strategy for object storage.
 To test authentication manually:
 
 ### 1. Client Credentials (M2M)
-```bash
-curl -X POST http://localhost:5198/connect/token \
-  -d "grant_type=client_credentials" \
-  -d "client_id=deeplens-m2m" \
-  -d "client_secret=m2m-secret"
-```
+
+*(Code block omitted for brevity)*
+
 
 ### 2. Authorization Code (Web UI)
 Use the [OIDC Debugger](https://oidcdebugger.com/) or the built-in Swagger UI at `http://localhost:5198/swagger`.
@@ -626,40 +601,21 @@ Last Updated: December 20, 2025
 2. **[PowerShell 7+](https://github.com/PowerShell/PowerShell)** - Shell
 3. **[.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)** - For Identity API
 
-```powershell
-# Configure PowerShell (one-time)
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
+
+*(Code block omitted for brevity)*
+
 
 ### 2. Start Core Infrastructure
 
-```powershell
-cd C:\productivity\deeplens\infrastructure
 
-# Create network
-podman network create deeplens-network
+*(Code block omitted for brevity)*
 
-# Start PostgreSQL
-podman run -d --name deeplens-postgres --network deeplens-network `
-  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=DeepLens123! `
-  -e POSTGRES_DB=nextgen_identity -p 5433:5432 `
-  -v deeplens-postgres-data:/var/lib/postgresql/data postgres:16-alpine
-
-# Start Redis
-podman run -d --name deeplens-redis --network deeplens-network `
-  -p 6379:6379 redis:7-alpine
-
-# Verify
-podman ps
-```
 
 ### 3. Start Identity API
 
-```powershell
-cd C:\productivity\deeplens\src\NextGen.Identity.Api
-$env:ASPNETCORE_ENVIRONMENT='Development'
-dotnet run --urls=http://localhost:5198
-```
+
+*(Code block omitted for brevity)*
+
 
 **Keep this terminal open!**
 
@@ -667,10 +623,9 @@ dotnet run --urls=http://localhost:5198
 
 In a new terminal:
 
-```powershell
-cd C:\productivity\deeplens\infrastructure
-.\provision-tenant.ps1 -TenantName "demo" -StorageType "DeepLens"
-```
+
+*(Code block omitted for brevity)*
+
 
 **Done!** You now have:
 - âœ… Core infrastructure (PostgreSQL, Redis)
@@ -703,13 +658,9 @@ cd C:\productivity\deeplens\infrastructure
 
 ### PowerShell Configuration
 
-```powershell
-# Allow script execution
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
-# Verify
-Get-ExecutionPolicy -List
-```
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -717,79 +668,33 @@ Get-ExecutionPolicy -List
 
 ### Architecture
 
-```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚         Shared Infrastructure           â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  PostgreSQL (5433) - All tenant DBs     â”‚
-â”‚  Redis (6379)      - Shared cache       â”‚
-â”‚  deeplens-network  - Container network  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-         â”‚
-         â”œâ”€â”€ Tenant 1
-         â”‚   â”œâ”€â”€ Qdrant (6333/6334)
-         â”‚   â”œâ”€â”€ MinIO (9000/9001)
-         â”‚   â””â”€â”€ Backup Container
-         â”‚
-         â”œâ”€â”€ Tenant 2
-         â”‚   â”œâ”€â”€ Qdrant (6335/6336)
-         â”‚   â”œâ”€â”€ MinIO (9002/9003)
-         â”‚   â””â”€â”€ Backup Container
-         â”‚
-         â””â”€â”€ Tenant N...
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Network Setup
 
-```powershell
-# Create network (required for tenant isolation)
-podman network create deeplens-network
 
-# Verify
-podman network ls
-```
+*(Code block omitted for brevity)*
+
 
 ### PostgreSQL Setup
 
-```powershell
-podman run -d `
-  --name deeplens-postgres `
-  --network deeplens-network `
-  -e POSTGRES_USER=postgres `
-  -e POSTGRES_PASSWORD=DeepLens123! `
-  -e POSTGRES_DB=nextgen_identity `
-  -p 5433:5432 `
-  -v deeplens-postgres-data:/var/lib/postgresql/data `
-  postgres:16-alpine
 
-# Test connection
-podman exec deeplens-postgres pg_isready -U postgres
-```
+*(Code block omitted for brevity)*
+
 
 ### Redis Setup
 
-```powershell
-podman run -d `
-  --name deeplens-redis `
-  --network deeplens-network `
-  -p 6379:6379 `
-  redis:7-alpine
 
-# Test connection
-podman exec deeplens-redis redis-cli ping
-```
+*(Code block omitted for brevity)*
+
 
 ### Verify Infrastructure
 
-```powershell
-# Check all containers
-podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-# Expected output:
-# NAMES              STATUS        PORTS
-# deeplens-postgres  Up X seconds  0.0.0.0:5433->5432/tcp
-# deeplens-redis     Up X seconds  0.0.0.0:6379->6379/tcp
-```
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -797,24 +702,15 @@ podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 ### Start the API
 
-```powershell
-cd C:\productivity\deeplens\src\NextGen.Identity.Api
 
-# Set environment (REQUIRED!)
-$env:ASPNETCORE_ENVIRONMENT='Development'
+*(Code block omitted for brevity)*
 
-# Start API
-dotnet run --urls=http://localhost:5198
-```
 
 ### Verify API is Running
 
-```powershell
-# Test OpenID configuration
-Invoke-RestMethod http://localhost:5198/.well-known/openid-configuration
 
-# Should return JSON with endpoints
-```
+*(Code block omitted for brevity)*
+
 
 ### Default Admin Credentials
 
@@ -828,18 +724,9 @@ Invoke-RestMethod http://localhost:5198/.well-known/openid-configuration
 
 ### Provision a Tenant
 
-```powershell
-cd C:\productivity\deeplens\infrastructure
 
-# Interactive (prompts for storage type)
-.\provision-tenant.ps1 -TenantName "your-tenant"
+*(Code block omitted for brevity)*
 
-# With DeepLens-managed storage
-.\provision-tenant.ps1 -TenantName "your-tenant" -StorageType "DeepLens"
-
-# With BYOS (Bring Your Own Storage)
-.\provision-tenant.ps1 -TenantName "your-tenant" -StorageType "BYOS"
-```
 
 ### What Gets Created
 
@@ -863,22 +750,15 @@ cd C:\productivity\deeplens\infrastructure
 
 ### Verify Tenant
 
-```powershell
-# Check tenant containers
-podman ps --filter "label=tenant=your-tenant"
 
-# Check database
-podman exec deeplens-postgres psql -U postgres -c "\l" | Select-String "tenant_"
+*(Code block omitted for brevity)*
 
-# View credentials
-Get-Content "C:\productivity\deeplensData\tenants\your-tenant\admin-credentials.txt"
-```
 
 ### Remove a Tenant
 
-```powershell
-.\provision-tenant.ps1 -TenantName "old-tenant" -Remove
-```
+
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -886,75 +766,45 @@ Get-Content "C:\productivity\deeplensData\tenants\your-tenant\admin-credentials.
 
 ### "dotnet: command not found"
 
-```powershell
-# Use full path
-& "C:\Program Files\dotnet\dotnet.exe" run --urls=http://localhost:5198
 
-# Or add to PATH
-$env:Path += ";C:\Program Files\dotnet"
-```
+*(Code block omitted for brevity)*
+
 
 ### "Scripts are disabled on this system"
 
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
+
+*(Code block omitted for brevity)*
+
 
 ### "Production signing credential not configured"
 
-```powershell
-# Ensure environment variable is set
-$env:ASPNETCORE_ENVIRONMENT='Development'
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Containers fail to start
 
-```powershell
-# Check if network exists
-podman network ls | Select-String "deeplens-network"
 
-# Create if missing
-podman network create deeplens-network
-```
+*(Code block omitted for brevity)*
+
 
 ### Port already in use
 
-```powershell
-# Find what's using the port
-netstat -ano | findstr :5433
 
-# Kill the process
-taskkill /PID <PID> /F
-```
+*(Code block omitted for brevity)*
+
 
 ### Tenant containers in "Created" state
 
-```powershell
-# Check for port conflicts
-podman ps -a | Select-String "demo"
 
-# Stop core infrastructure if using multi-tenant
-podman stop deeplens-qdrant deeplens-minio
+*(Code block omitted for brevity)*
 
-# Start tenant containers
-podman start deeplens-qdrant-demo deeplens-minio-demo
-```
 
 ### View Container Logs
 
-```powershell
-# Identity API logs (if running in background)
-podman logs deeplens-identity-api
 
-# Tenant Qdrant logs
-podman logs deeplens-qdrant-demo
+*(Code block omitted for brevity)*
 
-# Tenant MinIO logs
-podman logs deeplens-minio-demo
-
-# PostgreSQL logs
-podman logs deeplens-postgres
-```
 
 ---
 
@@ -962,73 +812,41 @@ podman logs deeplens-postgres
 
 ### Stop All Services
 
-```powershell
-# Stop Identity API (Ctrl+C in its terminal)
 
-# Stop all containers
-podman stop $(podman ps -aq)
+*(Code block omitted for brevity)*
 
-# Or stop specific services
-podman stop deeplens-postgres deeplens-redis
-```
 
 ### Backup Database
 
-```powershell
-# Backup all databases
-podman exec deeplens-postgres pg_dumpall -U postgres > deeplens-backup.sql
 
-# Backup specific tenant database
-podman exec deeplens-postgres pg_dump -U postgres tenant_demo_metadata > demo-backup.sql
-```
+*(Code block omitted for brevity)*
+
 
 ### Restore Database
 
-```powershell
-# Restore all databases
-Get-Content deeplens-backup.sql | podman exec -i deeplens-postgres psql -U postgres
 
-# Restore specific database
-Get-Content demo-backup.sql | podman exec -i deeplens-postgres psql -U postgres -d tenant_demo_metadata
-```
+*(Code block omitted for brevity)*
+
 
 ### Clean Up Everything
 
-```powershell
-# Stop and remove all containers
-podman stop $(podman ps -aq)
-podman rm $(podman ps -aq)
 
-# Remove all volumes (âš ï¸ DELETES ALL DATA)
-podman volume rm $(podman volume ls -q)
+*(Code block omitted for brevity)*
 
-# Remove network
-podman network rm deeplens-network
-```
 
 ### Check Resource Usage
 
-```powershell
-# Container stats
-podman stats
 
-# Disk usage
-podman system df
+*(Code block omitted for brevity)*
 
-# Volume usage
-podman volume ls
-```
 
 ### Migration & Portable Storage
 
 **Core Databases (Named Volumes):**
 On Windows, core databases use named volumes. To migrate:
-```powershell
-# Export
-podman volume export deeplens-postgres-data > postgres.tar
-# Import on new machine
-Get-Content postgres.tar | podman volume import deeplens-postgres-data
-```
+
+*(Code block omitted for brevity)*
+
 
 **Tenant Data (Bind Mounts):**
 Tenant data is in `C:\productivity\deeplensData\tenants`. Simply copy the directory to migrate.
@@ -1061,19 +879,19 @@ For more detailed information, see:
    - Terminal 2: Provisioning and management
 
 2. **Check status regularly:**
-   ```powershell
-   podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-   ```
+   
+*(Code block omitted for brevity)*
+
 
 3. **Monitor logs:**
-   ```powershell
-   podman logs -f <container-name>
-   ```
+   
+*(Code block omitted for brevity)*
+
 
 4. **Use labels for filtering:**
-   ```powershell
-   podman ps --filter "label=tenant=demo"
-   ```
+   
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -1135,21 +953,9 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 
 ### Provisioning Commands
 
-```powershell
-cd C:\productivity\deeplens\infrastructure
 
-# 1. Interactive Mode (Recommended)
-.\provision-tenant.ps1 -TenantName "acme"
+*(Code block omitted for brevity)*
 
-# 2. BYOS Mode
-.\provision-tenant.ps1 -TenantName "enterprise" -StorageType "BYOS"
-
-# 3. DeepLens Storage Mode
-.\provision-tenant.ps1 -TenantName "startup" -StorageType "DeepLens"
-
-# 4. Remove a Tenant
-.\provision-tenant.ps1 -TenantName "old-tenant" -Remove
-```
 
 ### Port Assignments (Auto-managed)
 
@@ -1170,25 +976,15 @@ Each tenant has a dedicated backup container that handles daily backups at 2 AM.
 
 ### Manual Backup
 
-```powershell
-# PostgreSQL Backup
-podman exec deeplens-postgres pg_dump -U postgres -d tenant_acme_metadata -F c -f /tmp/acme.dump
-podman cp deeplens-postgres:/tmp/acme.dump ./acme.dump
 
-# Qdrant Snapshot
-Invoke-RestMethod -Uri "http://localhost:6333/snapshots" -Method Post
-```
+*(Code block omitted for brevity)*
+
 
 ### Restore Procedure
 
-```powershell
-# Restore PostgreSQL
-podman exec -i deeplens-postgres pg_restore -U postgres -d tenant_acme_metadata -c ./acme.dump
 
-# Restore Qdrant
-Invoke-RestMethod -Uri "http://localhost:6333/snapshots/recover" -Method Put `
-  -ContentType "application/json" -Body '{"location": "/qdrant/snapshots/restore.snapshot"}'
-```
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -1196,16 +992,9 @@ Invoke-RestMethod -Uri "http://localhost:6333/snapshots/recover" -Method Put `
 
 ### Verify Tenant Health
 
-```powershell
-# Check containers
-podman ps --filter "label=tenant=acme"
 
-# List databases
-podman exec deeplens-postgres psql -U postgres -c "\l"
+*(Code block omitted for brevity)*
 
-# Check credentials
-# Location: C:\productivity\deeplensData\tenants\{tenant}\admin-credentials.txt
-```
 
 ### Common Issues
 
@@ -1250,29 +1039,23 @@ Last Updated: December 20, 2025
 **Symptoms:** `dotnet : The term 'dotnet' is not recognized...`
 
 **Solution:**
-```powershell
-# Option 1: Use full path
-& "C:\Program Files\dotnet\dotnet.exe" run --urls=http://localhost:5198
 
-# Option 2: Add to PATH (permanent)
-$env:Path += ";C:\Program Files\dotnet"
-[Environment]::SetEnvironmentVariable("Path", $env:Path, [System.EnvironmentVariableTarget]::User)
-```
+*(Code block omitted for brevity)*
+
 
 ### PowerShell Script Execution Blocked
 **Symptoms:** `File cannot be loaded because running scripts is disabled on this system`
 
 **Solution:**
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Identity API - "Production signing credential not configured"
 **Solution:** Ensure `ASPNETCORE_ENVIRONMENT` is set to `Development`.
-```powershell
-$env:ASPNETCORE_ENVIRONMENT='Development'
-dotnet run --urls=http://localhost:5198
-```
+
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -1280,28 +1063,23 @@ dotnet run --urls=http://localhost:5198
 
 ### Podman Machine Won't Start
 **Solution:** Reset the machine:
-```powershell
-podman machine stop podman-machine-default
-podman machine rm podman-machine-default
-podman machine init
-podman machine start
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Port Already in Use
 **Symptoms:** Container fails to start with "port in use" error.
 
 **Solution:** Find and kill the process:
-```powershell
-# Example: Check port 5433
-netstat -ano | findstr :5433
-taskkill /PID <PID> /F
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Container Stuck in "Created" State
 **Solution:** This usually indicates a config file mount error or port conflict on Windows. Check logs:
-```powershell
-podman logs <container-name>
-```
+
+*(Code block omitted for brevity)*
+
 **Pro Tip:** Use **Named Volumes** instead of bind mounts for persistence on Windows.
 
 ---
@@ -1312,17 +1090,15 @@ podman logs <container-name>
 **Symptoms:** "password authentication failed for user postgres"
 
 **Solution:** If you changed passwords, the old volume might still have the old data.
-```powershell
-podman stop deeplens-postgres && podman rm deeplens-postgres
-podman volume rm deeplens-postgres-data
-# Then start the container again
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Identity API Can't Connect to Database
 **Check connection status:**
-```powershell
-podman exec deeplens-postgres psql -U postgres -d nextgen_identity -c "SELECT 1;"
-```
+
+*(Code block omitted for brevity)*
+
 **Common Checks:**
 - Port: Ensure it's **5433** (not 5432).
 - Password: **DeepLens123!**
@@ -1336,23 +1112,22 @@ podman exec deeplens-postgres psql -U postgres -d nextgen_identity -c "SELECT 1;
 **Symptoms:** `provision-tenant.ps1` fails during container creation.
 
 **Solution:**
-```powershell
-podman network create deeplens-network
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Tenant Port Conflicts
 **Symptoms:** Tenant Qdrant/MinIO containers won't start.
 
 **Solution:** The script handles auto-assignment, but if you have core services running on the same ports, they must be stopped:
-```powershell
-podman stop deeplens-qdrant deeplens-minio
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Accessing Tenant Logs
-```powershell
-podman logs deeplens-qdrant-<tenant_name>
-podman logs deeplens-minio-<tenant_name>
-```
+
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -1391,28 +1166,26 @@ The Feature Extraction service is a FastAPI-based Python microservice that trans
 ## ðŸš€ Quick Start
 
 1. **Setup Environment**:
-   ```bash
-   python -m venv venv
-   ./venv/Scripts/Activate.ps1
-   pip install -r requirements.txt
-   ```
+   
+*(Code block omitted for brevity)*
+
 2. **Download Model**:
-   ```powershell
-   ./download-model.ps1
-   ```
+   
+*(Code block omitted for brevity)*
+
 3. **Run Service**:
-   ```bash
-   uvicorn main:app --port 8001 --reload
-   ```
+   
+*(Code block omitted for brevity)*
+
 
 ---
 
 ## ðŸ§ª Testing & Validation
 
 ### Running Tests
-```bash
-pytest tests/ -v
-```
+
+*(Code block omitted for brevity)*
+
 
 ### Testing Strategy
 - **Unit Tests**: Validate image preprocessing and model loading.
@@ -1426,14 +1199,9 @@ pytest tests/ -v
 ### `POST /extract-features`
 **Request**: Multipart form-data with `file`.
 **Response**:
-```json
-{
-  "image_id": "optional-id",
-  "features": [0.123, 0.456, ...],
-  "feature_dimension": 2048,
-  "model_name": "resnet50"
-}
-```
+
+*(Code block omitted for brevity)*
+
 
 ### `GET /health`
 Returns `{"status": "healthy", "model_loaded": true}`.
@@ -1483,16 +1251,15 @@ DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compati
 ## ðŸš€ Getting Started
 
 1. **Install Dependencies**:
-   ```bash
-   cd src/DeepLens.WebUI
-   npm install
-   ```
+   
+*(Code block omitted for brevity)*
+
 2. **Environment Config**:
    Copy `.env.example` to `.env` and set `VITE_API_BASE_URL` to your Identity API address.
 3. **Run Dev Server**:
-   ```bash
-   npm run dev
-   ```
+   
+*(Code block omitted for brevity)*
+
 
 ---
 
@@ -1520,4 +1287,3 @@ DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compati
 
 
 ---
-
