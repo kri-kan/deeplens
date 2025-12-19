@@ -2,7 +2,7 @@
 # Provisions all tenant-specific resources in a single operation
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$TenantName,
     
     [string]$DataBasePath = "C:\productivity\deeplensData",
@@ -36,13 +36,22 @@ $BackupsPath = "$TenantPath/backups"
 function Get-NextAvailablePort {
     param([int]$StartPort)
     
-    $usedPorts = podman ps --format "{{.Ports}}" | Select-String -Pattern "(\d+):" -AllMatches | 
-        ForEach-Object { $_.Matches.Groups[1].Value } | Sort-Object -Unique
+    # Get all ports from running AND created containers
+    $usedPorts = @()
+    $allContainers = podman ps -a --format "{{.Ports}}"
+    
+    foreach ($line in $allContainers) {
+        # Match both formats: "0.0.0.0:6333->6333/tcp" and "6333-6334->6333-6334/tcp"
+        if ($line -match '0\.0\.0\.0:(\d+)') {
+            $usedPorts += [int]$matches[1]
+        }
+    }
     
     $port = $StartPort
     while ($usedPorts -contains $port) {
-        $port++
+        $port += 2  # Increment by 2 for HTTP/gRPC pairs
     }
+    
     return $port
 }
 
@@ -113,12 +122,41 @@ function Provision-Tenant {
     
     # Check prerequisites
     Write-Host "[CHECK] Verifying prerequisites..." -ForegroundColor Cyan
+    
+    # Check PostgreSQL
     $pgRunning = podman ps --filter "name=^deeplens-postgres$" --format "{{.Names}}"
     if (-not $pgRunning) {
         Write-Host "[ERROR] PostgreSQL is not running. Start infrastructure first" -ForegroundColor Red
         exit 1
     }
     Write-Host "[OK] PostgreSQL is running" -ForegroundColor Green
+    
+    # Check if deeplens-network exists
+    Write-Host "[CHECK] Verifying network configuration..." -ForegroundColor Cyan
+    $networkExists = podman network ls --format "{{.Name}}" | Select-String -Pattern "^deeplens-network$"
+    if (-not $networkExists) {
+        Write-Host "[NETWORK] Creating deeplens-network..." -ForegroundColor Yellow
+        podman network create deeplens-network | Out-Null
+        Write-Host "[OK] Network created" -ForegroundColor Green
+    }
+    else {
+        Write-Host "[OK] Network exists" -ForegroundColor Green
+    }
+    
+    # Check if Identity API is running
+    Write-Host "[CHECK] Verifying Identity API..." -ForegroundColor Cyan
+    try {
+        $apiHealth = Invoke-RestMethod -Uri "http://localhost:5198/.well-known/openid-configuration" -ErrorAction Stop -TimeoutSec 5
+        Write-Host "[OK] Identity API is running" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[ERROR] Identity API is not running or not accessible" -ForegroundColor Red
+        Write-Host "[INFO] Start Identity API first:" -ForegroundColor Yellow
+        Write-Host "  cd src\NextGen.Identity.Api" -ForegroundColor White
+        Write-Host "  `$env:ASPNETCORE_ENVIRONMENT='Development'" -ForegroundColor White
+        Write-Host "  dotnet run --urls=http://localhost:5198" -ForegroundColor White
+        exit 1
+    }
     
     # Prompt for storage type if not specified
     if ([string]::IsNullOrEmpty($StorageType)) {
@@ -181,16 +219,16 @@ function Provision-Tenant {
     
     # Prepare API request body
     $apiBody = @{
-        tenantName = $TenantName
-        databaseName = $TenantDBName
-        adminEmail = $tenantAdminEmail
-        adminPassword = $tenantAdminPassword
+        tenantName     = $TenantName
+        databaseName   = $TenantDBName
+        adminEmail     = $tenantAdminEmail
+        adminPassword  = $tenantAdminPassword
         adminFirstName = $TenantName
-        adminLastName = "Admin"
+        adminLastName  = "Admin"
         qdrantHttpPort = 0  # Will be updated later
         qdrantGrpcPort = 0  # Will be updated later
-        minioEndpoint = "localhost:9000"
-        minioBucket = $TenantName
+        minioEndpoint  = "localhost:9000"
+        minioBucket    = $TenantName
     } | ConvertTo-Json
     
     try {
@@ -264,6 +302,16 @@ function Provision-Tenant {
             --label "service=qdrant" `
             qdrant/qdrant:v1.7.0 | Out-Null
         
+        # Verify container started
+        Start-Sleep -Seconds 3
+        $containerStatus = podman ps --filter "name=^deeplens-qdrant-$TenantName$" --format "{{.Status}}"
+        if ($containerStatus -notlike "*Up*") {
+            Write-Host "[ERROR] Qdrant container failed to start" -ForegroundColor Red
+            Write-Host "[INFO] Checking logs..." -ForegroundColor Yellow
+            podman logs "deeplens-qdrant-$TenantName" 2>&1 | Write-Host
+            throw "Qdrant container failed to start. Check logs above for details."
+        }
+        
         Write-Host "[OK] Qdrant started on ports $QdrantHttpPort (HTTP) and $QdrantGrpcPort (gRPC)" -ForegroundColor Green
         
         # Update tenant record with actual Qdrant ports
@@ -324,7 +372,7 @@ Login URL: http://localhost:3000
             
             # Generate secure credentials
             $minioRootUser = "${TenantName}-admin"
-            $minioRootPassword = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+            $minioRootPassword = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 24 | ForEach-Object { [char]$_ })
             
             # Save credentials to tenant directory
             $credentialsFile = "$TenantPath/minio-credentials.txt"
@@ -359,6 +407,16 @@ Console URL: http://localhost:$MinioConsolePort
                 --label "tenant=$TenantName" `
                 --label "service=minio" `
                 minio/minio:RELEASE.2023-10-16T04-13-43Z server /data --console-address ":9001" | Out-Null
+            
+            # Verify container started
+            Start-Sleep -Seconds 3
+            $minioStatus = podman ps --filter "name=^deeplens-minio-$TenantName$" --format "{{.Status}}"
+            if ($minioStatus -notlike "*Up*") {
+                Write-Host "[ERROR] MinIO container failed to start" -ForegroundColor Red
+                Write-Host "[INFO] Checking logs..." -ForegroundColor Yellow
+                podman logs "deeplens-minio-$TenantName" 2>&1 | Write-Host
+                throw "MinIO container failed to start. Check logs above for details."
+            }
             
             Write-Host "[OK] MinIO started on ports $MinioPort (API) and $MinioConsolePort (Console)" -ForegroundColor Green
             Write-Host "[INFO] Credentials saved to: $credentialsFile" -ForegroundColor Yellow
@@ -397,11 +455,11 @@ Console URL: http://localhost:$MinioConsolePort
         
         # Create backup script inside container
         $backupScript = "#!/bin/sh`n" +
-            "TIMESTAMP=`$(date +%Y%m%d_%H%M%S)`n" +
-            "BACKUP_FILE=""/backups/backup_`${TIMESTAMP}.sql""`n" +
-            "PGPASSWORD='DeepLens123!' pg_dump -h deeplens-postgres -U deeplens -d $TenantDBName > ""`$BACKUP_FILE""`n" +
-            "echo ""`$(date): Backup completed - `$BACKUP_FILE"" >> /backups/backup.log`n" +
-            "find /backups -name ""backup_*.sql"" -type f -mtime +$BackupRetentionDays -exec rm -f {} +`n"
+        "TIMESTAMP=`$(date +%Y%m%d_%H%M%S)`n" +
+        "BACKUP_FILE=""/backups/backup_`${TIMESTAMP}.sql""`n" +
+        "PGPASSWORD='DeepLens123!' pg_dump -h deeplens-postgres -U deeplens -d $TenantDBName > ""`$BACKUP_FILE""`n" +
+        "echo ""`$(date): Backup completed - `$BACKUP_FILE"" >> /backups/backup.log`n" +
+        "find /backups -name ""backup_*.sql"" -type f -mtime +$BackupRetentionDays -exec rm -f {} +`n"
         
         $backupScript | podman exec -i "deeplens-backup-$TenantName" sh -c "cat > /usr/local/bin/backup.sh"
         podman exec "deeplens-backup-$TenantName" chmod +x /usr/local/bin/backup.sh | Out-Null

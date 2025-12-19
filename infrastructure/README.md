@@ -1,1352 +1,482 @@
-# DeepLens Infrastructure Guide
+# DeepLens Infrastructure Setup
 
-**Complete reference for the containerized infrastructure setup**
+**Complete guide for setting up DeepLens with Podman on Windows**
 
-Last Updated: December 16, 2025
-
----
-
-## 📁 Directory Structure
-
-```
-infrastructure/
-├── README.md                              # ⭐ This comprehensive guide
-├── README-TENANT-MANAGEMENT.md            # Tenant provisioning documentation
-│
-├── 🐳 Docker Compose Files
-│   ├── docker-compose.infrastructure.yml  # Data services (11 containers)
-│   └── docker-compose.monitoring.yml      # Observability stack (8 containers)
-│
-├── ⚙️ Configuration
-│   └── .env.example                       # Environment variable template
-│
-├── 🔧 Setup Scripts
-│   ├── setup-containers.ps1               # Container runtime manager (Docker/Podman)
-│   └── setup-infrastructure.ps1           # Service lifecycle manager
-│
-├── 📦 PowerShell Modules
-│   ├── DeepLensInfrastructure.psm1        # Core infrastructure functions
-│   └── powershell/
-│       └── DeepLensTenantManager.psm1     # Multi-tenant management module
-│
-├── 🗄️ Database Initialization
-│   └── init-scripts/postgres/
-│       ├── 01-init-databases.sql          # Database & user creation
-│       └── 02-tenant-provisioning.sql     # Tenant provisioning procedures
-│
-└── 📊 Service Configurations
-    └── config/
-        ├── alertmanager/                  # Alert routing rules
-        ├── grafana/                       # Dashboards & datasources
-        ├── loki/                          # Log aggregation config
-        ├── otel-collector/                # OpenTelemetry pipeline
-        ├── prometheus/                    # Metrics scraping rules
-        ├── promtail/                      # Log shipping config
-        ├── qdrant/                        # Vector database config
-        └── redis/                         # Cache configuration
-```
+Last Updated: December 20, 2025
 
 ---
 
-## 🚀 Quick Start
+## 📋 Table of Contents
 
-### First-Time Setup
+- [Quick Start](#-quick-start-15-minutes)
+- [Prerequisites](#-prerequisites)
+- [Core Infrastructure](#-core-infrastructure-setup)
+- [Identity API](#-identity-api-setup)
+- [Tenant Provisioning](#-tenant-provisioning)
+- [Troubleshooting](#-troubleshooting)
+- [Advanced Topics](#-advanced-topics)
+
+---
+
+## 🚀 Quick Start (15 Minutes)
+
+### 1. Install Prerequisites
+
+1. **[Podman Desktop](https://podman.io/)** - Container runtime
+2. **[PowerShell 7+](https://github.com/PowerShell/PowerShell)** - Shell
+3. **[.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)** - For Identity API
 
 ```powershell
-# 1. Copy environment template
-Copy-Item .env.example .env
-
-# 2. Start everything (recommended)
-.\setup-containers.ps1 -StartComplete
-
-# OR start in stages
-.\setup-infrastructure.ps1 -Start          # Data services only
-.\setup-containers.ps1 -StartMonitoring    # Add monitoring
+# Configure PowerShell (one-time)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### Daily Operations
+### 2. Start Core Infrastructure
 
 ```powershell
-# Check status
-.\setup-containers.ps1 -Status
+cd C:\productivity\deeplens\infrastructure
 
-# Stop everything
-.\setup-containers.ps1 -Stop
+# Create network
+podman network create deeplens-network
 
-# View logs
-docker logs deeplens-postgres -f
+# Start PostgreSQL
+podman run -d --name deeplens-postgres --network deeplens-network `
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=DeepLens123! `
+  -e POSTGRES_DB=nextgen_identity -p 5433:5432 `
+  -v deeplens-postgres-data:/var/lib/postgresql/data postgres:16-alpine
+
+# Start Redis
+podman run -d --name deeplens-redis --network deeplens-network `
+  -p 6379:6379 redis:7-alpine
+
+# Verify
+podman ps
 ```
 
----
-
-## 🐳 Docker Compose Files
-
-### docker-compose.infrastructure.yml (11 Services)
-
-**Purpose:** Core data storage, message queues, and secret management
-
-| Service                | Port(s)                    | Purpose                                                       | Resource Limits |
-| ---------------------- | -------------------------- | ------------------------------------------------------------- | --------------- |
-| **postgres**           | 5432                       | Primary database (3 DBs: identity, platform, tenant_template) | 2GB RAM, 1 CPU  |
-| **qdrant**             | 6333 (HTTP), 6334 (gRPC)   | Vector similarity search                                      | 4GB RAM         |
-| **influxdb**           | 8086                       | Time-series metrics storage                                   | 2GB RAM         |
-| **kafka**              | 9092                       | Message queue & event streaming                               | 2GB RAM         |
-| **zookeeper**          | 2181                       | Kafka coordination                                            | 512MB RAM       |
-| **redis**              | 6379                       | Cache & session storage                                       | 1GB RAM         |
-| **minio**              | 9000 (API), 9001 (Console) | S3-compatible object storage (for BYOS testing)               | 1GB RAM         |
-| **kafka-ui**           | 8080                       | Kafka management interface                                    | 512MB RAM       |
-| **infisical**          | 8082                       | Self-hosted secret management                                 | 1GB RAM         |
-| **infisical-postgres** | 5433                       | Dedicated DB for Infisical                                    | 512MB RAM       |
-| **infisical-redis**    | 6380                       | Dedicated cache for Infisical                                 | 256MB RAM       |
-
-**Health Checks:** All services have 10-30s health check intervals  
-**Networking:** Custom bridge network `deeplens-network`  
-**Storage:** Persistent Docker volumes for all data services
-
-### docker-compose.monitoring.yml (8 Services)
-
-**Purpose:** Observability, metrics, logs, and tracing
-
-| Service            | Port(s)                                  | Purpose                                         | Resource Limits |
-| ------------------ | ---------------------------------------- | ----------------------------------------------- | --------------- |
-| **prometheus**     | 9090                                     | Metrics collection & storage (30-day retention) | 2GB RAM         |
-| **grafana**        | 3000                                     | Visualization dashboards                        | 1GB RAM         |
-| **jaeger**         | 16686 (UI), 14250 (gRPC)                 | Distributed tracing                             | 1GB RAM         |
-| **loki**           | 3100                                     | Log aggregation                                 | 1GB RAM         |
-| **promtail**       | 9080                                     | Log shipping agent                              | 256MB RAM       |
-| **cadvisor**       | 8081                                     | Container metrics exporter                      | 256MB RAM       |
-| **node-exporter**  | 9100                                     | Host metrics exporter                           | 128MB RAM       |
-| **alertmanager**   | 9093                                     | Alert routing & management                      | 256MB RAM       |
-| **otel-collector** | 4317 (gRPC), 4318 (HTTP), 8888 (metrics) | OpenTelemetry receiver                          | 512MB RAM       |
-| **portainer**      | 9443                                     | Container management UI                         | 512MB RAM       |
-
-**Pre-configured Dashboards:** Grafana includes infrastructure, application, and container metrics dashboards  
-**Alert Rules:** Prometheus has pre-configured alerts for service health and resource usage
-
----
-
-## 📊 Service Endpoints
-
-### Infrastructure Services
-
-| Service        | Port | Admin UI                        | Credentials             |
-| -------------- | ---- | ------------------------------- | ----------------------- |
-| **PostgreSQL** | 5432 | -                               | `deeplens/DeepLens123!` |
-| **Qdrant**     | 6333 | http://localhost:6333/dashboard | -                       |
-| **InfluxDB**   | 8086 | http://localhost:8086           | `admin/DeepLens123!`    |
-| **Kafka**      | 9092 | -                               | -                       |
-| **Kafka UI**   | 8080 | http://localhost:8080           | -                       |
-| **Redis**      | 6379 | -                               | -                       |
-| **MinIO**      | 9000 | http://localhost:9001           | `deeplens/DeepLens123!` |
-| **Infisical**  | 8082 | http://localhost:8082           | Create on first visit   |
-
-### Monitoring & Observability Services
-
-| Service           | Port      | Admin UI               | Credentials           |
-| ----------------- | --------- | ---------------------- | --------------------- |
-| **Grafana**       | 3000      | http://localhost:3000  | `admin/DeepLens123!`  |
-| **Prometheus**    | 9090      | http://localhost:9090  | -                     |
-| **Jaeger**        | 16686     | http://localhost:16686 | -                     |
-| **Loki**          | 3100      | -                      | -                     |
-| **AlertManager**  | 9093      | http://localhost:9093  | -                     |
-| **Portainer**     | 9443      | https://localhost:9443 | Create on first visit |
-| **cAdvisor**      | 8081      | http://localhost:8081  | -                     |
-| **OpenTelemetry** | 4317/4318 | -                      | -                     |
-
----
-
-## ⚙️ Configuration Files
-
-### .env.example
-
-**Purpose:** Template for all environment variables
-
-**Key Sections:**
-
-- **Database Credentials:** PostgreSQL, InfluxDB usernames/passwords
-- **Service Configuration:** Kafka partitions, Redis memory, Qdrant API keys
-- **Secret Management:** Infisical encryption keys and JWT secrets
-- **Network & Volumes:** Custom network name and volume mappings
-- **Resource Limits:** Production tuning parameters
-
-**⚠️ Security Note:**  
-Default credentials are for **development only**. Change all passwords, tokens, and encryption keys before production deployment.
+### 3. Start Identity API
 
 ```powershell
-# Setup for development
-Copy-Item .env.example .env
+cd C:\productivity\deeplens\src\NextGen.Identity.Api
+$env:ASPNETCORE_ENVIRONMENT='Development'
+dotnet run --urls=http://localhost:5198
+```
 
-# For production, generate secure keys
-$env:INFISICAL_ENCRYPTION_KEY = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 255 }))
+**Keep this terminal open!**
+
+### 4. Provision First Tenant
+
+In a new terminal:
+
+```powershell
+cd C:\productivity\deeplens\infrastructure
+.\provision-tenant.ps1 -TenantName "demo" -StorageType "DeepLens"
+```
+
+**Done!** You now have:
+- ✅ Core infrastructure (PostgreSQL, Redis)
+- ✅ Identity API (authentication)
+- ✅ First tenant with isolated Qdrant and MinIO
+
+---
+
+## 📋 Prerequisites
+
+### Required Software
+
+| Software       | Version | Purpose           |
+| -------------- | ------- | ----------------- |
+| Podman Desktop | Latest  | Container runtime |
+| PowerShell     | 7+      | Scripting         |
+| .NET SDK       | 9.0     | Identity API      |
+
+### System Requirements
+
+**Minimum (Development):**
+- CPU: 4 cores
+- RAM: 8 GB
+- Disk: 50 GB free
+
+**Recommended (Multi-Tenant):**
+- CPU: 8 cores
+- RAM: 16 GB
+- Disk: 100 GB SSD
+
+### PowerShell Configuration
+
+```powershell
+# Allow script execution
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Verify
+Get-ExecutionPolicy -List
 ```
 
 ---
 
-## 🔧 Setup Scripts
+## 🏗️ Core Infrastructure Setup
 
-### setup-containers.ps1 (Container Runtime Manager)
+### Architecture
 
-**Responsibility:** Manages the container platform (Docker/Podman)
+```
+┌─────────────────────────────────────────┐
+│         Shared Infrastructure           │
+├─────────────────────────────────────────┤
+│  PostgreSQL (5433) - All tenant DBs     │
+│  Redis (6379)      - Shared cache       │
+│  deeplens-network  - Container network  │
+└─────────────────────────────────────────┘
+         │
+         ├── Tenant 1
+         │   ├── Qdrant (6333/6334)
+         │   ├── MinIO (9000/9001)
+         │   └── Backup Container
+         │
+         ├── Tenant 2
+         │   ├── Qdrant (6335/6336)
+         │   ├── MinIO (9002/9003)
+         │   └── Backup Container
+         │
+         └── Tenant N...
+```
 
-**Features:**
-
-- Auto-detects Docker or Podman runtime
-- Validates container daemon status
-- Initializes Podman machines with Kubernetes support
-- Orchestrates docker-compose/podman-compose commands
-- Shows container resource usage (CPU, memory, network)
-
-**Usage:**
+### Network Setup
 
 ```powershell
-# Start complete environment
-.\setup-containers.ps1 -StartComplete
+# Create network (required for tenant isolation)
+podman network create deeplens-network
 
-# Use Podman instead of Docker
-.\setup-containers.ps1 -UsePodman -StartComplete
-
-# Start only infrastructure (no monitoring)
-.\setup-containers.ps1 -StartInfrastructure
-
-# Start only monitoring (requires infrastructure running)
-.\setup-containers.ps1 -StartMonitoring
-
-# Check container status
-.\setup-containers.ps1 -Status
-
-# Stop all containers
-.\setup-containers.ps1 -Stop
-
-# Interactive menu
-.\setup-containers.ps1
-
-# Help
-.\setup-containers.ps1 -Help
+# Verify
+podman network ls
 ```
 
-**Dependencies:**
-
-- Docker Desktop OR Podman
-- docker-compose OR podman-compose
-- Import: `DeepLensInfrastructure.psm1`
-
-### setup-infrastructure.ps1 (Service Manager)
-
-**Responsibility:** Manages DeepLens infrastructure services
-
-**Features:**
-
-- Starts/stops infrastructure services (excludes monitoring)
-- Tests service health with connectivity checks
-- Resets development environment (removes volumes)
-- Interactive menu for common operations
-
-**Usage:**
+### PostgreSQL Setup
 
 ```powershell
-# Start infrastructure services
-.\setup-infrastructure.ps1 -Start
+podman run -d `
+  --name deeplens-postgres `
+  --network deeplens-network `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_PASSWORD=DeepLens123! `
+  -e POSTGRES_DB=nextgen_identity `
+  -p 5433:5432 `
+  -v deeplens-postgres-data:/var/lib/postgresql/data `
+  postgres:16-alpine
 
-# Stop infrastructure services
-.\setup-infrastructure.ps1 -Stop
-
-# Check service health
-.\setup-infrastructure.ps1 -Status
-
-# Reset environment (⚠️ deletes all data)
-.\setup-infrastructure.ps1 -Reset
-
-# Interactive menu
-.\setup-infrastructure.ps1
-
-# Help
-.\setup-infrastructure.ps1 -Help
+# Test connection
+podman exec deeplens-postgres pg_isready -U postgres
 ```
 
-**Dependencies:**
-
-- Import: `DeepLensInfrastructure.psm1`
-- Delegates to module functions
-
-**Relationship with setup-containers.ps1:**
-
-- **Independent:** Can be used separately
-- **Complementary:** setup-containers.ps1 is the recommended entry point
-- **Scope:** setup-infrastructure.ps1 focuses only on data services
-
----
-
-## 📦 PowerShell Modules
-
-### DeepLensInfrastructure.psm1 (Core Module)
-
-**Purpose:** Core infrastructure management functions
-
-**Exported Functions:**
-
-#### Service Lifecycle
+### Redis Setup
 
 ```powershell
-Start-DeepLensInfrastructure      # Start all infrastructure services
-Stop-DeepLensInfrastructure       # Stop all infrastructure services
-Restart-DeepLensInfrastructure    # Restart all infrastructure services
+podman run -d `
+  --name deeplens-redis `
+  --network deeplens-network `
+  -p 6379:6379 `
+  redis:7-alpine
+
+# Test connection
+podman exec deeplens-redis redis-cli ping
 ```
 
-#### Health Checks
+### Verify Infrastructure
 
 ```powershell
-Test-DeepLensServices             # Check infrastructure service health
-Test-DeepLensMonitoring           # Check monitoring service health
-Show-DeepLensStatus               # Comprehensive status overview
-```
-
-#### Database Operations
-
-```powershell
-Backup-DeepLensDatabase           # Backup PostgreSQL databases
-Restore-DeepLensDatabase          # Restore from backup
-Reset-DeepLensDatabase            # Reset database to initial state
-```
-
-#### Service-Specific Operations
-
-```powershell
-Get-KafkaTopics                   # List Kafka topics
-Get-QdrantCollections             # List vector collections
-Get-RedisKeys                     # List Redis keys
-Get-InfluxDBBuckets               # List InfluxDB buckets
-```
-
-#### Environment Management
-
-```powershell
-Reset-DeepLensEnvironment         # Complete environment reset
-Show-DeepLensResources            # Show resource usage
-Export-DeepLensConfig             # Export current configuration
-```
-
-**Usage:**
-
-```powershell
-# Import module
-Import-Module .\infrastructure\DeepLensInfrastructure.psm1
-
-# Start services
-Start-DeepLensInfrastructure
-
-# Check health
-Test-DeepLensServices
-
-# Backup database
-Backup-DeepLensDatabase -OutputPath "C:\backups\deeplens-$(Get-Date -Format 'yyyyMMdd').sql"
-```
-
-### DeepLensTenantManager.psm1 (Tenant Management)
-
-**Purpose:** Multi-tenant provisioning and BYOS configuration
-
-**Location:** `powershell/DeepLensTenantManager.psm1`
-
-**Key Classes:**
-
-#### DeepLensConfig
-
-```powershell
-# Configuration object for tenant operations
-$config = [DeepLensConfig]@{
-    PostgresConnectionString = "Host=localhost;Port=5432;Database=deeplens_platform;Username=platform_service;Password=..."
-    EncryptionKey = "your-32-character-encryption-key"
-    PlatformApiUrl = "https://api.deeplens.local"
-}
-```
-
-#### StorageProviderConfig
-
-- Azure Blob Storage configuration
-- AWS S3 configuration
-- Google Cloud Storage configuration
-- MinIO configuration
-- NFS/SMB configuration
-
-**Exported Functions:**
-
-#### Tenant Provisioning
-
-```powershell
-New-DeepLensTenant                # Create new tenant with isolated database
-Remove-DeepLensTenant             # Delete tenant and cleanup resources
-Get-DeepLensTenant                # Retrieve tenant information
-Update-DeepLensTenant             # Update tenant configuration
-```
-
-#### Storage Management
-
-```powershell
-Set-TenantStorageConfig           # Configure BYOS storage provider
-Test-DeepLensStorageConfig        # Validate storage connectivity
-Get-TenantStorageUsage            # Retrieve storage metrics
-```
-
-#### Plan Management
-
-```powershell
-Get-TenantPlan                    # Get plan details (free/premium/enterprise)
-Update-TenantPlan                 # Upgrade/downgrade tenant plan
-```
-
-#### Managed MinIO Storage Provisioning
-
-```powershell
-New-TenantMinIOStorage            # Provision dedicated MinIO with NFS backend
-Remove-TenantMinIOStorage         # Remove tenant MinIO instance
-Get-TenantMinIOStatus             # Check MinIO status and configuration
-Get-AllTenantMinIOInstances       # List all tenant MinIO instances
-```
-
-See [README-TENANT-MINIO-PROVISIONING.md](README-TENANT-MINIO-PROVISIONING.md) for complete documentation.
-
-#### Tenant PostgreSQL Backup Provisioning
-
-```powershell
-New-TenantPostgreSQLBackup        # Configure automated backups with NFS storage
-Remove-TenantPostgreSQLBackup     # Remove backup configuration
-Get-TenantPostgreSQLBackupStatus  # Check backup status and logs
-Get-AllTenantPostgreSQLBackups    # List all tenant backup configurations
-```
-
-See [README-TENANT-BACKUP.md](README-TENANT-BACKUP.md) for complete backup and disaster recovery documentation (PostgreSQL, Qdrant, MinIO).
-
-**Usage Examples:**
-
-```powershell
-# Import module
-Import-Module .\infrastructure\powershell\DeepLensTenantManager.psm1
-
-# Create tenant with default MinIO storage
-New-DeepLensTenant -Name "acme-corp" -Domain "acme.com" -PlanType "premium"
-
-# Create tenant with Azure Blob Storage
-New-DeepLensTenant -Name "enterprise-client" -PlanType "enterprise" `
-  -StorageProvider "azure_blob" `
-  -StorageConfig @{
-    connection_string = "DefaultEndpointsProtocol=https;AccountName=storage;..."
-    container = "images"
-  }
-
-# List all tenants
-Get-DeepLensTenant
-
-# Test storage configuration
-Test-DeepLensStorageConfig -TenantId "12345678-1234-1234-1234-123456789012"
-
-# Remove tenant (with confirmation)
-Remove-DeepLensTenant -TenantId "12345678-1234-1234-1234-123456789012" -Confirm
-```
-
-**Plan Types & Limits:**
-
-| Plan           | Storage Quota | Images/Month | Search Queries/Day | Price          |
-| -------------- | ------------- | ------------ | ------------------ | -------------- |
-| **free**       | 5 GB          | 1,000        | 100                | Free           |
-| **premium**    | 100 GB        | 50,000       | 10,000             | $29/month      |
-| **enterprise** | Unlimited     | Unlimited    | Unlimited          | Custom pricing |
-
-**See Also:** [README-TENANT-MANAGEMENT.md](README-TENANT-MANAGEMENT.md)
-
----
-
-## 🗄️ Database Initialization Scripts
-
-### init-scripts/postgres/01-init-databases.sql
-
-**Purpose:** Initialize PostgreSQL databases, users, and permissions
-
-**Executes:** Automatically on first PostgreSQL container startup
-
-**Creates:**
-
-#### Databases (3)
-
-1. **nextgen_identity** - Authentication and user management
-2. **deeplens_platform** - Tenant registry and BYOS configurations
-3. **tenant_metadata_template** - Template for tenant-specific databases
-
-#### Users (4)
-
-1. **identity_service** - NextGen Identity service account
-2. **platform_service** - DeepLens Platform service account
-3. **tenant_service** - Tenant management service account
-4. **readonly_user** - Read-only analytics/reporting access
-
-**Extensions Enabled:**
-
-- `uuid-ossp` - UUID generation
-- `pgcrypto` - Encryption functions
-- `pg_trgm` - Text similarity search
-
-**Permissions:**
-
-- Owner permissions for service accounts on respective databases
-- Read-only permissions for analytics user
-- Schema-level access controls
-
-**Schema Structure:**
-
-```sql
--- Platform Database Tables
-- tenants                    (tenant registry)
-- tenant_storage_configs     (BYOS configurations, encrypted)
-- tenant_databases           (database registry)
-- api_usage_logs             (cross-tenant metrics)
-
--- Tenant Template Tables
-- image_collections          (user-organized collections)
-- images                     (image metadata & checksums)
-- search_sessions            (analytics)
-- search_queries             (search behavior)
-```
-
-### init-scripts/postgres/02-tenant-provisioning.sql
-
-**Purpose:** Stored procedures for runtime tenant provisioning
-
-**Functions:**
-
-#### create_tenant_database
-
-```sql
--- Creates isolated tenant database from template
--- Configures Row Level Security (RLS)
--- Returns connection string and database name
-CREATE OR REPLACE FUNCTION create_tenant_database(
-    tenant_id UUID,
-    tenant_name TEXT
-) RETURNS TABLE(database_name TEXT, connection_string TEXT)
-```
-
-#### provision_tenant_schema
-
-```sql
--- Initializes tenant-specific schema
--- Creates indexes and constraints
--- Sets up RLS policies
-CREATE OR REPLACE FUNCTION provision_tenant_schema(
-    tenant_db_name TEXT,
-    tenant_id UUID
-)
-```
-
-#### cleanup_tenant_database
-
-```sql
--- Safely removes tenant database
--- Terminates active connections
--- Drops database and user
-CREATE OR REPLACE FUNCTION cleanup_tenant_database(
-    tenant_db_name TEXT
-)
-```
-
-**Usage (Internal):**
-These functions are called automatically by `DeepLensTenantManager.psm1` during tenant creation/deletion.
-
----
-
-## 📊 Service Configurations
-
-### config/prometheus/
-
-**Files:**
-
-- `prometheus.yml` - Scraping rules, alerting rules, service discovery
-- `alerts.yml` - Alert definitions for service health and resource usage
-
-**Scrape Targets:**
-
-- PostgreSQL (postgres-exporter)
-- Redis (redis-exporter)
-- Kafka (kafka-exporter)
-- cAdvisor (container metrics)
-- Node Exporter (host metrics)
-
-**Alert Rules:**
-
-- Service down alerts (critical)
-- High CPU/memory usage (warning)
-- Disk space thresholds (critical)
-- Response time degradation (warning)
-
-### config/grafana/
-
-**Files:**
-
-- `datasources.yml` - Pre-configured datasources (Prometheus, Loki, Jaeger)
-- `dashboards.yml` - Dashboard provisioning config
-- `dashboards/` - JSON dashboard definitions
-
-**Included Dashboards:**
-
-- Infrastructure Overview
-- Container Metrics (cAdvisor)
-- Application Performance
-- Database Performance (PostgreSQL)
-- Kafka Monitoring
-- Redis Monitoring
-
-**Default Credentials:**
-
-- Username: `admin`
-- Password: `DeepLens123!`
-
-### config/loki/
-
-**Files:**
-
-- `loki-config.yml` - Log ingestion, storage, retention
-
-**Configuration:**
-
-- Retention: 30 days
-- Storage: Local filesystem
-- Ingestion rate limits configured
-
-### config/otel-collector/
-
-**Files:**
-
-- `otel-collector-config.yml` - OpenTelemetry pipeline configuration
-
-**Receivers:**
-
-- OTLP (gRPC: 4317, HTTP: 4318)
-- Prometheus receiver
-- Jaeger receiver
-
-**Exporters:**
-
-- Prometheus (metrics)
-- Jaeger (traces)
-- Loki (logs)
-
-### config/alertmanager/
-
-**Files:**
-
-- `alertmanager.yml` - Alert routing and notification rules
-
-**Notification Channels:**
-
-- Email (SMTP)
-- Webhook (for Slack/Teams integration)
-- PagerDuty (critical alerts)
-
-### config/qdrant/
-
-**Purpose:** Vector database configuration
-
-**Settings:**
-
-- Memory limit: 4GB
-- Collection creation on-demand
-- Quantization enabled for performance
-
-### config/redis/
-
-**Purpose:** Cache and session storage configuration
-
-**Settings:**
-
-- Max memory: 1GB
-- Eviction policy: allkeys-lru
-- Persistence: RDB snapshots every 15 minutes
-
----
-
-## 💾 Persistent Volumes
-
-All data is stored in Docker volumes:
-
-```bash
-# List all volumes
-docker volume ls | grep deeplens
-
-# Backup volumes (example for PostgreSQL)
-docker run --rm -v deeplens_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres-backup.tar.gz -C /data .
-
-# Restore volumes
-docker run --rm -v deeplens_postgres_data:/data -v $(pwd):/backup alpine tar xzf /backup/postgres-backup.tar.gz -C /data
+# Check all containers
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Expected output:
+# NAMES              STATUS        PORTS
+# deeplens-postgres  Up X seconds  0.0.0.0:5433->5432/tcp
+# deeplens-redis     Up X seconds  0.0.0.0:6379->6379/tcp
 ```
 
 ---
 
-## 🔐 Security Considerations
+## 🔐 Identity API Setup
 
-### Development Environment
-
-**Default Credentials (⚠️ CHANGE IN PRODUCTION):**
-
-- PostgreSQL: `deeplens` / `DeepLens123!`
-- InfluxDB: `admin` / `DeepLens123!`
-- Grafana: `admin` / `DeepLens123!`
-- MinIO: `deeplens` / `DeepLens123!`
-- Redis: `DeepLens123!`
-
-### Production Hardening Checklist
-
-- [ ] Change all default passwords and API keys
-- [ ] Generate secure encryption keys for Infisical (32+ character random)
-- [ ] Generate unique JWT secrets for Infisical
-- [ ] Enable TLS/SSL for all external endpoints
-- [ ] Use secrets management (Infisical or external provider)
-- [ ] Configure firewall rules (restrict ports to internal network)
-- [ ] Enable authentication on Redis and Kafka
-- [ ] Implement network segmentation
-- [ ] Set up automated backups with encryption
-- [ ] Configure log retention policies
-- [ ] Enable audit logging
-- [ ] Implement rate limiting
-
-### Encryption Keys Generation
+### Start the API
 
 ```powershell
-# Generate secure encryption key
-$bytes = New-Object byte[] 32
-[Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($bytes)
-$encryptionKey = [Convert]::ToBase64String($bytes)
+cd C:\productivity\deeplens\src\NextGen.Identity.Api
 
-# Generate JWT secrets
-$jwtSignup = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 255 }))
-$jwtRefresh = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 255 }))
-$jwtAuth = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 255 }))
+# Set environment (REQUIRED!)
+$env:ASPNETCORE_ENVIRONMENT='Development'
+
+# Start API
+dotnet run --urls=http://localhost:5198
 ```
+
+### Verify API is Running
+
+```powershell
+# Test OpenID configuration
+Invoke-RestMethod http://localhost:5198/.well-known/openid-configuration
+
+# Should return JSON with endpoints
+```
+
+### Default Admin Credentials
+
+- **Email:** `admin@deeplens.local`
+- **Password:** `DeepLens@Admin123!`
+- ⚠️ **Change after first login!**
 
 ---
 
-## 📊 Resource Requirements
+## 🏢 Tenant Provisioning
 
-### Minimum System Requirements (Development)
-
-- **CPU:** 4 cores
-- **RAM:** 16 GB
-- **Disk:** 50 GB free space
-- **OS:** Windows 10/11, macOS 12+, Linux (Ubuntu 20.04+)
-
-### Recommended System Requirements (Production)
-
-- **CPU:** 8+ cores
-- **RAM:** 32 GB+
-- **Disk:** 500 GB+ SSD (NVMe preferred)
-- **Network:** 1 Gbps+
-
-### Container Resource Usage (Approximate)
-
-| Component                   | CPU       | RAM      | Storage  |
-| --------------------------- | --------- | -------- | -------- |
-| **Infrastructure Services** | 2-3 cores | 8-10 GB  | 20-50 GB |
-| **Monitoring Stack**        | 1-2 cores | 4-6 GB   | 10-30 GB |
-| **Total**                   | 3-5 cores | 12-16 GB | 30-80 GB |
-
-### Docker Desktop Settings
-
-```json
-{
-  "memoryMiB": 16384,
-  "cpus": 4,
-  "diskSizeMiB": 102400
-}
-```
-
-### Podman Machine Configuration
+### Provision a Tenant
 
 ```powershell
-podman machine init --cpus 4 --memory 16384 --disk-size 100
+cd C:\productivity\deeplens\infrastructure
+
+# Interactive (prompts for storage type)
+.\provision-tenant.ps1 -TenantName "your-tenant"
+
+# With DeepLens-managed storage
+.\provision-tenant.ps1 -TenantName "your-tenant" -StorageType "DeepLens"
+
+# With BYOS (Bring Your Own Storage)
+.\provision-tenant.ps1 -TenantName "your-tenant" -StorageType "BYOS"
 ```
 
----
+### What Gets Created
 
-## 🔄 Backup & Recovery
+**For Every Tenant:**
+- ✅ Database: `tenant_{name}_metadata`
+- ✅ Qdrant: Dedicated vector database (auto-assigned ports)
+- ✅ Backup: Automated daily backups
+- ✅ Admin User: `admin@{name}.local`
 
-### Manual Backup
+**For DeepLens Storage:**
+- ✅ MinIO: Dedicated object storage (auto-assigned ports)
+- ✅ Credentials: Saved to tenant directory
+
+### Storage Options
+
+| Option       | What's Provisioned        | Use Case                      |
+| ------------ | ------------------------- | ----------------------------- |
+| **BYOS**     | Database + Qdrant         | Enterprise with Azure/AWS/GCS |
+| **DeepLens** | Database + Qdrant + MinIO | Development, testing          |
+| **None**     | Database + Qdrant         | Configure storage later       |
+
+### Verify Tenant
 
 ```powershell
-# Import infrastructure module
-Import-Module .\DeepLensInfrastructure.psm1
+# Check tenant containers
+podman ps --filter "label=tenant=your-tenant"
 
-# Backup all databases
-Backup-DeepLensDatabase -OutputPath "C:\backups\deeplens-$(Get-Date -Format 'yyyyMMdd').sql"
+# Check database
+podman exec deeplens-postgres psql -U postgres -c "\l" | Select-String "tenant_"
 
-# Backup specific database
-docker exec deeplens-postgres pg_dump -U deeplens deeplens_platform > platform-backup.sql
+# View credentials
+Get-Content "C:\productivity\deeplensData\tenants\your-tenant\admin-credentials.txt"
 ```
 
-### Automated Backup Script
+### Remove a Tenant
 
 ```powershell
-# Create scheduled task for daily backups
-$action = New-ScheduledTaskAction -Execute 'PowerShell.exe' `
-  -Argument '-File "C:\productivity\deeplens\infrastructure\backup-daily.ps1"'
-$trigger = New-ScheduledTaskTrigger -Daily -At 2am
-Register-ScheduledTask -TaskName "DeepLens Daily Backup" -Action $action -Trigger $trigger
-```
-
-### Restore from Backup
-
-```powershell
-# Restore using module
-Restore-DeepLensDatabase -BackupPath "C:\backups\deeplens-20251216.sql"
-
-# Manual restore
-Get-Content platform-backup.sql | docker exec -i deeplens-postgres psql -U deeplens deeplens_platform
-```
-
-### Volume Backup
-
-```powershell
-# Backup Docker volumes
-docker run --rm -v deeplens_postgres_data:/data -v C:\backups:/backup alpine tar czf /backup/postgres-data.tar.gz -C /data .
-
-# Restore Docker volumes
-docker run --rm -v deeplens_postgres_data:/data -v C:\backups:/backup alpine tar xzf /backup/postgres-data.tar.gz -C /data
+.\provision-tenant.ps1 -TenantName "old-tenant" -Remove
 ```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Services Won't Start
+### "dotnet: command not found"
 
 ```powershell
-# Check Docker daemon
-docker info
+# Use full path
+& "C:\Program Files\dotnet\dotnet.exe" run --urls=http://localhost:5198
 
-# Check container logs
-docker logs deeplens-postgres --tail 100
-
-# Check disk space
-docker system df
-
-# Clean up unused resources
-docker system prune -a --volumes
+# Or add to PATH
+$env:Path += ";C:\Program Files\dotnet"
 ```
 
-### Port Conflicts
+### "Scripts are disabled on this system"
 
 ```powershell
-# Find process using port
-netstat -ano | findstr :5432
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
-# Kill process (use PID from above)
+### "Production signing credential not configured"
+
+```powershell
+# Ensure environment variable is set
+$env:ASPNETCORE_ENVIRONMENT='Development'
+```
+
+### Containers fail to start
+
+```powershell
+# Check if network exists
+podman network ls | Select-String "deeplens-network"
+
+# Create if missing
+podman network create deeplens-network
+```
+
+### Port already in use
+
+```powershell
+# Find what's using the port
+netstat -ano | findstr :5433
+
+# Kill the process
 taskkill /PID <PID> /F
 ```
 
-### Database Connection Issues
+### Tenant containers in "Created" state
 
 ```powershell
-# Test PostgreSQL connection
-docker exec deeplens-postgres pg_isready -U deeplens
+# Check for port conflicts
+podman ps -a | Select-String "demo"
 
-# Test from host
-psql -h localhost -p 5432 -U deeplens -d deeplens_platform
+# Stop core infrastructure if using multi-tenant
+podman stop deeplens-qdrant deeplens-minio
 
-# Check network connectivity
-docker network inspect deeplens-network
+# Start tenant containers
+podman start deeplens-qdrant-demo deeplens-minio-demo
 ```
 
-### Health Check Failures
+### View Container Logs
 
 ```powershell
-# Run comprehensive health check
-Import-Module .\DeepLensInfrastructure.psm1
-Test-DeepLensServices
+# Identity API logs (if running in background)
+podman logs deeplens-identity-api
 
-# Check specific service
-docker exec deeplens-qdrant curl -s http://localhost:6333/health
-```
+# Tenant Qdrant logs
+podman logs deeplens-qdrant-demo
 
-### Container Resource Issues
+# Tenant MinIO logs
+podman logs deeplens-minio-demo
 
-```powershell
-# Check resource usage
-docker stats --no-stream
-
-# Increase Docker memory limit (Docker Desktop)
-# Settings > Resources > Memory > 16 GB
-
-# Restart containers with more resources
-docker-compose -f docker-compose.infrastructure.yml down
-docker-compose -f docker-compose.infrastructure.yml up -d
-```
-
-### Kafka Issues
-
-```powershell
-# Check Kafka broker status
-docker exec deeplens-kafka kafka-broker-api-versions --bootstrap-server localhost:9092
-
-# List topics
-docker exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 --list
-
-# Check consumer groups
-docker exec deeplens-kafka kafka-consumer-groups --bootstrap-server localhost:9092 --list
-```
-
-### Reset Everything
-
-```powershell
-# Nuclear option: Complete reset
-.\setup-infrastructure.ps1 -Reset
-
-# Manual reset
-docker-compose -f docker-compose.monitoring.yml down -v
-docker-compose -f docker-compose.infrastructure.yml down -v
-docker volume prune -f
-docker network prune -f
+# PostgreSQL logs
+podman logs deeplens-postgres
 ```
 
 ---
 
-## 📈 Monitoring & Observability
+## 🔧 Advanced Topics
 
-### Access Dashboards
-
-| Service           | URL                             | Credentials             |
-| ----------------- | ------------------------------- | ----------------------- |
-| **Grafana**       | http://localhost:3000           | admin / DeepLens123!    |
-| **Prometheus**    | http://localhost:9090           | -                       |
-| **Jaeger**        | http://localhost:16686          | -                       |
-| **Portainer**     | https://localhost:9443          | Create on first login   |
-| **Kafka UI**      | http://localhost:8080           | -                       |
-| **InfluxDB**      | http://localhost:8086           | admin / DeepLens123!    |
-| **Qdrant**        | http://localhost:6333/dashboard | -                       |
-| **MinIO Console** | http://localhost:9001           | deeplens / DeepLens123! |
-
-### Key Metrics to Monitor
-
-**Infrastructure Health:**
-
-- Container CPU/memory usage (cAdvisor)
-- Disk I/O and space (Node Exporter)
-- Network throughput (cAdvisor)
-
-**Database Performance:**
-
-- PostgreSQL connection pool usage
-- Query execution time (slow query log)
-- Cache hit ratio
-
-**Application Metrics:**
-
-- API response times
-- Request rate (throughput)
-- Error rates
-- Queue depth (Kafka lag)
-
-**Business Metrics:**
-
-- Active tenants
-- Images processed per day
-- Search queries per hour
-- Storage usage per tenant
-
-### Custom Metrics
+### Stop All Services
 
 ```powershell
-# Export custom metrics to Prometheus
-# Add to your application code
-$metrics = @{
-    images_processed_total = 12345
-    search_queries_total = 67890
-    active_tenants = 42
-}
+# Stop Identity API (Ctrl+C in its terminal)
 
-# Or query from Grafana
-# PromQL: sum(rate(http_requests_total[5m])) by (tenant_id)
+# Stop all containers
+podman stop $(podman ps -aq)
+
+# Or stop specific services
+podman stop deeplens-postgres deeplens-redis
 ```
 
----
-
-## 🔗 Integration Points
-
-### Application Connection Strings
+### Backup Database
 
 ```powershell
-# Platform Database
-Server=localhost;Port=5432;Database=deeplens_platform;User Id=platform_service;Password=...
+# Backup all databases
+podman exec deeplens-postgres pg_dumpall -U postgres > deeplens-backup.sql
 
-# Identity Database
-Server=localhost;Port=5432;Database=nextgen_identity;User Id=identity_service;Password=...
-
-# Tenant Database (dynamic)
-Server=localhost;Port=5432;Database=tenant_<tenant_id>;User Id=tenant_service;Password=...
-
-# Redis
-localhost:6379,password=DeepLens123!
-
-# Kafka
-localhost:9092
-
-# Qdrant
-http://localhost:6333
-
-# InfluxDB
-http://localhost:8086
+# Backup specific tenant database
+podman exec deeplens-postgres pg_dump -U postgres tenant_demo_metadata > demo-backup.sql
 ```
 
-### OpenTelemetry Integration
+### Restore Database
 
-```csharp
-// Add to your .NET application
-services.AddOpenTelemetry()
-    .WithTracing(builder => builder
-        .AddOtlpExporter(options =>
-        {
-            options.Endpoint = new Uri("http://localhost:4317");
-        })
-    );
+```powershell
+# Restore all databases
+Get-Content deeplens-backup.sql | podman exec -i deeplens-postgres psql -U postgres
+
+# Restore specific database
+Get-Content demo-backup.sql | podman exec -i deeplens-postgres psql -U postgres -d tenant_demo_metadata
 ```
+
+### Clean Up Everything
+
+```powershell
+# Stop and remove all containers
+podman stop $(podman ps -aq)
+podman rm $(podman ps -aq)
+
+# Remove all volumes (⚠️ DELETES ALL DATA)
+podman volume rm $(podman volume ls -q)
+
+# Remove network
+podman network rm deeplens-network
+```
+
+### Check Resource Usage
+
+```powershell
+# Container stats
+podman stats
+
+# Disk usage
+podman system df
+
+# Volume usage
+podman volume ls
+```
+
+### Migration & Portable Storage
+
+**Core Databases (Named Volumes):**
+On Windows, core databases use named volumes. To migrate:
+```powershell
+# Export
+podman volume export deeplens-postgres-data > postgres.tar
+# Import on new machine
+Get-Content postgres.tar | podman volume import deeplens-postgres-data
+```
+
+**Tenant Data (Bind Mounts):**
+Tenant data is in `C:\productivity\deeplensData\tenants`. Simply copy the directory to migrate.
+
+### Service Endpoints
+
+| Service         | Port | URL                             | Credentials             |
+| --------------- | ---- | ------------------------------- | ----------------------- |
+| PostgreSQL      | 5433 | -                               | postgres / DeepLens123! |
+| Redis           | 6379 | -                               | (no password)           |
+| Identity API    | 5198 | http://localhost:5198           | -                       |
+| Qdrant (tenant) | 6333 | http://localhost:6333/dashboard | -                       |
+| MinIO (tenant)  | 9001 | http://localhost:9001           | See credentials file    |
 
 ---
 
 ## 📚 Additional Documentation
 
-- [README-TENANT-MANAGEMENT.md](README-TENANT-MANAGEMENT.md) - Complete tenant provisioning guide
-- [docker-compose.infrastructure.yml](docker-compose.infrastructure.yml) - Infrastructure service definitions
-- [docker-compose.monitoring.yml](docker-compose.monitoring.yml) - Monitoring service definitions
-- [.env.example](.env.example) - Environment variable reference
+For more detailed information, see:
+
+- **[TENANT-GUIDE.md](TENANT-GUIDE.md)** - Architecture & provisioning
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solutions for common issues
 
 ---
 
-## 🎯 Common Workflows
+## 💡 Tips
 
-### Development Workflow
+1. **Keep terminals organized:**
+   - Terminal 1: Identity API (must stay running)
+   - Terminal 2: Provisioning and management
 
-```powershell
-# Morning: Start environment
-.\setup-containers.ps1 -StartComplete
+2. **Check status regularly:**
+   ```powershell
+   podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+   ```
 
-# Work on application...
+3. **Monitor logs:**
+   ```powershell
+   podman logs -f <container-name>
+   ```
 
-# Evening: Stop environment
-.\setup-containers.ps1 -Stop
-```
-
-### Tenant Onboarding Workflow
-
-#### Option 1: Tenant Brings Their Own Storage (BYOS)
-
-```powershell
-# 1. Import tenant manager
-Import-Module .\powershell\DeepLensTenantManager.psm1
-
-# 2. Create tenant with BYOS (Azure Blob)
-$tenant = New-DeepLensTenant -Name "enterprise-client" -Domain "enterprise.com" -PlanType "enterprise" `
-  -StorageProvider "azure_blob" `
-  -StorageConfig @{
-    connection_string = "DefaultEndpointsProtocol=https;AccountName=storage;AccountKey=...;EndpointSuffix=core.windows.net"
-    container = "deeplens-images"
-  }
-
-# 3. Test storage connectivity
-Test-DeepLensStorageConfig -TenantId $tenant.TenantId
-
-# 4. Provide tenant with credentials
-Write-Output "Tenant ID: $($tenant.TenantId)"
-Write-Output "Database: $($tenant.DatabaseName)"
-Write-Output "Storage: $($tenant.StorageProvider)"
-```
-
-#### Option 2: Platform-Managed MinIO Storage (NEW)
-
-**Use Case:** When tenant doesn't have cloud storage but has NFS infrastructure
-
-```powershell
-# 1. Import tenant manager
-Import-Module .\powershell\DeepLensTenantManager.psm1
-
-# 2. Create tenant record
-$tenant = New-DeepLensTenant -Name "vayyari" -Domain "vayyari.com" -PlanType "premium"
-
-# 3. Provision dedicated MinIO with tenant's NFS storage
-$minioConfig = New-TenantMinIOStorage `
-  -TenantId $tenant.TenantId `
-  -TenantName "vayyari" `
-  -NFSPath "nfs.vayyari.com:/exports/deeplens-storage"
-
-# Output example:
-# ✅ MinIO storage provisioned successfully for tenant: vayyari
-#
-# 📋 MinIO Configuration:
-#    Container Name: deeplens-minio-vayyari
-#    API Endpoint:   http://localhost:9100
-#    Console URL:    http://localhost:9200
-#    Access Key:     tenant-vayyari-1234
-#    Secret Key:     <auto-generated>
-#    Default Bucket: images
-#    NFS Backend:    nfs.vayyari.com:/exports/deeplens-storage
-
-# 4. Update tenant storage configuration
-Set-TenantStorageConfig -TenantId $tenant.TenantId -StorageProvider 'minio' -Config @{
-    endpoint = $minioConfig.APIEndpoint
-    access_key = $minioConfig.AccessKey
-    secret_key = $minioConfig.SecretKey
-    bucket = 'images'
-    secure = $false
-}
-
-# 5. Verify MinIO status
-Get-TenantMinIOStatus -TenantName "vayyari"
-
-# 6. Provide tenant with credentials
-Write-Host "Vayyari Tenant Provisioned:" -ForegroundColor Green
-Write-Host "  Tenant ID: $($tenant.TenantId)"
-Write-Host "  Database: $($tenant.DatabaseName)"
-Write-Host "  MinIO Console: $($minioConfig.ConsoleURL)"
-Write-Host "  MinIO Access Key: $($minioConfig.AccessKey)"
-Write-Host "  MinIO Secret Key: $($minioConfig.SecretKey)"
-Write-Host "  Data Location: NFS - $($minioConfig.NFSPath)"
-```
-
-#### Managed MinIO Features
-
-**What DeepLens Provisions:**
-
-- Dedicated containerized MinIO instance per tenant
-- Auto-generated secure credentials (32-byte secret key)
-- Auto-assigned ports (9100+ for API, 9200+ for Console)
-- NFS-backed Docker volume for data persistence
-- Default 'images' bucket pre-created
-- Health checks and auto-restart policy
-- Connected to `deeplens-network` for service integration
-
-**What Tenant Provides:**
-
-- NFS server hostname/IP (e.g., `nfs.vayyari.com` or `10.0.1.100`)
-- NFS export path (e.g., `/exports/deeplens-storage`)
-- Read/write access permissions on NFS export
-- Network connectivity to NFS server (port 2049)
-
-**NFS Configuration Examples:**
-
-```powershell
-# Standard NFS with default options
-New-TenantMinIOStorage `
-  -TenantId "<tenant-id>" `
-  -TenantName "customer" `
-  -NFSPath "nfs-server.company.com:/exports/customer-data"
-
-# NFS with custom mount options (for compatibility)
-New-TenantMinIOStorage `
-  -TenantId "<tenant-id>" `
-  -TenantName "customer" `
-  -NFSPath "10.0.1.100:/mnt/storage/customer" `
-  -NFSOptions "rw,sync,nolock"
-
-# Specify custom ports (if defaults conflict)
-New-TenantMinIOStorage `
-  -TenantId "<tenant-id>" `
-  -TenantName "customer" `
-  -NFSPath "nfs.customer.com:/exports/data" `
-  -MinIOPort 9500 `
-  -ConsolePort 9501
-```
-
-**Managing Tenant MinIO Instances:**
-
-```powershell
-# Check status of specific tenant MinIO
-Get-TenantMinIOStatus -TenantName "vayyari"
-
-# List all tenant MinIO instances
-Get-AllTenantMinIOInstances
-
-# Remove tenant MinIO (keeps NFS data intact)
-Remove-TenantMinIOStorage -TenantName "vayyari" -Confirm
-
-# Remove tenant MinIO and unmount NFS volume
-Remove-TenantMinIOStorage -TenantName "vayyari" -RemoveVolume -Confirm
-```
-
-**Troubleshooting MinIO Provisioning:**
-
-```powershell
-# Verify NFS server is accessible
-Test-Connection nfs.tenant.com
-
-# Check NFS exports (Linux/macOS)
-showmount -e nfs.tenant.com
-
-# View container logs
-docker logs deeplens-minio-vayyari
-
-# Check container health
-docker inspect deeplens-minio-vayyari --format='{{.State.Health.Status}}'
-
-# Test MinIO API connectivity
-curl http://localhost:9100/minio/health/live
-```
-
-### Monitoring Workflow
-
-```powershell
-# 1. Open Grafana
-Start-Process "http://localhost:3000"
-
-# 2. Check infrastructure dashboard
-# Navigate to: Dashboards > Infrastructure Overview
-
-# 3. Set up alerts
-# Grafana > Alerting > Alert Rules
-
-# 4. View logs in Loki
-# Grafana > Explore > Loki datasource
-
-# 5. Trace requests in Jaeger
-Start-Process "http://localhost:16686"
-```
-
-### Troubleshooting Workflow
-
-```powershell
-# 1. Check service health
-.\setup-infrastructure.ps1 -Status
-
-# 2. View container logs
-docker logs deeplens-<service-name> --tail 100 -f
-
-# 3. Check resource usage
-docker stats
-
-# 4. Test database connectivity
-docker exec deeplens-postgres psql -U deeplens -l
-
-# 5. If issues persist, restart services
-.\setup-infrastructure.ps1 -Stop
-Start-Sleep -Seconds 5
-.\setup-infrastructure.ps1 -Start
-```
+4. **Use labels for filtering:**
+   ```powershell
+   podman ps --filter "label=tenant=demo"
+   ```
 
 ---
 
-## 🚀 Performance Tuning
-
-### PostgreSQL Optimization
-
-```sql
--- View current settings
-SHOW all;
-
--- Recommended production settings (adjust based on hardware)
-ALTER SYSTEM SET shared_buffers = '4GB';
-ALTER SYSTEM SET effective_cache_size = '12GB';
-ALTER SYSTEM SET maintenance_work_mem = '1GB';
-ALTER SYSTEM SET checkpoint_completion_target = 0.9;
-ALTER SYSTEM SET wal_buffers = '16MB';
-ALTER SYSTEM SET default_statistics_target = 100;
-ALTER SYSTEM SET random_page_cost = 1.1;
-ALTER SYSTEM SET effective_io_concurrency = 200;
-ALTER SYSTEM SET work_mem = '32MB';
-ALTER SYSTEM SET min_wal_size = '1GB';
-ALTER SYSTEM SET max_wal_size = '4GB';
-
--- Restart PostgreSQL container
-docker restart deeplens-postgres
-```
-
-### Redis Optimization
-
-```bash
-# Edit redis config
-docker exec -it deeplens-redis redis-cli CONFIG SET maxmemory-policy allkeys-lru
-docker exec -it deeplens-redis redis-cli CONFIG SET maxmemory 2gb
-```
-
-### Kafka Optimization
-
-```properties
-# Increase partitions for high-throughput topics
-docker exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 \
-  --alter --topic images-processing --partitions 10
-
-# Increase retention for critical topics
-docker exec deeplens-kafka kafka-configs --bootstrap-server localhost:9092 \
-  --entity-type topics --entity-name images-processing \
-  --alter --add-config retention.ms=604800000
-```
-
----
-
-## 📞 Support & Contribution
-
-### Getting Help
-
-1. Check this README first
-2. Review service logs: `docker logs <container-name>`
-3. Check Grafana dashboards for metrics
-4. Review [Troubleshooting](#-troubleshooting) section
-
-### Contributing
-
-1. Test changes in development environment
-2. Update this README for infrastructure changes
-3. Add/update health checks for new services
-4. Document new configuration options
-
-### Version History
-
-- **v1.0.0** (December 16, 2025) - Initial comprehensive documentation
-  - 19 containerized services (11 infrastructure + 8 monitoring)
-  - Multi-tenant provisioning with BYOS support
-  - Complete automation with PowerShell modules
-  - Pre-configured monitoring dashboards
-
----
-
-**Last Updated:** December 16, 2025  
-**Maintainer:** DeepLens Team  
-**License:** Proprietary
-
-1. **Container Orchestration**: Use Kubernetes with StatefulSets
-2. **Observability**: Current monitoring stack is production-ready
-3. **Security**: Replace development credentials with proper secrets
-4. **High Availability**: Configure database clustering and replication
-5. **Backup Strategies**: Automated backups for all persistent data
-6. **Managed Services**: Consider cloud-managed databases for scale
-7. **TLS/SSL**: Enable encryption for all service communications
-
-### Monitoring Production Readiness ✅
-
-- **Metrics Collection**: Prometheus with 30-day retention
-- **Distributed Tracing**: Jaeger with OpenTelemetry integration
-- **Log Aggregation**: Loki with structured logging
-- **Alerting**: AlertManager with customizable routing
-- **Visualization**: Grafana with pre-built dashboards
-- **Resource Monitoring**: cAdvisor + Node Exporter for complete visibility
-
-## 📚 Next Steps
-
-1. **Start Infrastructure**: Use `setup-containers.ps1 -StartComplete` or `setup-infrastructure.ps1 -Start`
-2. **Verify Services**: Check health with `setup-containers.ps1 -Status` or PowerShell module `Test-DeepLensServices`
-3. **Import Management Module**: `Import-Module .\DeepLensInfrastructure.psm1` for advanced operations
-4. **Database Setup**: Run migrations for Identity and Metadata databases
-5. **Initialize Collections**: Set up Qdrant vector collections for image search
-6. **Access Monitoring**: Visit Grafana at http://localhost:3000 (admin/DeepLens123!)
-7. **Start Development**: Begin building DeepLens services with full observability support
-
-### PowerShell Module Functions
-
-```powershell
-# Import the module
-Import-Module .\DeepLensInfrastructure.psm1
-
-# Start complete environment
-Start-DeepLensComplete
-
-# Open monitoring dashboards
-Open-GrafanaUI
-Open-PrometheusUI
-Open-JaegerUI
-
-# Connect to databases
-Connect-DeepLensPostgreSQL
-Connect-DeepLensRedis
-```
+**Setup Time:** ~15 minutes  
+**Difficulty:** Beginner-friendly  
+**Platform:** Windows with Podman
