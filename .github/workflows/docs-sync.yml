@@ -1,0 +1,36 @@
+name: Sync Master Guide
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.md'
+      - 'tools/docs/generate_guide.py'
+      - '!DEEPLENS_GUIDE.md'
+
+jobs:
+  update-guide:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Guide Generator
+        run: python tools/docs/generate_guide.py
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add DEEPLENS_GUIDE.md
+          git commit -m "docs: auto-update DEEPLENS_GUIDE.md [skip ci]" || echo "No changes to commit"
+          git push
