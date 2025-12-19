@@ -1,70 +1,87 @@
-﻿# DeepLens Complete Documentation Guide
+# DeepLens Complete Documentation Guide
 
-**Updated:** 2025-12-20 00:48:31
+**Auto-generated on:** 2025-12-19 19:19:48
 
-> **Note:** This is a consolidated version of all repository documentation. Image binary samples and raw code templates have been omitted for clarity.
+> **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
 ---
 
+## 📚 Table of Contents
 
+1. [Readme](#source-readme-md)
+2. [Development](#source-development-md)
+3. [Architecture](#source-architecture-md)
+4. [Codebase](#source-codebase-md)
+5. [Docs - Security](#source-docs-security-md)
+6. [Docs - Services](#source-docs-services-md)
+7. [Docs - Observability](#source-docs-observability-md)
+8. [Infrastructure - Readme](#source-infrastructure-readme-md)
+9. [Infrastructure - Tenant-Guide](#source-infrastructure-tenant-guide-md)
+10. [Infrastructure - Troubleshooting](#source-infrastructure-troubleshooting-md)
+11. [Src - Deeplens.Featureextractionservice - Readme](#source-src-deeplens-featureextractionservice-readme-md)
+12. [Src - Deeplens.Webui - Readme](#source-src-deeplens-webui-readme-md)
+
+---
+
+<a name='source-readme-md'></a>
 
 # Documentation: README.md
-----------------------------------------
+------------------------------
 
 # DeepLens - Image Similarity Search Engine
 
 **DeepLens** is a high-performance, multi-tenant image similarity search engine built with modern .NET and Python technologies. It provides fast, accurate image matching using state-of-the-art vector databases and AI/ML models.
 
-## ðŸ§­ **Documentation Guide**
+## 🧭 **Documentation Guide**
 
 We have consolidated our documentation into several clear, focused guides:
 
-### ðŸ [Quick Start (DEVELOPMENT.md)](DEVELOPMENT.md)
+### 🏁 [Quick Start (DEVELOPMENT.md)](DEVELOPMENT.md)
 **The first stop for all developers.**
 - Prerequisites & Local Setup.
 - Service Credentials & Port Reference.
 - Basic Troubleshooting.
 
-### ðŸ—ï¸ [Architecture & Decisions (ARCHITECTURE.md)](ARCHITECTURE.md)
+### 🏗️ [Architecture & Decisions (ARCHITECTURE.md)](ARCHITECTURE.md)
 **How the system is built.**
 - Hybrid .NET + Python Microservices.
 - Multi-Tenant Isolation Model.
 - Architecture Decision Records (ADR).
 
-### ðŸ’» [Codebase & API (CODEBASE.md)](CODEBASE.md)
+### 💻 [Codebase & API (CODEBASE.md)](CODEBASE.md)
 **Deep dive into the source code.**
 - Project structures and responsibilities.
 - API Endpoints & Contract Reference.
 - Dapper & Data Access standards.
 
-### ðŸ¢ [Infrastructure & Tenants (infrastructure/README.md)](infrastructure/README.md)
+### 🏢 [Infrastructure & Tenants (infrastructure/README.md)](infrastructure/README.md)
 **Container management and multi-tenancy.**
 - Podman/Docker orchestration.
 - [Tenant Provisioning & Management](infrastructure/TENANT-GUIDE.md).
 - [DeepLens Troubleshooting Guide](infrastructure/TROUBLESHOOTING.md).
 
-### ðŸ”’ [Security & RBAC (docs/SECURITY.md)](docs/SECURITY.md)
+### 🔒 [Security & RBAC (docs/SECURITY.md)](docs/SECURITY.md)
 - Authentication flows and Token Lifecycle.
 - Role-Based Access Control (RBAC).
 - Administrative Impersonation.
 
-### ðŸ“Š [Observability & Monitoring (docs/OBSERVABILITY.md)](docs/OBSERVABILITY.md)
+### 📊 [Observability & Monitoring (docs/OBSERVABILITY.md)](docs/OBSERVABILITY.md)
 - OpenTelemetry instrumentation (Traces, Metrics, Logs).
 - Grafana Dashboards & Prometheus Alerts.
 
 ---
 
-## ðŸŽ¯ **Key Features**
+## 🎯 **Key Features**
 
-- **ðŸ” Advanced Image Search** - Vector-based similarity matching with multiple AI models.
-- **ðŸ¢ Multi-Tenant Architecture** - Complete tenant isolation with BYOS (Bring Your Own Storage).
-- **âš¡ High Performance** - Optimized for speed with Redis caching and Qdrant vector database.
-- **ðŸ“Š Full Observability** - Complete monitoring with the LGTM stack (Loki, Grafana, Tempo, Mimir).
-- **ðŸ”’ Enterprise Security** - OAuth 2.0/OpenID Connect with Duende IdentityServer.
+- **🔍 Advanced Image Search** - Vector-based similarity matching with multiple AI models.
+- **🏢 Multi-Tenant Architecture** - Complete tenant isolation with BYOS (Bring Your Own Storage).
+- **⚡ High Performance** - Optimized for speed with Redis caching and Qdrant vector database.
+- **📊 Full Observability** - Complete monitoring with the LGTM stack (Loki, Grafana, Tempo, Mimir).
+- **🔒 Enterprise Security** - OAuth 2.0/OpenID Connect with Duende IdentityServer.
 
 ---
 
-## ðŸ¤ **Contributing**
+## 🤝 **Contributing**
 
 1. Read the [DEVELOPMENT.md](DEVELOPMENT.md) and [CODEBASE.md](CODEBASE.md) guides.
 2. Fork the repository and create a feature branch.
@@ -72,14 +89,15 @@ We have consolidated our documentation into several clear, focused guides:
 
 ---
 
-**Made with â¤ï¸ by the DeepLens Team**
+**Made with ❤️ by the DeepLens Team**
 
 
 ---
 
+<a name='source-development-md'></a>
 
 # Documentation: DEVELOPMENT.md
-----------------------------------------
+------------------------------
 
 # DeepLens Development Guide
 
@@ -89,7 +107,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸš€ Quick Start (15 Minutes)
+## 🚀 Quick Start (15 Minutes)
 
 1.  **Prerequisites**: Install Podman/Docker, .NET 9 SDK, Python 3.11+, and PowerShell 7+.
 2.  **Environment**: 
@@ -107,7 +125,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ”‘ Development Credentials
+## 🔑 Development Credentials
 
 **DEVELOPMENT ONLY - DO NOT USE IN PRODUCTION** (Standard Password: `DeepLens123!`)
 
@@ -120,7 +138,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ”Œ Port Reference
+## 🔌 Port Reference
 
 | Port     | Service      | Description                 |
 | :------- | :----------- | :-------------------------- |
@@ -134,7 +152,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ› ï¸ Development Workflow
+## 🛠️ Development Workflow
 
 ### .NET Development
 - **Solution**: Open `src/DeepLens.sln` in VS 2022 or VS Code.
@@ -150,17 +168,17 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ“‹ Roadmaps & Plans
+## 📋 Roadmaps & Plans
 
 ### Current Implementation Status
-- âœ… **Phase 1**: Core Infrastructure & Podman Setup.
-- âœ… **Phase 2**: Multi-Tenant Provisioning & Identity API.
-- ðŸš§ **Phase 3**: Kafka Integration & Async Processing (In Progress).
-- â³ **Phase 4**: Web UI Full Implementation.
+- ✅ **Phase 1**: Core Infrastructure & Podman Setup.
+- ✅ **Phase 2**: Multi-Tenant Provisioning & Identity API.
+- 🚧 **Phase 3**: Kafka Integration & Async Processing (In Progress).
+- ⏳ **Phase 4**: Web UI Full Implementation.
 
 ---
 
-## ðŸ†˜ Troubleshooting
+## 🆘 Troubleshooting
 
 1.  **Port Conflicts**: Run `Get-Process -Id (Get-NetTCPConnection -LocalPort <Port>).OwningProcess` to find blockers.
 2.  **Container Failures**: Check `podman logs <container-name>`.
@@ -169,7 +187,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ“– Documentation Index
+## 📖 Documentation Index
 - [**ARCHITECTURE.md**](ARCHITECTURE.md) - High-level design & ADRs.
 - [**infrastructure/README.md**](infrastructure/README.md) - Deep dive into container setup.
 - [**infrastructure/TENANT-GUIDE.md**](infrastructure/TENANT-GUIDE.md) - How to provision new clients.
@@ -178,9 +196,10 @@ Last Updated: December 20, 2025
 
 ---
 
+<a name='source-architecture-md'></a>
 
 # Documentation: ARCHITECTURE.md
-----------------------------------------
+------------------------------
 
 # DeepLens Architecture Guide
 
@@ -190,7 +209,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ—ï¸ System Overview
+## 🏗️ System Overview
 
 DeepLens is a high-performance, multi-tenant image similarity search engine built using a **hybrid .NET + Python microservices architecture**. It balances enterprise-grade orchestration with state-of-the-art AI/ML capabilities.
 
@@ -204,7 +223,7 @@ DeepLens is a high-performance, multi-tenant image similarity search engine buil
 
 ---
 
-## ðŸ“ Architecture Diagrams
+## 📐 Architecture Diagrams
 
 ### High-Level System Flow
 
@@ -213,7 +232,7 @@ DeepLens is a high-performance, multi-tenant image similarity search engine buil
 
 ---
 
-## ðŸ’¾ Data & Storage Architecture
+## 💾 Data & Storage Architecture
 
 ### Multi-Tenant Model
 DeepLens provides strict isolation between tenants using a partitioned resource model:
@@ -235,7 +254,7 @@ Refers to the core tables in the `nextgen_identity` and `deeplens_platform` data
 
 ---
 
-## ðŸ§  Architectural Decisions (ADR)
+## 🧠 Architectural Decisions (ADR)
 
 ### ADR-001: Hybrid .NET + Python Microservices
 - **Decision**: Use .NET 9 for APIs and orchestration; Python (FastAPI) for ML inference.
@@ -258,16 +277,16 @@ Refers to the core tables in the `nextgen_identity` and `deeplens_platform` data
 
 ---
 
-## ðŸ“Š Observability Strategy
+## 📊 Observability Strategy
 
 DeepLens implements a full **OpenTelemetry** stack:
 - **Metrics**: Exported to Prometheus.
 - **Logs**: Structured JSON logs sent to Loki.
-- **Traces**: Distributed tracing via Jaeger (correlating API Gateway â†’ Worker â†’ Python AI).
+- **Traces**: Distributed tracing via Jaeger (correlating API Gateway → Worker → Python AI).
 
 ---
 
-## ðŸ“ Related Documents
+## 📁 Related Documents
 - [**DEVELOPMENT.md**](DEVELOPMENT.md) - Setup, Workflow, and Credentials
 - [**infrastructure/TENANT-GUIDE.md**](infrastructure/TENANT-GUIDE.md) - Provisioning & Storage
 - [**docs/SECURITY.md**](docs/SECURITY.md) - RBAC & Token Lifecycle
@@ -276,9 +295,10 @@ DeepLens implements a full **OpenTelemetry** stack:
 
 ---
 
+<a name='source-codebase-md'></a>
 
 # Documentation: CODEBASE.md
-----------------------------------------
+------------------------------
 
 # DeepLens Codebase & API Guide
 
@@ -288,7 +308,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ“‚ Project Structure
+## 📂 Project Structure
 
 ### .NET Microservices (`src/`)
 DeepLens is built using a clean architecture pattern across multiple services:
@@ -315,7 +335,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
 
 ---
 
-## ðŸ”Œ API Reference Summary
+## 🔌 API Reference Summary
 
 ### Identity Service (Port 5198)
 | Endpoint          | Method   | Purpose                               |
@@ -337,7 +357,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
 
 ---
 
-## ðŸ› ï¸ Implementation Details
+## 🛠️ Implementation Details
 
 ### Data Access (Dapper)
 We use pure Dapper with raw SQL for the Identity service to ensure maximum performance. 
@@ -351,7 +371,7 @@ Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiG
 
 ---
 
-## ðŸ“‹ Roadmap
+## 📋 Roadmap
 - [x] Identity API & Tenant Provisioning.
 - [ ] Kafka Core Integration.
 - [ ] Multi-Modal Search (Text-to-Image).
@@ -360,9 +380,10 @@ Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiG
 
 ---
 
+<a name='source-docs-security-md'></a>
 
 # Documentation: docs/SECURITY.md
-----------------------------------------
+------------------------------
 
 # DeepLens Security Guide
 
@@ -372,7 +393,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ” Authentication & Identity
+## 🔐 Authentication & Identity
 
 DeepLens uses **NextGen.Identity** (based on Duende IdentityServer) as its centralized Identity Provider (IdP).
 
@@ -393,7 +414,7 @@ Every JWT issued by DeepLens contains:
 
 ---
 
-## ðŸ›¡ï¸ Role-Based Access Control (RBAC)
+## 🛡️ Role-Based Access Control (RBAC)
 
 DeepLens implements a hierarchical RBAC model:
 
@@ -410,7 +431,7 @@ System Admins can impersonate users for troubleshooting.
 
 ---
 
-## ðŸš¦ Rate Limiting & Protection
+## 🚦 Rate Limiting & Protection
 
 DeepLens protects its services via a multi-layered rate limiting strategy:
 
@@ -425,7 +446,7 @@ DeepLens protects its services via a multi-layered rate limiting strategy:
 
 ---
 
-## ðŸ“ Security Best Practices
+## 📝 Security Best Practices
 
 1.  **Transport Security**: All production traffic must use TLS 1.3.
 2.  **Secret Management**: Developers should use Infisical or Azure Key Vault for secrets; Never commit `.env` files.
@@ -435,9 +456,10 @@ DeepLens protects its services via a multi-layered rate limiting strategy:
 
 ---
 
+<a name='source-docs-services-md'></a>
 
 # Documentation: docs/SERVICES.md
-----------------------------------------
+------------------------------
 
 # DeepLens Service Specifications
 
@@ -447,7 +469,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ”„ Event Streaming (Apache Kafka)
+## 🔄 Event Streaming (Apache Kafka)
 
 Kafka acts as the backbone for the DeepLens image processing pipeline.
 
@@ -464,7 +486,7 @@ Kafka acts as the backbone for the DeepLens image processing pipeline.
 
 ---
 
-## ðŸ–¼ï¸ Image & Thumbnail Handling
+## 🖼️ Image & Thumbnail Handling
 
 DeepLens manages large volumes of image data across multiple storage providers.
 
@@ -477,7 +499,7 @@ DeepLens manages large volumes of image data across multiple storage providers.
 
 ---
 
-## â˜ï¸ Object Storage (MinIO / S3)
+## ☁️ Object Storage (MinIO / S3)
 
 DeepLens uses a **Bucket-per-Tenant** strategy for object storage.
 
@@ -488,7 +510,7 @@ DeepLens uses a **Bucket-per-Tenant** strategy for object storage.
 
 ---
 
-## ðŸ§ª OAuth 2.0 Testing Guide
+## 🧪 OAuth 2.0 Testing Guide
 
 To test authentication manually:
 
@@ -506,9 +528,10 @@ Use the [OIDC Debugger](https://oidcdebugger.com/) or the built-in Swagger UI at
 
 ---
 
+<a name='source-docs-observability-md'></a>
 
 # Documentation: docs/OBSERVABILITY.md
-----------------------------------------
+------------------------------
 
 # DeepLens Observability Guide
 
@@ -518,7 +541,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ“Š Monitoring Architecture
+## 📊 Monitoring Architecture
 
 DeepLens uses the LGTM stack (Loki, Grafana, Tempo/Jaeger, Mimir/Prometheus) for complete visibility.
 
@@ -533,25 +556,25 @@ DeepLens uses the LGTM stack (Loki, Grafana, Tempo/Jaeger, Mimir/Prometheus) for
 
 ### 3. Tracing (Jaeger / OpenTelemetry)
 - **Stack**: OpenTelemetry SDKs for both .NET and Python.
-- **Context Propagation**: `TraceId` travels across network boundaries (Gateway â†’ Search API â†’ Kafka â†’ Worker â†’ AI Service).
+- **Context Propagation**: `TraceId` travels across network boundaries (Gateway → Search API → Kafka → Worker → AI Service).
 - **Port**: `16686` (Jaeger UI).
 
 ---
 
-## ðŸ› ï¸ OpenTelemetry Implementation Status
+## 🛠️ OpenTelemetry Implementation Status
 
 | Component                     | Tracing | Metrics | Logs  |
 | :---------------------------- | :-----: | :-----: | :---: |
-| **API Gateway**               |    âœ…    |    âœ…    |   âœ…   |
-| **Search API**                |    âœ…    |    âœ…    |   âœ…   |
-| **Identity API**              |    âœ…    |    âœ…    |   âœ…   |
-| **Worker Service**            |    âœ…    |    âœ…    |   âœ…   |
-| **AI Services (Python)**      |    âœ…    |    ðŸš§    |   âœ…   |
-| **Infrastructure (DB/Kafka)** |    âœ…    |    âœ…    |   âœ…   |
+| **API Gateway**               |    ✅    |    ✅    |   ✅   |
+| **Search API**                |    ✅    |    ✅    |   ✅   |
+| **Identity API**              |    ✅    |    ✅    |   ✅   |
+| **Worker Service**            |    ✅    |    ✅    |   ✅   |
+| **AI Services (Python)**      |    ✅    |    🚧    |   ✅   |
+| **Infrastructure (DB/Kafka)** |    ✅    |    ✅    |   ✅   |
 
 ---
 
-## ðŸ“ˆ Pre-built Dashboards
+## 📈 Pre-built Dashboards
 
 DeepLens comes with several Grafana dashboards:
 - **System Overview**: Node health, CPU/Memory usage.
@@ -560,7 +583,7 @@ DeepLens comes with several Grafana dashboards:
 
 ---
 
-## ðŸš¨ Alerts
+## 🚨 Alerts
 
 Alerts are managed via **Prometheus AlertManager**:
 - **Critical**: Service Down, High Error Rate (>5%), Qdrant Disk Low (<10%).
@@ -569,9 +592,10 @@ Alerts are managed via **Prometheus AlertManager**:
 
 ---
 
+<a name='source-infrastructure-readme-md'></a>
 
 # Documentation: infrastructure/README.md
-----------------------------------------
+------------------------------
 
 # DeepLens Infrastructure Setup
 
@@ -581,7 +605,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ“‹ Table of Contents
+## 📋 Table of Contents
 
 - [Quick Start](#-quick-start-15-minutes)
 - [Prerequisites](#-prerequisites)
@@ -593,7 +617,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸš€ Quick Start (15 Minutes)
+## 🚀 Quick Start (15 Minutes)
 
 ### 1. Install Prerequisites
 
@@ -628,13 +652,13 @@ In a new terminal:
 
 
 **Done!** You now have:
-- âœ… Core infrastructure (PostgreSQL, Redis)
-- âœ… Identity API (authentication)
-- âœ… First tenant with isolated Qdrant and MinIO
+- ✅ Core infrastructure (PostgreSQL, Redis)
+- ✅ Identity API (authentication)
+- ✅ First tenant with isolated Qdrant and MinIO
 
 ---
 
-## ðŸ“‹ Prerequisites
+## 📋 Prerequisites
 
 ### Required Software
 
@@ -664,7 +688,7 @@ In a new terminal:
 
 ---
 
-## ðŸ—ï¸ Core Infrastructure Setup
+## 🏗️ Core Infrastructure Setup
 
 ### Architecture
 
@@ -698,7 +722,7 @@ In a new terminal:
 
 ---
 
-## ðŸ” Identity API Setup
+## 🔐 Identity API Setup
 
 ### Start the API
 
@@ -716,11 +740,11 @@ In a new terminal:
 
 - **Email:** `admin@deeplens.local`
 - **Password:** `DeepLens@Admin123!`
-- âš ï¸ **Change after first login!**
+- ⚠️ **Change after first login!**
 
 ---
 
-## ðŸ¢ Tenant Provisioning
+## 🏢 Tenant Provisioning
 
 ### Provision a Tenant
 
@@ -731,14 +755,14 @@ In a new terminal:
 ### What Gets Created
 
 **For Every Tenant:**
-- âœ… Database: `tenant_{name}_metadata`
-- âœ… Qdrant: Dedicated vector database (auto-assigned ports)
-- âœ… Backup: Automated daily backups
-- âœ… Admin User: `admin@{name}.local`
+- ✅ Database: `tenant_{name}_metadata`
+- ✅ Qdrant: Dedicated vector database (auto-assigned ports)
+- ✅ Backup: Automated daily backups
+- ✅ Admin User: `admin@{name}.local`
 
 **For DeepLens Storage:**
-- âœ… MinIO: Dedicated object storage (auto-assigned ports)
-- âœ… Credentials: Saved to tenant directory
+- ✅ MinIO: Dedicated object storage (auto-assigned ports)
+- ✅ Credentials: Saved to tenant directory
 
 ### Storage Options
 
@@ -762,7 +786,7 @@ In a new terminal:
 
 ---
 
-## ðŸ› Troubleshooting
+## 🐛 Troubleshooting
 
 ### "dotnet: command not found"
 
@@ -808,7 +832,7 @@ In a new terminal:
 
 ---
 
-## ðŸ”§ Advanced Topics
+## 🔧 Advanced Topics
 
 ### Stop All Services
 
@@ -863,7 +887,7 @@ Tenant data is in `C:\productivity\deeplensData\tenants`. Simply copy the direct
 
 ---
 
-## ðŸ“š Additional Documentation
+## 📚 Additional Documentation
 
 For more detailed information, see:
 
@@ -872,7 +896,7 @@ For more detailed information, see:
 
 ---
 
-## ðŸ’¡ Tips
+## 💡 Tips
 
 1. **Keep terminals organized:**
    - Terminal 1: Identity API (must stay running)
@@ -902,9 +926,10 @@ For more detailed information, see:
 
 ---
 
+<a name='source-infrastructure-tenant-guide-md'></a>
 
 # Documentation: infrastructure/TENANT-GUIDE.md
-----------------------------------------
+------------------------------
 
 # DeepLens Tenant Management Guide
 
@@ -914,7 +939,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ—ï¸ Architecture Overview
+## 🏗️ Architecture Overview
 
 DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core services like PostgreSQL and Redis are shared, each tenant gets isolated storage and vector database resources.
 
@@ -922,34 +947,34 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 
 | Component      | Shared | Per-Tenant          | Purpose                      |
 | -------------- | ------ | ------------------- | ---------------------------- |
-| **PostgreSQL** | âœ…      | Database per tenant | Metadata, users, collections |
-| **Redis**      | âœ…      | âŒ                   | Shared cache & sessions      |
-| **Qdrant**     | âŒ      | Dedicated Instance  | Vector search isolation      |
-| **MinIO**      | âŒ      | Dedicated Instance  | Object storage isolation     |
-| **Backups**    | âŒ      | Dedicated Container | Automated tenant backups     |
+| **PostgreSQL** | ✅      | Database per tenant | Metadata, users, collections |
+| **Redis**      | ✅      | ❌                   | Shared cache & sessions      |
+| **Qdrant**     | ❌      | Dedicated Instance  | Vector search isolation      |
+| **MinIO**      | ❌      | Dedicated Instance  | Object storage isolation     |
+| **Backups**    | ❌      | Dedicated Container | Automated tenant backups     |
 
 ### Storage Models
 
-1. **BYOS (Bring Your Own Storage)** â­ *Enterprise*
+1. **BYOS (Bring Your Own Storage)** ⭐ *Enterprise*
    - Tenant provides their own cloud storage (Azure/AWS/GCS).
    - Custom credentials configured in Admin Portal.
    - DeepLens only provisions Database + Qdrant.
 
-2. **DeepLens-Provisioned Storage** ðŸ”’ *Isolated*
+2. **DeepLens-Provisioned Storage** 🔒 *Isolated*
    - Dedicated MinIO container per tenant.
    - Automated setup with unique ports and credentials.
    - DeepLens provisions: Database + Qdrant + MinIO.
 
 ---
 
-## ðŸš€ Provisioning Tenants
+## 🚀 Provisioning Tenants
 
 ### Prerequisites
 
-1. âœ… **Core infrastructure running** (PostgreSQL, Redis)
-2. âœ… **`deeplens-network` created**
-3. âœ… **Identity API running** at `http://localhost:5198`
-4. âœ… **Core Qdrant/MinIO stopped** (to avoid port conflicts)
+1. ✅ **Core infrastructure running** (PostgreSQL, Redis)
+2. ✅ **`deeplens-network` created**
+3. ✅ **Identity API running** at `http://localhost:5198`
+4. ✅ **Core Qdrant/MinIO stopped** (to avoid port conflicts)
 
 ### Provisioning Commands
 
@@ -970,7 +995,7 @@ Ports are automatically assigned to avoid conflicts:
 
 ---
 
-## ðŸ’¾ Backup & Disaster Recovery
+## 💾 Backup & Disaster Recovery
 
 Each tenant has a dedicated backup container that handles daily backups at 2 AM.
 
@@ -988,7 +1013,7 @@ Each tenant has a dedicated backup container that handles daily backups at 2 AM.
 
 ---
 
-## ðŸ” Verification & Maintenance
+## 🔍 Verification & Maintenance
 
 ### Verify Tenant Health
 
@@ -1004,7 +1029,7 @@ Each tenant has a dedicated backup container that handles daily backups at 2 AM.
 
 ---
 
-## ðŸ“š Related Files
+## 📚 Related Files
 
 - `provision-tenant.ps1`: Core provisioning script.
 - `init-scripts/02-tenant-provisioning.sql`: SQL logic for tenant DBs.
@@ -1013,9 +1038,10 @@ Each tenant has a dedicated backup container that handles daily backups at 2 AM.
 
 ---
 
+<a name='source-infrastructure-troubleshooting-md'></a>
 
 # Documentation: infrastructure/TROUBLESHOOTING.md
-----------------------------------------
+------------------------------
 
 # DeepLens Troubleshooting Guide
 
@@ -1025,7 +1051,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ“‹ Table of Contents
+## 📋 Table of Contents
 - [.NET & PowerShell Issues](#-net--powershell-issues)
 - [Podman & Container Issues](#-podman--container-issues)
 - [Service-Specific Issues](#-service-specific-issues)
@@ -1033,7 +1059,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ› ï¸ .NET & PowerShell Issues
+## 🛠️ .NET & PowerShell Issues
 
 ### .NET SDK Not Found
 **Symptoms:** `dotnet : The term 'dotnet' is not recognized...`
@@ -1059,7 +1085,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ³ Podman & Container Issues
+## 🐳 Podman & Container Issues
 
 ### Podman Machine Won't Start
 **Solution:** Reset the machine:
@@ -1084,7 +1110,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ˜ Service-Specific Issues
+## 🐘 Service-Specific Issues
 
 ### PostgreSQL Authentication Failure
 **Symptoms:** "password authentication failed for user postgres"
@@ -1106,7 +1132,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ¢ Tenant & Multi-Tenant Issues
+## 🏢 Tenant & Multi-Tenant Issues
 
 ### Missing `deeplens-network`
 **Symptoms:** `provision-tenant.ps1` fails during container creation.
@@ -1131,7 +1157,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸ’¡ Best Practices for Troubleshooting
+## 💡 Best Practices for Troubleshooting
 1. **Always check logs first:** `podman logs <container-name>`
 2. **Clean starts:** Use `podman rm -f <name>` and repeat provisioning.
 3. **Wait for Health:** Wait 5-10 seconds after starting containers for services to fully initialize.
@@ -1140,9 +1166,10 @@ Last Updated: December 20, 2025
 
 ---
 
+<a name='source-src-deeplens-featureextractionservice-readme-md'></a>
 
 # Documentation: src/DeepLens.FeatureExtractionService/README.md
-----------------------------------------
+------------------------------
 
 # Feature Extraction Service Guide
 
@@ -1152,7 +1179,7 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸŽ¯ Overview
+## 🎯 Overview
 
 The Feature Extraction service is a FastAPI-based Python microservice that transforms raw images into high-dimensional (2048-d) vectors using a **ResNet50** model in ONNX format.
 
@@ -1163,7 +1190,7 @@ The Feature Extraction service is a FastAPI-based Python microservice that trans
 
 ---
 
-## ðŸš€ Quick Start
+## 🚀 Quick Start
 
 1. **Setup Environment**:
    
@@ -1180,7 +1207,7 @@ The Feature Extraction service is a FastAPI-based Python microservice that trans
 
 ---
 
-## ðŸ§ª Testing & Validation
+## 🧪 Testing & Validation
 
 ### Running Tests
 
@@ -1194,7 +1221,7 @@ The Feature Extraction service is a FastAPI-based Python microservice that trans
 
 ---
 
-## ðŸ“Š API Reference
+## 📊 API Reference
 
 ### `POST /extract-features`
 **Request**: Multipart form-data with `file`.
@@ -1208,7 +1235,7 @@ Returns `{"status": "healthy", "model_loaded": true}`.
 
 ---
 
-## ðŸ“ Roadmap
+## 📐 Roadmap
 - [x] ResNet50 Implementation.
 - [ ] CLIP Model Integration (Multi-modal).
 - [ ] Batch processing API.
@@ -1217,9 +1244,10 @@ Returns `{"status": "healthy", "model_loaded": true}`.
 
 ---
 
+<a name='source-src-deeplens-webui-readme-md'></a>
 
 # Documentation: src/DeepLens.WebUI/README.md
-----------------------------------------
+------------------------------
 
 # DeepLens Web UI Guide
 
@@ -1229,13 +1257,13 @@ Last Updated: December 20, 2025
 
 ---
 
-## ðŸŽ¯ Overview
+## 🎯 Overview
 
 The Web UI is a React application built with **Vite**, **TypeScript**, and **Material UI (MUI)**. It serves as the primary gateway for both system admins (managing tenants) and tenant users (managing their images).
 
 ---
 
-## ðŸŽ¨ Design & Responsiveness
+## 🎨 Design & Responsiveness
 
 DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compatibility:
 - **Desktop**: Full sidebar navigation and detailed data tables.
@@ -1248,7 +1276,7 @@ DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compati
 
 ---
 
-## ðŸš€ Getting Started
+## 🚀 Getting Started
 
 1. **Install Dependencies**:
    
@@ -1263,7 +1291,7 @@ DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compati
 
 ---
 
-## ðŸ”‘ Authentication Flow
+## 🔑 Authentication Flow
 
 1. **Login**: User enters credentials.
 2. **Token Storage**: JWT Access and Refresh tokens stored in `localStorage`.
@@ -1271,7 +1299,7 @@ DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compati
 
 ---
 
-## ðŸ—ï¸ Project Structure
+## 🏗️ Project Structure
 - `/src/components`: Atomic UI pieces (Buttons, Cards).
 - `/src/pages`: Feature-level containers (Dashboard, Tenants, Settings).
 - `/src/services`: API client definitions.
@@ -1279,11 +1307,11 @@ DeepLens Web UI utilizes a **Dynamic Grid System** ensuring cross-device compati
 
 ---
 
-## ðŸ“‹ Feature Roadmap
-- âœ… Tenant Listing & Creation.
-- âœ… OAuth 2.0 Integration.
-- ðŸš§ Image Search & Dashboard Analytics (In Progress).
-- â³ Advanced RBAC User Management.
+## 📋 Feature Roadmap
+- ✅ Tenant Listing & Creation.
+- ✅ OAuth 2.0 Integration.
+- 🚧 Image Search & Dashboard Analytics (In Progress).
+- ⏳ Advanced RBAC User Management.
 
 
 ---
