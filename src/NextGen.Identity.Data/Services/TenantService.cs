@@ -11,22 +11,22 @@ public class TenantService : ITenantService
 {
     private readonly ITenantRepository _tenantRepository;
     private readonly IUserRepository _userRepository;
-    private readonly ITenantProvisioningService _provisioningService;
-    private readonly IJwtTokenService _jwtTokenService;
+    private readonly ITenantProvisioningService? _provisioningService;
+    private readonly IJwtTokenService? _jwtTokenService;
     private readonly IRefreshTokenRepository _refreshTokenRepository;
 
     public TenantService(
         ITenantRepository tenantRepository,
         IUserRepository userRepository,
-        ITenantProvisioningService provisioningService,
-        IJwtTokenService jwtTokenService,
-        IRefreshTokenRepository refreshTokenRepository)
+        IRefreshTokenRepository refreshTokenRepository,
+        ITenantProvisioningService? provisioningService = null,
+        IJwtTokenService? jwtTokenService = null)
     {
         _tenantRepository = tenantRepository;
         _userRepository = userRepository;
+        _refreshTokenRepository = refreshTokenRepository;
         _provisioningService = provisioningService;
         _jwtTokenService = jwtTokenService;
-        _refreshTokenRepository = refreshTokenRepository;
     }
 
     /// <summary>

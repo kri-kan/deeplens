@@ -48,6 +48,7 @@ try
     builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
     // Register services
+    builder.Services.AddScoped<ITenantService, TenantService>();
     builder.Services.AddScoped<DatabaseSeeder>();
 
     // Configure CORS for WebUI

@@ -288,7 +288,7 @@ Default Password: $tenantAdminPassword
 
 Role: TenantOwner (Full tenant access)
 
-⚠️  IMPORTANT SECURITY NOTES:
+IMPORTANT SECURITY NOTES:
   - Change this password IMMEDIATELY after first login
   - The default password follows the pattern: DeepLens@{TenantName}123!
   - This user has full access to the tenant's resources
@@ -470,7 +470,7 @@ Console URL: http://localhost:$MinioConsolePort
     Write-Host "  Backups Location:  $BackupsPath" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "[IMPORTANT]" -ForegroundColor Red
-    Write-Host "  🔐 Change the default admin password after first login!" -ForegroundColor Red
+    Write-Host "  Change the default admin password after first login!" -ForegroundColor Red
     Write-Host ""
     Write-Host "[NEXT STEPS]" -ForegroundColor Yellow
     Write-Host "  1. Login to WebUI at http://localhost:3000 with admin credentials" -ForegroundColor White
