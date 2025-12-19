@@ -13,7 +13,7 @@ This guide provides the tested, working steps to start DeepLens infrastructure f
 Before starting, ensure you have:
 
 - ✅ [Podman Desktop](https://podman.io/) installed and running
-- ✅ [PowerShell 7+](https://github.com/PowerShell/PowerShell) 
+- ✅ [PowerShell 7+](https://github.com/PowerShell/PowerShell)
 - ✅ [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - ✅ [Python 3.11+](https://www.python.org/downloads/) (for AI services later)
 
@@ -35,6 +35,7 @@ podman ps
 ```
 
 **Expected Output:**
+
 ```
 Machine "podman-machine-default" started successfully
 ```
@@ -123,6 +124,7 @@ podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
 **Expected Output:**
+
 ```
 NAMES              STATUS        PORTS
 deeplens-postgres  Up X seconds  0.0.0.0:5433->5432/tcp
@@ -144,6 +146,7 @@ dotnet run
 ```
 
 **Expected Output:**
+
 ```
 [INFO] Running database migrations...
 ✓ Executed migration: 001_InitialSchema.sql
@@ -167,11 +170,13 @@ After completing all steps, verify:
 ### Infrastructure Services
 
 - [ ] PostgreSQL accessible on **localhost:5433**
+
   ```powershell
   podman exec deeplens-postgres pg_isready -U postgres
   ```
 
 - [ ] Redis accessible on **localhost:6379**
+
   ```powershell
   podman exec deeplens-redis redis-cli ping
   ```
@@ -192,15 +197,16 @@ After completing all steps, verify:
 
 All services use standardized credentials for development:
 
-| Service    | Host/Port            | Username | Password       | Notes                    |
-| ---------- | -------------------- | -------- | -------------- | ------------------------ |
-| PostgreSQL | localhost:5433       | postgres | DeepLens123!   | Database: nextgen_identity |
-| Redis      | localhost:6379       | -        | (no password)  |                          |
-| Qdrant     | localhost:6333-6334  | -        | (no auth)      |                          |
-| MinIO      | localhost:9000-9001  | admin    | DeepLens123!   | Console on :9001         |
-| Identity   | localhost:5198       | -        | -              | OAuth/OIDC endpoints     |
+| Service    | Host/Port           | Username | Password      | Notes                      |
+| ---------- | ------------------- | -------- | ------------- | -------------------------- |
+| PostgreSQL | localhost:5433      | postgres | DeepLens123!  | Database: nextgen_identity |
+| Redis      | localhost:6379      | -        | (no password) |                            |
+| Qdrant     | localhost:6333-6334 | -        | (no auth)     |                            |
+| MinIO      | localhost:9000-9001 | admin    | DeepLens123!  | Console on :9001           |
+| Identity   | localhost:5198      | -        | -             | OAuth/OIDC endpoints       |
 
 **Admin User (Identity API):**
+
 - Email: admin@deeplens.local
 - Password: DeepLens@Admin123!
 
@@ -252,6 +258,7 @@ taskkill /PID <PID> /F
 **Symptoms:** "password authentication failed for user postgres"
 
 **Solution:** Volume has old data with different credentials
+
 ```powershell
 # Remove container and volume
 podman stop deeplens-postgres
@@ -264,6 +271,7 @@ podman volume rm deeplens-postgres-data
 ### Identity API Can't Connect to Database
 
 **Check connection string in appsettings:**
+
 - Port should be **5433** (not 5432)
 - Username should be **postgres**
 - Password should be **DeepLens123!**
@@ -291,15 +299,18 @@ podman logs deeplens-<service-name>
 Once infrastructure is running:
 
 1. **Test Authentication**
+
    - See [docs/OAUTH_TESTING_GUIDE.md](../docs/OAUTH_TESTING_GUIDE.md)
 
 2. **Start Additional Services**
+
    - API Gateway
    - Search API
    - Admin API
    - WebUI (Next.js)
 
 3. **Add Optional Infrastructure**
+
    - Kafka + Zookeeper (async processing)
    - Monitoring Stack (Grafana, Prometheus, Jaeger)
    - InfluxDB (time-series metrics)
@@ -329,13 +340,13 @@ Based on actual setup experience:
 
 ## 📝 Configuration Files Reference
 
-| File                                    | Purpose                              |
-| --------------------------------------- | ------------------------------------ |
-| `infrastructure/.env.example`           | Default environment variables        |
-| `docker-compose.infrastructure.yml`     | Full infrastructure definition       |
-| `src/NextGen.Identity.Api/appsettings.json` | Identity API connection strings  |
-| `CREDENTIALS.md`                        | All service credentials              |
-| `PORTS.md`                              | Port mappings and conflicts          |
+| File                                        | Purpose                         |
+| ------------------------------------------- | ------------------------------- |
+| `infrastructure/.env.example`               | Default environment variables   |
+| `docker-compose.infrastructure.yml`         | Full infrastructure definition  |
+| `src/NextGen.Identity.Api/appsettings.json` | Identity API connection strings |
+| `CREDENTIALS.md`                            | All service credentials         |
+| `PORTS.md`                                  | Port mappings and conflicts     |
 
 ---
 

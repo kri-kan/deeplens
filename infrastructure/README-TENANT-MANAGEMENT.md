@@ -1,6 +1,6 @@
 # DeepLens Multi-Tenant Management
 
-This directory contains the complete multi-tenant management system for DeepLens, providing database isolation, storage configuration (BYOS), and tenant provisioning capabilities.
+This directory contains the complete multi-tenant management system for DeepLens, providing database isolation, storage configuration, and tenant provisioning capabilities.
 
 ## 🏗️ Architecture Overview
 
@@ -19,21 +19,62 @@ This directory contains the complete multi-tenant management system for DeepLens
 - Contains schema for image collections, search analytics, user preferences
 - Cloned for each new tenant with Row Level Security (RLS)
 
-**Identity Database (`deeplens_identity`)**
+**Identity Database (`nextgen_identity`)**
 
 - Shared authentication service (NextGen Identity)
 - User accounts, roles, and permissions
 - Multi-tenant user isolation
 
-### Bring Your Own Storage (BYOS)
+### Storage Strategy
 
-Each tenant can configure their own storage provider:
+DeepLens supports **three storage models** per tenant:
 
+#### 1. BYOS (Bring Your Own Storage) ⭐ Recommended for Enterprise
+
+Tenant provides their own cloud storage credentials:
 - **Azure Blob Storage**: Enterprise-grade cloud storage
-- **AWS S3**: Scalable object storage
+- **AWS S3**: Scalable object storage  
 - **Google Cloud Storage**: Multi-regional storage
-- **MinIO**: Self-hosted S3-compatible storage
 - **NFS/SMB**: Network file system shares
+
+**Benefits:**
+- ✅ Data sovereignty - tenant owns their data
+- ✅ Compliance - meets regulatory requirements
+- ✅ Cost control - tenant pays storage directly
+- ✅ Integration - works with existing infrastructure
+
+**DeepLens provisions:** Database + Qdrant only  
+**Tenant provides:** Storage credentials via Admin Portal
+
+#### 2. DeepLens-Provisioned Storage 🔒 Isolated per Tenant
+
+Each tenant gets a **dedicated MinIO instance**:
+- Separate container per tenant
+- Unique ports (auto-assigned)
+- Isolated storage volumes
+- Independent credentials
+- Full resource isolation
+
+**Benefits:**
+- ✅ Complete isolation - no shared resources
+- ✅ Simple setup - fully automated
+- ✅ Managed by DeepLens - backups, monitoring
+- ✅ No cloud accounts needed
+
+**DeepLens provisions:** Database + Qdrant + Dedicated MinIO
+
+#### 3. None (Manual Configuration)
+
+Skip storage provisioning during initial setup, configure later manually.
+
+### What Gets Provisioned
+
+| Component | Shared | Per-Tenant | Purpose |
+|-----------|--------|------------|---------|
+| PostgreSQL | ✅ | Database per tenant | Metadata storage |
+| Qdrant | ❌ | Dedicated instance | Vector search isolation |
+| MinIO | ❌ | Optional (if DeepLens storage) | Object storage |
+| Backups | ❌ | Dedicated container | Automated backups |
 
 ## 📁 Directory Structure
 
@@ -52,51 +93,100 @@ infrastructure/
 ### 1. Initialize Infrastructure
 
 ```powershell
-# Start the infrastructure
-docker-compose up -d
-
-# Import the management module
-Import-Module .\infrastructure\powershell\DeepLensTenantManager.psm1
-
-# Check platform status
-Show-DeepLensStatus
+# Start core infrastructure (PostgreSQL, Redis, Qdrant, MinIO)
+cd infrastructure
+# See README-PODMAN-SETUP.md for infrastructure setup
 ```
 
-### 2. Create Your First Tenant
+### 2. Provision Your First Tenant
+
+#### Interactive Mode (Recommended)
 
 ```powershell
-# Create a tenant with MinIO storage (default)
-New-DeepLensTenant -Name "acme-corp" -Domain "acme.com" -PlanType "premium"
+# Script will prompt for storage choice
+.\provision-tenant.ps1 -TenantName "acme-corp"
 
-# Create a tenant with Azure Blob Storage
-New-DeepLensTenant -Name "enterprise-client" -Domain "enterprise.com" -PlanType "enterprise" -StorageProvider "azure_blob" -StorageConfig @{
-    connection_string = "DefaultEndpointsProtocol=https;AccountName=storage;AccountKey=key;EndpointSuffix=core.windows.net"
-    container = "images"
-}
-
-# Create a tenant with AWS S3
-New-DeepLensTenant -Name "startup-co" -PlanType "free" -StorageProvider "aws_s3" -StorageConfig @{
-    access_key = "AKIAIOSFODNN7EXAMPLE"
-    secret_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-    region = "us-west-2"
-    bucket = "deeplens-startup-images"
-}
+# Choose option:
+# [1] BYOS - Tenant provides Azure/AWS/GCS credentials
+# [2] DeepLens-Provisioned - Dedicated MinIO instance
+# [3] None - Skip storage, configure later
 ```
 
-### 3. Manage Tenants
+#### Option 1: BYOS (Bring Your Own Storage)
 
 ```powershell
-# List all tenants
-Get-DeepLensTenant
+# Provision tenant with BYOS model
+.\provision-tenant.ps1 -TenantName "enterprise-client" -StorageType "BYOS"
 
-# Get detailed tenant information
-Get-DeepLensTenant -TenantId "12345678-1234-1234-1234-123456789012"
+# Then configure storage in Admin Portal:
+# - Navigate to Tenants → enterprise-client → Storage
+# - Enter Azure/AWS/GCS credentials
+# - Test connection
+```
 
-# Test tenant storage configuration
-Test-DeepLensStorageConfig -TenantId "12345678-1234-1234-1234-123456789012"
+**What gets created:**
+- ✅ Database: `tenant_enterprise-client_metadata`
+- ✅ Qdrant: Dedicated instance on auto-assigned ports
+- ✅ Backup: Daily automated backups
+- ❌ Storage: Tenant configures their own
 
-# Remove a tenant (with confirmation)
-Remove-DeepLensTenant -TenantId "12345678-1234-1234-1234-123456789012" -Confirm
+#### Option 2: DeepLens-Provisioned Storage
+
+```powershell
+# Provision tenant with dedicated MinIO
+.\provision-tenant.ps1 -TenantName "startup-co" -StorageType "DeepLens"
+
+# MinIO credentials saved to:
+# C:\productivity\deeplensData\tenants\startup-co\minio-credentials.txt
+```
+
+**What gets created:**
+- ✅ Database: `tenant_startup-co_metadata`  
+- ✅ Qdrant: Dedicated instance on auto-assigned ports
+- ✅ MinIO: Dedicated instance with unique credentials
+- ✅ Backup: Daily automated backups
+
+**Ports auto-assigned:**
+- Qdrant HTTP: 6333, 6335, 6337, ... (incremental)
+- Qdrant gRPC: 6334, 6336, 6338, ...
+- MinIO API: 9000, 9002, 9004, ...
+- MinIO Console: 9001, 9003, 9005, ...
+
+#### Option 3: No Storage (Manual Configuration)
+
+```powershell
+# Skip storage provisioning
+.\provision-tenant.ps1 -TenantName "test-tenant" -StorageType "None"
+```
+
+### 3. Verify Tenant Setup
+
+```powershell
+# Check all containers
+podman ps --filter "label=tenant=acme-corp"
+
+# Test Qdrant
+Invoke-WebRequest -Uri "http://localhost:6335/dashboard" -UseBasicParsing
+
+# Test MinIO (if DeepLens-provisioned)
+Invoke-WebRequest -Uri "http://localhost:9002" -UseBasicParsing
+
+# Check database
+podman exec deeplens-postgres psql -U postgres -c "\l" | Select-String "tenant_"
+```
+
+### 4. Remove a Tenant
+
+```powershell
+# Complete cleanup - removes all resources
+.\provision-tenant.ps1 -TenantName "old-tenant" -Remove
+
+# Removes:
+# - Qdrant container and volume
+# - MinIO container and volume (if exists)
+# - Backup container
+# - PostgreSQL database
+# - All data directories
 ```
 
 ## 🗄️ Database Schema
@@ -535,6 +625,97 @@ public class TenantStorageFactory : ITenantStorageFactory
 - Tenant-specific performance dashboard
 - Storage utilization trends
 - API performance metrics
+
+---
+
+## 📋 Complete Examples
+
+### Example 1: SaaS Company with BYOS
+
+```powershell
+# Enterprise client brings Azure Blob Storage
+.\provision-tenant.ps1 -TenantName "contoso" -StorageType "BYOS"
+
+# Result:
+# - Database: tenant_contoso_metadata @ PostgreSQL
+# - Qdrant: http://localhost:6335 (dedicated)
+# - Storage: Configured by tenant in Admin Portal
+# - Backups: Daily at 2 AM
+
+# Tenant configures in portal:
+# Provider: Azure Blob
+# Connection: DefaultEndpointsProtocol=https;AccountName=contoso...
+# Container: deeplens-images
+```
+
+### Example 2: Development/Testing Environment
+
+```powershell
+# Quick setup with DeepLens-managed storage
+.\provision-tenant.ps1 -TenantName "dev-team" -StorageType "DeepLens"
+
+# Result:
+# - Database: tenant_dev-team_metadata
+# - Qdrant: http://localhost:6337 (dedicated)
+# - MinIO: http://localhost:9004 (API), :9005 (Console)
+# - Credentials: C:\productivity\deeplensData\tenants\dev-team\minio-credentials.txt
+# - Backups: Daily at 2 AM
+
+# Access MinIO Console
+Start-Process "http://localhost:9005"
+# Login with credentials from minio-credentials.txt
+```
+
+### Example 3: Multiple Tenants - Mixed Storage
+
+```powershell
+# Provision 3 tenants with different storage strategies
+
+# Tenant 1: Enterprise BYOS (AWS S3)
+.\provision-tenant.ps1 -TenantName "acme" -StorageType "BYOS"
+
+# Tenant 2: Startup with DeepLens storage
+.\provision-tenant.ps1 -TenantName "startup" -StorageType "DeepLens"
+
+# Tenant 3: Demo/POC without storage
+.\provision-tenant.ps1 -TenantName "demo" -StorageType "None"
+
+# Result:
+podman ps --format "table {{.Names}}\t{{.Ports}}"
+# deeplens-qdrant-acme       6335-6336
+# deeplens-qdrant-startup    6337-6338
+# deeplens-minio-startup     9004-9005
+# deeplens-qdrant-demo       6339-6340
+```
+
+### Example 4: Interactive Provisioning
+
+```powershell
+# Let the script prompt for options
+.\provision-tenant.ps1 -TenantName "vayyari"
+
+# Output:
+# ========================================
+#  Storage Configuration
+# ========================================
+# 
+# Choose storage option for tenant 'vayyari':
+# 
+#   [1] BYOS (Bring Your Own Storage)
+#       Tenant provides Azure/AWS/GCS credentials
+#       No DeepLens infrastructure provisioned
+# 
+#   [2] DeepLens-Provisioned Storage
+#       Dedicated MinIO instance for this tenant
+#       Fully isolated, managed by DeepLens
+# 
+#   [3] None (Skip storage provisioning)
+#       Configure storage later manually
+# 
+# Enter choice (1-3):
+```
+
+---
 
 ## 🔄 Backup and Recovery
 

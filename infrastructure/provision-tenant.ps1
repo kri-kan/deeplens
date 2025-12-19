@@ -15,6 +15,13 @@ param(
     
     [int]$BackupRetentionDays = 30,
     
+    [ValidateSet("BYOS", "DeepLens", "None", "")]
+    [string]$StorageType = "",  # Empty = prompt, BYOS = tenant provides, DeepLens = we provision MinIO
+    
+    [int]$MinioPort = 0,  # Auto-assign if StorageType=DeepLens
+    
+    [int]$MinioConsolePort = 0,  # Auto-assign if StorageType=DeepLens
+    
     [switch]$TestBackup,
     
     [switch]$Remove
@@ -59,6 +66,19 @@ function Remove-Tenant {
     }
     Write-Host "[OK] Qdrant removed" -ForegroundColor Green
     
+    # Stop and remove MinIO (if exists)
+    Write-Host "`n[MINIO] Removing MinIO container..." -ForegroundColor Yellow
+    $minioContainer = podman ps -a --filter "name=^deeplens-minio-$TenantName$" --format "{{.Names}}"
+    if ($minioContainer) {
+        podman stop "deeplens-minio-$TenantName" 2>&1 | Out-Null
+        podman rm "deeplens-minio-$TenantName" 2>&1 | Out-Null
+    }
+    $minioVolume = podman volume ls --filter "name=^deeplens_minio_${TenantName}_data$" --format "{{.Name}}"
+    if ($minioVolume) {
+        podman volume rm "deeplens_minio_${TenantName}_data" 2>&1 | Out-Null
+    }
+    Write-Host "[OK] MinIO removed" -ForegroundColor Green
+    
     # Stop and remove Backup
     Write-Host "`n[BACKUP] Removing backup container..." -ForegroundColor Yellow
     $backupContainer = podman ps -a --filter "name=^deeplens-backup-$TenantName$" --format "{{.Names}}"
@@ -71,7 +91,7 @@ function Remove-Tenant {
     # Drop database
     Write-Host "`n[DATABASE] Dropping tenant database..." -ForegroundColor Yellow
     $dropCmd = "DROP DATABASE IF EXISTS $TenantDBName;"
-    podman exec -i deeplens-postgres psql -U deeplens -c $dropCmd 2>&1 | Out-Null
+    podman exec -i deeplens-postgres psql -U postgres -c $dropCmd 2>&1 | Out-Null
     Write-Host "[OK] Database dropped" -ForegroundColor Green
     
     # Remove data directories
@@ -93,12 +113,49 @@ function Provision-Tenant {
     
     # Check prerequisites
     Write-Host "[CHECK] Verifying prerequisites..." -ForegroundColor Cyan
-    $pgStatus = podman inspect deeplens-postgres --format '{{.State.Health.Status}}' 2>$null
-    if ($pgStatus -ne "healthy") {
-        Write-Host "[ERROR] PostgreSQL is not healthy. Run setup-with-nfs.ps1 first" -ForegroundColor Red
+    $pgRunning = podman ps --filter "name=^deeplens-postgres$" --format "{{.Names}}"
+    if (-not $pgRunning) {
+        Write-Host "[ERROR] PostgreSQL is not running. Start infrastructure first" -ForegroundColor Red
         exit 1
     }
-    Write-Host "[OK] PostgreSQL is healthy" -ForegroundColor Green
+    Write-Host "[OK] PostgreSQL is running" -ForegroundColor Green
+    
+    # Prompt for storage type if not specified
+    if ([string]::IsNullOrEmpty($StorageType)) {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host " Storage Configuration" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Choose storage option for tenant '$TenantName':" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  [1] BYOS (Bring Your Own Storage)" -ForegroundColor White
+        Write-Host "      Tenant provides Azure/AWS/GCS credentials" -ForegroundColor Gray
+        Write-Host "      No DeepLens infrastructure provisioned" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "  [2] DeepLens-Provisioned Storage" -ForegroundColor White
+        Write-Host "      Dedicated MinIO instance for this tenant" -ForegroundColor Gray
+        Write-Host "      Fully isolated, managed by DeepLens" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "  [3] None (Skip storage provisioning)" -ForegroundColor White
+        Write-Host "      Configure storage later manually" -ForegroundColor Gray
+        Write-Host ""
+        
+        do {
+            $choice = Read-Host "Enter choice (1-3)"
+            switch ($choice) {
+                "1" { $StorageType = "BYOS"; $validChoice = $true }
+                "2" { $StorageType = "DeepLens"; $validChoice = $true }
+                "3" { $StorageType = "None"; $validChoice = $true }
+                default { 
+                    Write-Host "[ERROR] Invalid choice. Please enter 1, 2, or 3" -ForegroundColor Red
+                    $validChoice = $false
+                }
+            }
+        } while (-not $validChoice)
+        
+        Write-Host ""
+    }
     
     # Create tenant directories
     Write-Host "`n[DIRECTORIES] Creating tenant directories..." -ForegroundColor Cyan
@@ -109,7 +166,7 @@ function Provision-Tenant {
     Write-Host "`n[DATABASE] Creating tenant database..." -ForegroundColor Cyan
     $createDBCmd = "CREATE DATABASE $TenantDBName WITH ENCODING='UTF8' LC_COLLATE='en_US.utf8' LC_CTYPE='en_US.utf8';"
     try {
-        podman exec -i deeplens-postgres psql -U deeplens -c $createDBCmd 2>&1 | Out-Null
+        podman exec -i deeplens-postgres psql -U postgres -c $createDBCmd 2>&1 | Out-Null
         Write-Host "[OK] Database created: $TenantDBName" -ForegroundColor Green
     }
     catch {
@@ -154,6 +211,77 @@ function Provision-Tenant {
             qdrant/qdrant:v1.7.0 | Out-Null
         
         Write-Host "[OK] Qdrant started on ports $QdrantHttpPort (HTTP) and $QdrantGrpcPort (gRPC)" -ForegroundColor Green
+    }
+    
+    # Provision Storage based on type
+    if ($StorageType -eq "DeepLens") {
+        Write-Host "`n[STORAGE] Provisioning dedicated MinIO instance..." -ForegroundColor Cyan
+        
+        # Check if already exists
+        $minioExists = podman ps -a --filter "name=^deeplens-minio-$TenantName$" --format "{{.Names}}"
+        if ($minioExists) {
+            Write-Host "[WARNING] MinIO container already exists, skipping..." -ForegroundColor Yellow
+        }
+        else {
+            # Auto-assign ports if not specified
+            if ($MinioPort -eq 0) {
+                $MinioPort = Get-NextAvailablePort -StartPort 9000
+                Write-Host "[INFO] Auto-assigned MinIO API port: $MinioPort" -ForegroundColor Yellow
+            }
+            
+            if ($MinioConsolePort -eq 0) {
+                $MinioConsolePort = Get-NextAvailablePort -StartPort 9001
+                Write-Host "[INFO] Auto-assigned MinIO Console port: $MinioConsolePort" -ForegroundColor Yellow
+            }
+            
+            # Generate secure credentials
+            $minioRootUser = "${TenantName}-admin"
+            $minioRootPassword = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+            
+            # Save credentials to tenant directory
+            $credentialsFile = "$TenantPath/minio-credentials.txt"
+            @"
+MinIO Credentials for Tenant: $TenantName
+Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+
+Root User: $minioRootUser
+Root Password: $minioRootPassword
+
+API Endpoint: http://localhost:$MinioPort
+Console URL: http://localhost:$MinioConsolePort
+
+⚠️  IMPORTANT: Store these credentials securely!
+"@ | Out-File -FilePath $credentialsFile -Encoding UTF8
+            
+            $minioVolume = "deeplens_minio_${TenantName}_data"
+            $volumeExists = podman volume ls --filter "name=^${minioVolume}$" --format "{{.Name}}"
+            if (-not $volumeExists) {
+                podman volume create $minioVolume | Out-Null
+            }
+            
+            podman run -d `
+                --name "deeplens-minio-$TenantName" `
+                --restart unless-stopped `
+                --network deeplens-network `
+                -p "${MinioPort}:9000" `
+                -p "${MinioConsolePort}:9001" `
+                -e "MINIO_ROOT_USER=$minioRootUser" `
+                -e "MINIO_ROOT_PASSWORD=$minioRootPassword" `
+                -v "${minioVolume}:/data" `
+                --label "tenant=$TenantName" `
+                --label "service=minio" `
+                minio/minio:RELEASE.2023-10-16T04-13-43Z server /data --console-address ":9001" | Out-Null
+            
+            Write-Host "[OK] MinIO started on ports $MinioPort (API) and $MinioConsolePort (Console)" -ForegroundColor Green
+            Write-Host "[INFO] Credentials saved to: $credentialsFile" -ForegroundColor Yellow
+        }
+    }
+    elseif ($StorageType -eq "BYOS") {
+        Write-Host "`n[STORAGE] Tenant will use BYOS (Bring Your Own Storage)" -ForegroundColor Cyan
+        Write-Host "[INFO] Configure storage credentials in the DeepLens Admin Portal" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "`n[STORAGE] Storage provisioning skipped" -ForegroundColor Yellow
     }
     
     # Provision Backup Container
@@ -230,11 +358,20 @@ function Provision-Tenant {
     Write-Host "  Tenant Name:       $TenantName" -ForegroundColor Cyan
     Write-Host "  Database:          $TenantDBName" -ForegroundColor Cyan
     Write-Host "  Data Path:         $TenantPath" -ForegroundColor Cyan
+    Write-Host "  Storage Type:      $StorageType" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  Qdrant HTTP:       http://localhost:$QdrantHttpPort" -ForegroundColor Yellow
     Write-Host "  Qdrant Dashboard:  http://localhost:$QdrantHttpPort/dashboard" -ForegroundColor Yellow
     Write-Host "  Qdrant gRPC:       localhost:$QdrantGrpcPort" -ForegroundColor Yellow
     Write-Host ""
+    
+    if ($StorageType -eq "DeepLens") {
+        Write-Host "  MinIO API:         http://localhost:$MinioPort" -ForegroundColor Yellow
+        Write-Host "  MinIO Console:     http://localhost:$MinioConsolePort" -ForegroundColor Yellow
+        Write-Host "  MinIO Credentials: $TenantPath/minio-credentials.txt" -ForegroundColor Yellow
+        Write-Host ""
+    }
+    
     Write-Host "  Backup Schedule:   $BackupSchedule" -ForegroundColor Cyan
     Write-Host "  Backup Retention:  $BackupRetentionDays days" -ForegroundColor Cyan
     Write-Host "  Backups Location:  $BackupsPath" -ForegroundColor Cyan
@@ -242,7 +379,13 @@ function Provision-Tenant {
     Write-Host "[NEXT STEPS]" -ForegroundColor Yellow
     Write-Host "  1. Configure application to use database: $TenantDBName" -ForegroundColor White
     Write-Host "  2. Configure Qdrant endpoint: http://localhost:$QdrantHttpPort" -ForegroundColor White
-    Write-Host "  3. Create Qdrant collections as needed" -ForegroundColor White
+    if ($StorageType -eq "DeepLens") {
+        Write-Host "  3. Configure MinIO endpoint: http://localhost:$MinioPort" -ForegroundColor White
+        Write-Host "  4. Create MinIO buckets and access policies" -ForegroundColor White
+    }
+    elseif ($StorageType -eq "BYOS") {
+        Write-Host "  3. Configure tenant storage credentials in Admin Portal" -ForegroundColor White
+    }
     Write-Host ""
 }
 
