@@ -202,15 +202,16 @@ function Provision-Tenant {
     New-Item -ItemType Directory -Path $BackupsPath -Force | Out-Null
     Write-Host "[OK] Directories created at: $TenantPath" -ForegroundColor Green
     
-    # Create tenant database
-    Write-Host "`n[DATABASE] Creating tenant database..." -ForegroundColor Cyan
-    $createDBCmd = "CREATE DATABASE $TenantDBName WITH ENCODING='UTF8' LC_COLLATE='en_US.utf8' LC_CTYPE='en_US.utf8';"
+    # Create tenant database using template
+    Write-Host "`n[DATABASE] Creating tenant database from template..." -ForegroundColor Cyan
+    $templateName = "tenant_metadata_template"
+    $createDBCmd = "CREATE DATABASE $TenantDBName WITH TEMPLATE $templateName OWNER tenant_service;"
     try {
         podman exec -i deeplens-postgres psql -U postgres -c $createDBCmd 2>&1 | Out-Null
-        Write-Host "[OK] Database created: $TenantDBName" -ForegroundColor Green
+        Write-Host "[OK] Database created: $TenantDBName (from $templateName)" -ForegroundColor Green
     }
     catch {
-        Write-Host "[WARNING] Database might already exist" -ForegroundColor Yellow
+        Write-Host "[WARNING] Database creation failed or already exists: $($_.Exception.Message)" -ForegroundColor Yellow
     }
     
     # Create tenant entry and admin user via Identity API

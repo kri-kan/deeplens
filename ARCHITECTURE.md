@@ -62,6 +62,20 @@ Refers to the core tables in the `nextgen_identity` and `deeplens_platform` data
 | `tenant_api_keys`    | M2M authentication for programmatic access.             |
 | `infisical_projects` | Registry for secret management integration.             |
 
+### Catalog & Ingestion Architecture (Tenant-Specific)
+DeepLens uses a normalized catalog structure within each tenant's dedicated database to support multi-vendor e-commerce:
+
+1.  **Categories**: Broad product classifications (e.g., Sarees, Lehangas).
+2.  **Products**: Represent master SKUs with common titles and tags.
+3.  **Product Variants**: Represent sub-SKUs (e.g., by Color, Fabric, or Stitch Type).
+4.  **Images**: Managed assets with PHash for deduplication and quality scores for curation.
+5.  **Seller Listings**: Competitive offers for a variant, capturing seller-specific pricing and descriptions.
+
+### AI-Driven Ingestion Pipeline
+- **Enrichment**: An LLM-based `AttributeExtractionService` scans unstructured seller descriptions to extract structured metadata (Fabric, Color, Occasion).
+- **Parallel Processing**: Bulk ingestion supports high-throughput parallel uploads with concurrency semaphores to protect infrastructure resources.
+- **SKU Merging**: Intelligent merging of products allows consolidating multiple vendors under one SKU while preserving unique images and all historical pricing data.
+
 ### System Bootstrapping
 DeepLens uses a script-based bootstrapping approach to ensure environment consistency:
 1.  **Infrastructure (Podman)**: Postgres, Redis, Qdrant, and Kafka are started.
