@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2025-12-19 19:19:48
+**Auto-generated on:** 2025-12-20 08:46:10
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -118,7 +118,11 @@ Last Updated: December 20, 2025
     
 *(Code block omitted for brevity)*
 
-4.  **Verification**: 
+4.  **Checkpoint (Identity)**:
+    
+*(Code block omitted for brevity)*
+
+5.  **Verification**: 
     
 *(Code block omitted for brevity)*
 
@@ -240,17 +244,25 @@ DeepLens provides strict isolation between tenants using a partitioned resource 
 1.  **Platform Metadata (PostgreSQL)**: Shared database with row-level or schema-based separation for global configurations.
 2.  **Tenant Metadata (PostgreSQL)**: Isolated databases provisioned per tenant for image metadata and local settings.
 3.  **Vector Storage (Qdrant)**: Isolated collections (or separate instances) per tenant ensuring no cross-tenant similarity leakage.
-4.  **Object Storage (MinIO/S3/Azure)**: Dedicated buckets or account-level isolation for raw image files.
+4.  **Object Storage (MinIO/S3/Azure)**: Logical isolation via dedicated buckets within a shared master instance (default) or account-level isolation for high-scale tenants.
 
 ### Database Schema (Identity & Platform)
 Refers to the core tables in the `nextgen_identity` and `deeplens_platform` databases.
 
-| Table             | Purpose                                                 |
-| :---------------- | :------------------------------------------------------ |
-| `tenants`         | Organization configs, resource limits, and infra ports. |
-| `users`           | User accounts, roles, and authentication state.         |
-| `refresh_tokens`  | OAuth 2.0 rotation tokens.                              |
-| `tenant_api_keys` | M2M authentication for programmatic access.             |
+| Table                | Purpose                                                 |
+| :------------------- | :------------------------------------------------------ |
+| `tenants`            | Organization configs, resource limits, and infra ports. |
+| `users`              | User accounts, roles, and authentication state.         |
+| `refresh_tokens`     | OAuth 2.0 rotation tokens.                              |
+| `tenant_api_keys`    | M2M authentication for programmatic access.             |
+| `infisical_projects` | Registry for secret management integration.             |
+
+### System Bootstrapping
+DeepLens uses a script-based bootstrapping approach to ensure environment consistency:
+1.  **Infrastructure (Podman)**: Postgres, Redis, Qdrant, and Kafka are started.
+2.  **Platform DB Init**: SQL scripts initialize the system schemas and roles.
+3.  **Platform Admin Setup**: `init-platform-admin.ps1` creates the root `admin` tenant and global administrator user.
+4.  **Identity API**: The API starts up and handles further multi-tenant orchestration.
 
 ---
 
@@ -315,13 +327,13 @@ DeepLens is built using a clean architecture pattern across multiple services:
 
 - **NextGen.Identity**: Centralized authentication and tenant management.
   - `.Core`: Domain models (Tenant, User, Token).
-  - `.Data`: Dapper-based repositories and PostgreSQL migrations.
-  - `.Api`: REST endpoints for login and registration.
+  - `.Data`: Dapper-based repositories, PostgreSQL migrations, and stored procedures for provisioning.
+  - `.Api`: REST endpoints for login, profile management, and tenant provisioning.
 - **DeepLens (Platform)**:
   - `.SearchApi`: High-traffic semantic search and image ingestion.
   - `.AdminApi`: Resource management and analytics.
   - `.WorkerService`: Background Kafka consumers for feature extraction and indexing.
-  - `.Infrastructure`: Multi-tenant drivers for Qdrant, MinIO, and Kafka.
+  - `.Infrastructure`: Multi-tenant drivers for Qdrant, MinIO (Shared Bucket Strategy), and Kafka.
 - **Shared Libraries**:
   - `.Shared.Common`: Cross-cutting utilities.
   - `.Shared.Messaging`: Kafka producers and abstract event handlers.
@@ -662,32 +674,31 @@ Last Updated: December 20, 2025
 *(Code block omitted for brevity)*
 
 
-### 2. Start Core Infrastructure
+### 2. Start Infrastructure
+Automation handles the setup of PostgreSQL, Redis, and internal networks.
 
 
 *(Code block omitted for brevity)*
 
 
-### 3. Start Identity API
+### 3. Start Identity API & Bootstrap
+The Identity API handles database migrations on startup.
 
 
 *(Code block omitted for brevity)*
 
 
-**Keep this terminal open!**
-
-### 4. Provision First Tenant
-
-In a new terminal:
+### 4. Verify & Checkpoint
+Run the automated identity checkpoint to verify Platform and Tenant admin access.
 
 
 *(Code block omitted for brevity)*
 
 
 **Done!** You now have:
-- ✅ Core infrastructure (PostgreSQL, Redis)
-- ✅ Identity API (authentication)
-- ✅ First tenant with isolated Qdrant and MinIO
+- ✅ Automated platform bootstrapping (Admin user/tenant)
+- ✅ Verified Identity API with correct role claims
+- ✅ Multi-tenant resource readiness
 
 ---
 
@@ -978,13 +989,13 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 
 ### Data Separation Strategy
 
-| Component      | Shared | Per-Tenant          | Purpose                      |
-| -------------- | ------ | ------------------- | ---------------------------- |
-| **PostgreSQL** | ✅      | Database per tenant | Metadata, users, collections |
-| **Redis**      | ✅      | ❌                   | Shared cache & sessions      |
-| **Qdrant**     | ❌      | Dedicated Instance  | Vector search isolation      |
-| **MinIO**      | ❌      | Dedicated Instance  | Object storage isolation     |
-| **Backups**    | ❌      | Dedicated Container | Automated tenant backups     |
+| Component      | Shared | Per-Tenant           | Purpose                         |
+| -------------- | ------ | -------------------- | ------------------------------- |
+| **PostgreSQL** | ✅      | Database per tenant  | Metadata, users, collections    |
+| **Redis**      | ✅      | ❌                    | Shared cache & sessions         |
+| **Qdrant**     | ❌      | Dedicated Instance   | Vector search isolation         |
+| **MinIO**      | ✅      | **Dedicated Bucket** | Shared instance with IAM search |
+| **Backups**    | ❌      | Dedicated Container  | Automated tenant backups        |
 
 ### Storage Models
 
@@ -993,10 +1004,10 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
    - Custom credentials configured in Admin Portal.
    - DeepLens only provisions Database + Qdrant.
 
-2. **DeepLens-Provisioned Storage** 🔒 *Isolated*
-   - Dedicated MinIO container per tenant.
-   - Automated setup with unique ports and credentials.
-   - DeepLens provisions: Database + Qdrant + MinIO.
+2. **DeepLens-Provisioned Storage** 🛡️ *Optimized*
+   - Dedicated bucket created on the shared **Master MinIO** instance.
+   - Unique Service Account (Access Key/Secret Key) scoped to that bucket only.
+   - DeepLens provisions: Database + Qdrant + Bucket / IAM Security.
 
 ---
 
@@ -1007,7 +1018,7 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 1. ✅ **Core infrastructure running** (PostgreSQL, Redis)
 2. ✅ **`deeplens-network` created**
 3. ✅ **Identity API running** at `http://localhost:5198`
-4. ✅ **Core Qdrant/MinIO stopped** (to avoid port conflicts)
+4. ✅ **Core Qdrant instances stopped** (if overlapping with new tenant ports)
 
 ### Provisioning Commands
 
@@ -1019,12 +1030,11 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 
 Ports are automatically assigned to avoid conflicts:
 
-| Service       | Starting Port | Pattern               |
-| ------------- | ------------- | --------------------- |
-| Qdrant HTTP   | 6333          | 6333, 6335, 6337, ... |
-| Qdrant gRPC   | 6334          | 6334, 6336, 6338, ... |
-| MinIO API     | 9000          | 9000, 9002, 9004, ... |
-| MinIO Console | 9001          | 9001, 9003, 9005, ... |
+| Service      | Starting Port | Pattern               |
+| ------------ | ------------- | --------------------- |
+| Qdrant HTTP  | 6433          | 6433, 6435, 6437, ... |
+| Qdrant gRPC  | 6434          | 6434, 6436, 6438, ... |
+| Shared MinIO | 9000          | Fixed at 9000         |
 
 ---
 
