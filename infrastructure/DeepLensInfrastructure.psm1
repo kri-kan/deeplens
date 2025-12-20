@@ -98,6 +98,15 @@ function Test-DeepLensServices {
     catch {
         Write-Host "❌ Infisical: Not Ready" -ForegroundColor Red
     }
+    
+    # Reasoning API
+    try {
+        [void](Invoke-RestMethod -Uri "http://localhost:8002/health" -Method GET)
+        Write-Host "✅ Reasoning API: Ready" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "❌ Reasoning API: Not Ready" -ForegroundColor Red
+    }
 }
 
 # Test monitoring services health
@@ -347,7 +356,7 @@ function Stop-DeepLensComplete {
 # View logs for a specific service
 function Get-DeepLensLogs {
     param(
-        [ValidateSet("postgres", "qdrant", "influxdb", "kafka", "zookeeper", "redis", "kafka-ui", "infisical", "infisical-postgres", "infisical-redis")]
+        [ValidateSet("postgres", "qdrant", "influxdb", "kafka", "zookeeper", "redis", "kafka-ui", "infisical", "infisical-postgres", "infisical-redis", "reasoning-api")]
         [string]$Service
     )
     podman compose -f docker-compose.infrastructure.yml logs -f deeplens-$Service
@@ -455,6 +464,10 @@ function Show-DeepLensConnectionStrings {
     Write-Host "  OTLP gRPC: localhost:4317" -ForegroundColor Gray
     Write-Host "  OTLP HTTP: localhost:4318" -ForegroundColor Gray
     Write-Host "  Metrics: http://localhost:8888/metrics" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Reasoning API (Phi-3):" -ForegroundColor White
+    Write-Host "  URL: http://localhost:8002" -ForegroundColor Gray
+    Write-Host "  Swagger: http://localhost:8002/docs" -ForegroundColor Gray
 }
 
 # Run identity smoke tests

@@ -5,7 +5,14 @@ namespace DeepLens.Contracts.Events;
 /// <summary>
 /// Base class for all DeepLens Kafka events providing common properties and structure.
 /// </summary>
-public abstract class BaseEvent
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "eventType")]
+[JsonDerivedType(typeof(ImageUploadedEvent), "image.uploaded")]
+[JsonDerivedType(typeof(FeatureExtractionRequestedEvent), "feature.extraction.requested")]
+[JsonDerivedType(typeof(VectorIndexingRequestedEvent), "vector.indexing.requested")]
+[JsonDerivedType(typeof(ProcessingCompletedEvent), "processing.completed")]
+[JsonDerivedType(typeof(ProcessingFailedEvent), "processing.failed")]
+[JsonDerivedType(typeof(ImageDeletionRequestedEvent), "image.deletion.requested")]
+public class BaseEvent
 {
     [JsonPropertyName("eventId")]
     public required Guid EventId { get; set; }
@@ -34,8 +41,7 @@ public abstract class BaseEvent
 /// Published when an image is successfully uploaded and stored.
 /// Triggers the async processing pipeline.
 /// </summary>
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "eventType")]
-[JsonDerivedType(typeof(ImageUploadedEvent), "image.uploaded")]
+/// </summary>
 public class ImageUploadedEvent : BaseEvent
 {
     [JsonPropertyName("data")]
@@ -141,7 +147,7 @@ public class StorageProviderInfo
 /// Published to request feature extraction for an uploaded image.
 /// Consumed by the feature extraction worker.
 /// </summary>
-[JsonDerivedType(typeof(FeatureExtractionRequestedEvent), "feature.extraction.requested")]
+/// </summary>
 public class FeatureExtractionRequestedEvent : BaseEvent
 {
     [JsonPropertyName("data")]
@@ -211,7 +217,7 @@ public class RetryPolicy
 /// Published when feature extraction is complete and vector is ready for indexing.
 /// Consumed by the vector indexing worker.
 /// </summary>
-[JsonDerivedType(typeof(VectorIndexingRequestedEvent), "vector.indexing.requested")]
+/// </summary>
 public class VectorIndexingRequestedEvent : BaseEvent
 {
     [JsonPropertyName("data")]
@@ -290,7 +296,7 @@ public class VectorMetadata
 /// Published when the entire processing pipeline is completed (success or failure).
 /// Used for status tracking and notifications.
 /// </summary>
-[JsonDerivedType(typeof(ProcessingCompletedEvent), "processing.completed")]
+/// </summary>
 public class ProcessingCompletedEvent : BaseEvent
 {
     [JsonPropertyName("data")]
@@ -356,7 +362,7 @@ public class ProcessingStep
 /// <summary>
 /// Published when processing fails and needs retry or manual intervention.
 /// </summary>
-[JsonDerivedType(typeof(ProcessingFailedEvent), "processing.failed")]
+/// </summary>
 public class ProcessingFailedEvent : BaseEvent
 {
     [JsonPropertyName("data")]
@@ -398,6 +404,42 @@ public class ProcessingFailedData
 }
 
 // =============================================================================
+// Catalog & Maintenance Events
+// =============================================================================
+
+/// <summary>
+/// Published when an image is marked for deletion (e.g., during SKU merging).
+/// Triggers physical deletion of files and thumbnails.
+/// </summary>
+public class ImageDeletionRequestedEvent : BaseEvent
+{
+    [JsonPropertyName("data")]
+    public required ImageDeletionData Data { get; set; }
+
+    public ImageDeletionRequestedEvent()
+    {
+        EventType = "image.deletion.requested";
+        EventVersion = "1.0";
+        Timestamp = DateTime.UtcNow;
+    }
+}
+
+public class ImageDeletionData
+{
+    [JsonPropertyName("imageId")]
+    public required Guid ImageId { get; set; }
+
+    [JsonPropertyName("storagePath")]
+    public required string StoragePath { get; set; }
+
+    [JsonPropertyName("deleteThumbnails")]
+    public bool DeleteThumbnails { get; set; } = true;
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; } // e.g. "sku_merge", "manual_delete"
+}
+
+// =============================================================================
 // Event Constants and Topic Names
 // =============================================================================
 
@@ -408,6 +450,7 @@ public static class EventTypes
     public const string VectorIndexingRequested = "vector.indexing.requested";
     public const string ProcessingCompleted = "processing.completed";
     public const string ProcessingFailed = "processing.failed";
+    public const string ImageDeletionRequested = "image.deletion.requested";
 }
 
 public static class KafkaTopics
@@ -417,6 +460,7 @@ public static class KafkaTopics
     public const string VectorIndexing = "deeplens.vectors.indexing";
     public const string ProcessingCompleted = "deeplens.processing.completed";
     public const string ProcessingFailed = "deeplens.processing.failed";
+    public const string ImageMaintenance = "deeplens.images.maintenance";
 
     public static readonly string[] AllTopics = 
     {
@@ -424,7 +468,8 @@ public static class KafkaTopics
         FeatureExtraction,
         VectorIndexing,
         ProcessingCompleted,
-        ProcessingFailed
+        ProcessingFailed,
+        ImageMaintenance
     };
 }
 
@@ -434,11 +479,11 @@ public static class KafkaTopics
 
 public enum ImageProcessingStatus
 {
-    Uploaded,      // Image uploaded, processing not started
-    Processing,    // Currently being processed
-    Completed,     // Successfully processed and searchable
-    Failed,        // Processing failed
-    PartialFailed  // Some steps completed, others failed
+    Uploaded = 0,
+    Processed = 1,
+    Indexed = 2,
+    PendingDelete = 98,
+    Failed = 99
 }
 
 public enum ProcessingPriority

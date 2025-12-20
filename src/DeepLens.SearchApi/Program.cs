@@ -4,6 +4,7 @@ using Microsoft.OpenApi.Models;
 using DeepLens.SearchApi.Services;
 using DeepLens.Infrastructure.Services;
 using Minio;
+using Confluent.Kafka;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +14,7 @@ builder.Services.AddEndpointsApiExplorer();
 
 // Custom services
 builder.Services.AddScoped<ITenantMetadataService, TenantMetadataService>();
-builder.Services.AddScoped<IAttributeExtractionService, LlmAttributeExtractionService>();
+builder.Services.AddHttpClient<IAttributeExtractionService, LlmAttributeExtractionService>();
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
 
 // MinIO Setup
@@ -23,6 +24,13 @@ builder.Services.AddSingleton<Minio.IMinioClient>(sp =>
         .WithEndpoint("localhost:9000") // TODO: Config
         .WithCredentials("minioadmin", "minioadmin")
         .Build();
+});
+
+// Kafka Producer Setup
+builder.Services.AddSingleton<IProducer<string, string>>(sp => 
+{
+    var config = new ProducerConfig { BootstrapServers = "localhost:9092" }; // TODO: Config
+    return new ProducerBuilder<string, string>(config).Build();
 });
 builder.Services.AddSwaggerGen(c =>
 {

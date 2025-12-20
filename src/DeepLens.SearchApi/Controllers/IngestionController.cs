@@ -210,6 +210,22 @@ public class IngestionController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>
+    /// Ad-hoc metadata extraction from unstructured text using AI reasoning.
+    /// Useful for UI previews or background enrichment.
+    /// </summary>
+    [HttpPost("extract")]
+    public async Task<ActionResult<ExtractedAttributes>> ExtractMetadata([FromBody] ExtractionRequest request)
+    {
+        if (string.IsNullOrEmpty(request.Text))
+            return BadRequest(new { message = "Description text is required" });
+
+        var result = await _attributeService.ExtractAttributesAsync(request.Text, request.Category ?? "Apparel");
+        return Ok(result);
+    }
+
+    public record ExtractionRequest(string Text, string? Category);
+
     private async Task NotifyPipeline(Guid tenantId, Guid imageId, string storagePath)
     {
         var message = new {

@@ -390,6 +390,28 @@ services:
   #         memory: 512MB
   #         cpus: "0.5"
 
+  # =============================================================================
+  # Reasoning Service - Phi-3 based metadata extraction
+  # =============================================================================
+  reasoning-api:
+    build:
+      context: ../src/DeepLens.ReasoningService
+      dockerfile: Dockerfile
+    container_name: deeplens-reasoning-api
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - MOCK_MODE=${REASONING_MOCK_MODE:-true}
+      - MODEL_ID=microsoft/Phi-3-mini-4k-instruct
+    networks:
+      - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 4GB
+          cpus: "2.0"
+
 # =============================================================================
 # Networks
 # =============================================================================

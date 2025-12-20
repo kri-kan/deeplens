@@ -7,6 +7,7 @@ namespace DeepLens.Infrastructure.Services;
 public interface IStorageService
 {
     Task<string> UploadFileAsync(Guid tenantId, string fileName, Stream data, string contentType);
+    Task DeleteFileAsync(Guid tenantId, string storagePath);
 }
 
 public class MinioStorageService : IStorageService
@@ -48,5 +49,22 @@ public class MinioStorageService : IStorageService
         _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", bucketName, path);
         
         return $"{bucketName}/{path}";
+    }
+
+    public async Task DeleteFileAsync(Guid tenantId, string storagePath)
+    {
+        // storagePath format is "tenant-xxx/path/to/file"
+        var parts = storagePath.Split('/', 2);
+        if (parts.Length < 2) return;
+
+        var bucketName = parts[0];
+        var objectName = parts[1];
+
+        var rmArgs = new RemoveObjectArgs()
+            .WithBucket(bucketName)
+            .WithObject(objectName);
+
+        await _minioClient.RemoveObjectAsync(rmArgs);
+        _logger.LogInformation("Deleted file from MinIO: {Bucket}/{Path}", bucketName, objectName);
     }
 }

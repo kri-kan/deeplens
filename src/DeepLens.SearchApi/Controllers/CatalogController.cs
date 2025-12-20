@@ -63,4 +63,20 @@ public class CatalogController : ControllerBase
         await _metadataService.SetDefaultImageAsync(tenantId, imageId, isDefault);
         return Ok(new { message = "Image default status updated" });
     }
+
+    /// <summary>
+    /// Set a listing as favorite (starred).
+    /// </summary>
+    [HttpPatch("listings/{listingId}/favorite")]
+    public async Task<IActionResult> SetFavoriteListing(Guid listingId, [FromQuery] bool isFavorite = true)
+    {
+        var tenantIdClaim = User.FindFirst("tenant_id")?.Value;
+        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
+        {
+            return Unauthorized(new { message = "Invalid tenant_id" });
+        }
+
+        await _metadataService.SetFavoriteListingAsync(tenantId, listingId, isFavorite);
+        return Ok(new { message = "Listing favorite status updated" });
+    }
 }

@@ -33,6 +33,7 @@ graph TD
     Search --> Kafka{Apache Kafka}
     Kafka --> Worker[Worker Service - .NET]
     Worker --> FeatureEx[Feature Extraction - Python]
+    Worker --> ReasoningEx[Reasoning Service - Python]
     Worker --> VectorDB[(Qdrant Vector DB)]
     
     Admin --> Metadata[(PostgreSQL Metadata)]
@@ -66,15 +67,18 @@ Refers to the core tables in the `nextgen_identity` and `deeplens_platform` data
 DeepLens uses a normalized catalog structure within each tenant's dedicated database to support multi-vendor e-commerce:
 
 1.  **Categories**: Broad product classifications (e.g., Sarees, Lehangas).
-2.  **Products**: Represent master SKUs with common titles and tags.
+2.  **Products**: Represent master SKUs with common titles and a **Union of Tags** consolidated from all sources.
 3.  **Product Variants**: Represent sub-SKUs (e.g., by Color, Fabric, or Stitch Type).
-4.  **Images**: Managed assets with PHash for deduplication and quality scores for curation.
-5.  **Seller Listings**: Competitive offers for a variant, capturing seller-specific pricing and descriptions.
+4.  **Images**: Managed assets with PHash for deduplication and quality scores for curation. Supports a **Reliable Deletion Queue** for asynchronous storage cleanup.
+5.  **Sellers**: Master registry of vendors (e.g., WhatsApp groups, Marketplaces).
+6.  **Seller Listings**: Competitive offers for a variant, capturing live price, descriptions, and **Shipping Metadata** (Free/Plus).
+7.  **Price History**: Temporal audit trail of every price change per seller listing, enabling long-term performance analysis.
 
 ### AI-Driven Ingestion Pipeline
-- **Enrichment**: An LLM-based `AttributeExtractionService` scans unstructured seller descriptions to extract structured metadata (Fabric, Color, Occasion).
-- **Parallel Processing**: Bulk ingestion supports high-throughput parallel uploads with concurrency semaphores to protect infrastructure resources.
+- **Enrichment**: An LLM-based `ReasoningService` (utilizing models like Phi-3) scans unstructured seller descriptions to extract structured metadata (Fabric, Color, Occasion).
+- **Parallel Processing**: Bulk ingestion supports high-throughput parallel uploads with concurrency semaphores.
 - **SKU Merging**: Intelligent merging of products allows consolidating multiple vendors under one SKU while preserving unique images and all historical pricing data.
+- **Reliable Cleanup**: Deduplicated or deleted images are queued for asynchronous cleanup from MinIO and Qdrant via Kafka-driven background workers.
 
 ### System Bootstrapping
 DeepLens uses a script-based bootstrapping approach to ensure environment consistency:

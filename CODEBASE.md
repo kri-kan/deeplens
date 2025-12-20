@@ -16,6 +16,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
   - `.Data`: Dapper-based repositories, PostgreSQL migrations, and stored procedures for provisioning.
   - `.Api`: REST endpoints for login, profile management, and tenant provisioning.
 - **DeepLens (Platform)**:
+  - `.ReasoningService`: Python FastAPI service utilizing LLMs (Phi-3) for structured metadata extraction.
   - `.SearchApi`: High-traffic semantic search and image ingestion.
   - `.AdminApi`: Resource management and analytics.
   - `.WorkerService`: Background Kafka consumers for feature extraction and indexing.
@@ -50,6 +51,12 @@ DeepLens is built using a clean architecture pattern across multiple services:
 | `/api/v1/catalog/images/{id}/default` | PATCH  | Set primary image for quick sharing.               |
 | `/api/v1/search`                      | POST   | Semantic image-to-image/text similarity search.    |
 
+### Reasoning Service (Port 8002)
+| Endpoint   | Method | Purpose                               |
+| :--------- | :----- | :------------------------------------ |
+| `/health`  | GET    | Check model and service health.       |
+| `/extract` | POST   | Structured metadata extraction (LLM). |
+
 ### Feature Extraction (Port 8001)
 | Endpoint   | Method | Purpose                             |
 | :--------- | :----- | :---------------------------------- |
@@ -77,6 +84,7 @@ Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiG
 
 ## 📋 Roadmap
 - [x] Identity API & Tenant Provisioning.
-- [ ] Kafka Core Integration.
+- [x] Kafka Core Integration (Upload, Entry, Indexing).
+- [x] Asynchronous Image Maintenance & Reliable Deletion.
 - [ ] Multi-Modal Search (Text-to-Image).
 - [ ] Real-time WebSocket notifications.
