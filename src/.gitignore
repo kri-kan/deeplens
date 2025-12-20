@@ -1,100 +1,94 @@
-# DeepLens - Root .gitignore
-# Language-specific .gitignore files exist in:
-#   - src/.gitignore (C#/.NET)
-#   - src/DeepLens.WebUI/.gitignore (Node.js/Vite - already exists)
-#   - tools/python/.gitignore (Python - already exists)
+# src/.gitignore - .NET & C# Projects
+# This file handles .NET-specific patterns for all projects in src/
+# Node.js/TypeScript patterns are in DeepLens.WebUI/.gitignore
 
 # =============================================================================
-# .NET Build Outputs (Global - covers tools/ and other .NET projects)
+# .NET Build Outputs
 # =============================================================================
 bin/
 obj/
+out/
+artifacts/
+TestResults/
 
 # =============================================================================
-# Common IDE & Editor
+# NuGet
 # =============================================================================
-.vs/
-.vscode/
-!.vscode/extensions.json
-!.vscode/recommended-extensions.json
-!.vscode/launch.json
-!.vscode/settings.json
-.idea/
-*.suo
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# =============================================================================
+# .NET User/IDE Files
+# =============================================================================
 *.user
-*.sln.iml
+*.userosscache
+*.rsuser
+*.sln.docstates
+*.userprefs
 *.DotSettings.user
+mono_crash.*
 
 # =============================================================================
-# Environment & Secrets (Global)
+# .NET Build Artifacts
 # =============================================================================
-.env*
-!.env.example
-!.env.template
-secrets.json
-
-# SSL certificates
-*.pfx
-*.p12
-*.key
-*.crt
-*.pem
+*.dll
+*.pdb
+*.exe
+*.cache
+*.deps.json
+*.runtimeconfig.json
+*.runtimeconfig.dev.json
+project.lock.json
+project.fragment.lock.json
 
 # =============================================================================
-# Cloud & Infrastructure
+# ASP.NET Core Configuration (Environment-specific)
 # =============================================================================
-.azure/
-.aws/
-*.tfstate
-*.tfstate.*
-.terraform/
-*.kubeconfig
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+appsettings.Local.json
+
+# Keep base appsettings.json checked in
+!appsettings.json
 
 # =============================================================================
-# Docker
+# Identity Server / Security
 # =============================================================================
-Dockerfile.prod
-docker-compose.override.yml
+keys/
+*.rsa
 
 # =============================================================================
-# Operating System
+# Local Databases
 # =============================================================================
-Thumbs.db
-[Dd]esktop.ini
-$RECYCLE.BIN/
-.DS_Store
-._*
-*~
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
 
 # =============================================================================
-# Logs & Temporary Files
+# Old/Backup Files
 # =============================================================================
-*.log
-*.log.*
-temp/
-tmp/
-*.tmp
+*.old
+*.backup
 *.bak
+.eslintcache
 
 # =============================================================================
-# Infrastructure Runtime Data
+# Configuration (ASP.NET Core environment-specific)
 # =============================================================================
-infrastructure/data/
-infrastructure/logs/
-infrastructure/config/grafana/dashboards/
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
 
 # =============================================================================
-# DeepLens Application Data (Runtime/Cache)
+# Important files to INCLUDE (force track)
 # =============================================================================
-image_cache/
-thumbnails/
-processed_images/
-qdrant_data/
-weaviate_data/
-vector_cache/
-model_cache/
-feature_cache/
-test_images/
-sample_data/
-benchmark_results/
-performance_logs/
+# TypeScript/Node.js configs - must be in repo
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig*.json
+!.npmrc
