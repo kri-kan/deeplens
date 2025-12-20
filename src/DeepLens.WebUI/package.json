@@ -2,6 +2,7 @@
   "name": "deeplens-webui",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "DeepLens Web UI - Unified interface for tenant and data management",
   "dependencies": {
     "@mui/material": "^5.15.0",
