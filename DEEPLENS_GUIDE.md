@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2025-12-20 08:46:10
+**Auto-generated on:** 2025-12-20 12:31:43
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -257,6 +257,20 @@ Refers to the core tables in the `nextgen_identity` and `deeplens_platform` data
 | `tenant_api_keys`    | M2M authentication for programmatic access.             |
 | `infisical_projects` | Registry for secret management integration.             |
 
+### Catalog & Ingestion Architecture (Tenant-Specific)
+DeepLens uses a normalized catalog structure within each tenant's dedicated database to support multi-vendor e-commerce:
+
+1.  **Categories**: Broad product classifications (e.g., Sarees, Lehangas).
+2.  **Products**: Represent master SKUs with common titles and tags.
+3.  **Product Variants**: Represent sub-SKUs (e.g., by Color, Fabric, or Stitch Type).
+4.  **Images**: Managed assets with PHash for deduplication and quality scores for curation.
+5.  **Seller Listings**: Competitive offers for a variant, capturing seller-specific pricing and descriptions.
+
+### AI-Driven Ingestion Pipeline
+- **Enrichment**: An LLM-based `AttributeExtractionService` scans unstructured seller descriptions to extract structured metadata (Fabric, Color, Occasion).
+- **Parallel Processing**: Bulk ingestion supports high-throughput parallel uploads with concurrency semaphores to protect infrastructure resources.
+- **SKU Merging**: Intelligent merging of products allows consolidating multiple vendors under one SKU while preserving unique images and all historical pricing data.
+
 ### System Bootstrapping
 DeepLens uses a script-based bootstrapping approach to ensure environment consistency:
 1.  **Infrastructure (Podman)**: Postgres, Redis, Qdrant, and Kafka are started.
@@ -355,11 +369,14 @@ DeepLens is built using a clean architecture pattern across multiple services:
 | `/api/auth/login` | POST     | Authenticate and get JWT.             |
 | `/api/tenants`    | GET/POST | List and provision new organizations. |
 
-### Search Service (Port 5001)
-| Endpoint             | Method | Purpose                                 |
-| :------------------- | :----- | :-------------------------------------- |
-| `/api/images/upload` | POST   | Upload and trigger processing pipeline. |
-| `/api/images/search` | POST   | Semantic image-to-image search.         |
+### Search & Ingestion Service (Port 5002)
+| Endpoint                              | Method | Purpose                                            |
+| :------------------------------------ | :----- | :------------------------------------------------- |
+| `/api/v1/ingest/upload`               | POST   | Single image upload with metadata.                 |
+| `/api/v1/ingest/bulk`                 | POST   | Parallel bulk ingestion with LLM-based enrichment. |
+| `/api/v1/catalog/merge`               | POST   | Merge source SKU into target with image dedupe.    |
+| `/api/v1/catalog/images/{id}/default` | PATCH  | Set primary image for quick sharing.               |
+| `/api/v1/search`                      | POST   | Semantic image-to-image/text similarity search.    |
 
 ### Feature Extraction (Port 8001)
 | Endpoint   | Method | Purpose                             |
@@ -438,41 +455,8 @@ DeepLens implements a hierarchical RBAC model:
 
 ### Administrative Impersonation
 System Admins can impersonate users for troubleshooting. 
-- **Mechanism**: The backend generates a temporary context using the target user's ID but flags the request as `impersonated` using the `act_as` claim.
-- **Audit**: Every impersonated action is logged with both the Admin's ID (`act_as`) and the target User's ID (`sub`).
-- **Status**: Backend plumbing (scopes and claims) is ready in the Identity API.
-
-### Personal Access Tokens (DL-PAT)
-DeepLens supports long-lived background service access via Personal Access Tokens, similar to GitHub PATs.
-- **Format**: `dlp_` followed by a secure high-entropy string.
-- **Security**: Tokens are hashed using SHA-256 before storage. Only the plain-text key is returned once during creation.
-- **Expiration**: Supported with custom TTL (e.g., 30 days, 90 days, or No Expiry).
-- **Scope Management**: Keys can be restricted to specific granular scopes. By default, a key cannot perform actions beyond the creator's role.
-
-#### Requesting Scopes
-When creating a key via `POST /api/ApiKey`, you can specify a `scopes` list:
-```json
-{
-  "name": "Search CI/CD",
-  "scopes": ["deeplens.search", "deeplens.api"],
-  "expiresInDays": 30
-}
-```
-
-#### Standard Scopes
-| Scope               | Description                                                  |
-| :------------------ | :----------------------------------------------------------- |
-| `deeplens.search`   | Standard image search and metadata retrieval.                |
-| `deeplens.api`      | High-level platform operations and image ingestion.          |
-| `deeplens.admin`    | Administrative operations (requires creator to be an Admin). |
-| `deeplens.identity` | User and tenant management.                                  |
-
-#### Usage in Apps
-API Keys should be passed in the `X-API-Key` header:
-```http
-GET /api/images/search HTTP/1.1
-X-API-Key: dlp_a1b2c3d4e5f6g7h8...
-```
+- **Mechanism**: The backend generates a temporary context using the target user's ID but flags the request as `impersonated`.
+- **Audit**: Every impersonated action is logged with both the Admin's ID and the target User's ID.
 
 ---
 
