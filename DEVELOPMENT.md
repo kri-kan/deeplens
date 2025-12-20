@@ -99,6 +99,108 @@ Last Updated: December 20, 2025
 
 ---
 
+## 📸 Image Ingestion Workflow
+
+### Bulk Image Upload
+
+To ingest a collection of images for a tenant:
+
+1. **Prepare Your Images**:
+   - Place images in a designated folder (e.g., `tests/saree_images/`)
+   - Supported formats: JPEG, PNG, WebP
+   - Recommended: High-quality source images for best thumbnail generation
+
+2. **Create Metadata File**:
+   Create a JSON file mapping images to product metadata:
+   ```json
+   {
+     "sellerId": "seller123",
+     "category": "Sarees",
+     "images": [
+       {
+         "fileName": "image1.jpeg",
+         "sku": "VAY-SRI-201",
+         "description": "Pure Kanchipuram Silk Saree...",
+         "price": 12500,
+         "currency": "INR",
+         "color": "Emerald Green",
+         "fabric": "Silk"
+       }
+     ]
+   }
+   ```
+
+3. **Upload via API**:
+   ```powershell
+   $apiBase = "http://localhost:5000"
+   $metadata = Get-Content -Raw "path/to/metadata.json"
+   $imagesDir = "path/to/images"
+   
+   $curlCmd = "curl.exe -X POST $apiBase/api/v1/ingest/bulk -F `"metadata=<metadata.json`""
+   Get-ChildItem $imagesDir -Filter *.jpeg | ForEach-Object {
+       $curlCmd += " -F `"files=@$($_.FullName)`""
+   }
+   Invoke-Expression $curlCmd
+   ```
+
+4. **Verify in Visual Catalog**:
+   - Navigate to http://localhost:3000/images
+   - Images should appear with status "Uploaded" → "Processed"
+   - Thumbnails auto-generated based on tenant thumbnail settings
+
+### Tenant-Specific Thumbnail Configuration
+
+Configure per-tenant thumbnail settings in the database:
+
+```sql
+UPDATE tenants 
+SET settings = '{
+  "thumbnails": {
+    "enabled": true,
+    "specifications": [
+      {
+        "name": "grid",
+        "maxWidth": 800,
+        "maxHeight": 800,
+        "format": "WebP",
+        "options": {
+          "webp": { "quality": 85 }
+        }
+      }
+    ]
+  }
+}'::jsonb
+WHERE slug = 'vayyari';
+```
+
+### Testing the End-to-End Pipeline
+
+1. **Start All Services**:
+   ```powershell
+   # Backend APIs
+   dotnet run --project src/NextGen.Identity.Api/NextGen.Identity.Api.csproj --urls http://localhost:5198
+   dotnet run --project src/DeepLens.SearchApi/DeepLens.SearchApi.csproj --urls http://localhost:5000
+   dotnet run --project src/DeepLens.WorkerService/DeepLens.WorkerService.csproj
+   
+   # Frontend
+   cd src/DeepLens.WebUI
+   npm run dev
+   ```
+
+2. **Upload Test Images** (as shown above)
+
+3. **Monitor Processing**:
+   - Worker logs show thumbnail generation progress
+   - Check MinIO for uploaded files and generated thumbnails
+   - Database updates: status transitions from 0→1, dimensions populated
+
+4. **Verify in UI**:
+   - Login at http://localhost:3000/login
+   - Navigate to Images page
+   - Grid displays processed images with metadata
+
+---
+
 ## 📖 Documentation Index
 - [**ARCHITECTURE.md**](ARCHITECTURE.md) - High-level design & ADRs.
 - [**infrastructure/README.md**](infrastructure/README.md) - Deep dive into container setup.

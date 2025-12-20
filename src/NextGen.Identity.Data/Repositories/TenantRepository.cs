@@ -28,7 +28,7 @@ public class TenantRepository : ITenantRepository
                    qdrant_grpc_port AS qdrantgrpcport, minio_endpoint AS minioendpoint,
                    minio_bucket_name AS miniobucketname, status, tier,
                    max_storage_bytes AS maxstoragebytes, max_users AS maxusers,
-                   max_api_calls_per_day AS maxapicallsperday,
+                   max_api_calls_per_day AS maxapicallsperday, settings,
                    created_at AS createdat, updated_at AS updatedat, 
                    deleted_at AS deletedat, created_by AS createdby
             FROM tenants
@@ -61,7 +61,7 @@ public class TenantRepository : ITenantRepository
                    qdrant_grpc_port AS qdrantgrpcport, minio_endpoint AS minioendpoint,
                    minio_bucket_name AS miniobucketname, status, tier,
                    max_storage_bytes AS maxstoragebytes, max_users AS maxusers,
-                   max_api_calls_per_day AS maxapicallsperday,
+                   max_api_calls_per_day AS maxapicallsperday, settings,
                    created_at AS createdat, updated_at AS updatedat, 
                    deleted_at AS deletedat, created_by AS createdby
             FROM tenants
@@ -93,7 +93,7 @@ public class TenantRepository : ITenantRepository
                    qdrant_grpc_port AS qdrantgrpcport, minio_endpoint AS minioendpoint,
                    minio_bucket_name AS miniobucketname, status, tier,
                    max_storage_bytes AS maxstoragebytes, max_users AS maxusers,
-                   max_api_calls_per_day AS maxapicallsperday,
+                   max_api_calls_per_day AS maxapicallsperday, settings,
                    created_at AS createdat, updated_at AS updatedat, 
                    deleted_at AS deletedat, created_by AS createdby
             FROM tenants
@@ -126,12 +126,12 @@ public class TenantRepository : ITenantRepository
             INSERT INTO tenants (id, name, description, slug, database_name, connection_string,
                                qdrant_container_name, qdrant_http_port, qdrant_grpc_port,
                                minio_endpoint, minio_bucket_name, status, tier,
-                               max_storage_bytes, max_users, max_api_calls_per_day,
+                               max_storage_bytes, max_users, max_api_calls_per_day, settings,
                                created_at, created_by)
             VALUES (@Id, @Name, @Description, @Slug, @DatabaseName, @ConnectionString,
                     @QdrantContainerName, @QdrantHttpPort, @QdrantGrpcPort,
                     @MinioEndpoint, @MinioBucketName, @Status, @Tier,
-                    @MaxStorageBytes, @MaxUsers, @MaxApiCallsPerDay,
+                    @MaxStorageBytes, @MaxUsers, @MaxApiCallsPerDay, @Settings,
                     @CreatedAt, @CreatedBy)
             RETURNING id";
 
@@ -166,6 +166,7 @@ public class TenantRepository : ITenantRepository
                 max_storage_bytes = @MaxStorageBytes,
                 max_users = @MaxUsers,
                 max_api_calls_per_day = @MaxApiCallsPerDay,
+                settings = @Settings,
                 updated_at = @UpdatedAt
             WHERE id = @Id";
 

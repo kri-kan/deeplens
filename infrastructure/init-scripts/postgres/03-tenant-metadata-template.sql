@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS images (
     phash VARCHAR(64), -- Perceptual hash for dedupe
     is_default BOOLEAN DEFAULT FALSE, 
     quality_score NUMERIC, 
+    width INT,
+    height INT,
     features_extracted BOOLEAN DEFAULT FALSE,
     indexed BOOLEAN DEFAULT FALSE,
     uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

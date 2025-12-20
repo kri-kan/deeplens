@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using System.Text;
 using System.Net.Http;
 using Confluent.Kafka;
+using DeepLens.Infrastructure.Services;
 
 namespace DeepLens.WorkerService.Workers;
 
@@ -213,6 +214,14 @@ public class FeatureExtractionWorker : BackgroundService
 
             var processingTime = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
+            // Update dimensions in database
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var metadataService = scope.ServiceProvider.GetRequiredService<DeepLens.Infrastructure.Services.ITenantMetadataService>();
+                await metadataService.UpdateImageDimensionsAsync(Guid.Parse(extractionEvent.TenantId), 
+                    extractionEvent.Data.ImageId, extractionResponse.ImageWidth ?? 0, extractionResponse.ImageHeight ?? 0);
+            }
+
             // Create vector indexing event
             var indexingEvent = new VectorIndexingRequestedEvent
             {
@@ -275,24 +284,29 @@ public class FeatureExtractionWorker : BackgroundService
     {
         try
         {
-            // TODO: Implement proper storage abstraction
-            // For now, assume local file system storage
-            if (File.Exists(imagePath))
+            using var scope = _serviceProvider.CreateScope();
+            var storageService = scope.ServiceProvider.GetRequiredService<IStorageService>();
+            
+            // imagePath format: "tenant-{guid}/raw/yyyy/MM/dd/guid_filename.ext"
+            // Extract tenantId from the path
+            var parts = imagePath.Split('/', 2);
+            if (parts.Length < 2 || !parts[0].StartsWith("tenant-"))
             {
-                return await File.ReadAllBytesAsync(imagePath, cancellationToken);
+                _logger.LogError("Invalid storage path format: {ImagePath}", imagePath);
+                return null;
             }
             
-            // Could also be a URL or cloud storage path
-            if (Uri.TryCreate(imagePath, UriKind.Absolute, out var uri))
+            var tenantIdStr = parts[0].Replace("tenant-", "");
+            if (!Guid.TryParse(tenantIdStr, out var tenantId))
             {
-                if (uri.Scheme == "http" || uri.Scheme == "https")
-                {
-                    return await _pythonServiceClient.GetByteArrayAsync(imagePath, cancellationToken);
-                }
+                _logger.LogError("Invalid tenant ID in path: {ImagePath}", imagePath);
+                return null;
             }
             
-            _logger.LogError("Unable to read image from path: {ImagePath}", imagePath);
-            return null;
+            using var stream = await storageService.GetFileAsync(tenantId, imagePath);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream, cancellationToken);
+            return memoryStream.ToArray();
         }
         catch (Exception ex)
         {

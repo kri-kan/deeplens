@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using DeepLens.Contracts.Events;
 using System.Text.Json;
 using Confluent.Kafka;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
+using DeepLens.Infrastructure.Services;
 
 namespace DeepLens.WorkerService.Workers;
 
@@ -32,7 +35,7 @@ public class ImageProcessingWorker : BackgroundService
         var consumerConfig = new ConsumerConfig
         {
             BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
-            GroupId = "deeplens-image-processing-workers",
+            GroupId = "deeplens-image-processing-workers-v2",
             ClientId = Environment.MachineName + "-image-processor",
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false, // Manual commit for better reliability
@@ -182,7 +185,10 @@ public class ImageProcessingWorker : BackgroundService
 
         try 
         {
-            // Create feature extraction request event
+            // 1. Generate WebP Thumbnail immediately
+            await GenerateWebpThumbnail(uploadEvent, cancellationToken);
+
+            // 2. Create feature extraction request event
             var extractionEvent = new FeatureExtractionRequestedEvent
             {
                 EventId = Guid.NewGuid(),
@@ -233,7 +239,7 @@ public class ImageProcessingWorker : BackgroundService
                 uploadEvent.Data.ImageId, deliveryResult.Topic, deliveryResult.Offset);
 
             // Update processing status in database (optional, for status tracking)
-            await UpdateProcessingStatus(uploadEvent.Data.ImageId, ImageProcessingStatus.Uploaded, cancellationToken);
+            await UpdateProcessingStatus(Guid.Parse(uploadEvent.TenantId), uploadEvent.Data.ImageId, ImageProcessingStatus.Uploaded, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -246,12 +252,13 @@ public class ImageProcessingWorker : BackgroundService
         }
     }
 
-    private async Task UpdateProcessingStatus(Guid imageId, ImageProcessingStatus status, CancellationToken cancellationToken)
+    private async Task UpdateProcessingStatus(Guid tenantId, Guid imageId, ImageProcessingStatus status, CancellationToken cancellationToken)
     {
-        // TODO: Implement status tracking in database
-        // This would update a processing_status table or similar
+        using var scope = _serviceProvider.CreateScope();
+        var metadataService = scope.ServiceProvider.GetRequiredService<ITenantMetadataService>();
+        
         _logger.LogDebug("Updating processing status for ImageId: {ImageId} to {Status}", imageId, status);
-        await Task.CompletedTask;
+        await metadataService.UpdateImageStatusAsync(tenantId, imageId, (int)status);
     }
 
     private async Task PublishProcessingFailedEvent(ImageUploadedEvent originalEvent, string failedStep, 
@@ -306,6 +313,81 @@ public class ImageProcessingWorker : BackgroundService
         // For now, just log the error
         
         await Task.CompletedTask;
+    }
+
+    private async Task GenerateWebpThumbnail(ImageUploadedEvent uploadEvent, CancellationToken cancellationToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var storageService = scope.ServiceProvider.GetRequiredService<IStorageService>();
+        
+        try
+        {
+            _logger.LogInformation("Generating thumbnail for ImageId: {ImageId}, Format: {Format}", 
+                uploadEvent.Data.ImageId, uploadEvent.ProcessingOptions.ThumbnailFormat);
+            
+            using var rawStream = await storageService.GetFileAsync(Guid.Parse(uploadEvent.TenantId), uploadEvent.Data.FilePath);
+            using var imageObj = await Image.LoadAsync(rawStream, cancellationToken);
+            
+            var options = uploadEvent.ProcessingOptions;
+            
+            // Maintain aspect ratio: Resize to fit within specified dimensions
+            imageObj.Mutate(x => x.Resize(new ResizeOptions {
+                Size = new Size(options.ThumbnailWidth, options.ThumbnailHeight),
+                Mode = ResizeMode.Max
+            }));
+
+            var extension = options.ThumbnailFormat.ToLower() == "jpeg" ? ".jpg" : $".{options.ThumbnailFormat.ToLower()}";
+            var thumbPath = uploadEvent.Data.FilePath.Replace("raw/", "thumbnails/");
+            var lastDot = thumbPath.LastIndexOf('.');
+            if (lastDot > 0) thumbPath = thumbPath.Substring(0, lastDot);
+            thumbPath += extension;
+
+            using var outMs = new MemoryStream();
+            
+            if (options.ThumbnailFormat.ToLower() == "webp")
+            {
+                await imageObj.SaveAsWebpAsync(outMs, new SixLabors.ImageSharp.Formats.Webp.WebpEncoder 
+                { 
+                    Quality = options.ThumbnailQuality 
+                }, cancellationToken);
+            }
+            else if (options.ThumbnailFormat.ToLower() == "jpeg")
+            {
+                await imageObj.SaveAsJpegAsync(outMs, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder 
+                { 
+                    Quality = options.ThumbnailQuality 
+                }, cancellationToken);
+            }
+            else // Default to WebP if format unknown
+            {
+                await imageObj.SaveAsWebpAsync(outMs, cancellationToken);
+            }
+            
+            outMs.Position = 0;
+
+            // Upload thumbnail to MinIO
+            var mimeType = options.ThumbnailFormat.ToLower() == "jpeg" ? "image/jpeg" : $"image/{options.ThumbnailFormat.ToLower()}";
+            await storageService.UploadThumbnailAsync(Guid.Parse(uploadEvent.TenantId), thumbPath, outMs, mimeType);
+            
+            _logger.LogInformation("WebP thumbnail generated and uploaded: {ThumbPath}", thumbPath);
+
+            // Update image dimensions in database
+            using (var metadataScope = _serviceProvider.CreateScope())
+            {
+                var metadataService = metadataScope.ServiceProvider.GetRequiredService<ITenantMetadataService>();
+                await metadataService.UpdateImageDimensionsAsync(Guid.Parse(uploadEvent.TenantId), 
+                    uploadEvent.Data.ImageId, imageObj.Width, imageObj.Height);
+                
+                // Mark as processed
+                await metadataService.UpdateImageStatusAsync(Guid.Parse(uploadEvent.TenantId), 
+                    uploadEvent.Data.ImageId, (int)ImageProcessingStatus.Processed);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate thumbnail for ImageId: {ImageId}", uploadEvent.Data.ImageId);
+            // Non-fatal, pipeline continues
+        }
     }
 
     public override void Dispose()

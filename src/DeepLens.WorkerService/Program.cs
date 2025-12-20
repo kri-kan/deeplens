@@ -15,7 +15,7 @@ builder.Services.AddSingleton<IMinioClient>(sp =>
 {
     return new MinioClient()
         .WithEndpoint("localhost:9000") // TODO: Config
-        .WithCredentials("minioadmin", "minioadmin")
+        .WithCredentials("deeplens", "DeepLens123!")
         .Build();
 });
 
@@ -29,11 +29,13 @@ builder.Services.AddSingleton<IProducer<string, string>>(sp =>
 // Infrastructure Drivers
 builder.Services.AddScoped<IStorageService, MinioStorageService>();
 builder.Services.AddScoped<IVectorStoreService, VectorStoreService>();
+builder.Services.AddScoped<ITenantMetadataService, TenantMetadataService>();
 
 // Background Workers
+builder.Services.AddHostedService<ImageProcessingWorker>();
+builder.Services.AddHostedService<FeatureExtractionWorker>();
+builder.Services.AddHostedService<VectorIndexingWorker>();
 builder.Services.AddHostedService<ImageMaintenanceWorker>();
-// builder.Services.AddHostedService<FeatureExtractionWorker>(); // Uncomment when ready
-// builder.Services.AddHostedService<VectorIndexingWorker>();    // Uncomment when ready
 
 var host = builder.Build();
 host.Run();

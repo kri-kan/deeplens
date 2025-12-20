@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using DeepLens.Contracts.Ingestion;
-using DeepLens.SearchApi.Services;
+using DeepLens.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 
 namespace DeepLens.SearchApi.Controllers;

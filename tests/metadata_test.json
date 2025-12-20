@@ -1,0 +1,19 @@
+{
+    "sellerId": "VAY-BLR-001",
+    "category": "Handloom Sarees",
+    "images": [
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.15 PM.jpeg",
+            "sku": "VAY-SRI-201",
+            "description": "Pure Kanchipuram Silk Saree in Emerald Green with Gold Zari border",
+            "color": "Emerald Green",
+            "fabric": "Kanchipuram Silk",
+            "price": 24500.0,
+            "tags": [
+                "wedding",
+                "traditional",
+                "luxury"
+            ]
+        }
+    ]
+}

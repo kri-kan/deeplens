@@ -28,6 +28,9 @@ public class Tenant
     public int MaxUsers { get; set; } = 10;
     public int MaxApiCallsPerDay { get; set; } = 10000;
     
+    // Custom settings (JSON)
+    public string? Settings { get; set; } 
+    
     // Audit fields
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

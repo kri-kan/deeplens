@@ -98,6 +98,18 @@ public class ProcessingOptions
 
     [JsonPropertyName("generateThumbnail")]
     public bool GenerateThumbnail { get; set; } = true;
+
+    [JsonPropertyName("thumbnailQuality")]
+    public int ThumbnailQuality { get; set; } = 75;
+
+    [JsonPropertyName("thumbnailWidth")]
+    public int ThumbnailWidth { get; set; } = 512;
+
+    [JsonPropertyName("thumbnailHeight")]
+    public int ThumbnailHeight { get; set; } = 512;
+
+    [JsonPropertyName("thumbnailFormat")]
+    public string ThumbnailFormat { get; set; } = "webp";
 }
 
 public class ImageMetadata

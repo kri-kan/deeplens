@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using DeepLens.SearchApi.Services;
@@ -22,8 +23,15 @@ builder.Services.AddSingleton<Minio.IMinioClient>(sp =>
 {
     return new Minio.MinioClient()
         .WithEndpoint("localhost:9000") // TODO: Config
-        .WithCredentials("minioadmin", "minioadmin")
+        .WithCredentials("deeplens", "DeepLens123!")
         .Build();
+});
+
+// Redis Cache
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+    options.InstanceName = "DeepLens_";
 });
 
 // Kafka Producer Setup
@@ -89,6 +97,18 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("IngestPolicy", policy => policy.RequireClaim("scope", "deeplens.api"));
 });
 
+// CORS Configuration for Frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", builder =>
+    {
+        builder.WithOrigins("http://localhost:3000", "http://localhost:5173")
+               .AllowAnyMethod()
+               .AllowAnyHeader()
+               .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -97,6 +117,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

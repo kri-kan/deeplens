@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using System.Data;
 using Confluent.Kafka;
 
-namespace DeepLens.SearchApi.Services;
+namespace DeepLens.Infrastructure.Services;
 
 public interface ITenantMetadataService
 {
@@ -16,6 +16,10 @@ public interface ITenantMetadataService
     Task MergeProductsAsync(Guid tenantId, string targetSku, string sourceSku, bool deleteSource);
     Task SetDefaultImageAsync(Guid tenantId, Guid imageId, bool isDefault);
     Task SetFavoriteListingAsync(Guid tenantId, Guid listingId, bool isFavorite);
+    Task UpdateImageDimensionsAsync(Guid tenantId, Guid imageId, int width, int height);
+    Task UpdateImageStatusAsync(Guid tenantId, Guid imageId, int status);
+    Task<IEnumerable<ImageDto>> ListImagesAsync(Guid tenantId, int page, int pageSize);
+    Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync(Guid tenantId);
 }
 
 public class TenantMetadataService : ITenantMetadataService
@@ -406,4 +410,80 @@ public class TenantMetadataService : ITenantMetadataService
                 new { ListingId = listingId, Price = current.Value, Currency = currency }, trans);
         }
     }
+
+    public async Task<IEnumerable<ImageDto>> ListImagesAsync(Guid tenantId, int page, int pageSize)
+    {
+        using var connection = GetConnection(tenantId);
+        const string sql = @"
+            SELECT i.id, i.storage_path as StoragePath, i.status, i.width, i.height, i.uploaded_at as UploadedAt,
+                   p.base_sku as Sku, p.title as ProductTitle
+            FROM images i
+            LEFT JOIN product_variants v ON i.variant_id = v.id
+            LEFT JOIN products p ON v.product_id = p.id
+            ORDER BY i.uploaded_at DESC
+            LIMIT @PageSize OFFSET @Offset";
+
+        return await connection.QueryAsync<ImageDto>(sql, new { 
+            PageSize = pageSize, 
+            Offset = (page - 1) * pageSize 
+        });
+    }
+
+    public async Task UpdateImageDimensionsAsync(Guid tenantId, Guid imageId, int width, int height)
+    {
+        using var connection = GetConnection(tenantId);
+        const string sql = "UPDATE images SET width = @Width, height = @Height WHERE id = @Id";
+        await connection.ExecuteAsync(sql, new { Id = imageId, Width = width, Height = height });
+    }
+
+    public async Task UpdateImageStatusAsync(Guid tenantId, Guid imageId, int status)
+    {
+        using var connection = GetConnection(tenantId);
+        const string sql = "UPDATE images SET status = @Status WHERE id = @Id";
+        await connection.ExecuteAsync(sql, new { Id = imageId, Status = status });
+    }
+
+    public async Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync(Guid tenantId)
+    {
+        try
+        {
+            var baseConnString = _configuration.GetConnectionString("DefaultConnection") 
+                ?? "Host=localhost;Port=5433;Username=postgres;Password=DeepLens123!";
+            
+            var builder = new NpgsqlConnectionStringBuilder(baseConnString);
+            builder.Database = "nextgen_identity"; // Query the registry/identity DB
+            
+            using var connection = new NpgsqlConnection(builder.ConnectionString);
+            var settingsJson = await connection.QuerySingleOrDefaultAsync<string>(
+                "SELECT settings FROM tenants WHERE id = @Id", new { Id = tenantId });
+            
+            if (string.IsNullOrEmpty(settingsJson)) return null;
+            
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var settings = JsonSerializer.Deserialize<Dictionary<string, object>>(settingsJson, options);
+            
+            if (settings != null && settings.TryGetValue("thumbnails", out var thumbObj))
+            {
+                return JsonSerializer.Deserialize<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto>(thumbObj.ToString()!, options);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch custom settings for tenant {TenantId}. Falling back to defaults.", tenantId);
+        }
+        
+        return null;
+    }
+}
+
+public class ImageDto
+{
+    public Guid Id { get; set; }
+    public required string StoragePath { get; set; }
+    public int Status { get; set; }
+    public int? Width { get; set; }
+    public int? Height { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public string? Sku { get; set; }
+    public string? ProductTitle { get; set; }
 }

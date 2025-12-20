@@ -1,0 +1,97 @@
+{
+    "sellerId": "VAY-BLR-001",
+    "category": "Handloom Sarees",
+    "images": [
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.15 PM.jpeg",
+            "sku": "VAY-SRI-201",
+            "description": "Pure Kanchipuram Silk Saree in Emerald Green with Gold Zari border",
+            "color": "Emerald Green",
+            "fabric": "Kanchipuram Silk",
+            "price": 24500.0,
+            "tags": [
+                "wedding",
+                "traditional",
+                "luxury"
+            ]
+        },
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.151 PM.jpeg",
+            "sku": "VAY-SRI-202",
+            "description": "Midnight Blue Banarasi Saree featuring intricate silver floral motifs",
+            "color": "Midnight Blue",
+            "fabric": "Banarasi Silk",
+            "price": 18900.0,
+            "tags": [
+                "party",
+                "silver-zari",
+                "banarasi"
+            ]
+        },
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.16 PM.jpeg",
+            "sku": "VAY-SRI-203",
+            "description": "Hand-painted Kalamkari Saree on Tussar Silk, featuring mythological narratives",
+            "color": "Multi/Earth Tones",
+            "fabric": "Tussar Silk",
+            "price": 12500.0,
+            "tags": [
+                "hand-painted",
+                "artistic",
+                "tussar"
+            ]
+        },
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.17 PM.jpeg",
+            "sku": "VAY-SRI-204",
+            "description": "Classic Red Bridal Saree with heavy Zardosi work and stone embellishments",
+            "color": "Ruby Red",
+            "fabric": "Silk Blend",
+            "price": 32000.0,
+            "tags": [
+                "bridal",
+                "heavy-work",
+                "wedding"
+            ]
+        },
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.19 PM.jpeg",
+            "sku": "VAY-SRI-205",
+            "description": "Lightweight Chiffon Saree in Pastel Pink with subtle pearl border",
+            "color": "Pastel Pink",
+            "fabric": "Chiffon",
+            "price": 5500.0,
+            "tags": [
+                "summer",
+                "casual-chic",
+                "pearl-work"
+            ]
+        },
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.20 PM.jpeg",
+            "sku": "VAY-SRI-206",
+            "description": "Indigo Dabu Print Cotton Saree, naturally dyed and handcrafted",
+            "color": "Indigo Blue",
+            "fabric": "Cotton",
+            "price": 3800.0,
+            "tags": [
+                "eco-friendly",
+                "casual",
+                "indigo"
+            ]
+        },
+        {
+            "fileName": "WhatsApp Image 2025-12-20 at 11.06.22 PM.jpeg",
+            "sku": "VAY-SRI-207",
+            "description": "Elegant Paithani Saree in Magenta with Peacock motifs on the pallu",
+            "color": "Magenta",
+            "fabric": "Paithani Silk",
+            "price": 21000.0,
+            "tags": [
+                "maharashtrian",
+                "paithani",
+                "silk"
+            ]
+        }
+    ]
+}

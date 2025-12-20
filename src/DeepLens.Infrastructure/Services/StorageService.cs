@@ -7,6 +7,8 @@ namespace DeepLens.Infrastructure.Services;
 public interface IStorageService
 {
     Task<string> UploadFileAsync(Guid tenantId, string fileName, Stream data, string contentType);
+    Task<string> UploadThumbnailAsync(Guid tenantId, string storagePath, Stream data, string contentType);
+    Task<Stream> GetFileAsync(Guid tenantId, string storagePath);
     Task DeleteFileAsync(Guid tenantId, string storagePath);
 }
 
@@ -49,6 +51,38 @@ public class MinioStorageService : IStorageService
         _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", bucketName, path);
         
         return $"{bucketName}/{path}";
+    }
+
+    public async Task<string> UploadThumbnailAsync(Guid tenantId, string storagePath, Stream data, string contentType)
+    {
+        var bucketName = $"tenant-{tenantId}".ToLower();
+
+        var putArgs = new PutObjectArgs()
+            .WithBucket(bucketName)
+            .WithObject(storagePath)
+            .WithStreamData(data)
+            .WithObjectSize(data.Length)
+            .WithContentType(contentType);
+
+        await _minioClient.PutObjectAsync(putArgs);
+        return $"{bucketName}/{storagePath}";
+    }
+
+    public async Task<Stream> GetFileAsync(Guid tenantId, string storagePath)
+    {
+        var parts = storagePath.Split('/', 2);
+        var bucketName = parts[0];
+        var objectName = parts[1];
+
+        var memoryStream = new MemoryStream();
+        var getArgs = new GetObjectArgs()
+            .WithBucket(bucketName)
+            .WithObject(objectName)
+            .WithCallbackStream(s => s.CopyTo(memoryStream));
+
+        await _minioClient.GetObjectAsync(getArgs);
+        memoryStream.Position = 0;
+        return memoryStream;
     }
 
     public async Task DeleteFileAsync(Guid tenantId, string storagePath)
