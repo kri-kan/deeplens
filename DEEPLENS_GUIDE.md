@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2025-12-20 16:15:32
+**Auto-generated on:** 2025-12-20 20:00:52
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -188,6 +188,62 @@ Last Updated: December 20, 2025
 2.  **Container Failures**: Check `podman logs <container-name>`.
 3.  **Database Errors**: Ensure `.env` in `infrastructure` matches your local config.
 4.  **Identity API Not Starting**: Check that PostgreSQL is accessible on port 5433.
+
+---
+
+## 📸 Image Ingestion Workflow
+
+### Bulk Image Upload
+
+To ingest a collection of images for a tenant:
+
+1. **Prepare Your Images**:
+   - Place images in a designated folder (e.g., `tests/saree_images/`)
+   - Supported formats: JPEG, PNG, WebP
+   - Recommended: High-quality source images for best thumbnail generation
+
+2. **Create Metadata File**:
+   Create a JSON file mapping images to product metadata:
+   
+*(Code block omitted for brevity)*
+
+
+3. **Upload via API**:
+   
+*(Code block omitted for brevity)*
+
+
+4. **Verify in Visual Catalog**:
+   - Navigate to http://localhost:3000/images
+   - Images should appear with status "Uploaded" → "Processed"
+   - Thumbnails auto-generated based on tenant thumbnail settings
+
+### Tenant-Specific Thumbnail Configuration
+
+Configure per-tenant thumbnail settings in the database:
+
+
+*(Code block omitted for brevity)*
+
+
+### Testing the End-to-End Pipeline
+
+1. **Start All Services**:
+   
+*(Code block omitted for brevity)*
+
+
+2. **Upload Test Images** (as shown above)
+
+3. **Monitor Processing**:
+   - Worker logs show thumbnail generation progress
+   - Check MinIO for uploaded files and generated thumbnails
+   - Database updates: status transitions from 0→1, dimensions populated
+
+4. **Verify in UI**:
+   - Login at http://localhost:3000/login
+   - Navigate to Images page
+   - Grid displays processed images with metadata
 
 ---
 
