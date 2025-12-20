@@ -73,6 +73,15 @@ public class DeepLensProfileService : IProfileService
             claims.Add(new Claim("tenant_tier", user.Tenant.Tier.ToString()));
         }
 
+        // Handle Administrative Impersonation claims if present in the Subject principal
+        var impersonatorId = context.Subject.FindFirst("act_as")?.Value;
+        if (!string.IsNullOrEmpty(impersonatorId))
+        {
+            claims.Add(new Claim("act_as", impersonatorId));
+            claims.Add(new Claim("is_impersonated", "true"));
+            _logger.LogInformation("Issuing impersonated token for user {UserId} by admin {AdminId}", user.Id, impersonatorId);
+        }
+
         context.IssuedClaims.AddRange(claims);
         
         _logger.LogDebug("Profile data retrieved for user: {UserId}", userId);

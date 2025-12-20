@@ -1,0 +1,20 @@
+[
+    {
+        "Category": "Saree",
+        "Text": "Kanchipuram Pure Silk Saree in Royal Blue",
+        "ExpectedFabric": "Silk",
+        "ExpectedColor": "Blue"
+    },
+    {
+        "Category": "Kurta",
+        "Text": "Cotton Kurta for Men, Emerald Green",
+        "ExpectedFabric": "Cotton",
+        "ExpectedColor": "Emerald Green"
+    },
+    {
+        "Category": "Lehenga",
+        "Text": "Bridal Lehenga on georgette fabric, Maroon red",
+        "ExpectedFabric": "Georgette",
+        "ExpectedColor": "Red"
+    }
+]

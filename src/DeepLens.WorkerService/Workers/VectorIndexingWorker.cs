@@ -41,8 +41,7 @@ public class VectorIndexingWorker : BackgroundService
             SessionTimeoutMs = 30000,
             HeartbeatIntervalMs = 3000,
             MaxPollIntervalMs = 300000, // 5 minutes
-            FetchMinBytes = 1,
-            FetchMaxWaitMs = 1000
+            FetchMinBytes = 1
         };
 
         // Configure Kafka producer
@@ -51,7 +50,6 @@ public class VectorIndexingWorker : BackgroundService
             BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
             ClientId = Environment.MachineName + "-vector-indexer-producer",
             Acks = Acks.All,
-            Retries = 3,
             RetryBackoffMs = 1000,
             MessageTimeoutMs = 30000,
             BatchSize = 16384,
@@ -251,6 +249,8 @@ public class VectorIndexingWorker : BackgroundService
             var completionEvent = new ProcessingCompletedEvent
             {
                 EventId = Guid.NewGuid(),
+                EventType = EventTypes.ProcessingCompleted,
+                EventVersion = "1.0",
                 TenantId = indexingEvent.TenantId,
                 CorrelationId = indexingEvent.CorrelationId,
                 Timestamp = DateTime.UtcNow,
@@ -271,7 +271,7 @@ public class VectorIndexingWorker : BackgroundService
                 indexingEvent.Data.ImageId, collectionInfo.Name, indexDuration, totalProcessingTime);
 
             // Update processing status in database (optional)
-            await UpdateProcessingStatus(indexingEvent.Data.ImageId, ImageProcessingStatus.Completed, cancellationToken);
+            await UpdateProcessingStatus(indexingEvent.Data.ImageId, ImageProcessingStatus.Indexed, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -333,6 +333,8 @@ public class VectorIndexingWorker : BackgroundService
             var failedEvent = new ProcessingFailedEvent
             {
                 EventId = Guid.NewGuid(),
+                EventType = EventTypes.ProcessingFailed,
+                EventVersion = "1.0",
                 TenantId = originalEvent.TenantId,
                 CorrelationId = originalEvent.CorrelationId,
                 Timestamp = DateTime.UtcNow,
@@ -355,6 +357,8 @@ public class VectorIndexingWorker : BackgroundService
                 var partialCompletionEvent = new ProcessingCompletedEvent
                 {
                     EventId = Guid.NewGuid(),
+                    EventType = EventTypes.ProcessingCompleted,
+                    EventVersion = "1.0",
                     TenantId = originalEvent.TenantId,
                     CorrelationId = originalEvent.CorrelationId,
                     Timestamp = DateTime.UtcNow,

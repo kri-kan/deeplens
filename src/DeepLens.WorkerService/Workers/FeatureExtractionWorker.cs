@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using DeepLens.Contracts.Events;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text;
+using System.Net.Http;
 using Confluent.Kafka;
 
 namespace DeepLens.WorkerService.Workers;
@@ -48,8 +50,7 @@ public class FeatureExtractionWorker : BackgroundService
             SessionTimeoutMs = 45000, // Longer for ML processing
             HeartbeatIntervalMs = 3000,
             MaxPollIntervalMs = 600000, // 10 minutes for ML processing
-            FetchMinBytes = 1,
-            FetchMaxWaitMs = 1000
+            FetchMinBytes = 1
         };
 
         // Configure Kafka producer
@@ -58,7 +59,6 @@ public class FeatureExtractionWorker : BackgroundService
             BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
             ClientId = Environment.MachineName + "-feature-extractor-producer",
             Acks = Acks.All,
-            Retries = 3,
             RetryBackoffMs = 1000,
             MessageTimeoutMs = 30000,
             BatchSize = 16384,
@@ -217,6 +217,8 @@ public class FeatureExtractionWorker : BackgroundService
             var indexingEvent = new VectorIndexingRequestedEvent
             {
                 EventId = Guid.NewGuid(),
+                EventType = EventTypes.VectorIndexingRequested,
+                EventVersion = "1.0",
                 TenantId = extractionEvent.TenantId,
                 CorrelationId = extractionEvent.CorrelationId,
                 Timestamp = DateTime.UtcNow,
@@ -348,6 +350,8 @@ public class FeatureExtractionWorker : BackgroundService
             var failedEvent = new ProcessingFailedEvent
             {
                 EventId = Guid.NewGuid(),
+                EventType = EventTypes.ProcessingFailed,
+                EventVersion = "1.0",
                 TenantId = extractionEvent.TenantId,
                 CorrelationId = extractionEvent.CorrelationId,
                 Timestamp = DateTime.UtcNow,

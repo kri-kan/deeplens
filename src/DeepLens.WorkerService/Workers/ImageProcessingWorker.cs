@@ -40,8 +40,7 @@ public class ImageProcessingWorker : BackgroundService
             HeartbeatIntervalMs = 3000,
             MaxPollIntervalMs = 300000, // 5 minutes for long-running processing
             // Optimize for throughput
-            FetchMinBytes = 1024,
-            FetchMaxWaitMs = 500
+            FetchMinBytes = 1024
         };
 
         // Configure Kafka producer  
@@ -51,7 +50,6 @@ public class ImageProcessingWorker : BackgroundService
             ClientId = Environment.MachineName + "-image-processor-producer",
             // Reliability settings
             Acks = Acks.All,
-            Retries = 3,
             RetryBackoffMs = 1000,
             MessageTimeoutMs = 30000,
             // Performance settings
@@ -188,6 +186,8 @@ public class ImageProcessingWorker : BackgroundService
             var extractionEvent = new FeatureExtractionRequestedEvent
             {
                 EventId = Guid.NewGuid(),
+                EventType = EventTypes.FeatureExtractionRequested,
+                EventVersion = "1.0",
                 TenantId = uploadEvent.TenantId,
                 CorrelationId = uploadEvent.EventId,
                 Timestamp = DateTime.UtcNow,
@@ -233,7 +233,7 @@ public class ImageProcessingWorker : BackgroundService
                 uploadEvent.Data.ImageId, deliveryResult.Topic, deliveryResult.Offset);
 
             // Update processing status in database (optional, for status tracking)
-            await UpdateProcessingStatus(uploadEvent.Data.ImageId, ImageProcessingStatus.Processing, cancellationToken);
+            await UpdateProcessingStatus(uploadEvent.Data.ImageId, ImageProcessingStatus.Uploaded, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -262,6 +262,8 @@ public class ImageProcessingWorker : BackgroundService
             var failedEvent = new ProcessingFailedEvent
             {
                 EventId = Guid.NewGuid(),
+                EventType = EventTypes.ProcessingFailed,
+                EventVersion = "1.0",
                 TenantId = originalEvent.TenantId,
                 CorrelationId = originalEvent.EventId,
                 Timestamp = DateTime.UtcNow,

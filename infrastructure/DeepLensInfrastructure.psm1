@@ -8,19 +8,24 @@
 # Start all services
 function Start-DeepLensInfrastructure {
     Write-Host "🚀 Starting DeepLens Infrastructure..." -ForegroundColor Green
-    docker-compose -f docker-compose.infrastructure.yml up -d
+    podman compose -f docker-compose.infrastructure.yml up -d
     
     Write-Host "⏳ Waiting for services to be ready..." -ForegroundColor Yellow
     Start-Sleep -Seconds 10
     
     # Check service health
     Test-DeepLensServices
+    
+    # Initialize Platform Admin
+    if (Test-Path "$PSScriptRoot\init-platform-admin.ps1") {
+        powershell -File "$PSScriptRoot\init-platform-admin.ps1"
+    }
 }
 
 # Stop all services
 function Stop-DeepLensInfrastructure {
     Write-Host "🛑 Stopping DeepLens Infrastructure..." -ForegroundColor Red
-    docker-compose -f docker-compose.infrastructure.yml down
+    podman compose -f docker-compose.infrastructure.yml down
 }
 
 # Restart all services
@@ -40,9 +45,10 @@ function Test-DeepLensServices {
     
     # PostgreSQL
     try {
-        $pgResult = docker exec deeplens-postgres pg_isready -U deeplens
+        $pgResult = podman exec deeplens-postgres pg_isready -U postgres
         Write-Host "✅ PostgreSQL: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ PostgreSQL: Not Ready" -ForegroundColor Red
     }
     
@@ -50,7 +56,8 @@ function Test-DeepLensServices {
     try {
         $qdrantResult = Invoke-RestMethod -Uri "http://localhost:6333/health" -Method GET
         Write-Host "✅ Qdrant: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Qdrant: Not Ready" -ForegroundColor Red
     }
     
@@ -58,25 +65,28 @@ function Test-DeepLensServices {
     try {
         $influxResult = Invoke-RestMethod -Uri "http://localhost:8086/health" -Method GET
         Write-Host "✅ InfluxDB: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ InfluxDB: Not Ready" -ForegroundColor Red
     }
     
     # Kafka
     try {
-        $kafkaResult = docker exec deeplens-kafka kafka-broker-api-versions --bootstrap-server localhost:9092
+        $kafkaResult = podman exec deeplens-kafka kafka-broker-api-versions --bootstrap-server localhost:9092
         Write-Host "✅ Kafka: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Kafka: Not Ready" -ForegroundColor Red
     }
     
     # Redis
     try {
-        $redisResult = docker exec deeplens-redis redis-cli ping
+        $redisResult = podman exec deeplens-redis redis-cli ping
         if ($redisResult -eq "PONG") {
             Write-Host "✅ Redis: Ready" -ForegroundColor Green
         }
-    } catch {
+    }
+    catch {
         Write-Host "❌ Redis: Not Ready" -ForegroundColor Red
     }
     
@@ -84,8 +94,18 @@ function Test-DeepLensServices {
     try {
         $infisicalResult = Invoke-RestMethod -Uri "http://localhost:8082/api/status" -Method GET
         Write-Host "✅ Infisical: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Infisical: Not Ready" -ForegroundColor Red
+    }
+    
+    # Reasoning API
+    try {
+        [void](Invoke-RestMethod -Uri "http://localhost:8002/health" -Method GET)
+        Write-Host "✅ Reasoning API: Ready" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "❌ Reasoning API: Not Ready" -ForegroundColor Red
     }
 }
 
@@ -97,7 +117,8 @@ function Test-DeepLensMonitoring {
     try {
         $prometheusResult = Invoke-RestMethod -Uri "http://localhost:9090/-/healthy" -Method GET
         Write-Host "✅ Prometheus: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Prometheus: Not Ready" -ForegroundColor Red
     }
     
@@ -105,7 +126,8 @@ function Test-DeepLensMonitoring {
     try {
         $grafanaResult = Invoke-RestMethod -Uri "http://localhost:3000/api/health" -Method GET
         Write-Host "✅ Grafana: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Grafana: Not Ready" -ForegroundColor Red
     }
     
@@ -113,7 +135,8 @@ function Test-DeepLensMonitoring {
     try {
         $jaegerResult = Invoke-RestMethod -Uri "http://localhost:16686/api/services" -Method GET
         Write-Host "✅ Jaeger: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Jaeger: Not Ready" -ForegroundColor Red
     }
     
@@ -121,7 +144,8 @@ function Test-DeepLensMonitoring {
     try {
         $otelResult = Invoke-RestMethod -Uri "http://localhost:8888/metrics" -Method GET
         Write-Host "✅ OpenTelemetry Collector: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ OpenTelemetry Collector: Not Ready" -ForegroundColor Red
     }
     
@@ -129,7 +153,8 @@ function Test-DeepLensMonitoring {
     try {
         $alertResult = Invoke-RestMethod -Uri "http://localhost:9093/-/healthy" -Method GET
         Write-Host "✅ AlertManager: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ AlertManager: Not Ready" -ForegroundColor Red
     }
     
@@ -137,7 +162,8 @@ function Test-DeepLensMonitoring {
     try {
         $lokiResult = Invoke-RestMethod -Uri "http://localhost:3100/ready" -Method GET
         Write-Host "✅ Loki: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Loki: Not Ready" -ForegroundColor Red
     }
     
@@ -145,7 +171,8 @@ function Test-DeepLensMonitoring {
     try {
         $nodeResult = Invoke-RestMethod -Uri "http://localhost:9100/metrics" -Method GET -TimeoutSec 5
         Write-Host "✅ Node Exporter: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Node Exporter: Not Ready" -ForegroundColor Red
     }
     
@@ -153,7 +180,8 @@ function Test-DeepLensMonitoring {
     try {
         $portainerResult = Invoke-RestMethod -Uri "https://localhost:9443/api/status" -Method GET -SkipCertificateCheck
         Write-Host "✅ Portainer: Ready" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host "❌ Portainer: Not Ready" -ForegroundColor Red
     }
 }
@@ -168,13 +196,13 @@ function Connect-DeepLensPostgreSQL {
         [string]$Database = "deeplens"
     )
     Write-Host "🔌 Connecting to PostgreSQL database: $Database" -ForegroundColor Cyan
-    docker exec -it deeplens-postgres psql -U deeplens -d $Database
+    podman exec -it deeplens-postgres psql -U postgres -d $Database
 }
 
 # Connect to Redis CLI
 function Connect-DeepLensRedis {
     Write-Host "🔌 Connecting to Redis CLI" -ForegroundColor Cyan
-    docker exec -it deeplens-redis redis-cli
+    podman exec -it deeplens-redis redis-cli
 }
 
 # Open Qdrant Web UI
@@ -208,7 +236,7 @@ function Open-InfisicalUI {
 # Start monitoring stack
 function Start-DeepLensMonitoring {
     Write-Host "📊 Starting DeepLens Monitoring Stack..." -ForegroundColor Green
-    docker-compose -f docker-compose.monitoring.yml up -d
+    podman compose -f docker-compose.monitoring.yml up -d
     
     Write-Host "⏳ Waiting for monitoring services to be ready..." -ForegroundColor Yellow
     Start-Sleep -Seconds 15
@@ -223,7 +251,7 @@ function Start-DeepLensMonitoring {
 # Stop monitoring stack
 function Stop-DeepLensMonitoring {
     Write-Host "🛑 Stopping DeepLens Monitoring Stack..." -ForegroundColor Red
-    docker-compose -f docker-compose.monitoring.yml down
+    podman compose -f docker-compose.monitoring.yml down
 }
 
 # Open Grafana Dashboard
@@ -328,10 +356,10 @@ function Stop-DeepLensComplete {
 # View logs for a specific service
 function Get-DeepLensLogs {
     param(
-        [ValidateSet("postgres", "qdrant", "influxdb", "kafka", "zookeeper", "redis", "kafka-ui", "infisical", "infisical-postgres", "infisical-redis")]
+        [ValidateSet("postgres", "qdrant", "influxdb", "kafka", "zookeeper", "redis", "kafka-ui", "infisical", "infisical-postgres", "infisical-redis", "reasoning-api")]
         [string]$Service
     )
-    docker-compose -f docker-compose.infrastructure.yml logs -f deeplens-$Service
+    podman compose -f docker-compose.infrastructure.yml logs -f deeplens-$Service
 }
 
 # Clean up unused volumes and images
@@ -375,11 +403,11 @@ function Backup-DeepLensData {
     Write-Host "💾 Creating backup at: $BackupPath" -ForegroundColor Cyan
     
     # PostgreSQL backup
-    docker exec deeplens-postgres pg_dumpall -U deeplens > "$BackupPath\postgres-backup.sql"
+    podman exec deeplens-postgres pg_dumpall -U postgres > "$BackupPath\postgres-backup.sql"
     
     # Redis backup
-    docker exec deeplens-redis redis-cli BGSAVE
-    docker cp deeplens-redis:/data/deeplens-dump.rdb "$BackupPath\redis-backup.rdb"
+    podman exec deeplens-redis redis-cli BGSAVE
+    podman cp deeplens-redis:/data/deeplens-dump.rdb "$BackupPath\redis-backup.rdb"
     
     Write-Host "✅ Backup completed" -ForegroundColor Green
 }
@@ -393,10 +421,10 @@ function Reset-DeepLensEnvironment {
     Write-Host "🔄 Resetting DeepLens development environment..." -ForegroundColor Blue
     
     # Stop and remove containers
-    docker-compose -f docker-compose.infrastructure.yml down -v
+    podman compose -f docker-compose.infrastructure.yml down -v
     
     # Pull latest images
-    docker-compose -f docker-compose.infrastructure.yml pull
+    podman compose -f docker-compose.infrastructure.yml pull
     
     # Start fresh
     Start-DeepLensInfrastructure
@@ -409,10 +437,10 @@ function Show-DeepLensConnectionStrings {
     Write-Host "🔗 DeepLens Development Connection Strings:" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "PostgreSQL (NextGen Identity):" -ForegroundColor White
-    Write-Host "  Host=localhost;Port=5432;Database=nextgen_identity;Username=nextgen_identity_service;Password=NextGenIdentity123!" -ForegroundColor Gray
+    Write-Host "  Host=localhost;Port=5433;Database=nextgen_identity;Username=postgres;Password=DeepLens123!" -ForegroundColor Gray
     Write-Host ""
     Write-Host "PostgreSQL (Metadata):" -ForegroundColor White  
-    Write-Host "  Host=localhost;Port=5432;Database=deeplens_metadata;Username=api_service;Password=ApiService123!" -ForegroundColor Gray
+    Write-Host "  Host=localhost;Port=5433;Database=deeplens_metadata;Username=postgres;Password=DeepLens123!" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Qdrant:" -ForegroundColor White
     Write-Host "  HTTP: http://localhost:6333" -ForegroundColor Gray
@@ -436,6 +464,24 @@ function Show-DeepLensConnectionStrings {
     Write-Host "  OTLP gRPC: localhost:4317" -ForegroundColor Gray
     Write-Host "  OTLP HTTP: localhost:4318" -ForegroundColor Gray
     Write-Host "  Metrics: http://localhost:8888/metrics" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Reasoning API (Phi-3):" -ForegroundColor White
+    Write-Host "  URL: http://localhost:8002" -ForegroundColor Gray
+    Write-Host "  Swagger: http://localhost:8002/docs" -ForegroundColor Gray
+}
+
+# Run identity smoke tests
+function Invoke-IdentityCheckpoint {
+    param(
+        [string]$BaseUrl = "http://localhost:5198"
+    )
+    
+    if (Test-Path "$PSScriptRoot\test-identity-logins.ps1") {
+        powershell -File "$PSScriptRoot\test-identity-logins.ps1" -BaseUrl $BaseUrl
+    }
+    else {
+        Write-Host "❌ Identity smoke test script not found." -ForegroundColor Red
+    }
 }
 
 # =============================================================================
@@ -447,6 +493,7 @@ Export-ModuleMember -Function @(
     'Stop-DeepLensInfrastructure', 
     'Restart-DeepLensInfrastructure',
     'Test-DeepLensServices',
+    'Invoke-IdentityCheckpoint',
     'Test-DeepLensMonitoring',
     'Connect-DeepLensPostgreSQL',
     'Connect-DeepLensRedis',

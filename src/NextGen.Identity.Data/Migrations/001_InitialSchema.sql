@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS tenant_api_keys (
     name VARCHAR(100) NOT NULL,
     key_hash VARCHAR(255) NOT NULL,
     key_prefix VARCHAR(8) NOT NULL,
+    scopes TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP,
     last_used_at TIMESTAMP,

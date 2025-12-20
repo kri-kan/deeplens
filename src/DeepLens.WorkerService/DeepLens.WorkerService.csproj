@@ -9,5 +9,16 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.11" />
+    <PackageReference Include="Confluent.Kafka" Version="2.3.0" />
+    <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.1" />
+    <PackageReference Include="Npgsql" Version="8.0.2" />
+    <PackageReference Include="Minio" Version="6.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeepLens.Contracts\DeepLens.Contracts.csproj" />
+    <ProjectReference Include="..\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
+    <ProjectReference Include="..\DeepLens.Shared.Common\DeepLens.Shared.Common.csproj" />
   </ItemGroup>
 </Project>
