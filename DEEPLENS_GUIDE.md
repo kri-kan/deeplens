@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2025-12-20 12:31:43
+**Auto-generated on:** 2025-12-20 16:15:32
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -261,15 +261,18 @@ Refers to the core tables in the `nextgen_identity` and `deeplens_platform` data
 DeepLens uses a normalized catalog structure within each tenant's dedicated database to support multi-vendor e-commerce:
 
 1.  **Categories**: Broad product classifications (e.g., Sarees, Lehangas).
-2.  **Products**: Represent master SKUs with common titles and tags.
+2.  **Products**: Represent master SKUs with common titles and a **Union of Tags** consolidated from all sources.
 3.  **Product Variants**: Represent sub-SKUs (e.g., by Color, Fabric, or Stitch Type).
-4.  **Images**: Managed assets with PHash for deduplication and quality scores for curation.
-5.  **Seller Listings**: Competitive offers for a variant, capturing seller-specific pricing and descriptions.
+4.  **Images**: Managed assets with PHash for deduplication and quality scores for curation. Supports a **Reliable Deletion Queue** for asynchronous storage cleanup.
+5.  **Sellers**: Master registry of vendors (e.g., WhatsApp groups, Marketplaces).
+6.  **Seller Listings**: Competitive offers for a variant, capturing live price, descriptions, and **Shipping Metadata** (Free/Plus).
+7.  **Price History**: Temporal audit trail of every price change per seller listing, enabling long-term performance analysis.
 
 ### AI-Driven Ingestion Pipeline
-- **Enrichment**: An LLM-based `AttributeExtractionService` scans unstructured seller descriptions to extract structured metadata (Fabric, Color, Occasion).
-- **Parallel Processing**: Bulk ingestion supports high-throughput parallel uploads with concurrency semaphores to protect infrastructure resources.
+- **Enrichment**: An LLM-based `ReasoningService` (utilizing models like Phi-3) scans unstructured seller descriptions to extract structured metadata (Fabric, Color, Occasion).
+- **Parallel Processing**: Bulk ingestion supports high-throughput parallel uploads with concurrency semaphores.
 - **SKU Merging**: Intelligent merging of products allows consolidating multiple vendors under one SKU while preserving unique images and all historical pricing data.
+- **Reliable Cleanup**: Deduplicated or deleted images are queued for asynchronous cleanup from MinIO and Qdrant via Kafka-driven background workers.
 
 ### System Bootstrapping
 DeepLens uses a script-based bootstrapping approach to ensure environment consistency:
@@ -344,6 +347,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
   - `.Data`: Dapper-based repositories, PostgreSQL migrations, and stored procedures for provisioning.
   - `.Api`: REST endpoints for login, profile management, and tenant provisioning.
 - **DeepLens (Platform)**:
+  - `.ReasoningService`: Python FastAPI service utilizing LLMs (Phi-3) for structured metadata extraction.
   - `.SearchApi`: High-traffic semantic search and image ingestion.
   - `.AdminApi`: Resource management and analytics.
   - `.WorkerService`: Background Kafka consumers for feature extraction and indexing.
@@ -378,6 +382,12 @@ DeepLens is built using a clean architecture pattern across multiple services:
 | `/api/v1/catalog/images/{id}/default` | PATCH  | Set primary image for quick sharing.               |
 | `/api/v1/search`                      | POST   | Semantic image-to-image/text similarity search.    |
 
+### Reasoning Service (Port 8002)
+| Endpoint   | Method | Purpose                               |
+| :--------- | :----- | :------------------------------------ |
+| `/health`  | GET    | Check model and service health.       |
+| `/extract` | POST   | Structured metadata extraction (LLM). |
+
 ### Feature Extraction (Port 8001)
 | Endpoint   | Method | Purpose                             |
 | :--------- | :----- | :---------------------------------- |
@@ -402,7 +412,8 @@ Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiG
 
 ## 📋 Roadmap
 - [x] Identity API & Tenant Provisioning.
-- [ ] Kafka Core Integration.
+- [x] Kafka Core Integration (Upload, Entry, Indexing).
+- [x] Asynchronous Image Maintenance & Reliable Deletion.
 - [ ] Multi-Modal Search (Text-to-Image).
 - [ ] Real-time WebSocket notifications.
 
@@ -503,15 +514,18 @@ Last Updated: December 20, 2025
 Kafka acts as the backbone for the DeepLens image processing pipeline.
 
 ### Core Topics
-- `images.uploaded`: Triggered when Search API receives a new file.
-- `images.processing.requested`: Commands for the Feature Extraction service.
-- `images.processing.completed`: Contains the generated 2048-d vector.
-- `images.index.updated`: Emitted when the vector is pushed to Qdrant.
+- `deeplens.images.uploaded`: Triggered when Search API receives a new file.
+- `deeplens.features.extraction`: Commands for the Feature Extraction service.
+- `deeplens.vectors.indexing`: Requests to index vectors in Qdrant.
+- `deeplens.processing.completed`: Emitted when the entire pipeline finishes.
+- `deeplens.images.maintenance`: Triggers cleanup of deleted files and vectors.
 
 ### Pipeline Flow
-1. **Producer**: Search API (Upload).
-2. **Consumer**: Worker Service (Coordinates extraction).
-3. **Consumer**: Vector Indexer (Pushes to Qdrant).
+1. **Producer**: Search API (Upload / Merge).
+2. **Consumer**: Image Processing Worker (Initializes pipeline).
+3. **Consumer**: Feature Extraction Worker (Calls ML service).
+4. **Consumer**: Vector Indexing Worker (Updates Qdrant).
+5. **Consumer**: Image Maintenance Worker (Physical cleanup).
 
 ---
 
