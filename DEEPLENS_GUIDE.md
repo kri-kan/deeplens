@@ -430,6 +430,38 @@ System Admins can impersonate users for troubleshooting.
 - **Audit**: Every impersonated action is logged with both the Admin's ID (`act_as`) and the target User's ID (`sub`).
 - **Status**: Backend plumbing (scopes and claims) is ready in the Identity API.
 
+### Personal Access Tokens (DL-PAT)
+DeepLens supports long-lived background service access via Personal Access Tokens, similar to GitHub PATs.
+- **Format**: `dlp_` followed by a secure high-entropy string.
+- **Security**: Tokens are hashed using SHA-256 before storage. Only the plain-text key is returned once during creation.
+- **Expiration**: Supported with custom TTL (e.g., 30 days, 90 days, or No Expiry).
+- **Scope Management**: Keys can be restricted to specific granular scopes. By default, a key cannot perform actions beyond the creator's role.
+
+#### Requesting Scopes
+When creating a key via `POST /api/ApiKey`, you can specify a `scopes` list:
+```json
+{
+  "name": "Search CI/CD",
+  "scopes": ["deeplens.search", "deeplens.api"],
+  "expiresInDays": 30
+}
+```
+
+#### Standard Scopes
+| Scope               | Description                                                  |
+| :------------------ | :----------------------------------------------------------- |
+| `deeplens.search`   | Standard image search and metadata retrieval.                |
+| `deeplens.api`      | High-level platform operations and image ingestion.          |
+| `deeplens.admin`    | Administrative operations (requires creator to be an Admin). |
+| `deeplens.identity` | User and tenant management.                                  |
+
+#### Usage in Apps
+API Keys should be passed in the `X-API-Key` header:
+```http
+GET /api/images/search HTTP/1.1
+X-API-Key: dlp_a1b2c3d4e5f6g7h8...
+```
+
 ---
 
 ## 🚦 Rate Limiting & Protection

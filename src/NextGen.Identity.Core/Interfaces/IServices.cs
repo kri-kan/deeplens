@@ -65,6 +65,24 @@ public interface IRefreshTokenRepository
     Task DeleteAsync(Guid id);
 }
 
+public interface ITenantApiKeyRepository
+{
+    Task<TenantApiKey?> GetByIdAsync(Guid id);
+    Task<TenantApiKey?> GetByPrefixAsync(string prefix);
+    Task<List<TenantApiKey>> GetByTenantIdAsync(Guid tenantId);
+    Task<TenantApiKey> CreateAsync(TenantApiKey apiKey);
+    Task UpdateAsync(TenantApiKey apiKey);
+    Task DeleteAsync(Guid id);
+}
+
+public interface IApiKeyService
+{
+    Task<CreateApiKeyResponse> CreateApiKeyAsync(Guid tenantId, Guid userId, CreateApiKeyRequest request);
+    Task<bool> RevokeApiKeyAsync(Guid tenantId, Guid keyId);
+    Task<List<ApiKeyResponse>> GetTenantApiKeysAsync(Guid tenantId);
+    Task<TenantApiKey?> ValidateApiKeyAsync(string plainTextKey);
+}
+
 public record UpdateTenantRequest
 {
     public string? Description { get; init; }

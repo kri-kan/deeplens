@@ -45,8 +45,10 @@ try
     builder.Services.AddScoped<ITenantRepository, TenantRepository>();
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+    builder.Services.AddScoped<ITenantApiKeyRepository, TenantApiKeyRepository>();
 
     builder.Services.AddScoped<ITenantService, TenantService>();
+    builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 
     // Configure CORS for WebUI
     builder.Services.AddCors(options =>
