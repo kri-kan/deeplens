@@ -31,7 +31,8 @@ public static class IdentityServerConfig
             new ApiScope(name: "deeplens.api", displayName: "DeepLens API"),
             new ApiScope(name: "deeplens.search", displayName: "DeepLens Search API"),
             new ApiScope(name: "deeplens.admin", displayName: "DeepLens Admin API"),
-            new ApiScope(name: "deeplens.identity", displayName: "Identity Management API")
+            new ApiScope(name: "deeplens.identity", displayName: "Identity Management API"),
+            new ApiScope(name: "deeplens.impersonate", displayName: "Administrative Impersonation")
         };
 
     /// <summary>
@@ -42,8 +43,8 @@ public static class IdentityServerConfig
         {
             new ApiResource("deeplens-api", "DeepLens API")
             {
-                Scopes = { "deeplens.api", "deeplens.search", "deeplens.admin", "deeplens.identity" },
-                UserClaims = { "role", "email", "tenant_id" }
+                Scopes = { "deeplens.api", "deeplens.search", "deeplens.admin", "deeplens.identity", "deeplens.impersonate" },
+                UserClaims = { "role", "email", "tenant_id", "act_as", "is_impersonated" }
             }
         };
 

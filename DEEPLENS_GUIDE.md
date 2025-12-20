@@ -426,8 +426,9 @@ DeepLens implements a hierarchical RBAC model:
 
 ### Administrative Impersonation
 System Admins can impersonate users for troubleshooting. 
-- **Mechanism**: The backend generates a temporary context using the target user's ID but flags the request as `impersonated`.
-- **Audit**: Every impersonated action is logged with both the Admin's ID and the target User's ID.
+- **Mechanism**: The backend generates a temporary context using the target user's ID but flags the request as `impersonated` using the `act_as` claim.
+- **Audit**: Every impersonated action is logged with both the Admin's ID (`act_as`) and the target User's ID (`sub`).
+- **Status**: Backend plumbing (scopes and claims) is ready in the Identity API.
 
 ---
 
