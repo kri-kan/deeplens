@@ -12,13 +12,13 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 
 ### Data Separation Strategy
 
-| Component      | Shared | Per-Tenant          | Purpose                      |
-| -------------- | ------ | ------------------- | ---------------------------- |
-| **PostgreSQL** | ✅      | Database per tenant | Metadata, users, collections |
-| **Redis**      | ✅      | ❌                   | Shared cache & sessions      |
-| **Qdrant**     | ❌      | Dedicated Instance  | Vector search isolation      |
-| **MinIO**      | ❌      | Dedicated Instance  | Object storage isolation     |
-| **Backups**    | ❌      | Dedicated Container | Automated tenant backups     |
+| Component      | Shared | Per-Tenant           | Purpose                         |
+| -------------- | ------ | -------------------- | ------------------------------- |
+| **PostgreSQL** | ✅      | Database per tenant  | Metadata, users, collections    |
+| **Redis**      | ✅      | ❌                    | Shared cache & sessions         |
+| **Qdrant**     | ❌      | Dedicated Instance   | Vector search isolation         |
+| **MinIO**      | ✅      | **Dedicated Bucket** | Shared instance with IAM search |
+| **Backups**    | ❌      | Dedicated Container  | Automated tenant backups        |
 
 ### Storage Models
 
@@ -27,10 +27,10 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
    - Custom credentials configured in Admin Portal.
    - DeepLens only provisions Database + Qdrant.
 
-2. **DeepLens-Provisioned Storage** 🔒 *Isolated*
-   - Dedicated MinIO container per tenant.
-   - Automated setup with unique ports and credentials.
-   - DeepLens provisions: Database + Qdrant + MinIO.
+2. **DeepLens-Provisioned Storage** 🛡️ *Optimized*
+   - Dedicated bucket created on the shared **Master MinIO** instance.
+   - Unique Service Account (Access Key/Secret Key) scoped to that bucket only.
+   - DeepLens provisions: Database + Qdrant + Bucket / IAM Security.
 
 ---
 
@@ -41,7 +41,7 @@ DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core serv
 1. ✅ **Core infrastructure running** (PostgreSQL, Redis)
 2. ✅ **`deeplens-network` created**
 3. ✅ **Identity API running** at `http://localhost:5198`
-4. ✅ **Core Qdrant/MinIO stopped** (to avoid port conflicts)
+4. ✅ **Core Qdrant instances stopped** (if overlapping with new tenant ports)
 
 ### Provisioning Commands
 
@@ -65,12 +65,11 @@ cd C:\productivity\deeplens\infrastructure
 
 Ports are automatically assigned to avoid conflicts:
 
-| Service       | Starting Port | Pattern               |
-| ------------- | ------------- | --------------------- |
-| Qdrant HTTP   | 6333          | 6333, 6335, 6337, ... |
-| Qdrant gRPC   | 6334          | 6334, 6336, 6338, ... |
-| MinIO API     | 9000          | 9000, 9002, 9004, ... |
-| MinIO Console | 9001          | 9001, 9003, 9005, ... |
+| Service      | Starting Port | Pattern               |
+| ------------ | ------------- | --------------------- |
+| Qdrant HTTP  | 6433          | 6433, 6435, 6437, ... |
+| Qdrant gRPC  | 6434          | 6434, 6436, 6438, ... |
+| Shared MinIO | 9000          | Fixed at 9000         |
 
 ---
 

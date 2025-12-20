@@ -49,17 +49,25 @@ DeepLens provides strict isolation between tenants using a partitioned resource 
 1.  **Platform Metadata (PostgreSQL)**: Shared database with row-level or schema-based separation for global configurations.
 2.  **Tenant Metadata (PostgreSQL)**: Isolated databases provisioned per tenant for image metadata and local settings.
 3.  **Vector Storage (Qdrant)**: Isolated collections (or separate instances) per tenant ensuring no cross-tenant similarity leakage.
-4.  **Object Storage (MinIO/S3/Azure)**: Dedicated buckets or account-level isolation for raw image files.
+4.  **Object Storage (MinIO/S3/Azure)**: Logical isolation via dedicated buckets within a shared master instance (default) or account-level isolation for high-scale tenants.
 
 ### Database Schema (Identity & Platform)
 Refers to the core tables in the `nextgen_identity` and `deeplens_platform` databases.
 
-| Table             | Purpose                                                 |
-| :---------------- | :------------------------------------------------------ |
-| `tenants`         | Organization configs, resource limits, and infra ports. |
-| `users`           | User accounts, roles, and authentication state.         |
-| `refresh_tokens`  | OAuth 2.0 rotation tokens.                              |
-| `tenant_api_keys` | M2M authentication for programmatic access.             |
+| Table                | Purpose                                                 |
+| :------------------- | :------------------------------------------------------ |
+| `tenants`            | Organization configs, resource limits, and infra ports. |
+| `users`              | User accounts, roles, and authentication state.         |
+| `refresh_tokens`     | OAuth 2.0 rotation tokens.                              |
+| `tenant_api_keys`    | M2M authentication for programmatic access.             |
+| `infisical_projects` | Registry for secret management integration.             |
+
+### System Bootstrapping
+DeepLens uses a script-based bootstrapping approach to ensure environment consistency:
+1.  **Infrastructure (Podman)**: Postgres, Redis, Qdrant, and Kafka are started.
+2.  **Platform DB Init**: SQL scripts initialize the system schemas and roles.
+3.  **Platform Admin Setup**: `init-platform-admin.ps1` creates the root `admin` tenant and global administrator user.
+4.  **Identity API**: The API starts up and handles further multi-tenant orchestration.
 
 ---
 

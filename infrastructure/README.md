@@ -31,29 +31,16 @@ Last Updated: December 20, 2025
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### 2. Start Core Infrastructure
+### 2. Start Infrastructure
+Automation handles the setup of PostgreSQL, Redis, and internal networks.
 
 ```powershell
 cd C:\productivity\deeplens\infrastructure
-
-# Create network
-podman network create deeplens-network
-
-# Start PostgreSQL
-podman run -d --name deeplens-postgres --network deeplens-network `
-  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=DeepLens123! `
-  -e POSTGRES_DB=nextgen_identity -p 5433:5432 `
-  -v deeplens-postgres-data:/var/lib/postgresql/data postgres:16-alpine
-
-# Start Redis
-podman run -d --name deeplens-redis --network deeplens-network `
-  -p 6379:6379 redis:7-alpine
-
-# Verify
-podman ps
+./setup-infrastructure.ps1 -Start
 ```
 
-### 3. Start Identity API
+### 3. Start Identity API & Bootstrap
+The Identity API handles database migrations on startup.
 
 ```powershell
 cd C:\productivity\deeplens\src\NextGen.Identity.Api
@@ -61,21 +48,19 @@ $env:ASPNETCORE_ENVIRONMENT='Development'
 dotnet run --urls=http://localhost:5198
 ```
 
-**Keep this terminal open!**
-
-### 4. Provision First Tenant
-
-In a new terminal:
+### 4. Verify & Checkpoint
+Run the automated identity checkpoint to verify Platform and Tenant admin access.
 
 ```powershell
 cd C:\productivity\deeplens\infrastructure
-.\provision-tenant.ps1 -TenantName "demo" -StorageType "DeepLens"
+Import-Module ./DeepLensInfrastructure.psm1
+Invoke-IdentityCheckpoint
 ```
 
 **Done!** You now have:
-- ✅ Core infrastructure (PostgreSQL, Redis)
-- ✅ Identity API (authentication)
-- ✅ First tenant with isolated Qdrant and MinIO
+- ✅ Automated platform bootstrapping (Admin user/tenant)
+- ✅ Verified Identity API with correct role claims
+- ✅ Multi-tenant resource readiness
 
 ---
 

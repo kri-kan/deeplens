@@ -9,7 +9,6 @@ using NextGen.Identity.Data.Migrations;
 using NextGen.Identity.Core.Interfaces;
 using NextGen.Identity.Api.Configuration;
 using NextGen.Identity.Api.Services;
-using NextGen.Identity.Api.Data;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Metrics;
@@ -47,9 +46,7 @@ try
     builder.Services.AddScoped<IUserRepository, UserRepository>();
     builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
-    // Register services
     builder.Services.AddScoped<ITenantService, TenantService>();
-    builder.Services.AddScoped<DatabaseSeeder>();
 
     // Configure CORS for WebUI
     builder.Services.AddCors(options =>
@@ -145,10 +142,6 @@ try
             var migrationRunner = new MigrationRunner(dbConnectionString);
             await migrationRunner.RunMigrationsAsync();
             logger.LogInformation("Database migrations completed successfully");
-
-            // Seed initial data
-            var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
-            await seeder.SeedAsync();
         }
         catch (Exception ex)
         {

@@ -21,7 +21,13 @@ Last Updated: December 20, 2025
     $env:ASPNETCORE_ENVIRONMENT="Development"
     dotnet run --urls "http://localhost:5198"
     ```
-4.  **Verification**: 
+4.  **Checkpoint (Identity)**:
+    ```powershell
+    cd infrastructure
+    Import-Module ./DeepLensInfrastructure.psm1
+    Invoke-IdentityCheckpoint
+    ```
+5.  **Verification**: 
     ```powershell
     podman ps  # Ensure Postgres, Redis, Qdrant are running
     ```

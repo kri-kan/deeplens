@@ -1,0 +1,14 @@
+[
+    {
+        "name": "Platform Admin",
+        "email": "admin@deeplens.local",
+        "password": "DeepLensAdmin123!",
+        "expectedRole": "Admin"
+    },
+    {
+        "name": "Tenant Admin (Vayyari)",
+        "email": "admin@vayyari.local",
+        "password": "DeepLens@vayyari123!",
+        "expectedRole": "TenantOwner"
+    }
+]

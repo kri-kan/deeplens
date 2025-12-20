@@ -13,13 +13,13 @@ DeepLens is built using a clean architecture pattern across multiple services:
 
 - **NextGen.Identity**: Centralized authentication and tenant management.
   - `.Core`: Domain models (Tenant, User, Token).
-  - `.Data`: Dapper-based repositories and PostgreSQL migrations.
-  - `.Api`: REST endpoints for login and registration.
+  - `.Data`: Dapper-based repositories, PostgreSQL migrations, and stored procedures for provisioning.
+  - `.Api`: REST endpoints for login, profile management, and tenant provisioning.
 - **DeepLens (Platform)**:
   - `.SearchApi`: High-traffic semantic search and image ingestion.
   - `.AdminApi`: Resource management and analytics.
   - `.WorkerService`: Background Kafka consumers for feature extraction and indexing.
-  - `.Infrastructure`: Multi-tenant drivers for Qdrant, MinIO, and Kafka.
+  - `.Infrastructure`: Multi-tenant drivers for Qdrant, MinIO (Shared Bucket Strategy), and Kafka.
 - **Shared Libraries**:
   - `.Shared.Common`: Cross-cutting utilities.
   - `.Shared.Messaging`: Kafka producers and abstract event handlers.

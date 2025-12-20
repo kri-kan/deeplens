@@ -187,6 +187,7 @@ dmypy.json
 # Dataset files
 *.csv
 *.json
+!infrastructure/config/*.json
 *.parquet
 *.feather
 datasets/
