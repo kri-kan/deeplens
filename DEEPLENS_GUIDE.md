@@ -143,7 +143,7 @@ Last Updated: December 20, 2025
 | :----------------- | :--------------------- | :------------------- | :------------------ |
 | **PostgreSQL**     | `postgres`             | `DeepLens123!`       | Port 5433           |
 | **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin       |
-| **MinIO Admin**    | `admin`                | `DeepLens123!`       | Port 9001 (Console) |
+| **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
 
 ---
