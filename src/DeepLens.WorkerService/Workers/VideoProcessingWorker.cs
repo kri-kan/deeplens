@@ -204,8 +204,12 @@ public class VideoProcessingWorker : BackgroundService
             }
 
             // 5. Upload to MinIO
-            string thumbPath = videoEvent.Data.FilePath.Replace("raw/", "thumbnails/").Replace(Path.GetExtension(videoEvent.Data.FileName), ".webp");
-            string previewPath = videoEvent.Data.FilePath.Replace("raw/", "previews/").Replace(Path.GetExtension(videoEvent.Data.FileName), ".gif");
+            // FilePath includes bucket prefix (e.g., "tenant-xxx/raw/..."), but UploadThumbnailAsync expects just the object path
+            var filePathParts = videoEvent.Data.FilePath.Split('/', 2);
+            var objectPath = filePathParts.Length > 1 ? filePathParts[1] : videoEvent.Data.FilePath;
+            
+            string thumbPath = objectPath.Replace("raw/", "thumbnails/").Replace(Path.GetExtension(videoEvent.Data.FileName), ".webp");
+            string previewPath = objectPath.Replace("raw/", "previews/").Replace(Path.GetExtension(videoEvent.Data.FileName), ".gif");
 
             using (var fs = File.OpenRead(tempThumb))
             {

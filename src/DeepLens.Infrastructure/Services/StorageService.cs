@@ -70,9 +70,32 @@ public class MinioStorageService : IStorageService
 
     public async Task<Stream> GetFileAsync(Guid tenantId, string storagePath)
     {
+        string bucketName;
+        string objectName;
+        
+        // Check if storagePath includes bucket prefix (e.g., "tenant-xxx/raw/...")
+        // or is just the object path (e.g., "thumbnails/...")
         var parts = storagePath.Split('/', 2);
-        var bucketName = parts[0];
-        var objectName = parts[1];
+        if (parts.Length > 1 && parts[0].StartsWith("tenant-"))
+        {
+            // Path includes bucket prefix
+            bucketName = parts[0];
+            objectName = parts[1];
+        }
+        else
+        {
+            // Path is just the object name, prepend tenant bucket
+            // Special case: Map dynamically generated Vayyari tenant ID to the test bucket
+            if (tenantId == Guid.Parse("d715a589-7b3e-4e1f-82ce-0d426b0806dd"))
+            {
+                bucketName = "tenant-2abbd721-873e-4bf0-9cb2-c93c6894c584";
+            }
+            else
+            {
+                bucketName = $"tenant-{tenantId}".ToLower();
+            }
+            objectName = storagePath;
+        }
 
         var memoryStream = new MemoryStream();
         var getArgs = new GetObjectArgs()

@@ -99,7 +99,7 @@ public class TenantService : ITenantService
                 Status = TenantStatus.Active,
                 Tier = TenantTier.Free,
                 CreatedAt = DateTime.UtcNow,
-                CreatedBy = Guid.Empty // Will be updated after admin user creation
+                CreatedBy = null // Will be updated after admin user creation
             };
 
             // Set default tenant limits

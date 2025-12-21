@@ -43,7 +43,7 @@ public class TenantMetadataService : ITenantMetadataService
         
         var builder = new NpgsqlConnectionStringBuilder(baseConnString);
         
-        if (tenantId == Guid.Parse("2abbd721-873e-4bf0-9cb2-c93c6894c584")) // Vayyari ID
+        if (tenantId == Guid.Parse("2abbd721-873e-4bf0-9cb2-c93c6894c584") || tenantId == Guid.Parse("d715a589-7b3e-4e1f-82ce-0d426b0806dd")) // Vayyari ID
         {
             builder.Database = "tenant_vayyari_metadata";
         }
