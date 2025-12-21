@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2025-12-20 20:02:04
+**Auto-generated on:** 2025-12-21 10:11:39
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -28,9 +28,9 @@
 # Documentation: README.md
 ------------------------------
 
-# DeepLens - Image Similarity Search Engine
+# DeepLens - Visual Search Engine
 
-**DeepLens** is a high-performance, multi-tenant image similarity search engine built with modern .NET and Python technologies. It provides fast, accurate image matching using state-of-the-art vector databases and AI/ML models.
+**DeepLens** is a high-performance, multi-tenant **visual search engine** built with modern .NET and Python technologies. It provides fast, accurate similarity matching for both **images and videos** using state-of-the-art vector databases and AI/ML models.
 
 ## 🧭 **Documentation Guide**
 
@@ -69,11 +69,17 @@ We have consolidated our documentation into several clear, focused guides:
 - OpenTelemetry instrumentation (Traces, Metrics, Logs).
 - Grafana Dashboards & Prometheus Alerts.
 
+### 🎬 [Video Processing (docs/VIDEO_PROCESSING.md)](docs/VIDEO_PROCESSING.md)
+- Video upload and storage.
+- Automated thumbnail and GIF preview generation.
+- FFmpeg integration and configuration.
+
 ---
 
 ## 🎯 **Key Features**
 
-- **🔍 Advanced Image Search** - Vector-based similarity matching with multiple AI models.
+- **🔍 Advanced Visual Search** - Vector-based similarity matching for images and videos with multiple AI models.
+- **🎬 Video Processing** - Automated thumbnail and GIF preview generation with FFmpeg.
 - **🏢 Multi-Tenant Architecture** - Complete tenant isolation with BYOS (Bring Your Own Storage).
 - **⚡ High Performance** - Optimized for speed with Redis caching and Qdrant vector database.
 - **📊 Full Observability** - Complete monitoring with the LGTM stack (Loki, Grafana, Tempo, Mimir).
@@ -271,7 +277,7 @@ Last Updated: December 20, 2025
 
 ## 🏗️ System Overview
 
-DeepLens is a high-performance, multi-tenant image similarity search engine built using a **hybrid .NET + Python microservices architecture**. It balances enterprise-grade orchestration with state-of-the-art AI/ML capabilities.
+DeepLens is a high-performance, multi-tenant **visual search engine** built using a **hybrid .NET + Python microservices architecture**. It supports both **image and video assets** with AI-powered similarity search, feature extraction, and intelligent cataloging.
 
 ### Core Design Principles
 - **Unified .NET Backend**: Centralized orchestration, API gateway, and tenant management.
