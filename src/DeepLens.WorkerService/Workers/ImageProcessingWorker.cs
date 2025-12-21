@@ -34,7 +34,7 @@ public class ImageProcessingWorker : BackgroundService
         // Configure Kafka consumer
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "127.0.0.1:9092",
             GroupId = "deeplens-image-processing-workers-v2",
             ClientId = Environment.MachineName + "-image-processor",
             AutoOffsetReset = AutoOffsetReset.Earliest,
@@ -239,7 +239,7 @@ public class ImageProcessingWorker : BackgroundService
                 uploadEvent.Data.ImageId, deliveryResult.Topic, deliveryResult.Offset);
 
             // Update processing status in database (optional, for status tracking)
-            await UpdateProcessingStatus(Guid.Parse(uploadEvent.TenantId), uploadEvent.Data.ImageId, ImageProcessingStatus.Uploaded, cancellationToken);
+            await UpdateProcessingStatus(Guid.Parse(uploadEvent.TenantId), uploadEvent.Data.ImageId, MediaProcessingStatus.Uploaded, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -252,13 +252,13 @@ public class ImageProcessingWorker : BackgroundService
         }
     }
 
-    private async Task UpdateProcessingStatus(Guid tenantId, Guid imageId, ImageProcessingStatus status, CancellationToken cancellationToken)
+    private async Task UpdateProcessingStatus(Guid tenantId, Guid imageId, MediaProcessingStatus status, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var metadataService = scope.ServiceProvider.GetRequiredService<ITenantMetadataService>();
         
         _logger.LogDebug("Updating processing status for ImageId: {ImageId} to {Status}", imageId, status);
-        await metadataService.UpdateImageStatusAsync(tenantId, imageId, (int)status);
+        await metadataService.UpdateMediaStatusAsync(tenantId, imageId, (int)status);
     }
 
     private async Task PublishProcessingFailedEvent(ImageUploadedEvent originalEvent, string failedStep, 
@@ -375,12 +375,12 @@ public class ImageProcessingWorker : BackgroundService
             using (var metadataScope = _serviceProvider.CreateScope())
             {
                 var metadataService = metadataScope.ServiceProvider.GetRequiredService<ITenantMetadataService>();
-                await metadataService.UpdateImageDimensionsAsync(Guid.Parse(uploadEvent.TenantId), 
+                await metadataService.UpdateMediaDimensionsAsync(Guid.Parse(uploadEvent.TenantId), 
                     uploadEvent.Data.ImageId, imageObj.Width, imageObj.Height);
                 
                 // Mark as processed
-                await metadataService.UpdateImageStatusAsync(Guid.Parse(uploadEvent.TenantId), 
-                    uploadEvent.Data.ImageId, (int)ImageProcessingStatus.Processed);
+                await metadataService.UpdateMediaStatusAsync(Guid.Parse(uploadEvent.TenantId), 
+                    uploadEvent.Data.ImageId, (int)MediaProcessingStatus.Processed);
             }
         }
         catch (Exception ex)

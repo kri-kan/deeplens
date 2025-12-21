@@ -1,50 +1,51 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Typography, CircularProgress, useTheme, useMediaQuery, Fade } from '@mui/material';
-import { imageService, ImageDto } from '../../services/imageService';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Box, Typography, CircularProgress, useTheme, useMediaQuery, Fade, Dialog, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import { mediaService, MediaDto } from '../../services/mediaService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ImagesPage = () => {
-  const [images, setImages] = useState<ImageDto[]>([]);
+  const [mediaItems, setMediaItems] = useState<MediaDto[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const { user } = useAuth();
   const observer = useRef<IntersectionObserver | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<MediaDto | null>(null);
 
-  const lastImageRef = useCallback((node: HTMLDivElement) => {
+  const lastItemRef = useCallback((node: HTMLDivElement) => {
     if (loading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
-        setPage(prevPage => prevPage + 1);
+        setPage((prevPage: number) => prevPage + 1);
       }
     });
     if (node) observer.current.observe(node);
   }, [loading, hasMore]);
 
   useEffect(() => {
-    const fetchImages = async () => {
+    const fetchMedia = async () => {
       setLoading(true);
       try {
-        const data = await imageService.listImages(page, 20, user?.tenantId);
+        const data = await mediaService.listMedia(page, 20, user?.tenantId);
         if (data.length === 0) {
           setHasMore(false);
         } else {
-          setImages(prev => {
-            // Deduplicate if needed (though API should handle this)
-            const existingIds = new Set(prev.map(img => img.id));
-            const newImages = data.filter(img => !existingIds.has(img.id));
-            return [...prev, ...newImages];
+          setMediaItems((prev: MediaDto[]) => {
+            const existingIds = new Set(prev.map(item => item.id));
+            const newItems = data.filter((item: MediaDto) => !existingIds.has(item.id));
+            return [...prev, ...newItems];
           });
         }
       } catch (err) {
-        console.error('Failed to fetch images', err);
+        console.error('Failed to fetch media', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchImages();
+    fetchMedia();
   }, [page, user?.tenantId]);
 
   const theme = useTheme();
@@ -74,15 +75,16 @@ const ImagesPage = () => {
           flexGrow: 999999,
         }
       }}>
-        {images.map((image, index) => {
+        {mediaItems.map((item: MediaDto, index: number) => {
           // Use natural aspect ratio if available, otherwise fallback to 1:1
-          const aspectRatio = (image.width && image.height) ? image.width / image.height : 1;
+          const aspectRatio = (item.width && item.height) ? item.width / item.height : 1;
           const flexWidth = rowHeight * aspectRatio;
+          const isVideo = item.mediaType === 2;
 
           return (
-            <Fade in={true} timeout={500 + (index % 10) * 100} key={image.id}>
+            <Fade in={true} timeout={500 + (index % 10) * 100} key={item.id}>
               <Box
-                ref={index === images.length - 1 ? lastImageRef : null}
+                ref={index === mediaItems.length - 1 ? lastItemRef : null}
                 sx={{
                   flexGrow: aspectRatio,
                   flexBasis: `${flexWidth}px`,
@@ -99,22 +101,56 @@ const ImagesPage = () => {
                     transform: 'translateY(-4px)',
                     boxShadow: '0 12px 32px rgba(0,0,0,0.12)',
                     '& .overlay': { opacity: 1 },
-                    '& img': { transform: 'scale(1.08)' }
+                    '& .media-content': { transform: 'scale(1.08)' }
                   }
                 }}
+                onClick={() => setSelectedMedia(item)}
               >
-                <img
-                  src={imageService.getThumbnailUrl(image.id, user?.tenantId || '')}
-                  alt={image.productTitle || 'Product'}
-                  loading="lazy"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    display: 'block',
-                    transition: 'transform 0.6s ease'
-                  }}
-                />
+                <Box className="media-content" sx={{ width: '100%', height: '100%', transition: 'transform 0.6s ease' }}>
+                  <img
+                    src={mediaService.getThumbnailUrl(item.id, user?.tenantId || '')}
+                    alt={item.productTitle || 'Product'}
+                    loading="lazy"
+                    onMouseOver={(e) => {
+                      if (isVideo && item.previewPath) {
+                        e.currentTarget.src = mediaService.getPreviewUrl(item.id, user?.tenantId || '');
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (isVideo) {
+                        e.currentTarget.src = mediaService.getThumbnailUrl(item.id, user?.tenantId || '');
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                    }}
+                  />
+
+                  {isVideo && (
+                    <Box sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      bgcolor: 'rgba(0,0,0,0.4)',
+                      borderRadius: '50%',
+                      width: 48,
+                      height: 48,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backdropFilter: 'blur(4px)',
+                      pointerEvents: 'none'
+                    }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </Box>
+                  )}
+                </Box>
 
                 {/* Info Overlay */}
                 <Box
@@ -142,7 +178,7 @@ const ImagesPage = () => {
                     fontSize: '0.65rem',
                     letterSpacing: '1px'
                   }}>
-                    {image.sku || 'PENDING SKU'}
+                    {item.sku || 'PENDING SKU'}
                   </Typography>
                   <Typography variant="subtitle2" sx={{
                     fontWeight: 600,
@@ -152,12 +188,12 @@ const ImagesPage = () => {
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap'
                   }}>
-                    {image.productTitle || 'Catalog Item'}
+                    {item.productTitle || 'Catalog Item'}
                   </Typography>
                 </Box>
 
                 {/* Status Indicator */}
-                {image.status === 2 && (
+                {item.status === 2 && (
                   <Box sx={{
                     position: 'absolute',
                     top: 12,
@@ -194,9 +230,89 @@ const ImagesPage = () => {
           <Typography variant="body2" sx={{ color: 'text.disabled', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
             End of Collection
           </Typography>
-          <Box sx={{ width: 40, h: 2, bgcolor: 'divider', mx: 'auto', mt: 1 }} />
+          <Box sx={{ width: 40, height: 2, bgcolor: 'divider', mx: 'auto', mt: 1 }} />
         </Box>
       )}
+
+      {/* Media Viewer Modal */}
+      <Dialog
+        fullScreen
+        open={!!selectedMedia}
+        onClose={() => setSelectedMedia(null)}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(0,0,0,0.95)',
+            backgroundImage: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden'
+          }
+        }}
+      >
+        <IconButton
+          onClick={() => setSelectedMedia(null)}
+          sx={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            color: 'white',
+            bgcolor: 'rgba(255,255,255,0.1)',
+            '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' },
+            zIndex: 10
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+
+        {selectedMedia && (
+          <Box sx={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 2
+          }}>
+            {selectedMedia.mediaType === 2 ? (
+              <video
+                src={mediaService.getRawUrl(selectedMedia.id, user?.tenantId || '')}
+                controls
+                autoPlay
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: 'calc(100vh - 100px)',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                  borderRadius: '8px'
+                }}
+              />
+            ) : (
+              <img
+                src={mediaService.getRawUrl(selectedMedia.id, user?.tenantId || '')}
+                alt={selectedMedia.productTitle || ''}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: 'calc(100vh - 100px)',
+                  objectFit: 'contain',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                  borderRadius: '4px'
+                }}
+              />
+            )}
+
+            <Box sx={{ mt: 3, textAlign: 'center', color: 'white', maxWidth: 800 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {selectedMedia.productTitle || 'Untitled Asset'}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.7, mt: 0.5 }}>
+                SKU: {selectedMedia.sku || 'N/A'} • {selectedMedia.width}x{selectedMedia.height}
+                {selectedMedia.durationSeconds && ` • ${selectedMedia.durationSeconds.toFixed(1)}s`}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+      </Dialog>
     </Box>
   );
 };

@@ -12,13 +12,14 @@ namespace DeepLens.Infrastructure.Services;
 
 public interface ITenantMetadataService
 {
-    Task SaveIngestionDataAsync(Guid tenantId, Guid imageId, string storagePath, string mimeType, long fileSize, UploadImageRequest request);
+    Task SaveIngestionDataAsync(Guid tenantId, Guid id, string storagePath, string mimeType, long fileSize, UploadImageRequest request);
     Task MergeProductsAsync(Guid tenantId, string targetSku, string sourceSku, bool deleteSource);
-    Task SetDefaultImageAsync(Guid tenantId, Guid imageId, bool isDefault);
+    Task SetDefaultMediaAsync(Guid tenantId, Guid id, bool isDefault);
     Task SetFavoriteListingAsync(Guid tenantId, Guid listingId, bool isFavorite);
-    Task UpdateImageDimensionsAsync(Guid tenantId, Guid imageId, int width, int height);
-    Task UpdateImageStatusAsync(Guid tenantId, Guid imageId, int status);
-    Task<IEnumerable<ImageDto>> ListImagesAsync(Guid tenantId, int page, int pageSize);
+    Task UpdateMediaDimensionsAsync(Guid tenantId, Guid id, int width, int height);
+    Task UpdateMediaStatusAsync(Guid tenantId, Guid id, int status);
+    Task UpdateVideoMetadataAsync(Guid tenantId, Guid id, decimal duration, string? thumbnailPath, string? previewPath);
+    Task<IEnumerable<MediaDto>> ListMediaAsync(Guid tenantId, int page, int pageSize, int? mediaType = null);
     Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync(Guid tenantId);
 }
 
@@ -59,7 +60,7 @@ public class TenantMetadataService : ITenantMetadataService
         return new NpgsqlConnection(GetTenantConnectionString(tenantId));
     }
 
-    public async Task SaveIngestionDataAsync(Guid tenantId, Guid imageId, string storagePath, string contentType, long fileSize, UploadImageRequest request)
+    public async Task SaveIngestionDataAsync(Guid tenantId, Guid id, string storagePath, string contentType, long fileSize, UploadImageRequest request)
     {
         using var connection = GetConnection(tenantId);
         connection.Open();
@@ -76,15 +77,17 @@ public class TenantMetadataService : ITenantMetadataService
             // 3. Get or Create Variant (Sub-SKU)
             var variantId = await GetOrCreateVariant(connection, productId, request, transaction);
 
-            // 4. Save Image Record
-            const string imageSql = @"
-                INSERT INTO images (id, variant_id, storage_path, original_filename, file_size_bytes, mime_type, phash, quality_score, status)
-                VALUES (@Id, @VariantId, @StoragePath, @OriginalFilename, @FileSize, @MimeType, @PHash, @Quality, 0)";
+            // 4. Save Media Record
+            var mediaType = contentType.StartsWith("video/") ? 2 : 1;
+            const string mediaSql = @"
+                INSERT INTO media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, phash, quality_score, status)
+                VALUES (@Id, @VariantId, @StoragePath, @MediaType, @OriginalFilename, @FileSize, @MimeType, @PHash, @Quality, 0)";
             
-            await connection.ExecuteAsync(imageSql, new {
-                Id = imageId,
+            await connection.ExecuteAsync(mediaSql, new {
+                Id = id,
                 VariantId = variantId,
                 StoragePath = storagePath,
+                MediaType = mediaType,
                 OriginalFilename = request.File.FileName,
                 FileSize = fileSize,
                 MimeType = contentType,
@@ -111,10 +114,10 @@ public class TenantMetadataService : ITenantMetadataService
         await db.ExecuteAsync("UPDATE seller_listings SET is_favorite = @IsFavorite WHERE id = @Id", new { IsFavorite = isFavorite, Id = listingId });
     }
 
-    public async Task SetDefaultImageAsync(Guid tenantId, Guid imageId, bool isDefault)
+    public async Task SetDefaultMediaAsync(Guid tenantId, Guid id, bool isDefault)
     {
         using var db = GetConnection(tenantId);
-        await db.ExecuteAsync("UPDATE images SET is_default = @IsDefault WHERE id = @Id", new { IsDefault = isDefault, Id = imageId });
+        await db.ExecuteAsync("UPDATE media SET is_default = @IsDefault WHERE id = @Id", new { IsDefault = isDefault, Id = id });
     }
 
     public async Task MergeProductsAsync(Guid tenantId, string targetSku, string sourceSku, bool deleteSource)
@@ -164,7 +167,7 @@ public class TenantMetadataService : ITenantMetadataService
                     await MergeListings(db, sVar.Id, targetVarId.Value, trans);
                     
                     // Move Images
-                    await db.ExecuteAsync("UPDATE images SET variant_id = @TargetVarId WHERE variant_id = @SourceVarId", 
+                    await db.ExecuteAsync("UPDATE media SET variant_id = @TargetVarId WHERE variant_id = @SourceVarId", 
                         new { TargetVarId = targetVarId.Value, SourceVarId = sVar.Id }, trans);
                     
                     // Cleanup orphaned source variant
@@ -235,7 +238,7 @@ public class TenantMetadataService : ITenantMetadataService
             WITH RankedImages AS (
                 SELECT id, storage_path, 
                        row_number() OVER(PARTITION BY variant_id, phash ORDER BY quality_score DESC NULLS LAST, uploaded_at ASC) as rank
-                FROM images 
+                FROM media 
                 WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Id)
                 AND phash IS NOT NULL
             )
@@ -244,11 +247,11 @@ public class TenantMetadataService : ITenantMetadataService
         foreach (var dup in duplicates)
         {
             // 1. Mark for deletion in DB
-            await db.ExecuteAsync("UPDATE images SET status = 98 WHERE id = @Id", new { Id = dup.Id }, trans);
+            await db.ExecuteAsync("UPDATE media SET status = 98 WHERE id = @Id", new { Id = dup.Id }, trans);
 
             // 2. Add to reliable Deletion Queue
             await db.ExecuteAsync(@"
-                INSERT INTO image_deletion_queue (image_id, storage_path) 
+                INSERT INTO media_deletion_queue (media_id, storage_path) 
                 VALUES (@Id, @Path)", new { Id = dup.Id, Path = dup.Path }, trans);
 
             // 3. Emit Kafka event for async cleanup
@@ -411,36 +414,61 @@ public class TenantMetadataService : ITenantMetadataService
         }
     }
 
-    public async Task<IEnumerable<ImageDto>> ListImagesAsync(Guid tenantId, int page, int pageSize)
+    public async Task<IEnumerable<MediaDto>> ListMediaAsync(Guid tenantId, int page, int pageSize, int? mediaType = null)
     {
         using var connection = GetConnection(tenantId);
-        const string sql = @"
-            SELECT i.id, i.storage_path as StoragePath, i.status, i.width, i.height, i.uploaded_at as UploadedAt,
+        string typeFilter = mediaType.HasValue ? "AND i.media_type = @MediaType" : "";
+        string sql = @$"
+            SELECT i.id, i.storage_path as StoragePath, i.media_type as MediaType, i.status, 
+                   i.width, i.height, i.duration_seconds as DurationSeconds,
+                   i.thumbnail_path as ThumbnailPath, i.preview_path as PreviewPath,
+                   i.mime_type as MimeType,
+                   i.uploaded_at as UploadedAt,
                    p.base_sku as Sku, p.title as ProductTitle
-            FROM images i
+            FROM media i
             LEFT JOIN product_variants v ON i.variant_id = v.id
             LEFT JOIN products p ON v.product_id = p.id
+            WHERE 1=1 {typeFilter}
             ORDER BY i.uploaded_at DESC
             LIMIT @PageSize OFFSET @Offset";
 
-        return await connection.QueryAsync<ImageDto>(sql, new { 
+        return await connection.QueryAsync<MediaDto>(sql, new { 
+            MediaType = mediaType,
             PageSize = pageSize, 
             Offset = (page - 1) * pageSize 
         });
     }
 
-    public async Task UpdateImageDimensionsAsync(Guid tenantId, Guid imageId, int width, int height)
+    public async Task UpdateMediaDimensionsAsync(Guid tenantId, Guid id, int width, int height)
     {
         using var connection = GetConnection(tenantId);
-        const string sql = "UPDATE images SET width = @Width, height = @Height WHERE id = @Id";
-        await connection.ExecuteAsync(sql, new { Id = imageId, Width = width, Height = height });
+        const string sql = "UPDATE media SET width = @Width, height = @Height WHERE id = @Id";
+        await connection.ExecuteAsync(sql, new { Id = id, Width = width, Height = height });
     }
 
-    public async Task UpdateImageStatusAsync(Guid tenantId, Guid imageId, int status)
+    public async Task UpdateMediaStatusAsync(Guid tenantId, Guid id, int status)
     {
         using var connection = GetConnection(tenantId);
-        const string sql = "UPDATE images SET status = @Status WHERE id = @Id";
-        await connection.ExecuteAsync(sql, new { Id = imageId, Status = status });
+        const string sql = "UPDATE media SET status = @Status WHERE id = @Id";
+        await connection.ExecuteAsync(sql, new { Id = id, Status = status });
+    }
+
+    public async Task UpdateVideoMetadataAsync(Guid tenantId, Guid id, decimal duration, string? thumbnailPath, string? previewPath)
+    {
+        using var connection = GetConnection(tenantId);
+        const string sql = @"
+            UPDATE media 
+            SET duration_seconds = @Duration, 
+                thumbnail_path = @ThumbPath, 
+                preview_path = @PreviewPath,
+                status = 1 -- Mark as processed
+            WHERE id = @Id";
+        await connection.ExecuteAsync(sql, new { 
+            Id = id, 
+            Duration = duration, 
+            ThumbPath = thumbnailPath, 
+            PreviewPath = previewPath 
+        });
     }
 
     public async Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync(Guid tenantId)
@@ -476,13 +504,18 @@ public class TenantMetadataService : ITenantMetadataService
     }
 }
 
-public class ImageDto
+public class MediaDto
 {
     public Guid Id { get; set; }
     public required string StoragePath { get; set; }
+    public int MediaType { get; set; } // 1=Image, 2=Video
     public int Status { get; set; }
     public int? Width { get; set; }
     public int? Height { get; set; }
+    public decimal? DurationSeconds { get; set; }
+    public string? ThumbnailPath { get; set; }
+    public string? PreviewPath { get; set; }
+    public string? MimeType { get; set; }
     public DateTime UploadedAt { get; set; }
     public string? Sku { get; set; }
     public string? ProductTitle { get; set; }

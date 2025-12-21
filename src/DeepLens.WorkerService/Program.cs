@@ -22,7 +22,7 @@ builder.Services.AddSingleton<IMinioClient>(sp =>
 // Kafka Producer Setup (for workers that produce results)
 builder.Services.AddSingleton<IProducer<string, string>>(sp => 
 {
-    var config = new ProducerConfig { BootstrapServers = "localhost:9092" };
+    var config = new ProducerConfig { BootstrapServers = "127.0.0.1:9092" };
     return new ProducerBuilder<string, string>(config).Build();
 });
 
@@ -33,6 +33,7 @@ builder.Services.AddScoped<ITenantMetadataService, TenantMetadataService>();
 
 // Background Workers
 builder.Services.AddHostedService<ImageProcessingWorker>();
+builder.Services.AddHostedService<VideoProcessingWorker>();
 builder.Services.AddHostedService<FeatureExtractionWorker>();
 builder.Services.AddHostedService<VectorIndexingWorker>();
 builder.Services.AddHostedService<ImageMaintenanceWorker>();

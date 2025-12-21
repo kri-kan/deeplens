@@ -218,7 +218,7 @@ public class FeatureExtractionWorker : BackgroundService
             using (var scope = _serviceProvider.CreateScope())
             {
                 var metadataService = scope.ServiceProvider.GetRequiredService<DeepLens.Infrastructure.Services.ITenantMetadataService>();
-                await metadataService.UpdateImageDimensionsAsync(Guid.Parse(extractionEvent.TenantId), 
+                await metadataService.UpdateMediaDimensionsAsync(Guid.Parse(extractionEvent.TenantId), 
                     extractionEvent.Data.ImageId, extractionResponse.ImageWidth ?? 0, extractionResponse.ImageHeight ?? 0);
             }
 

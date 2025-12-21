@@ -37,7 +37,7 @@ builder.Services.AddStackExchangeRedisCache(options =>
 // Kafka Producer Setup
 builder.Services.AddSingleton<IProducer<string, string>>(sp => 
 {
-    var config = new ProducerConfig { BootstrapServers = "localhost:9092" }; // TODO: Config
+    var config = new ProducerConfig { BootstrapServers = "127.0.0.1:9092" }; // TODO: Config
     return new ProducerBuilder<string, string>(config).Build();
 });
 builder.Services.AddSwaggerGen(c =>

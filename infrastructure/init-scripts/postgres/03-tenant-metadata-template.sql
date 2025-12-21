@@ -64,11 +64,12 @@ CREATE TABLE IF NOT EXISTS product_variants (
 CREATE INDEX IF NOT EXISTS idx_product_variants_keywords ON product_variants USING GIN (search_keywords);
 CREATE INDEX IF NOT EXISTS idx_product_variants_attributes ON product_variants USING GIN (attributes_json);
 
--- Images table (The core entity we process)
-CREATE TABLE IF NOT EXISTS images (
+-- Media table (Images, Videos, etc.)
+CREATE TABLE IF NOT EXISTS media (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     variant_id UUID REFERENCES product_variants(id) ON DELETE CASCADE,
     storage_path VARCHAR(500) NOT NULL, -- Bucket/Path in MinIO
+    media_type SMALLINT DEFAULT 1, -- 1=Image, 2=Video
     original_filename VARCHAR(255),
     file_size_bytes BIGINT,
     mime_type VARCHAR(100),
@@ -79,6 +80,9 @@ CREATE TABLE IF NOT EXISTS images (
     quality_score NUMERIC, 
     width INT,
     height INT,
+    duration_seconds NUMERIC,
+    thumbnail_path VARCHAR(500), -- Path to poster frame or static thumbnail
+    preview_path VARCHAR(500), -- Path to preview (GIF/Short video)
     features_extracted BOOLEAN DEFAULT FALSE,
     indexed BOOLEAN DEFAULT FALSE,
     uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -112,10 +116,10 @@ CREATE TABLE IF NOT EXISTS price_history (
     effective_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Queue for reliable image deletion (source + thumbnails)
-CREATE TABLE IF NOT EXISTS image_deletion_queue (
+-- Queue for reliable media deletion (source + thumbnails/previews)
+CREATE TABLE IF NOT EXISTS media_deletion_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    image_id UUID NOT NULL,
+    media_id UUID NOT NULL,
     storage_path VARCHAR(500) NOT NULL,
     deleted_from_disk BOOLEAN DEFAULT FALSE,
     deleted_from_vector BOOLEAN DEFAULT FALSE,
@@ -127,4 +131,5 @@ CREATE TABLE IF NOT EXISTS image_deletion_queue (
 CREATE INDEX IF NOT EXISTS idx_products_sku ON products(base_sku);
 CREATE INDEX IF NOT EXISTS idx_seller_listings_variant ON seller_listings(variant_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_listing ON price_history(listing_id);
-CREATE INDEX IF NOT EXISTS idx_images_phash ON images(phash);
+CREATE INDEX IF NOT EXISTS idx_media_phash ON media(phash);
+CREATE INDEX IF NOT EXISTS idx_media_type ON media(media_type);

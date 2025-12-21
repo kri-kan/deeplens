@@ -8,7 +8,7 @@ Last Updated: December 20, 2025
 
 ## 🏗️ System Overview
 
-DeepLens is a high-performance, multi-tenant image similarity search engine built using a **hybrid .NET + Python microservices architecture**. It balances enterprise-grade orchestration with state-of-the-art AI/ML capabilities.
+DeepLens is a high-performance, multi-tenant **visual search engine** built using a **hybrid .NET + Python microservices architecture**. It supports both **image and video assets** with AI-powered similarity search, feature extraction, and intelligent cataloging.
 
 ### Core Design Principles
 - **Unified .NET Backend**: Centralized orchestration, API gateway, and tenant management.

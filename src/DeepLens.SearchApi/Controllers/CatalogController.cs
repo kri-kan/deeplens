@@ -60,7 +60,7 @@ public class CatalogController : ControllerBase
             return Unauthorized(new { message = "Invalid tenant_id" });
         }
 
-        await _metadataService.SetDefaultImageAsync(tenantId, imageId, isDefault);
+        await _metadataService.SetDefaultMediaAsync(tenantId, imageId, isDefault);
         return Ok(new { message = "Image default status updated" });
     }
 

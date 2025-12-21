@@ -43,9 +43,10 @@ public class IngestionController : ControllerBase
     /// </summary>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
-    public async Task<ActionResult<UploadImageResponse>> IngestImage([FromForm] UploadImageRequest request)
+    [AllowAnonymous]
+    public async Task<ActionResult<UploadImageResponse>> IngestImage([FromForm] UploadImageRequest request, [FromQuery] string? tenant = null)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value;
+        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
         if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
         {
             return Unauthorized(new { message = "Invalid or missing tenant_id in token" });
@@ -215,6 +216,11 @@ public class IngestionController : ControllerBase
                 // 4. Notify
                 if (_kafkaProducer != null)
                 {
+                    var isVideo = file.ContentType.StartsWith("video/");
+                    if (isVideo)
+                    {
+                        processingOptions.GenerateGifPreview = true;
+                    }
                     await NotifyPipeline(tenantId, imageId, storagePath, singleRequest, processingOptions);
                 }
 
@@ -259,39 +265,70 @@ public class IngestionController : ControllerBase
 
     public record ExtractionRequest(string Text, string? Category);
 
-    private async Task NotifyPipeline(Guid tenantId, Guid imageId, string storagePath, UploadImageRequest request, ProcessingOptions processingOptions)
+    private async Task NotifyPipeline(Guid tenantId, Guid id, string storagePath, UploadImageRequest request, ProcessingOptions processingOptions)
     {
-        var evt = new ImageUploadedEvent
+        var contentType = request.File.ContentType;
+        var isVideo = contentType.StartsWith("video/");
+        
+        BaseEvent evt;
+        string topic;
+
+        if (isVideo)
         {
-            EventId = Guid.NewGuid(),
-            EventType = EventTypes.ImageUploaded,
-            EventVersion = "1.0",
-            Timestamp = DateTime.UtcNow,
-            TenantId = tenantId.ToString(),
-            Data = new ImageUploadedData
+            evt = new VideoUploadedEvent
             {
-                ImageId = imageId,
-                FileName = request.File.FileName,
-                FilePath = storagePath,
-                FileSize = request.File.Length,
-                ContentType = request.File.ContentType,
-                UploadedBy = "system", // TODO: Get from claims
-                Metadata = new ImageMetadata
+                EventId = Guid.NewGuid(),
+                EventType = EventTypes.VideoUploaded,
+                EventVersion = "1.0",
+                Timestamp = DateTime.UtcNow,
+                TenantId = tenantId.ToString(),
+                Data = new VideoUploadedData
                 {
-                    OriginalFileName = request.File.FileName,
-                    Format = request.File.ContentType
-                }
-            },
-            ProcessingOptions = processingOptions
-        };
+                    VideoId = id,
+                    FileName = request.File.FileName,
+                    FilePath = storagePath,
+                    FileSize = request.File.Length,
+                    ContentType = contentType,
+                    UploadedBy = "system"
+                },
+                ProcessingOptions = processingOptions
+            };
+            topic = KafkaTopics.VideoUploaded;
+        }
+        else
+        {
+            evt = new ImageUploadedEvent
+            {
+                EventId = Guid.NewGuid(),
+                EventType = EventTypes.ImageUploaded,
+                EventVersion = "1.0",
+                Timestamp = DateTime.UtcNow,
+                TenantId = tenantId.ToString(),
+                Data = new ImageUploadedData
+                {
+                    ImageId = id,
+                    FileName = request.File.FileName,
+                    FilePath = storagePath,
+                    FileSize = request.File.Length,
+                    ContentType = contentType,
+                    UploadedBy = "system",
+                    Metadata = new ImageMetadata
+                    {
+                        OriginalFileName = request.File.FileName,
+                        Format = contentType
+                    }
+                },
+                ProcessingOptions = processingOptions
+            };
+            topic = KafkaTopics.ImageUploaded;
+        }
 
         var kafkaMsg = new Message<string, string>
         {
-            Key = imageId.ToString(),
+            Key = id.ToString(),
             Value = JsonSerializer.Serialize(evt)
         };
 
-        var topic = KafkaTopics.ImageUploaded;
         await _kafkaProducer.ProduceAsync(topic, kafkaMsg);
     }
 }

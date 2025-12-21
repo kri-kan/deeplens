@@ -7,6 +7,7 @@ namespace DeepLens.Contracts.Events;
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "eventType")]
 [JsonDerivedType(typeof(ImageUploadedEvent), "image.uploaded")]
+[JsonDerivedType(typeof(VideoUploadedEvent), "video.uploaded")]
 [JsonDerivedType(typeof(FeatureExtractionRequestedEvent), "feature.extraction.requested")]
 [JsonDerivedType(typeof(VectorIndexingRequestedEvent), "vector.indexing.requested")]
 [JsonDerivedType(typeof(ProcessingCompletedEvent), "processing.completed")]
@@ -99,6 +100,9 @@ public class ProcessingOptions
     [JsonPropertyName("generateThumbnail")]
     public bool GenerateThumbnail { get; set; } = true;
 
+    [JsonPropertyName("generateGifPreview")]
+    public bool GenerateGifPreview { get; set; } = true;
+
     [JsonPropertyName("thumbnailQuality")]
     public int ThumbnailQuality { get; set; } = 75;
 
@@ -110,6 +114,54 @@ public class ProcessingOptions
 
     [JsonPropertyName("thumbnailFormat")]
     public string ThumbnailFormat { get; set; } = "webp";
+}
+
+// =============================================================================
+// Video Upload Events
+// =============================================================================
+
+/// <summary>
+/// Published when a video is successfully uploaded and stored.
+/// Triggers the video processing pipeline (GIF generation, transcoding).
+/// </summary>
+public class VideoUploadedEvent : BaseEvent
+{
+    [JsonPropertyName("data")]
+    public required VideoUploadedData Data { get; set; }
+
+    [JsonPropertyName("processingOptions")]
+    public ProcessingOptions ProcessingOptions { get; set; } = new();
+
+    public VideoUploadedEvent()
+    {
+        EventType = "video.uploaded";
+        EventVersion = "1.0";
+        Timestamp = DateTime.UtcNow;
+    }
+}
+
+public class VideoUploadedData
+{
+    [JsonPropertyName("videoId")]
+    public required Guid VideoId { get; set; }
+
+    [JsonPropertyName("fileName")]
+    public required string FileName { get; set; }
+
+    [JsonPropertyName("filePath")]
+    public required string FilePath { get; set; }
+
+    [JsonPropertyName("fileSize")]
+    public required long FileSize { get; set; }
+
+    [JsonPropertyName("contentType")]
+    public required string ContentType { get; set; }
+
+    [JsonPropertyName("uploadedBy")]
+    public string? UploadedBy { get; set; }
+
+    [JsonPropertyName("storageProvider")]
+    public StorageProviderInfo StorageProvider { get; set; } = new() { Type = "minio" };
 }
 
 public class ImageMetadata
@@ -458,6 +510,7 @@ public class ImageDeletionData
 public static class EventTypes
 {
     public const string ImageUploaded = "image.uploaded";
+    public const string VideoUploaded = "video.uploaded";
     public const string FeatureExtractionRequested = "feature.extraction.requested";
     public const string VectorIndexingRequested = "vector.indexing.requested";
     public const string ProcessingCompleted = "processing.completed";
@@ -468,6 +521,7 @@ public static class EventTypes
 public static class KafkaTopics
 {
     public const string ImageUploaded = "deeplens.images.uploaded";
+    public const string VideoUploaded = "deeplens.videos.uploaded";
     public const string FeatureExtraction = "deeplens.features.extraction";
     public const string VectorIndexing = "deeplens.vectors.indexing";
     public const string ProcessingCompleted = "deeplens.processing.completed";
@@ -477,6 +531,7 @@ public static class KafkaTopics
     public static readonly string[] AllTopics = 
     {
         ImageUploaded,
+        VideoUploaded,
         FeatureExtraction,
         VectorIndexing,
         ProcessingCompleted,
@@ -489,7 +544,7 @@ public static class KafkaTopics
 // Processing Status Enums
 // =============================================================================
 
-public enum ImageProcessingStatus
+public enum MediaProcessingStatus
 {
     Uploaded = 0,
     Processed = 1,

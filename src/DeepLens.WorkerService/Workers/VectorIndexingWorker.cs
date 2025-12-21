@@ -271,7 +271,7 @@ public class VectorIndexingWorker : BackgroundService
                 indexingEvent.Data.ImageId, collectionInfo.Name, indexDuration, totalProcessingTime);
 
             // Update processing status in database (optional)
-            await UpdateProcessingStatus(indexingEvent.Data.ImageId, ImageProcessingStatus.Indexed, cancellationToken);
+            await UpdateProcessingStatus(indexingEvent.Data.ImageId, MediaProcessingStatus.Indexed, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -411,7 +411,7 @@ public class VectorIndexingWorker : BackgroundService
         }
     }
 
-    private async Task UpdateProcessingStatus(Guid imageId, ImageProcessingStatus status, CancellationToken cancellationToken)
+    private async Task UpdateProcessingStatus(Guid imageId, MediaProcessingStatus status, CancellationToken cancellationToken)
     {
         // TODO: Implement status tracking in database
         _logger.LogDebug("Updating processing status for ImageId: {ImageId} to {Status}", imageId, status);
