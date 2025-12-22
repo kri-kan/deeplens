@@ -200,6 +200,7 @@ if (-not $SkipBuild) {
 podman run -d `
     --name deeplens-feature-extraction `
     --network deeplens-network `
+    -v "${PWD}/src/DeepLens.FeatureExtractionService/models:/app/models" `
     -p 8001:8001 `
     deeplens-feature-extraction | Out-Null
 Confirm-Step "Feature Extraction Start"
@@ -250,57 +251,22 @@ Write-Host "[11/10] Bootstrapping platform and demo tenant..." -ForegroundColor 
 $VAYYARI_ID = "2abbd721-873e-4bf0-9cb2-c93c6894c584"
 $ADMIN_ID = "cf123992-628d-4eb4-9721-aef8c59275a5"
 
-# Generate hashes using the existing .NET tool in tools/HashGenerator
-Write-Host "  Generating secure hashes using internal tool..." -ForegroundColor Gray
+# Generate bootstrap SQL using the CLI tool
+Write-Host "  Generating bootstrap SQL using DeepLens.CLI..." -ForegroundColor Gray
 $DOTNET_PATH = "C:\Program Files\dotnet\dotnet.exe"
-$HASH_TOOL = "tools\HashGenerator\HashGenerator.csproj"
+$CLI_TOOL = "tools\DeepLens.CLI\DeepLens.CLI.csproj"
 
-function Get-BcHash {
-    param($password)
-    $output = & $DOTNET_PATH run --project $HASH_TOOL $password 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "    [FAIL] Failed to generate hash for password." -ForegroundColor Red
-        Write-Host $output
-        exit 1
-    }
-    # Parse "Hash: $2a$..." line
-    $hashLine = $output | Select-String "Hash:"
-    if (-not $hashLine) {
-        Write-Host "    [FAIL] Unexpected output from HashGenerator." -ForegroundColor Red
-        exit 1
-    }
-    return $hashLine.ToString().Split(" ")[1].Trim()
+$bootstrapFile = "bootstrap_temp.sql"
+
+# Call the tool to generate SQL
+& $DOTNET_PATH run --project $CLI_TOOL -- bootstrap-sql "DeepLensAdmin123!" "DeepLens@Vayyari123!" $ADMIN_ID $VAYYARI_ID > $bootstrapFile
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "    [FAIL] Failed to generate bootstrap SQL." -ForegroundColor Red
+    exit 1
 }
 
-$ADMIN_HASH = Get-BcHash "DeepLensAdmin123!"
-$VAYYARI_HASH = Get-BcHash "DeepLens@Vayyari123!"
-
-$BOOTSTRAP_SQL = @"
--- Clean existing
-DELETE FROM users WHERE email IN ('admin@deeplens.local', 'admin@vayyari.local');
-DELETE FROM tenants WHERE slug IN ('admin', 'vayyari') OR id IN ('$ADMIN_ID', '$VAYYARI_ID');
-
--- 1. Create Demo Tenant (Vayyari)
-INSERT INTO tenants (id, name, slug, database_name, qdrant_container_name, qdrant_http_port, qdrant_grpc_port, minio_endpoint, minio_bucket_name, status, tier, created_at)
-VALUES ('$VAYYARI_ID', 'Vayyari', 'vayyari', 'tenant_vayyari_metadata', 'deeplens-qdrant-Vayyari', 6433, 6434, 'http://localhost:9000', 'vayyari', 1, 1, NOW());
-
--- 2. Create Platform Admin Tenant
-INSERT INTO tenants (id, name, slug, database_name, qdrant_container_name, qdrant_http_port, qdrant_grpc_port, minio_endpoint, minio_bucket_name, status, tier, created_at)
-VALUES ('$ADMIN_ID', 'DeepLens Administration', 'admin', 'nextgen_identity', 'deeplens-qdrant', 6333, 6334, 'http://localhost:9000', 'platform-admin', 1, 3, NOW());
-
--- 3. Create Admin Users
-INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, is_active, created_at)
-VALUES 
-('9d1645f7-c93d-4c31-97f2-aed8c56275a5', '$ADMIN_ID', 'admin@deeplens.local', '$ADMIN_HASH', 'System', 'Admin', 2, true, NOW()),
-('798f62b3-2828-45f0-8ba4-6dd94c1787ff', '$VAYYARI_ID', 'admin@vayyari.local', '$VAYYARI_HASH', 'Vayyari', 'Admin', 2, true, NOW());
-"@
-
-# Write SQL to file to avoid piping issues
-$bootstrapFile = "bootstrap_temp.sql"
-$BOOTSTRAP_SQL | Out-File -FilePath $bootstrapFile -Encoding UTF8
-
 Write-Host "  Executing bootstrap SQL..." -ForegroundColor Gray
-cat $bootstrapFile | podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity
+Get-Content $bootstrapFile | podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  [FAIL] Database bootstrap failed" -ForegroundColor Red

@@ -11,7 +11,7 @@ if (-not (Test-Path $modelsDir)) {
 }
 
 # Model details
-$modelUrl = "https://github.com/onnx/models/raw/main/vision/classification/resnet/model/resnet50-v2-7.onnx"
+$modelUrl = "https://huggingface.co/webai-community/models-bk/resolve/main/resnet50-v2-7.onnx"
 $modelPath = Join-Path $modelsDir "resnet50-v2-7.onnx"
 
 # Check if model already exists
@@ -29,21 +29,26 @@ Write-Host "Downloading from: $modelUrl" -ForegroundColor Cyan
 Write-Host "This may take a few minutes..." -ForegroundColor Yellow
 
 try {
-    $ProgressPreference = 'SilentlyContinue'  # Faster downloads
-    Invoke-WebRequest -Uri $modelUrl -OutFile $modelPath -UseBasicParsing
-    $ProgressPreference = 'Continue'
+    # Use curl.exe for reliable download
+    $downloadCommand = "curl.exe -L -o `"$modelPath`" `"$modelUrl`""
+    Invoke-Expression $downloadCommand
     
     # Verify download
     if (Test-Path $modelPath) {
         $fileSize = (Get-Item $modelPath).Length / 1MB
+        if ($fileSize -lt 1.0) {
+            throw "Downloaded file is too small ($($fileSize) MB). Likely an error page."
+        }
         Write-Host " Model downloaded successfully!" -ForegroundColor Green
         Write-Host "  Location: $modelPath" -ForegroundColor Gray
         Write-Host "  Size: $([math]::Round($fileSize, 2)) MB" -ForegroundColor Gray
-    } else {
+    }
+    else {
         throw "File not found after download"
     }
     
-} catch {
+}
+catch {
     Write-Host " Error downloading model: $_" -ForegroundColor Red
     exit 1
 }
