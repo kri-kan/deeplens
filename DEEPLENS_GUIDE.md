@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2025-12-29 13:45:49
+**Auto-generated on:** 2025-12-29 14:25:51
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -150,15 +150,17 @@ Last Updated: December 20, 2025
 
 ## 🔌 Port Reference
 
-| Port     | Service      | Description                 |
-| :------- | :----------- | :-------------------------- |
-| **5433** | PostgreSQL   | Metadata & Identity DB      |
-| **6379** | Redis        | Caching & State             |
-| **5198** | Identity API | Auth & Tenant Orchestration |
-| **5001** | Search API   | Image Upload & Search       |
-| **8001** | Feature Ext. | Python AI Microservice      |
-| **3000** | Grafana      | Monitoring Dashboards       |
-| **6333** | Qdrant       | Vector DB Dashboard         |
+| Port      | Service      | Description                 |
+| :-------- | :----------- | :-------------------------- |
+| **5433**  | PostgreSQL   | Metadata & Identity DB      |
+| **6379**  | Redis        | Caching & State             |
+| **5198**  | Identity API | Auth & Tenant Orchestration |
+| **5001**  | Search API   | Image Upload & Search       |
+| **8001**  | Feature Ext. | Python AI Microservice      |
+| **3000**  | Grafana      | Monitoring Dashboards       |
+| **9090**  | Prometheus   | Metrics Time-Series DB      |
+| **16686** | Jaeger       | Distributed Tracing UI      |
+| **6333**  | Qdrant       | Vector DB Dashboard         |
 
 ---
 
@@ -373,7 +375,10 @@ DeepLens uses a script-based bootstrapping approach to ensure environment consis
 DeepLens implements a full **OpenTelemetry** stack:
 - **Metrics**: Exported to Prometheus.
 - **Logs**: Structured JSON logs sent to Loki.
-- **Traces**: Distributed tracing via Jaeger (correlating API Gateway → Worker → Python AI).
+### 3. Tracing (Jaeger / OpenTelemetry)
+- **Stack**: OpenTelemetry SDKs for .NET, Node.js, and Python.
+- **Context Propagation**: `TraceId` travels across network boundaries (Gateway → Search API → Kafka → Worker → AI Service) and (WhatsApp Processor → PostgreSQL/MinIO).
+- **Port**: `16686` (Jaeger UI).
 
 ---
 
@@ -674,6 +679,7 @@ DeepLens uses the LGTM stack (Loki, Grafana, Tempo/Jaeger, Mimir/Prometheus) for
 | **Search API**                |    ✅    |    ✅    |   ✅   |
 | **Identity API**              |    ✅    |    ✅    |   ✅   |
 | **Worker Service**            |    ✅    |    ✅    |   ✅   |
+| **WhatsApp Processor**        |    ✅    |    ✅    |   ✅   |
 | **AI Services (Python)**      |    ✅    |    🚧    |   ✅   |
 | **Infrastructure (DB/Kafka)** |    ✅    |    ✅    |   ✅   |
 
@@ -796,230 +802,248 @@ Run the automated identity checkpoint to verify Platform and Tenant admin access
 
 ### Architecture
 
+┌─────────────────────────────────────────────────────────┐
+│              Shared Infrastructure                      │
+├─────────────────────────────────────────────────────────┤
+│ PostgreSQL (5433) - All tenant DBs                       │
+│ Redis (6379)      - Shared cache                         │
+│ deeplens-network  - Container network                    │
+├─────────────────────────────────────────────────────────┤
+│              Observability Stack                        │
+├─────────────────────────────────────────────────────────┤
+│ Jaeger (16686)    - Distributed Tracing                  │
+│ Grafana (3000)    - Monitoring Dashboards                │
+│ Prometheus (9090) - Metrics Database                     │
+│ Loki (3100)       - Log Aggregation                      │
+└─────────────────────────────────────────────────────────┘
+         │
+         ├── Tenant 1
+         │   ├── Qdrant (6333/6334)
+         │   ├── MinIO (9000/9001)
+         │   └── Backup Container
+         │
+         ├── Tenant 2
+         │   ├── Qdrant (6335/6336)
+         │   ├── MinIO (9002/9003)
+         │   └── Backup Container
+         │
+         └── Tenant N...
 
 *(Code block omitted for brevity)*
+powershell
+# Create network (required for tenant isolation)
+podman network create deeplens-network
 
-
-### Network Setup
-
-
-*(Code block omitted for brevity)*
-
-
-### PostgreSQL Setup
-
+# Verify
+podman network ls
 
 *(Code block omitted for brevity)*
+powershell
+podman run -d `
+  --name deeplens-postgres `
+  --network deeplens-network `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_PASSWORD=DeepLens123! `
+  -e POSTGRES_DB=nextgen_identity `
+  -p 5433:5432 `
+  -v deeplens-postgres-data:/var/lib/postgresql/data `
+  postgres:16-alpine
 
-
-### Redis Setup
-
-
-*(Code block omitted for brevity)*
-
-
-### Verify Infrastructure
-
-
-*(Code block omitted for brevity)*
-
-
----
-
-## 🔐 Identity API Setup
-
-### Start the API
-
+# Test connection
+podman exec deeplens-postgres pg_isready -U postgres
 
 *(Code block omitted for brevity)*
+powershell
+podman run -d `
+  --name deeplens-redis `
+  --network deeplens-network `
+  -p 6379:6379 `
+  redis:7-alpine
 
-
-### Verify API is Running
-
-
-*(Code block omitted for brevity)*
-
-
-### Default Admin Credentials
-
-- **Email:** `admin@deeplens.local`
-- **Password:** `DeepLens@Admin123!`
-- ⚠️ **Change after first login!**
-
----
-
-## 🏢 Tenant Provisioning
-
-### Provision a Tenant
-
+# Test connection
+podman exec deeplens-redis redis-cli ping
 
 *(Code block omitted for brevity)*
+powershell
+# Check all containers
+podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-
-### What Gets Created
-
-**For Every Tenant:**
-- ✅ Database: `tenant_{name}_metadata`
-- ✅ Qdrant: Dedicated vector database (auto-assigned ports)
-- ✅ Backup: Automated daily backups
-- ✅ Admin User: `admin@{name}.local`
-
-**For DeepLens Storage:**
-- ✅ MinIO: Dedicated object storage (auto-assigned ports)
-- ✅ Credentials: Saved to tenant directory
-
-### Storage Options
-
-| Option       | What's Provisioned        | Use Case                      |
-| ------------ | ------------------------- | ----------------------------- |
-| **BYOS**     | Database + Qdrant         | Enterprise with Azure/AWS/GCS |
-| **DeepLens** | Database + Qdrant + MinIO | Development, testing          |
-| **None**     | Database + Qdrant         | Configure storage later       |
-
-### Verify Tenant
-
+# Expected output:
+# NAMES              STATUS        PORTS
+# deeplens-postgres  Up X seconds  0.0.0.0:5433->5432/tcp
+# deeplens-redis     Up X seconds  0.0.0.0:6379->6379/tcp
 
 *(Code block omitted for brevity)*
+powershell
+cd C:\productivity\deeplens\src\NextGen.Identity.Api
 
+# Set environment (REQUIRED!)
+$env:ASPNETCORE_ENVIRONMENT='Development'
 
-### Remove a Tenant
-
-
-*(Code block omitted for brevity)*
-
-
----
-
-## 🐛 Troubleshooting
-
-### "dotnet: command not found"
-
+# Start API
+dotnet run --urls=http://localhost:5198
 
 *(Code block omitted for brevity)*
+powershell
+# Test OpenID configuration
+Invoke-RestMethod http://localhost:5198/.well-known/openid-configuration
 
-
-### "Scripts are disabled on this system"
-
-
-*(Code block omitted for brevity)*
-
-
-### "Production signing credential not configured"
-
+# Should return JSON with endpoints
 
 *(Code block omitted for brevity)*
+powershell
+cd C:\productivity\deeplens\infrastructure
 
+# Interactive (prompts for storage type)
+.\provision-tenant.ps1 -TenantName "your-tenant"
 
-### Containers fail to start
+# With DeepLens-managed storage
+.\provision-tenant.ps1 -TenantName "your-tenant" -StorageType "DeepLens"
 
-
-*(Code block omitted for brevity)*
-
-
-### Port already in use
-
-
-*(Code block omitted for brevity)*
-
-
-### Tenant containers in "Created" state
-
+# With BYOS (Bring Your Own Storage)
+.\provision-tenant.ps1 -TenantName "your-tenant" -StorageType "BYOS"
 
 *(Code block omitted for brevity)*
+powershell
+# Check tenant containers
+podman ps --filter "label=tenant=your-tenant"
 
+# Check database
+podman exec deeplens-postgres psql -U postgres -c "\l" | Select-String "tenant_"
 
-### View Container Logs
-
-
-*(Code block omitted for brevity)*
-
-
----
-
-## 🔧 Advanced Topics
-
-### Stop All Services
-
+# View credentials
+Get-Content "C:\productivity\deeplensData\tenants\your-tenant\admin-credentials.txt"
 
 *(Code block omitted for brevity)*
-
-
-### Backup Database
-
+powershell
+.\provision-tenant.ps1 -TenantName "old-tenant" -Remove
 
 *(Code block omitted for brevity)*
+powershell
+# Use full path
+& "C:\Program Files\dotnet\dotnet.exe" run --urls=http://localhost:5198
 
-
-### Restore Database
-
-
-*(Code block omitted for brevity)*
-
-
-### Clean Up Everything
-
+# Or add to PATH
+$env:Path += ";C:\Program Files\dotnet"
 
 *(Code block omitted for brevity)*
-
-
-### Check Resource Usage
-
+powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 *(Code block omitted for brevity)*
-
-
-### Migration & Portable Storage
-
-**Core Databases (Named Volumes):**
-On Windows, core databases use named volumes. To migrate:
+powershell
+# Ensure environment variable is set
+$env:ASPNETCORE_ENVIRONMENT='Development'
 
 *(Code block omitted for brevity)*
+powershell
+# Check if network exists
+podman network ls | Select-String "deeplens-network"
 
+# Create if missing
+podman network create deeplens-network
 
-**Tenant Data (Bind Mounts):**
-Tenant data is in `C:\productivity\deeplensData\tenants`. Simply copy the directory to migrate.
+*(Code block omitted for brevity)*
+powershell
+# Find what's using the port
+netstat -ano | findstr :5433
 
-### Service Endpoints
+# Kill the process
+taskkill /PID <PID> /F
 
-| Service         | Port | URL                             | Credentials             |
-| --------------- | ---- | ------------------------------- | ----------------------- |
-| PostgreSQL      | 5433 | -                               | postgres / DeepLens123! |
-| Redis           | 6379 | -                               | (no password)           |
-| Identity API    | 5198 | http://localhost:5198           | -                       |
-| Qdrant (tenant) | 6333 | http://localhost:6333/dashboard | -                       |
-| MinIO (tenant)  | 9001 | http://localhost:9001           | See credentials file    |
+*(Code block omitted for brevity)*
+powershell
+# Check for port conflicts
+podman ps -a | Select-String "demo"
 
----
+# Stop core infrastructure if using multi-tenant
+podman stop deeplens-qdrant deeplens-minio
 
-## 📚 Additional Documentation
+# Start tenant containers
+podman start deeplens-qdrant-demo deeplens-minio-demo
 
-For more detailed information, see:
+*(Code block omitted for brevity)*
+powershell
+# Identity API logs (if running in background)
+podman logs deeplens-identity-api
 
-- **[TENANT-GUIDE.md](TENANT-GUIDE.md)** - Architecture & provisioning
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Solutions for common issues
+# Tenant Qdrant logs
+podman logs deeplens-qdrant-demo
 
----
+# Tenant MinIO logs
+podman logs deeplens-minio-demo
 
-## 💡 Tips
+# PostgreSQL logs
+podman logs deeplens-postgres
 
-1. **Keep terminals organized:**
-   - Terminal 1: Identity API (must stay running)
-   - Terminal 2: Provisioning and management
+*(Code block omitted for brevity)*
+powershell
+# Stop Identity API (Ctrl+C in its terminal)
 
-2. **Check status regularly:**
+# Stop all containers
+podman stop $(podman ps -aq)
+
+# Or stop specific services
+podman stop deeplens-postgres deeplens-redis
+
+*(Code block omitted for brevity)*
+powershell
+# Backup all databases
+podman exec deeplens-postgres pg_dumpall -U postgres > deeplens-backup.sql
+
+# Backup specific tenant database
+podman exec deeplens-postgres pg_dump -U postgres tenant_demo_metadata > demo-backup.sql
+
+*(Code block omitted for brevity)*
+powershell
+# Restore all databases
+Get-Content deeplens-backup.sql | podman exec -i deeplens-postgres psql -U postgres
+
+# Restore specific database
+Get-Content demo-backup.sql | podman exec -i deeplens-postgres psql -U postgres -d tenant_demo_metadata
+
+*(Code block omitted for brevity)*
+powershell
+# Stop and remove all containers
+podman stop $(podman ps -aq)
+podman rm $(podman ps -aq)
+
+# Remove all volumes (⚠️ DELETES ALL DATA)
+podman volume rm $(podman volume ls -q)
+
+# Remove network
+podman network rm deeplens-network
+
+*(Code block omitted for brevity)*
+powershell
+# Container stats
+podman stats
+
+# Disk usage
+podman system df
+
+# Volume usage
+podman volume ls
+
+*(Code block omitted for brevity)*
+powershell
+# Export
+podman volume export deeplens-postgres-data > postgres.tar
+# Import on new machine
+Get-Content postgres.tar | podman volume import deeplens-postgres-data
+
+*(Code block omitted for brevity)*
+powershell
+   podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
    
 *(Code block omitted for brevity)*
-
-
-3. **Monitor logs:**
+powershell
+   podman logs -f <container-name>
    
 *(Code block omitted for brevity)*
-
-
-4. **Use labels for filtering:**
-   
-*(Code block omitted for brevity)*
-
+powershell
+   podman ps --filter "label=tenant=demo"
+   ```
 
 ---
 
