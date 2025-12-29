@@ -96,7 +96,8 @@ $volumes = @(
     "deeplens-redis-data",
     "deeplens-prometheus-data",
     "deeplens-grafana-data",
-    "deeplens-loki-data"
+    "deeplens-loki-data",
+    "deeplens-jaeger-data"
 )
 foreach ($volume in $volumes) {
     podman volume create $volume 2>&1 | Out-Null
@@ -201,7 +202,11 @@ podman run -d `
     --name deeplens-jaeger `
     --network deeplens-network `
     -e COLLECTOR_OTLP_ENABLED=true `
-    -e SPAN_STORAGE_TYPE=memory `
+    -e SPAN_STORAGE_TYPE=badger `
+    -e BADGER_EPHEMERAL=false `
+    -e BADGER_DIRECTORY_VALUE=/badger/data `
+    -e BADGER_DIRECTORY_KEY=/badger/key `
+    -v deeplens-jaeger-data:/badger `
     -p 16686:16686 `
     -p 14250:14250 `
     -p 14268:14268 `
