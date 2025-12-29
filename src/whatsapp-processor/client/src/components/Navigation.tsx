@@ -105,6 +105,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
     const location = useLocation();
     const styles = useStyles();
     const [isConversationsExpanded, setIsConversationsExpanded] = useState(true);
+    const [isAdminExpanded, setIsAdminExpanded] = useState(true);
 
     const width = isCollapsed ? 60 : 240;
 
@@ -211,17 +212,56 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
 
                 {/* Administration Menu */}
                 {!isCollapsed && (
-                    <Button
-                        appearance="subtle"
-                        icon={<Settings24Regular />}
-                        onClick={() => navigate('/admin/chats')}
-                        className={`${styles.navButton} ${location.pathname.startsWith('/admin') ? styles.navButtonActive : ''}`}
-                        style={{ width: '100%' }}
-                    >
-                        Administration
-                    </Button>
+                    <>
+                        <Button
+                            appearance="subtle"
+                            icon={<Settings24Regular />}
+                            iconPosition="before"
+                            onClick={() => setIsAdminExpanded(!isAdminExpanded)}
+                            className={`${styles.navButton} ${isAdminActive ? styles.navButtonActive : ''}`}
+                            style={{ width: '100%', justifyContent: 'space-between' }}
+                        >
+                            <span>Administration</span>
+                            {isAdminExpanded ? <ChevronDown24Regular /> : <ChevronRight24Regular />}
+                        </Button>
+
+                        {isAdminExpanded && (
+                            <>
+                                <Button
+                                    appearance="subtle"
+                                    icon={<People24Regular />}
+                                    onClick={() => navigate('/admin/chats')}
+                                    className={`${styles.subNavButton} ${location.pathname === '/admin/chats' ? styles.subNavButtonActive : ''}`}
+                                    style={{ width: '100%' }}
+                                >
+                                    Chats
+                                </Button>
+
+                                <Button
+                                    appearance="subtle"
+                                    icon={<Megaphone24Regular />}
+                                    onClick={() => navigate('/admin/announcements')}
+                                    className={`${styles.subNavButton} ${location.pathname === '/admin/announcements' ? styles.subNavButtonActive : ''}`}
+                                    style={{ width: '100%' }}
+                                >
+                                    Announcements
+                                </Button>
+
+                                <Button
+                                    appearance="subtle"
+                                    icon={<PeopleTeam24Regular />}
+                                    onClick={() => navigate('/admin/groups')}
+                                    className={`${styles.subNavButton} ${location.pathname === '/admin/groups' ? styles.subNavButtonActive : ''}`}
+                                    style={{ width: '100%' }}
+                                >
+                                    Groups
+                                </Button>
+                            </>
+                        )}
+                    </>
                 )}
 
+                {/* When collapsed, show admin icon only */}
                 {isCollapsed && (
                     <Button
                         appearance="subtle"
