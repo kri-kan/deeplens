@@ -67,7 +67,25 @@ Or use the combined command:
 npm run build:all
 ```
 
-### 3. Configure
+### 3. Setup Database
+
+The WhatsApp Processor requires a PostgreSQL database. If you're using the DeepLens infrastructure:
+
+```bash
+# Make sure DeepLens infrastructure is running
+cd c:\productivity\deeplens
+.\infrastructure\setup-deeplens-dev.ps1
+
+# Setup WhatsApp database
+cd src\whatsapp-processor
+.\setup-whatsapp-db.ps1
+```
+
+**Important:** The database runs on port **5433** (not 5432) when using DeepLens infrastructure.
+
+See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed database configuration and troubleshooting.
+
+### 4. Configure
 
 Copy the example environment file and edit with your values:
 
@@ -80,7 +98,7 @@ Edit `.env` with your tenant-specific configuration:
 - `MINIO_BUCKET` - Your tenant's MinIO bucket (format: `tenant-<uuid>`)
 - `DB_CONNECTION_STRING` - Your tenant's PostgreSQL database
 
-### 4. Run
+### 5. Run
 
 ```bash
 npm start
