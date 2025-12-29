@@ -1,0 +1,38 @@
+{
+    "name": "whatsapp-community-processor",
+    "version": "1.0.0",
+    "description": "",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "build:client": "cd client && npm run build",
+        "build:all": "npm run build:client && npm run build",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts",
+        "dev:client": "cd client && npm run dev",
+        "setup": "npm install && cd client && npm install && npm run build && cd .. && npm run build"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@hapi/boom": "^10.0.1",
+        "@whiskeysockets/baileys": "^6.7.9",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "minio": "^8.0.3",
+        "pg": "^8.13.1",
+        "pino": "^9.6.0",
+        "qrcode-terminal": "^0.12.0",
+        "socket.io": "^4.8.1"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.0",
+        "@types/minio": "^7.1.1",
+        "@types/node": "^22.10.2",
+        "@types/pg": "^8.11.10",
+        "@types/qrcode-terminal": "^0.12.2",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.7.2"
+    }
+}

@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  whatsapp-processor:
+    build: 
+      context: ./src/whatsapp-processor
+      dockerfile: Dockerfile
+    image: deeplens-whatsapp-processor:latest
+    container_name: deeplens-whatsapp-${SESSION_ID:-default}-${TENANT_NAME}
+    restart: unless-stopped
+    environment:
+      # --- Identity & Session ---
+      - SESSION_ID=${SESSION_ID:-default}
+      - TENANT_NAME=${TENANT_NAME}
+      
+      # --- Database Connection ---
+      # Connects to the specific tenant database created by provision-tenant.ps1
+      # Note: We use the 'postgres' user here for simplicity, but in prod should be 'tenant_service'
+      - DB_CONNECTION_STRING=postgresql://postgres:${PG_PASSWORD:-DeepLens123!}@deeplens-postgres:5432/tenant_${TENANT_NAME}_metadata
+      
+      # --- MinIO Connection ---
+      # Connects to the shared MinIO instance but targets the tenant-specific bucket
+      - MINIO_ENDPOINT=deeplens-minio
+      - MINIO_PORT=9000
+      - MINIO_BUCKET=${MINIO_BUCKET:-tenant-${TENANT_NAME}-data}
+      # Ideally use the specific tenant keys generated during provisioning
+      # Fallback to arguments passed via .env or CLI
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+
+      # --- App Config ---
+      - DATA_DIR=/usr/src/app/data
+      - API_PORT=3000
+      - LOG_LEVEL=info
+    
+    volumes:
+      # Persist Session Auth & Config
+      # Naming convention: deeplens_whatsapp_<Tenant>_<Session>_data
+      - deeplens_whatsapp_${TENANT_NAME}_${SESSION_ID:-default}_data:/usr/src/app/data
+    
+    networks:
+      - deeplens-network
+    
+    ports:
+      # Expose UI port (mapped to host for access)
+      - "${RequestPort:-3000}:3000"
+
+networks:
+  deeplens-network:
+    name: deeplens-network
+    external: true
+
+volumes:
+  deeplens_whatsapp_${TENANT_NAME}_${SESSION_ID:-default}_data:
+    name: deeplens_whatsapp_${TENANT_NAME}_${SESSION_ID:-default}_data

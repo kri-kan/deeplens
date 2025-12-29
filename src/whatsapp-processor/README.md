@@ -1,0 +1,275 @@
+# DeepLens WhatsApp Processor
+
+Multi-tenant WhatsApp message processor with modern React UI, integrated into the DeepLens ecosystem.
+
+## 🎯 Overview
+
+This application connects to WhatsApp Web using the Baileys library, allowing you to:
+- Monitor WhatsApp groups and communities
+- Selectively track messages from whitelisted groups
+- Store media in MinIO and metadata in PostgreSQL
+- Manage everything through a modern React interface
+
+## 🏗️ Architecture
+
+### Backend
+- **Node.js + TypeScript** - Server runtime
+- **Express** - Web server
+- **Socket.IO** - Real-time WebSocket communication
+- **Baileys** - WhatsApp Web API client
+- **MinIO SDK** - Object storage for media
+- **PostgreSQL Client** - Metadata storage
+
+### Frontend
+- **React 18** - UI library
+- **TypeScript** - Type safety
+- **Vite** - Build tool and dev server
+- **TailwindCSS** - Styling
+- **Socket.IO Client** - Real-time updates
+- **qrcode.react** - QR code rendering
+
+### Storage
+- **MinIO** - Media files (images, videos)
+- **PostgreSQL** - Chat history and metadata
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+ (managed via nvm)
+- Running DeepLens infrastructure (PostgreSQL, MinIO)
+
+### 1. Install Dependencies
+
+```bash
+# Install backend dependencies
+npm install
+
+# Install frontend dependencies
+cd client
+npm install
+cd ..
+```
+
+### 2. Build
+
+```bash
+# Build frontend
+cd client
+npm run build
+cd ..
+
+# Build backend
+npm run build
+```
+
+Or use the combined command:
+```bash
+npm run build:all
+```
+
+### 3. Configure
+
+Copy the example environment file and edit with your values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your tenant-specific configuration:
+- `TENANT_NAME` - Your tenant name (e.g., "Vayyari")
+- `MINIO_BUCKET` - Your tenant's MinIO bucket (format: `tenant-<uuid>`)
+- `DB_CONNECTION_STRING` - Your tenant's PostgreSQL database
+
+### 4. Run
+
+```bash
+npm start
+```
+
+Access the UI at: **http://localhost:3005**
+
+## 📁 Project Structure
+
+```
+whatsapp-processor/
+├── client/                    # React frontend
+│   ├── src/
+│   │   ├── components/       # React components
+│   │   │   ├── Header.tsx
+│   │   │   ├── QRSection.tsx
+│   │   │   ├── GroupsSection.tsx
+│   │   │   └── GroupItem.tsx
+│   │   ├── App.tsx           # Main app component
+│   │   ├── main.tsx          # Entry point
+│   │   └── index.css         # Global styles
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tsconfig.json
+├── src/                       # Backend
+│   └── index.ts              # Express + Socket.IO + Baileys
+├── public/
+│   └── dist/                 # React build output (served by backend)
+├── data/                      # Session data (gitignored)
+│   ├── <session-id>/         # WhatsApp credentials
+│   └── config/
+│       └── whitelist.json    # Tracked groups
+├── .env                       # Environment config (gitignored)
+├── .env.example              # Environment template
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## 🛠️ Development
+
+### Backend Development
+
+```bash
+npm run dev
+```
+
+Runs the backend with ts-node for hot reload on **port 3005**.
+
+### Frontend Development
+
+```bash
+cd client
+npm run dev
+```
+
+Runs Vite dev server on **port 3006** with:
+- Hot module replacement
+- Proxy to backend API (port 3005)
+- Fast refresh
+
+### Full Development Setup
+
+Run both in separate terminals:
+
+```bash
+# Terminal 1: Backend
+npm run dev
+
+# Terminal 2: Frontend
+npm run dev:client
+```
+
+## 📡 API Reference
+
+### REST Endpoints
+
+| Endpoint             | Method | Description                             |
+| -------------------- | ------ | --------------------------------------- |
+| `/api/status`        | GET    | Connection status, QR code, tenant info |
+| `/api/groups`        | GET    | List all groups with tracking status    |
+| `/api/groups/toggle` | POST   | Enable/disable tracking for a group     |
+
+### WebSocket Events
+
+| Event    | Direction       | Data              | Description               |
+| -------- | --------------- | ----------------- | ------------------------- |
+| `status` | Server → Client | `{ status, qr? }` | Connection status updates |
+
+**Status values:**
+- `disconnected` - Not connected to WhatsApp
+- `scanning` - Waiting for QR code scan
+- `connected` - Successfully connected
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file with these variables:
+
+```env
+# Session
+SESSION_ID=community_alpha          # Unique session identifier
+TENANT_NAME=Vayyari                 # Tenant name
+
+# Storage
+DATA_DIR=./data                     # Local data directory
+MINIO_ENDPOINT=localhost            # MinIO host
+MINIO_PORT=9000                     # MinIO port
+MINIO_ACCESS_KEY=minioadmin         # MinIO access key
+MINIO_SECRET_KEY=minioadmin         # MinIO secret key
+MINIO_BUCKET=tenant-<uuid>          # Tenant bucket name
+
+# Database
+DB_CONNECTION_STRING=postgresql://postgres:password@localhost:5432/tenant_name_metadata
+
+# Server
+API_PORT=3005                       # Server port
+LOG_LEVEL=info                      # Logging level
+```
+
+**Note:** Special characters in passwords should be URL-encoded (e.g., `!` becomes `%21`)
+
+## 🐳 Docker Deployment
+
+See `docker-compose.whatsapp.yml` in the DeepLens root for containerized deployment with:
+- Isolated containers per tenant
+- Network isolation via `deeplens-network`
+- Persistent volumes for session data
+- Environment-based configuration
+
+## 🎨 Features
+
+✅ **WhatsApp Authentication** - QR code scanning for multi-device login  
+✅ **Group Management** - View and whitelist communities/groups  
+✅ **Real-time Updates** - Live connection status via WebSocket  
+✅ **Multi-tenant** - Isolated data per tenant  
+✅ **Modern UI** - React with TypeScript and TailwindCSS  
+✅ **Type Safety** - Full TypeScript coverage  
+✅ **Hot Reload** - Fast development workflow  
+
+## 📝 NPM Scripts
+
+| Script                 | Description                        |
+| ---------------------- | ---------------------------------- |
+| `npm start`            | Start production server            |
+| `npm run dev`          | Start backend dev server           |
+| `npm run dev:client`   | Start frontend dev server          |
+| `npm run build`        | Build backend                      |
+| `npm run build:client` | Build frontend                     |
+| `npm run build:all`    | Build both backend and frontend    |
+| `npm run setup`        | Install all dependencies and build |
+
+## 🔒 Security Notes
+
+- `.env` file is gitignored - never commit credentials
+- Use `.env.example` as a template for new environments
+- Each tenant has isolated MinIO bucket and PostgreSQL database
+- Session credentials are stored in `data/` directory (gitignored)
+
+## 🐛 Troubleshooting
+
+### "React build not found" error
+
+Run the build command:
+```bash
+cd client && npm run build
+```
+
+### Database connection errors
+
+Check your `DB_CONNECTION_STRING` in `.env`:
+- Ensure password is URL-encoded
+- Verify database exists
+- Check PostgreSQL is running
+
+### MinIO connection errors
+
+Verify:
+- MinIO is running on the specified port
+- Bucket exists and credentials are correct
+- `MINIO_BUCKET` matches your tenant's bucket name
+
+## 📚 Additional Documentation
+
+- **Frontend**: See `client/README.md` for React-specific details
+- **Migration**: See `MIGRATION_COMPLETE.md` for React migration notes
+- **DeepLens**: See root `README.md` for overall architecture
+
+## 📄 License
+
+Part of the DeepLens project.

@@ -336,8 +336,11 @@ public class ImageProcessingWorker : BackgroundService
                 Mode = ResizeMode.Max
             }));
 
+            var filePathParts = uploadEvent.Data.FilePath.Split('/', 2);
+            var objectPath = filePathParts.Length > 1 ? filePathParts[1] : uploadEvent.Data.FilePath;
+            
             var extension = options.ThumbnailFormat.ToLower() == "jpeg" ? ".jpg" : $".{options.ThumbnailFormat.ToLower()}";
-            var thumbPath = uploadEvent.Data.FilePath.Replace("raw/", "thumbnails/");
+            var thumbPath = objectPath.Replace("raw/", "thumbnails/");
             var lastDot = thumbPath.LastIndexOf('.');
             if (lastDot > 0) thumbPath = thumbPath.Substring(0, lastDot);
             thumbPath += extension;
