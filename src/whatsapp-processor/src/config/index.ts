@@ -64,3 +64,11 @@ export const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 export const SESSION_PATH = path.join(DATA_DIR, SESSION_ID);
 export const CONFIG_PATH = path.join(DATA_DIR, 'config');
 export const WHITELIST_FILE = path.join(CONFIG_PATH, 'whitelist.json');
+
+// --- Rate Limiter Configuration ---
+export const RATE_LIMIT_CONFIG = {
+    maxRequestsPerMinute: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS_PER_MINUTE || '30'),
+    minDelayMs: parseInt(process.env.RATE_LIMIT_MIN_DELAY_MS || '1000'),
+    maxDelayMs: parseInt(process.env.RATE_LIMIT_MAX_DELAY_MS || '3000'),
+    jitterPercent: parseInt(process.env.RATE_LIMIT_JITTER_PERCENT || '30'),
+};

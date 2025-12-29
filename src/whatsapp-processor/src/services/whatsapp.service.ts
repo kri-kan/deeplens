@@ -41,6 +41,7 @@ export interface Chat {
 
 export class WhatsAppService {
     private sock: WASocket | null = null;
+    private store: ReturnType<typeof makeInMemoryStore> | null = null;
     private qrCode: string | null = null;
     private connectionStatus: ConnectionStatus = 'disconnected';
     private groupsCache: GroupMetadata[] = [];
@@ -55,6 +56,33 @@ export class WhatsAppService {
     async start(): Promise<void> {
         // Ensure MinIO bucket exists
         await ensureBucketExists();
+
+        // Create and configure message store
+        const fs = require('fs');
+        const path = require('path');
+        const storePath = path.join(process.cwd(), 'data', 'baileys-store.json');
+
+        // Ensure data directory exists
+        const dataDir = path.join(process.cwd(), 'data');
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+
+        this.store = makeInMemoryStore({ logger: logger as any });
+
+        // Load store from file if exists
+        if (fs.existsSync(storePath)) {
+            this.store.readFromFile(storePath);
+            logger.info('Loaded message store from file');
+        }
+
+        // Save store periodically
+        setInterval(() => {
+            if (this.store) {
+                this.store.writeToFile(storePath);
+                logger.debug('Saved message store to file');
+            }
+        }, 30_000); // Every 30 seconds
 
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
         const { version } = await fetchLatestBaileysVersion();
@@ -73,6 +101,11 @@ export class WhatsAppService {
 
         this.sock = sock;
 
+        // Bind store to socket events
+        if (this.store) {
+            this.store.bind(sock.ev);
+        }
+
         sock.ev.on('connection.update', (update: Partial<ConnectionState>) => {
             this.handleConnectionUpdate(update);
         });
@@ -81,6 +114,21 @@ export class WhatsAppService {
 
         sock.ev.on('messages.upsert', async ({ messages, type }: { messages: WAMessage[], type: string }) => {
             await this.handleMessages(messages, type);
+        });
+
+        // Handle message updates (edits, deletes)
+        sock.ev.on('messages.update', async (updates: any[]) => {
+            await this.handleMessageUpdates(updates);
+        });
+
+        // Handle chat list on connection
+        sock.ev.on('chats.set', async ({ chats }: { chats: BChat[] }) => {
+            await this.handleChatsSet(chats);
+        });
+
+        // Handle new/updated chats
+        sock.ev.on('chats.upsert', async (chats: BChat[]) => {
+            await this.handleChatsUpsert(chats);
         });
     }
 
