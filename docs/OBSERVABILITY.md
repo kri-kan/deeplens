@@ -34,6 +34,7 @@ DeepLens uses the LGTM stack (Loki, Grafana, Tempo/Jaeger, Mimir/Prometheus) for
 | **Search API**                |    ✅    |    ✅    |   ✅   |
 | **Identity API**              |    ✅    |    ✅    |   ✅   |
 | **Worker Service**            |    ✅    |    ✅    |   ✅   |
+| **WhatsApp Processor**        |    ✅    |    ✅    |   ✅   |
 | **AI Services (Python)**      |    ✅    |    🚧    |   ✅   |
 | **Infrastructure (DB/Kafka)** |    ✅    |    ✅    |   ✅   |
 

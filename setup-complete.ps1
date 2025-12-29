@@ -110,6 +110,7 @@ Write-Host "  Platform Admin:  admin@deeplens.local / DeepLensAdmin123!" -Foregr
 Write-Host "  Tenant Admin:    admin@Vayyari.local / DeepLens@Vayyari123!" -ForegroundColor White
 Write-Host "  MinIO:           deeplens / DeepLens123!" -ForegroundColor White
 Write-Host "  PostgreSQL:      postgres / DeepLens123!" -ForegroundColor White
+Write-Host "  Grafana:         admin / DeepLens123!" -ForegroundColor White
 Write-Host ""
 
 Write-Host "Service URLs:" -ForegroundColor Cyan
@@ -117,6 +118,10 @@ Write-Host "  Identity API:    http://localhost:5198" -ForegroundColor White
 Write-Host "  Search API:      http://localhost:5000" -ForegroundColor White
 Write-Host "  Swagger:         http://localhost:5000/swagger" -ForegroundColor White
 Write-Host "  MinIO Console:   http://localhost:9001" -ForegroundColor White
+Write-Host "  Jaeger (Traces): http://localhost:16686" -ForegroundColor White
+Write-Host "  Grafana (Dash):  http://localhost:3000" -ForegroundColor White
+Write-Host "  Prometheus:      http://localhost:9090" -ForegroundColor White
+Write-Host "  WhatsApp UI:     http://localhost:3005" -ForegroundColor White
 Write-Host ""
 
 exit $validationResult

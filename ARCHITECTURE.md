@@ -117,7 +117,10 @@ DeepLens uses a script-based bootstrapping approach to ensure environment consis
 DeepLens implements a full **OpenTelemetry** stack:
 - **Metrics**: Exported to Prometheus.
 - **Logs**: Structured JSON logs sent to Loki.
-- **Traces**: Distributed tracing via Jaeger (correlating API Gateway → Worker → Python AI).
+### 3. Tracing (Jaeger / OpenTelemetry)
+- **Stack**: OpenTelemetry SDKs for .NET, Node.js, and Python.
+- **Context Propagation**: `TraceId` travels across network boundaries (Gateway → Search API → Kafka → Worker → AI Service) and (WhatsApp Processor → PostgreSQL/MinIO).
+- **Port**: `16686` (Jaeger UI).
 
 ---
 

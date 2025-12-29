@@ -102,14 +102,20 @@ Get-ExecutionPolicy -List
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────┐
-│         Shared Infrastructure           │
-├─────────────────────────────────────────┤
-│  PostgreSQL (5433) - All tenant DBs     │
-│  Redis (6379)      - Shared cache       │
-│  deeplens-network  - Container network  │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│              Shared Infrastructure                      │
+├─────────────────────────────────────────────────────────┤
+│ PostgreSQL (5433) - All tenant DBs                       │
+│ Redis (6379)      - Shared cache                         │
+│ deeplens-network  - Container network                    │
+├─────────────────────────────────────────────────────────┤
+│              Observability Stack                        │
+├─────────────────────────────────────────────────────────┤
+│ Jaeger (16686)    - Distributed Tracing                  │
+│ Grafana (3000)    - Monitoring Dashboards                │
+│ Prometheus (9090) - Metrics Database                     │
+│ Loki (3100)       - Log Aggregation                      │
+└─────────────────────────────────────────────────────────┘
          │
          ├── Tenant 1
          │   ├── Qdrant (6333/6334)
@@ -420,13 +426,16 @@ Tenant data is in `C:\productivity\deeplensData\tenants`. Simply copy the direct
 
 ### Service Endpoints
 
-| Service         | Port | URL                             | Credentials             |
-| --------------- | ---- | ------------------------------- | ----------------------- |
-| PostgreSQL      | 5433 | -                               | postgres / DeepLens123! |
-| Redis           | 6379 | -                               | (no password)           |
-| Identity API    | 5198 | http://localhost:5198           | -                       |
-| Qdrant (tenant) | 6333 | http://localhost:6333/dashboard | -                       |
-| MinIO (tenant)  | 9001 | http://localhost:9001           | See credentials file    |
+| Service         | Port  | URL                             | Credentials             |
+| --------------- | ----- | ------------------------------- | ----------------------- |
+| PostgreSQL      | 5433  | -                               | postgres / DeepLens123! |
+| Redis           | 6379  | -                               | (no password)           |
+| Identity API    | 5198  | http://localhost:5198           | -                       |
+| Qdrant (tenant) | 6333  | http://localhost:6333/dashboard | -                       |
+| MinIO (tenant)  | 9001  | http://localhost:9001           | See credentials file    |
+| Jaeger          | 16686 | http://localhost:16686          | -                       |
+| Grafana         | 3000  | http://localhost:3000           | admin / DeepLens123!    |
+| Prometheus      | 9090  | http://localhost:9090           | -                       |
 
 ---
 

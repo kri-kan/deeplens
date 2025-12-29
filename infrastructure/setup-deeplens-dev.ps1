@@ -93,7 +93,10 @@ $volumes = @(
     "deeplens-zookeeper-logs",
     "deeplens-minio-data",
     "deeplens-qdrant-data",
-    "deeplens-redis-data"
+    "deeplens-redis-data",
+    "deeplens-prometheus-data",
+    "deeplens-grafana-data",
+    "deeplens-loki-data"
 )
 foreach ($volume in $volumes) {
     podman volume create $volume 2>&1 | Out-Null
@@ -190,8 +193,66 @@ Confirm-Step "Redis Start"
 Start-Sleep 2
 Write-Host "  [OK] Redis started" -ForegroundColor Green
 
-# Step 9: Build and start Feature Extraction Service
-Write-Host "[9/10] Setting up Feature Extraction Service..." -ForegroundColor Yellow
+# Step 9: Start Observability Stack
+Write-Host "[9/11] Starting Observability Stack..." -ForegroundColor Yellow
+
+# Jaeger - Distributed Tracing
+podman run -d `
+    --name deeplens-jaeger `
+    --network deeplens-network `
+    -e COLLECTOR_OTLP_ENABLED=true `
+    -e SPAN_STORAGE_TYPE=memory `
+    -p 16686:16686 `
+    -p 14250:14250 `
+    -p 14268:14268 `
+    -p 4317:4317 `
+    -p 4318:4318 `
+    jaegertracing/all-in-one:1.49 | Out-Null
+Confirm-Step "Jaeger Start"
+
+# Prometheus - Metrics
+podman run -d `
+    --name deeplens-prometheus `
+    --network deeplens-network `
+    -v "${PWD}/infrastructure/config/prometheus:/etc/prometheus" `
+    -v deeplens-prometheus-data:/prometheus `
+    -p 9090:9090 `
+    prom/prometheus:v2.47.0 --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus | Out-Null
+Confirm-Step "Prometheus Start"
+
+# Grafana - Visualization
+podman run -d `
+    --name deeplens-grafana `
+    --network deeplens-network `
+    -e GF_SECURITY_ADMIN_PASSWORD=$POSTGRES_PASSWORD `
+    -v deeplens-grafana-data:/var/lib/grafana `
+    -p 3000:3000 `
+    grafana/grafana:10.1.0 | Out-Null
+Confirm-Step "Grafana Start"
+
+# Loki - Log Aggregation
+podman run -d `
+    --name deeplens-loki `
+    --network deeplens-network `
+    -v deeplens-loki-data:/loki `
+    -p 3100:3100 `
+    grafana/loki:2.9.0 | Out-Null
+Confirm-Step "Loki Start"
+
+# OTel Collector - Telemetry Pipeline
+podman run -d `
+    --name deeplens-otel-collector `
+    --network deeplens-network `
+    -v "${PWD}/infrastructure/config/otel-collector:/etc/otelcol-contrib" `
+    -p 8888:8888 `
+    -p 8889:8889 `
+    otel/opentelemetry-collector-contrib:0.88.0 --config=/etc/otelcol-contrib/otel-collector.yaml | Out-Null
+Confirm-Step "OTel Collector Start"
+
+Write-Host "  [OK] Observability stack started" -ForegroundColor Green
+
+# Step 10: Build and start Feature Extraction Service
+Write-Host "[10/11] Setting up Feature Extraction Service..." -ForegroundColor Yellow
 if (-not $SkipBuild) {
     Write-Host "  Building Docker image..." -ForegroundColor Gray
     podman build -t deeplens-feature-extraction -f src/DeepLens.FeatureExtractionService/Dockerfile src/DeepLens.FeatureExtractionService | Out-Null
@@ -207,8 +268,8 @@ Confirm-Step "Feature Extraction Start"
 Start-Sleep 3
 Write-Host "  [OK] Feature Extraction Service started" -ForegroundColor Green
 
-# Step 10: Initialize databases
-Write-Host "[10/10] Initializing baseline databases..." -ForegroundColor Yellow
+# Step 11: Initialize databases
+Write-Host "[11/11] Initializing baseline databases..." -ForegroundColor Yellow
 
 # Wait for PostgreSQL to be ready
 $maxRetries = 30

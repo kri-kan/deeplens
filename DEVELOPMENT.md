@@ -49,15 +49,17 @@ Last Updated: December 20, 2025
 
 ## 🔌 Port Reference
 
-| Port     | Service      | Description                 |
-| :------- | :----------- | :-------------------------- |
-| **5433** | PostgreSQL   | Metadata & Identity DB      |
-| **6379** | Redis        | Caching & State             |
-| **5198** | Identity API | Auth & Tenant Orchestration |
-| **5001** | Search API   | Image Upload & Search       |
-| **8001** | Feature Ext. | Python AI Microservice      |
-| **3000** | Grafana      | Monitoring Dashboards       |
-| **6333** | Qdrant       | Vector DB Dashboard         |
+| Port      | Service      | Description                 |
+| :-------- | :----------- | :-------------------------- |
+| **5433**  | PostgreSQL   | Metadata & Identity DB      |
+| **6379**  | Redis        | Caching & State             |
+| **5198**  | Identity API | Auth & Tenant Orchestration |
+| **5001**  | Search API   | Image Upload & Search       |
+| **8001**  | Feature Ext. | Python AI Microservice      |
+| **3000**  | Grafana      | Monitoring Dashboards       |
+| **9090**  | Prometheus   | Metrics Time-Series DB      |
+| **16686** | Jaeger       | Distributed Tracing UI      |
+| **6333**  | Qdrant       | Vector DB Dashboard         |
 
 ---
 

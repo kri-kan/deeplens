@@ -160,10 +160,6 @@ Runs Vite dev server on **port 3006** with:
 - Proxy to backend API (port 3005)
 - Fast refresh
 
-### Full Development Setup
-
-Run both in separate terminals:
-
 ```bash
 # Terminal 1: Backend
 npm run dev
@@ -171,6 +167,26 @@ npm run dev
 # Terminal 2: Frontend
 npm run dev:client
 ```
+
+## 📊 Observability & Tracing
+
+The WhatsApp Processor is fully instrumented with **OpenTelemetry**.
+
+### Distributed Tracing
+Traces are automatically collected for:
+- Incoming HTTP requests
+- Outgoing database queries (PostgreSQL)
+- MinIO object storage operations
+
+You can view live traces in **Jaeger** at: [http://localhost:16686](http://localhost:16686)
+
+### Metrics
+Application-level metrics are exported via OTLP and can be viewed in **Grafana** (Port 3000) or directly in **Prometheus** (Port 9090).
+
+### Configuration
+Tracing is configured via environment variables in `.env`:
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` - Jaeger/OTel Collector endpoint
+- `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` - Prometheus/OTel Collector endpoint
 
 ## 📡 API Reference
 
