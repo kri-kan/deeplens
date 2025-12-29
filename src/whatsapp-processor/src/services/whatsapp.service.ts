@@ -167,32 +167,69 @@ export class WhatsAppService {
      * Manual initial sync for existing sessions
      * chats.set event only fires on first connection, not on reconnects
      */
-    private async performManualInitialSync(): Promise<void> {
-        if (!this.sock) return;
+    async performManualInitialSync(): Promise<void> {
+        if (!this.sock) {
+            logger.warn('⚠️  Cannot perform manual sync: WhatsApp not connected');
+            return;
+        }
 
         const client = getWhatsAppDbClient();
-        if (!client) return;
+        if (!client) {
+            logger.warn('⚠️  Cannot perform manual sync: Database not available');
+            return;
+        }
 
         try {
+            logger.info('🔍 Checking database state...');
+
             // Check if we already have chats in database
             const result = await client.query('SELECT COUNT(*) as count FROM chats');
             const chatCount = parseInt(result.rows[0]?.count || '0');
 
+            logger.info({ chatCount }, `📊 Current database state: ${chatCount} chats`);
+
             if (chatCount > 0) {
-                logger.info({ chatCount }, 'Database already has chats, skipping initial sync');
+                logger.info({ chatCount }, '✅ Database already has chats, skipping initial sync');
+
+                // Log breakdown
+                const breakdown = await client.query(`
+                    SELECT 
+                        COUNT(*) FILTER (WHERE is_group = true) as groups,
+                        COUNT(*) FILTER (WHERE is_group = false) as individual,
+                        COUNT(*) FILTER (WHERE is_announcement = true) as announcements
+                    FROM chats
+                `);
+
+                logger.info({
+                    groups: breakdown.rows[0]?.groups || 0,
+                    individual: breakdown.rows[0]?.individual || 0,
+                    announcements: breakdown.rows[0]?.announcements || 0
+                }, '📊 Chat breakdown');
+
                 return;
             }
 
-            logger.info('Database is empty, performing manual initial sync...');
+            logger.warn('🗄️  Database is empty, performing manual initial sync...');
 
             // Fetch all groups
+            logger.info('📡 Fetching groups from WhatsApp...');
             const groups = await this.sock.groupFetchAllParticipating();
             const allGroups = Object.values(groups);
 
-            logger.info(`Fetching ${allGroups.length} groups for initial sync`);
+            logger.info(`📥 Received ${allGroups.length} groups from WhatsApp`);
+
+            if (allGroups.length === 0) {
+                logger.warn('⚠️  No groups found in WhatsApp');
+                return;
+            }
 
             // Sync groups to database (same logic as handleChatsSet)
+            let syncedCount = 0;
+            let announcementCount = 0;
+
             for (const group of allGroups) {
+                const isAnnouncement = group.id.includes('@newsletter');
+
                 await upsertChat(
                     group.id,
                     group.subject || 'Unknown Group',
@@ -212,13 +249,26 @@ export class WhatsAppService {
                     WHERE jid = $1
                 `, [
                     group.id,
-                    group.id.includes('@newsletter')
+                    isAnnouncement
                 ]);
+
+                syncedCount++;
+                if (isAnnouncement) announcementCount++;
+
+                // Log progress every 10 groups
+                if (syncedCount % 10 === 0) {
+                    logger.info(`📥 Synced ${syncedCount}/${allGroups.length} groups...`);
+                }
             }
 
-            logger.info(`Manual initial sync completed: ${allGroups.length} groups synced`);
+            logger.warn({
+                total: syncedCount,
+                groups: syncedCount - announcementCount,
+                announcements: announcementCount
+            }, `✅ Manual initial sync completed: ${syncedCount} groups synced`);
+
         } catch (err) {
-            logger.error({ err }, 'Failed to perform manual initial sync');
+            logger.error({ err }, '❌ Failed to perform manual initial sync');
         }
     }
 

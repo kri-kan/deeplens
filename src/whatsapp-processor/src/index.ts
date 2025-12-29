@@ -10,6 +10,7 @@ import { initializeDeepLensDbClient, initializeWhatsAppDbClient, getWhatsAppDbCl
 import { WhatsAppService } from './services/whatsapp.service';
 import { createApiRoutes } from './routes/api.routes';
 import { createConversationRoutes } from './routes/conversation.routes';
+import { createAdminRoutes } from './routes/admin.routes';
 import { initializeDatabaseSchema } from './utils/db-init';
 
 const logger = pino({ level: LOG_LEVEL });
@@ -117,6 +118,10 @@ async function initializeServices() {
     // Register conversation routes
     const conversationRoutes = createConversationRoutes(waService);
     app.use('/api/conversations', conversationRoutes);
+
+    // Register admin routes
+    const adminRoutes = createAdminRoutes(waService);
+    app.use('/api/admin', adminRoutes);
 
     // Verify DB Sync
     const client = getWhatsAppDbClient();
