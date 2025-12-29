@@ -30,7 +30,7 @@ podman run -d --name whatsapp-vayyari `
     -e MINIO_BUCKET="tenant-$tenantId" `
     -e MINIO_ACCESS_KEY="minioadmin" `
     -e MINIO_SECRET_KEY="minioadmin" `
-    -e DB_CONNECTION_STRING="postgresql://postgres:DeepLens123!@deeplens-postgres:5432/tenant_Vayyari_metadata" `
+    -e DB_CONNECTION_STRING="postgresql://postgres:DeepLens123!@deeplens-postgres:5432/tenant_vayyari_metadata" `
     -e API_PORT=3000 `
     -v deeplens_whatsapp_vayyari_data:/usr/src/app/data `
     -p 3005:3000 `
