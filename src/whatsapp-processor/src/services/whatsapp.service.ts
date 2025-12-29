@@ -405,4 +405,8 @@ export class WhatsAppService {
         const credsPath = path.join(SESSION_PATH, 'creds.json');
         return fs.existsSync(credsPath);
     }
+
+    getSocket(): WASocket | null {
+        return this.sock;
+    }
 }
