@@ -9,7 +9,7 @@ import { API_PORT, TENANT_NAME, SESSION_PATH, CONFIG_PATH, LOG_LEVEL } from './c
 import { initializeDeepLensDbClient, initializeWhatsAppDbClient, getWhatsAppDbClient } from './clients/db.client';
 import { WhatsAppService } from './services/whatsapp.service';
 import { createApiRoutes } from './routes/api.routes';
-import { createConversationRoutes } from './routes/conversation.routes';
+// import { createConversationRoutes } from './routes/conversation.routes';
 import { createAdminRoutes } from './routes/admin.routes';
 import { initializeDatabaseSchema } from './utils/db-init';
 
@@ -116,8 +116,9 @@ async function initializeServices() {
     app.use('/api', apiRoutes);
 
     // Register conversation routes
-    const conversationRoutes = createConversationRoutes(waService);
-    app.use('/api/conversations', conversationRoutes);
+    // TODO: Fix TypeScript errors in conversation routes
+    // const conversationRoutes = createConversationRoutes(waService);
+    // app.use('/api/conversations', conversationRoutes);
 
     // Register admin routes
     const adminRoutes = createAdminRoutes(waService);

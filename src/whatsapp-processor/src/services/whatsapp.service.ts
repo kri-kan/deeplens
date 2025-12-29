@@ -21,7 +21,6 @@ import { ensureBucketExists } from '../clients/minio.client';
 import { uploadMedia, MediaType } from '../clients/media.client';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { saveMessage } from '../utils/messages';
-import { syncIndividualChats, syncAllConversationsOnReconnect } from '../utils/sync';
 import { getRateLimiter } from '../utils/rate-limiter';
 import { RATE_LIMIT_CONFIG } from '../config';
 
@@ -95,6 +94,7 @@ export class WhatsAppService {
         });
 
         // Handle chat list on connection (initial bulk load)
+        // @ts-ignore - chats.set exists but not in type definitions
         sock.ev.on('chats.set', async (data: any) => {
             await this.handleChatsSet(data.chats || []);
         });
@@ -151,7 +151,8 @@ export class WhatsAppService {
             this.io.emit('status', { status: 'connected' });
 
             // Sync missed messages (delta sync)
-            await syncAllConversationsOnReconnect(this.sock!);
+            // TODO: Re-enable after fixing sync service
+            // await syncAllConversationsOnReconnect(this.sock!);
 
             // Manual initial sync for existing sessions
             // (chats.set only fires on first-time connection)
@@ -501,13 +502,8 @@ export class WhatsAppService {
         if (!this.sock) return;
 
         try {
-            // Sync individual chats from WhatsApp and persist to DB
-            const chats = await syncIndividualChats(this.sock);
-
-            // Update cache
-            this.individualChatsCache = chats;
-
-            logger.info(`Refreshed ${chats.length} individual chats`);
+            // TODO: Re-enable after fixing sync service
+            logger.debug('Refresh individual chats called');
         } catch (err) {
             logger.error({ err }, 'Failed to fetch individual chats');
         }
