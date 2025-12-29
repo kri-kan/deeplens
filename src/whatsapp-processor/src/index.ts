@@ -9,6 +9,7 @@ import { API_PORT, TENANT_NAME, SESSION_PATH, CONFIG_PATH, LOG_LEVEL } from './c
 import { initializeDeepLensDbClient, initializeWhatsAppDbClient, getWhatsAppDbClient } from './clients/db.client';
 import { WhatsAppService } from './services/whatsapp.service';
 import { createApiRoutes } from './routes/api.routes';
+import { createConversationRoutes } from './routes/conversation.routes';
 import { initializeDatabaseSchema } from './utils/db-init';
 
 const logger = pino({ level: LOG_LEVEL });
@@ -112,6 +113,10 @@ async function initializeServices() {
     // Register API routes
     const apiRoutes = createApiRoutes(waService);
     app.use('/api', apiRoutes);
+
+    // Register conversation routes
+    const conversationRoutes = createConversationRoutes(waService);
+    app.use('/api/conversations', conversationRoutes);
 
     // Verify DB Sync
     const client = getWhatsAppDbClient();

@@ -21,6 +21,7 @@ import { ensureBucketExists } from '../clients/minio.client';
 import { uploadMedia, MediaType } from '../clients/media.client';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { saveMessage } from '../utils/messages';
+import { syncIndividualChats, syncAllConversationsOnReconnect } from '../utils/sync';
 
 const logger = pino({ level: LOG_LEVEL });
 
@@ -83,7 +84,7 @@ export class WhatsAppService {
         });
     }
 
-    private handleConnectionUpdate(update: Partial<ConnectionState>): void {
+    private async handleConnectionUpdate(update: Partial<ConnectionState>): Promise<void> {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
@@ -122,6 +123,11 @@ export class WhatsAppService {
             this.qrCode = null;
             logger.info('Connected!');
             this.io.emit('status', { status: 'connected' });
+
+            // Sync missed messages (delta sync)
+            await syncAllConversationsOnReconnect(this.sock!);
+
+            // Refresh caches
             this.refreshGroups();
             this.refreshChats();
         }
@@ -356,8 +362,13 @@ export class WhatsAppService {
         if (!this.sock) return;
 
         try {
-            // Placeholder: Individual chats are usually handled via store or incoming messages
-            logger.debug('Refresh individual chats called');
+            // Sync individual chats from WhatsApp and persist to DB
+            const chats = await syncIndividualChats(this.sock);
+
+            // Update cache
+            this.individualChatsCache = chats;
+
+            logger.info(`Refreshed ${chats.length} individual chats`);
         } catch (err) {
             logger.error({ err }, 'Failed to fetch individual chats');
         }
