@@ -153,9 +153,72 @@ export class WhatsAppService {
             // Sync missed messages (delta sync)
             await syncAllConversationsOnReconnect(this.sock!);
 
+            // Manual initial sync for existing sessions
+            // (chats.set only fires on first-time connection)
+            await this.performManualInitialSync();
+
             // Refresh caches
             this.refreshGroups();
             this.refreshChats();
+        }
+    }
+
+    /**
+     * Manual initial sync for existing sessions
+     * chats.set event only fires on first connection, not on reconnects
+     */
+    private async performManualInitialSync(): Promise<void> {
+        if (!this.sock) return;
+
+        const client = getWhatsAppDbClient();
+        if (!client) return;
+
+        try {
+            // Check if we already have chats in database
+            const result = await client.query('SELECT COUNT(*) as count FROM chats');
+            const chatCount = parseInt(result.rows[0]?.count || '0');
+
+            if (chatCount > 0) {
+                logger.info({ chatCount }, 'Database already has chats, skipping initial sync');
+                return;
+            }
+
+            logger.info('Database is empty, performing manual initial sync...');
+
+            // Fetch all groups
+            const groups = await this.sock.groupFetchAllParticipating();
+            const allGroups = Object.values(groups);
+
+            logger.info(`Fetching ${allGroups.length} groups for initial sync`);
+
+            // Sync groups to database (same logic as handleChatsSet)
+            for (const group of allGroups) {
+                await upsertChat(
+                    group.id,
+                    group.subject || 'Unknown Group',
+                    true,
+                    {
+                        creation: group.creation,
+                        ...group
+                    }
+                );
+
+                // Update WhatsApp-specific fields
+                await client.query(`
+                    UPDATE chats
+                    SET is_group = true,
+                        is_announcement = $2,
+                        updated_at = NOW()
+                    WHERE jid = $1
+                `, [
+                    group.id,
+                    group.id.includes('@newsletter')
+                ]);
+            }
+
+            logger.info(`Manual initial sync completed: ${allGroups.length} groups synced`);
+        } catch (err) {
+            logger.error({ err }, 'Failed to perform manual initial sync');
         }
     }
 
