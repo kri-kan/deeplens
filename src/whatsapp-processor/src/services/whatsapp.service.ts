@@ -22,6 +22,8 @@ import { uploadMedia, MediaType } from '../clients/media.client';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { saveMessage } from '../utils/messages';
 import { syncIndividualChats, syncAllConversationsOnReconnect } from '../utils/sync';
+import { getRateLimiter } from '../utils/rate-limiter';
+import { RATE_LIMIT_CONFIG } from '../config';
 
 const logger = pino({ level: LOG_LEVEL });
 
@@ -41,7 +43,6 @@ export interface Chat {
 
 export class WhatsAppService {
     private sock: WASocket | null = null;
-    private store: ReturnType<typeof makeInMemoryStore> | null = null;
     private qrCode: string | null = null;
     private connectionStatus: ConnectionStatus = 'disconnected';
     private groupsCache: GroupMetadata[] = [];
@@ -57,32 +58,9 @@ export class WhatsAppService {
         // Ensure MinIO bucket exists
         await ensureBucketExists();
 
-        // Create and configure message store
-        const fs = require('fs');
-        const path = require('path');
-        const storePath = path.join(process.cwd(), 'data', 'baileys-store.json');
-
-        // Ensure data directory exists
-        const dataDir = path.join(process.cwd(), 'data');
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
-
-        this.store = makeInMemoryStore({ logger: logger as any });
-
-        // Load store from file if exists
-        if (fs.existsSync(storePath)) {
-            this.store.readFromFile(storePath);
-            logger.info('Loaded message store from file');
-        }
-
-        // Save store periodically
-        setInterval(() => {
-            if (this.store) {
-                this.store.writeToFile(storePath);
-                logger.debug('Saved message store to file');
-            }
-        }, 30_000); // Every 30 seconds
+        // Initialize rate limiter
+        getRateLimiter(RATE_LIMIT_CONFIG);
+        logger.info({ config: RATE_LIMIT_CONFIG }, 'Rate limiter initialized');
 
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
         const { version } = await fetchLatestBaileysVersion();
@@ -101,11 +79,6 @@ export class WhatsAppService {
 
         this.sock = sock;
 
-        // Bind store to socket events
-        if (this.store) {
-            this.store.bind(sock.ev);
-        }
-
         sock.ev.on('connection.update', (update: Partial<ConnectionState>) => {
             this.handleConnectionUpdate(update);
         });
@@ -121,14 +94,19 @@ export class WhatsAppService {
             await this.handleMessageUpdates(updates);
         });
 
-        // Handle chat list on connection
-        sock.ev.on('chats.set', async ({ chats }: { chats: BChat[] }) => {
-            await this.handleChatsSet(chats);
+        // Handle chat list on connection (initial bulk load)
+        sock.ev.on('chats.set', async (data: any) => {
+            await this.handleChatsSet(data.chats || []);
         });
 
         // Handle new/updated chats
-        sock.ev.on('chats.upsert', async (chats: BChat[]) => {
+        sock.ev.on('chats.upsert', async (chats: any[]) => {
             await this.handleChatsUpsert(chats);
+        });
+
+        // Handle chat updates (unread count, last message, etc.)
+        sock.ev.on('chats.update', async (updates: any[]) => {
+            await this.handleChatsUpdate(updates);
         });
     }
 
@@ -467,5 +445,197 @@ export class WhatsAppService {
 
     getSocket(): WASocket | null {
         return this.sock;
+    }
+
+    /**
+     * Handle initial chat list (chats.set event)
+     * Fired once on connection with ALL chats
+     */
+    private async handleChatsSet(chats: any[]): Promise<void> {
+        logger.info(`Received ${chats.length} chats from WhatsApp (initial load)`);
+
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            logger.warn('Database not available, skipping chat sync');
+            return;
+        }
+
+        try {
+            for (const chat of chats) {
+                await upsertChat(
+                    chat.id,
+                    chat.name || chat.id.split('@')[0],
+                    chat.id.endsWith('@g.us'),
+                    {
+                        conversationTimestamp: chat.conversationTimestamp,
+                        unreadCount: chat.unreadCount,
+                        archived: chat.archived,
+                        pinned: chat.pinned,
+                        muteEndTime: chat.muteEndTime,
+                        isAnnouncement: chat.id.includes('@newsletter'),
+                        ...chat
+                    }
+                );
+
+                // Update WhatsApp-specific fields
+                await client.query(`
+                    UPDATE chats
+                    SET unread_count = $2,
+                        last_message_timestamp = $3,
+                        is_archived = $4,
+                        is_pinned = $5,
+                        is_muted = $6,
+                        mute_until_timestamp = $7,
+                        updated_at = NOW()
+                    WHERE jid = $1
+                `, [
+                    chat.id,
+                    chat.unreadCount || 0,
+                    chat.conversationTimestamp || null,
+                    chat.archived || false,
+                    chat.pinned ? true : false,
+                    chat.muteEndTime ? true : false,
+                    chat.muteEndTime || null
+                ]);
+            }
+
+            logger.info(`Successfully synced ${chats.length} chats to database`);
+        } catch (err) {
+            logger.error({ err }, 'Failed to sync chats');
+        }
+    }
+
+    /**
+     * Handle new or updated chats (chats.upsert event)
+     */
+    private async handleChatsUpsert(chats: any[]): Promise<void> {
+        logger.debug(`Chat upsert: ${chats.length} chats`);
+
+        for (const chat of chats) {
+            await upsertChat(
+                chat.id,
+                chat.name || chat.id.split('@')[0],
+                chat.id.endsWith('@g.us'),
+                chat
+            );
+        }
+    }
+
+    /**
+     * Handle chat updates (chats.update event)
+     * Updates unread count, last message, etc.
+     */
+    private async handleChatsUpdate(updates: any[]): Promise<void> {
+        const client = getWhatsAppDbClient();
+        if (!client) return;
+
+        for (const update of updates) {
+            try {
+                const jid = update.id;
+                if (!jid) continue;
+
+                const updateFields: string[] = [];
+                const values: any[] = [jid];
+                let paramIndex = 2;
+
+                if (update.unreadCount !== undefined) {
+                    updateFields.push(`unread_count = $${paramIndex++}`);
+                    values.push(update.unreadCount);
+                }
+
+                if (update.conversationTimestamp !== undefined) {
+                    updateFields.push(`last_message_timestamp = $${paramIndex++}`);
+                    values.push(update.conversationTimestamp);
+                }
+
+                if (update.archived !== undefined) {
+                    updateFields.push(`is_archived = $${paramIndex++}`);
+                    values.push(update.archived);
+                }
+
+                if (update.pinned !== undefined) {
+                    updateFields.push(`is_pinned = $${paramIndex++}`);
+                    values.push(update.pinned > 0);
+                    updateFields.push(`pin_order = $${paramIndex++}`);
+                    values.push(update.pinned);
+                }
+
+                if (updateFields.length > 0) {
+                    updateFields.push('updated_at = NOW()');
+
+                    await client.query(`
+                        UPDATE chats
+                        SET ${updateFields.join(', ')}
+                        WHERE jid = $1
+                    `, values);
+
+                    logger.debug({ jid, updates: updateFields }, 'Chat updated');
+                }
+            } catch (err) {
+                logger.error({ err, update }, 'Failed to update chat');
+            }
+        }
+    }
+
+    /**
+     * Handle message updates (messages.update event)
+     * Handles message edits and deletes
+     */
+    private async handleMessageUpdates(updates: any[]): Promise<void> {
+        const client = getWhatsAppDbClient();
+        if (!client) return;
+
+        for (const update of updates) {
+            try {
+                const messageId = update.key?.id;
+                if (!messageId) continue;
+
+                // Handle message edit
+                if (update.update?.message) {
+                    const newContent = this.extractMessageContent({ message: update.update.message } as WAMessage);
+
+                    await client.query(`
+                        UPDATE messages
+                        SET content = $2,
+                            metadata = jsonb_set(
+                                COALESCE(metadata, '{}'::jsonb),
+                                '{edited}',
+                                'true'::jsonb
+                            ),
+                            metadata = jsonb_set(
+                                metadata,
+                                '{editedAt}',
+                                to_jsonb(EXTRACT(EPOCH FROM NOW())::bigint)
+                            )
+                        WHERE message_id = $1
+                    `, [messageId, newContent]);
+
+                    logger.info({ messageId }, 'Message edited');
+                }
+
+                // Handle message delete
+                if (update.update?.messageStubType === 'REVOKE' || update.update?.messageStubType === 68) {
+                    await client.query(`
+                        UPDATE messages
+                        SET content = '[Message deleted]',
+                            metadata = jsonb_set(
+                                COALESCE(metadata, '{}'::jsonb),
+                                '{deleted}',
+                                'true'::jsonb
+                            ),
+                            metadata = jsonb_set(
+                                metadata,
+                                '{deletedAt}',
+                                to_jsonb(EXTRACT(EPOCH FROM NOW())::bigint)
+                            )
+                        WHERE message_id = $1
+                    `, [messageId]);
+
+                    logger.info({ messageId }, 'Message deleted');
+                }
+            } catch (err) {
+                logger.error({ err, update }, 'Failed to handle message update');
+            }
+        }
     }
 }
