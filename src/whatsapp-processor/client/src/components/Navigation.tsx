@@ -104,10 +104,11 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const styles = useStyles();
-    const [isAdminExpanded, setIsAdminExpanded] = useState(true);
+    const [isConversationsExpanded, setIsConversationsExpanded] = useState(true);
 
     const width = isCollapsed ? 60 : 240;
 
+    const isConversationsActive = location.pathname.startsWith('/conversations');
     const isAdminActive = location.pathname.startsWith('/admin');
     const isAdminChatsActive = location.pathname === '/admin/chats';
     const isAdminAnnouncementsActive = location.pathname === '/admin/announcements';
@@ -152,15 +153,15 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                             appearance="subtle"
                             icon={<People24Regular />}
                             iconPosition="before"
-                            onClick={() => setIsAdminExpanded(!isAdminExpanded)}
-                            className={`${styles.navButton} ${isAdminActive ? styles.navButtonActive : ''}`}
+                            onClick={() => setIsConversationsExpanded(!isConversationsExpanded)}
+                            className={`${styles.navButton} ${isConversationsActive ? styles.navButtonActive : ''}`}
                             style={{ width: '100%', justifyContent: 'space-between' }}
                         >
                             <span>Conversations</span>
-                            {isAdminExpanded ? <ChevronDown24Regular /> : <ChevronRight24Regular />}
+                            {isConversationsExpanded ? <ChevronDown24Regular /> : <ChevronRight24Regular />}
                         </Button>
 
-                        {isAdminExpanded && (
+                        {isConversationsExpanded && (
                             <>
                                 <Button
                                     appearance="subtle"
