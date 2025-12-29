@@ -231,6 +231,7 @@ podman run -d `
     --network deeplens-network `
     -e GF_SECURITY_ADMIN_PASSWORD=$POSTGRES_PASSWORD `
     -v deeplens-grafana-data:/var/lib/grafana `
+    -v "${PWD}/infrastructure/config/grafana/provisioning:/etc/grafana/provisioning" `
     -p 3000:3000 `
     grafana/grafana:10.1.0 | Out-Null
 Confirm-Step "Grafana Start"

@@ -1,13 +1,14 @@
 # DeepLens Grafana Datasource Configuration
-# Automatically configures Prometheus and InfluxDB as data sources
+# Automatically configures Prometheus, Loki, and Jaeger as data sources
 
 apiVersion: 1
 
 datasources:
+  # Prometheus - Metrics (Default)
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://deeplens-prometheus:9090
     isDefault: true
     editable: true
     jsonData:
@@ -15,35 +16,36 @@ datasources:
       queryTimeout: "60s"
       httpMethod: "POST"
 
-  - name: InfluxDB
-    type: influxdb
+  # Loki - Logs
+  - name: Loki
+    type: loki
     access: proxy
-    url: http://influxdb:8086
-    database: deeplens
-    user: admin
-    secureJsonData:
-      password: DeepLens123!
+    url: http://deeplens-loki:3100
+    editable: true
     jsonData:
-      timeInterval: "10s"
-      queryTimeout: "60s"
-      version: "InfluxQL"
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: "traceID=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
 
-  - name: InfluxDB-Flux
-    type: influxdb
-    access: proxy
-    url: http://influxdb:8086
-    jsonData:
-      version: "Flux"
-      organization: deeplens
-      defaultBucket: metrics
-      tlsSkipVerify: true
-    secureJsonData:
-      token: deeplens-admin-token
-
+  # Jaeger - Traces
   - name: Jaeger
     type: jaeger
     access: proxy
-    url: http://jaeger:16686
+    url: http://deeplens-jaeger:16686
+    editable: true
+    uid: jaeger
     jsonData:
       tracesToLogs:
         datasourceUid: loki
+        tags: ["service.name", "service.namespace"]
+        mappedTags: [{ key: "service.name", value: "service" }]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+        filterByTraceID: true
+        filterBySpanID: false
+      nodeGraph:
+        enabled: true
