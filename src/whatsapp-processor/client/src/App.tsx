@@ -13,6 +13,9 @@ import AnnouncementsAdminPage from './pages/AnnouncementsAdminPage';
 import GroupsAdminPage from './pages/GroupsAdminPage';
 import CommunitiesAdminPage from './pages/CommunitiesAdminPage';
 import QRCodePage from './pages/QRCodePage';
+import ChatsPage from './pages/ChatsPage';
+import AnnouncementsPage from './pages/AnnouncementsPage';
+import GroupsPage from './pages/GroupsPage';
 
 function AppContent({
     settings,
@@ -153,6 +156,11 @@ function AppContent({
                             path="/"
                             element={hasSession ? <DashboardPage /> : <Navigate to="/qr" replace />}
                         />
+
+                        {/* Conversation Routes */}
+                        <Route path="/conversations/chats" element={<ChatsPage />} />
+                        <Route path="/conversations/announcements" element={<AnnouncementsPage />} />
+                        <Route path="/conversations/groups" element={<GroupsPage />} />
 
                         {/* Administration Routes */}
                         <Route path="/admin/chats" element={<ChatsAdminPage />} />
