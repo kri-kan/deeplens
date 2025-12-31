@@ -103,7 +103,7 @@ const useStyles = makeStyles({
         fontSize: '14px',
         '&:focus': {
             outline: 'none',
-            borderColor: tokens.colorBrandStroke1,
+            // borderColor: tokens.colorBrandBackground,
         },
     },
 });

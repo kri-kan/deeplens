@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { makeStyles, tokens, Spinner } from '@fluentui/react-components';
 import ConversationList, { Conversation } from '../components/ConversationList';
 import MessageList from '../components/MessageList';
-import { fetchGroups, ConversationData } from '../services/conversation.service';
+import { fetchCommunities, ConversationData } from '../services/conversation.service';
 
 const useStyles = makeStyles({
     container: {
@@ -54,7 +54,7 @@ const useStyles = makeStyles({
     },
 });
 
-export default function GroupsPage() {
+export default function CommunitiesPage() {
     const styles = useStyles();
     const [selectedConversation, setSelectedConversation] = useState<Conversation>();
     const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -62,32 +62,32 @@ export default function GroupsPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        loadGroups();
+        loadCommunities();
     }, []);
 
-    const loadGroups = async () => {
+    const loadCommunities = async () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await fetchGroups();
+            const data = await fetchCommunities();
 
             // Convert API data to Conversation format
-            const converted: Conversation[] = data.map((group: ConversationData) => ({
-                id: group.jid,
-                name: group.name,
-                lastMessage: group.last_message_text || 'No messages yet',
-                timestamp: group.last_message_timestamp
-                    ? new Date(group.last_message_timestamp * 1000)
+            const converted: Conversation[] = data.map((community: ConversationData) => ({
+                id: community.jid,
+                name: community.name,
+                lastMessage: community.last_message_text || 'No messages yet',
+                timestamp: community.last_message_timestamp
+                    ? new Date(community.last_message_timestamp * 1000)
                     : new Date(),
-                unreadCount: group.unread_count || 0,
+                unreadCount: community.unread_count || 0,
                 isGroup: true,
-                isAnnouncement: false,
+                isAnnouncement: community.is_announcement,
             }));
 
             setConversations(converted);
         } catch (err: any) {
-            console.error('Failed to load groups:', err);
-            setError(err.message || 'Failed to load groups');
+            console.error('Failed to load communities:', err);
+            setError(err.message || 'Failed to load communities');
         } finally {
             setLoading(false);
         }
@@ -102,7 +102,7 @@ export default function GroupsPage() {
         return (
             <div className={styles.container}>
                 <div className={styles.loading}>
-                    <Spinner size="large" label="Loading groups..." />
+                    <Spinner size="large" label="Loading communities..." />
                 </div>
             </div>
         );
@@ -111,9 +111,9 @@ export default function GroupsPage() {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <h1 className={styles.title}>👥 Groups</h1>
+                <h1 className={styles.title}>🏢 Communities</h1>
                 <p className={styles.subtitle}>
-                    Group conversations • {conversations.length} active
+                    WhatsApp Communities • {conversations.length} active
                 </p>
             </div>
 
@@ -129,7 +129,7 @@ export default function GroupsPage() {
                         conversations={conversations}
                         selectedId={selectedConversation?.id}
                         onSelect={handleSelect}
-                        emptyMessage="No group conversations yet"
+                        emptyMessage="No communities found"
                     />
                 </div>
                 <div className={styles.detailsPane}>

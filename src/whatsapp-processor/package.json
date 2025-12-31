@@ -10,7 +10,8 @@
         "start": "node dist/index.js",
         "dev": "ts-node src/index.ts",
         "dev:client": "cd client && npm run dev",
-        "setup": "npm install && cd client && npm install && npm run build && cd .. && npm run build"
+        "setup": "npm install && cd client && npm install && npm run build && cd .. && npm run build",
+        "reset": "powershell -ExecutionPolicy Bypass -File ./reset-all.ps1"
     },
     "keywords": [],
     "author": "",
@@ -26,7 +27,8 @@
         "@opentelemetry/sdk-node": "^0.208.0",
         "@opentelemetry/sdk-trace-node": "^2.2.0",
         "@opentelemetry/semantic-conventions": "^1.38.0",
-        "@whiskeysockets/baileys": "^6.7.9",
+        "@whiskeysockets/baileys": "^7.0.0-rc.9",
+        "cors": "^2.8.5",
         "dotenv": "^16.4.7",
         "express": "^4.21.2",
         "minio": "^8.0.3",
@@ -36,6 +38,7 @@
         "socket.io": "^4.8.1"
     },
     "devDependencies": {
+        "@types/cors": "^2.8.19",
         "@types/express": "^5.0.0",
         "@types/minio": "^7.1.1",
         "@types/node": "^22.10.2",

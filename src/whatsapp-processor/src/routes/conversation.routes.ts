@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { WhatsAppService } from '../services/whatsapp.service';
 import { getWhatsAppDbClient } from '../clients/db.client';
+import { getMediaUrl } from '../clients/media.client';
 import pino from 'pino';
 
 const logger = pino({ level: 'info' });
@@ -13,6 +14,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
      * Returns all conversations with sync status and last message
      */
     router.get('/', async (req: Request, res: Response) => {
+        logger.info('GET /api/conversations hit');
         try {
             const client = getWhatsAppDbClient();
             if (!client) {
@@ -51,6 +53,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
      * Returns only individual 1-on-1 chats
      */
     router.get('/chats', async (req: Request, res: Response) => {
+        logger.info('GET /api/conversations/chats hit');
         try {
             const client = getWhatsAppDbClient();
             if (!client) {
@@ -63,6 +66,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     name,
                     is_group,
                     is_announcement,
+                    is_community,
                     unread_count,
                     last_message_text,
                     last_message_timestamp,
@@ -71,8 +75,13 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     is_archived,
                     is_muted
                 FROM chats
-                WHERE is_group = false AND is_announcement = false
+                WHERE is_group = false 
+                  AND is_announcement = false 
+                  AND is_community = false
                 ORDER BY 
+                    -- Real names first, then numeric
+                    (name !~ '^[0-9]+$') DESC,
+                    -- Pinned and ordered
                     is_pinned DESC,
                     pin_order DESC,
                     last_message_timestamp DESC NULLS LAST
@@ -102,6 +111,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     name,
                     is_group,
                     is_announcement,
+                    is_community,
                     unread_count,
                     last_message_text,
                     last_message_timestamp,
@@ -110,7 +120,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     is_archived,
                     is_muted
                 FROM chats
-                WHERE is_group = true AND is_announcement = false
+                WHERE is_group = true AND is_announcement = false AND is_community = false
                 ORDER BY 
                     is_pinned DESC,
                     pin_order DESC,
@@ -126,9 +136,50 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
     /**
      * GET /api/conversations/announcements
-     * Returns only announcement channels
+     * Returns only announcement channels (Newsletters)
      */
     router.get('/announcements', async (req: Request, res: Response) => {
+        try {
+            const client = getWhatsAppDbClient();
+            if (!client) {
+                return res.status(503).json({ error: 'Database not available' });
+            }
+
+            // In Announcements, we show Newsletters specifically
+            const result = await client.query(`
+                SELECT 
+                    jid,
+                    name,
+                    is_group,
+                    is_announcement,
+                    is_community,
+                    unread_count,
+                    last_message_text,
+                    last_message_timestamp,
+                    last_message_from_me,
+                    is_pinned,
+                    is_archived,
+                    is_muted
+                FROM chats
+                WHERE jid LIKE '%@newsletter' OR (is_announcement = true AND is_community = false)
+                ORDER BY 
+                    is_pinned DESC,
+                    pin_order DESC,
+                    last_message_timestamp DESC NULLS LAST
+            `);
+
+            res.json(result.rows);
+        } catch (err: any) {
+            logger.error({ err }, 'Failed to get announcements');
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
+     * GET /api/conversations/communities
+     * Returns only communities
+     */
+    router.get('/communities', async (req: Request, res: Response) => {
         try {
             const client = getWhatsAppDbClient();
             if (!client) {
@@ -141,6 +192,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     name,
                     is_group,
                     is_announcement,
+                    is_community,
                     unread_count,
                     last_message_text,
                     last_message_timestamp,
@@ -149,7 +201,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     is_archived,
                     is_muted
                 FROM chats
-                WHERE is_announcement = true
+                WHERE is_community = true
                 ORDER BY 
                     is_pinned DESC,
                     pin_order DESC,
@@ -158,7 +210,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
             res.json(result.rows);
         } catch (err: any) {
-            logger.error({ err }, 'Failed to get announcements');
+            logger.error({ err }, 'Failed to get communities');
             res.status(500).json({ error: err.message });
         }
     });
@@ -182,7 +234,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 `SELECT 
                     message_id,
                     jid as chat_jid,
-                    sender_jid,
+                    sender as sender_jid,
                     content as message_text,
                     message_type,
                     timestamp,
@@ -202,8 +254,21 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 [jid]
             );
 
+            // Resolve media URLs
+            const messages = await Promise.all(result.rows.map(async (msg: any) => {
+                if (msg.media_url && msg.media_url.startsWith('minio://')) {
+                    try {
+                        const objectName = msg.media_url.replace('minio://', '').split('/').slice(1).join('/');
+                        msg.media_url = await getMediaUrl(objectName);
+                    } catch (err) {
+                        logger.error({ err, url: msg.media_url }, 'Failed to resolve media URL');
+                    }
+                }
+                return msg;
+            }));
+
             res.json({
-                messages: result.rows,
+                messages,
                 total: parseInt(countResult.rows[0].count),
                 limit,
                 offset

@@ -1,10 +1,7 @@
 -- Enhanced Chat Schema for WhatsApp-like Interface
--- Supports: unread counts, last message ordering, pinning, archiving
+-- Support: unread counts, last message ordering, pinning, archiving
 
--- Drop existing table to recreate with new schema
-DROP TABLE IF EXISTS chats CASCADE;
-
-CREATE TABLE chats (
+CREATE TABLE IF NOT EXISTS chats (
     -- Primary Key
     jid VARCHAR(255) PRIMARY KEY,
     
@@ -37,13 +34,13 @@ CREATE TABLE chats (
 );
 
 -- Indexes for WhatsApp-like UI Performance
-CREATE INDEX idx_chats_last_message_timestamp ON chats(last_message_timestamp DESC NULLS LAST);
-CREATE INDEX idx_chats_unread_count ON chats(unread_count) WHERE unread_count > 0;
-CREATE INDEX idx_chats_pinned ON chats(is_pinned, pin_order DESC) WHERE is_pinned = true;
-CREATE INDEX idx_chats_archived ON chats(is_archived) WHERE is_archived = false;
-CREATE INDEX idx_chats_is_group ON chats(is_group);
-CREATE INDEX idx_chats_is_announcement ON chats(is_announcement);
-CREATE INDEX idx_chats_name_search ON chats USING gin(to_tsvector('english', name));
+CREATE INDEX IF NOT EXISTS idx_chats_last_message_timestamp ON chats(last_message_timestamp DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_chats_unread_count ON chats(unread_count) WHERE unread_count > 0;
+CREATE INDEX IF NOT EXISTS idx_chats_pinned ON chats(is_pinned, pin_order DESC) WHERE is_pinned = true;
+CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived) WHERE is_archived = false;
+CREATE INDEX IF NOT EXISTS idx_chats_is_group ON chats(is_group);
+CREATE INDEX IF NOT EXISTS idx_chats_is_announcement ON chats(is_announcement);
+CREATE INDEX IF NOT EXISTS idx_chats_name_search ON chats USING gin(to_tsvector('english', name));
 
 -- Function to update last_message_at from timestamp
 CREATE OR REPLACE FUNCTION update_last_message_at()
@@ -57,6 +54,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_last_message_at ON chats;
 CREATE TRIGGER trigger_update_last_message_at
     BEFORE INSERT OR UPDATE ON chats
     FOR EACH ROW

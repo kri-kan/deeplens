@@ -20,15 +20,35 @@ export async function upsertChat(jid: string, name: string, isGroup: boolean, me
     if (!client) return;
 
     try {
+        // Determine flags from metadata
+        const isNewsletter = jid.endsWith('@newsletter');
+        const isAnnouncement = isNewsletter || !!metadata.readOnly || !!metadata.announce || !!metadata.isCommunityAnnounce;
+        const isCommunity = !!metadata.isCommunity || !!metadata.isCommunityAnnounce;
+
         await client.query(
-            `INSERT INTO chats (jid, name, is_group, metadata, updated_at)
-             VALUES ($1, $2, $3, $4, NOW())
+            `INSERT INTO chats (jid, name, is_group, is_announcement, is_community, metadata, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())
              ON CONFLICT (jid) DO UPDATE 
-             SET name = EXCLUDED.name, 
+             SET name = CASE 
+                    -- Only update name if new name is NOT a numeric ID/JID and is NOT generic 'Group'
+                    WHEN EXCLUDED.name IS NOT NULL 
+                         AND EXCLUDED.name != '' 
+                         AND EXCLUDED.name NOT LIKE '%@%' 
+                         AND EXCLUDED.name !~ '^[0-9]+$' 
+                         AND EXCLUDED.name != 'Group' 
+                    THEN EXCLUDED.name
+                    -- Keep existing name if it's already descriptive
+                    WHEN chats.name IS NOT NULL AND chats.name != '' AND chats.name !~ '^[0-9]+$' AND chats.name NOT LIKE '%@%'
+                    THEN chats.name
+                    -- Otherwise fallback to new name
+                    ELSE EXCLUDED.name 
+                 END,
                  is_group = EXCLUDED.is_group,
-                 metadata = EXCLUDED.metadata,
+                 is_announcement = COALESCE(NULLIF(EXCLUDED.is_announcement, false), chats.is_announcement),
+                 is_community = COALESCE(NULLIF(EXCLUDED.is_community, false), chats.is_community),
+                 metadata = chats.metadata || EXCLUDED.metadata,
                  updated_at = NOW()`,
-            [jid, name, isGroup, JSON.stringify(metadata)]
+            [jid, name, isGroup, isAnnouncement, isCommunity, JSON.stringify(metadata)]
         );
     } catch (err: any) {
         logger.error({ err: err.message, jid }, 'Failed to upsert chat');

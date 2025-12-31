@@ -30,7 +30,7 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
     }
 
     try {
-        await client.query(
+        const result = await client.query(
             `INSERT INTO messages (
                 message_id, 
                 jid, 
@@ -61,8 +61,12 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
                 JSON.stringify(msg.metadata)
             ]
         );
-        logger.debug({ messageId: msg.messageId }, 'Message saved to database');
+        if (result.rowCount && result.rowCount > 0) {
+            logger.info({ messageId: msg.messageId, jid: msg.jid }, 'Message saved to database');
+        } else {
+            logger.debug({ messageId: msg.messageId }, 'Message already exists in database');
+        }
     } catch (err: any) {
-        logger.error({ err: err.message, messageId: msg.messageId }, 'Failed to save message to database');
+        logger.error({ err: err.message, messageId: msg.messageId, jid: msg.jid }, 'Failed to save message to database');
     }
 }

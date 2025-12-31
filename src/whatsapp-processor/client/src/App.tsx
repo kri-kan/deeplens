@@ -16,6 +16,7 @@ import QRCodePage from './pages/QRCodePage';
 import ChatsPage from './pages/ChatsPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import GroupsPage from './pages/GroupsPage';
+import CommunitiesPage from './pages/CommunitiesPage';
 
 function AppContent({
     settings,
@@ -161,6 +162,7 @@ function AppContent({
                         <Route path="/conversations/chats" element={<ChatsPage />} />
                         <Route path="/conversations/announcements" element={<AnnouncementsPage />} />
                         <Route path="/conversations/groups" element={<GroupsPage />} />
+                        <Route path="/conversations/communities" element={<CommunitiesPage />} />
 
                         {/* Administration Routes */}
                         <Route path="/admin/chats" element={<ChatsAdminPage />} />

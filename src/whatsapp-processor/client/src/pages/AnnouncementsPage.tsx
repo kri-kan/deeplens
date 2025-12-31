@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { makeStyles, tokens, Spinner } from '@fluentui/react-components';
 import ConversationList, { Conversation } from '../components/ConversationList';
+import MessageList from '../components/MessageList';
 import { fetchAnnouncements, ConversationData } from '../services/conversation.service';
 
 const useStyles = makeStyles({
     container: {
         maxWidth: '1400px',
         margin: '0 auto',
+        height: '100%',
     },
     header: {
         marginBottom: '24px',
@@ -21,6 +23,19 @@ const useStyles = makeStyles({
         fontSize: '14px',
         color: tokens.colorNeutralForeground3,
         margin: 0,
+    },
+    splitPane: {
+        display: 'flex',
+        gap: '24px',
+        height: 'calc(100vh - 240px)',
+    },
+    listPane: {
+        width: '400px',
+        minWidth: '400px',
+    },
+    detailsPane: {
+        flex: 1,
+        display: 'flex',
     },
     loading: {
         display: 'flex',
@@ -41,7 +56,7 @@ const useStyles = makeStyles({
 
 export default function AnnouncementsPage() {
     const styles = useStyles();
-    const [selectedId, setSelectedId] = useState<string>();
+    const [selectedConversation, setSelectedConversation] = useState<Conversation>();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -78,6 +93,11 @@ export default function AnnouncementsPage() {
         }
     };
 
+    const handleSelect = (id: string) => {
+        const conversation = conversations.find(c => c.id === id);
+        setSelectedConversation(conversation);
+    };
+
     if (loading) {
         return (
             <div className={styles.container}>
@@ -103,12 +123,22 @@ export default function AnnouncementsPage() {
                 </div>
             )}
 
-            <ConversationList
-                conversations={conversations}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                emptyMessage="No announcement channels yet"
-            />
+            <div className={styles.splitPane}>
+                <div className={styles.listPane}>
+                    <ConversationList
+                        conversations={conversations}
+                        selectedId={selectedConversation?.id}
+                        onSelect={handleSelect}
+                        emptyMessage="No announcement channels yet"
+                    />
+                </div>
+                <div className={styles.detailsPane}>
+                    <MessageList
+                        jid={selectedConversation?.id}
+                        chatName={selectedConversation?.name}
+                    />
+                </div>
+            </div>
         </div>
     );
 }

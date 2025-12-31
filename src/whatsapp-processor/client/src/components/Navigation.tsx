@@ -14,6 +14,7 @@ import {
     Megaphone24Regular,
     ChevronDown24Regular,
     ChevronRight24Regular,
+    Organization24Regular,
 } from '@fluentui/react-icons';
 import { useState } from 'react';
 
@@ -193,6 +194,16 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                                 >
                                     Groups
                                 </Button>
+
+                                <Button
+                                    appearance="subtle"
+                                    icon={<Organization24Regular />}
+                                    onClick={() => navigate('/conversations/communities')}
+                                    className={`${styles.subNavButton} ${location.pathname === '/conversations/communities' ? styles.subNavButtonActive : ''}`}
+                                    style={{ width: '100%' }}
+                                >
+                                    Communities
+                                </Button>
                             </>
                         )}
                     </>
@@ -255,6 +266,16 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                                     style={{ width: '100%' }}
                                 >
                                     Groups
+                                </Button>
+
+                                <Button
+                                    appearance="subtle"
+                                    icon={<Organization24Regular />}
+                                    onClick={() => navigate('/admin/communities')}
+                                    className={`${styles.subNavButton} ${location.pathname === '/admin/communities' ? styles.subNavButtonActive : ''}`}
+                                    style={{ width: '100%' }}
+                                >
+                                    Communities
                                 </Button>
                             </>
                         )}
