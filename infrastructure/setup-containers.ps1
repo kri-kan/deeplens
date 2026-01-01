@@ -96,7 +96,8 @@ function Initialize-ContainerRuntime {
         try {
             $podmanVersion = podman --version
             Write-Host "✅ Podman detected: $podmanVersion" -ForegroundColor Green
-        } catch {
+        }
+        catch {
             Write-Host "❌ Podman not found. Please install Podman first." -ForegroundColor Red
             exit 1
         }
@@ -122,14 +123,16 @@ function Initialize-ContainerRuntime {
         Write-Host "✅ Podman runtime initialized" -ForegroundColor Green
         Write-Host "💡 Kubernetes available via: kubectl --context=podman" -ForegroundColor Cyan
         
-    } else {
+    }
+    else {
         Write-Host "🐳 Using Docker Runtime..." -ForegroundColor Blue
         
         # Check if Docker is running
         try {
             $dockerVersion = docker --version
             Write-Host "✅ Docker detected: $dockerVersion" -ForegroundColor Green
-        } catch {
+        }
+        catch {
             Write-Host "❌ Docker not found or not running. Please install and start Docker." -ForegroundColor Red
             exit 1
         }
@@ -138,7 +141,8 @@ function Initialize-ContainerRuntime {
         try {
             docker info | Out-Null
             Write-Host "✅ Docker daemon is running" -ForegroundColor Green
-        } catch {
+        }
+        catch {
             Write-Host "❌ Docker daemon is not running. Please start Docker Desktop." -ForegroundColor Red
             exit 1
         }
@@ -160,7 +164,8 @@ function Show-ContainerStatus {
     
     if ($containers) {
         Write-Host $containers
-    } else {
+    }
+    else {
         Write-Host "No DeepLens containers found." -ForegroundColor Yellow
     }
     
@@ -227,7 +232,7 @@ if ($Help) {
 }
 
 # Determine container runtime
-$usesPodman = $UsePodman -or (Get-Command podman -ErrorAction SilentlyContinue -and -not $UseDocker)
+$usesPodman = $UsePodman -or ((Get-Command podman -ErrorAction SilentlyContinue) -and (-not $UseDocker))
 
 # Initialize container runtime
 Initialize-ContainerRuntime -UsePodmanRuntime $usesPodman

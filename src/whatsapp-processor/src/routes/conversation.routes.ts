@@ -136,7 +136,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
     /**
      * GET /api/conversations/announcements
-     * Returns only announcement channels (Newsletters)
+     * Returns only announcement channels (including former Communities)
      */
     router.get('/announcements', async (req: Request, res: Response) => {
         try {
@@ -145,7 +145,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 return res.status(503).json({ error: 'Database not available' });
             }
 
-            // In Announcements, we show Newsletters specifically
+            // Show all announcements (which now include what were formerly Communities)
             const result = await client.query(`
                 SELECT 
                     jid,
@@ -161,7 +161,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     is_archived,
                     is_muted
                 FROM chats
-                WHERE jid LIKE '%@newsletter' OR (is_announcement = true AND is_community = false)
+                WHERE is_announcement = true
                 ORDER BY 
                     is_pinned DESC,
                     pin_order DESC,
@@ -177,42 +177,10 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
     /**
      * GET /api/conversations/communities
-     * Returns only communities
+     * Deprecated: Now returns empty as they are merged into announcements
      */
     router.get('/communities', async (req: Request, res: Response) => {
-        try {
-            const client = getWhatsAppDbClient();
-            if (!client) {
-                return res.status(503).json({ error: 'Database not available' });
-            }
-
-            const result = await client.query(`
-                SELECT 
-                    jid,
-                    name,
-                    is_group,
-                    is_announcement,
-                    is_community,
-                    unread_count,
-                    last_message_text,
-                    last_message_timestamp,
-                    last_message_from_me,
-                    is_pinned,
-                    is_archived,
-                    is_muted
-                FROM chats
-                WHERE is_community = true
-                ORDER BY 
-                    is_pinned DESC,
-                    pin_order DESC,
-                    last_message_timestamp DESC NULLS LAST
-            `);
-
-            res.json(result.rows);
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to get communities');
-            res.status(500).json({ error: err.message });
-        }
+        res.json([]);
     });
 
     /**

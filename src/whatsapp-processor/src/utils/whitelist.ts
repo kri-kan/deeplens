@@ -22,8 +22,9 @@ export async function upsertChat(jid: string, name: string, isGroup: boolean, me
     try {
         // Determine flags from metadata
         const isNewsletter = jid.endsWith('@newsletter');
-        const isAnnouncement = isNewsletter || !!metadata.readOnly || !!metadata.announce || !!metadata.isCommunityAnnounce;
-        const isCommunity = !!metadata.isCommunity || !!metadata.isCommunityAnnounce;
+        // Merge communities into announcements
+        const isAnnouncement = isNewsletter || !!metadata.readOnly || !!metadata.announce || !!metadata.isCommunityAnnounce || !!metadata.isCommunity;
+        const isCommunity = false; // Phasing out separate community flag
 
         await client.query(
             `INSERT INTO chats (jid, name, is_group, is_announcement, is_community, metadata, updated_at)

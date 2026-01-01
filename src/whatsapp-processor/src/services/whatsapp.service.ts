@@ -587,29 +587,29 @@ export class WhatsAppService {
             // 1. Filter Standalone Groups (Business groups, friends, etc.)
             this.groupsCache = allGroups
                 .filter((g: GroupMetadata) => {
-                    if (g.id.includes('@newsletter')) return false;
+                    // Ignore newsletters completely
+                    if (g.id.endsWith('@newsletter')) return false;
 
-                    const isPartOfCommunity = !!(g as any).linkedParentJid || !!(g as any).parent || !!(g as any).isCommunity || !!(g as any).isCommunityAnnounce;
+                    const isAnnounce = (g as any).announce === true || (g as any).announce === 'true' || !!(g as any).isCommunityAnnounce || !!(g as any).isCommunity;
                     const hasAnnouncementTitle = g.subject?.toLowerCase().includes('announcement');
 
-                    // EXCLUDE if part of a community OR if it's clearly an announcement channel
-                    if (isPartOfCommunity) return false;
-                    if (hasAnnouncementTitle) return false;
+                    // EXCLUDE if it's an announcement channel or community parent
+                    if (isAnnounce || hasAnnouncementTitle) return false;
 
                     return true;
                 });
 
-            // 2. Filter Community Announcements & Newsletters
+            // 2. Filter Announcement Channels (including Community Parents)
             this.announcementsCache = allGroups
                 .filter((g: GroupMetadata) => {
-                    if (g.id.includes('@newsletter')) return true;
+                    // Ignore newsletters completely
+                    if (g.id.endsWith('@newsletter')) return false;
 
-                    const isAnnounce = (g as any).announce === true || (g as any).announce === 'true' || !!(g as any).isCommunityAnnounce;
-                    const isPartOfCommunity = !!(g as any).linkedParentJid || !!(g as any).parent || !!(g as any).isCommunity || !!(g as any).isCommunityAnnounce;
+                    const isAnnounce = (g as any).announce === true || (g as any).announce === 'true' || !!(g as any).isCommunityAnnounce || !!(g as any).isCommunity;
                     const hasAnnouncementTitle = g.subject?.toLowerCase().includes('announcement');
 
-                    // Include if it's a community announcement or clearly labeled as such
-                    return (isAnnounce && isPartOfCommunity) || hasAnnouncementTitle;
+                    // Include if it's an announcement or community parent
+                    return isAnnounce || hasAnnouncementTitle;
                 })
                 .map((g: GroupMetadata) => ({
                     id: g.id,
@@ -726,8 +726,12 @@ export class WhatsAppService {
 
             // Update local caches for Administration UI (newsletters already filtered out)
             this.individualChatsCache = chatsToProcess.filter(c => !c.id!.endsWith('@g.us'));
-            this.announcementsCache = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && ((c as any).readOnly || (c as any).announce || (c as any).isCommunityAnnounce));
-            const newGroups = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && !((c as any).readOnly || (c as any).announce || (c as any).isCommunityAnnounce));
+
+            // Define what counts as an announcement (merged with communities)
+            const isAnnounce = (c: any) => !!c.readOnly || !!c.announce || !!c.isCommunityAnnounce || !!c.isCommunity;
+
+            this.announcementsCache = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && isAnnounce(c));
+            const newGroups = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && !isAnnounce(c));
 
             // Merge groups cache
             const groupIds = new Set(this.groupsCache.map(g => g.id));
@@ -743,7 +747,13 @@ export class WhatsAppService {
                 try {
                     const jid = chat.id!;
                     const isGroup = jid.endsWith('@g.us');
-                    const isAnnouncement = !!(isGroup && (chat as any).readOnly);
+                    // Treat any broadcast, read-only, or community-wide channel as an announcement
+                    const isAnnouncement = isGroup && (
+                        !!(chat as any).readOnly ||
+                        !!(chat as any).announce ||
+                        !!(chat as any).isCommunityAnnounce ||
+                        !!(chat as any).isCommunity
+                    );
 
                     if (!isGroup) {
                         individualCount++;
