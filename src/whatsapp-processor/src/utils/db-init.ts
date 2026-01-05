@@ -26,7 +26,8 @@ export async function initializeDatabaseSchema(): Promise<void> {
         '003_chat_tracking_state.sql',
         '004_processing_state.sql',
         '005_media_files.sql',
-        '006_conversation_sync_state.sql'
+        '006_conversation_sync_state.sql',
+        '007_add_deep_sync.sql'
     ];
 
     logger.info('Starting database schema initialization...');

@@ -1,7 +1,7 @@
 import { makeStyles, tokens, Avatar } from '@fluentui/react-components';
 import { Pin16Regular } from '@fluentui/react-icons';
 import { formatDistanceToNow } from 'date-fns';
-import { FixedSizeList as List } from 'react-window';
+import { FixedSizeList as List } from '../utils/VirtualizedList';
 import { useStore } from '../store/useStore';
 
 const useStyles = makeStyles({
@@ -89,12 +89,16 @@ const useStyles = makeStyles({
     pinIcon: {
         color: tokens.colorNeutralForeground4,
         marginLeft: '4px',
+    },
+    faded: {
+        opacity: 0.5,
+        filter: 'grayscale(0.5)',
     }
 });
 
 export default function ConversationList() {
     const styles = useStyles();
-    const { chats, activeChatJid, setActiveChatJid } = useStore();
+    const { chats, activeChatJid, setActiveChatJid, syncProgress, processingState } = useStore();
 
     const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
         const chat = chats[index];
@@ -102,10 +106,16 @@ export default function ConversationList() {
         const rawTs = parseInt(chat.last_message_timestamp || '');
         const timestamp = (!isNaN(rawTs) && rawTs > 0) ? new Date(rawTs * 1000) : null;
 
+        const isIndividual = !chat.is_group && !chat.is_announcement;
+        const isSyncDisabled =
+            (isIndividual && processingState && !processingState.trackChats) ||
+            (chat.is_group && !chat.is_announcement && processingState && !processingState.trackGroups) ||
+            (chat.is_announcement && processingState && !processingState.trackAnnouncements);
+
         return (
             <div
                 style={style}
-                className={`${styles.conversationItem} ${isActive ? styles.conversationItemActive : ''}`}
+                className={`${styles.conversationItem} ${isActive ? styles.conversationItemActive : ''} ${isSyncDisabled ? styles.faded : ''}`}
                 onClick={() => setActiveChatJid(chat.jid)}
             >
                 <Avatar name={chat.name} size={48} />
@@ -153,6 +163,35 @@ export default function ConversationList() {
                     {Row}
                 </List>
             </div>
+
+            {syncProgress && syncProgress.progress < 100 && (
+                <div style={{
+                    padding: '8px 16px',
+                    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+                    backgroundColor: tokens.colorNeutralBackground2,
+                    fontSize: '11px',
+                    color: tokens.colorNeutralForeground4
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span>Syncing History...</span>
+                        <span>{syncProgress.progress}%</span>
+                    </div>
+                    <div style={{
+                        height: '4px',
+                        width: '100%',
+                        backgroundColor: tokens.colorNeutralStroke2,
+                        borderRadius: '2px',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            height: '100%',
+                            width: `${syncProgress.progress}%`,
+                            backgroundColor: tokens.colorBrandBackground,
+                            transition: 'width 0.3s ease'
+                        }} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -3,6 +3,8 @@ import {
     makeStyles,
     Button,
     tokens,
+    Badge,
+    mergeClasses,
 } from '@fluentui/react-components';
 import {
     Navigation24Regular,
@@ -16,7 +18,9 @@ import {
     ChevronRight24Regular,
     Organization24Regular,
 } from '@fluentui/react-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { fetchChats, fetchAnnouncements, fetchGroups } from '../services/conversation.service';
+import { useStore } from '../store/useStore';
 
 const useStyles = makeStyles({
     container: {
@@ -29,6 +33,7 @@ const useStyles = makeStyles({
         top: 0,
         transition: 'width 0.3s ease',
         borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+        zIndex: 1000,
     },
     header: {
         padding: '16px',
@@ -60,31 +65,62 @@ const useStyles = makeStyles({
     navButton: {
         justifyContent: 'flex-start',
         color: tokens.colorNeutralForeground1,
+        position: 'relative',
         '&:hover': {
             backgroundColor: tokens.colorNeutralBackground2Hover,
         },
     },
     navButtonActive: {
-        backgroundColor: tokens.colorBrandBackground,
-        color: tokens.colorNeutralForegroundOnBrand,
+        backgroundColor: `${tokens.colorNeutralBackground3} !important`,
+        color: `${tokens.colorBrandForeground1} !important`,
+        fontWeight: "700 !important",
+        '&::before': {
+            content: '""',
+            position: 'absolute',
+            left: '0px',
+            top: '4px',
+            bottom: '4px',
+            width: '6px',
+            backgroundColor: tokens.colorBrandBackground,
+            borderRadius: '0 4px 4px 0',
+            zIndex: 100,
+        },
+        '& .fui-Button__icon': {
+            color: `${tokens.colorBrandForeground1} !important`,
+        },
         '&:hover': {
-            backgroundColor: tokens.colorBrandBackgroundHover,
+            backgroundColor: `${tokens.colorNeutralBackground3Hover} !important`,
         },
     },
     subNavButton: {
         justifyContent: 'flex-start',
         color: tokens.colorNeutralForeground4,
-        paddingLeft: '48px',
+        paddingLeft: '44px',
+        position: 'relative',
+        fontSize: '13px',
+        height: '32px',
         '&:hover': {
             backgroundColor: tokens.colorNeutralBackground2Hover,
             color: tokens.colorNeutralForeground2,
         },
     },
     subNavButtonActive: {
-        backgroundColor: tokens.colorNeutralBackground3,
-        color: tokens.colorBrandForeground1,
+        backgroundColor: `${tokens.colorNeutralBackground3} !important`,
+        color: `${tokens.colorBrandForeground1} !important`,
+        fontWeight: "700 !important",
+        '&::before': {
+            content: '""',
+            position: 'absolute',
+            left: '20px',
+            top: '6px',
+            bottom: '6px',
+            width: '4px',
+            backgroundColor: tokens.colorBrandBackground,
+            borderRadius: '2px',
+            zIndex: 100,
+        },
         '&:hover': {
-            backgroundColor: tokens.colorNeutralBackground3Hover,
+            backgroundColor: `${tokens.colorNeutralBackground3} !important`,
         },
     },
     hamburger: {
@@ -94,6 +130,14 @@ const useStyles = makeStyles({
             backgroundColor: tokens.colorNeutralBackground2Hover,
         },
     },
+    countBadge: {
+        marginLeft: 'auto',
+        fontSize: '10px',
+    },
+    faded: {
+        opacity: 0.5,
+        filter: 'grayscale(0.5)',
+    }
 });
 
 interface NavigationProps {
@@ -105,16 +149,50 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const styles = useStyles();
+    const { processingState } = useStore();
     const [isConversationsExpanded, setIsConversationsExpanded] = useState(true);
     const [isAdminExpanded, setIsAdminExpanded] = useState(true);
+    const [counts, setCounts] = useState({ chats: 0, groups: 0, announcements: 0 });
 
-    const width = isCollapsed ? 60 : 240;
+    const width = isCollapsed ? 60 : 260;
 
     const isConversationsActive = location.pathname.startsWith('/conversations');
     const isAdminActive = location.pathname.startsWith('/admin');
-    const isAdminChatsActive = location.pathname === '/admin/chats';
-    const isAdminAnnouncementsActive = location.pathname === '/admin/announcements';
-    const isAdminGroupsActive = location.pathname === '/admin/groups';
+
+    useEffect(() => {
+        const loadCounts = async () => {
+            try {
+                const [c, g, a] = await Promise.all([
+                    fetchChats(),
+                    fetchGroups(),
+                    fetchAnnouncements()
+                ]);
+                setCounts({
+                    chats: c.length,
+                    groups: g.length,
+                    announcements: a.length
+                });
+            } catch (err) {
+                console.error('Failed to load menu counts:', err);
+            }
+        };
+
+        loadCounts();
+        // Refresh counts occasionally
+        const interval = setInterval(loadCounts, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const NavLabel = ({ label, count }: { label: string, count?: number }) => (
+        <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+            <span>{label}</span>
+            {!isCollapsed && count !== undefined && count > 0 && (
+                <Badge appearance="tint" size="small" className={styles.countBadge}>
+                    {count}
+                </Badge>
+            )}
+        </div>
+    );
 
     return (
         <div className={styles.container} style={{ width }}>
@@ -142,7 +220,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                     appearance="subtle"
                     icon={<Home24Regular />}
                     onClick={() => navigate('/')}
-                    className={`${styles.navButton} ${location.pathname === '/' ? styles.navButtonActive : ''}`}
+                    className={mergeClasses(styles.navButton, location.pathname === '/' && styles.navButtonActive)}
                     style={{ width: '100%' }}
                 >
                     {!isCollapsed && 'Dashboard'}
@@ -156,7 +234,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                             icon={<People24Regular />}
                             iconPosition="before"
                             onClick={() => setIsConversationsExpanded(!isConversationsExpanded)}
-                            className={`${styles.navButton} ${isConversationsActive ? styles.navButtonActive : ''}`}
+                            className={mergeClasses(styles.navButton, isConversationsActive && styles.navButtonActive)}
                             style={{ width: '100%', justifyContent: 'space-between' }}
                         >
                             <span>Conversations</span>
@@ -166,33 +244,42 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                         {isConversationsExpanded && (
                             <>
                                 <Button
-                                    appearance="subtle"
-                                    icon={<People24Regular />}
+                                    appearance="transparent"
                                     onClick={() => navigate('/conversations/chats')}
-                                    className={`${styles.subNavButton} ${location.pathname === '/conversations/chats' ? styles.subNavButtonActive : ''}`}
+                                    className={mergeClasses(
+                                        styles.subNavButton,
+                                        location.pathname === '/conversations/chats' && styles.subNavButtonActive,
+                                        processingState && !processingState.trackChats && styles.faded
+                                    )}
                                     style={{ width: '100%' }}
                                 >
-                                    Chats
+                                    <NavLabel label="Chats" count={counts.chats} />
                                 </Button>
 
                                 <Button
-                                    appearance="subtle"
-                                    icon={<Megaphone24Regular />}
+                                    appearance="transparent"
                                     onClick={() => navigate('/conversations/announcements')}
-                                    className={`${styles.subNavButton} ${location.pathname === '/conversations/announcements' ? styles.subNavButtonActive : ''}`}
+                                    className={mergeClasses(
+                                        styles.subNavButton,
+                                        location.pathname === '/conversations/announcements' && styles.subNavButtonActive,
+                                        processingState && !processingState.trackAnnouncements && styles.faded
+                                    )}
                                     style={{ width: '100%' }}
                                 >
-                                    Announcements
+                                    <NavLabel label="Announcements" count={counts.announcements} />
                                 </Button>
 
                                 <Button
-                                    appearance="subtle"
-                                    icon={<PeopleTeam24Regular />}
+                                    appearance="transparent"
                                     onClick={() => navigate('/conversations/groups')}
-                                    className={`${styles.subNavButton} ${location.pathname === '/conversations/groups' ? styles.subNavButtonActive : ''}`}
+                                    className={mergeClasses(
+                                        styles.subNavButton,
+                                        location.pathname === '/conversations/groups' && styles.subNavButtonActive,
+                                        processingState && !processingState.trackGroups && styles.faded
+                                    )}
                                     style={{ width: '100%' }}
                                 >
-                                    Groups
+                                    <NavLabel label="Groups" count={counts.groups} />
                                 </Button>
                             </>
                         )}
@@ -205,7 +292,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                         appearance="subtle"
                         icon={<People24Regular />}
                         onClick={() => navigate('/conversations/chats')}
-                        className={`${styles.navButton} ${location.pathname.startsWith('/conversations') ? styles.navButtonActive : ''}`}
+                        className={mergeClasses(styles.navButton, location.pathname.startsWith('/conversations') && styles.navButtonActive)}
                         style={{ width: '100%' }}
                         title="Conversations"
                     />
@@ -219,7 +306,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                             icon={<Settings24Regular />}
                             iconPosition="before"
                             onClick={() => setIsAdminExpanded(!isAdminExpanded)}
-                            className={`${styles.navButton} ${isAdminActive ? styles.navButtonActive : ''}`}
+                            className={mergeClasses(styles.navButton, isAdminActive && styles.navButtonActive)}
                             style={{ width: '100%', justifyContent: 'space-between' }}
                         >
                             <span>Administration</span>
@@ -229,30 +316,27 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                         {isAdminExpanded && (
                             <>
                                 <Button
-                                    appearance="subtle"
-                                    icon={<People24Regular />}
+                                    appearance="transparent"
                                     onClick={() => navigate('/admin/chats')}
-                                    className={`${styles.subNavButton} ${location.pathname === '/admin/chats' ? styles.subNavButtonActive : ''}`}
+                                    className={mergeClasses(styles.subNavButton, location.pathname === '/admin/chats' && styles.subNavButtonActive)}
                                     style={{ width: '100%' }}
                                 >
                                     Chats
                                 </Button>
 
                                 <Button
-                                    appearance="subtle"
-                                    icon={<Megaphone24Regular />}
+                                    appearance="transparent"
                                     onClick={() => navigate('/admin/announcements')}
-                                    className={`${styles.subNavButton} ${location.pathname === '/admin/announcements' ? styles.subNavButtonActive : ''}`}
+                                    className={mergeClasses(styles.subNavButton, location.pathname === '/admin/announcements' && styles.subNavButtonActive)}
                                     style={{ width: '100%' }}
                                 >
                                     Announcements
                                 </Button>
 
                                 <Button
-                                    appearance="subtle"
-                                    icon={<PeopleTeam24Regular />}
+                                    appearance="transparent"
                                     onClick={() => navigate('/admin/groups')}
-                                    className={`${styles.subNavButton} ${location.pathname === '/admin/groups' ? styles.subNavButtonActive : ''}`}
+                                    className={mergeClasses(styles.subNavButton, location.pathname === '/admin/groups' && styles.subNavButtonActive)}
                                     style={{ width: '100%' }}
                                 >
                                     Groups
@@ -268,7 +352,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                         appearance="subtle"
                         icon={<Settings24Regular />}
                         onClick={() => navigate('/admin/chats')}
-                        className={`${styles.navButton} ${location.pathname.startsWith('/admin') ? styles.navButtonActive : ''}`}
+                        className={mergeClasses(styles.navButton, location.pathname.startsWith('/admin') && styles.navButtonActive)}
                         style={{ width: '100%' }}
                         title="Administration"
                     />
@@ -278,7 +362,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                     appearance="subtle"
                     icon={<QrCode24Regular />}
                     onClick={() => navigate('/qr')}
-                    className={`${styles.navButton} ${location.pathname === '/qr' ? styles.navButtonActive : ''}`}
+                    className={mergeClasses(styles.navButton, location.pathname === '/qr' && styles.navButtonActive)}
                     style={{ width: '100%' }}
                 >
                     {!isCollapsed && 'QR Code'}

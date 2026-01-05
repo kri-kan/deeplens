@@ -18,6 +18,9 @@ export interface ProcessingState {
     isPaused: boolean;
     pausedAt: number | null;
     resumedAt: number | null;
+    trackChats: boolean;
+    trackGroups: boolean;
+    trackAnnouncements: boolean;
 }
 
 export interface StatusResponse {
@@ -36,27 +39,50 @@ export async function fetchStatus(): Promise<StatusResponse> {
     return response.json();
 }
 
+export interface PaginatedResponse<T> {
+    items: T[];
+    total: number;
+}
+
 /**
- * Fetches all groups with their exclusion status
+ * Fetches groups with their exclusion status, supports pagination
  */
-export async function fetchGroups(): Promise<Group[]> {
-    const response = await fetch('/api/groups');
+export async function fetchGroups(limit = 100, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Group>> {
+    const url = new URL('/api/groups', window.location.origin);
+    url.searchParams.set('limit', limit.toString());
+    url.searchParams.set('offset', offset.toString());
+    if (search) url.searchParams.set('search', search);
+    if (excluded !== undefined) url.searchParams.set('excluded', excluded.toString());
+
+    const response = await fetch(url.toString());
     return response.json();
 }
 
 /**
- * Fetches all chats with their exclusion status
+ * Fetches chats with their exclusion status, supports pagination
  */
-export async function fetchChats(): Promise<Chat[]> {
-    const response = await fetch('/api/chats');
+export async function fetchChats(limit = 100, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Chat>> {
+    const url = new URL('/api/chats', window.location.origin);
+    url.searchParams.set('limit', limit.toString());
+    url.searchParams.set('offset', offset.toString());
+    if (search) url.searchParams.set('search', search);
+    if (excluded !== undefined) url.searchParams.set('excluded', excluded.toString());
+
+    const response = await fetch(url.toString());
     return response.json();
 }
 
 /**
- * Fetches all community announcement channels with their exclusion status
+ * Fetches community announcement channels with their exclusion status, supports pagination
  */
-export async function fetchAnnouncements(): Promise<Chat[]> {
-    const response = await fetch('/api/announcements');
+export async function fetchAnnouncements(limit = 100, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Chat>> {
+    const url = new URL('/api/announcements', window.location.origin);
+    url.searchParams.set('limit', limit.toString());
+    url.searchParams.set('offset', offset.toString());
+    if (search) url.searchParams.set('search', search);
+    if (excluded !== undefined) url.searchParams.set('excluded', excluded.toString());
+
+    const response = await fetch(url.toString());
     return response.json();
 }
 
@@ -68,6 +94,17 @@ export async function excludeChat(jid: string): Promise<void> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jid })
+    });
+}
+
+/**
+ * Bulk excludes chats from tracking
+ */
+export async function bulkExcludeChats(jids: string[]): Promise<void> {
+    await fetch('/api/chats/bulk-exclude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jids })
     });
 }
 
@@ -110,4 +147,21 @@ export async function resumeProcessing(): Promise<ProcessingState> {
 export async function fetchProcessingState(): Promise<ProcessingState> {
     const response = await fetch('/api/processing/state');
     return response.json();
+}
+
+/**
+ * Updates sync settings
+ */
+export async function updateSyncSettings(settings: {
+    trackChats?: boolean;
+    trackGroups?: boolean;
+    trackAnnouncements?: boolean;
+}): Promise<ProcessingState> {
+    const response = await fetch('/api/processing/sync-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    });
+    const data = await response.json();
+    return data.state;
 }

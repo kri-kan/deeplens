@@ -5,12 +5,14 @@ import {
     getExclusionList,
     excludeChat,
     includeChat,
+    bulkExcludeChats,
     getAllTrackingStates
 } from '../utils/whitelist';
 import {
     pauseProcessing,
     resumeProcessing,
-    getProcessingState
+    getProcessingState,
+    updateSyncSettings
 } from '../utils/processing-state';
 import { TENANT_NAME } from '../config';
 import { getRedisClient } from '../clients/redis.client';
@@ -21,7 +23,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
     /**
      * GET /api/status
-     * Returns the current connection status, QR code, tenant name, and session existence
+     * Returns the current connection status, QR code, tenant name, session existence, and system health
      */
     router.get('/status', async (req: Request, res: Response) => {
         res.json({
@@ -29,50 +31,186 @@ export function createApiRoutes(waService: WhatsAppService): Router {
             qr: waService.getQrCode(),
             tenant: TENANT_NAME,
             hasSession: waService.hasSession(),
-            processingState: await waService.getProcessingState()
+            processingState: await waService.getProcessingState(),
+            systemHealth: waService.getSystemHealth()
         });
     });
 
     /**
      * GET /api/groups
-     * Returns all standalone groups (not part of communities) with their exclusion status
+     * Returns standalone groups (not part of communities) with pagination and exclusion status
      */
     router.get('/groups', async (req: Request, res: Response) => {
-        const exclusionList = await getExclusionList();
-        const groups = waService.getGroups();
-        const result = groups.map(g => ({
-            ...g,
-            isExcluded: exclusionList.includes(g.id)
-        }));
-        res.json(result);
+        const limit = parseInt(req.query.limit as string) || 100;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const search = req.query.search as string;
+        const excluded = req.query.excluded === 'true';
+
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            let whereClause = 'WHERE c.is_group = true AND c.is_announcement = false';
+            const params: any[] = [];
+
+            if (search) {
+                params.push(`%${search}%`);
+                whereClause += ` AND c.name ILIKE $${params.length}`;
+            }
+
+            if (req.query.excluded !== undefined) {
+                if (excluded) {
+                    whereClause += ` AND t.is_excluded = true`;
+                } else {
+                    whereClause += ` AND (t.is_excluded = false OR t.is_excluded IS NULL)`;
+                }
+            }
+
+            const totalResult = await client.query(`
+                SELECT COUNT(*) 
+                FROM chats c 
+                LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
+                ${whereClause}
+            `, params);
+
+            let query = `
+                SELECT 
+                    c.jid as id, 
+                    c.name as subject, 
+                    c.last_message_timestamp as "lastMessageTime",
+                    COALESCE(t.is_excluded, FALSE) as "isExcluded"
+                FROM chats c
+                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                ${whereClause}
+                ORDER BY c.last_message_timestamp DESC NULLS LAST 
+                LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+            `;
+            const result = await client.query(query, [...params, limit, offset]);
+            res.json({
+                items: result.rows,
+                total: parseInt(totalResult.rows[0].count)
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
     });
 
     /**
      * GET /api/chats
-     * Returns all individual 1-on-1 chats with their exclusion status
+     * Returns individual 1-on-1 chats with pagination and exclusion status
      */
     router.get('/chats', async (req: Request, res: Response) => {
-        const exclusionList = await getExclusionList();
-        const chats = waService.getIndividualChats();
-        const result = chats.map(c => ({
-            ...c,
-            isExcluded: exclusionList.includes(c.id)
-        }));
-        res.json(result);
+        const limit = parseInt(req.query.limit as string) || 100;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const search = req.query.search as string;
+        const excluded = req.query.excluded === 'true';
+
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            let whereClause = 'WHERE c.is_group = false AND c.is_announcement = false';
+            const params: any[] = [];
+
+            if (search) {
+                params.push(`%${search}%`);
+                whereClause += ` AND c.name ILIKE $${params.length}`;
+            }
+
+            if (req.query.excluded !== undefined) {
+                if (excluded) {
+                    whereClause += ` AND t.is_excluded = true`;
+                } else {
+                    whereClause += ` AND (t.is_excluded = false OR t.is_excluded IS NULL)`;
+                }
+            }
+
+            const totalResult = await client.query(`
+                SELECT COUNT(*) 
+                FROM chats c 
+                LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
+                ${whereClause}
+            `, params);
+
+            let query = `
+                SELECT 
+                    c.jid as id, 
+                    c.name as name, 
+                    c.last_message_timestamp as "lastMessageTime",
+                    COALESCE(t.is_excluded, FALSE) as "isExcluded"
+                FROM chats c
+                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                ${whereClause}
+                ORDER BY c.last_message_timestamp DESC NULLS LAST 
+                LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+            `;
+            const result = await client.query(query, [...params, limit, offset]);
+            res.json({
+                items: result.rows,
+                total: parseInt(totalResult.rows[0].count)
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
     });
 
     /**
      * GET /api/announcements
-     * Returns all community announcement channels with their exclusion status
+     * Returns community announcement channels with pagination and exclusion status
      */
     router.get('/announcements', async (req: Request, res: Response) => {
-        const exclusionList = await getExclusionList();
-        const announcements = waService.getAnnouncements();
-        const result = announcements.map(a => ({
-            ...a,
-            isExcluded: exclusionList.includes(a.id)
-        }));
-        res.json(result);
+        const limit = parseInt(req.query.limit as string) || 100;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const search = req.query.search as string;
+        const excluded = req.query.excluded === 'true';
+
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            let whereClause = 'WHERE c.is_announcement = true';
+            const params: any[] = [];
+
+            if (search) {
+                params.push(`%${search}%`);
+                whereClause += ` AND c.name ILIKE $${params.length}`;
+            }
+
+            if (req.query.excluded !== undefined) {
+                if (excluded) {
+                    whereClause += ` AND t.is_excluded = true`;
+                } else {
+                    whereClause += ` AND (t.is_excluded = false OR t.is_excluded IS NULL)`;
+                }
+            }
+
+            const totalResult = await client.query(`
+                SELECT COUNT(*) 
+                FROM chats c 
+                LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
+                ${whereClause}
+            `, params);
+
+            let query = `
+                SELECT 
+                    c.jid as id, 
+                    c.name as name, 
+                    c.last_message_timestamp as "lastMessageTime",
+                    COALESCE(t.is_excluded, FALSE) as "isExcluded"
+                FROM chats c
+                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                ${whereClause}
+                ORDER BY c.last_message_timestamp DESC NULLS LAST 
+                LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+            `;
+            const result = await client.query(query, [...params, limit, offset]);
+            res.json({
+                items: result.rows,
+                total: parseInt(totalResult.rows[0].count)
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
     });
 
     /**
@@ -88,6 +226,21 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
         await excludeChat(jid);
         res.json({ success: true, jid, action: 'excluded' });
+    });
+
+    /**
+     * POST /api/chats/bulk-exclude
+     * Bulk excludes chats from tracking
+     */
+    router.post('/chats/bulk-exclude', async (req: Request, res: Response) => {
+        const { jids } = req.body;
+
+        if (!jids || !Array.isArray(jids)) {
+            return res.status(400).json({ error: 'JIDs array is required' });
+        }
+
+        await bulkExcludeChats(jids);
+        res.json({ success: true, count: jids.length, action: 'excluded' });
     });
 
     /**
@@ -142,6 +295,22 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      */
     router.get('/processing/state', async (req: Request, res: Response) => {
         res.json(await getProcessingState());
+    });
+
+    /**
+     * POST /api/processing/sync-settings
+     * Updates global sync settings
+     */
+    router.post('/processing/sync-settings', async (req: Request, res: Response) => {
+        const { trackChats, trackGroups, trackAnnouncements } = req.body;
+
+        await updateSyncSettings({
+            trackChats,
+            trackGroups,
+            trackAnnouncements
+        });
+
+        res.json({ success: true, state: await getProcessingState() });
     });
 
     /**

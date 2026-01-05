@@ -7,9 +7,9 @@ import { useStore } from '../store/useStore';
 
 const useStyles = makeStyles({
     container: {
-        maxWidth: '1400px',
-        margin: '0 auto',
+        width: '100%',
         height: '100%',
+        overflow: 'hidden',
     },
     header: {
         marginBottom: '24px',
@@ -27,8 +27,8 @@ const useStyles = makeStyles({
     },
     splitPane: {
         display: 'flex',
-        gap: '24px',
-        height: 'calc(100vh - 240px)',
+        gap: '0px',
+        height: '100%',
     },
     listPane: {
         width: '400px',
@@ -95,13 +95,6 @@ export default function AnnouncementsPage() {
 
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
-                <h1 className={styles.title}>📢 Announcements</h1>
-                <p className={styles.subtitle}>
-                    Broadcast channels • {chats.length} subscribed
-                </p>
-            </div>
-
             <div className={styles.splitPane}>
                 <div className={styles.listPane}>
                     <ConversationList />

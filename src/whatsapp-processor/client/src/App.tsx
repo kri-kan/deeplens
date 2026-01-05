@@ -17,6 +17,7 @@ import AnnouncementsPage from './pages/AnnouncementsPage';
 import GroupsPage from './pages/GroupsPage';
 import { useStore } from './store/useStore';
 import { fetchChats } from './services/conversation.service';
+import ToastContainer from './components/ToastContainer';
 
 function AppContent({
     settings,
@@ -32,6 +33,7 @@ function AppContent({
     const [tenantName, setTenantName] = useState<string>('');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const navigate = useNavigate();
+    const { setProcessingState } = useStore();
 
     useEffect(() => {
         // Check if session exists on mount
@@ -39,6 +41,7 @@ function AppContent({
             setHasSession(data.hasSession);
             setStatus(data.status);
             setTenantName(data.tenant);
+            setProcessingState(data.processingState);
             setIsLoading(false);
         }).catch(() => {
             setHasSession(false);
@@ -107,10 +110,20 @@ function AppContent({
             }
         });
 
+        // Listen for sync progress
+        socket.on('sync_progress', (data: any) => {
+            const { setSyncProgress } = useStore.getState();
+            setSyncProgress({
+                progress: data.progress,
+                messagesCount: data.messagesCount
+            });
+        });
+
         return () => {
             socket.off('status');
             socket.off('new_message');
             socket.off('chat_update');
+            socket.off('sync_progress');
         };
     }, [navigate]);
 
@@ -138,12 +151,13 @@ function AppContent({
         );
     }
 
-    const navWidth = isNavCollapsed ? 60 : 240;
+    const navWidth = isNavCollapsed ? 60 : 260;
 
     return (
         <div style={{
             display: 'flex',
-            minHeight: '100vh',
+            height: '100vh',
+            overflow: 'hidden',
             backgroundColor: settings.theme === 'dark' ? '#0f172a' : '#f8fafc',
             color: settings.theme === 'dark' ? '#ffffff' : '#0f172a'
         }}>
@@ -179,7 +193,10 @@ function AppContent({
                 flex: 1,
                 marginLeft: hasSession ? `${navWidth}px` : '0',
                 marginTop: hasSession && settings.stickyHeader ? '64px' : '0',
-                overflowY: 'auto',
+                height: hasSession && settings.stickyHeader ? 'calc(100vh - 64px)' : '100vh',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
                 transition: 'margin-left 0.3s ease',
             }}>
                 {/* Top Header - Scrollable when sticky is disabled */}
@@ -193,27 +210,29 @@ function AppContent({
                     />
                 )}
 
-                <div style={{ padding: '32px', maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
-                    <Routes>
-                        {/* Dashboard Landing Page */}
-                        <Route
-                            path="/"
-                            element={hasSession ? <DashboardPage /> : <Navigate to="/qr" replace />}
-                        />
+                <div style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '100%' }}>
+                        <Routes>
+                            {/* Dashboard Landing Page */}
+                            <Route
+                                path="/"
+                                element={hasSession ? <DashboardPage /> : <Navigate to="/qr" replace />}
+                            />
 
-                        {/* Conversation Routes */}
-                        <Route path="/conversations/chats" element={<ChatsPage />} />
-                        <Route path="/conversations/announcements" element={<AnnouncementsPage />} />
-                        <Route path="/conversations/groups" element={<GroupsPage />} />
+                            {/* Conversation Routes */}
+                            <Route path="/conversations/chats" element={<ChatsPage />} />
+                            <Route path="/conversations/announcements" element={<AnnouncementsPage />} />
+                            <Route path="/conversations/groups" element={<GroupsPage />} />
 
-                        {/* Administration Routes */}
-                        <Route path="/admin/chats" element={<ChatsAdminPage />} />
-                        <Route path="/admin/announcements" element={<AnnouncementsAdminPage />} />
-                        <Route path="/admin/groups" element={<GroupsAdminPage />} />
+                            {/* Administration Routes */}
+                            <Route path="/admin/chats" element={<ChatsAdminPage />} />
+                            <Route path="/admin/announcements" element={<AnnouncementsAdminPage />} />
+                            <Route path="/admin/groups" element={<GroupsAdminPage />} />
 
-                        {/* QR Code Page */}
-                        <Route path="/qr" element={<QRCodePage />} />
-                    </Routes>
+                            {/* QR Code Page */}
+                            <Route path="/qr" element={<QRCodePage />} />
+                        </Routes>
+                    </div>
                 </div>
             </div>
         </div>
@@ -246,6 +265,7 @@ function App() {
             <BrowserRouter>
                 <AppContent settings={settings} onSettingChange={handleSettingChange} />
             </BrowserRouter>
+            <ToastContainer />
         </FluentProvider>
     );
 }

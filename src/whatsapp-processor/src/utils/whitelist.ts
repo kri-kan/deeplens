@@ -52,17 +52,18 @@ export async function upsertChat(
                     WHEN EXCLUDED.is_contact = TRUE THEN EXCLUDED.name
                     
                     -- 2. If we already have an address book name, keep it
-                    WHEN chats.is_contact = TRUE AND chats.name NOT LIKE '%@%' AND chats.name !~ '^[0-9]+$' THEN chats.name
+                    WHEN chats.is_contact = TRUE AND chats.name NOT LIKE '%@%' AND chats.name !~ '^[0-9+\\-@.]+$' THEN chats.name
                     
-                    -- 3. If current name is just a JID or number, and new name is descriptive
-                    WHEN (chats.name LIKE '%@%' OR chats.name ~ '^[0-9]+$' OR chats.name = '' OR chats.name IS NULL)
-                         AND EXCLUDED.name IS NOT NULL AND EXCLUDED.name != '' 
-                         AND EXCLUDED.name NOT LIKE '%@%' AND EXCLUDED.name !~ '^[0-9]+$'
-                    THEN EXCLUDED.name
-                    
-                    -- 4. Keep existing descriptive name
-                    WHEN chats.name IS NOT NULL AND chats.name != '' AND chats.name NOT LIKE '%@%' AND chats.name !~ '^[0-9]+$'
-                    THEN chats.name
+                    -- 3. If current name is generic (JID, number, or literal 'Group'), and new name is descriptive
+                WHEN (chats.name LIKE '%@%' OR chats.name ~ '^[0-9+\\-@.]+$' OR chats.name = '' OR chats.name IS NULL OR chats.name = 'Group' OR chats.name = 'group')
+                     AND EXCLUDED.name IS NOT NULL AND EXCLUDED.name != '' 
+                     AND EXCLUDED.name NOT LIKE '%@%' AND EXCLUDED.name !~ '^[0-9+\\-@.]+$'
+                     AND EXCLUDED.name != 'Group' AND EXCLUDED.name != 'group'
+                THEN EXCLUDED.name
+                
+                -- 4. Keep existing descriptive name
+                WHEN chats.name IS NOT NULL AND chats.name != '' AND chats.name NOT LIKE '%@%' AND chats.name !~ '^[0-9+\\-@.]+$'
+                THEN chats.name
                     
                     -- 5. Final fallback to whatever is newest
                     ELSE EXCLUDED.name 
@@ -125,7 +126,8 @@ export async function getExclusionList(): Promise<string[]> {
  * Checks if a JID is excluded (should NOT be tracked)
  * Follows the blueprint: 
  * 1. If explicit state exists in DB, use it.
- * 2. Otherwise use defaults: 
+ * 2. Otherwise use global sync settings from processing_state.
+ * 3. Finally fall back to defaults: 
  *    - Groups: Excluded by default (trackGroups=false)
  *    - Private: Included by default (trackPrivate=true)
  */
@@ -134,6 +136,7 @@ export async function isExcluded(jid: string): Promise<boolean> {
     if (!client) return false;
 
     try {
+        // 1. Check explicit state
         const res = await client.query(
             'SELECT is_excluded FROM chat_tracking_state WHERE jid = $1',
             [jid]
@@ -143,12 +146,23 @@ export async function isExcluded(jid: string): Promise<boolean> {
             return res.rows[0].is_excluded;
         }
 
-        // Apply Defaults
+        // 2. Check Global Sync Settings
+        const stateRes = await client.query('SELECT track_chats, track_groups, track_announcements FROM processing_state WHERE id = 1');
+        const globalState = stateRes.rows[0] || { track_chats: true, track_groups: true, track_announcements: true };
+
         const isGroup = jid.endsWith('@g.us');
+        const isNewsletter = jid.endsWith('@newsletter');
+
+        if (isNewsletter) {
+            return !globalState.track_announcements;
+        }
+
         if (isGroup) {
-            return !DEFAULT_TRACK_GROUPS; // If trackGroups is false, return isExcluded=true
+            if (globalState.track_groups === false) return true; // Section off
+            return !DEFAULT_TRACK_GROUPS; // Follow default
         } else {
-            return !DEFAULT_TRACK_PRIVATE; // If trackPrivate is true, return isExcluded=false
+            if (globalState.track_chats === false) return true; // Section off
+            return !DEFAULT_TRACK_PRIVATE; // Follow default
         }
     } catch (err) {
         logger.error({ err, jid }, 'Failed to check if chat is excluded');
@@ -161,49 +175,73 @@ export async function isExcluded(jid: string): Promise<boolean> {
  * Adds a JID to the exclusion list
  */
 export async function excludeChat(jid: string): Promise<void> {
-    const client = getWhatsAppDbClient();
-    if (!client) {
-        logger.warn({ jid }, 'No DB client available for excludeChat');
-        return;
-    }
-
-    try {
-        logger.info({ jid }, 'Excluding chat in database');
-        await client.query(
-            `INSERT INTO chat_tracking_state (jid, is_excluded, excluded_at, updated_at)
-             VALUES ($1, TRUE, NOW(), NOW())
-             ON CONFLICT (jid) DO UPDATE 
-             SET is_excluded = TRUE, 
-                 excluded_at = NOW(),
-                 updated_at = NOW()`,
-            [jid]
-        );
-        logger.info({ jid }, 'Successfully excluded chat in database');
-    } catch (err: any) {
-        logger.error({ err: err.message, stack: err.stack, jid }, 'Failed to exclude chat in database');
-    }
+    await bulkExcludeChats([jid]);
 }
 
 /**
  * Removes a JID from the exclusion list
  */
 export async function includeChat(jid: string, resumeMode: 'from_last' | 'from_now'): Promise<void> {
+    await bulkIncludeChats([jid], resumeMode);
+}
+
+/**
+ * Adds multiple JIDs to the exclusion list
+ */
+export async function bulkExcludeChats(jids: string[]): Promise<void> {
     const client = getWhatsAppDbClient();
-    if (!client) return;
+    if (!client || jids.length === 0) return;
 
     try {
-        await client.query(
-            `INSERT INTO chat_tracking_state (jid, is_excluded, resume_mode, excluded_at, updated_at)
-             VALUES ($1, FALSE, $2, NULL, NOW())
-             ON CONFLICT (jid) DO UPDATE 
-             SET is_excluded = FALSE, 
-                 resume_mode = EXCLUDED.resume_mode,
-                 excluded_at = NULL,
-                 updated_at = NOW()`,
-            [jid, resumeMode]
-        );
-    } catch (err) {
-        logger.error({ err, jid }, 'Failed to include chat');
+        logger.info({ count: jids.length }, 'Bulk excluding chats in database');
+
+        // Use a single transaction for efficiency
+        await client.query('BEGIN');
+        for (const jid of jids) {
+            await client.query(
+                `INSERT INTO chat_tracking_state (jid, is_excluded, excluded_at, updated_at)
+                 VALUES ($1, TRUE, NOW(), NOW())
+                 ON CONFLICT (jid) DO UPDATE 
+                 SET is_excluded = TRUE, 
+                     excluded_at = NOW(),
+                     updated_at = NOW()`,
+                [jid]
+            );
+        }
+        await client.query('COMMIT');
+
+        logger.info({ count: jids.length }, 'Successfully bulk excluded chats in database');
+    } catch (err: any) {
+        if (client) await client.query('ROLLBACK');
+        logger.error({ err: err.message, count: jids.length }, 'Failed to bulk exclude chats in database');
+    }
+}
+
+/**
+ * Removes multiple JIDs from the exclusion list
+ */
+export async function bulkIncludeChats(jids: string[], resumeMode: 'from_last' | 'from_now'): Promise<void> {
+    const client = getWhatsAppDbClient();
+    if (!client || jids.length === 0) return;
+
+    try {
+        await client.query('BEGIN');
+        for (const jid of jids) {
+            await client.query(
+                `INSERT INTO chat_tracking_state (jid, is_excluded, resume_mode, excluded_at, updated_at)
+                 VALUES ($1, FALSE, $2, NULL, NOW())
+                 ON CONFLICT (jid) DO UPDATE 
+                 SET is_excluded = FALSE, 
+                     resume_mode = EXCLUDED.resume_mode,
+                     excluded_at = NULL,
+                     updated_at = NOW()`,
+                [jid, resumeMode]
+            );
+        }
+        await client.query('COMMIT');
+    } catch (err: any) {
+        if (client) await client.query('ROLLBACK');
+        logger.error({ err: err.message, count: jids.length }, 'Failed to bulk include chats');
     }
 }
 
