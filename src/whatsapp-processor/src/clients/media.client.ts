@@ -5,7 +5,32 @@ import { Readable } from 'stream';
 
 const logger = pino({ level: 'info' });
 
+// Track MinIO availability to avoid repeated failed attempts
+let isMinIOAvailable = true;
+let lastMinIOCheck = 0;
+const MINIO_CHECK_INTERVAL = 60000; // Re-check every 60 seconds
+
 export type MediaType = 'photo' | 'video' | 'audio' | 'document';
+
+/**
+ * Sets MinIO availability status
+ */
+export function setMinIOAvailability(available: boolean): void {
+    isMinIOAvailable = available;
+    lastMinIOCheck = Date.now();
+    if (!available) {
+        logger.warn('⚠️  MinIO marked as unavailable - media uploads will be skipped');
+    } else {
+        logger.info('✅ MinIO marked as available');
+    }
+}
+
+/**
+ * Gets MinIO availability status
+ */
+export function getMinIOAvailability(): boolean {
+    return isMinIOAvailable;
+}
 
 /**
  * Gets the folder path for a media type
@@ -22,6 +47,7 @@ function getMediaFolder(mediaType: MediaType): string {
 
 /**
  * Uploads media to MinIO and returns the URL
+ * Returns null if MinIO is unavailable (graceful degradation)
  * 
  * Note: Bucket existence is guaranteed by ensureBucketExists() called at application startup.
  * No need to verify bucket on every upload - it's a performance optimization.
@@ -31,7 +57,13 @@ export async function uploadMedia(
     jid: string,
     filename: string,
     mediaType: MediaType
-): Promise<string> {
+): Promise<string | null> {
+    // Fast-fail if MinIO is known to be unavailable
+    if (!isMinIOAvailable && (Date.now() - lastMinIOCheck) < MINIO_CHECK_INTERVAL) {
+        logger.debug({ jid, filename }, 'Skipping media upload - MinIO unavailable');
+        return null;
+    }
+
     const maxRetries = 3;
     let lastError: Error | null = null;
 
@@ -57,11 +89,17 @@ export async function uploadMedia(
 
             logger.info({ objectName, size: buffer.length, attempt }, 'Media uploaded to MinIO');
 
+            // Mark MinIO as available if it was previously down
+            if (!isMinIOAvailable) {
+                setMinIOAvailability(true);
+            }
+
             return url;
         } catch (err: any) {
             lastError = err;
             logger.warn({
                 err: err.message,
+                code: err.code,
                 jid,
                 filename,
                 attempt,
@@ -71,8 +109,12 @@ export async function uploadMedia(
             }, `Failed to upload media (attempt ${attempt}/${maxRetries})`);
 
             // Don't retry on certain errors
-            if (err.code === 'NoSuchBucket' || err.code === 'InvalidAccessKeyId') {
-                logger.error({ err: err.message }, 'Fatal MinIO error - bucket may not exist. Check startup logs.');
+            if (err.code === 'NoSuchBucket' || err.code === 'InvalidAccessKeyId' || err.code === 'ECONNREFUSED') {
+                logger.error({
+                    err: err.message,
+                    code: err.code
+                }, 'Fatal MinIO error - marking as unavailable');
+                setMinIOAvailability(false);
                 break;
             }
 
@@ -83,8 +125,18 @@ export async function uploadMedia(
         }
     }
 
-    logger.error({ err: lastError, jid, filename }, 'Failed to upload media to MinIO after all retries');
-    throw lastError || new Error('Upload failed');
+    logger.error({
+        err: lastError?.message,
+        code: (lastError as any)?.code,
+        jid,
+        filename
+    }, 'Failed to upload media to MinIO after all retries - continuing without media');
+
+    // Mark MinIO as unavailable after repeated failures
+    setMinIOAvailability(false);
+
+    // Return null instead of throwing - allow message processing to continue
+    return null;
 }
 
 /**

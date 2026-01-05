@@ -14,8 +14,9 @@ export const minioClient = new Minio.Client({
 
 /**
  * Ensures that the MinIO bucket exists
+ * Returns true if successful, false if MinIO is unavailable (allows graceful degradation)
  */
-export async function ensureBucketExists(): Promise<void> {
+export async function ensureBucketExists(): Promise<boolean> {
     try {
         const bucketName = MINIO_CONFIG.bucket;
         logger.info({ bucket: bucketName }, 'Checking MinIO bucket existence...');
@@ -60,9 +61,21 @@ export async function ensureBucketExists(): Promise<void> {
             logger.debug({ err: policyErr }, 'Could not set bucket policy (non-critical)');
         }
 
+        return true;
+
     } catch (err: any) {
-        logger.error({ err: err.message, config: MINIO_CONFIG }, '❌ Failed to verify/create MinIO bucket');
-        throw new Error(`MinIO bucket setup failed: ${err.message}`);
+        logger.error({
+            err: err.message,
+            stack: err.stack,
+            config: {
+                endpoint: MINIO_CONFIG.endpoint,
+                port: MINIO_CONFIG.port,
+                bucket: MINIO_CONFIG.bucket
+            }
+        }, '❌ Failed to verify/create MinIO bucket - Media uploads will be disabled');
+
+        // Don't throw - allow app to continue without media support
+        return false;
     }
 }
 
