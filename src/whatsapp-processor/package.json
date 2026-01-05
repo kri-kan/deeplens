@@ -8,7 +8,8 @@
         "build:client": "cd client && npm run build",
         "build:all": "npm run build:client && npm run build",
         "start": "node dist/index.js",
-        "dev": "ts-node src/index.ts",
+        "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+        "dev:server": "ts-node-dev --respawn --transpile-only src/index.ts",
         "dev:client": "cd client && npm run dev",
         "setup": "npm install && cd client && npm install && npm run build && cd .. && npm run build",
         "reset": "powershell -ExecutionPolicy Bypass -File ./reset-all.ps1"
@@ -46,7 +47,9 @@
         "@types/node": "^22.10.2",
         "@types/pg": "^8.11.10",
         "@types/qrcode-terminal": "^0.12.2",
+        "concurrently": "^9.2.1",
         "ts-node": "^10.9.2",
+        "ts-node-dev": "^2.0.0",
         "typescript": "^5.7.2"
     }
 }
