@@ -1,0 +1,17 @@
+{
+  "lidInfo": {
+    "remoteJid": "918750633334@s.whatsapp.net",
+    "displayJid": "918750633334@s.whatsapp.net",
+    "participant": "918750633334@s.whatsapp.net",
+    "displayParticipant": "918750633334@s.whatsapp.net"
+  },
+  "pushName": null,
+  "templateMessage": {
+    "hydratedTemplate": {
+      "hydratedContentText": "Dear Policyholder,\nPremium for your SBI Life Policy 1N699833602 is due on 01-DEC-2025 of Rs. 105,930.00. Auto Debit facility is active. Pls keep sufficient balance in your account/Card. Your bank may levy charges in case of debit failure."
+    },
+    "hydratedFourRowTemplate": {
+      "hydratedContentText": "Dear Policyholder,\nPremium for your SBI Life Policy 1N699833602 is due on 01-DEC-2025 of Rs. 105,930.00. Auto Debit facility is active. Pls keep sufficient balance in your account/Card. Your bank may levy charges in case of debit failure."
+    }
+  }
+}
