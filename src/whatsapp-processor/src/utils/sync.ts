@@ -2,9 +2,7 @@ import { WASocket, WAMessage, Chat as BChat, proto } from '@whiskeysockets/baile
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { saveMessage, MessageRecord } from './messages';
 import { upsertChat } from './whitelist';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from './logger';
 
 /**
  * Get the timestamp of the last message we have for a conversation

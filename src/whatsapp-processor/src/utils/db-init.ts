@@ -1,9 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getWhatsAppDbClient } from '../clients/db.client';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from './logger';
 
 /**
  * Initializes the database schema by running all SQL scripts in scripts/ddl

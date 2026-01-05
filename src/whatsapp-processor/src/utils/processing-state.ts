@@ -1,7 +1,5 @@
 import { getWhatsAppDbClient } from '../clients/db.client';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from './logger';
 
 export interface ProcessingState {
     isPaused: boolean;

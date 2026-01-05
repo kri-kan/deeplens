@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS chats (
     name VARCHAR(500) NOT NULL,
     is_group BOOLEAN DEFAULT FALSE,
     is_announcement BOOLEAN DEFAULT FALSE,
-    is_community BOOLEAN DEFAULT FALSE,
     
     -- WhatsApp-like UI Support
     unread_count INTEGER DEFAULT 0,
@@ -28,6 +27,10 @@ CREATE TABLE IF NOT EXISTS chats (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     last_message_at TIMESTAMP, -- Converted from last_message_timestamp
+    
+    -- WhatsApp-specific flags
+    is_contact BOOLEAN DEFAULT FALSE,
+    canonical_jid VARCHAR(255),
     
     -- Metadata
     metadata JSONB DEFAULT '{}'::jsonb

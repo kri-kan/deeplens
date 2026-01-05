@@ -31,6 +31,14 @@ export const MINIO_CONFIG = {
     useSSL: false
 };
 
+// --- Redis Configuration ---
+export const REDIS_CONFIG = {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD || undefined
+};
+
+
 // --- Database Configuration ---
 // DeepLens Core Database (for tenant metadata, feature extraction, etc.)
 export const DEEPLENS_VAYYARI_CONNECTION_STRING = getEnvVar(
@@ -59,6 +67,7 @@ if (VAYYARI_WA_DB_CONNECTION_STRING && VAYYARI_WA_DB_CONNECTION_STRING.includes(
 // --- Server Configuration ---
 export const API_PORT = parseInt(process.env.API_PORT || '3000');
 export const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+export const SYNC_NEWSLETTERS = process.env.SYNC_NEWSLETTERS === 'true'; // Disabled by default
 
 // --- Paths ---
 export const SESSION_PATH = path.join(DATA_DIR, SESSION_ID);
@@ -72,3 +81,8 @@ export const RATE_LIMIT_CONFIG = {
     maxDelayMs: parseInt(process.env.RATE_LIMIT_MAX_DELAY_MS || '3000'),
     jitterPercent: parseInt(process.env.RATE_LIMIT_JITTER_PERCENT || '30'),
 };
+
+// --- Default Tracking Policies ---
+export const DEFAULT_TRACK_GROUPS = process.env.DEFAULT_TRACK_GROUPS === 'true'; // Blueprint: false
+export const DEFAULT_TRACK_PRIVATE = process.env.DEFAULT_TRACK_PRIVATE !== 'false'; // Blueprint: true
+

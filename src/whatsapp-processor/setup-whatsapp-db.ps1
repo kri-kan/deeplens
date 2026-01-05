@@ -17,7 +17,7 @@ param(
     [switch]$Clean
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 # Configuration
 $DB_NAME = "whatsapp_vayyari_data"
@@ -82,6 +82,7 @@ else {
 Write-Host "[4/4] Initializing database schema..." -ForegroundColor Yellow
 $scriptDir = Join-Path $PSScriptRoot "scripts\ddl"
 $scripts = @(
+    "000_auth_storage.sql",
     "001_chats.sql",
     "002_messages.sql",
     "003_chat_tracking_state.sql",

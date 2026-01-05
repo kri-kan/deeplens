@@ -13,6 +13,8 @@ import {
     getProcessingState
 } from '../utils/processing-state';
 import { TENANT_NAME } from '../config';
+import { getRedisClient } from '../clients/redis.client';
+import { getPresignedUrl } from '../clients/media.client';
 
 export function createApiRoutes(waService: WhatsAppService): Router {
     const router = Router();
@@ -143,6 +145,19 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     });
 
     /**
+     * POST /api/sync/manual
+     * Manually triggers a sync of chats and contacts
+     */
+    router.post('/sync/manual', async (req: Request, res: Response) => {
+        try {
+            await waService.manualSync();
+            res.json({ success: true, message: 'Manual sync started' });
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
+    /**
      * GET /api/debug/db
      * DEBUG ONLY: Returns counts of records in the database
      */
@@ -152,11 +167,13 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
         try {
             const chats = await client.query('SELECT COUNT(*) FROM chats');
+            const messages = await client.query('SELECT COUNT(*) FROM messages');
             const tracking = await client.query('SELECT COUNT(*) FROM chat_tracking_state');
             const paused = await client.query('SELECT * FROM processing_state');
 
             res.json({
                 chats_count: chats.rows[0].count,
+                messages_count: messages.rows[0].count,
                 tracking_count: tracking.rows[0].count,
                 processing_state: paused.rows
             });
@@ -165,5 +182,53 @@ export function createApiRoutes(waService: WhatsAppService): Router {
         }
     });
 
+    /**
+     * GET /api/media/:messageId
+     * Media Read-Through: Returns a presigned URL for the media associated with a message
+     */
+    router.get('/media/:messageId', async (req: Request, res: Response) => {
+        const { messageId } = req.params;
+        const redis = getRedisClient();
+        const cacheKey = `media_presigned_${messageId}`;
+
+        try {
+            // 1. Check Redis
+            const cachedUrl = await redis.get(cacheKey);
+            if (cachedUrl) {
+                return res.redirect(cachedUrl);
+            }
+
+            // 2. Miss: Get from DB
+            const db = getWhatsAppDbClient();
+            if (!db) return res.status(503).json({ error: 'DB not available' });
+
+            const result = await db.query('SELECT media_url FROM messages WHERE message_id = $1', [messageId]);
+            if (result.rows.length === 0 || !result.rows[0].media_url) {
+                return res.status(404).json({ error: 'Media not found' });
+            }
+
+            const mediaUrl = result.rows[0].media_url;
+            if (!mediaUrl.startsWith('minio://')) {
+                return res.status(400).json({ error: 'Invalid media URL format' });
+            }
+
+            // Extract object name
+            const objectName = mediaUrl.replace(/^minio:\/\/[^\/]+\//, '');
+
+            // 3. Request Presigned URL from MinIO (valid for 1 hour)
+            const presignedUrl = await getPresignedUrl(objectName, 3600);
+
+            // 4. Save to Redis with 55-minute TTL
+            await redis.set(cacheKey, presignedUrl, 'EX', 3300);
+
+            // 5. Redirect
+            res.redirect(presignedUrl);
+        } catch (err: any) {
+            console.error('Media read-through failed:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     return router;
 }
+

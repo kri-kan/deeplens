@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { makeStyles, tokens, Spinner } from '@fluentui/react-components';
-import ConversationList, { Conversation } from '../components/ConversationList';
+import ConversationList from '../components/ConversationList';
 import MessageList from '../components/MessageList';
-import { fetchAnnouncements, ConversationData } from '../services/conversation.service';
+import { fetchAnnouncements } from '../services/conversation.service';
+import { useStore } from '../store/useStore';
 
 const useStyles = makeStyles({
     container: {
@@ -44,22 +45,13 @@ const useStyles = makeStyles({
         minHeight: '400px',
         flexDirection: 'column',
         gap: '16px',
-    },
-    error: {
-        padding: '16px',
-        backgroundColor: tokens.colorPaletteRedBackground2,
-        color: tokens.colorPaletteRedForeground1,
-        borderRadius: '8px',
-        marginBottom: '16px',
-    },
+    }
 });
 
 export default function AnnouncementsPage() {
     const styles = useStyles();
-    const [selectedConversation, setSelectedConversation] = useState<Conversation>();
-    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const { chats, setChats, activeChatJid } = useStore();
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         loadAnnouncements();
@@ -68,37 +60,30 @@ export default function AnnouncementsPage() {
     const loadAnnouncements = async () => {
         try {
             setLoading(true);
-            setError(null);
             const data = await fetchAnnouncements();
 
-            // Convert API data to Conversation format
-            const converted: Conversation[] = data.map((announcement: ConversationData) => ({
-                id: announcement.jid,
-                name: announcement.name,
-                lastMessage: announcement.last_message_text || 'No messages yet',
-                timestamp: announcement.last_message_timestamp
-                    ? new Date(announcement.last_message_timestamp * 1000)
-                    : new Date(),
-                unreadCount: announcement.unread_count || 0,
-                isGroup: false,
-                isAnnouncement: true,
+            // Map to store format
+            const mappedChats = data.map(chat => ({
+                jid: chat.jid,
+                name: chat.name,
+                is_group: chat.is_group,
+                is_announcement: chat.is_announcement,
+                unread_count: chat.unread_count,
+                last_message_text: chat.last_message_text,
+                last_message_timestamp: chat.last_message_timestamp?.toString() || null,
+                is_pinned: chat.is_pinned,
+                is_archived: chat.is_archived
             }));
 
-            setConversations(converted);
-        } catch (err: any) {
+            setChats(mappedChats);
+        } catch (err) {
             console.error('Failed to load announcements:', err);
-            setError(err.message || 'Failed to load announcements');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSelect = (id: string) => {
-        const conversation = conversations.find(c => c.id === id);
-        setSelectedConversation(conversation);
-    };
-
-    if (loading) {
+    if (loading && chats.length === 0) {
         return (
             <div className={styles.container}>
                 <div className={styles.loading}>
@@ -113,32 +98,19 @@ export default function AnnouncementsPage() {
             <div className={styles.header}>
                 <h1 className={styles.title}>📢 Announcements</h1>
                 <p className={styles.subtitle}>
-                    Broadcast channels • {conversations.length} subscribed
+                    Broadcast channels • {chats.length} subscribed
                 </p>
             </div>
 
-            {error && (
-                <div className={styles.error}>
-                    <strong>Error:</strong> {error}
-                </div>
-            )}
-
             <div className={styles.splitPane}>
                 <div className={styles.listPane}>
-                    <ConversationList
-                        conversations={conversations}
-                        selectedId={selectedConversation?.id}
-                        onSelect={handleSelect}
-                        emptyMessage="No announcement channels yet"
-                    />
+                    <ConversationList />
                 </div>
                 <div className={styles.detailsPane}>
-                    <MessageList
-                        jid={selectedConversation?.id}
-                        chatName={selectedConversation?.name}
-                    />
+                    <MessageList />
                 </div>
             </div>
         </div>
     );
 }
+

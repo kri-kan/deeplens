@@ -11,12 +11,12 @@ import DashboardPage from './pages/DashboardPage';
 import ChatsAdminPage from './pages/ChatsAdminPage';
 import AnnouncementsAdminPage from './pages/AnnouncementsAdminPage';
 import GroupsAdminPage from './pages/GroupsAdminPage';
-import CommunitiesAdminPage from './pages/CommunitiesAdminPage';
 import QRCodePage from './pages/QRCodePage';
 import ChatsPage from './pages/ChatsPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import GroupsPage from './pages/GroupsPage';
-import CommunitiesPage from './pages/CommunitiesPage';
+import { useStore } from './store/useStore';
+import { fetchChats } from './services/conversation.service';
 
 function AppContent({
     settings,
@@ -66,8 +66,51 @@ function AppContent({
             }
         });
 
+        // Listen for real-time messages
+        socket.on('new_message', (message: any) => {
+            const { addMessage } = useStore.getState();
+            addMessage(message);
+        });
+
+        // Listen for chat updates (sorting/naming)
+        socket.on('chat_update', (update: any) => {
+            const { chats, setChats } = useStore.getState();
+            const index = chats.findIndex(c => c.jid === update.jid);
+
+            if (index !== -1) {
+                const newChats = [...chats];
+                newChats[index] = { ...newChats[index], ...update };
+                // Re-sort based on latest message
+                newChats.sort((a, b) => {
+                    if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+                    const tsA = parseInt(a.last_message_timestamp || '0');
+                    const tsB = parseInt(b.last_message_timestamp || '0');
+                    return tsB - tsA;
+                });
+                setChats(newChats);
+            } else {
+                // New chat discovery - just push and fetch full list to be safe
+                fetchChats().then(data => {
+                    const mapped = data.map(chat => ({
+                        jid: chat.jid,
+                        name: chat.name,
+                        is_group: chat.is_group,
+                        is_announcement: chat.is_announcement,
+                        unread_count: chat.unread_count,
+                        last_message_text: chat.last_message_text,
+                        last_message_timestamp: chat.last_message_timestamp?.toString() || null,
+                        is_pinned: chat.is_pinned,
+                        is_archived: chat.is_archived
+                    }));
+                    setChats(mapped);
+                });
+            }
+        });
+
         return () => {
             socket.off('status');
+            socket.off('new_message');
+            socket.off('chat_update');
         };
     }, [navigate]);
 
@@ -162,13 +205,11 @@ function AppContent({
                         <Route path="/conversations/chats" element={<ChatsPage />} />
                         <Route path="/conversations/announcements" element={<AnnouncementsPage />} />
                         <Route path="/conversations/groups" element={<GroupsPage />} />
-                        <Route path="/conversations/communities" element={<CommunitiesPage />} />
 
                         {/* Administration Routes */}
                         <Route path="/admin/chats" element={<ChatsAdminPage />} />
                         <Route path="/admin/announcements" element={<AnnouncementsAdminPage />} />
                         <Route path="/admin/groups" element={<GroupsAdminPage />} />
-                        <Route path="/admin/communities" element={<CommunitiesAdminPage />} />
 
                         {/* QR Code Page */}
                         <Route path="/qr" element={<QRCodePage />} />

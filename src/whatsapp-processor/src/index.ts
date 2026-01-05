@@ -4,16 +4,14 @@ import { Server as SocketServer } from 'socket.io';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
-import pino from 'pino';
-import { API_PORT, TENANT_NAME, SESSION_PATH, CONFIG_PATH, LOG_LEVEL } from './config';
+import { logger } from './utils/logger';
+import { API_PORT, TENANT_NAME, SESSION_PATH, CONFIG_PATH } from './config';
 import { initializeDeepLensDbClient, initializeWhatsAppDbClient, getWhatsAppDbClient } from './clients/db.client';
 import { WhatsAppService } from './services/whatsapp.service';
 import { createApiRoutes } from './routes/api.routes';
 import { createConversationRoutes } from './routes/conversation.routes';
 import { createAdminRoutes } from './routes/admin.routes';
 import { initializeDatabaseSchema } from './utils/db-init';
-
-const logger = pino({ level: LOG_LEVEL });
 
 // --- Ensure Required Directories ---
 if (!fs.existsSync(SESSION_PATH)) {

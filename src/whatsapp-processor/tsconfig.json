@@ -12,6 +12,9 @@
         "inlineSourceMap": true,
         "inlineSources": true
     },
+    "include": [
+        "src/**/*"
+    ],
     "exclude": [
         "client",
         "node_modules",

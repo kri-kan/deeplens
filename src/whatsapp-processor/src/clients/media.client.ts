@@ -88,15 +88,14 @@ export async function uploadMedia(
 }
 
 /**
- * Gets the public URL for a media object (for future HTTP access)
+ * Gets a presigned URL for a media object with configurable TTL
  */
-export async function getMediaUrl(objectName: string): Promise<string> {
+export async function getPresignedUrl(objectName: string, expirySeconds: number = 3600): Promise<string> {
     try {
-        // Generate a presigned URL valid for 7 days
         const url = await minioClient.presignedGetObject(
             MINIO_CONFIG.bucket,
             objectName,
-            7 * 24 * 60 * 60
+            expirySeconds
         );
         return url;
     } catch (err) {
@@ -104,6 +103,7 @@ export async function getMediaUrl(objectName: string): Promise<string> {
         throw err;
     }
 }
+
 
 /**
  * Updates media URL in the database (for future DeepLens migration)

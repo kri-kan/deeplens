@@ -1,7 +1,6 @@
 import {
     makeWASocket,
     DisconnectReason,
-    useMultiFileAuthState,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
     WAMessage,
@@ -9,26 +8,33 @@ import {
     WASocket,
     ConnectionState,
     GroupMetadata,
-    Chat as BChat
+    Chat as BChat,
 } from '@whiskeysockets/baileys';
+import { usePostgresAuthState } from '../utils/auth';
+// @ts-ignore - Baileys export issues in some versions
+import { makeInMemoryStore } from '../utils/baileys-store';
 import { Boom } from '@hapi/boom';
-import pino from 'pino';
-import path from 'path';
-import fs from 'fs';
-import { Server as SocketServer } from 'socket.io';
-import { SESSION_PATH, LOG_LEVEL } from '../config';
+import { logger } from '../utils/logger';
+import { SESSION_ID, SYNC_NEWSLETTERS, RATE_LIMIT_CONFIG } from '../config';
 import { isExcluded, updateLastProcessedMessage, upsertChat } from '../utils/whitelist';
 import { isProcessingPaused, getProcessingState } from '../utils/processing-state';
 import { ensureBucketExists } from '../clients/minio.client';
-import { uploadMedia, MediaType } from '../clients/media.client';
+import { uploadMedia, MediaType, setMinIOAvailability } from '../clients/media.client';
 import { getWhatsAppDbClient } from '../clients/db.client';
+import { getRedisClient } from '../clients/redis.client';
 import { saveMessage } from '../utils/messages';
 import { getRateLimiter } from '../utils/rate-limiter';
-import { RATE_LIMIT_CONFIG } from '../config';
-
-const logger = pino({ level: LOG_LEVEL });
+import { Server as SocketServer } from 'socket.io';
+import fs from 'fs';
+import path from 'path';
 
 export type ConnectionStatus = 'disconnected' | 'scanning' | 'connected';
+
+export interface SystemHealth {
+    minioAvailable: boolean;
+    databaseAvailable: boolean;
+    whatsappConnected: boolean;
+}
 
 export interface Group {
     id: string;
@@ -45,26 +51,53 @@ export interface Chat {
 export class WhatsAppService {
     private sock: WASocket | null = null;
     private qrCode: string | null = null;
+    private lastMessageSyncCache: Map<string, number> = new Map();
     private connectionStatus: ConnectionStatus = 'disconnected';
     private groupsCache: GroupMetadata[] = [];
     private individualChatsCache: BChat[] = [];
     private announcementsCache: BChat[] = [];
     private io: SocketServer;
     private store: any;
+    private systemHealth: SystemHealth = {
+        minioAvailable: true,
+        databaseAvailable: true,
+        whatsappConnected: false
+    };
 
-    constructor(io: SocketServer) {
+    constructor(io: any) {
         this.io = io;
+        this.store = makeInMemoryStore({ logger: logger as any });
     }
 
     async start(): Promise<void> {
-        // Ensure MinIO bucket exists
-        await ensureBucketExists();
+        // Ensure MinIO bucket exists (non-blocking)
+        try {
+            const minioReady = await ensureBucketExists();
+            this.systemHealth.minioAvailable = minioReady;
+            setMinIOAvailability(minioReady);
+
+            if (!minioReady) {
+                logger.warn('⚠️  Starting without MinIO - media uploads will be disabled');
+                this.io.emit('system_warning', {
+                    type: 'minio_unavailable',
+                    message: 'Media storage unavailable - messages will be saved without media files',
+                    severity: 'warning'
+                });
+            }
+        } catch (err) {
+            logger.error({ err }, 'MinIO initialization failed - continuing without media support');
+            this.systemHealth.minioAvailable = false;
+            setMinIOAvailability(false);
+        }
 
         // Initialize rate limiter
         getRateLimiter(RATE_LIMIT_CONFIG);
         logger.info({ config: RATE_LIMIT_CONFIG }, 'Rate limiter initialized');
 
-        const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+        // Load caches from DB
+        await this.loadCachesFromDb();
+
+        const { state, saveCreds } = await usePostgresAuthState(SESSION_ID);
         const { version } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
@@ -82,6 +115,7 @@ export class WhatsAppService {
         });
 
         this.sock = sock;
+        this.store.bind(sock.ev);
 
         sock.ev.on('connection.update', (update: Partial<ConnectionState>) => {
             this.handleConnectionUpdate(update);
@@ -122,16 +156,85 @@ export class WhatsAppService {
 
         // Handle full history sync from WhatsApp (fires on connection with ALL data)
         sock.ev.on('messaging-history.set', async (data: any) => {
-            const { chats, messages, contacts } = data;
+            let { chats, messages, contacts } = data;
+
+            if (!SYNC_NEWSLETTERS) {
+                if (chats) chats = chats.filter((c: any) => !c.id?.endsWith('@newsletter'));
+                if (contacts) contacts = contacts.filter((c: any) => !c.id?.endsWith('@newsletter'));
+                if (messages) messages = messages.filter((m: any) => !m.key?.remoteJid?.endsWith('@newsletter'));
+            }
+
             const chatCount = chats?.length || 0;
             const msgCount = messages?.length || 0;
             const contactCount = contacts?.length || 0;
 
-            logger.info(`Received messaging history: ${chatCount} chats, ${msgCount} messages, ${contactCount} contacts`);
+            logger.info(`Received messaging history: ${chatCount} chats, ${msgCount} messages (SKIPPED - deep sync disabled), ${contactCount} contacts (${SYNC_NEWSLETTERS ? 'newsletters enabled' : 'newsletters ignored'})`);
 
             if (chats) await this.handleChatsSet(chats);
             if (contacts) await this.handleContactsSet(contacts);
-            if (messages) await this.handleMessages(messages, 'notify', true); // skipMedia = true for bulk history
+
+            // Process messages for chats with deep sync enabled
+            if (messages && messages.length > 0) {
+                const client = getWhatsAppDbClient();
+                if (client) {
+                    const jids = [...new Set(messages.map((m: any) => m.key?.remoteJid).filter(Boolean))];
+                    const res = await client.query(
+                        'SELECT jid FROM chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
+                        [jids]
+                    );
+                    const enabledJids = new Set(res.rows.map((r: any) => r.jid));
+                    const filtered = messages.filter((m: any) => enabledJids.has(m.key?.remoteJid));
+
+                    if (filtered.length > 0) {
+                        logger.info({ count: filtered.length }, 'Processing deep sync messages from initial history set (including media)');
+                        await this.handleMessages(filtered, 'history', false);
+                    }
+                }
+            }
+        });
+
+        // Handle incremental history updates (WhatsApp sends history in batches)
+        (sock.ev as any).on('history-sync.update', async (update: any) => {
+            const { chats, messages, contacts, progress } = update;
+            logger.info({
+                chats: chats?.length || 0,
+                messages: messages?.length || 0,
+                contacts: contacts?.length || 0,
+                progress
+            }, `Received incremental history update (Progress: ${progress}%)`);
+
+            // Emit sync progress to UI always
+            this.io.emit('sync_progress', {
+                progress,
+                chatsCount: chats?.length || 0,
+                messagesCount: messages?.length || 0,
+                contactsCount: contacts?.length || 0
+            });
+
+            if (chats) await this.handleChatsSet(chats);
+            if (contacts) await this.handleContactsSet(contacts);
+
+            if (messages) {
+                const msgList = Array.isArray(messages) ? messages : [];
+                if (msgList.length > 0) {
+                    const client = getWhatsAppDbClient();
+                    if (client) {
+                        // Check which chats have deep sync enabled
+                        const jids = [...new Set(msgList.map(m => m.key?.remoteJid).filter(Boolean))];
+                        const res = await client.query(
+                            'SELECT jid FROM chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
+                            [jids]
+                        );
+                        const enabledJids = new Set(res.rows.map(r => r.jid));
+
+                        const filteredMessages = msgList.filter(m => m.key?.remoteJid && enabledJids.has(m.key.remoteJid));
+                        if (filteredMessages.length > 0) {
+                            logger.info({ count: filteredMessages.length }, 'Processing history messages with media for deep-sync enabled chats');
+                            await this.handleMessages(filteredMessages, 'notify', false);
+                        }
+                    }
+                }
+            }
         });
 
         sock.ev.on('contacts.upsert', async (contacts) => {
@@ -146,9 +249,25 @@ export class WhatsAppService {
 
         // LID Mapping (Baileys v7 - LID is first-class citizen)
         sock.ev.on('lid-mapping.update', async (mapping) => {
-            logger.info({ mapping }, 'Received LID mapping update');
-            // TODO: Store LID → Phone number mappings in database
-            // This allows us to resolve LIDs to phone numbers for display
+            logger.info({ mappingCount: Object.keys(mapping).length }, 'Received LID mapping update');
+
+            const client = getWhatsAppDbClient();
+            if (!client) return;
+
+            for (const [lid, jid] of Object.entries(mapping)) {
+                try {
+                    // Update any existing LID record to have the PN as canonical_jid
+                    // PN (phone number) always ends in @s.whatsapp.net
+                    await client.query(`
+                        UPDATE chats 
+                        SET canonical_jid = $2,
+                            metadata = metadata || jsonb_build_object('pn_jid', $2)
+                        WHERE jid = $1 OR (canonical_jid = $1 AND jid NOT LIKE '%@s.whatsapp.net')
+                    `, [lid, jid]);
+                } catch (err) {
+                    logger.error({ err, lid, jid }, 'Failed to update LID mapping in DB');
+                }
+            }
         });
 
         // Try 'contacts.set' anyway, sometimes it fires despite not being in types
@@ -164,6 +283,7 @@ export class WhatsAppService {
         if (qr) {
             this.qrCode = qr;
             this.connectionStatus = 'scanning';
+            logger.info('👾 New QR Code received. Waiting for scan...');
             this.io.emit('status', { status: 'scanning', qr });
         }
 
@@ -212,21 +332,98 @@ export class WhatsAppService {
         }
     }
 
+    async manualSync(): Promise<void> {
+        logger.info('🔄 Manual sync triggered');
+
+        // 1. Sync groups (newsletters filtered inside performManualInitialSync)
+        await this.performManualInitialSync();
+
+        // 2. Sync contacts from store if available
+        if (this.store && this.store.contacts) {
+            const contacts = Object.values(this.store.contacts);
+            logger.info(`👥 Manually syncing ${contacts.length} contacts from memory store`);
+            await this.handleContactsSet(contacts);
+        }
+
+        // 3. Sync chats from store if available
+        if (this.store && this.store.chats) {
+            const chats = Object.values(this.store.chats.all()) as BChat[];
+            // Filter out newsletters here too just in case they ended up in the store
+            const filteredChats = chats.filter(c => c.id && !c.id.endsWith('@newsletter'));
+            logger.info(`💬 Manually syncing ${filteredChats.length} chats from memory store`);
+            await this.handleChatsSet(filteredChats);
+        }
+
+        // 4. Deep Name Reconciliation: Recover names from message metadata for numeric JIDs
+        const client = getWhatsAppDbClient();
+        if (client) {
+            logger.info('🧠 Running Deep Name Reconciliation from message history...');
+            try {
+                const reconcileResult = await client.query(`
+                    UPDATE chats c
+                    SET name = sub.push_name,
+                        is_contact = true,
+                        updated_at = NOW()
+                    FROM (
+                        SELECT DISTINCT ON (chat_jid) 
+                            chat_jid, 
+                            metadata->>'pushName' as push_name
+                        FROM messages
+                        WHERE metadata->>'pushName' IS NOT NULL 
+                          AND metadata->>'pushName' !~ '^[0-9+\\-@.]+$'
+                          AND chat_jid NOT LIKE '%@g.us'
+                        ORDER BY chat_jid, timestamp DESC
+                    ) sub
+                    WHERE c.jid = sub.chat_jid
+                      AND (c.name ~ '^[0-9+\\-@.]+$' OR c.name IS NULL OR c.name = c.jid OR c.name LIKE '%@%' OR c.name = 'Group' OR c.name = 'group')
+                    RETURNING c.jid, c.name;
+                `);
+                logger.info(`✨ Deep Reconciliation: Updated ${reconcileResult.rowCount} chat names from message history`);
+            } catch (err) {
+                logger.error({ err }, 'Failed deep name reconciliation');
+            }
+
+            // 5. Deep Group Subject Recovery: Try to fetch metadata for JID-named groups
+            try {
+                const mysteryGroups = await client.query(`
+                    SELECT jid FROM chats 
+                    WHERE jid LIKE '%@g.us' 
+                      AND (name ~ '^[0-9+\\-@.]+$' OR name = 'Group' OR name = 'group')
+                    LIMIT 20
+                `);
+
+                if (mysteryGroups.rows.length > 0) {
+                    logger.info(`🔍 Attempting to recover subjects for ${mysteryGroups.rows.length} mystery groups...`);
+                    for (const group of mysteryGroups.rows) {
+                        try {
+                            // Check if it's already in store first (faster)
+                            const cached = this.store?.groupMetadata?.[group.jid];
+                            if (cached && cached.subject) {
+                                await upsertChat(group.jid, cached.subject, true, cached);
+                                continue;
+                            }
+
+                            // Fetch from WhatsApp (network op)
+                            const metadata = await this.sock!.groupMetadata(group.jid);
+                            if (metadata && metadata.subject) {
+                                await upsertChat(group.jid, metadata.subject, true, metadata);
+                            }
+                        } catch (err) {
+                            // Non-critical: usually fails if you are no longer in the group
+                            logger.debug({ jid: group.jid }, 'Could not recover group subject (likely left group)');
+                        }
+                    }
+                }
+            } catch (err) {
+                logger.error({ err }, 'Failed deep group subject recovery');
+            }
+        }
+
+        logger.info('✅ Manual sync completed');
+    }
+
     /**
      * Manual initial sync for existing sessions
-     * chats.set event only fires on first connection, not on reconnects
-     */
-    /**
-     * Manual initial sync for existing sessions
-     * chats.set event only fires on first connection, not on reconnects
-     */
-    /**
-     * Manual initial sync for existing sessions
-     * chats.set event only fires on first connection, not on reconnects
-     */
-    /**
-     * Manual initial sync for existing sessions
-     * messaging-history.set event only fires on first connection, not on reconnects
      */
     async performManualInitialSync(): Promise<void> {
         if (!this.sock) {
@@ -264,7 +461,7 @@ export class WhatsAppService {
 
             const chatsToSync = [
                 ...allGroups.map(g => ({ ...g, isGroup: true })),
-                ...allNewsletters.map(n => ({ ...n, isNewsletter: true }))
+                ...(SYNC_NEWSLETTERS ? allNewsletters.map(n => ({ ...n, isNewsletter: true })) : [])
             ];
 
             let syncedCount = 0;
@@ -287,21 +484,21 @@ export class WhatsAppService {
             /*
             logger.info('👥 Discovering participants from groups (Deep Discovery)...');
             let participantDiscoveryCount = 0;
-
+            
             // Limit deep discovery to first 1000 groups to cover more contacts
             const discoveryGroups = allGroups.slice(0, 1000);
-
+            
             for (const group of discoveryGroups) {
                 try {
                     let participants = group.participants;
-
+            
                     // If participants are missing, try to fetch full metadata
                     if (!participants || participants.length === 0) {
                         logger.debug({ jid: group.id }, 'Fetching full metadata for discovery');
                         const metadata = await this.sock.groupMetadata(group.id);
                         participants = metadata.participants;
                     }
-
+            
                     if (participants) {
                         for (const participant of participants) {
                             const jid = participant.id;
@@ -322,6 +519,36 @@ export class WhatsAppService {
 
             logger.info({ total: syncedCount }, '✅ Manual initial sync complete');
 
+            // Deep Name Reconciliation: Recover names from message metadata for numeric JIDs
+            // This runs automatically on every connection to ensure names are always resolved
+            const client = getWhatsAppDbClient();
+            if (client) {
+                logger.info('🧠 Running Deep Name Reconciliation from message history...');
+                try {
+                    const reconcileResult = await client.query(`
+                        UPDATE chats c
+                        SET name = sub.push_name,
+                            is_contact = true,
+                            updated_at = NOW()
+                        FROM (
+                            SELECT DISTINCT ON (chat_jid) 
+                                chat_jid, 
+                                metadata->>'pushName' as push_name
+                            FROM messages
+                            WHERE metadata->>'pushName' IS NOT NULL 
+                              AND metadata->>'pushName' !~ '^[0-9]+$'
+                            ORDER BY chat_jid, timestamp DESC
+                        ) sub
+                        WHERE c.jid = sub.chat_jid
+                          AND (c.name ~ '^[0-9]+$' OR c.name IS NULL OR c.name = c.jid OR c.name LIKE '%@%')
+                        RETURNING c.jid, c.name;
+                    `);
+                    logger.info(`✨ Deep Reconciliation: Updated ${reconcileResult.rowCount} chat names from message history`);
+                } catch (err) {
+                    logger.error({ err }, 'Failed deep name reconciliation');
+                }
+            }
+
             this.refreshGroups();
             this.refreshChats();
         } catch (err) {
@@ -329,22 +556,23 @@ export class WhatsAppService {
         }
     }
 
-    private clearSession(): void {
-        const fs = require('fs');
-        const path = require('path');
-
+    private async clearSession(): Promise<void> {
         try {
-            // Delete session directory contents
-            if (fs.existsSync(SESSION_PATH)) {
-                const files = fs.readdirSync(SESSION_PATH);
-                for (const file of files) {
-                    const filePath = path.join(SESSION_PATH, file);
-                    fs.unlinkSync(filePath);
-                }
-                logger.info('Session files cleared');
+            const client = getWhatsAppDbClient();
+            if (client) {
+                await client.query('DELETE FROM wa_auth_sessions WHERE session_id = $1', [SESSION_ID]);
+                logger.info('Session cleared from database');
+            }
+
+            // Also clear Redis cache
+            const redis = getRedisClient();
+            const keys = await redis.keys(`wa_session:${SESSION_ID}:*`);
+            if (keys.length > 0) {
+                await redis.del(...keys);
+                logger.info('Session cache cleared from Redis');
             }
         } catch (err) {
-            logger.error({ err }, 'Failed to clear session files');
+            logger.error({ err }, 'Failed to clear session');
         }
     }
 
@@ -362,30 +590,23 @@ export class WhatsAppService {
             const remoteJid = msg.key.remoteJid;
             if (!remoteJid) continue;
 
-            // Skip newsletters - they're broadcast-only, not conversations
-            if (remoteJid.endsWith('@newsletter')) {
-                logger.debug({ jid: remoteJid }, 'Skipping newsletter message');
-                continue;
-            }
+            // Ignore status updates
+            if (remoteJid === 'status@broadcast') continue;
 
-            // INVERTED LOGIC: Process if NOT excluded (track all by default)
-            if (await isExcluded(remoteJid)) {
-                logger.debug({ jid: remoteJid }, 'Chat is excluded, skipping');
-                continue;
-            }
-
+            const isExcludedChat = await isExcluded(remoteJid);
             const messageType = Object.keys(msg.message)[0];
-            logger.info({ jid: remoteJid, type: messageType }, 'Processing Message');
 
+            // We ALWAYS process for identity/name discovery, but we skip storage if excluded
             try {
-                await this.processMessage(msg, skipMedia);
+                // If excluded, we only care about naming/identity sync
+                await this.processMessage(msg, skipMedia || isExcludedChat, !isExcludedChat);
             } catch (err) {
-                logger.error({ err, jid: remoteJid }, 'Failed to process message');
+                logger.error({ err, jid: remoteJid }, 'Failed to process message discovery');
             }
         }
     }
 
-    private async processMessage(msg: WAMessage, skipMedia: boolean = false): Promise<void> {
+    private async processMessage(msg: WAMessage, skipMedia: boolean = false, saveToDb: boolean = true): Promise<void> {
         // Baileys v7: LID is first-class citizen
         // remoteJid can be either LID or PN (phone number)
         const remoteJid = msg.key.remoteJid!;
@@ -405,6 +626,16 @@ export class WhatsAppService {
         const displayParticipant = participantAlt || participant;
 
         const pushName = msg.pushName || null;
+
+        // Resolve name from store or alt JID if pushName is missing on message
+        let resolvedName = pushName;
+        if (!resolvedName && this.store?.contacts) {
+            const contact = this.store.contacts[remoteJid] || (remoteJidAlt ? this.store.contacts[remoteJidAlt] : null);
+            if (contact) {
+                resolvedName = contact.name || contact.verifiedName || contact.pushName || contact.pushname || contact.notify;
+            }
+        }
+
         const isFromMe = msg.key.fromMe || false;
 
         // Extract message content
@@ -435,93 +666,145 @@ export class WhatsAppService {
         const isGroup = remoteJid.endsWith('@g.us');
         const isNewsletter = remoteJid.endsWith('@newsletter');
 
-        // Pass generic name for groups so upsertChat keeps subject, 
-        // use pushName for individuals to fix numeric LID labels.
-        const suggestedName = isGroup ? 'Group' : (pushName || remoteJid.split('@')[0]);
+        // Pass generic name for groups only if subject is unknown, 
+        // try to get subject from store or metadata
+        let groupSubject = isGroup ? (this.store?.groupMetadata?.[remoteJid]?.subject || null) : null;
 
-        await upsertChat(
-            remoteJid,
-            suggestedName,
-            isGroup,
-            {
-                last_message_at: timestamp,
-                push_name: pushName,
-                // Baileys v7: Store Alt JID for display
-                alt_jid: remoteJidAlt,
-                display_jid: displayJid
-            }
-        );
+        const suggestedName = isGroup
+            ? (groupSubject || remoteJid.split('@')[0])
+            : (isFromMe ? remoteJid.split('@')[0] : (resolvedName || remoteJid.split('@')[0]));
 
-        // Update chat's last message info
-        const client = getWhatsAppDbClient();
-        if (client) {
-            await client.query(`
-                UPDATE chats 
-                SET last_message_text = $2, 
-                    last_message_timestamp = $3, 
-                    last_message_from_me = $4,
-                    updated_at = NOW()
-                WHERE jid = $1
-            `, [remoteJid, messageContent, timestamp, isFromMe]);
+        // Efficiently track latest message state
+        const lastProcessedTs = this.lastMessageSyncCache.get(remoteJid) || 0;
+
+        // Only hit the DB if the message is actually newer than our local state
+        // (This protects against out-of-order history packets)
+        if (timestamp >= lastProcessedTs) {
+            this.lastMessageSyncCache.set(remoteJid, timestamp);
+
+            // Consolidated identity and last-message update
+            await upsertChat(
+                remoteJid,
+                suggestedName,
+                isGroup,
+                {
+                    push_name: pushName,
+                    resolved_name: resolvedName,
+                    alt_jid: remoteJidAlt,
+                    display_jid: displayJid
+                },
+                !!resolvedName, // Mark as contact if we resolved a name
+                messageContent,
+                timestamp,
+                isFromMe
+            );
         }
 
-        // Save to database
-        await saveMessage({
-            messageId,
-            jid: remoteJid,  // Store primary ID (LID or PN)
-            content: messageContent,
-            messageType,
-            mediaType,
-            mediaUrl,
-            sender: participant,  // Primary sender ID
-            senderName: pushName,
-            timestamp,
-            isFromMe,
-            isForwarded: !!(msg.message?.extendedTextMessage?.contextInfo?.isForwarded),
-            metadata: {
-                ...msg.message,
-                pushName: msg.pushName,
-                // Baileys v7: Store Alt fields for LID ↔ PN mapping
-                lidInfo: {
-                    remoteJid,
-                    remoteJidAlt,
-                    participant,
-                    participantAlt,
-                    displayJid,
-                    displayParticipant
-                }
+        if (saveToDb) {
+            // Only save if we have content or media
+            if (messageContent === null && !mediaUrl) {
+                logger.debug({ messageId }, 'Skipping save for protocol/empty message');
+                return;
             }
-        });
 
-        logger.info({
-            jid: remoteJid,
-            messageId,
-            timestamp,
-            mediaType,
-            mediaUrl
-        }, 'Message processed and saved');
+            // Save to database
+            await saveMessage({
+                messageId,
+                jid: remoteJid,  // Store primary ID (LID or PN)
+                content: messageContent || '',
+                messageType,
+                mediaType,
+                mediaUrl,
+                sender: participant,  // Primary sender ID
+                senderName: pushName,
+                timestamp,
+                isFromMe,
+                isForwarded: !!(msg.message?.extendedTextMessage?.contextInfo?.isForwarded),
+                metadata: {
+                    ...msg.message,
+                    pushName: msg.pushName,
+                    // Baileys v7: Store Alt fields for LID ↔ PN mapping
+                    lidInfo: {
+                        remoteJid,
+                        remoteJidAlt,
+                        participant,
+                        participantAlt,
+                        displayJid,
+                        displayParticipant
+                    }
+                }
+            });
 
-        // Update tracking state
-        await updateLastProcessedMessage(remoteJid, messageId, timestamp);
+            logger.info({
+                jid: remoteJid,
+                messageId,
+                timestamp,
+                mediaType,
+                mediaUrl
+            }, 'Message processed and saved');
+
+            // Update tracking state
+            await updateLastProcessedMessage(remoteJid, messageId, timestamp);
+
+            // Emit real-time events to frontend
+            const messageData = {
+                message_id: messageId,
+                chat_jid: remoteJid,
+                sender_jid: participant,
+                message_text: messageContent,
+                message_type: messageType,
+                timestamp: timestamp.toString(),
+                is_from_me: isFromMe,
+                media_url: mediaUrl
+            };
+
+            this.io.emit('new_message', messageData);
+
+            // Also emit chat list update
+            this.io.emit('chat_update', {
+                jid: remoteJid,
+                name: suggestedName,
+                last_message_text: messageContent,
+                last_message_timestamp: timestamp.toString(),
+                unread_count: 1 // Ideally we should fetch actual count, but 1 triggers UI badge
+            });
+        }
     }
 
-    private extractMessageContent(msg: WAMessage): string {
+    private extractMessageContent(msg: WAMessage): string | null {
         const message = msg.message;
-        if (!message) return '';
+        if (!message) return null;
+
+        // Ignore protocol messages that don't have user-visible content
+        if (message.protocolMessage || message.senderKeyDistributionMessage || (message as any).peerDataOperationRequestMessage) {
+            return null;
+        }
 
         // Handle various message types
         if (message.conversation) return message.conversation;
         if (message.extendedTextMessage?.text) return message.extendedTextMessage.text;
 
         // Handle media with/without captions
-        if (message.imageMessage) return message.imageMessage.caption || '[Image]';
-        if (message.videoMessage) return message.videoMessage.caption || '[Video]';
-        if (message.audioMessage) return '[Audio]';
-        if (message.stickerMessage) return '[Sticker]';
-        if (message.documentMessage) return message.documentMessage.fileName || '[Document]';
-        if (message.contactMessage) return `[Contact: ${message.contactMessage.displayName}]`;
-        if (message.locationMessage) return '[Location]';
-        if (message.pollCreationMessageV3) return `[Poll: ${message.pollCreationMessageV3.name}]`;
+        if (message.imageMessage) return message.imageMessage.caption || '[image]';
+        if (message.videoMessage) return message.videoMessage.caption || '[video]';
+        if (message.audioMessage) return '[audio]';
+        if (message.stickerMessage) return '[sticker]';
+        if (message.documentMessage) return message.documentMessage.fileName || '[document]';
+        if (message.contactMessage) return `[contact: ${message.contactMessage.displayName}]`;
+        if (message.locationMessage) return '[location]';
+        if (message.pollCreationMessageV3) return `[poll: ${message.pollCreationMessageV3.name}]`;
+
+        // Handle interactive/template messages (common in Business/Bot accounts)
+        if (message.templateMessage) {
+            const template = message.templateMessage.hydratedTemplate || message.templateMessage.hydratedFourRowTemplate;
+            if (template?.hydratedContentText) return template.hydratedContentText;
+        }
+        if (message.buttonsMessage) return message.buttonsMessage.contentText || '[Buttons Message]';
+        if (message.listMessage) return message.listMessage.description || message.listMessage.title || '[List Message]';
+        if (message.interactiveMessage) {
+            const body = message.interactiveMessage.body;
+            if (body?.text) return body.text;
+        }
 
         // Check for ephemeral or view once messages
         const ephemeralMsg = (message as any).ephemeralMessage?.message || (message as any).viewOnceMessage?.message || (message as any).viewOnceMessageV2?.message;
@@ -529,16 +812,18 @@ export class WhatsAppService {
             return this.extractMessageContent({ ...msg, message: ephemeralMsg });
         }
 
-        return '';
+        return null;
     }
 
     private async downloadAndUploadMedia(msg: WAMessage, type: MediaType): Promise<string | null> {
         const sock = this.sock;
         if (!sock) {
-            throw new Error('WhatsApp socket not initialized');
+            logger.error('WhatsApp socket not initialized for media download');
+            return null;
         }
 
         try {
+            // Download media from WhatsApp
             const buffer = await downloadMediaMessage(
                 msg,
                 'buffer',
@@ -549,13 +834,36 @@ export class WhatsAppService {
                 }
             ) as Buffer;
 
+            if (!buffer || buffer.length === 0) {
+                logger.warn({ messageId: msg.key.id }, 'Downloaded media buffer is empty');
+                return null;
+            }
+
             const remoteJid = msg.key.remoteJid!;
             const filename = this.getMediaFilename(msg, type);
 
+            // Upload to MinIO (returns null if MinIO unavailable)
             const url = await uploadMedia(buffer, remoteJid, filename, type);
+
+            if (!url) {
+                logger.warn({
+                    messageId: msg.key.id,
+                    jid: remoteJid,
+                    type
+                }, 'Media upload failed - MinIO unavailable, continuing without media');
+            }
+
             return url;
-        } catch (err) {
-            logger.error({ err, type }, 'Failed to download/upload media');
+        } catch (err: any) {
+            logger.error({
+                err: err.message,
+                stack: err.stack,
+                messageId: msg.key.id,
+                jid: msg.key.remoteJid,
+                type
+            }, 'Failed to download/upload media - continuing without media');
+
+            // Return null instead of throwing - allow message processing to continue
             return null;
         }
     }
@@ -688,10 +996,8 @@ export class WhatsAppService {
     }
 
     hasSession(): boolean {
-        const fs = require('fs');
-        const path = require('path');
-        const credsPath = path.join(SESSION_PATH, 'creds.json');
-        return fs.existsSync(credsPath);
+        // Only return true if we have a socket AND an authenticated user
+        return !!this.sock?.user;
     }
 
     getSocket(): WASocket | null {
@@ -712,8 +1018,10 @@ export class WhatsAppService {
         const lids = validChats.filter(c => c.id!.endsWith('@lid')).length;
         logger.info(`Received ${chats.length} chats from WhatsApp (bulk sync). Breakdown: ${groups} groups, ${individual} individuals, ${newsletter} newsletters (ignored), ${lids} lids`);
 
-        // Filter out newsletters - we don't track broadcast channels
-        const chatsToProcess = validChats.filter(c => !c.id!.endsWith('@newsletter'));
+        // Filter out newsletters and status updates
+        const chatsToProcess = SYNC_NEWSLETTERS
+            ? validChats.filter(c => c.id !== 'status@broadcast')
+            : validChats.filter(c => !c.id!.endsWith('@newsletter') && c.id !== 'status@broadcast');
 
         const client = getWhatsAppDbClient();
         if (!client) {
@@ -760,79 +1068,83 @@ export class WhatsAppService {
                         logger.debug({ jid, name: (chat as any).name }, 'Processing individual chat');
                     }
 
-                    await upsertChat(
-                        jid,
-                        (chat as any).name || (chat as any).subject || jid.split('@')[0],
-                        isGroup,
-                        chat
-                    );
+                    // Extract last message info from history if available
+                    let lastMessageText: string | null = null;
+                    let lastMessageTimestamp: number | null = chat.conversationTimestamp ? Number(chat.conversationTimestamp) : null;
+                    let lastMessageFromMe: boolean = false;
+                    let lastMsg: WAMessage | null = null;
 
-                    // Handle last message from chat history if present
                     if ((chat as any).messages && (chat as any).messages.length > 0) {
                         const lastMsgArray = (chat as any).messages;
-                        const lastMsg = lastMsgArray[lastMsgArray.length - 1];
+                        lastMsg = lastMsgArray[lastMsgArray.length - 1];
 
                         if (lastMsg && lastMsg.message) {
-                            const messageText = this.extractMessageContent(lastMsg);
-                            const timestamp = lastMsg.messageTimestamp;
-                            const fromMe = lastMsg.key?.fromMe || false;
-
-                            // Update chat preview
-                            await client.query(`
-                                UPDATE chats
-                                SET last_message_text = $2,
-                                    last_message_timestamp = $3,
-                                    last_message_from_me = $4
-                                WHERE jid = $1
-                            `, [jid, messageText, timestamp, fromMe]);
-
-                            // Skip processMessage during bulk sync to avoid media download hangs
-                            // We can just save the text entry directly if we really want history
-                            await saveMessage({
-                                messageId: lastMsg.key?.id || `hist-${timestamp}`,
-                                jid,
-                                content: messageText,
-                                messageType: Object.keys(lastMsg.message || {})[0] || 'text',
-                                mediaType: null,
-                                mediaUrl: null,
-                                sender: lastMsg.key?.participant || lastMsg.key?.remoteJid,
-                                senderName: (lastMsg as any).pushName || null,
-                                timestamp: Number(timestamp),
-                                isFromMe: fromMe,
-                                isForwarded: false,
-                                metadata: lastMsg.message
-                            });
+                            lastMessageText = this.extractMessageContent(lastMsg);
+                            lastMessageTimestamp = Number(lastMsg.messageTimestamp);
+                            lastMessageFromMe = lastMsg.key?.fromMe || false;
                         }
                     }
 
-                    // Update categorization and other fields
-                    await client.query(`
-                        UPDATE chats
-                        SET unread_count = $2,
-                            last_message_timestamp = COALESCE(last_message_timestamp, $3),
-                            is_archived = $4,
-                            is_pinned = $5,
-                            is_muted = $6,
-                            mute_until_timestamp = $7,
-                            is_announcement = $8,
-                            is_group = $9,
-                            updated_at = NOW()
-                        WHERE jid = $1
-                    `, [
-                        jid,
-                        chat.unreadCount || 0,
-                        chat.conversationTimestamp ? Number(chat.conversationTimestamp) : null,
-                        chat.archived || false,
-                        chat.pinned ? true : false,
-                        chat.muteEndTime ? true : false,
-                        chat.muteEndTime ? Number(chat.muteEndTime) : null,
-                        isAnnouncement,
-                        isGroup
-                    ]);
+                    // Memory check to skip redundant DB writes during history flood
+                    const cachedTs = this.lastMessageSyncCache.get(jid) || 0;
+                    if (!lastMessageTimestamp || lastMessageTimestamp >= cachedTs) {
+                        if (lastMessageTimestamp) this.lastMessageSyncCache.set(jid, lastMessageTimestamp);
 
-                    count++;
-                    if (count % 100 === 0) {
-                        logger.info(`Synced ${count}/${chats.length} chats...`);
+                        await upsertChat(
+                            jid,
+                            (chat as any).name || (chat as any).subject || jid.split('@')[0],
+                            isGroup,
+                            chat,
+                            false, // isContact
+                            lastMessageText,
+                            lastMessageTimestamp,
+                            lastMessageFromMe
+                        );
+
+                        // If we have a physical message record, save it to the messages table
+                        if (lastMsg && lastMsg.message) {
+                            const extracted = this.extractMessageContent(lastMsg);
+                            if (extracted !== null) {
+                                await saveMessage({
+                                    messageId: lastMsg.key?.id || `hist-${lastMessageTimestamp}`,
+                                    jid,
+                                    content: extracted,
+                                    messageType: Object.keys(lastMsg.message || {})[0] || 'text',
+                                    mediaType: null,
+                                    mediaUrl: null,
+                                    sender: lastMsg.key?.participant || lastMsg.key?.remoteJid || null,
+                                    senderName: (lastMsg as any).pushName || null,
+                                    timestamp: Number(lastMessageTimestamp),
+                                    isFromMe: lastMessageFromMe,
+                                    isForwarded: false,
+                                    metadata: lastMsg.message
+                                });
+                            }
+                        }
+
+                        // Update UI categorization fields that are NOT in upsertChat yet
+                        await client.query(`
+                            UPDATE chats
+                            SET unread_count = $2,
+                                is_archived = $3,
+                                is_pinned = $4,
+                                is_muted = $5,
+                                mute_until_timestamp = $6,
+                                updated_at = NOW()
+                            WHERE jid = $1
+                        `, [
+                            jid,
+                            chat.unreadCount || 0,
+                            chat.archived || false,
+                            chat.pinned ? true : false,
+                            chat.muteEndTime ? true : false,
+                            chat.muteEndTime ? Number(chat.muteEndTime) : null
+                        ]);
+
+                        count++;
+                        if (count % 100 === 0) {
+                            logger.info(`Synced ${count}/${chats.length} chats...`);
+                        }
                     }
                 } catch (chatErr: any) {
                     logger.error({ err: chatErr.message, jid: chat.id }, 'Failed to sync individual chat');
@@ -933,12 +1245,24 @@ export class WhatsAppService {
                 const jid = contact.id;
                 if (!jid) continue;
 
-                // Only handle personal chats here
-                const isGroup = jid.endsWith('@g.us');
-                const isNewsletter = jid.endsWith('@newsletter');
-                const name = contact.name || contact.verifiedName || contact.notify || jid.split('@')[0];
+                // Only handle non-group chats here (groups handled by groups.upsert)
+                if (jid.endsWith('@g.us')) continue;
+                if (!SYNC_NEWSLETTERS && jid.endsWith('@newsletter')) continue;
 
-                await upsertChat(jid, name, isGroup, contact);
+                const isGroup = false;
+                const isNewsletter = jid.endsWith('@newsletter');
+
+                const hasAddressBookName = !!contact.name || !!contact.verifiedName;
+                // Resolution order: Address Book Name > Verified Name > pushName > notify > Fallback
+                const name = contact.name || contact.verifiedName || contact.pushName || contact.pushname || contact.notify || jid.split('@')[0];
+
+                if (name === jid.split('@')[0]) {
+                    logger.debug({ jid, name, contactFields: Object.keys(contact) }, 'Contact sync: No descriptive name found');
+                } else {
+                    logger.info({ jid, name, source: contact.name ? 'addressbook' : (contact.pushName ? 'pushName' : 'other') }, 'Contact sync: Resolved name');
+                }
+
+                await upsertChat(jid, name, isGroup, contact, hasAddressBookName);
                 discoveryCount++;
             } catch (err) {
                 logger.error({ err, contact }, 'Failed to process contact discovery');
@@ -1007,5 +1331,39 @@ export class WhatsAppService {
                 logger.error({ err, update }, 'Failed to handle message update');
             }
         }
+    }
+
+    private async loadCachesFromDb() {
+        const client = getWhatsAppDbClient();
+        if (!client) return;
+
+        try {
+            logger.info('Loading caches from database...');
+
+            // Load individual chats
+            const chatsRes = await client.query(`
+                SELECT jid as id, name, last_message_timestamp as "conversationTimestamp", is_group, is_announcement, metadata
+                FROM chats
+                ORDER BY last_message_timestamp DESC NULLS LAST
+            `);
+
+            this.individualChatsCache = chatsRes.rows.filter(r => !r.is_group);
+            this.announcementsCache = chatsRes.rows.filter(r => r.is_group && r.is_announcement);
+            this.groupsCache = chatsRes.rows.filter(r => r.is_group && !r.is_announcement);
+
+            logger.info({
+                individuals: this.individualChatsCache.length,
+                groups: this.groupsCache.length,
+                announcements: this.announcementsCache.length
+            }, 'Caches populated from database');
+        } catch (err) {
+            logger.error({ err }, 'Failed to load caches from database');
+        }
+    }
+
+    getSystemHealth(): SystemHealth {
+        this.systemHealth.whatsappConnected = this.connectionStatus === 'connected';
+        this.systemHealth.databaseAvailable = getWhatsAppDbClient() !== null;
+        return this.systemHealth;
     }
 }

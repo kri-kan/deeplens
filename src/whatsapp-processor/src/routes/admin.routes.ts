@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import { WhatsAppService } from '../services/whatsapp.service';
 import { resetDatabase, getDatabaseStats, getSampleData } from '../services/admin.service';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from '../utils/logger';
 
 export function createAdminRoutes(waService: WhatsAppService): Router {
     const router = Router();
@@ -61,6 +59,36 @@ export function createAdminRoutes(waService: WhatsAppService): Router {
     });
 
     /**
+     * POST /api/admin/sync
+     * Manually trigger full sync (groups, newsletters, contacts, chats)
+     */
+    router.post('/sync', async (req, res) => {
+        try {
+            logger.info('🔄 Manual full sync requested');
+
+            if (waService.getStatus() !== 'connected') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'WhatsApp not connected'
+                });
+            }
+
+            await waService.manualSync();
+
+            res.json({
+                success: true,
+                message: 'Manual sync completed successfully'
+            });
+        } catch (err: any) {
+            logger.error({ err }, 'Failed to perform manual sync');
+            res.status(500).json({
+                success: false,
+                message: err.message
+            });
+        }
+    });
+
+    /**
      * POST /api/admin/force-initial-sync
      * Force initial sync (manually trigger chats.set logic)
      */
@@ -76,9 +104,7 @@ export function createAdminRoutes(waService: WhatsAppService): Router {
                 });
             }
 
-            // Call the manual sync method
-            // We'll expose this as a public method
-            await (waService as any).performManualInitialSync();
+            await waService.performManualInitialSync();
 
             res.json({
                 success: true,

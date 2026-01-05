@@ -1,8 +1,6 @@
 import { getWhatsAppDbClient } from '../clients/db.client';
-import pino from 'pino';
+import { logger } from './logger';
 import { LOG_LEVEL } from '../config';
-
-const logger = pino({ level: LOG_LEVEL });
 
 export interface MessageRecord {
     messageId: string;
@@ -45,7 +43,13 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
                 is_forwarded, 
                 metadata
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            ON CONFLICT (message_id) DO NOTHING`,
+            ON CONFLICT (message_id) 
+            DO UPDATE SET 
+                content = EXCLUDED.content,
+                metadata = EXCLUDED.metadata,
+                media_url = COALESCE(EXCLUDED.media_url, messages.media_url),
+                media_type = COALESCE(EXCLUDED.media_type, messages.media_type)
+            WHERE messages.content = '' OR messages.content IS NULL OR messages.content = EXCLUDED.content`,
             [
                 msg.messageId,
                 msg.jid,

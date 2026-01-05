@@ -1,7 +1,5 @@
 import { getWhatsAppDbClient } from '../clients/db.client';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from '../utils/logger';
 
 /**
  * Reset database to clean slate

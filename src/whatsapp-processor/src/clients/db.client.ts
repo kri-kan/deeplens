@@ -1,8 +1,6 @@
 import { Client } from 'pg';
 import { DEEPLENS_VAYYARI_CONNECTION_STRING, VAYYARI_WA_DB_CONNECTION_STRING } from '../config';
-import pino from 'pino';
-
-const logger = pino({ level: 'info' });
+import { logger } from '../utils/logger';
 
 // DeepLens Core Database Client (for tenant metadata, feature extraction, etc.)
 export let deeplensDbClient: Client | null = null;
