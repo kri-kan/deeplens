@@ -27,6 +27,7 @@ export interface Message {
     is_from_me: boolean;
     media_url: string | null;
     metadata: any;
+    group_id?: string;
 }
 
 const API_BASE_URL = '/api';
@@ -247,5 +248,152 @@ export async function excludeChat(jid: string): Promise<void> {
             throw new Error(`Failed to exclude chat: ${error.message}`);
         }
         throw error;
+    }
+}
+
+/**
+ * Purge all messages for a chat while preserving metadata
+ */
+export async function purgeMessages(jid: string): Promise<{
+    success: boolean;
+    messagesDeleted: number;
+    mediaFilesReferenced: number;
+}> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/conversations/${encodeURIComponent(jid)}/messages`, {
+            method: 'DELETE'
+        });
+        if (!response.ok) {
+            await handleApiError(response, 'Purging messages');
+        }
+        return response.json();
+    } catch (error: any) {
+        if (!error.message.includes('Purging messages')) {
+            throw new Error(`Failed to purge messages: ${error.message}`);
+        }
+        throw error;
+    }
+}
+
+/**
+ * Bulk purge all messages for multiple chats while preserving metadata
+ */
+export async function bulkPurgeMessages(jids: string[]): Promise<{
+    success: boolean;
+    chatsProcessed: number;
+    totalMessagesDeleted: number;
+    totalMediaFiles: number;
+}> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/conversations/bulk-delete-messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jids })
+        });
+        if (!response.ok) {
+            await handleApiError(response, 'Bulk purging messages');
+        }
+        return response.json();
+    } catch (error: any) {
+        if (!error.message.includes('Bulk purging messages')) {
+            throw new Error(`Failed to bulk purge messages: ${error.message}`);
+        }
+        throw error;
+    }
+}
+
+export interface ConversationStats {
+    jid: string;
+    name: string;
+    is_group: boolean;
+    is_announcement: boolean;
+    is_excluded: boolean;
+    deep_sync_enabled: boolean;
+    enable_message_grouping: boolean;
+    created_at: string;
+    updated_at: string;
+    last_message_timestamp: number | null;
+    messages: {
+        total: number;
+        sent: number;
+        received: number;
+        oldest_timestamp: number | null;
+        newest_timestamp: number | null;
+    };
+    media: {
+        total: number;
+        photos: number;
+        videos: number;
+        audio: number;
+        documents: number;
+        stickers: number;
+    };
+}
+
+/**
+ * Fetch detailed statistics for a conversation
+ */
+export async function fetchConversationStats(jid: string): Promise<ConversationStats> {
+    try {
+        const response = await fetch(`${API_BASE_URL}/conversations/${encodeURIComponent(jid)}/stats`);
+        if (!response.ok) {
+            await handleApiError(response, 'Fetching conversation stats');
+        }
+        return response.json();
+    } catch (error: any) {
+        if (!error.message.includes('Fetching conversation stats')) {
+            throw new Error(`Failed to fetch conversation stats: ${error.message}`);
+        }
+        throw error;
+    }
+}
+
+/**
+ * Toggle message grouping for a conversation
+ */
+export async function toggleMessageGrouping(jid: string, enabled: boolean, config?: any): Promise<void> {
+    try {
+        const response = await fetch(`/api/conversations/${encodeURIComponent(jid)}/message-grouping`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled, config })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        return response.json();
+    } catch (error: any) {
+        if (!error.message.includes('Toggling message grouping')) {
+            throw new Error(`Failed to toggle message grouping: ${error.message}`);
+        }
+        throw error;
+    }
+}
+
+/**
+ * Split group at specific message
+ */
+export async function splitMessageGroup(jid: string, messageId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/conversations/${encodeURIComponent(jid)}/messages/${messageId}/split-group`, {
+        method: 'POST'
+    });
+    if (!response.ok) {
+        await handleApiError(response, 'Splitting group');
+    }
+}
+
+/**
+ * Move message to adjacent group
+ */
+export async function moveMessageGroup(jid: string, messageId: string, direction: 'prev' | 'next'): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/conversations/${encodeURIComponent(jid)}/messages/${messageId}/move-group`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction })
+    });
+    if (!response.ok) {
+        await handleApiError(response, 'Moving message group');
     }
 }

@@ -32,6 +32,13 @@ CREATE TABLE IF NOT EXISTS chats (
     is_contact BOOLEAN DEFAULT FALSE,
     canonical_jid VARCHAR(255),
     
+    -- Message Grouping Control
+    enable_message_grouping BOOLEAN DEFAULT FALSE,
+    grouping_config JSONB DEFAULT '{}'::jsonb,
+    
+    -- Sync Control
+    deep_sync_enabled BOOLEAN DEFAULT FALSE,
+    
     -- Metadata
     metadata JSONB DEFAULT '{}'::jsonb
 );
@@ -43,6 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_chats_pinned ON chats(is_pinned, pin_order DESC) 
 CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived) WHERE is_archived = false;
 CREATE INDEX IF NOT EXISTS idx_chats_is_group ON chats(is_group);
 CREATE INDEX IF NOT EXISTS idx_chats_is_announcement ON chats(is_announcement);
+CREATE INDEX IF NOT EXISTS idx_chats_enable_grouping ON chats(enable_message_grouping) WHERE enable_message_grouping = true;
 CREATE INDEX IF NOT EXISTS idx_chats_name_search ON chats USING gin(to_tsvector('english', name));
 
 -- Function to update last_message_at from timestamp
@@ -159,6 +167,9 @@ COMMENT ON COLUMN chats.is_pinned IS 'Whether chat is pinned to top';
 COMMENT ON COLUMN chats.pin_order IS 'Order of pinned chats (higher = more important)';
 COMMENT ON COLUMN chats.is_archived IS 'Whether chat is archived';
 COMMENT ON COLUMN chats.is_muted IS 'Whether notifications are muted';
+COMMENT ON COLUMN chats.enable_message_grouping IS 'Whether messages from this chat should be grouped and processed';
+COMMENT ON COLUMN chats.grouping_config IS 'Configuration rules for message grouping (strategy, thresholds, etc)';
+COMMENT ON COLUMN chats.deep_sync_enabled IS 'Whether full history sync is requested for this chat';
 
 -- Example Queries
 

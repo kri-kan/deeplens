@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS processing_state (
     -- Processing State
     is_paused BOOLEAN DEFAULT FALSE,
     
+    -- Sync Toggles
+    track_chats BOOLEAN DEFAULT TRUE,
+    track_groups BOOLEAN DEFAULT TRUE,
+    track_announcements BOOLEAN DEFAULT TRUE,
+    
     -- Timestamps
     paused_at TIMESTAMP,
     resumed_at TIMESTAMP,
@@ -23,13 +28,16 @@ CREATE TABLE IF NOT EXISTS processing_state (
 );
 
 -- Insert default row
-INSERT INTO processing_state (id, is_paused) 
-VALUES (1, FALSE) 
+INSERT INTO processing_state (id, is_paused, track_chats, track_groups, track_announcements) 
+VALUES (1, FALSE, TRUE, TRUE, TRUE) 
 ON CONFLICT (id) DO NOTHING;
 
 -- Comments
 COMMENT ON TABLE processing_state IS 'Stores global processing state (pause/resume) - singleton table';
 COMMENT ON COLUMN processing_state.id IS 'Always 1 - ensures only one row exists';
 COMMENT ON COLUMN processing_state.is_paused IS 'Whether message processing is paused';
+COMMENT ON COLUMN processing_state.track_chats IS 'Whether individual 1-on-1 chats should be synced';
+COMMENT ON COLUMN processing_state.track_groups IS 'Whether group chats should be synced';
+COMMENT ON COLUMN processing_state.track_announcements IS 'Whether community announcement channels should be synced';
 COMMENT ON COLUMN processing_state.paused_at IS 'When processing was paused';
 COMMENT ON COLUMN processing_state.resumed_at IS 'When processing was resumed';

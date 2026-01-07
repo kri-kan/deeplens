@@ -13,7 +13,10 @@ export function useWhatsAppConnection() {
     const [processingState, setProcessingState] = useState<ProcessingState>({
         isPaused: false,
         pausedAt: null,
-        resumedAt: null
+        resumedAt: null,
+        trackChats: true,
+        trackGroups: true,
+        trackAnnouncements: true
     });
 
     useEffect(() => {
@@ -54,15 +57,13 @@ export function useGroups(status: ConnectionStatus) {
     const [groups, setGroups] = useState<Group[]>([]);
 
     useEffect(() => {
-        if (status === 'connected') {
-            loadGroups();
-        }
-    }, [status]);
+        loadGroups();
+    }, []);
 
     const loadGroups = async () => {
         try {
             const data = await fetchGroups();
-            setGroups(data);
+            setGroups(data.items);
         } catch (error) {
             console.error('Failed to fetch groups:', error);
         }
@@ -78,15 +79,13 @@ export function useChats(status: ConnectionStatus) {
     const [chats, setChats] = useState<Chat[]>([]);
 
     useEffect(() => {
-        if (status === 'connected') {
-            loadChats();
-        }
-    }, [status]);
+        loadChats();
+    }, []);
 
     const loadChats = async () => {
         try {
             const data = await fetchChats();
-            setChats(data);
+            setChats(data.items);
         } catch (error) {
             console.error('Failed to fetch chats:', error);
         }

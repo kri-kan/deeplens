@@ -165,3 +165,12 @@ export async function updateSyncSettings(settings: {
     const data = await response.json();
     return data.state;
 }
+
+/**
+ * Formally logs out from WhatsApp
+ */
+export async function logout(): Promise<void> {
+    await fetch('/api/auth/logout', {
+        method: 'POST'
+    });
+}

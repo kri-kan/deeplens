@@ -10,7 +10,7 @@ let isMinIOAvailable = true;
 let lastMinIOCheck = 0;
 const MINIO_CHECK_INTERVAL = 60000; // Re-check every 60 seconds
 
-export type MediaType = 'photo' | 'video' | 'audio' | 'document';
+export type MediaType = 'photo' | 'video' | 'audio' | 'document' | 'sticker';
 
 /**
  * Sets MinIO availability status
@@ -40,7 +40,8 @@ function getMediaFolder(mediaType: MediaType): string {
         photo: 'photos',
         video: 'videos',
         audio: 'audio',
-        document: 'documents'
+        document: 'documents',
+        sticker: 'stickers'
     };
     return folderMap[mediaType] || 'documents';
 }

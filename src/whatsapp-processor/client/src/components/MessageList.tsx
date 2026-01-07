@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { makeStyles, tokens, Spinner, Avatar, Button, Label } from '@fluentui/react-components';
-import { Dismiss20Regular, ArrowSync20Regular } from '@fluentui/react-icons';
+import { Dismiss20Regular, ArrowSync20Regular, SplitHorizontal20Regular, ArrowPrevious20Regular, ArrowNext20Regular } from '@fluentui/react-icons';
 import { format } from 'date-fns';
 import { useStore } from '../store/useStore';
-import { fetchMessages, excludeChat } from '../services/conversation.service';
+import { fetchMessages, excludeChat, splitMessageGroup, moveMessageGroup } from '../services/conversation.service';
 import { syncChatHistory, toggleDeepSync } from '../services/sync.service';
 import { useToasts } from '../utils/toast';
+import MediaGrid, { groupMediaMessages } from './MediaGrid';
 
 const useStyles = makeStyles({
     container: {
@@ -85,6 +86,37 @@ const useStyles = makeStyles({
         height: '100%',
         color: tokens.colorNeutralForeground4,
     },
+    groupDivider: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        margin: '16px 0 8px 0',
+        color: tokens.colorNeutralForeground4,
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '1px',
+        '::before': { content: '""', flex: 1, height: '1px', backgroundColor: tokens.colorBrandStroke2 }, // Brand color to highlight
+        '::after': { content: '""', flex: 1, height: '1px', backgroundColor: tokens.colorBrandStroke2 },
+    },
+    groupControls: {
+        position: 'absolute',
+        top: '2px',
+        right: '2px',
+        display: 'flex',
+        gap: '2px',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        padding: '2px',
+        borderRadius: '4px',
+        zIndex: 100,
+        boxShadow: tokens.shadow4,
+    },
+    groupIdLabel: {
+        fontSize: '8px',
+        color: tokens.colorNeutralForeground4,
+        marginBottom: '2px',
+        textAlign: 'right',
+        opacity: 0.5,
+    }
 });
 
 export default function MessageList() {
@@ -96,9 +128,33 @@ export default function MessageList() {
     const [deepSyncEnabled, setDeepSyncEnabled] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [offset, setOffset] = useState(0);
+    const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const { error: showError, success: showSuccess } = useToasts();
     const PAGE_SIZE = 50;
+
+    const handleSplitGroup = async (msgId: string) => {
+        if (!activeChatJid) return;
+        if (!confirm('Start a new group from this message?')) return;
+        try {
+            await splitMessageGroup(activeChatJid, msgId);
+            showSuccess('Group split successfully');
+            loadInitialMessages(); // Refresh to see changes
+        } catch (e: any) {
+            showError('Failed to split', e.message);
+        }
+    };
+
+    const handleMoveGroup = async (msgId: string, direction: 'prev' | 'next') => {
+        if (!activeChatJid) return;
+        try {
+            await moveMessageGroup(activeChatJid, msgId, direction);
+            showSuccess(`Message moved to ${direction === 'prev' ? 'previous' : 'next'} group`);
+            loadInitialMessages();
+        } catch (e: any) {
+            showError('Move failed', e.message);
+        }
+    };
 
     const activeChat = chats.find(c => c.jid === activeChatJid);
 
@@ -333,110 +389,198 @@ export default function MessageList() {
                     <div className={styles.emptyState}><Spinner /></div>
                 ) : messages.length === 0 ? (
                     <div className={styles.emptyState}>No messages yet</div>
-                ) : (
-                    sortedMessages.map((msg) => (
-                        <div
-                            key={msg.message_id}
-                            className={`${styles.messageContainer} ${msg.is_from_me ? styles.messageSent : styles.messageReceived}`}
-                        >
-                            <div className={`${styles.messageBubble} ${msg.is_from_me ? styles.bubbleSent : styles.bubbleReceived}`}>
-                                {msg.media_url && (
-                                    <div className={styles.mediaContent}>
-                                        {msg.media_type === 'photo' && (
-                                            <img
-                                                src={msg.media_url}
-                                                alt="Photo"
-                                                style={{ width: '100%', borderRadius: '8px' }}
-                                                onLoad={() => {
-                                                    if (scrollRef.current && offset === PAGE_SIZE) {
-                                                        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-                                                        const isNearBottom = scrollHeight - scrollTop - clientHeight < 500;
-                                                        if (isNearBottom) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                                                    }
-                                                }}
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).style.display = 'none';
-                                                }}
-                                            />
-                                        )}
-                                        {msg.media_type === 'video' && (
-                                            <video
-                                                src={msg.media_url}
-                                                controls
-                                                style={{ width: '100%', borderRadius: '8px' }}
-                                            />
-                                        )}
-                                        {msg.media_type === 'audio' && (
-                                            <audio
-                                                src={msg.media_url}
-                                                controls
-                                                style={{ width: '100%' }}
-                                            />
-                                        )}
-                                        {msg.media_type === 'document' && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: '4px' }}>
-                                                <span>📄</span>
-                                                <a href={msg.media_url} target="_blank" rel="noopener noreferrer" style={{ color: tokens.colorBrandForeground1 }}>
-                                                    Download Document
-                                                </a>
-                                            </div>
-                                        )}
-                                        {/* Fallback for old records or unknown types */}
-                                        {!msg.media_type && (
-                                            <img
-                                                src={msg.media_url}
-                                                alt="Media"
-                                                style={{ width: '100%', borderRadius: '8px' }}
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).style.display = 'none';
-                                                }}
-                                            />
-                                        )}
+                ) : (() => {
+                    const mediaGroups = groupMediaMessages(sortedMessages);
+                    const groupedMessageIds = new Set(mediaGroups.flat().map(m => m.message_id));
+                    let lastGroupId = '';
+
+                    return sortedMessages.map((msg) => {
+                        const group = mediaGroups.find(g => g[0].message_id === msg.message_id);
+                        if (groupedMessageIds.has(msg.message_id) && !group) return null;
+
+                        // Skip messages with no displayable content
+                        const isSticker = msg.media_type === 'sticker';
+                        const hasMedia = msg.media_url;
+                        const hasText = msg.message_text && msg.message_text.trim().length > 0;
+                        const isPlaceholder = [
+                            '[image]', '[video]', '[audio]', '[sticker]', '[document]',
+                            '[Image]', '[Video]', '[Audio]', '[Sticker]', '[Document]'
+                        ].includes(msg.message_text?.trim());
+
+                        // Hide if no content at all (unless it's a sticker - show placeholder)
+                        if (!isSticker && !hasMedia && !hasText) return null;
+                        if (!isSticker && !hasMedia && isPlaceholder) return null;
+
+                        // Group Divider Logic
+                        let showDivider = false;
+                        if (msg.group_id && msg.group_id !== lastGroupId) {
+                            // Only show divider if it's NOT the very first message in the list (optional, maybe we want it there too to show ID?)
+                            // Let's always show it if it changes.
+                            if (lastGroupId !== '') showDivider = true;
+                            // Special case: First message in list gets a divider if it has a group_id?
+                            // Depends on preference. Let's stick to change detection.
+                            lastGroupId = msg.group_id;
+                        } else if (!msg.group_id) {
+                            // If message has no group, reset (so next group shows divider)
+                            lastGroupId = '';
+                        }
+
+                        const isHovered = hoveredMessageId === msg.message_id;
+
+                        return (
+                            <div key={msg.message_id} style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                                {showDivider && (
+                                    <div className={styles.groupDivider}>
+                                        <span>Group</span>
+                                        <span style={{ opacity: 0.5 }}>{msg.group_id?.slice(0, 8)}</span>
                                     </div>
                                 )}
-                                <div style={{ whiteSpace: 'pre-wrap' }}>
-                                    {(() => {
-                                        const isPlaceholder = [
-                                            '[image]', '[video]', '[audio]', '[sticker]', '[document]',
-                                            '[Image]', '[Video]', '[Audio]', '[Sticker]', '[Document]'
-                                        ].includes(msg.message_text?.trim());
+                                <div
+                                    className={`${styles.messageContainer} ${msg.is_from_me ? styles.messageSent : styles.messageReceived}`}
+                                    onMouseEnter={() => setHoveredMessageId(msg.message_id)}
+                                    onMouseLeave={() => setHoveredMessageId(null)}
+                                >
+                                    {isHovered && (
+                                        <div className={styles.groupControls}>
+                                            <Button icon={<ArrowPrevious20Regular />} size="small" appearance="subtle" title="Move to Previous Group" onClick={() => handleMoveGroup(msg.message_id, 'prev')} />
+                                            <Button icon={<SplitHorizontal20Regular />} size="small" appearance="subtle" title="Split Group Here" onClick={() => handleSplitGroup(msg.message_id)} />
+                                            <Button icon={<ArrowNext20Regular />} size="small" appearance="subtle" title="Move to Next Group" onClick={() => handleMoveGroup(msg.message_id, 'next')} />
+                                        </div>
+                                    )}
+                                    <div
+                                        className={`${styles.messageBubble} ${msg.is_from_me ? styles.bubbleSent : styles.bubbleReceived}`}
+                                        style={isSticker ? { backgroundColor: 'transparent', boxShadow: 'none', padding: 0 } : {}}
+                                    >
+                                        {msg.group_id && <div className={styles.groupIdLabel}>{msg.group_id.slice(0, 8)}</div>}
+                                        {group ? (
+                                            <>
+                                                <MediaGrid messages={group} />
+                                                <div className={styles.messageMeta}>
+                                                    {renderTimestamp(group[0].timestamp)}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                {msg.media_url && (
+                                                    <div className={styles.mediaContent}>
+                                                        {msg.media_type === 'photo' && (
+                                                            <img
+                                                                src={msg.media_url}
+                                                                alt="Photo"
+                                                                style={{ width: '100%', borderRadius: '8px' }}
+                                                                onLoad={() => {
+                                                                    if (scrollRef.current && offset === PAGE_SIZE) {
+                                                                        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+                                                                        const isNearBottom = scrollHeight - scrollTop - clientHeight < 500;
+                                                                        if (isNearBottom) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                                                                    }
+                                                                }}
+                                                                onError={(e) => {
+                                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                                }}
+                                                            />
+                                                        )}
+                                                        {msg.media_type === 'video' && (
+                                                            <video
+                                                                src={msg.media_url}
+                                                                controls
+                                                                style={{ width: '100%', borderRadius: '8px' }}
+                                                            />
+                                                        )}
+                                                        {msg.media_type === 'audio' && (
+                                                            <audio
+                                                                src={msg.media_url}
+                                                                controls
+                                                                style={{ width: '100%' }}
+                                                            />
+                                                        )}
+                                                        {msg.media_type === 'document' && (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: '4px' }}>
+                                                                <span>📄</span>
+                                                                <a href={msg.media_url} target="_blank" rel="noopener noreferrer" style={{ color: tokens.colorBrandForeground1 }}>
+                                                                    Download Document
+                                                                </a>
+                                                            </div>
+                                                        )}
+                                                        {msg.media_type === 'sticker' && (
+                                                            msg.media_url ? (
+                                                                <img
+                                                                    src={msg.media_url}
+                                                                    alt="Sticker"
+                                                                    style={{ width: '160px', height: '160px', objectFit: 'contain' }}
+                                                                />
+                                                            ) : (
+                                                                <div style={{
+                                                                    width: '160px',
+                                                                    height: '160px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    backgroundColor: tokens.colorNeutralBackground3,
+                                                                    borderRadius: '8px',
+                                                                    fontSize: '48px'
+                                                                }}>
+                                                                    🎭
+                                                                </div>
+                                                            )
+                                                        )}
+                                                        {!msg.media_type && (
+                                                            <img
+                                                                src={msg.media_url}
+                                                                alt="Media"
+                                                                style={{ width: '100%', borderRadius: '8px' }}
+                                                                onError={(e) => {
+                                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div style={{ whiteSpace: 'pre-wrap' }}>
+                                                    {(() => {
+                                                        // Don't show text if it's just a media placeholder
+                                                        const isPlaceholder = [
+                                                            '[image]', '[video]', '[audio]', '[sticker]', '[document]',
+                                                            '[Image]', '[Video]', '[Audio]', '[Sticker]', '[Document]'
+                                                        ].includes(msg.message_text?.trim());
 
-                                        if (msg.media_url && isPlaceholder) return null;
+                                                        if (msg.media_url && isPlaceholder) return null;
+                                                        if (!msg.message_text && msg.media_url) return null;
+                                                        if (!msg.message_text) return null; // Already filtered, but just in case
 
-                                        if (!msg.message_text && msg.media_url) return null;
-                                        if (!msg.message_text) {
-                                            return <span style={{ fontStyle: 'italic', opacity: 0.5 }}>Message content unavailable</span>;
-                                        }
+                                                        // URL Detection and rendering
+                                                        const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                                        const parts = msg.message_text.split(urlRegex);
 
-                                        // URL Detection
-                                        const urlRegex = /(https?:\/\/[^\s]+)/g;
-                                        const parts = msg.message_text.split(urlRegex);
-
-                                        return parts.map((part, i) => {
-                                            if (part.match(urlRegex)) {
-                                                return (
-                                                    <a
-                                                        key={i}
-                                                        href={part}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        style={{ color: tokens.colorBrandForeground1, textDecoration: 'underline' }}
-                                                    >
-                                                        {part}
-                                                    </a>
-                                                );
-                                            }
-                                            return part;
-                                        });
-                                    })()}
-                                </div>
-                                <div className={styles.messageMeta}>
-                                    {renderTimestamp(msg.timestamp)}
+                                                        return parts.map((part, i) => {
+                                                            if (part.match(urlRegex)) {
+                                                                return (
+                                                                    <a
+                                                                        key={i}
+                                                                        href={part}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        style={{ color: tokens.colorBrandForeground1, textDecoration: 'underline' }}
+                                                                    >
+                                                                        {part}
+                                                                    </a>
+                                                                );
+                                                            }
+                                                            return part;
+                                                        });
+                                                    })()}
+                                                </div>
+                                                <div className={styles.messageMeta}>
+                                                    {renderTimestamp(msg.timestamp)}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))
-                )}
+                        );
+                    });
+                })()}
             </div>
         </div>
     );

@@ -12,6 +12,7 @@ import { createApiRoutes } from './routes/api.routes';
 import { createConversationRoutes } from './routes/conversation.routes';
 import { createAdminRoutes } from './routes/admin.routes';
 import { initializeDatabaseSchema } from './utils/db-init';
+import { initializeMessageQueue, shutdownMessageQueue } from './init-message-queue';
 
 // --- Ensure Required Directories ---
 if (!fs.existsSync(SESSION_PATH)) {
@@ -40,6 +41,9 @@ async function initializeServices() {
     await initializeDeepLensDbClient();
     await initializeWhatsAppDbClient();
     await initializeDatabaseSchema();
+
+    // Initialize message processing queue
+    await initializeMessageQueue();
 
     const waService = new WhatsAppService(io);
     await waService.start();
@@ -89,4 +93,23 @@ async function initializeServices() {
 initializeServices().catch(err => {
     logger.error({ err }, 'Failed to initialize services');
     process.exit(1);
+});
+
+// --- Graceful Shutdown ---
+process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully...');
+    shutdownMessageQueue();
+    server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    logger.info('SIGINT received, shutting down gracefully...');
+    shutdownMessageQueue();
+    server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+    });
 });

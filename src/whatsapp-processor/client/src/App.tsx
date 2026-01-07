@@ -15,6 +15,7 @@ import QRCodePage from './pages/QRCodePage';
 import ChatsPage from './pages/ChatsPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import GroupsPage from './pages/GroupsPage';
+import ConversationDetailPage from './pages/ConversationDetailPage';
 import { useStore } from './store/useStore';
 import { fetchChats } from './services/conversation.service';
 import ToastContainer from './components/ToastContainer';
@@ -59,7 +60,7 @@ function AppContent({
                 // If logged out, clear session and redirect to QR page
                 if (data.loggedOut) {
                     setHasSession(false);
-                    navigate('/qr');
+                    // navigate('/qr'); // User requested to keep admin access open
                 } else {
                     // Only set to false if we're sure there's no session
                     fetchStatus().then(statusData => {
@@ -161,16 +162,14 @@ function AppContent({
             backgroundColor: settings.theme === 'dark' ? '#0f172a' : '#f8fafc',
             color: settings.theme === 'dark' ? '#ffffff' : '#0f172a'
         }}>
-            {/* Left Sidebar Navigation - Only show when session exists */}
-            {hasSession && (
-                <Navigation
-                    isCollapsed={isNavCollapsed}
-                    onToggle={() => setIsNavCollapsed(!isNavCollapsed)}
-                />
-            )}
+            {/* Left Sidebar Navigation - Always show to allow management */}
+            <Navigation
+                isCollapsed={isNavCollapsed}
+                onToggle={() => setIsNavCollapsed(!isNavCollapsed)}
+            />
 
             {/* Top Header - Fixed position when sticky is enabled */}
-            {hasSession && settings.stickyHeader && (
+            {settings.stickyHeader && (
                 <TopHeader
                     status={status}
                     tenantName={tenantName}
@@ -191,16 +190,16 @@ function AppContent({
             {/* Main Content Area */}
             <div style={{
                 flex: 1,
-                marginLeft: hasSession ? `${navWidth}px` : '0',
-                marginTop: hasSession && settings.stickyHeader ? '64px' : '0',
-                height: hasSession && settings.stickyHeader ? 'calc(100vh - 64px)' : '100vh',
+                marginLeft: `${navWidth}px`,
+                marginTop: settings.stickyHeader ? '64px' : '0',
+                height: settings.stickyHeader ? 'calc(100vh - 64px)' : '100vh',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
                 transition: 'margin-left 0.3s ease',
             }}>
                 {/* Top Header - Scrollable when sticky is disabled */}
-                {hasSession && !settings.stickyHeader && (
+                {!settings.stickyHeader && (
                     <TopHeader
                         status={status}
                         tenantName={tenantName}
@@ -210,14 +209,46 @@ function AppContent({
                     />
                 )}
 
+                {/* Session Warning Banner */}
+                {!hasSession && (
+                    <div style={{
+                        padding: '12px 24px',
+                        backgroundColor: '#7f1d1d',
+                        color: '#fecaca',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: '1px solid #991b1b',
+                        flexShrink: 0
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 'bold' }}>⚠️ Session Disconnected:</span>
+                            <span>Historical data is visible, but no new messages will be processed until you log in.</span>
+                        </div>
+                        <button
+                            onClick={() => navigate('/qr')}
+                            style={{
+                                padding: '6px 16px',
+                                backgroundColor: '#dc2626',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                        >
+                            Reconnect Now
+                        </button>
+                    </div>
+                )}
+
                 <div style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
                     <div style={{ width: '100%', height: '100%' }}>
                         <Routes>
                             {/* Dashboard Landing Page */}
-                            <Route
-                                path="/"
-                                element={hasSession ? <DashboardPage /> : <Navigate to="/qr" replace />}
-                            />
+                            <Route path="/" element={<DashboardPage />} />
 
                             {/* Conversation Routes */}
                             <Route path="/conversations/chats" element={<ChatsPage />} />
@@ -228,6 +259,9 @@ function AppContent({
                             <Route path="/admin/chats" element={<ChatsAdminPage />} />
                             <Route path="/admin/announcements" element={<AnnouncementsAdminPage />} />
                             <Route path="/admin/groups" element={<GroupsAdminPage />} />
+
+                            {/* Conversation Detail Page */}
+                            <Route path="/admin/conversation/:jid" element={<ConversationDetailPage />} />
 
                             {/* QR Code Page */}
                             <Route path="/qr" element={<QRCodePage />} />

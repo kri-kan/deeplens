@@ -43,19 +43,36 @@ Start-Sleep -Seconds 2
 
 # 2. Clean database
 Write-Host ""
-Write-Host "2. Cleaning database..." -ForegroundColor Cyan
+Write-Host "2. Resetting database schema..." -ForegroundColor Cyan
 $env:PGPASSWORD = 'DeepLens123!'
 try {
-    $result = podman exec deeplens-postgres psql -U postgres -d whatsapp_vayyari_data -c "TRUNCATE chats, messages, conversation_sync_state, chat_tracking_state, processing_state, media_files CASCADE;" 2>&1
+    # 1. Drop Schema
+    Write-Host "   Dropping existing schema..." -ForegroundColor Gray
+    $dropResult = podman exec deeplens-postgres psql -U postgres -d whatsapp_vayyari_data -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "   [WARN] Schema drop failed: $dropResult" -ForegroundColor Yellow
+    }
+
+    # 2. Copy DDL scripts
+    Write-Host "   Copying DDL scripts..." -ForegroundColor Gray
+    podman cp ./scripts/ddl deeplens-postgres:/tmp/ddl 2>&1 | Out-Null
+
+    # 3. Run setup.sql
+    Write-Host "   Applying fresh schema..." -ForegroundColor Gray
+    $setupResult = podman exec deeplens-postgres psql -U postgres -d whatsapp_vayyari_data -f /tmp/ddl/setup.sql 2>&1
+    
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "   [OK] Database tables truncated" -ForegroundColor Green
+        Write-Host "   [OK] Database schema reset and initialized" -ForegroundColor Green
     }
     else {
-        Write-Host "   [WARN] Database truncate failed: $result" -ForegroundColor Yellow
+        Write-Host "   [ERROR] Schema setup failed: $setupResult" -ForegroundColor Red
     }
+
+    # 4. Cleanup temp files
+    podman exec deeplens-postgres rm -rf /tmp/ddl
 }
 catch {
-    Write-Host "   [ERROR] Database cleanup failed: $_" -ForegroundColor Red
+    Write-Host "   [ERROR] Database reset failed: $_" -ForegroundColor Red
 }
 
 # 3. Clean MinIO bucket

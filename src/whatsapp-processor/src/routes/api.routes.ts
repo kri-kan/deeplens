@@ -398,6 +398,19 @@ export function createApiRoutes(waService: WhatsAppService): Router {
         }
     });
 
+    /**
+     * POST /api/auth/logout
+     * Formally log out from WhatsApp and clear the session
+     */
+    router.post('/auth/logout', async (req: Request, res: Response) => {
+        try {
+            await waService.logout();
+            res.json({ success: true, message: 'Successfully logged out' });
+        } catch (err: any) {
+            res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     return router;
 }
 

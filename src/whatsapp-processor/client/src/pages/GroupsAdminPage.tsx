@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useWhatsAppConnection } from '../hooks/useWhatsApp';
 import { Group, fetchGroups, excludeChat, bulkExcludeChats, pauseProcessing, resumeProcessing, fetchProcessingState, updateSyncSettings, ProcessingState } from '../services/api.service';
+import { purgeMessages, bulkPurgeMessages } from '../services/conversation.service';
 import { useStore } from '../store/useStore';
 import ResumeModal from '../components/ResumeModal';
 import { tokens } from '@fluentui/react-components';
@@ -58,6 +60,7 @@ const styles = mergeStyleSets({
 });
 
 export default function GroupsAdminPage() {
+    const navigate = useNavigate();
     const { status } = useWhatsAppConnection();
     const { setProcessingState: setGlobalProcessingState } = useStore();
     const [items, setItems] = useState<Group[]>([]);
@@ -74,9 +77,7 @@ export default function GroupsAdminPage() {
     const LIMIT = 50;
 
     useEffect(() => {
-        if (status === 'connected') {
-            refreshData();
-        }
+        refreshData();
     }, [status, selectedTab, search]);
 
     const refreshData = async () => {
@@ -178,31 +179,62 @@ export default function GroupsAdminPage() {
         }
     };
 
-    if (status !== 'connected') {
-        return (
-            <Stack tokens={{ childrenGap: 24 }}>
-                <Stack
-                    horizontalAlign="center"
-                    tokens={{ childrenGap: 16 }}
-                    className={styles.card}
-                    styles={{ root: { padding: '48px' } }}
-                >
-                    <Icon
-                        iconName={status === 'scanning' ? 'QRCode' : 'StatusErrorFull'}
-                        styles={{ root: { fontSize: 48, color: status === 'scanning' ? tokens.colorPaletteYellowForeground1 : tokens.colorPaletteRedForeground1 } }}
-                    />
-                    <Text variant="xxLarge" styles={{ root: { fontWeight: 600 } }}>
-                        {status === 'scanning' ? 'Scan QR Code' : 'Disconnected'}
-                    </Text>
-                    <Text variant="medium" styles={{ root: { color: tokens.colorNeutralForeground4, textAlign: 'center' } }}>
-                        {status === 'scanning'
-                            ? 'Please navigate to the QR Code page to authenticate.'
-                            : 'WhatsApp is not connected. Please check the connection.'}
-                    </Text>
-                </Stack>
-            </Stack>
+    const handlePurgeMessages = async (jid: string, name: string) => {
+        const confirmed = confirm(
+            `⚠️ WARNING: This will permanently delete ALL messages for "${name}"\n\n` +
+            `This action:\n` +
+            `• Deletes all message records from the database\n` +
+            `• Removes all media references\n` +
+            `• Keeps the chat metadata (name, settings)\n` +
+            `• CANNOT be undone\n\n` +
+            `Are you absolutely sure you want to proceed?`
         );
-    }
+
+        if (!confirmed) return;
+
+        try {
+            const result = await purgeMessages(jid);
+            alert(
+                `✅ Successfully purged messages for "${name}"\n\n` +
+                `Messages deleted: ${result.messagesDeleted}\n` +
+                `Media files referenced: ${result.mediaFilesReferenced}`
+            );
+            await refreshData();
+        } catch (error: any) {
+            alert(`❌ Failed to purge messages: ${error.message}`);
+            console.error('Failed to purge messages:', error);
+        }
+    };
+
+    const handleBulkPurgeMessages = async () => {
+        if (selectedJids.size === 0) return;
+
+        const confirmed = confirm(
+            `⚠️ WARNING: This will permanently delete ALL messages for ${selectedJids.size} selected groups\n\n` +
+            `This action:\n` +
+            `• Deletes all message records from the database\n` +
+            `• Removes all media references\n` +
+            `• Keeps the chat metadata (name, settings)\n` +
+            `• CANNOT be undone\n\n` +
+            `Are you absolutely sure you want to proceed?`
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const result = await bulkPurgeMessages(Array.from(selectedJids));
+            alert(
+                `✅ Successfully purged messages for ${result.chatsProcessed} groups\n\n` +
+                `Total messages deleted: ${result.totalMessagesDeleted}\n` +
+                `Total media files referenced: ${result.totalMediaFiles}`
+            );
+            await refreshData();
+        } catch (error: any) {
+            alert(`❌ Failed to bulk purge messages: ${error.message}`);
+            console.error('Failed to bulk purge messages:', error);
+        }
+    };
+
 
     return (
         <div style={{ height: '100%', overflowY: 'auto', padding: '16px' }}>
@@ -313,12 +345,19 @@ export default function GroupsAdminPage() {
                         </Pivot>
 
                         {selectedJids.size > 0 && selectedTab === 'included' && (
-                            <DefaultButton
-                                text={`Exclude Selected (${selectedJids.size})`}
-                                iconProps={{ iconName: 'Cancel' }}
-                                onClick={handleBulkExclude}
-                                styles={{ root: { color: tokens.colorPaletteRedForeground1 } }}
-                            />
+                            <Stack horizontal tokens={{ childrenGap: 8 }}>
+                                <DefaultButton
+                                    text={`Delete Messages (${selectedJids.size})`}
+                                    iconProps={{ iconName: 'Delete' }}
+                                    onClick={handleBulkPurgeMessages}
+                                    styles={{ root: { color: tokens.colorPaletteRedForeground1 } }}
+                                />
+                                <DefaultButton
+                                    text={`Exclude Selected (${selectedJids.size})`}
+                                    iconProps={{ iconName: 'Cancel' }}
+                                    onClick={handleBulkExclude}
+                                />
+                            </Stack>
                         )}
                     </Stack>
 
@@ -352,7 +391,20 @@ export default function GroupsAdminPage() {
                                                 styles={{ root: { marginRight: 12 } }}
                                             />
                                             <Stack tokens={{ childrenGap: 4 }} styles={{ root: { flex: 1, minWidth: 0 } }}>
-                                                <Text variant="mediumPlus" styles={{ root: { fontWeight: 600 } }}>
+                                                <Text
+                                                    variant="mediumPlus"
+                                                    styles={{
+                                                        root: {
+                                                            fontWeight: 600,
+                                                            cursor: 'pointer',
+                                                            ':hover': {
+                                                                color: tokens.colorBrandForeground1,
+                                                                textDecoration: 'underline'
+                                                            }
+                                                        }
+                                                    }}
+                                                    onClick={() => navigate(`/admin/conversation/${encodeURIComponent(item.id)}`)}
+                                                >
                                                     {item.subject}
                                                 </Text>
                                                 <Text variant="small" styles={{ root: { color: tokens.colorNeutralForeground4, fontFamily: 'monospace' } }}>
@@ -360,19 +412,33 @@ export default function GroupsAdminPage() {
                                                 </Text>
                                             </Stack>
                                             {selectedTab === 'included' ? (
-                                                <DefaultButton
-                                                    text="Exclude"
-                                                    iconProps={{ iconName: 'Cancel' }}
-                                                    onClick={() => handleExclude(item.id)}
-                                                    styles={{ root: { marginLeft: 16 } }}
-                                                />
+                                                <Stack horizontal tokens={{ childrenGap: 8 }}>
+                                                    <DefaultButton
+                                                        text="Delete Messages"
+                                                        iconProps={{ iconName: 'Delete' }}
+                                                        onClick={() => handlePurgeMessages(item.id, item.subject)}
+                                                        styles={{ root: { color: tokens.colorPaletteRedForeground1 } }}
+                                                    />
+                                                    <DefaultButton
+                                                        text="Exclude"
+                                                        iconProps={{ iconName: 'Cancel' }}
+                                                        onClick={() => handleExclude(item.id)}
+                                                    />
+                                                </Stack>
                                             ) : (
-                                                <PrimaryButton
-                                                    text="Include"
-                                                    iconProps={{ iconName: 'CheckMark' }}
-                                                    onClick={() => handleInclude(item.id, item.subject)}
-                                                    styles={{ root: { marginLeft: 16 } }}
-                                                />
+                                                <Stack horizontal tokens={{ childrenGap: 8 }}>
+                                                    <DefaultButton
+                                                        text="Delete Messages"
+                                                        iconProps={{ iconName: 'Delete' }}
+                                                        onClick={() => handlePurgeMessages(item.id, item.subject)}
+                                                        styles={{ root: { color: tokens.colorPaletteRedForeground1 } }}
+                                                    />
+                                                    <PrimaryButton
+                                                        text="Include"
+                                                        iconProps={{ iconName: 'CheckMark' }}
+                                                        onClick={() => handleInclude(item.id, item.subject)}
+                                                    />
+                                                </Stack>
                                             )}
                                         </Stack>
                                     );

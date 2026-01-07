@@ -7,6 +7,12 @@
 \echo 'Creating WhatsApp Vayyari Data Database Schema...'
 \echo ''
 
+-- 0. Create auth table
+\echo '0. Creating wa_auth_sessions table...'
+\i 000_auth_storage.sql
+\echo 'Done.'
+\echo ''
+
 -- 1. Create chats table
 \echo '1. Creating chats table...'
 \i 001_chats.sql
@@ -37,11 +43,19 @@
 \echo 'Done.'
 \echo ''
 
+-- 6. Create conversation_sync_state table
+\echo '6. Creating conversation_sync_state table...'
+\i 006_conversation_sync_state.sql
+\echo 'Done.'
+\echo ''
+
 \echo 'Database schema creation complete!'
 \echo ''
 \echo 'Tables created:'
+\echo '  - wa_auth_sessions'
 \echo '  - chats'
 \echo '  - messages'
 \echo '  - chat_tracking_state'
 \echo '  - processing_state'
 \echo '  - media_files'
+\echo '  - conversation_sync_state'

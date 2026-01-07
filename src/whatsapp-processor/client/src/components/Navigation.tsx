@@ -17,9 +17,12 @@ import {
     ChevronDown24Regular,
     ChevronRight24Regular,
     Organization24Regular,
+    SignOut24Regular,
+    ArrowEnterLeft24Regular,
 } from '@fluentui/react-icons';
 import { useState, useEffect } from 'react';
 import { fetchChats, fetchAnnouncements, fetchGroups } from '../services/conversation.service';
+import { logout, fetchStatus } from '../services/api.service';
 import { useStore } from '../store/useStore';
 
 const useStyles = makeStyles({
@@ -137,6 +140,30 @@ const useStyles = makeStyles({
     faded: {
         opacity: 0.5,
         filter: 'grayscale(0.5)',
+    },
+    footer: {
+        marginTop: 'auto',
+        padding: '8px',
+        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+    },
+    logoutButton: {
+        justifyContent: 'flex-start',
+        color: tokens.colorPaletteRedForeground1,
+        '&:hover': {
+            backgroundColor: tokens.colorPaletteRedBackground1,
+            color: tokens.colorPaletteRedForeground2,
+        },
+    },
+    loginButton: {
+        justifyContent: 'flex-start',
+        color: tokens.colorPaletteGreenForeground1,
+        '&:hover': {
+            backgroundColor: tokens.colorPaletteGreenBackground1,
+            color: tokens.colorPaletteGreenForeground2,
+        },
     }
 });
 
@@ -153,6 +180,7 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
     const [isConversationsExpanded, setIsConversationsExpanded] = useState(true);
     const [isAdminExpanded, setIsAdminExpanded] = useState(true);
     const [counts, setCounts] = useState({ chats: 0, groups: 0, announcements: 0 });
+    const [hasSession, setHasSession] = useState<boolean>(false);
 
     const width = isCollapsed ? 60 : 260;
 
@@ -180,6 +208,22 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
         loadCounts();
         // Refresh counts occasionally
         const interval = setInterval(loadCounts, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        const loadSessionStatus = async () => {
+            try {
+                const status = await fetchStatus();
+                setHasSession(status.hasSession);
+            } catch (err) {
+                console.error('Failed to fetch session status:', err);
+            }
+        };
+
+        loadSessionStatus();
+        // Refresh session status periodically
+        const interval = setInterval(loadSessionStatus, 10000);
         return () => clearInterval(interval);
     }, []);
 
@@ -368,6 +412,40 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                     {!isCollapsed && 'QR Code'}
                 </Button>
             </div>
-        </div >
+
+            {/* Footer with Login/Logout */}
+            <div className={styles.footer}>
+                {hasSession ? (
+                    <Button
+                        appearance="subtle"
+                        icon={<SignOut24Regular />}
+                        onClick={async () => {
+                            if (confirm('Are you sure you want to log out from WhatsApp? This will end your session.')) {
+                                try {
+                                    await logout();
+                                    setHasSession(false);
+                                } catch (err) {
+                                    console.error('Logout failed:', err);
+                                }
+                            }
+                        }}
+                        className={styles.logoutButton}
+                        style={{ width: '100%' }}
+                    >
+                        {!isCollapsed && 'Log Out'}
+                    </Button>
+                ) : (
+                    <Button
+                        appearance="subtle"
+                        icon={<ArrowEnterLeft24Regular />}
+                        onClick={() => navigate('/qr')}
+                        className={styles.loginButton}
+                        style={{ width: '100%' }}
+                    >
+                        {!isCollapsed && 'Log In'}
+                    </Button>
+                )}
+            </div>
+        </div>
     );
 }

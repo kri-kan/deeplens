@@ -658,7 +658,10 @@ export class WhatsAppService {
         } else if (!skipMedia && msg.message?.documentMessage) {
             mediaType = 'document';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'document');
-        } else if (skipMedia && (msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage)) {
+        } else if (!skipMedia && msg.message?.stickerMessage) {
+            mediaType = 'sticker';
+            mediaUrl = await this.downloadAndUploadMedia(msg, 'sticker');
+        } else if (skipMedia && (msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage || msg.message?.stickerMessage)) {
             logger.debug({ messageId }, 'Skipping media download in history sync');
         }
 
@@ -788,7 +791,7 @@ export class WhatsAppService {
         if (message.imageMessage) return message.imageMessage.caption || '[image]';
         if (message.videoMessage) return message.videoMessage.caption || '[video]';
         if (message.audioMessage) return '[audio]';
-        if (message.stickerMessage) return '[sticker]';
+        if (message.stickerMessage) return null;
         if (message.documentMessage) return message.documentMessage.fileName || '[document]';
         if (message.contactMessage) return `[contact: ${message.contactMessage.displayName}]`;
         if (message.locationMessage) return '[location]';
@@ -876,6 +879,7 @@ export class WhatsAppService {
         if (type === 'photo') extension = 'jpg';
         else if (type === 'video') extension = 'mp4';
         else if (type === 'audio') extension = 'mp3';
+        else if (type === 'sticker') extension = 'webp';
         else if (message?.documentMessage?.fileName) {
             return message.documentMessage.fileName;
         }
@@ -998,10 +1002,6 @@ export class WhatsAppService {
     hasSession(): boolean {
         // Only return true if we have a socket AND an authenticated user
         return !!this.sock?.user;
-    }
-
-    getSocket(): WASocket | null {
-        return this.sock;
     }
 
     /**
@@ -1361,9 +1361,37 @@ export class WhatsAppService {
         }
     }
 
+    async logout(): Promise<void> {
+        logger.info('👤 Logout requested');
+
+        try {
+            if (this.sock) {
+                // Formally logout from WhatsApp (this will invalidate the session)
+                await this.sock.logout();
+                this.sock = null;
+            }
+        } catch (err) {
+            logger.error({ err }, 'Failed to formally logout from WhatsApp');
+        }
+
+        // Always clear local session data even if WhatsApp logout fails
+        await this.clearSession();
+        this.qrCode = null;
+        this.connectionStatus = 'disconnected';
+
+        // Notify client
+        this.io.emit('status', { status: 'disconnected', loggedOut: true });
+
+        logger.info('✅ Successfully logged out and cleared session');
+    }
+
     getSystemHealth(): SystemHealth {
         this.systemHealth.whatsappConnected = this.connectionStatus === 'connected';
         this.systemHealth.databaseAvailable = getWhatsAppDbClient() !== null;
         return this.systemHealth;
+    }
+
+    getSocket(): WASocket | null {
+        return this.sock;
     }
 }

@@ -22,6 +22,7 @@ interface Message {
     timestamp: number;
     is_from_me: boolean;
     media_url: string | null;
+    group_id?: string;
 }
 
 interface WhatsAppStore {

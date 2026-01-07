@@ -80,40 +80,43 @@ else {
 
 # Initialize schema
 Write-Host "[4/4] Initializing database schema..." -ForegroundColor Yellow
-$scriptDir = Join-Path $PSScriptRoot "scripts\ddl"
-$scripts = @(
-    "000_auth_storage.sql",
-    "001_chats.sql",
-    "002_messages.sql",
-    "003_chat_tracking_state.sql",
-    "004_processing_state.sql",
-    "005_media_files.sql"
-)
+$localScriptsDir = Join-Path $PSScriptRoot "scripts\ddl"
 
-foreach ($script in $scripts) {
-    $scriptPath = Join-Path $scriptDir $script
-    if (-not (Test-Path $scriptPath)) {
-        Write-Host "  [WARNING] Script not found: $script" -ForegroundColor Yellow
-        continue
+if (Test-Path $localScriptsDir) {
+    # Copy DDL to container
+    Write-Host "  Copying DDL scripts to container..." -ForegroundColor Gray
+    $copyResult = podman cp $localScriptsDir deeplens-postgres:/tmp/ddl 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [FAIL] Failed to copy scripts: $copyResult" -ForegroundColor Red
+        exit 1
     }
     
-    Write-Host "  Executing: $script" -ForegroundColor Gray
-    # Run psql and capture output. We don't use 2>&1 | Out-Null here because it can trigger ErrorActionPreference Stop
-    # Instead we let it run and check $LASTEXITCODE
-    Get-Content $scriptPath | podman exec -i $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME > $null
+    # Run setup.sql
+    Write-Host "  Executing setup.sql..." -ForegroundColor Gray
+    podman exec $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -f /tmp/ddl/setup.sql
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [WARNING] Script $script had issues (exit code: $LASTEXITCODE)" -ForegroundColor Yellow
+        Write-Host "  [FAIL] Schema initialization failed" -ForegroundColor Red
     }
+    else {
+        Write-Host "  [OK] setup.sql executed successfully" -ForegroundColor Green
+    }
+
+    # Cleanup
+    podman exec $CONTAINER_NAME rm -rf /tmp/ddl
+}
+else {
+    Write-Host "  [FAIL] scripts/ddl directory not found! Path: $localScriptsDir" -ForegroundColor Red
+    exit 1
 }
 
 # Verify tables were created
 $tableCount = podman exec $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public';" 2>&1
-if ($tableCount -and $tableCount.Trim() -ge 5) {
+if ($tableCount -and $tableCount.Trim() -ge 7) {
     Write-Host "  [OK] Schema initialized successfully ($($tableCount.Trim()) tables created)" -ForegroundColor Green
 }
 else {
-    Write-Host "  [WARNING] Expected 5 tables, found $($tableCount.Trim())" -ForegroundColor Yellow
+    Write-Host "  [WARNING] Expected at least 7 tables, found $($tableCount.Trim())" -ForegroundColor Yellow
 }
 
 Write-Host ""
