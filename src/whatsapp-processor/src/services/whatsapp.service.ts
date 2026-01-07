@@ -646,21 +646,51 @@ export class WhatsAppService {
         let mediaUrl: string | null = null;
         let mediaType: MediaType | null = null;
 
-        if (!skipMedia && msg.message?.imageMessage) {
+        // Check if message already exists in DB with media (avoid re-downloading)
+        let existingMediaUrl: string | null = null;
+        if (!skipMedia) {
+            const client = getWhatsAppDbClient();
+            if (client) {
+                try {
+                    const existing = await client.query(
+                        'SELECT media_url FROM messages WHERE message_id = $1 AND media_url IS NOT NULL',
+                        [messageId]
+                    );
+                    if (existing.rows.length > 0) {
+                        existingMediaUrl = existing.rows[0].media_url;
+                        logger.debug({ messageId, mediaUrl: existingMediaUrl }, 'Media already downloaded, skipping');
+                    }
+                } catch (err) {
+                    // Ignore errors, proceed with download
+                }
+            }
+        }
+
+        // Only download media if not already present
+        if (!skipMedia && !existingMediaUrl && msg.message?.imageMessage) {
             mediaType = 'photo';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'photo');
-        } else if (!skipMedia && msg.message?.videoMessage) {
+        } else if (!skipMedia && !existingMediaUrl && msg.message?.videoMessage) {
             mediaType = 'video';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'video');
-        } else if (!skipMedia && msg.message?.audioMessage) {
+        } else if (!skipMedia && !existingMediaUrl && msg.message?.audioMessage) {
             mediaType = 'audio';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'audio');
-        } else if (!skipMedia && msg.message?.documentMessage) {
+        } else if (!skipMedia && !existingMediaUrl && msg.message?.documentMessage) {
             mediaType = 'document';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'document');
-        } else if (!skipMedia && msg.message?.stickerMessage) {
+        } else if (!skipMedia && !existingMediaUrl && msg.message?.stickerMessage) {
             mediaType = 'sticker';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'sticker');
+        } else if (existingMediaUrl) {
+            // Use existing media URL
+            mediaUrl = existingMediaUrl;
+            // Determine media type from message
+            if (msg.message?.imageMessage) mediaType = 'photo';
+            else if (msg.message?.videoMessage) mediaType = 'video';
+            else if (msg.message?.audioMessage) mediaType = 'audio';
+            else if (msg.message?.documentMessage) mediaType = 'document';
+            else if (msg.message?.stickerMessage) mediaType = 'sticker';
         } else if (skipMedia && (msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage || msg.message?.stickerMessage)) {
             logger.debug({ messageId }, 'Skipping media download in history sync');
         }
