@@ -34,7 +34,9 @@ class MessageProcessingQueue {
     private handler: ((message: ProcessableMessage) => Promise<void>) | null = null;
     private isPolling = false;
     private processingInterval: NodeJS.Timeout | null = null;
-    private readonly POLL_INTERVAL = 2000;
+    private readonly POLL_INTERVAL = parseInt(process.env.KAFKA_POLL_INTERVAL_MS || '5000'); // 5 seconds between polls
+    private readonly BATCH_SIZE = parseInt(process.env.KAFKA_BATCH_SIZE || '10'); // Process 10 messages per batch
+    private readonly MESSAGE_DELAY_MS = parseInt(process.env.KAFKA_MESSAGE_DELAY_MS || '500'); // 500ms delay between messages
 
     constructor() {
         this.kafka = new Kafka({
@@ -198,14 +200,20 @@ class MessageProcessingQueue {
                 const result = await client.query<ProcessableMessage>(
                     `SELECT * FROM messages 
                      WHERE processing_status = 'ready' 
-                     LIMIT 50`
+                     ORDER BY timestamp ASC
+                     LIMIT $1`,
+                    [this.BATCH_SIZE]
                 );
 
                 if (result.rows.length > 0) {
-                    logger.debug(`Found ${result.rows.length} messages ready for Kafka`);
+                    logger.debug(`Found ${result.rows.length} messages ready for Kafka (rate-limited processing)`);
 
                     for (const msg of result.rows) {
                         await this.produceToKafka(msg);
+                        // Add delay between messages to prevent WhatsApp rate limiting
+                        if (this.MESSAGE_DELAY_MS > 0) {
+                            await new Promise(resolve => setTimeout(resolve, this.MESSAGE_DELAY_MS));
+                        }
                     }
                 }
             } catch (err) {
