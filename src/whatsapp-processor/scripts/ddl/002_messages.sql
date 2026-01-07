@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_media_type ON messages(media_type) WHERE
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 
 -- Processing queue indexes
-CREATE INDEX IF NOT EXISTS idx_messages_processing_status ON messages(processing_status, timestamp) WHERE processing_status IN ('pending', 'ready');
+CREATE INDEX IF NOT EXISTS idx_messages_processing_status ON messages(processing_status, timestamp) WHERE processing_status IN ('pending', 'ready', 'queued');
 CREATE INDEX IF NOT EXISTS idx_messages_processing_retry ON messages(processing_retry_count, processing_last_attempt) WHERE processing_status = 'failed';
 
 -- Full-text search index for message content
@@ -74,7 +74,7 @@ COMMENT ON COLUMN messages.group_id IS 'UUID grouping related messages (product 
 COMMENT ON COLUMN messages.media_url IS 'MinIO URL for media files';
 COMMENT ON COLUMN messages.timestamp IS 'Unix timestamp from WhatsApp';
 COMMENT ON COLUMN messages.metadata IS 'Additional metadata (reactions, mentions, etc.)';
-COMMENT ON COLUMN messages.processing_status IS 'Processing queue status: pending, ready, processing, processed, failed';
+COMMENT ON COLUMN messages.processing_status IS 'Processing queue status: pending, ready, queued, processing, processed, failed';
 COMMENT ON COLUMN messages.processing_retry_count IS 'Number of processing attempts';
 COMMENT ON COLUMN messages.processing_last_attempt IS 'Last time processing was attempted';
 COMMENT ON COLUMN messages.processing_completed_at IS 'When processing completed successfully';

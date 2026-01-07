@@ -15,7 +15,7 @@ import { randomUUID } from 'crypto';
 export async function initializeMessageQueue() {
     logger.info('Initializing message grouping queue...');
 
-    messageQueue.on('message:ready', async (message) => {
+    messageQueue.registerHandler(async (message) => {
         const { getWhatsAppDbClient } = await import('./clients/db.client');
         const client = getWhatsAppDbClient();
 
@@ -84,7 +84,7 @@ export async function initializeMessageQueue() {
             // Check media type of the current message (which is starting the group)
             if (message.media_type === 'sticker') {
                 prefix = 'sticker_';
-            } else if (['image', 'photo', 'video'].includes(message.media_type)) {
+            } else if (message.media_type && ['image', 'photo', 'video'].includes(message.media_type)) {
                 prefix = 'product_';
             }
             // Ensure we don't double-generate if line 50 already made a UUID (it did)
@@ -114,6 +114,8 @@ export async function initializeMessageQueue() {
             strategy: grouping_config?.strategy
         }, 'Message grouped');
     });
+
+    await messageQueue.start();
 
     logger.info('Message grouping queue initialized successfully');
 }

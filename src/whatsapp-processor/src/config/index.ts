@@ -86,3 +86,11 @@ export const RATE_LIMIT_CONFIG = {
 export const DEFAULT_TRACK_GROUPS = process.env.DEFAULT_TRACK_GROUPS === 'true'; // Blueprint: false
 export const DEFAULT_TRACK_PRIVATE = process.env.DEFAULT_TRACK_PRIVATE !== 'false'; // Blueprint: true
 
+// --- Kafka Configuration ---
+export const KAFKA_CONFIG = {
+    brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+    clientId: process.env.KAFKA_CLIENT_ID || 'whatsapp-processor',
+    groupId: process.env.KAFKA_GROUP_ID || 'whatsapp-processing-group',
+    topic: process.env.KAFKA_TOPIC || 'whatsapp-ready-messages'
+};
+

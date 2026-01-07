@@ -1,17 +1,19 @@
 /**
- * Message Processing Queue System
+ * Message Processing Queue System (Kafka Backed)
  * 
- * Ensures messages are only processed after they are fully available (text + media)
- * Handles async media downloads and retry logic
+ * Ensures messages are processed sequentially per Chat JID using Kafka Partitioning.
+ * Flow:
+ * 1. DB: 'pending' -> 'ready' (via Media Download or initial save)
+ * 2. Poller: DB 'ready' -> Kafka Produce -> DB 'queued'
+ * 3. Consumer: Kafka Consume -> Grouping Logic (Handler) -> DB 'processed'
  */
 
-import { EventEmitter } from 'events';
+import { Kafka, Producer, Consumer, logLevel } from 'kafkajs';
 import { logger } from '../utils/logger';
 import { getWhatsAppDbClient } from '../clients/db.client';
+import { KAFKA_CONFIG } from '../config';
 
-const pool = getWhatsAppDbClient();
-
-export type MessageStatus = 'pending' | 'media_downloading' | 'ready' | 'processing' | 'processed' | 'failed';
+export type MessageStatus = 'pending' | 'media_downloading' | 'ready' | 'queued' | 'processing' | 'processed' | 'failed';
 
 export interface ProcessableMessage {
     message_id: string;
@@ -25,164 +27,123 @@ export interface ProcessableMessage {
     status: MessageStatus;
 }
 
-class MessageProcessingQueue extends EventEmitter {
+class MessageProcessingQueue {
+    private kafka: Kafka;
+    private producer: Producer;
+    private consumer: Consumer;
+    private handler: ((message: ProcessableMessage) => Promise<void>) | null = null;
+    private isPolling = false;
     private processingInterval: NodeJS.Timeout | null = null;
-    private readonly POLL_INTERVAL = 5000; // Check every 5 seconds
-    private readonly MAX_RETRIES = 3;
-    private isProcessing = false;
+    private readonly POLL_INTERVAL = 2000;
 
     constructor() {
-        super();
-        this.recoverStuckMessages().then(() => {
-            this.startPolling();
+        this.kafka = new Kafka({
+            clientId: KAFKA_CONFIG.clientId,
+            brokers: KAFKA_CONFIG.brokers,
+            logLevel: logLevel.ERROR,
+            retry: {
+                initialRetryTime: 300,
+                retries: 8
+            }
+        });
+
+        this.producer = this.kafka.producer({
+            retry: {
+                initialRetryTime: 300,
+                retries: 8
+            }
+        });
+        this.consumer = this.kafka.consumer({
+            groupId: KAFKA_CONFIG.groupId,
+            retry: {
+                initialRetryTime: 300,
+                retries: 8
+            }
         });
     }
 
-    /**
-     * Recover messages that were stuck in 'processing' state due to crash/restart
-     * Resets them to 'ready' so they can be retried
-     */
-    private async recoverStuckMessages(): Promise<void> {
+    public async start() {
+        await this.initialize();
+    }
+
+    private get pool() {
+        return getWhatsAppDbClient();
+    }
+
+    private async initialize() {
         try {
-            const result = await pool.query(
-                `UPDATE messages 
-                 SET processing_status = 'ready',
-                     processing_retry_count = COALESCE(processing_retry_count, 0) + 1
-                 WHERE processing_status = 'processing'
-                    AND processing_last_attempt < NOW() - INTERVAL '5 minutes'
-                 RETURNING message_id`
-            );
+            logger.info({ brokers: KAFKA_CONFIG.brokers }, 'Connecting to Kafka...');
 
-            if (result.rowCount && result.rowCount > 0) {
-                logger.warn(
-                    { count: result.rowCount, messageIds: result.rows.map(r => r.message_id) },
-                    'Recovered stuck messages from previous crash/restart'
-                );
-            } else {
-                logger.info('No stuck messages found - clean startup');
-            }
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to recover stuck messages');
-        }
-    }
+            // Add timeout to prevent hanging
+            const connectTimeout = 10000; // 10 seconds
+            await Promise.race([
+                Promise.all([
+                    this.producer.connect(),
+                    this.consumer.connect()
+                ]),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Kafka connection timeout')), connectTimeout)
+                )
+            ]);
 
-    /**
-     * Mark a message as pending processing
-     * Called immediately when message is saved to DB
-     */
-    async markMessagePending(messageId: string): Promise<void> {
-        try {
-            await pool.query(
-                `UPDATE messages 
-                 SET processing_status = 'pending', 
-                     processing_retry_count = 0,
-                     processing_last_attempt = NULL
-                 WHERE message_id = $1`,
-                [messageId]
-            );
-            logger.debug({ messageId }, 'Message marked as pending processing');
-        } catch (err: any) {
-            logger.error({ err, messageId }, 'Failed to mark message as pending');
-        }
-    }
+            logger.info({ topic: KAFKA_CONFIG.topic }, 'Subscribing to topic');
+            await this.consumer.subscribe({ topic: KAFKA_CONFIG.topic, fromBeginning: false });
 
-    /**
-     * Mark message as ready for processing (media downloaded or no media)
-     * Called after media download completes
-     */
-    async markMessageReady(messageId: string): Promise<void> {
-        try {
-            await pool.query(
-                `UPDATE messages 
-                 SET processing_status = 'ready'
-                 WHERE message_id = $1`,
-                [messageId]
-            );
-            logger.debug({ messageId }, 'Message marked as ready for processing');
+            // Start Consumer
+            await this.consumer.run({
+                eachMessage: async ({ topic, partition, message }) => {
+                    const msgContent = message.value?.toString();
+                    if (!msgContent) return;
 
-            // Trigger immediate processing check
-            this.checkAndProcessMessages();
-        } catch (err: any) {
-            logger.error({ err, messageId }, 'Failed to mark message as ready');
-        }
-    }
-
-    /**
-     * Start polling for messages ready to process
-     */
-    private startPolling(): void {
-        if (this.processingInterval) return;
-
-        this.processingInterval = setInterval(() => {
-            this.checkAndProcessMessages();
-        }, this.POLL_INTERVAL);
-
-        logger.info('Message processing queue started');
-    }
-
-    /**
-     * Stop polling
-     */
-    stopPolling(): void {
-        if (this.processingInterval) {
-            clearInterval(this.processingInterval);
-            this.processingInterval = null;
-            logger.info('Message processing queue stopped');
-        }
-    }
-
-    /**
-     * Check for messages ready to process
-     */
-    private async checkAndProcessMessages(): Promise<void> {
-        if (this.isProcessing) return; // Prevent concurrent processing
-
-        this.isProcessing = true;
-
-        try {
-            // Find messages that are ready to process
-            const result = await pool.query<ProcessableMessage>(
-                `SELECT 
-                    message_id,
-                    jid,
-                    message_text,
-                    media_type,
-                    media_url,
-                    timestamp,
-                    is_from_me,
-                    sender,
-                    processing_status as status
-                 FROM messages
-                 WHERE processing_status = 'ready'
-                    AND (processing_retry_count IS NULL OR processing_retry_count < $1)
-                 ORDER BY timestamp ASC
-                 LIMIT 100`,
-                [this.MAX_RETRIES]
-            );
-
-            if (result.rows.length > 0) {
-                logger.info(`Found ${result.rows.length} messages ready for processing`);
-
-                for (const message of result.rows) {
-                    await this.processMessage(message);
+                    try {
+                        const parsedMsg = JSON.parse(msgContent) as ProcessableMessage;
+                        await this.handleConsumedMessage(parsedMsg);
+                    } catch (err) {
+                        logger.error({ err }, 'Failed to process consumed Kafka message');
+                    }
                 }
-            }
+            });
+
+            // Start Producer Poller (Transition 'ready' -> Kafka)
+            this.startProducerPoller();
+
+            logger.info('Message Processing Queue (Kafka) Initialized');
         } catch (err: any) {
-            logger.error({ err }, 'Error checking for processable messages');
-        } finally {
-            this.isProcessing = false;
+            logger.error({ err: err.message, brokers: KAFKA_CONFIG.brokers }, 'Failed to initialize Kafka Queue - message grouping will be disabled');
+            // Don't throw - allow app to continue without Kafka
         }
     }
 
     /**
-     * Process a single message
+     * Register the logic handler (Grouping Logic)
      */
-    private async processMessage(message: ProcessableMessage): Promise<void> {
+    public registerHandler(handler: (message: ProcessableMessage) => Promise<void>) {
+        this.handler = handler;
+    }
+
+    /**
+     * Consumed Message Logic
+     * 1. Update DB to 'processing'
+     * 2. Run Handler
+     * 3. Update DB to 'processed'
+     */
+    private async handleConsumedMessage(message: ProcessableMessage) {
+        if (!this.handler) {
+            logger.warn('No handler registered for message processing');
+            return;
+        }
+
+        const client = this.pool;
+        if (!client) {
+            logger.error('DB not connected, skipping message processing');
+            return;
+        }
+
         const { message_id } = message;
 
         try {
             // Mark as processing
-            await pool.query(
+            await client.query(
                 `UPDATE messages 
                  SET processing_status = 'processing',
                      processing_last_attempt = NOW()
@@ -190,11 +151,11 @@ class MessageProcessingQueue extends EventEmitter {
                 [message_id]
             );
 
-            // Emit event for custom processing
-            this.emit('message:ready', message);
+            // Execute Handler (Strictly Awaited)
+            await this.handler(message);
 
             // Mark as processed
-            await pool.query(
+            await client.query(
                 `UPDATE messages 
                  SET processing_status = 'processed',
                      processing_completed_at = NOW()
@@ -202,13 +163,13 @@ class MessageProcessingQueue extends EventEmitter {
                 [message_id]
             );
 
-            logger.debug({ messageId: message_id }, 'Message processed successfully');
+            logger.debug({ messageId: message_id }, 'Message processed successfully via Kafka');
 
         } catch (err: any) {
-            logger.error({ err, messageId: message_id }, 'Failed to process message');
+            logger.error({ err, messageId: message_id }, 'Failed to process message (Handler Error)');
 
-            // Increment retry count
-            await pool.query(
+            // Mark failed
+            await client.query(
                 `UPDATE messages 
                  SET processing_status = 'failed',
                      processing_retry_count = COALESCE(processing_retry_count, 0) + 1,
@@ -220,82 +181,102 @@ class MessageProcessingQueue extends EventEmitter {
     }
 
     /**
-     * Manually trigger processing for a specific message
+     * Polling Loop: Finds 'ready' messages in DB and pushes to Kafka
      */
-    async triggerProcessing(messageId: string): Promise<void> {
-        const result = await pool.query<ProcessableMessage>(
-            `SELECT 
-                message_id,
-                jid,
-                message_text,
-                media_type,
-                media_url,
-                timestamp,
-                is_from_me,
-                sender,
-                processing_status as status
-             FROM messages
-             WHERE message_id = $1`,
-            [messageId]
-        );
+    private startProducerPoller() {
+        this.processingInterval = setInterval(async () => {
+            if (this.isPolling) return;
+            this.isPolling = true;
 
-        if (result.rows.length > 0) {
-            await this.processMessage(result.rows[0]);
-        }
+            const client = this.pool;
+            if (!client) {
+                this.isPolling = false;
+                return;
+            }
+
+            try {
+                const result = await client.query<ProcessableMessage>(
+                    `SELECT * FROM messages 
+                     WHERE processing_status = 'ready' 
+                     LIMIT 50`
+                );
+
+                if (result.rows.length > 0) {
+                    logger.debug(`Found ${result.rows.length} messages ready for Kafka`);
+
+                    for (const msg of result.rows) {
+                        await this.produceToKafka(msg);
+                    }
+                }
+            } catch (err) {
+                logger.error({ err }, 'Producer Poller Error');
+            } finally {
+                this.isPolling = false;
+            }
+        }, this.POLL_INTERVAL);
     }
 
     /**
-     * Get processing statistics
+     * Push a message to Kafka and update status to 'queued'
      */
-    async getStats(): Promise<{
-        pending: number;
-        ready: number;
-        processing: number;
-        processed: number;
-        failed: number;
-    }> {
-        const result = await pool.query(
-            `SELECT 
-                processing_status,
-                COUNT(*) as count
-             FROM messages
-             WHERE processing_status IS NOT NULL
-             GROUP BY processing_status`
-        );
+    private async produceToKafka(message: ProcessableMessage) {
+        const client = this.pool;
+        if (!client) return;
 
-        const stats = {
-            pending: 0,
-            ready: 0,
-            processing: 0,
-            processed: 0,
-            failed: 0
-        };
+        try {
+            // Send to Kafka
+            await this.producer.send({
+                topic: KAFKA_CONFIG.topic,
+                messages: [{
+                    key: message.jid, // PARTITION KEY: Critical for ordering!
+                    value: JSON.stringify(message)
+                }]
+            });
 
-        result.rows.forEach(row => {
-            stats[row.processing_status as keyof typeof stats] = parseInt(row.count);
-        });
+            // Update DB
+            await client.query(
+                `UPDATE messages SET processing_status = 'queued' WHERE message_id = $1`,
+                [message.message_id]
+            );
+        } catch (err) {
+            logger.error({ err, msgId: message.message_id }, 'Failed to produce to Kafka');
+        }
+    }
 
-        return stats;
+    // Helper methods for other services
+    async markMessagePending(messageId: string): Promise<void> {
+        const client = this.pool;
+        if (!client) return;
+        try {
+            await client.query(
+                `UPDATE messages SET processing_status = 'pending', processing_retry_count = 0, processing_last_attempt = NULL WHERE message_id = $1`,
+                [messageId]
+            );
+        } catch (err) { logger.error({ err }, 'Error marking pending'); }
+    }
+
+    async markMessageReady(messageId: string): Promise<void> {
+        const client = this.pool;
+        if (!client) return;
+        try {
+            await client.query(
+                `UPDATE messages SET processing_status = 'ready' WHERE message_id = $1`,
+                [messageId]
+            );
+            // Poller will pick it up next tick
+        } catch (err) { logger.error({ err }, 'Error marking ready'); }
+    }
+
+    async triggerProcessing(messageId: string): Promise<void> {
+        // Force reset to ready so poller grabs it
+        await this.markMessageReady(messageId);
+    }
+
+    stopPolling() {
+        if (this.processingInterval) clearInterval(this.processingInterval);
+        this.consumer.disconnect();
+        this.producer.disconnect();
     }
 }
 
-// Singleton instance
 export const messageQueue = new MessageProcessingQueue();
-
-// Example usage in your code:
-/*
-messageQueue.on('message:ready', async (message: ProcessableMessage) => {
-    console.log('Processing message:', message.message_id);
-    
-    // Your custom processing logic here
-    // - Extract entities
-    // - Analyze sentiment
-    // - Generate embeddings
-    // - Send to external API
-    // etc.
-    
-    if (message.media_url) {
-        console.log('Media available:', message.media_url);
-    }
-});
-*/

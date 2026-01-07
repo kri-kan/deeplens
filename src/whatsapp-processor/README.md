@@ -19,6 +19,7 @@ This application connects to WhatsApp Web using the Baileys library, allowing yo
 - **Baileys** - WhatsApp Web API client
 - **MinIO SDK** - Object storage for media
 - **PostgreSQL Client** - Metadata storage
+- **Kafka** - Message processing queue (sequential ordering per chat)
 
 ### Frontend
 - **React 18** - UI library
@@ -31,12 +32,13 @@ This application connects to WhatsApp Web using the Baileys library, allowing yo
 ### Storage
 - **MinIO** - Media files (images, videos)
 - **PostgreSQL** - Chat history and metadata
+- **Kafka** - Message queue for reliable, ordered processing
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+ (managed via nvm)
-- Running DeepLens infrastructure (PostgreSQL, MinIO)
+- Running DeepLens infrastructure (PostgreSQL, MinIO, Kafka)
 
 ### 1. Install Dependencies
 
