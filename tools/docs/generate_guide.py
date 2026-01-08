@@ -33,29 +33,18 @@ DOCS_TO_INCLUDE = [
     "src/whatsapp-processor/ARCHITECTURE.md",
     "src/whatsapp-processor/DATABASE_SETUP.md",
     "src/whatsapp-processor/DESIGN_VISION.md",
-    "src/whatsapp-processor/INTEGRATION_GUIDE.md",
-    "src/whatsapp-processor/INTEGRATION_STATUS.md",
     "src/whatsapp-processor/TESTING_GUIDE.md",
     "src/whatsapp-processor/QUICK_REFERENCE.md",
     "src/whatsapp-processor/MESSAGE_GROUPING_SYSTEM.md",
-    "src/whatsapp-processor/MANUAL_GROUPING_FEATURES.md",
-    "src/whatsapp-processor/MESSAGE_GROUPING_FLAG.md",
     
-    # WhatsApp Processor - Technical Guides
+    # WhatsApp Processor - Technical Guides (Essential Only)
     "src/whatsapp-processor/docs/ADMIN_PANEL_GUIDE.md",
     "src/whatsapp-processor/docs/BAILEYS_API_DEEP_DIVE.md",
-    "src/whatsapp-processor/docs/BAILEYS_SYNC_STRATEGY.md",
-    "src/whatsapp-processor/docs/CHATS_SET_EVENT.md",
     "src/whatsapp-processor/docs/deep-sync-implementation.md",
-    "src/whatsapp-processor/docs/EXISTING_SESSION_GUIDE.md",
     "src/whatsapp-processor/docs/LID_IMPLEMENTATION.md",
-    "src/whatsapp-processor/docs/LID_MIGRATION.md",
-    "src/whatsapp-processor/docs/QUESTIONS_ANSWERED.md",
     
-    # WhatsApp Processor - Database
+    # WhatsApp Processor - Database & Client
     "src/whatsapp-processor/scripts/ddl/README.md",
-    
-    # WhatsApp Processor - Client
     "src/whatsapp-processor/client/README.md",
 ]
 
