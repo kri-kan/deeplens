@@ -228,14 +228,16 @@ MINIO_ENDPOINT=localhost            # MinIO host
 MINIO_PORT=9000                     # MinIO port
 MINIO_ACCESS_KEY=minioadmin         # MinIO access key
 MINIO_SECRET_KEY=minioadmin         # MinIO secret key
-MINIO_BUCKET=tenant-<uuid>          # Tenant bucket name
+MINIO_BUCKET=whatsapp-data          # Tenant bucket name
 
 # Database
 DB_CONNECTION_STRING=postgresql://postgres:password@localhost:5432/tenant_name_metadata
 
 # Server
+REDIS_DB=1                          # Redis Database Index (0-15)
 API_PORT=3005                       # Server port
 LOG_LEVEL=info                      # Logging level
+SYNC_NEWSLETTERS=false              # Enable WhatsApp Channels (true/false)
 ```
 
 **Note:** Special characters in passwords should be URL-encoded (e.g., `!` becomes `%21`)

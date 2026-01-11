@@ -59,3 +59,10 @@
 \echo '  - processing_state'
 \echo '  - media_files'
 \echo '  - conversation_sync_state'
+
+-- 7. Create contacts table
+\echo '7. Creating contacts table...'
+\i 007_contacts.sql
+\echo 'Done.'
+\echo ''
+\echo '  - contacts'

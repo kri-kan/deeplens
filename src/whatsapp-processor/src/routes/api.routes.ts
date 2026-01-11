@@ -67,22 +67,30 @@ export function createApiRoutes(waService: WhatsAppService): Router {
             }
 
             const totalResult = await client.query(`
-                SELECT COUNT(*) 
+                SELECT COUNT(DISTINCT COALESCE(c.canonical_jid, c.jid)) 
                 FROM chats c 
                 LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
                 ${whereClause}
             `, params);
 
             let query = `
-                SELECT 
-                    c.jid as id, 
-                    c.name as subject, 
-                    c.last_message_timestamp as "lastMessageTime",
-                    COALESCE(t.is_excluded, FALSE) as "isExcluded"
-                FROM chats c
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
-                ${whereClause}
-                ORDER BY c.last_message_timestamp DESC NULLS LAST 
+                SELECT * FROM (
+                    SELECT DISTINCT ON (COALESCE(c.canonical_jid, c.jid))
+                        c.jid as id, 
+                        c.name as subject, 
+                        c.last_message_timestamp as "lastMessageTime",
+                        COALESCE(t.is_excluded, FALSE) as "isExcluded",
+                        c.deep_sync_enabled as "deep_sync_enabled",
+                        c.canonical_jid
+                    FROM chats c
+                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    ${whereClause}
+                    ORDER BY 
+                        COALESCE(c.canonical_jid, c.jid),
+                        (c.name !~ '^[0-9]+$') DESC,
+                        c.last_message_timestamp DESC NULLS LAST
+                ) sub
+                ORDER BY sub."lastMessageTime" DESC NULLS LAST 
                 LIMIT $${params.length + 1} OFFSET $${params.length + 2}
             `;
             const result = await client.query(query, [...params, limit, offset]);
@@ -126,22 +134,30 @@ export function createApiRoutes(waService: WhatsAppService): Router {
             }
 
             const totalResult = await client.query(`
-                SELECT COUNT(*) 
+                SELECT COUNT(DISTINCT COALESCE(c.canonical_jid, c.jid)) 
                 FROM chats c 
                 LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
                 ${whereClause}
             `, params);
 
             let query = `
-                SELECT 
-                    c.jid as id, 
-                    c.name as name, 
-                    c.last_message_timestamp as "lastMessageTime",
-                    COALESCE(t.is_excluded, FALSE) as "isExcluded"
-                FROM chats c
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
-                ${whereClause}
-                ORDER BY c.last_message_timestamp DESC NULLS LAST 
+                SELECT * FROM (
+                    SELECT DISTINCT ON (COALESCE(c.canonical_jid, c.jid))
+                        c.jid as id, 
+                        c.name as name, 
+                        c.last_message_timestamp as "lastMessageTime",
+                        COALESCE(t.is_excluded, FALSE) as "isExcluded",
+                        c.deep_sync_enabled as "deep_sync_enabled",
+                        c.canonical_jid
+                    FROM chats c
+                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    ${whereClause}
+                    ORDER BY 
+                        COALESCE(c.canonical_jid, c.jid),
+                        (c.name !~ '^[0-9]+$') DESC,
+                        c.last_message_timestamp DESC NULLS LAST
+                ) sub
+                ORDER BY sub."lastMessageTime" DESC NULLS LAST 
                 LIMIT $${params.length + 1} OFFSET $${params.length + 2}
             `;
             const result = await client.query(query, [...params, limit, offset]);
@@ -185,22 +201,30 @@ export function createApiRoutes(waService: WhatsAppService): Router {
             }
 
             const totalResult = await client.query(`
-                SELECT COUNT(*) 
+                SELECT COUNT(DISTINCT COALESCE(c.canonical_jid, c.jid)) 
                 FROM chats c 
                 LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
                 ${whereClause}
             `, params);
 
             let query = `
-                SELECT 
-                    c.jid as id, 
-                    c.name as name, 
-                    c.last_message_timestamp as "lastMessageTime",
-                    COALESCE(t.is_excluded, FALSE) as "isExcluded"
-                FROM chats c
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
-                ${whereClause}
-                ORDER BY c.last_message_timestamp DESC NULLS LAST 
+                SELECT * FROM (
+                    SELECT DISTINCT ON (COALESCE(c.canonical_jid, c.jid))
+                        c.jid as id, 
+                        c.name as name, 
+                        c.last_message_timestamp as "lastMessageTime",
+                        COALESCE(t.is_excluded, FALSE) as "isExcluded",
+                        c.deep_sync_enabled as "deep_sync_enabled",
+                        c.canonical_jid
+                    FROM chats c
+                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    ${whereClause}
+                    ORDER BY 
+                        COALESCE(c.canonical_jid, c.jid),
+                        (c.name !~ '^[0-9]+$') DESC,
+                        c.last_message_timestamp DESC NULLS LAST
+                ) sub
+                ORDER BY sub."lastMessageTime" DESC NULLS LAST 
                 LIMIT $${params.length + 1} OFFSET $${params.length + 2}
             `;
             const result = await client.query(query, [...params, limit, offset]);

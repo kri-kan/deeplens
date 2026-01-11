@@ -222,7 +222,7 @@ To ingest a collection of images for a tenant:
 
 
 4. **Verify in Visual Catalog**:
-   - Navigate to http://localhost:3000/images
+   - Navigate to http://localhost:5001/images
    - Images should appear with status "Uploaded" → "Processed"
    - Thumbnails auto-generated based on tenant thumbnail settings
 
@@ -249,7 +249,7 @@ Configure per-tenant thumbnail settings in the database:
    - Database updates: status transitions from 0→1, dimensions populated
 
 4. **Verify in UI**:
-   - Login at http://localhost:3000/login
+   - Login at http://localhost:5001/login
    - Navigate to Images page
    - Grid displays processed images with metadata
 

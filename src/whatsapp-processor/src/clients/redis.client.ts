@@ -10,6 +10,7 @@ export const getRedisClient = (): Redis => {
             host: REDIS_CONFIG.host,
             port: REDIS_CONFIG.port,
             password: REDIS_CONFIG.password,
+            db: REDIS_CONFIG.db,
             retryStrategy: (times) => {
                 const delay = Math.min(times * 50, 2000);
                 return delay;

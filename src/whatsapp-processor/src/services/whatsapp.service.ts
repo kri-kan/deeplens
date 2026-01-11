@@ -365,16 +365,16 @@ export class WhatsAppService {
                         is_contact = true,
                         updated_at = NOW()
                     FROM (
-                        SELECT DISTINCT ON (chat_jid) 
-                            chat_jid, 
+                        SELECT DISTINCT ON (jid) 
+                            jid, 
                             metadata->>'pushName' as push_name
                         FROM messages
                         WHERE metadata->>'pushName' IS NOT NULL 
                           AND metadata->>'pushName' !~ '^[0-9+\\-@.]+$'
-                          AND chat_jid NOT LIKE '%@g.us'
-                        ORDER BY chat_jid, timestamp DESC
+                          AND jid NOT LIKE '%@g.us'
+                        ORDER BY jid, timestamp DESC
                     ) sub
-                    WHERE c.jid = sub.chat_jid
+                    WHERE c.jid = sub.jid
                       AND (c.name ~ '^[0-9+\\-@.]+$' OR c.name IS NULL OR c.name = c.jid OR c.name LIKE '%@%' OR c.name = 'Group' OR c.name = 'group')
                     RETURNING c.jid, c.name;
                 `);
@@ -531,15 +531,15 @@ export class WhatsAppService {
                             is_contact = true,
                             updated_at = NOW()
                         FROM (
-                            SELECT DISTINCT ON (chat_jid) 
-                                chat_jid, 
+                            SELECT DISTINCT ON (jid) 
+                                jid, 
                                 metadata->>'pushName' as push_name
                             FROM messages
                             WHERE metadata->>'pushName' IS NOT NULL 
                               AND metadata->>'pushName' !~ '^[0-9]+$'
-                            ORDER BY chat_jid, timestamp DESC
+                            ORDER BY jid, timestamp DESC
                         ) sub
-                        WHERE c.jid = sub.chat_jid
+                        WHERE c.jid = sub.jid
                           AND (c.name ~ '^[0-9]+$' OR c.name IS NULL OR c.name = c.jid OR c.name LIKE '%@%')
                         RETURNING c.jid, c.name;
                     `);
@@ -611,7 +611,18 @@ export class WhatsAppService {
         // remoteJid can be either LID or PN (phone number)
         const remoteJid = msg.key.remoteJid!;
         const messageId = msg.key.id!;
-        const timestamp = Number(msg.messageTimestamp);
+
+        // Robust timestamp extraction (handle Baileys Long object)
+        let timestamp = 0;
+        if (typeof msg.messageTimestamp === 'number') {
+            timestamp = msg.messageTimestamp;
+        } else if (msg.messageTimestamp && typeof (msg.messageTimestamp as any).toNumber === 'function') {
+            timestamp = (msg.messageTimestamp as any).toNumber();
+        } else if (msg.messageTimestamp && typeof (msg.messageTimestamp as any).low === 'number') {
+            timestamp = (msg.messageTimestamp as any).low;
+        } else {
+            timestamp = Math.floor(Date.now() / 1000);
+        }
 
         // Use participant for groups, remoteJid for DMs
         const participant = msg.key.participant || remoteJid;

@@ -8,17 +8,18 @@ Last Updated: December 20, 2025
 
 ## 🏗️ Architecture Overview
 
-DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core services like PostgreSQL and Redis are shared, each tenant gets isolated storage and vector database resources.
+DeepLens uses a "Shared Infrastructure, Isolated Data" approach. Core services (Postgres, Kafka, MinIO, Redis) are shared across applications (DeepLens, WhatsApp Processor), while tenant data is logically isolated.
 
 ### Data Separation Strategy
 
-| Component      | Shared | Per-Tenant           | Purpose                         |
-| -------------- | ------ | -------------------- | ------------------------------- |
-| **PostgreSQL** | ✅      | Database per tenant  | Metadata, users, collections    |
-| **Redis**      | ✅      | ❌                    | Shared cache & sessions         |
-| **Qdrant**     | ❌      | Dedicated Instance   | Vector search isolation         |
-| **MinIO**      | ✅      | **Dedicated Bucket** | Shared instance with IAM search |
-| **Backups**    | ❌      | Dedicated Container  | Automated tenant backups        |
+| Component      | Shared | Per-Tenant           | Purpose                             |
+| -------------- | ------ | -------------------- | ----------------------------------- |
+| **PostgreSQL** | ✅      | Database per tenant  | Shared Instance (DeepLens/WhatsApp) |
+| **Kafka**      | ✅      | Topic per tenant     | Shared Message Backbone             |
+| **Redis**      | ✅      | Key Prefix           | Shared Cache & Sessions             |
+| **MinIO**      | ✅      | **Dedicated Bucket** | Shared Instance with IAM Search     |
+| **Qdrant**     | ❌      | Dedicated Instance   | Vector Search Isolation             |
+| **Backups**    | ❌      | Dedicated Container  | Automated Tenant Backups            |
 
 ### Storage Models
 

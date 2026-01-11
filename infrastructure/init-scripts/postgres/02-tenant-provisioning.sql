@@ -1,9 +1,13 @@
+\c deeplens_platform
+SELECT current_database();
+
 -- =============================================================================
 -- DeepLens Multi-Tenant: Tenant Provisioning Script
 -- =============================================================================
 -- This script provides functions and procedures for dynamic tenant provisioning
 -- Usage: SELECT create_tenant('tenant-name', 'example.com', 'tenant1', 'premium');
 -- =============================================================================
+
 
 -- =============================================================================
 -- Tenant Database Creation Function

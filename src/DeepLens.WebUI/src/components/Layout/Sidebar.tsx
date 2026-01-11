@@ -16,6 +16,7 @@ import {
   Image,
   Settings,
   Analytics,
+  Store,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -32,6 +33,7 @@ const menuItems = [
   { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
   { text: "Tenants", icon: <Business />, path: "/tenants", adminOnly: true },
   { text: "Users", icon: <People />, path: "/users" },
+  { text: "Vendors", icon: <Store />, path: "/vendors" },
   { text: "Images", icon: <Image />, path: "/images" },
   { text: "Analytics", icon: <Analytics />, path: "/analytics" },
 ];

@@ -27,7 +27,7 @@ export const MINIO_CONFIG = {
     port: parseInt(process.env.MINIO_PORT || '9000'),
     accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
     secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin',
-    bucket: process.env.MINIO_BUCKET || `tenant-${TENANT_NAME}-data`,
+    bucket: process.env.MINIO_BUCKET || 'whatsapp-data',
     useSSL: false
 };
 
@@ -35,7 +35,8 @@ export const MINIO_CONFIG = {
 export const REDIS_CONFIG = {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD || undefined
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB || '1')
 };
 
 

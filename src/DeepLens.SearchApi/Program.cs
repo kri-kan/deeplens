@@ -17,6 +17,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddScoped<ITenantMetadataService, TenantMetadataService>();
 builder.Services.AddHttpClient<IAttributeExtractionService, LlmAttributeExtractionService>();
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
+builder.Services.AddScoped<IVendorService, VendorService>();
 
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 

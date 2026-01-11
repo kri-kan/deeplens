@@ -41,35 +41,13 @@ catch {
 
 Start-Sleep -Seconds 2
 
-# 2. Clean database
+# 2. Reset database schema
 Write-Host ""
 Write-Host "2. Resetting database schema..." -ForegroundColor Cyan
 $env:PGPASSWORD = 'DeepLens123!'
 try {
-    # 1. Drop Schema
-    Write-Host "   Dropping existing schema..." -ForegroundColor Gray
-    $dropResult = podman exec deeplens-postgres psql -U postgres -d whatsapp_vayyari_data -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "   [WARN] Schema drop failed: $dropResult" -ForegroundColor Yellow
-    }
-
-    # 2. Copy DDL scripts
-    Write-Host "   Copying DDL scripts..." -ForegroundColor Gray
-    podman cp ./scripts/ddl deeplens-postgres:/tmp/ddl 2>&1 | Out-Null
-
-    # 3. Run setup.sql
-    Write-Host "   Applying fresh schema..." -ForegroundColor Gray
-    $setupResult = podman exec deeplens-postgres psql -U postgres -d whatsapp_vayyari_data -f /tmp/ddl/setup.sql 2>&1
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "   [OK] Database schema reset and initialized" -ForegroundColor Green
-    }
-    else {
-        Write-Host "   [ERROR] Schema setup failed: $setupResult" -ForegroundColor Red
-    }
-
-    # 4. Cleanup temp files
-    podman exec deeplens-postgres rm -rf /tmp/ddl
+    # Point to common script and explicitly pass DDL path since script was moved
+    & "$PSScriptRoot\..\..\infrastructure\scripts\WAProcessor\manage-postgres-db.ps1" -Action "Reset" -DdlPath "$PSScriptRoot\scripts\ddl"
 }
 catch {
     Write-Host "   [ERROR] Database reset failed: $_" -ForegroundColor Red
@@ -80,7 +58,7 @@ Write-Host ""
 Write-Host "3. Cleaning MinIO bucket..." -ForegroundColor Cyan
 
 # Get bucket name from .env
-$bucketName = "tenant-vayyari-data"
+$bucketName = "whatsapp-data"
 if (Test-Path .env) {
     $envContent = Get-Content .env -Raw
     if ($envContent -match 'MINIO_BUCKET=(.+)') {
@@ -91,45 +69,52 @@ if (Test-Path .env) {
 Write-Host "   Bucket: $bucketName" -ForegroundColor Gray
 
 try {
-    # List and remove all objects in the bucket
-    $objects = podman exec deeplens-minio mc ls --recursive local/$bucketName 2>&1
-    
-    if ($LASTEXITCODE -eq 0 -and $objects) {
-        Write-Host "   Removing objects..." -ForegroundColor Gray
-        $removeResult = podman exec deeplens-minio mc rm --recursive --force local/$bucketName/ 2>&1
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "   [OK] MinIO bucket cleaned" -ForegroundColor Green
-        }
-        else {
-            Write-Host "   [WARN] Some objects may not have been removed" -ForegroundColor Yellow
-        }
-    }
-    else {
-        Write-Host "   [INFO] Bucket is already empty or inaccessible" -ForegroundColor Gray
-    }
+    & "$PSScriptRoot\..\..\infrastructure\scripts\WAProcessor\manage-minio-storage.ps1" -Action "Clean" -BucketName $bucketName
 }
 catch {
     Write-Host "   [WARN] MinIO cleanup skipped: $_" -ForegroundColor Yellow
 }
 
-# 4. Clean WhatsApp session (optional)
+# 4. Clean Redis Cache
+Write-Host ""
+Write-Host "4. Cleaning Redis cache..." -ForegroundColor Cyan
+
+# Get Redis DB from .env
+$redisDb = 1 # Default
+if (Test-Path .env) {
+    $envContent = Get-Content .env -Raw
+    if ($envContent -match 'REDIS_DB=(\d+)') {
+        $redisDb = [int]$matches[1]
+    }
+}
+Write-Host "   Database Index: $redisDb" -ForegroundColor Gray
+
+try {
+    & "$PSScriptRoot\..\..\infrastructure\scripts\WAProcessor\manage-redis-cache.ps1" -Action "FlushDb" -DbIndex $redisDb
+}
+catch {
+    Write-Host "   [WARN] Redis cleanup skipped: $_" -ForegroundColor Yellow
+}
+
+# 5. Reset Kafka Topic
+Write-Host ""
+Write-Host "5. Resetting Kafka topic..." -ForegroundColor Cyan
+try {
+    & "$PSScriptRoot\..\..\infrastructure\scripts\WAProcessor\manage-kafka-topics.ps1" -Action "Recreate" -TopicName "whatsapp-ready-messages"
+}
+catch {
+    Write-Host "   [WARN] Kafka topic reset skipped: $_" -ForegroundColor Yellow
+}
+
+# 6. Clean WhatsApp session (optional)
 if ($IncludeSession) {
     Write-Host ""
-    Write-Host "4. Cleaning WhatsApp session..." -ForegroundColor Cyan
-    
-    $sessionPath = "./sessions/default_session"
-    if (Test-Path $sessionPath) {
-        try {
-            Remove-Item -Path $sessionPath -Recurse -Force
-            Write-Host "   [OK] Session deleted (QR code required on next start)" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "   [ERROR] Session cleanup failed: $_" -ForegroundColor Red
-        }
+    Write-Host "6. Cleaning WhatsApp session..." -ForegroundColor Cyan
+    try {
+        & "$PSScriptRoot\scripts\infra\manage-app-session.ps1" -Action "Clear"
     }
-    else {
-        Write-Host "   [INFO] No session found" -ForegroundColor Gray
+    catch {
+        Write-Host "   [WARN] Session cleanup skipped: $_" -ForegroundColor Yellow
     }
 }
 

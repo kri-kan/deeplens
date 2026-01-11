@@ -74,32 +74,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO analytics_re
 -- Infisical Secret Management Integration
 -- =============================================================================
 
--- Infisical Projects Registry
-CREATE TABLE IF NOT EXISTS infisical_projects (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
-    project_id VARCHAR(255) NOT NULL UNIQUE,
-    project_name VARCHAR(255) NOT NULL,
-    environment VARCHAR(50) DEFAULT 'development',
-    client_id VARCHAR(255) NOT NULL,
-    client_secret_encrypted TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_sync TIMESTAMP WITH TIME ZONE
-);
-
--- Infisical Secret Registry (for audit and tracking)
-CREATE TABLE IF NOT EXISTS infisical_secrets (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    project_id UUID REFERENCES infisical_projects(id) ON DELETE CASCADE,
-    secret_key VARCHAR(255) NOT NULL,
-    secret_version INTEGER DEFAULT 1,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_accessed TIMESTAMP WITH TIME ZONE,
-    access_count INTEGER DEFAULT 0,
-    
-    UNIQUE(project_id, secret_key)
-);
+-- Moved to after tenants table
 
 -- =============================================================================
 -- Platform Management Tables
@@ -168,6 +143,80 @@ CREATE TABLE IF NOT EXISTS api_usage_logs (
     response_time_ms INTEGER,
     user_id UUID,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}'
+);
+
+-- =============================================================================
+-- Moved Tables (Infisical & Monitoring)
+-- =============================================================================
+
+-- Infisical Projects Registry
+CREATE TABLE IF NOT EXISTS infisical_projects (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    project_id VARCHAR(255) NOT NULL UNIQUE,
+    project_name VARCHAR(255) NOT NULL,
+    environment VARCHAR(50) DEFAULT 'development',
+    client_id VARCHAR(255) NOT NULL,
+    client_secret_encrypted TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_sync TIMESTAMP WITH TIME ZONE
+);
+
+-- Infisical Secret Registry (for audit and tracking)
+CREATE TABLE IF NOT EXISTS infisical_secrets (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    project_id UUID REFERENCES infisical_projects(id) ON DELETE CASCADE,
+    secret_key VARCHAR(255) NOT NULL,
+    secret_version INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_accessed TIMESTAMP WITH TIME ZONE,
+    access_count INTEGER DEFAULT 0,
+    
+    UNIQUE(project_id, secret_key)
+);
+
+-- =============================================================================
+-- Monitoring and Analytics Tables
+-- =============================================================================
+
+-- System Health Metrics
+CREATE TABLE IF NOT EXISTS system_health_metrics (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    service_name VARCHAR(100) NOT NULL,
+    metric_name VARCHAR(100) NOT NULL,
+    metric_value NUMERIC NOT NULL,
+    metric_unit VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'healthy', -- 'healthy', 'warning', 'critical'
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    metadata JSONB DEFAULT '{}'
+);
+
+-- Service Dependencies Tracking
+CREATE TABLE IF NOT EXISTS service_dependencies (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    service_name VARCHAR(100) NOT NULL,
+    dependency_name VARCHAR(100) NOT NULL,
+    dependency_type VARCHAR(50) NOT NULL, -- 'database', 'cache', 'api', 'storage'
+    is_critical BOOLEAN DEFAULT TRUE,
+    health_check_url VARCHAR(500),
+    last_check TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(20) DEFAULT 'unknown', -- 'healthy', 'degraded', 'down', 'unknown'
+    response_time_ms INTEGER,
+    
+    UNIQUE(service_name, dependency_name)
+);
+
+-- Tenant Performance Metrics
+CREATE TABLE IF NOT EXISTS tenant_performance_metrics (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    metric_type VARCHAR(50) NOT NULL, -- 'api_latency', 'search_performance', 'storage_usage'
+    metric_value NUMERIC NOT NULL,
+    metric_unit VARCHAR(20),
+    aggregation_period VARCHAR(20) DEFAULT '1h', -- '1m', '5m', '1h', '1d'
+    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     metadata JSONB DEFAULT '{}'
 );
 
@@ -343,43 +392,11 @@ CREATE TABLE IF NOT EXISTS image_collections (
     total_images INTEGER DEFAULT 0,
     metadata JSONB,
     
-    CONSTRAINT unique_tenant_collection_name UNIQUE(tenant_id, name)
+    CONSTRAINT unique_tenant_collection_name UNIQUE(tenant_id, name),
+    CONSTRAINT unique_collection_tenant UNIQUE(id, tenant_id)
 );
 
--- Images Registry (Tenant-Specific)
-CREATE TABLE IF NOT EXISTS images (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    tenant_id UUID NOT NULL, -- Always filter by tenant
-    collection_id UUID REFERENCES image_collections(id) ON DELETE CASCADE,
-    filename VARCHAR(500) NOT NULL,
-    original_filename VARCHAR(500),
-    storage_path VARCHAR(1000), -- Path in tenant's storage (BYOS)
-    file_size BIGINT NOT NULL,
-    mime_type VARCHAR(100) NOT NULL,
-    width INTEGER,
-    height INTEGER,
-    format VARCHAR(20),
-    checksum_md5 VARCHAR(32),
-    checksum_sha256 VARCHAR(64),
-    upload_source VARCHAR(100), -- 'web', 'api', 'batch'
-    uploaded_by UUID NOT NULL,
-    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    processed_at TIMESTAMP WITH TIME ZONE,
-    processing_status VARCHAR(50) DEFAULT 'pending',
-    vector_id VARCHAR(255), -- Reference to Qdrant vector ID
-    thumbnail_path VARCHAR(1000), -- Thumbnail in tenant storage
-    is_deleted BOOLEAN DEFAULT FALSE,
-    deleted_at TIMESTAMP WITH TIME ZONE,
-    metadata JSONB,
-    exif_data JSONB,
-    ai_analysis JSONB,
-    
-    -- Ensure all images belong to collections within the same tenant
-    CONSTRAINT fk_tenant_consistency CHECK (
-        collection_id IS NULL OR 
-        EXISTS (SELECT 1 FROM image_collections ic WHERE ic.id = collection_id AND ic.tenant_id = tenant_id)
-    )
-);
+-- Media table moved to 03
 
 -- Search Sessions (Tenant-Specific Analytics)
 CREATE TABLE IF NOT EXISTS search_sessions (
@@ -391,7 +408,9 @@ CREATE TABLE IF NOT EXISTS search_sessions (
     total_searches INTEGER DEFAULT 0,
     ip_address INET,
     user_agent TEXT,
-    metadata JSONB
+    metadata JSONB,
+    
+    UNIQUE(id, tenant_id)
 );
 
 -- Search Queries (Tenant-Specific Analytics and Improvements)
@@ -409,15 +428,11 @@ CREATE TABLE IF NOT EXISTS search_queries (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     metadata JSONB,
     
-    -- Ensure tenant consistency
-    CONSTRAINT fk_session_tenant_consistency CHECK (
-        session_id IS NULL OR 
-        EXISTS (SELECT 1 FROM search_sessions ss WHERE ss.id = session_id AND ss.tenant_id = tenant_id)
-    ),
-    CONSTRAINT fk_collection_tenant_consistency CHECK (
-        collection_id IS NULL OR 
-        EXISTS (SELECT 1 FROM image_collections ic WHERE ic.id = collection_id AND ic.tenant_id = tenant_id)
-    )
+    -- Ensure tenant consistency via Composite Foreign Keys
+    CONSTRAINT fk_session_tenant_consistency FOREIGN KEY (session_id, tenant_id)
+        REFERENCES search_sessions(id, tenant_id),
+    CONSTRAINT fk_collection_tenant_consistency FOREIGN KEY (collection_id, tenant_id)
+        REFERENCES image_collections(id, tenant_id)
 );
 
 -- User Preferences (Tenant-Specific)
@@ -457,15 +472,8 @@ CREATE INDEX IF NOT EXISTS idx_image_collections_tenant_id ON image_collections(
 CREATE INDEX IF NOT EXISTS idx_image_collections_created_by ON image_collections(created_by);
 CREATE INDEX IF NOT EXISTS idx_image_collections_created_at ON image_collections(created_at);
 
--- Images Indexes
-CREATE INDEX IF NOT EXISTS idx_images_tenant_id ON images(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_images_collection_id ON images(collection_id);
-CREATE INDEX IF NOT EXISTS idx_images_uploaded_by ON images(uploaded_by);
-CREATE INDEX IF NOT EXISTS idx_images_uploaded_at ON images(uploaded_at);
-CREATE INDEX IF NOT EXISTS idx_images_processing_status ON images(processing_status);
-CREATE INDEX IF NOT EXISTS idx_images_checksum_sha256 ON images(checksum_sha256);
-CREATE INDEX IF NOT EXISTS idx_images_vector_id ON images(vector_id) WHERE vector_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_images_deleted ON images(is_deleted, deleted_at);
+-- Media indexes moved to 03
+
 
 -- Search Sessions Indexes
 CREATE INDEX IF NOT EXISTS idx_search_sessions_tenant_id ON search_sessions(tenant_id);
@@ -489,8 +497,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_statistics_metric ON usage_statistics(metri
 CREATE INDEX IF NOT EXISTS idx_usage_statistics_recorded_at ON usage_statistics(recorded_at);
 
 -- Composite Indexes for Common Queries
-CREATE INDEX IF NOT EXISTS idx_images_tenant_collection ON images(tenant_id, collection_id);
-CREATE INDEX IF NOT EXISTS idx_images_tenant_status ON images(tenant_id, processing_status);
+
 CREATE INDEX IF NOT EXISTS idx_search_queries_tenant_type_time ON search_queries(tenant_id, query_type, timestamp);
 
 -- =============================================================================
@@ -499,7 +506,6 @@ CREATE INDEX IF NOT EXISTS idx_search_queries_tenant_type_time ON search_queries
 
 -- Enable RLS on all tenant tables
 ALTER TABLE image_collections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE search_queries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
@@ -513,9 +519,7 @@ CREATE POLICY tenant_isolation_policy ON image_collections
     FOR ALL TO tenant_service 
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
 
-CREATE POLICY tenant_isolation_policy ON images 
-    FOR ALL TO tenant_service 
-    USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
+
 
 CREATE POLICY tenant_isolation_policy ON search_sessions 
     FOR ALL TO tenant_service 
@@ -666,48 +670,7 @@ CREATE INDEX IF NOT EXISTS idx_tenant_performance_metric_type ON tenant_performa
 CREATE INDEX IF NOT EXISTS idx_tenant_performance_recorded_at ON tenant_performance_metrics(recorded_at);
 CREATE INDEX IF NOT EXISTS idx_tenant_performance_tenant_type_time ON tenant_performance_metrics(tenant_id, metric_type, recorded_at);
 
--- =============================================================================
--- Monitoring and Analytics Tables
--- =============================================================================
-
--- System Health Metrics
-CREATE TABLE IF NOT EXISTS system_health_metrics (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    service_name VARCHAR(100) NOT NULL,
-    metric_name VARCHAR(100) NOT NULL,
-    metric_value NUMERIC NOT NULL,
-    metric_unit VARCHAR(20),
-    status VARCHAR(20) DEFAULT 'healthy', -- 'healthy', 'warning', 'critical'
-    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    metadata JSONB DEFAULT '{}'
-);
-
--- Service Dependencies Tracking
-CREATE TABLE IF NOT EXISTS service_dependencies (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    service_name VARCHAR(100) NOT NULL,
-    dependency_name VARCHAR(100) NOT NULL,
-    dependency_type VARCHAR(50) NOT NULL, -- 'database', 'cache', 'api', 'storage'
-    is_critical BOOLEAN DEFAULT TRUE,
-    health_check_url VARCHAR(500),
-    last_check TIMESTAMP WITH TIME ZONE,
-    status VARCHAR(20) DEFAULT 'unknown', -- 'healthy', 'degraded', 'down', 'unknown'
-    response_time_ms INTEGER,
-    
-    UNIQUE(service_name, dependency_name)
-);
-
--- Tenant Performance Metrics
-CREATE TABLE IF NOT EXISTS tenant_performance_metrics (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
-    metric_type VARCHAR(50) NOT NULL, -- 'api_latency', 'search_performance', 'storage_usage'
-    metric_value NUMERIC NOT NULL,
-    metric_unit VARCHAR(20),
-    aggregation_period VARCHAR(20) DEFAULT '1h', -- '1m', '5m', '1h', '1d'
-    recorded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    metadata JSONB DEFAULT '{}'
-);
+-- Moved to after tenants table
 
 -- =============================================================================
 -- Initial Platform Data
@@ -721,7 +684,7 @@ INSERT INTO platform_configs (key, value, description) VALUES
 ('supported_storage_providers', '["azure_blob", "aws_s3", "gcs", "minio", "nfs"]', 'List of supported storage providers'),
 ('image_processing_enabled', 'true', 'Whether image processing is enabled globally'),
 ('vector_similarity_threshold', '0.8', 'Default similarity threshold for vector searches'),
-('tenant_database_template', 'tenant_metadata_template', 'Template database name for new tenants'),
+('tenant_database_template', '"tenant_metadata_template"', 'Template database name for new tenants'),
 ('max_file_size_mb', '50', 'Maximum file size for image uploads (MB)'),
 ('supported_image_formats', '["jpg", "jpeg", "png", "gif", "bmp", "webp"]', 'Supported image formats'),
 ('tenant_provisioning_enabled', 'true', 'Whether new tenant provisioning is enabled'),

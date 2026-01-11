@@ -8,6 +8,7 @@ import TenantDetailPage from './pages/Tenants/TenantDetailPage';
 import UsersPage from './pages/Users/UsersPage';
 import ImagesPage from './pages/Images/ImagesPage';
 import SettingsPage from './pages/Settings/SettingsPage';
+import { VendorListPage, VendorFormPage, VendorDetailPage } from './pages/Vendors';
 import { useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
@@ -18,9 +19,9 @@ function App() {
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <Routes>
         {/* Public Routes */}
-        <Route 
-          path="/login" 
-          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} 
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
         />
 
         {/* Protected Routes */}
@@ -32,6 +33,10 @@ function App() {
             <Route path="/tenants/:id" element={<TenantDetailPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/images" element={<ImagesPage />} />
+            <Route path="/vendors" element={<VendorListPage />} />
+            <Route path="/vendors/new" element={<VendorFormPage />} />
+            <Route path="/vendors/:id" element={<VendorDetailPage />} />
+            <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>

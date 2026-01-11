@@ -49,17 +49,36 @@ Last Updated: December 20, 2025
 
 ## 🔌 Port Reference
 
-| Port      | Service      | Description                 |
-| :-------- | :----------- | :-------------------------- |
-| **5433**  | PostgreSQL   | Metadata & Identity DB      |
-| **6379**  | Redis        | Caching & State             |
-| **5198**  | Identity API | Auth & Tenant Orchestration |
-| **5001**  | Search API   | Image Upload & Search       |
-| **8001**  | Feature Ext. | Python AI Microservice      |
-| **3000**  | Grafana      | Monitoring Dashboards       |
-| **9090**  | Prometheus   | Metrics Time-Series DB      |
-| **16686** | Jaeger       | Distributed Tracing UI      |
-| **6333**  | Qdrant       | Vector DB Dashboard         |
+### Core Services
+| Port     | Service    | Description            |
+| :------- | :--------- | :--------------------- |
+| **5433** | PostgreSQL | Metadata & Identity DB |
+| **6379** | Redis      | Caching & State        |
+| **6333** | Qdrant     | Vector DB Dashboard    |
+| **9001** | MinIO      | Object Storage Console |
+
+### DeepLens APIs
+| Port     | Service      | Description                 |
+| :------- | :----------- | :-------------------------- |
+| **5198** | Identity API | Auth & Tenant Orchestration |
+| **5000** | Search API   | Image Upload & Search       |
+| **5001** | Web UI       | React Frontend (Optional)   |
+| **8001** | Feature Ext. | Python AI Microservice      |
+
+### WhatsApp Processor
+| Port     | Service      | Description               |
+| :------- | :----------- | :------------------------ |
+| **3005** | WhatsApp API | Express Backend Server    |
+| **3006** | WhatsApp UI  | React Frontend (Dev Mode) |
+
+**Note**: In production, the React app is served by the Express backend on port 3005.
+
+### Monitoring & Observability
+| Port      | Service    | Description            |
+| :-------- | :--------- | :--------------------- |
+| **3000**  | Grafana    | Monitoring Dashboards  |
+| **9090**  | Prometheus | Metrics Time-Series DB |
+| **16686** | Jaeger     | Distributed Tracing UI |
 
 ---
 
@@ -146,7 +165,7 @@ To ingest a collection of images for a tenant:
    ```
 
 4. **Verify in Visual Catalog**:
-   - Navigate to http://localhost:3000/images
+   - Navigate to http://localhost:5001/images
    - Images should appear with status "Uploaded" → "Processed"
    - Thumbnails auto-generated based on tenant thumbnail settings
 
@@ -197,7 +216,7 @@ WHERE slug = 'vayyari';
    - Database updates: status transitions from 0→1, dimensions populated
 
 4. **Verify in UI**:
-   - Login at http://localhost:3000/login
+   - Login at http://localhost:5001/login
    - Navigate to Images page
    - Grid displays processed images with metadata
 

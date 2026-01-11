@@ -13,8 +13,8 @@
 .PARAMETER Clean
     Start fresh by removing all existing containers and data
 .EXAMPLE
-    .\setup-complete.ps1
-    .\setup-complete.ps1 -Clean
+    .\deeplens-reset.ps1
+    .\deeplens-reset.ps1 -Clean
 #>
 
 param(
@@ -114,14 +114,21 @@ Write-Host "  Grafana:         admin / DeepLens123!" -ForegroundColor White
 Write-Host ""
 
 Write-Host "Service URLs:" -ForegroundColor Cyan
-Write-Host "  Identity API:    http://localhost:5198" -ForegroundColor White
-Write-Host "  Search API:      http://localhost:5000" -ForegroundColor White
-Write-Host "  Swagger:         http://localhost:5000/swagger" -ForegroundColor White
-Write-Host "  MinIO Console:   http://localhost:9001" -ForegroundColor White
-Write-Host "  Jaeger (Traces): http://localhost:16686" -ForegroundColor White
-Write-Host "  Grafana (Dash):  http://localhost:3000" -ForegroundColor White
-Write-Host "  Prometheus:      http://localhost:9090" -ForegroundColor White
-Write-Host "  WhatsApp UI:     http://localhost:3005" -ForegroundColor White
+Write-Host "  DeepLens:" -ForegroundColor Yellow
+Write-Host "    Identity API:  http://localhost:5198" -ForegroundColor White
+Write-Host "    Search API:    http://localhost:5000" -ForegroundColor White
+Write-Host "    Web UI:        http://localhost:5001 (Optional - run .\infrastructure\start-ui.ps1)" -ForegroundColor Gray
+Write-Host "    Swagger:       http://localhost:5000/swagger" -ForegroundColor White
+Write-Host "" -ForegroundColor White
+Write-Host "  WhatsApp Processor:" -ForegroundColor Yellow
+Write-Host "    API + UI:      http://localhost:3005 (Production)" -ForegroundColor White
+Write-Host "    Dev UI:        http://localhost:3006 (Dev mode only)" -ForegroundColor White
+Write-Host "" -ForegroundColor White
+Write-Host "  Infrastructure:" -ForegroundColor Yellow
+Write-Host "    MinIO Console: http://localhost:9001" -ForegroundColor White
+Write-Host "    Grafana:       http://localhost:3000" -ForegroundColor White
+Write-Host "    Prometheus:    http://localhost:9090" -ForegroundColor White
+Write-Host "    Jaeger:        http://localhost:16686" -ForegroundColor White
 Write-Host ""
 
 exit $validationResult

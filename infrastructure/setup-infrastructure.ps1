@@ -23,7 +23,7 @@ OPTIONS:
   -Start    Start all infrastructure services
   -Stop     Stop all infrastructure services  
   -Status   Check the status of all services
-  -Reset    Reset the entire development environment
+  -Reset    Reset the entire development environment (WARNING: Deletes SHARED data!)
   -Help     Show this help message
 
 EXAMPLES:
@@ -32,11 +32,11 @@ EXAMPLES:
   .\setup-infrastructure.ps1 -Reset
 
 SERVICES INCLUDED:
-  • PostgreSQL (Identity & Metadata databases)
+  • PostgreSQL (Shared DB for Identity & DeepLens/WhatsApp)
+  • Apache Kafka (Shared Message Queue)
+  • Redis (Shared Cache layer)
   • Qdrant (Vector database for similarity search)
   • InfluxDB (Time-series metrics)
-  • Apache Kafka (Message queue)
-  • Redis (Cache layer)
   
 WEB INTERFACES:
   • Qdrant Dashboard: http://localhost:6333/dashboard

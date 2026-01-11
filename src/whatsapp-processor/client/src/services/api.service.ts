@@ -3,6 +3,7 @@ export interface Group {
     subject: string;
     creation?: number;
     isExcluded: boolean;
+    deep_sync_enabled: boolean;
 }
 
 export interface Chat {
@@ -10,6 +11,7 @@ export interface Chat {
     name: string;
     lastMessageTime?: number;
     isExcluded: boolean;
+    deep_sync_enabled: boolean;
 }
 
 export type ConnectionStatus = 'disconnected' | 'scanning' | 'connected';

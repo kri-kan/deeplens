@@ -59,7 +59,7 @@ public class Program
 -- Needs cleaned up environment first
 -- 1. Create Demo Tenant (Vayyari)
 INSERT INTO tenants (id, name, slug, database_name, qdrant_container_name, qdrant_http_port, qdrant_grpc_port, minio_endpoint, minio_bucket_name, status, tier, created_at)
-VALUES ('{tenantId}', 'Vayyari', 'vayyari', 'tenant_vayyari_metadata', 'deeplens-qdrant-Vayyari', 6433, 6434, 'http://localhost:9000', 'vayyari', 1, 1, NOW())
+VALUES ('{tenantId}', 'Vayyari', 'vayyari', 'tenant_vayyari_metadata', 'deeplens-qdrant', 6333, 6334, 'http://localhost:9000', 'vayyari', 1, 1, NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Create Platform Admin Tenant

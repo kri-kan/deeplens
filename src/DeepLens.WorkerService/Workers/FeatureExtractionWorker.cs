@@ -197,6 +197,7 @@ public class FeatureExtractionWorker : BackgroundService
             var extractionResponse = await CallFeatureExtractionService(
                 imageBytes, 
                 extractionEvent.Data.ImageId.ToString(),
+                extractionEvent.Data.ImagePath,
                 extractionEvent.Data.ExtractionOptions.ReturnMetadata,
                 cancellationToken);
 
@@ -318,6 +319,7 @@ public class FeatureExtractionWorker : BackgroundService
     private async Task<ExtractFeaturesResponse?> CallFeatureExtractionService(
         byte[] imageBytes, 
         string imageId, 
+        string imagePath,
         bool returnMetadata,
         CancellationToken cancellationToken)
     {
@@ -325,8 +327,27 @@ public class FeatureExtractionWorker : BackgroundService
         {
             using var content = new MultipartFormDataContent();
             
+            // Determine content type from extension
+            string mimeType = "image/jpeg";
+            string fileName = "image.jpg";
+
+            if (imagePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) 
+            {
+                mimeType = "image/png";
+                fileName = "image.png";
+            }
+            else if (imagePath.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
+            {
+                mimeType = "image/webp";
+                fileName = "image.webp";
+            }
+
+            // Create file content with correct headers
+            var fileContent = new ByteArrayContent(imageBytes);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
+
             // Add image file
-            content.Add(new ByteArrayContent(imageBytes), "file", "image.jpg");
+            content.Add(fileContent, "file", fileName);
             content.Add(new StringContent(imageId), "image_id");
             content.Add(new StringContent(returnMetadata.ToString().ToLower()), "return_metadata");
 

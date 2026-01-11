@@ -369,7 +369,7 @@ function Clear-DeepLensData {
     )
     
     if (-not $Force) {
-        $confirm = Read-Host "⚠️  This will delete ALL DeepLens data. Are you sure? (yes/no)"
+        $confirm = Read-Host "⚠️  This will delete ALL data in SHARED volumes (Postgres, MinIO, Kafka). This affects DeepLens AND WhatsApp Processor. Are you sure? (yes/no)"
         if ($confirm -ne "yes") {
             Write-Host "❌ Operation cancelled" -ForegroundColor Red
             return

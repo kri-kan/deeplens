@@ -32,7 +32,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 ### 2. Start Infrastructure
-Automation handles the setup of PostgreSQL, Redis, and internal networks.
+Automation handles the setup of Shared Services (PostgreSQL, Kafka, MinIO, Redis) and internal networks.
 
 ```powershell
 cd C:\productivity\deeplens\infrastructure
@@ -104,10 +104,13 @@ Get-ExecutionPolicy -List
 
 ┌─────────────────────────────────────────────────────────┐
 │              Shared Infrastructure                      │
+│ (Supports DeepLens, WhatsApp Processor, etc.)           │
 ├─────────────────────────────────────────────────────────┤
-│ PostgreSQL (5433) - All tenant DBs                       │
-│ Redis (6379)      - Shared cache                         │
-│ deeplens-network  - Container network                    │
+│ PostgreSQL (5433) - Shared Relational DB                 │
+│ Kafka (9092)      - Shared Message Backbone              │
+│ MinIO (9000/9001) - Shared Object Storage                │
+│ Redis (6379)      - Shared Cache                         │
+│ deeplens-network  - Shared Container Network             │
 ├─────────────────────────────────────────────────────────┤
 │              Observability Stack                        │
 ├─────────────────────────────────────────────────────────┤
@@ -117,17 +120,12 @@ Get-ExecutionPolicy -List
 │ Loki (3100)       - Log Aggregation                      │
 └─────────────────────────────────────────────────────────┘
          │
-         ├── Tenant 1
-         │   ├── Qdrant (6333/6334)
-         │   ├── MinIO (9000/9001)
+         ├── DeepLens Tenants
+         │   ├── Qdrant (6333/6334) - Vector Database
          │   └── Backup Container
          │
-         ├── Tenant 2
-         │   ├── Qdrant (6335/6336)
-         │   ├── MinIO (9002/9003)
-         │   └── Backup Container
-         │
-         └── Tenant N...
+         └── Other Applications
+             └── WhatsApp Processor Containers...
 ```
 
 ### Network Setup

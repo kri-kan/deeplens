@@ -38,6 +38,9 @@ export async function upsertChat(
         const altJid = metadata.alt_jid || metadata.display_jid;
         const canonicalJid = (jid.endsWith('@s.whatsapp.net')) ? jid : (altJid || jid);
 
+        // Sanitize timestamp (prevent NaN Postgres error)
+        const safeTimestamp = (lastMessageTimestamp && !isNaN(lastMessageTimestamp)) ? lastMessageTimestamp : 0;
+
         await client.query(
             `INSERT INTO chats (
                 jid, name, is_group, is_announcement, is_contact, 
@@ -96,7 +99,7 @@ export async function upsertChat(
             [
                 jid, name, isGroup, isAnnouncement, isContact,
                 canonicalJid, JSON.stringify(metadata),
-                lastMessageText, lastMessageTimestamp, lastMessageFromMe
+                lastMessageText, safeTimestamp, lastMessageFromMe
             ]
         );
     } catch (err: any) {

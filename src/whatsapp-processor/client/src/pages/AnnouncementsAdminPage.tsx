@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWhatsAppConnection } from '../hooks/useWhatsApp';
 import { Chat, fetchAnnouncements, excludeChat, bulkExcludeChats, fetchProcessingState, updateSyncSettings, ProcessingState } from '../services/api.service';
 import { purgeMessages, bulkPurgeMessages } from '../services/conversation.service';
+import { toggleDeepSync } from '../services/sync.service';
 import { useStore } from '../store/useStore';
 import ResumeModal from '../components/ResumeModal';
 import { tokens } from '@fluentui/react-components';
@@ -224,6 +225,16 @@ export default function AnnouncementsAdminPage() {
         }
     };
 
+    const handleDeepSyncToggle = async (jid: string, currentState: boolean) => {
+        try {
+            await toggleDeepSync(jid, !currentState);
+            await refreshData();
+        } catch (error: any) {
+            alert(`❌ Failed to toggle deep sync: ${error.message}`);
+            console.error('Failed to toggle deep sync:', error);
+        }
+    };
+
 
     return (
         <div style={{ height: '100%', overflowY: 'auto', padding: '16px' }}>
@@ -346,6 +357,13 @@ export default function AnnouncementsAdminPage() {
                                                     {item.id}
                                                 </Text>
                                             </Stack>
+                                            <Toggle
+                                                label="Deep Sync"
+                                                checked={item.deep_sync_enabled}
+                                                onChange={() => handleDeepSyncToggle(item.id, item.deep_sync_enabled)}
+                                                inlineLabel
+                                                styles={{ root: { marginRight: 16 } }}
+                                            />
                                             {selectedTab === 'included' ? (
                                                 <Stack horizontal tokens={{ childrenGap: 8 }}>
                                                     <DefaultButton

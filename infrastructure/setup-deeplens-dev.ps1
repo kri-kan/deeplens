@@ -1,15 +1,14 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Complete DeepLens development environment setup script
+    Complete DeepLens development environment setup script (Orchestrator)
 .DESCRIPTION
-    This script sets up the entire DeepLens development environment from scratch:
-    - Infrastructure containers (Postgres, Kafka, MinIO, Qdrant, Redis)
-    - Feature Extraction Service (Python)
-.PARAMETER Clean
-    If specified, removes all existing containers and volumes before setup
-.PARAMETER SkipBuild
-    If specified, skips building the Feature Extraction Docker image
+    This script sets up the entire DeepLens development environment by coordinating modular lifecycle scripts:
+    1. Infrastructure Cleanup (manage-cleanup.ps1)
+    2. Core Services Start (start-core-services.ps1)
+    3. Messaging Services Start (start-messaging-services.ps1)
+    4. Observability Start (start-observability.ps1)
+    5. Data Initialization (init-bootstrap-data.ps1)
 #>
 
 param(
@@ -17,252 +16,78 @@ param(
     [switch]$SkipBuild
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
+$ScriptsRoot = "$PSScriptRoot\scripts\lifecycle"
+$CommonScriptsRoot = "$PSScriptRoot\scripts\WAProcessor"
 
-# Helper function to check exit codes of native commands
-function Confirm-Step {
-    param([string]$StepName)
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [FAIL] $StepName failed with exit code $LASTEXITCODE" -ForegroundColor Red
-        exit 1
-    }
-}
-
-# Configuration
-$POSTGRES_PASSWORD = "DeepLens123!"
-$MINIO_USER = "deeplens"
-$MINIO_PASSWORD = "DeepLens123!"
-
-Write-Host "=== DeepLens Development Environment Setup ===" -ForegroundColor Cyan
+Write-Host "=== DeepLens Development Environment Setup (Modular) ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Step 1: Clean up if requested
+# 1. Cleanup
 if ($Clean) {
-    Write-Host "[1/10] Cleaning up existing environment..." -ForegroundColor Yellow
-    
-    # Stop .NET services
-    Write-Host "  Stopping .NET services..." -ForegroundColor Gray
-    $dotnetProcs = Get-Process -Name "dotnet" -ErrorAction SilentlyContinue
-    if ($dotnetProcs) {
-        $dotnetProcs | Stop-Process -Force
-    }
-    
-    # Stop and remove DeepLens containers
-    Write-Host "  Removing containers..." -ForegroundColor Gray
-    $allContainers = podman ps -a --format "{{.Names}}" | Where-Object { $_ -match "^deeplens-" }
-    foreach ($container in $allContainers) {
-        podman rm -f $container 2>&1 | Out-Null
-    }
-    
-    # Remove DeepLens volumes
-    Write-Host "  Removing volumes..." -ForegroundColor Gray
-    $allVolumes = podman volume ls --format "{{.Name}}" | Where-Object { $_ -match "^deeplens[-_]" }
-    foreach ($volume in $allVolumes) {
-        podman volume rm $volume 2>&1 | Out-Null
-    }
-    
-    # Prune orphaned volumes
-    podman volume prune -f 2>&1 | Out-Null
-    
-    # Remove network
-    $networkExists = podman network ls --format "{{.Name}}" | Select-String -Pattern "^deeplens-network$"
-    if ($networkExists) {
-        podman network rm deeplens-network 2>&1 | Out-Null
-    }
-
-    Write-Host "  [OK] Cleanup complete" -ForegroundColor Green
+    Write-Host "[1/6] Cleaning infrastructure..." -ForegroundColor Yellow
+    & "$ScriptsRoot\manage-cleanup.ps1"
 }
 
-# Step 2: Create podman resources
-Write-Host "[2/10] Creating podman resources..." -ForegroundColor Yellow
+# 2. Start Core Services
+Write-Host "[2/6] Starting Core Services..." -ForegroundColor Yellow
+& "$ScriptsRoot\start-core-services.ps1"
 
-# Create network
-$networkExists = podman network ls --format "{{.Name}}" | Select-String -Pattern "^deeplens-network$"
-if (-not $networkExists) {
-    podman network create deeplens-network | Out-Null
-    Confirm-Step "Network Creation"
-}
+# 3. Start Messaging Services
+Write-Host "[3/6] Starting Messaging Services..." -ForegroundColor Yellow
+& "$ScriptsRoot\start-messaging-services.ps1"
 
-# Create volumes
-$volumes = @(
-    "deeplens-postgres-data",
-    "deeplens-kafka-data",
-    "deeplens-kafka-secrets",
-    "deeplens-zookeeper-data",
-    "deeplens-zookeeper-secrets",
-    "deeplens-zookeeper-logs",
-    "deeplens-minio-data",
-    "deeplens-qdrant-data",
-    "deeplens-redis-data",
-    "deeplens-prometheus-data",
-    "deeplens-grafana-data",
-    "deeplens-loki-data",
-    "deeplens-jaeger-data"
+# 3a. Create Kafka Topics
+Write-Host "  Creating Kafka Topics..." -ForegroundColor Yellow
+$requiredTopics = @(
+    "deeplens.images.uploaded",
+    "deeplens.videos.uploaded",
+    "deeplens.features.extraction",
+    "deeplens.vectors.indexing",
+    "deeplens.processing.completed",
+    "deeplens.processing.failed",
+    "deeplens.images.maintenance"
 )
-foreach ($volume in $volumes) {
-    podman volume create $volume 2>&1 | Out-Null
-    Confirm-Step "Volume Creation: $volume"
+
+foreach ($topic in $requiredTopics) {
+    & "$CommonScriptsRoot\manage-kafka-topics.ps1" -Action "Create" -TopicName $topic | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Host "    [WARN] Failed to create topic $topic" -ForegroundColor Yellow }
 }
-Write-Host "  [OK] Resources created" -ForegroundColor Green
 
-# Step 3: Start PostgreSQL
-Write-Host "[3/10] Starting PostgreSQL..." -ForegroundColor Yellow
-# Note: We don't set POSTGRES_DB here because init scripts handle database creation
-podman run -d `
-    --name deeplens-postgres `
-    --network deeplens-network `
-    -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD `
-    -v deeplens-postgres-data:/var/lib/postgresql/data `
-    -p 5433:5432 `
-    postgres:16 | Out-Null
-Confirm-Step "PostgreSQL Start"
-Write-Host "  [OK] PostgreSQL started" -ForegroundColor Green
+# 3b. Cleanup Data (Topics/Buckets) if Clean was requested
+# This runs AFTER services start because we need the services to accept delete commands
+if ($Clean) {
+    Write-Host "  [CLEAN] Cleaning App Data (Topics/Buckets)..." -ForegroundColor Yellow
+    
+    # Kafka Topics
+    # We loop and use the common script
+    try {
+        $topics = podman exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 --list 2>$null
+        if ($topics) {
+            $deepLensTopics = $topics -split "\r?\n" | Where-Object { $_ -match "^deeplens-" }
+            foreach ($topic in $deepLensTopics) {
+                 & "$CommonScriptsRoot\manage-kafka-topics.ps1" -Action "Delete" -TopicName $topic
+            }
+        }
+    } catch { Write-Host "    [WARN] Kafka cleanup issue: $_" -ForegroundColor Gray }
 
-# Step 4: Start Zookeeper
-Write-Host "[4/10] Starting Zookeeper..." -ForegroundColor Yellow
-podman run -d `
-    --name deeplens-zookeeper `
-    --network deeplens-network `
-    -e ZOOKEEPER_CLIENT_PORT=2181 `
-    -e ZOOKEEPER_TICK_TIME=2000 `
-    -v deeplens-zookeeper-data:/var/lib/zookeeper/data `
-    -v deeplens-zookeeper-secrets:/etc/zookeeper/secrets `
-    -v deeplens-zookeeper-logs:/var/lib/zookeeper/log `
-    -p 2181:2181 `
-    confluentinc/cp-zookeeper:7.4.0 | Out-Null
-Confirm-Step "Zookeeper Start"
-Start-Sleep 5
-Write-Host "  [OK] Zookeeper started" -ForegroundColor Green
+    # MinIO Buckets
+    try {
+        & "$CommonScriptsRoot\manage-minio-storage.ps1" -Action "Clean" -BucketName "vayyari"
+        & "$CommonScriptsRoot\manage-minio-storage.ps1" -Action "Clean" -BucketName "platform-admin"
+    } catch { Write-Host "    [WARN] MinIO cleanup issue: $_" -ForegroundColor Gray }
+}
 
-# Step 5: Start Kafka
-Write-Host "[5/10] Starting Kafka..." -ForegroundColor Yellow
-$kafkaEnv = "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
-podman run -d `
-    --name deeplens-kafka `
-    --network deeplens-network `
-    -e KAFKA_BROKER_ID=1 `
-    -e KAFKA_ZOOKEEPER_CONNECT=deeplens-zookeeper:2181 `
-    -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 `
-    -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 `
-    -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=$kafkaEnv `
-    -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT `
-    -v deeplens-kafka-data:/var/lib/kafka/data `
-    -v deeplens-kafka-secrets:/etc/kafka/secrets `
-    -p 9092:9092 `
-    confluentinc/cp-kafka:7.4.0 | Out-Null
-Confirm-Step "Kafka Start"
-Start-Sleep 5
-Write-Host "  [OK] Kafka started" -ForegroundColor Green
+# 4. Start Observability
+Write-Host "[4/6] Starting Observability Stack..." -ForegroundColor Yellow
+& "$ScriptsRoot\start-observability.ps1"
 
-# Step 6: Start MinIO
-Write-Host "[6/10] Starting MinIO..." -ForegroundColor Yellow
-podman run -d `
-    --name deeplens-minio `
-    --network deeplens-network `
-    -e MINIO_ROOT_USER=$MINIO_USER `
-    -e MINIO_ROOT_PASSWORD=$MINIO_PASSWORD `
-    -v deeplens-minio-data:/data `
-    -p 9000:9000 `
-    -p 9001:9001 `
-    quay.io/minio/minio server /data --console-address ":9001" | Out-Null
-Confirm-Step "MinIO Start"
-Start-Sleep 3
-Write-Host "  [OK] MinIO started" -ForegroundColor Green
-
-# Step 7: Start Qdrant
-Write-Host "[7/10] Starting Qdrant..." -ForegroundColor Yellow
-podman run -d `
-    --name deeplens-qdrant `
-    --network deeplens-network `
-    -v deeplens-qdrant-data:/qdrant/storage `
-    -p 6333:6333 `
-    -p 6334:6334 `
-    qdrant/qdrant:latest | Out-Null
-Confirm-Step "Qdrant Start"
-Start-Sleep 3
-Write-Host "  [OK] Qdrant started" -ForegroundColor Green
-
-# Step 8: Start Redis
-Write-Host "[8/10] Starting Redis..." -ForegroundColor Yellow
-podman run -d `
-    --name deeplens-redis `
-    --network deeplens-network `
-    -v deeplens-redis-data:/data `
-    -p 6379:6379 `
-    redis:latest redis-server --appendonly yes | Out-Null
-Confirm-Step "Redis Start"
-Start-Sleep 2
-Write-Host "  [OK] Redis started" -ForegroundColor Green
-
-# Step 9: Start Observability Stack
-Write-Host "[9/11] Starting Observability Stack..." -ForegroundColor Yellow
-
-# Jaeger - Distributed Tracing
-podman run -d `
-    --name deeplens-jaeger `
-    --network deeplens-network `
-    -e COLLECTOR_OTLP_ENABLED=true `
-    -e SPAN_STORAGE_TYPE=badger `
-    -e BADGER_EPHEMERAL=false `
-    -e BADGER_DIRECTORY_VALUE=/badger/data `
-    -e BADGER_DIRECTORY_KEY=/badger/key `
-    -v deeplens-jaeger-data:/badger `
-    -p 16686:16686 `
-    -p 14250:14250 `
-    -p 14268:14268 `
-    -p 4317:4317 `
-    -p 4318:4318 `
-    jaegertracing/all-in-one:1.49 | Out-Null
-Confirm-Step "Jaeger Start"
-
-# Prometheus - Metrics
-podman run -d `
-    --name deeplens-prometheus `
-    --network deeplens-network `
-    -v "${PWD}/infrastructure/config/prometheus:/etc/prometheus" `
-    -v deeplens-prometheus-data:/prometheus `
-    -p 9090:9090 `
-    prom/prometheus:v2.47.0 --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus | Out-Null
-Confirm-Step "Prometheus Start"
-
-# Grafana - Visualization
-podman run -d `
-    --name deeplens-grafana `
-    --network deeplens-network `
-    -e GF_SECURITY_ADMIN_PASSWORD=$POSTGRES_PASSWORD `
-    -v deeplens-grafana-data:/var/lib/grafana `
-    -v "${PWD}/infrastructure/config/grafana/provisioning:/etc/grafana/provisioning" `
-    -p 3000:3000 `
-    grafana/grafana:10.1.0 | Out-Null
-Confirm-Step "Grafana Start"
-
-# Loki - Log Aggregation
-podman run -d `
-    --name deeplens-loki `
-    --network deeplens-network `
-    -v deeplens-loki-data:/loki `
-    -p 3100:3100 `
-    grafana/loki:2.9.0 | Out-Null
-Confirm-Step "Loki Start"
-
-# OTel Collector - Telemetry Pipeline
-podman run -d `
-    --name deeplens-otel-collector `
-    --network deeplens-network `
-    -v "${PWD}/infrastructure/config/otel-collector:/etc/otelcol-contrib" `
-    -p 8888:8888 `
-    -p 8889:8889 `
-    otel/opentelemetry-collector-contrib:0.88.0 --config=/etc/otelcol-contrib/otel-collector.yaml | Out-Null
-Confirm-Step "OTel Collector Start"
-
-Write-Host "  [OK] Observability stack started" -ForegroundColor Green
-
-# Step 10: Build and start Feature Extraction Service
-Write-Host "[10/11] Setting up Feature Extraction Service..." -ForegroundColor Yellow
+# 5. Feature Extraction
+Write-Host "[5/6] Setting up Feature Extraction Service..." -ForegroundColor Yellow
 if (-not $SkipBuild) {
     Write-Host "  Building Docker image..." -ForegroundColor Gray
     podman build -t deeplens-feature-extraction -f src/DeepLens.FeatureExtractionService/Dockerfile src/DeepLens.FeatureExtractionService | Out-Null
-    Confirm-Step "Image Build"
+    if ($LASTEXITCODE -ne 0) { Write-Host "  [FAIL] Build failed" -ForegroundColor Red; exit 1 }
 }
 podman run -d `
     --name deeplens-feature-extraction `
@@ -270,88 +95,12 @@ podman run -d `
     -v "${PWD}/src/DeepLens.FeatureExtractionService/models:/app/models" `
     -p 8001:8001 `
     deeplens-feature-extraction | Out-Null
-Confirm-Step "Feature Extraction Start"
-Start-Sleep 3
 Write-Host "  [OK] Feature Extraction Service started" -ForegroundColor Green
 
-# Step 11: Initialize databases
-Write-Host "[11/11] Initializing baseline databases..." -ForegroundColor Yellow
+# 6. Initialize Data
+Write-Host "[6/6] Initializing & Bootstrapping Data..." -ForegroundColor Yellow
+& "$ScriptsRoot\init-bootstrap-data.ps1"
 
-# Wait for PostgreSQL to be ready
-$maxRetries = 30
-$retryCount = 0
-while ($retryCount -lt $maxRetries) {
-    podman exec deeplens-postgres pg_isready -U postgres 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { break }
-    Start-Sleep 1
-    $retryCount++
-}
-
-if ($retryCount -eq $maxRetries) {
-    Write-Host "  [FAIL] PostgreSQL failed to start in time" -ForegroundColor Red
-    exit 1
-}
-
-# Run all init scripts in order
-Write-Host "  Running database initialization scripts..." -ForegroundColor Gray
-$initScripts = Get-ChildItem "infrastructure\init-scripts\postgres\*.sql" | Sort-Object Name
-foreach ($script in $initScripts) {
-    Write-Host "    Executing: $($script.Name)" -ForegroundColor DarkGray
-    # Copy script to container for reliable execution
-    podman cp $script.FullName "deeplens-postgres:/tmp/$($script.Name)"
-    # Execute inside container
-    podman exec -i deeplens-postgres psql -U postgres -d postgres -f "/tmp/$($script.Name)"
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "    [WARNING] Script $($script.Name) had some issues (exit code $LASTEXITCODE). Continuing..." -ForegroundColor Yellow
-    }
-    else {
-        Write-Host "    [OK] $($script.Name) completed" -ForegroundColor Gray
-    }
-}
-Write-Host "  [OK] Baseline databases initialized" -ForegroundColor Green
-
-# Step 11: Bootstrapping Admin and Demo Data
-Write-Host "[11/10] Bootstrapping platform and demo tenant..." -ForegroundColor Yellow
-
-# Shared "Blessed" IDs from codebase
-$VAYYARI_ID = "2abbd721-873e-4bf0-9cb2-c93c6894c584"
-$ADMIN_ID = "cf123992-628d-4eb4-9721-aef8c59275a5"
-
-# Generate bootstrap SQL using the CLI tool
-Write-Host "  Generating bootstrap SQL using DeepLens.CLI..." -ForegroundColor Gray
-$DOTNET_PATH = "C:\Program Files\dotnet\dotnet.exe"
-$CLI_TOOL = "tools\DeepLens.CLI\DeepLens.CLI.csproj"
-
-$bootstrapFile = "bootstrap_temp.sql"
-
-# Call the tool to generate SQL
-& $DOTNET_PATH run --project $CLI_TOOL -- bootstrap-sql "DeepLensAdmin123!" "DeepLens@Vayyari123!" $ADMIN_ID $VAYYARI_ID > $bootstrapFile
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "    [FAIL] Failed to generate bootstrap SQL." -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "  Executing bootstrap SQL..." -ForegroundColor Gray
-Get-Content $bootstrapFile | podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  [FAIL] Database bootstrap failed" -ForegroundColor Red
-}
-else {
-    Write-Host "  [OK] Database bootstrap successful" -ForegroundColor Green
-}
-
-Remove-Item $bootstrapFile -ErrorAction SilentlyContinue
-
-# 4. Create Vayyari Tenant Database if missing
-$checkVayyariDB = podman exec -i deeplens-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'tenant_vayyari_metadata';"
-if (-not ($checkVayyariDB -and $checkVayyariDB.Trim())) {
-    podman exec -i deeplens-postgres psql -U postgres -c "CREATE DATABASE tenant_vayyari_metadata WITH TEMPLATE tenant_metadata_template OWNER tenant_service;"
-    Write-Host "  [OK] Vayyari database created" -ForegroundColor Green
-}
-
-Write-Host "  [OK] Bootstrapping complete" -ForegroundColor Green
 Write-Host ""
 Write-Host "=== Infrastructure Setup Complete ===" -ForegroundColor Green
 Write-Host ""
@@ -359,9 +108,3 @@ Write-Host "NEXT STEPS:" -ForegroundColor Yellow
 Write-Host "1. Start backend services:  .\infrastructure\start-dotnet-services.ps1" -ForegroundColor White
 Write-Host "2. Wait 30s, then seed data: .\seed_data.ps1" -ForegroundColor White
 Write-Host "3. Start Web UI:            .\infrastructure\start-ui.ps1" -ForegroundColor White
-Write-Host ""
-Write-Host "Credentials:" -ForegroundColor Cyan
-Write-Host "  - Platform: admin@deeplens.local / DeepLensAdmin123!" -ForegroundColor White
-Write-Host "  - Demo:     admin@vayyari.local / DeepLens@Vayyari123!" -ForegroundColor White
-Write-Host ""
-
