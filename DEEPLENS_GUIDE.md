@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-01-08 08:55:46
+**Auto-generated on:** 2026-01-11 08:08:45
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -166,17 +166,36 @@ Last Updated: December 20, 2025
 
 ## 🔌 Port Reference
 
-| Port      | Service      | Description                 |
-| :-------- | :----------- | :-------------------------- |
-| **5433**  | PostgreSQL   | Metadata & Identity DB      |
-| **6379**  | Redis        | Caching & State             |
-| **5198**  | Identity API | Auth & Tenant Orchestration |
-| **5001**  | Search API   | Image Upload & Search       |
-| **8001**  | Feature Ext. | Python AI Microservice      |
-| **3000**  | Grafana      | Monitoring Dashboards       |
-| **9090**  | Prometheus   | Metrics Time-Series DB      |
-| **16686** | Jaeger       | Distributed Tracing UI      |
-| **6333**  | Qdrant       | Vector DB Dashboard         |
+### Core Services
+| Port     | Service    | Description            |
+| :------- | :--------- | :--------------------- |
+| **5433** | PostgreSQL | Metadata & Identity DB |
+| **6379** | Redis      | Caching & State        |
+| **6333** | Qdrant     | Vector DB Dashboard    |
+| **9001** | MinIO      | Object Storage Console |
+
+### DeepLens APIs
+| Port     | Service      | Description                 |
+| :------- | :----------- | :-------------------------- |
+| **5198** | Identity API | Auth & Tenant Orchestration |
+| **5000** | Search API   | Image Upload & Search       |
+| **5001** | Web UI       | React Frontend (Optional)   |
+| **8001** | Feature Ext. | Python AI Microservice      |
+
+### WhatsApp Processor
+| Port     | Service      | Description               |
+| :------- | :----------- | :------------------------ |
+| **3005** | WhatsApp API | Express Backend Server    |
+| **3006** | WhatsApp UI  | React Frontend (Dev Mode) |
+
+**Note**: In production, the React app is served by the Express backend on port 3005.
+
+### Monitoring & Observability
+| Port      | Service    | Description            |
+| :-------- | :--------- | :--------------------- |
+| **3000**  | Grafana    | Monitoring Dashboards  |
+| **9090**  | Prometheus | Metrics Time-Series DB |
+| **16686** | Jaeger     | Distributed Tracing UI |
 
 ---
 
@@ -1174,7 +1193,7 @@ Last Updated: December 20, 2025
 
 
 ### 2. Start Infrastructure
-Automation handles the setup of PostgreSQL, Redis, and internal networks.
+Automation handles the setup of Shared Services (PostgreSQL, Kafka, MinIO, Redis) and internal networks.
 
 
 *(Code block omitted for brevity)*
@@ -1237,10 +1256,13 @@ Run the automated identity checkpoint to verify Platform and Tenant admin access
 
 ┌─────────────────────────────────────────────────────────┐
 │              Shared Infrastructure                      │
+│ (Supports DeepLens, WhatsApp Processor, etc.)           │
 ├─────────────────────────────────────────────────────────┤
-│ PostgreSQL (5433) - All tenant DBs                       │
-│ Redis (6379)      - Shared cache                         │
-│ deeplens-network  - Container network                    │
+│ PostgreSQL (5433) - Shared Relational DB                 │
+│ Kafka (9092)      - Shared Message Backbone              │
+│ MinIO (9000/9001) - Shared Object Storage                │
+│ Redis (6379)      - Shared Cache                         │
+│ deeplens-network  - Shared Container Network             │
 ├─────────────────────────────────────────────────────────┤
 │              Observability Stack                        │
 ├─────────────────────────────────────────────────────────┤
@@ -1250,17 +1272,12 @@ Run the automated identity checkpoint to verify Platform and Tenant admin access
 │ Loki (3100)       - Log Aggregation                      │
 └─────────────────────────────────────────────────────────┘
          │
-         ├── Tenant 1
-         │   ├── Qdrant (6333/6334)
-         │   ├── MinIO (9000/9001)
+         ├── DeepLens Tenants
+         │   ├── Qdrant (6333/6334) - Vector Database
          │   └── Backup Container
          │
-         ├── Tenant 2
-         │   ├── Qdrant (6335/6336)
-         │   ├── MinIO (9002/9003)
-         │   └── Backup Container
-         │
-         └── Tenant N...
+         └── Other Applications
+             └── WhatsApp Processor Containers...
 
 *(Code block omitted for brevity)*
 powershell
@@ -1502,17 +1519,18 @@ Last Updated: December 20, 2025
 
 ## 🏗️ Architecture Overview
 
-DeepLens uses a "Shared Infrastructure, Isolated Data" approach. While core services like PostgreSQL and Redis are shared, each tenant gets isolated storage and vector database resources.
+DeepLens uses a "Shared Infrastructure, Isolated Data" approach. Core services (Postgres, Kafka, MinIO, Redis) are shared across applications (DeepLens, WhatsApp Processor), while tenant data is logically isolated.
 
 ### Data Separation Strategy
 
-| Component      | Shared | Per-Tenant           | Purpose                         |
-| -------------- | ------ | -------------------- | ------------------------------- |
-| **PostgreSQL** | ✅      | Database per tenant  | Metadata, users, collections    |
-| **Redis**      | ✅      | ❌                    | Shared cache & sessions         |
-| **Qdrant**     | ❌      | Dedicated Instance   | Vector search isolation         |
-| **MinIO**      | ✅      | **Dedicated Bucket** | Shared instance with IAM search |
-| **Backups**    | ❌      | Dedicated Container  | Automated tenant backups        |
+| Component      | Shared | Per-Tenant           | Purpose                             |
+| -------------- | ------ | -------------------- | ----------------------------------- |
+| **PostgreSQL** | ✅      | Database per tenant  | Shared Instance (DeepLens/WhatsApp) |
+| **Kafka**      | ✅      | Topic per tenant     | Shared Message Backbone             |
+| **Redis**      | ✅      | Key Prefix           | Shared Cache & Sessions             |
+| **MinIO**      | ✅      | **Dedicated Bucket** | Shared Instance with IAM Search     |
+| **Qdrant**     | ❌      | Dedicated Instance   | Vector Search Isolation             |
+| **Backups**    | ❌      | Dedicated Container  | Automated Tenant Backups            |
 
 ### Storage Models
 
