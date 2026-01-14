@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-01-11 19:45:45
+**Auto-generated on:** 2026-01-14 16:19:20
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -1032,19 +1032,32 @@ Last Updated: December 20, 2025
 
 Kafka acts as the backbone for the DeepLens image processing pipeline.
 
-### Core Topics
-- `deeplens.images.uploaded`: Triggered when Search API receives a new file.
-- `deeplens.features.extraction`: Commands for the Feature Extraction service.
-- `deeplens.vectors.indexing`: Requests to index vectors in Qdrant.
-- `deeplens.processing.completed`: Emitted when the entire pipeline finishes.
-- `deeplens.images.maintenance`: Triggers cleanup of deleted files and vectors.
+> **📖 For comprehensive Kafka documentation, see [KAFKA_TOPICS.md](./KAFKA_TOPICS.md)**
+
+### Core Topics (Summary)
+- `deeplens.images.uploaded`: Image upload notifications → triggers processing pipeline
+- `deeplens.videos.uploaded`: Video upload notifications → triggers frame extraction
+- `deeplens.features.extraction`: ML feature extraction requests → PythonService
+- `deeplens.vectors.indexing`: Vector indexing requests → Qdrant
+- `deeplens.processing.completed`: Pipeline completion notifications → SearchAPI
+- `deeplens.processing.failed`: Error notifications → SearchAPI (triggers alerts/retry)
+- `deeplens.images.maintenance`: Cleanup and maintenance tasks → MaintenanceWorker
+
+### WhatsApp Processor Topic
+- `whatsapp-ready-messages`: WhatsApp message queue → MessageQueueService
 
 ### Pipeline Flow
-1. **Producer**: Search API (Upload / Merge).
-2. **Consumer**: Image Processing Worker (Initializes pipeline).
-3. **Consumer**: Feature Extraction Worker (Calls ML service).
-4. **Consumer**: Vector Indexing Worker (Updates Qdrant).
-5. **Consumer**: Image Maintenance Worker (Physical cleanup).
+1. **Producer**: Search API (Upload / Merge)
+2. **Consumer**: Image Processing Worker (Initializes pipeline)
+3. **Consumer**: Feature Extraction Worker (Calls ML service)
+4. **Consumer**: Vector Indexing Worker (Updates Qdrant)
+5. **Consumer**: Image Maintenance Worker (Physical cleanup)
+
+**See [KAFKA_TOPICS.md](./KAFKA_TOPICS.md) for detailed documentation including:**
+- Complete data flow diagrams
+- Payload examples for each topic
+- Monitoring and management commands
+- Best practices and troubleshooting
 
 ---
 
