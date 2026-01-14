@@ -518,16 +518,80 @@ public static class EventTypes
     public const string ImageDeletionRequested = "image.deletion.requested";
 }
 
+/// <summary>
+/// Kafka topic names used throughout the DeepLens processing pipeline.
+/// All topics use 3 partitions and replication factor of 1 (development setup).
+/// See docs/KAFKA_TOPICS.md for detailed documentation.
+/// </summary>
 public static class KafkaTopics
 {
+    /// <summary>
+    /// Image upload notification topic.
+    /// Producer: SearchAPI (on image upload)
+    /// Consumer: WorkerService (ImageProcessingWorker)
+    /// Purpose: Triggers the image processing pipeline when new images are uploaded.
+    /// Payload: ImageUploadedEvent with image metadata and storage location.
+    /// </summary>
     public const string ImageUploaded = "deeplens.images.uploaded";
+    
+    /// <summary>
+    /// Video upload notification topic.
+    /// Producer: SearchAPI (on video upload)
+    /// Consumer: WorkerService (VideoProcessingWorker)
+    /// Purpose: Triggers video frame extraction and processing when videos are uploaded.
+    /// Payload: VideoUploadedEvent with video metadata and storage location.
+    /// </summary>
     public const string VideoUploaded = "deeplens.videos.uploaded";
+    
+    /// <summary>
+    /// Feature extraction request topic.
+    /// Producer: WorkerService (after image preprocessing)
+    /// Consumer: PythonService (ML feature extraction)
+    /// Purpose: Requests ML-based feature extraction from preprocessed images.
+    /// Payload: FeatureExtractionRequestedEvent with image path and extraction parameters.
+    /// </summary>
     public const string FeatureExtraction = "deeplens.features.extraction";
+    
+    /// <summary>
+    /// Vector indexing request topic.
+    /// Producer: PythonService (after feature extraction)
+    /// Consumer: WorkerService (VectorIndexingWorker)
+    /// Purpose: Requests indexing of extracted feature vectors into Qdrant.
+    /// Payload: VectorIndexingRequestedEvent with vectors and metadata.
+    /// </summary>
     public const string VectorIndexing = "deeplens.vectors.indexing";
+    
+    /// <summary>
+    /// Processing completion notification topic.
+    /// Producer: WorkerService (after successful pipeline completion)
+    /// Consumer: SearchAPI (updates database status)
+    /// Purpose: Notifies that the entire processing pipeline completed successfully.
+    /// Payload: ProcessingCompletedEvent with final status and metrics.
+    /// </summary>
     public const string ProcessingCompleted = "deeplens.processing.completed";
+    
+    /// <summary>
+    /// Processing failure notification topic.
+    /// Producer: WorkerService (on pipeline errors)
+    /// Consumer: SearchAPI (updates database status, triggers alerts)
+    /// Purpose: Notifies that processing failed and requires attention.
+    /// Payload: ProcessingFailedEvent with error details and retry information.
+    /// </summary>
     public const string ProcessingFailed = "deeplens.processing.failed";
+    
+    /// <summary>
+    /// Image maintenance and cleanup topic.
+    /// Producer: SearchAPI (on image deletion or cleanup requests)
+    /// Consumer: WorkerService (MaintenanceWorker)
+    /// Purpose: Triggers cleanup of deleted images, orphaned vectors, and storage optimization.
+    /// Payload: ImageMaintenanceEvent with cleanup instructions.
+    /// </summary>
     public const string ImageMaintenance = "deeplens.images.maintenance";
 
+    /// <summary>
+    /// Array of all DeepLens Kafka topics for bulk operations.
+    /// Used during setup, monitoring, and cleanup operations.
+    /// </summary>
     public static readonly string[] AllTopics = 
     {
         ImageUploaded,
