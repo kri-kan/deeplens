@@ -1,8 +1,8 @@
 import apiClient from "./apiClient";
 import axios from "axios";
 
-// Identity Server base URL
-const IDENTITY_SERVER_URL = "http://localhost:5198";
+// Identity Server base URL - use environment variable with fallback
+const IDENTITY_SERVER_URL = import.meta.env.VITE_IDENTITY_API_URL || "http://localhost:5198";
 
 export interface LoginRequest {
   email: string;

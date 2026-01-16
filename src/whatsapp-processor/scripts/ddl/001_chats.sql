@@ -39,6 +39,12 @@ CREATE TABLE IF NOT EXISTS chats (
     -- Sync Control
     deep_sync_enabled BOOLEAN DEFAULT FALSE,
     
+    -- DeepLens Vendor Integration (no FK - reference only)
+    vendor_id VARCHAR(255),  -- UUID from DeepLens vendors table
+    vendor_name VARCHAR(500), -- Cached vendor name for display
+    vendor_assigned_at TIMESTAMP,
+    vendor_assigned_by VARCHAR(255),
+    
     -- Metadata
     metadata JSONB DEFAULT '{}'::jsonb
 );
@@ -51,6 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(is_archived) WHERE is_arc
 CREATE INDEX IF NOT EXISTS idx_chats_is_group ON chats(is_group);
 CREATE INDEX IF NOT EXISTS idx_chats_is_announcement ON chats(is_announcement);
 CREATE INDEX IF NOT EXISTS idx_chats_enable_grouping ON chats(enable_message_grouping) WHERE enable_message_grouping = true;
+CREATE INDEX IF NOT EXISTS idx_chats_vendor_id ON chats(vendor_id) WHERE vendor_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_chats_name_search ON chats USING gin(to_tsvector('english', name));
 
 -- Function to update last_message_at from timestamp

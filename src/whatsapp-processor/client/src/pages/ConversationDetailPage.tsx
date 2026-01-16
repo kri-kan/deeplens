@@ -5,9 +5,10 @@ import {
     Dialog, DialogTrigger, DialogSurface, DialogTitle, DialogBody, DialogActions, DialogContent,
     Label, Input, Select, Badge
 } from '@fluentui/react-components';
-import { ArrowLeft24Regular, ArrowSync24Regular, Image24Regular, Video24Regular, MusicNote224Regular, Document24Regular, Emoji24Regular } from '@fluentui/react-icons';
+import { ArrowLeft24Regular, ArrowSync24Regular, Image24Regular, Video24Regular, MusicNote224Regular, Document24Regular, Emoji24Regular, BuildingShop24Regular } from '@fluentui/react-icons';
 import { fetchConversationStats, ConversationStats, purgeMessages, toggleMessageGrouping, fetchMessages, Message } from '../services/conversation.service';
 import { format } from 'date-fns';
+import VendorAssignmentModal from '../components/VendorAssignmentModal';
 
 const useStyles = makeStyles({
     container: {
@@ -158,6 +159,7 @@ export default function ConversationDetailPage() {
     const [configTimeGap, setConfigTimeGap] = useState('300');
     const [previewMessages, setPreviewMessages] = useState<Message[]>([]);
     const [previewCount, setPreviewCount] = useState(50);
+    const [showVendorModal, setShowVendorModal] = useState(false);
 
     useEffect(() => {
         if (jid) {
@@ -288,6 +290,13 @@ export default function ConversationDetailPage() {
                     >
                         {stats.enable_message_grouping ? '✓ Grouping' : '✗ Not Grouping'}
                     </span>
+                    <Button
+                        appearance="primary"
+                        icon={<BuildingShop24Regular />}
+                        onClick={() => setShowVendorModal(true)}
+                    >
+                        Assign Vendor
+                    </Button>
                     <Button
                         appearance="subtle"
                         icon={refreshing ? <Spinner size="tiny" /> : <ArrowSync24Regular />}
@@ -556,6 +565,21 @@ export default function ConversationDetailPage() {
                     </DialogBody>
                 </DialogSurface >
             </Dialog >
+
+            {/* Vendor Assignment Modal */}
+            {showVendorModal && stats && (
+                <VendorAssignmentModal
+                    isOpen={showVendorModal}
+                    onClose={() => setShowVendorModal(false)}
+                    chat={{
+                        jid: stats.jid,
+                        name: stats.name,
+                        vendor_id: (stats as any).vendor_id,
+                        vendor_name: (stats as any).vendor_name
+                    }}
+                    onAssignSuccess={loadStats}
+                />
+            )}
         </div >
     );
 }

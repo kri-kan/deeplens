@@ -31,7 +31,7 @@ class ApiClient {
       (response) => response,
       async (error: AxiosError) => {
         const originalRequest = error.config;
-        
+
         if (error.response?.status === 401 && originalRequest) {
           // Try to refresh token
           const refreshToken = localStorage.getItem('refreshToken');
@@ -40,11 +40,11 @@ class ApiClient {
               const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
                 refreshToken,
               });
-              
+
               const { accessToken, refreshToken: newRefreshToken } = response.data;
               localStorage.setItem('accessToken', accessToken);
               localStorage.setItem('refreshToken', newRefreshToken);
-              
+
               // Retry original request
               originalRequest.headers.Authorization = `Bearer ${accessToken}`;
               return this.client(originalRequest);
@@ -60,7 +60,7 @@ class ApiClient {
             window.location.href = '/login';
           }
         }
-        
+
         return Promise.reject(error);
       }
     );

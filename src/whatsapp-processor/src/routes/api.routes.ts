@@ -435,6 +435,174 @@ export function createApiRoutes(waService: WhatsAppService): Router {
         }
     });
 
+    /**
+     * POST /api/chats/:jid/vendor
+     * Assign a vendor to a chat (group, announcement, or individual)
+     */
+    router.post('/chats/:jid/vendor', async (req: Request, res: Response) => {
+        const { jid } = req.params;
+        const { vendorId, vendorName, assignedBy } = req.body;
+
+        if (!vendorId || !vendorName) {
+            return res.status(400).json({ error: 'vendorId and vendorName are required' });
+        }
+
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            await client.query(
+                `UPDATE chats 
+                 SET vendor_id = $1, 
+                     vendor_name = $2, 
+                     vendor_assigned_at = NOW(),
+                     vendor_assigned_by = $3,
+                     updated_at = NOW()
+                 WHERE jid = $4`,
+                [vendorId, vendorName, assignedBy || 'admin', jid]
+            );
+
+            res.json({
+                success: true,
+                message: 'Vendor assigned successfully',
+                data: { jid, vendorId, vendorName }
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
+     * GET /api/chats/:jid/vendor
+     * Get vendor information for a chat
+     */
+    router.get('/chats/:jid/vendor', async (req: Request, res: Response) => {
+        const { jid } = req.params;
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            const result = await client.query(
+                `SELECT vendor_id, vendor_name, vendor_assigned_at, vendor_assigned_by
+                 FROM chats
+                 WHERE jid = $1`,
+                [jid]
+            );
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Chat not found' });
+            }
+
+            const chat = result.rows[0];
+            if (!chat.vendor_id) {
+                return res.json({ hasVendor: false, vendor: null });
+            }
+
+            res.json({
+                hasVendor: true,
+                vendor: {
+                    vendorId: chat.vendor_id,
+                    vendorName: chat.vendor_name,
+                    assignedAt: chat.vendor_assigned_at,
+                    assignedBy: chat.vendor_assigned_by
+                }
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
+     * DELETE /api/chats/:jid/vendor
+     * Remove vendor assignment from a chat
+     */
+    router.delete('/chats/:jid/vendor', async (req: Request, res: Response) => {
+        const { jid } = req.params;
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            await client.query(
+                `UPDATE chats 
+                 SET vendor_id = NULL, 
+                     vendor_name = NULL, 
+                     vendor_assigned_at = NULL,
+                     vendor_assigned_by = NULL,
+                     updated_at = NOW()
+                 WHERE jid = $1`,
+                [jid]
+            );
+
+            res.json({ success: true, message: 'Vendor assignment removed' });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
+     * GET /api/vendors/:vendorId/chats
+     * Get all chats assigned to a specific vendor
+     */
+    router.get('/vendors/:vendorId/chats', async (req: Request, res: Response) => {
+        const { vendorId } = req.params;
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            const result = await client.query(
+                `SELECT jid, name, is_group, is_announcement, vendor_name, 
+                        vendor_assigned_at, vendor_assigned_by, last_message_timestamp
+                 FROM chats
+                 WHERE vendor_id = $1
+                 ORDER BY last_message_timestamp DESC NULLS LAST`,
+                [vendorId]
+            );
+
+            res.json({
+                vendorId,
+                totalChats: result.rows.length,
+                chats: result.rows
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
+     * GET /api/vendors/stats
+     * Get vendor assignment statistics
+     */
+    router.get('/vendors/stats', async (req: Request, res: Response) => {
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            const result = await client.query(
+                `SELECT 
+                    COUNT(*) FILTER (WHERE vendor_id IS NOT NULL) as assigned_chats,
+                    COUNT(*) FILTER (WHERE vendor_id IS NULL) as unassigned_chats,
+                    COUNT(DISTINCT vendor_id) as unique_vendors,
+                    COUNT(*) as total_chats
+                 FROM chats`
+            );
+
+            const vendorList = await client.query(
+                `SELECT vendor_id, vendor_name, COUNT(*) as chat_count
+                 FROM chats
+                 WHERE vendor_id IS NOT NULL
+                 GROUP BY vendor_id, vendor_name
+                 ORDER BY chat_count DESC`
+            );
+
+            res.json({
+                stats: result.rows[0],
+                vendors: vendorList.rows
+            });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     return router;
 }
 

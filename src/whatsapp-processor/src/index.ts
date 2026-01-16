@@ -45,6 +45,11 @@ async function initializeServices() {
     // Initialize message processing queue
     await initializeMessageQueue();
 
+    // Initialize DeepLens integration service
+    const { deepLensIntegration } = await import('./services/deeplens-integration.service');
+    await deepLensIntegration.start();
+    logger.info('DeepLens integration service started');
+
     const waService = new WhatsAppService(io);
     await waService.start();
 
@@ -96,18 +101,28 @@ initializeServices().catch(err => {
 });
 
 // --- Graceful Shutdown ---
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down gracefully...');
-    shutdownMessageQueue();
+
+    // Shutdown services
+    const { deepLensIntegration } = await import('./services/deeplens-integration.service');
+    await deepLensIntegration.stop();
+    await shutdownMessageQueue();
+
     server.close(() => {
         logger.info('Server closed');
         process.exit(0);
     });
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     logger.info('SIGINT received, shutting down gracefully...');
-    shutdownMessageQueue();
+
+    // Shutdown services
+    const { deepLensIntegration } = await import('./services/deeplens-integration.service');
+    await deepLensIntegration.stop();
+    await shutdownMessageQueue();
+
     server.close(() => {
         logger.info('Server closed');
         process.exit(0);

@@ -50,12 +50,15 @@ try
     builder.Services.AddScoped<ITenantService, TenantService>();
     builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 
-    // Configure CORS for WebUI
+    // Configure CORS for WebUI - read from appsettings.json
+    var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
+        ?? new[] { "http://localhost:3000", "http://localhost:5001", "http://localhost:5002" };
+    
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowWebUI", policy =>
         {
-            policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
+            policy.WithOrigins(corsOrigins)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
                   .AllowCredentials();
@@ -158,7 +161,7 @@ try
         app.MapOpenApi();
     }
 
-    app.UseHttpsRedirection();
+    // app.UseHttpsRedirection(); // Disabled for development - using HTTP only
     app.UseCors("AllowWebUI");
 
     // Use IdentityServer middleware

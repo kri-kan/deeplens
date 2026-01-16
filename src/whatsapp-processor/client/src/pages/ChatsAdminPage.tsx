@@ -6,6 +6,7 @@ import { fetchChats, fetchProcessingState, updateSyncSettings, Chat, ProcessingS
 import { purgeMessages, bulkPurgeMessages } from '../services/conversation.service';
 import { toggleDeepSync } from '../services/sync.service';
 import ResumeModal from '../components/ResumeModal';
+import VendorAssignmentModal from '../components/VendorAssignmentModal';
 import { tokens } from '@fluentui/react-components';
 import {
     Stack,
@@ -74,6 +75,8 @@ export default function ChatsAdminPage() {
     const [selectedChat, setSelectedChat] = useState<{ jid: string; name: string } | null>(null);
     const [selectedTab, setSelectedTab] = useState<string>('included');
     const [selectedJids, setSelectedJids] = useState<Set<string>>(new Set());
+    const [showVendorModal, setShowVendorModal] = useState(false);
+    const [vendorModalChat, setVendorModalChat] = useState<Chat | null>(null);
 
     const LIMIT = 50;
 
@@ -234,6 +237,15 @@ export default function ChatsAdminPage() {
             alert(`❌ Failed to toggle deep sync: ${error.message}`);
             console.error('Failed to toggle deep sync:', error);
         }
+    };
+
+    const handleVendorAssignment = (chat: Chat) => {
+        setVendorModalChat(chat);
+        setShowVendorModal(true);
+    };
+
+    const handleVendorAssignSuccess = async () => {
+        await refreshData();
     };
 
 
@@ -422,6 +434,23 @@ export default function ChatsAdminPage() {
                         setSelectedChat(null);
                     }}
                     onSuccess={refreshData}
+                />
+            )}
+
+            {showVendorModal && vendorModalChat && (
+                <VendorAssignmentModal
+                    isOpen={showVendorModal}
+                    onClose={() => {
+                        setShowVendorModal(false);
+                        setVendorModalChat(null);
+                    }}
+                    chat={{
+                        jid: vendorModalChat.id,
+                        name: vendorModalChat.name,
+                        vendor_id: (vendorModalChat as any).vendor_id,
+                        vendor_name: (vendorModalChat as any).vendor_name
+                    }}
+                    onAssignSuccess={handleVendorAssignSuccess}
                 />
             )}
         </div>

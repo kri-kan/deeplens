@@ -98,12 +98,15 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("IngestPolicy", policy => policy.RequireClaim("scope", "deeplens.api"));
 });
 
-// CORS Configuration for Frontend
+// CORS Configuration for Frontend - read from appsettings.json
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:3000", "http://localhost:5001", "http://localhost:5173" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", builder =>
     {
-        builder.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        builder.WithOrigins(corsOrigins)
                .AllowAnyMethod()
                .AllowAnyHeader()
                .AllowCredentials();

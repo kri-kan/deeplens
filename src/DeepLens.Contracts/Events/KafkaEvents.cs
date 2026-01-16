@@ -532,7 +532,7 @@ public static class KafkaTopics
     /// Purpose: Triggers the image processing pipeline when new images are uploaded.
     /// Payload: ImageUploadedEvent with image metadata and storage location.
     /// </summary>
-    public const string ImageUploaded = "deeplens.images.uploaded";
+    public const string ImageUploaded = "WhatsApp.newproduct.received";
     
     /// <summary>
     /// Video upload notification topic.

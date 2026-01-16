@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS messages (
     -- Message Content
     content TEXT,
     message_type VARCHAR(50) NOT NULL DEFAULT 'text',
-    group_id VARCHAR(50), -- UUID for grouped messages
+    group_id VARCHAR(255), -- Conversation grouping: {jid}_{timestamp} format
     
     -- Media Information
     media_type VARCHAR(50),
@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS messages (
     processing_completed_at TIMESTAMP,
     processing_error TEXT,
     
+    -- DeepLens Integration
+    deeplens_processed BOOLEAN DEFAULT FALSE,
+    deeplens_sent_at TIMESTAMP,
+    
     -- Additional Metadata
     metadata JSONB DEFAULT '{}'::jsonb,
     
@@ -61,6 +65,10 @@ CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_processing_status ON messages(processing_status, timestamp) WHERE processing_status IN ('pending', 'ready', 'queued');
 CREATE INDEX IF NOT EXISTS idx_messages_processing_retry ON messages(processing_retry_count, processing_last_attempt) WHERE processing_status = 'failed';
 
+-- DeepLens integration indexes
+CREATE INDEX IF NOT EXISTS idx_messages_deeplens_query ON messages(media_type, deeplens_processed, timestamp) WHERE media_type IN ('image', 'sticker');
+CREATE INDEX IF NOT EXISTS idx_messages_grouping_query ON messages(jid, timestamp) WHERE group_id IS NULL;
+
 -- Full-text search index for message content
 CREATE INDEX IF NOT EXISTS idx_messages_content_search ON messages USING gin(to_tsvector('english', content)) WHERE content IS NOT NULL;
 
@@ -70,7 +78,7 @@ COMMENT ON COLUMN messages.message_id IS 'WhatsApp message ID (unique)';
 COMMENT ON COLUMN messages.jid IS 'Chat JID (foreign key to chats)';
 COMMENT ON COLUMN messages.content IS 'Message text content';
 COMMENT ON COLUMN messages.message_type IS 'Type: text, image, video, audio, document, etc.';
-COMMENT ON COLUMN messages.group_id IS 'UUID grouping related messages (product photos + description)';
+COMMENT ON COLUMN messages.group_id IS 'Conversation grouping ID: {jid}_{timestamp} format - groups messages within time window (all types: text, image, video, etc.)';
 COMMENT ON COLUMN messages.media_url IS 'MinIO URL for media files';
 COMMENT ON COLUMN messages.timestamp IS 'Unix timestamp from WhatsApp';
 COMMENT ON COLUMN messages.metadata IS 'Additional metadata (reactions, mentions, etc.)';
@@ -79,3 +87,5 @@ COMMENT ON COLUMN messages.processing_retry_count IS 'Number of processing attem
 COMMENT ON COLUMN messages.processing_last_attempt IS 'Last time processing was attempted';
 COMMENT ON COLUMN messages.processing_completed_at IS 'When processing completed successfully';
 COMMENT ON COLUMN messages.processing_error IS 'Error message if processing failed';
+COMMENT ON COLUMN messages.deeplens_processed IS 'Whether image has been sent to DeepLens for AI processing';
+COMMENT ON COLUMN messages.deeplens_sent_at IS 'Timestamp when image was sent to DeepLens';
