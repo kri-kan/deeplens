@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api/v1';
+const ENV_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = ENV_URL.endsWith('/api/v1') ? ENV_URL : `${ENV_URL}/api/v1`;
 const TENANT_ID = import.meta.env.VITE_TENANT_ID || '2abbd721-873e-4bf0-9cb2-c93c6894c584';
 
 export interface VendorContact {

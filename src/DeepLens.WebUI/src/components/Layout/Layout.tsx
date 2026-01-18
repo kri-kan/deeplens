@@ -14,7 +14,7 @@ const Layout = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", width: "100%" }}>
       <Sidebar
         isMobile={isMobile}
         mobileOpen={mobileOpen}
@@ -25,7 +25,8 @@ const Layout = () => {
           flexGrow: 1,
           display: "flex",
           flexDirection: "column",
-          width: { xs: "100%", md: "auto" },
+          width: { xs: "100%", md: "calc(100% - 260px)" },
+          minWidth: 0, // Ensure flex child shrinks properly if content overflows
         }}
       >
         <Header onMenuClick={handleDrawerToggle} showMenuButton={isMobile} />
