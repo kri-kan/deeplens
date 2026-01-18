@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWhatsAppConnection } from '../hooks/useWhatsApp';
 import { Chat, fetchAnnouncements, excludeChat, bulkExcludeChats, fetchProcessingState, updateSyncSettings, ProcessingState } from '../services/api.service';
 import { purgeMessages, bulkPurgeMessages } from '../services/conversation.service';
 import { toggleDeepSync } from '../services/sync.service';
 import { useStore } from '../store/useStore';
+import { useDebounce } from '../hooks/useDebounce';
 import ResumeModal from '../components/ResumeModal';
 import { tokens } from '@fluentui/react-components';
 import {
@@ -68,36 +69,48 @@ export default function AnnouncementsAdminPage() {
     const [total, setTotal] = useState(0);
     const [offset, setOffset] = useState(0);
     const [search, setSearch] = useState('');
+    const debouncedSearch = useDebounce(search, 500);
     const [isLoading, setIsLoading] = useState(false);
     const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
     const [showResumeModal, setShowResumeModal] = useState(false);
     const [selectedChat, setSelectedChat] = useState<{ jid: string; name: string } | null>(null);
     const [selectedTab, setSelectedTab] = useState<string>('included');
     const [selectedJids, setSelectedJids] = useState<Set<string>>(new Set());
+    const lastRequestRef = useRef<number>(0);
 
     const LIMIT = 50;
 
     useEffect(() => {
         refreshData();
-    }, [status, selectedTab, search]);
+    }, [status, selectedTab, debouncedSearch]);
 
     const refreshData = async () => {
+        const requestId = Date.now();
+        lastRequestRef.current = requestId;
+
         setOffset(0);
         setIsLoading(true);
         try {
             const [response, state] = await Promise.all([
-                fetchAnnouncements(LIMIT, 0, search, selectedTab === 'excluded'),
+                fetchAnnouncements(LIMIT, 0, debouncedSearch, selectedTab === 'excluded'),
                 fetchProcessingState()
             ]);
-            setItems(response.items);
-            setTotal(response.total);
-            setProcessingState(state);
-            setGlobalProcessingState(state);
-            setSelectedJids(new Set());
+
+            if (lastRequestRef.current === requestId) {
+                setItems(response.items);
+                setTotal(response.total);
+                setProcessingState(state);
+                setGlobalProcessingState(state);
+                setSelectedJids(new Set());
+            }
         } catch (error) {
-            console.error('Failed to load data:', error);
+            if (lastRequestRef.current === requestId) {
+                console.error('Failed to load data:', error);
+            }
         } finally {
-            setIsLoading(false);
+            if (lastRequestRef.current === requestId) {
+                setIsLoading(false);
+            }
         }
     };
 
@@ -107,7 +120,7 @@ export default function AnnouncementsAdminPage() {
         setIsLoading(true);
         const newOffset = offset + LIMIT;
         try {
-            const response = await fetchAnnouncements(LIMIT, newOffset, search, selectedTab === 'excluded');
+            const response = await fetchAnnouncements(LIMIT, newOffset, debouncedSearch, selectedTab === 'excluded');
             setItems(prev => [...prev, ...response.items]);
             setOffset(newOffset);
         } catch (error) {

@@ -1,8 +1,10 @@
+import { useState, useMemo } from 'react';
 import { makeStyles, tokens, Avatar } from '@fluentui/react-components';
 import { Pin16Regular } from '@fluentui/react-icons';
 import { formatDistanceToNow } from 'date-fns';
 import { FixedSizeList as List } from '../utils/VirtualizedList';
 import { useStore } from '../store/useStore';
+import { useDebounce } from '../hooks/useDebounce';
 
 const useStyles = makeStyles({
     container: {
@@ -99,9 +101,22 @@ const useStyles = makeStyles({
 export default function ConversationList() {
     const styles = useStyles();
     const { chats, activeChatJid, setActiveChatJid, syncProgress, processingState } = useStore();
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebounce(searchTerm, 300);
+
+    const filteredChats = useMemo(() => {
+        if (!debouncedSearch) return chats;
+        const lowerSearch = debouncedSearch.toLowerCase();
+        return chats.filter(chat =>
+            (chat.name && chat.name.toLowerCase().includes(lowerSearch)) ||
+            (chat.jid && chat.jid.includes(lowerSearch))
+        );
+    }, [chats, debouncedSearch]);
 
     const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
-        const chat = chats[index];
+        const chat = filteredChats[index];
+        if (!chat) return null;
+
         const isActive = activeChatJid === chat.jid;
         const rawTs = parseInt(chat.last_message_timestamp || '');
         const timestamp = (!isNaN(rawTs) && rawTs > 0) ? new Date(rawTs * 1000) : null;
@@ -151,12 +166,14 @@ export default function ConversationList() {
                     type="text"
                     placeholder="Search chats..."
                     className={styles.searchInput}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
             <div style={{ flex: 1, position: 'relative' }}>
                 <List
                     height={800} // This should ideally be dynamic
-                    itemCount={chats.length}
+                    itemCount={filteredChats.length}
                     itemSize={72}
                     width="100%"
                 >

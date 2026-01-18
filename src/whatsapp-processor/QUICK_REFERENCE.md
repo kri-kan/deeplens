@@ -235,7 +235,7 @@ curl http://localhost:3005/api/chats
 ## 🔮 Coming Soon
 
 - Database integration for message storage
-- Search and analytics
+- Analytics dashboard
 - Export functionality
 - Batch operations
 - Advanced filtering

@@ -55,7 +55,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
             if (search) {
                 params.push(`%${search}%`);
-                whereClause += ` AND c.name ILIKE $${params.length}`;
+                whereClause += ` AND (c.name ILIKE $${params.length} OR c.jid ILIKE $${params.length})`;
             }
 
             if (req.query.excluded !== undefined) {
@@ -122,7 +122,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
             if (search) {
                 params.push(`%${search}%`);
-                whereClause += ` AND c.name ILIKE $${params.length}`;
+                whereClause += ` AND (c.name ILIKE $${params.length} OR c.jid ILIKE $${params.length})`;
             }
 
             if (req.query.excluded !== undefined) {
@@ -189,7 +189,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
             if (search) {
                 params.push(`%${search}%`);
-                whereClause += ` AND c.name ILIKE $${params.length}`;
+                whereClause += ` AND (c.name ILIKE $${params.length} OR c.jid ILIKE $${params.length})`;
             }
 
             if (req.query.excluded !== undefined) {
