@@ -343,7 +343,7 @@ Cleanup Policy: delete
 ### Configuration Files
 
 **DeepLens Topics**:
-- Defined in: `src/DeepLens.Contracts/Events/KafkaEvents.cs`
+- Defined in: `src/DeepLens.Service/DeepLens.Contracts/Events/KafkaEvents.cs`
 - Created by: `infrastructure/setup-deeplens-dev.ps1`
 
 **WhatsApp Topic**:
@@ -554,7 +554,7 @@ podman exec deeplens-kafka kafka-console-consumer \
 - [SERVICES.md](./SERVICES.md) - Service architecture overview
 - [VIDEO_PROCESSING.md](./VIDEO_PROCESSING.md) - Video processing details
 - [DEVELOPMENT.md](../DEVELOPMENT.md) - Development setup guide
-- [KafkaEvents.cs](../src/DeepLens.Contracts/Events/KafkaEvents.cs) - Event definitions
+- [KafkaEvents.cs](../src/DeepLens.Service/DeepLens.Contracts/Events/KafkaEvents.cs) - Event definitions
 
 ---
 

@@ -27,6 +27,7 @@ class ReplyOverlayService : AccessibilityService() {
     private var tvReplyCycle: TextView? = null
     private var btnCloseService: Button? = null
     private var checkBoxAutoMode: CheckBox? = null
+    private var checkBoxTagUser: CheckBox? = null
     private lateinit var params: WindowManager.LayoutParams
     
     private var replyMessages = mutableListOf<String>()
@@ -35,6 +36,7 @@ class ReplyOverlayService : AccessibilityService() {
     private var lastAutoFilledNodeHash: Int = 0
     
     private var isAutoMode = false
+    private var isTagUser = true
     private var isManuallyClosed = false
     private val handler = Handler(Looper.getMainLooper())
 
@@ -74,9 +76,6 @@ class ReplyOverlayService : AccessibilityService() {
         try {
             loadMessages()
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-            
-            // Android 15 stability: inflate with a slight delay if needed, 
-            // but here we ensure the layout flags are high-compatibility.
             floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_widget, null)
             
             params = WindowManager.LayoutParams(
@@ -85,7 +84,7 @@ class ReplyOverlayService : AccessibilityService() {
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or 
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED, // Needed for Nothing Phone/Android 15
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.TRANSLUCENT
             )
             
@@ -95,7 +94,6 @@ class ReplyOverlayService : AccessibilityService() {
             
             setupDraggableTouchListener()
             
-            // Short delay before adding view helps on Android 15 system startup
             handler.postDelayed({
                 try {
                     windowManager?.addView(floatingView, params)
@@ -103,6 +101,7 @@ class ReplyOverlayService : AccessibilityService() {
                     tvReplyCycle = floatingView?.findViewById(R.id.btn_reply_cycle)
                     btnCloseService = floatingView?.findViewById(R.id.btn_close_service)
                     checkBoxAutoMode = floatingView?.findViewById(R.id.switch_auto_mode)
+                    checkBoxTagUser = floatingView?.findViewById(R.id.switch_tag_user)
                     
                     updateButtonText()
                     
@@ -114,6 +113,9 @@ class ReplyOverlayService : AccessibilityService() {
                     checkBoxAutoMode?.setOnCheckedChangeListener { _, isChecked ->
                         isAutoMode = isChecked
                         if (!isChecked) lastAutoFilledNodeHash = 0
+                    }
+                    checkBoxTagUser?.setOnCheckedChangeListener { _, isChecked ->
+                        isTagUser = isChecked
                     }
                     floatingView?.visibility = View.VISIBLE
                 } catch (e: Exception) {
@@ -127,7 +129,10 @@ class ReplyOverlayService : AccessibilityService() {
     }
 
     private fun setupDraggableTouchListener() {
-        floatingView?.setOnTouchListener(object : View.OnTouchListener {
+        // Drag logic attached to the drag handle specifically or the whole container
+        val dragHandle = floatingView?.findViewById<View>(R.id.img_drag_handle)
+        
+        dragHandle?.setOnTouchListener(object : View.OnTouchListener {
             private var initialX: Int = 0
             private var initialY: Int = 0
             private var initialTouchX: Float = 0f
@@ -147,12 +152,6 @@ class ReplyOverlayService : AccessibilityService() {
                             params.x = initialX + (event.rawX - initialTouchX).toInt()
                             params.y = initialY + (event.rawY - initialTouchY).toInt()
                             windowManager?.updateViewLayout(floatingView, params)
-                            return true
-                        }
-                        MotionEvent.ACTION_UP -> {
-                            val diffX = Math.abs(event.rawX - initialTouchX)
-                            val diffY = Math.abs(event.rawY - initialTouchY)
-                            if (diffX < 10 && diffY < 10) v.performClick()
                             return true
                         }
                     }
@@ -196,24 +195,55 @@ class ReplyOverlayService : AccessibilityService() {
         }
     }
 
+    private fun findInstagramUsername(node: AccessibilityNodeInfo?): String? {
+        if (node == null) return null
+        var parent = node.parent
+        var depth = 0
+        while (parent != null && depth < 5) {
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChild(i) ?: continue
+                val text = child.text?.toString() ?: ""
+                if (text.isNotEmpty() && text.length < 30 && !text.contains(" ") && child.hashCode() != node.hashCode()) {
+                    val username = text.replace("@", "")
+                    child.recycle()
+                    parent.recycle()
+                    return username
+                }
+                child.recycle()
+            }
+            val oldParent = parent
+            parent = parent.parent
+            oldParent.recycle()
+            depth++
+        }
+        return null
+    }
+
     private fun pasteMessage(targetNode: AccessibilityNodeInfo?) {
         val nodeToUse = targetNode ?: rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         
         if (nodeToUse != null && nodeToUse.isEditable) {
             if (replyMessages.isEmpty()) return
             
-            val currentMessage = replyMessages[currentIndex]
-            val existingText = nodeToUse.text?.toString() ?: ""
+            // Apply tagging logic only if checked
+            val username = if (isTagUser) findInstagramUsername(nodeToUse) else null
+            val prefix = if (username != null) "@$username " else ""
             
+            val currentMessage = replyMessages[currentIndex]
+            val messageWithUser = "$prefix$currentMessage"
+            
+            val existingText = nodeToUse.text?.toString() ?: ""
             val newText: String
-            if (lastInjectedMessage != null && existingText.endsWith(lastInjectedMessage!!)) {
-                val baseText = existingText.substring(0, existingText.length - lastInjectedMessage!!.length)
-                newText = baseText + currentMessage
+            
+            if (lastInjectedMessage != null && existingText.contains(lastInjectedMessage!!)) {
+                val index = existingText.lastIndexOf(lastInjectedMessage!!)
+                val baseText = existingText.substring(0, index)
+                newText = baseText + messageWithUser
             } else {
                 newText = if (existingText.isNotEmpty() && !existingText.endsWith(" ")) {
-                    "$existingText $currentMessage"
+                    "$existingText $messageWithUser"
                 } else {
-                    "$existingText$currentMessage"
+                    "$existingText$messageWithUser"
                 }
             }
 

@@ -5,6 +5,7 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import { logger } from './utils/logger';
+import { setupSwagger } from './swagger';
 import { API_PORT, TENANT_NAME, SESSION_PATH, CONFIG_PATH } from './config';
 import { initializeDeepLensDbClient, initializeWhatsAppDbClient, getWhatsAppDbClient } from './clients/db.client';
 import { WhatsAppService } from './services/whatsapp.service';
@@ -32,10 +33,14 @@ const io = new SocketServer(server);
 
 // --- Initialize Services ---
 async function initializeServices() {
+
     // --- Middlewares ---
     const cors = require('cors');
     app.use(cors());
     app.use(express.json());
+
+    // --- Swagger Docs ---
+    setupSwagger(app);
 
     // --- Services Initialization ---
     await initializeDeepLensDbClient();

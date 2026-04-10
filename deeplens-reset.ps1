@@ -119,6 +119,7 @@ Write-Host "    Identity API:  http://localhost:5198" -ForegroundColor White
 Write-Host "    Search API:    http://localhost:5000" -ForegroundColor White
 Write-Host "    Web UI:        http://localhost:5001 (Optional - run .\infrastructure\start-ui.ps1)" -ForegroundColor Gray
 Write-Host "    Swagger:       http://localhost:5000/swagger" -ForegroundColor White
+Write-Host "    Orchestrator:  http://localhost:5200" -ForegroundColor White
 Write-Host "" -ForegroundColor White
 Write-Host "  WhatsApp Processor:" -ForegroundColor Yellow
 Write-Host "    API + UI:      http://localhost:3005 (Production)" -ForegroundColor White

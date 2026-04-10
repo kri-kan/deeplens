@@ -25,6 +25,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * GET /api/status
      * Returns the current connection status, QR code, tenant name, session existence, and system health
      */
+    /**
+     * @openapi
+     * /api/status:
+     *   get:
+     *     summary: Get API status and health
+     *     responses:
+     *       200:
+     *         description: Status and health info
+     */
     router.get('/status', async (req: Request, res: Response) => {
         res.json({
             status: waService.getStatus(),
@@ -39,6 +48,32 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/groups
      * Returns standalone groups (not part of communities) with pagination and exclusion status
+     */
+    /**
+     * @openapi
+     * /api/groups:
+     *   get:
+     *     summary: Get WhatsApp groups
+     *     parameters:
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *       - in: query
+     *         name: offset
+     *         schema:
+     *           type: integer
+     *       - in: query
+     *         name: search
+     *         schema:
+     *           type: string
+     *       - in: query
+     *         name: excluded
+     *         schema:
+     *           type: boolean
+     *     responses:
+     *       200:
+     *         description: List of groups
      */
     router.get('/groups', async (req: Request, res: Response) => {
         const limit = parseInt(req.query.limit as string) || 100;
@@ -107,6 +142,32 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * GET /api/chats
      * Returns individual 1-on-1 chats with pagination and exclusion status
      */
+    /**
+     * @openapi
+     * /api/chats:
+     *   get:
+     *     summary: Get 1-on-1 chats
+     *     parameters:
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *       - in: query
+     *         name: offset
+     *         schema:
+     *           type: integer
+     *       - in: query
+     *         name: search
+     *         schema:
+     *           type: string
+     *       - in: query
+     *         name: excluded
+     *         schema:
+     *           type: boolean
+     *     responses:
+     *       200:
+     *         description: List of chats
+     */
     router.get('/chats', async (req: Request, res: Response) => {
         const limit = parseInt(req.query.limit as string) || 100;
         const offset = parseInt(req.query.offset as string) || 0;
@@ -173,6 +234,32 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/announcements
      * Returns community announcement channels with pagination and exclusion status
+     */
+    /**
+     * @openapi
+     * /api/announcements:
+     *   get:
+     *     summary: Get announcement channels
+     *     parameters:
+     *       - in: query
+     *         name: limit
+     *         schema:
+     *           type: integer
+     *       - in: query
+     *         name: offset
+     *         schema:
+     *           type: integer
+     *       - in: query
+     *         name: search
+     *         schema:
+     *           type: string
+     *       - in: query
+     *         name: excluded
+     *         schema:
+     *           type: boolean
+     *     responses:
+     *       200:
+     *         description: List of announcement channels
      */
     router.get('/announcements', async (req: Request, res: Response) => {
         const limit = parseInt(req.query.limit as string) || 100;
@@ -241,6 +328,24 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * POST /api/chats/exclude
      * Excludes a chat from tracking
      */
+    /**
+     * @openapi
+     * /api/chats/exclude:
+     *   post:
+     *     summary: Exclude a chat from tracking
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               jid:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Chat excluded
+     */
     router.post('/chats/exclude', async (req: Request, res: Response) => {
         const { jid } = req.body;
 
@@ -256,6 +361,26 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * POST /api/chats/bulk-exclude
      * Bulk excludes chats from tracking
      */
+    /**
+     * @openapi
+     * /api/chats/bulk-exclude:
+     *   post:
+     *     summary: Bulk exclude chats
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               jids:
+     *                 type: array
+     *                 items:
+     *                   type: string
+     *     responses:
+     *       200:
+     *         description: Chats excluded
+     */
     router.post('/chats/bulk-exclude', async (req: Request, res: Response) => {
         const { jids } = req.body;
 
@@ -270,6 +395,27 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * POST /api/chats/include
      * Includes a chat for tracking with resume mode
+     */
+    /**
+     * @openapi
+     * /api/chats/include:
+     *   post:
+     *     summary: Include a chat for tracking
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               jid:
+     *                 type: string
+     *               resumeMode:
+     *                 type: string
+     *                 enum: [from_last, from_now]
+     *     responses:
+     *       200:
+     *         description: Chat included
      */
     router.post('/chats/include', async (req: Request, res: Response) => {
         const { jid, resumeMode } = req.body;
@@ -290,6 +436,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * GET /api/tracking-states
      * Returns all chat tracking states
      */
+    /**
+     * @openapi
+     * /api/tracking-states:
+     *   get:
+     *     summary: Get all chat tracking states
+     *     responses:
+     *       200:
+     *         description: Tracking states
+     */
     router.get('/tracking-states', async (req: Request, res: Response) => {
         const states = await getAllTrackingStates();
         res.json(states);
@@ -298,6 +453,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * POST /api/processing/pause
      * Pauses message processing
+     */
+    /**
+     * @openapi
+     * /api/processing/pause:
+     *   post:
+     *     summary: Pause message processing
+     *     responses:
+     *       200:
+     *         description: Processing paused
      */
     router.post('/processing/pause', async (req: Request, res: Response) => {
         await pauseProcessing();
@@ -308,6 +472,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * POST /api/processing/resume
      * Resumes message processing
      */
+    /**
+     * @openapi
+     * /api/processing/resume:
+     *   post:
+     *     summary: Resume message processing
+     *     responses:
+     *       200:
+     *         description: Processing resumed
+     */
     router.post('/processing/resume', async (req: Request, res: Response) => {
         await resumeProcessing();
         res.json({ success: true, state: await getProcessingState() });
@@ -317,6 +490,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * GET /api/processing/state
      * Gets the current processing state
      */
+    /**
+     * @openapi
+     * /api/processing/state:
+     *   get:
+     *     summary: Get current processing state
+     *     responses:
+     *       200:
+     *         description: Processing state
+     */
     router.get('/processing/state', async (req: Request, res: Response) => {
         res.json(await getProcessingState());
     });
@@ -324,6 +506,28 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * POST /api/processing/sync-settings
      * Updates global sync settings
+     */
+    /**
+     * @openapi
+     * /api/processing/sync-settings:
+     *   post:
+     *     summary: Update global sync settings
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               trackChats:
+     *                 type: boolean
+     *               trackGroups:
+     *                 type: boolean
+     *               trackAnnouncements:
+     *                 type: boolean
+     *     responses:
+     *       200:
+     *         description: Sync settings updated
      */
     router.post('/processing/sync-settings', async (req: Request, res: Response) => {
         const { trackChats, trackGroups, trackAnnouncements } = req.body;
@@ -341,6 +545,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * POST /api/sync/manual
      * Manually triggers a sync of chats and contacts
      */
+    /**
+     * @openapi
+     * /api/sync/manual:
+     *   post:
+     *     summary: Manually trigger sync
+     *     responses:
+     *       200:
+     *         description: Manual sync started
+     */
     router.post('/sync/manual', async (req: Request, res: Response) => {
         try {
             await waService.manualSync();
@@ -353,6 +566,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/debug/db
      * DEBUG ONLY: Returns counts of records in the database
+     */
+    /**
+     * @openapi
+     * /api/debug/db:
+     *   get:
+     *     summary: Get DB debug info
+     *     responses:
+     *       200:
+     *         description: DB debug info
      */
     router.get('/debug/db', async (req: Request, res: Response) => {
         const client = getWhatsAppDbClient();
@@ -378,6 +600,21 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/media/:messageId
      * Media Read-Through: Returns a presigned URL for the media associated with a message
+     */
+    /**
+     * @openapi
+     * /api/media/{messageId}:
+     *   get:
+     *     summary: Get presigned media URL
+     *     parameters:
+     *       - in: path
+     *         name: messageId
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       302:
+     *         description: Redirect to presigned URL
      */
     router.get('/media/:messageId', async (req: Request, res: Response) => {
         const { messageId } = req.params;
@@ -426,6 +663,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * POST /api/auth/logout
      * Formally log out from WhatsApp and clear the session
      */
+    /**
+     * @openapi
+     * /api/auth/logout:
+     *   post:
+     *     summary: Log out from WhatsApp
+     *     responses:
+     *       200:
+     *         description: Logout successful
+     */
     router.post('/auth/logout', async (req: Request, res: Response) => {
         try {
             await waService.logout();
@@ -438,6 +684,34 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * POST /api/chats/:jid/vendor
      * Assign a vendor to a chat (group, announcement, or individual)
+     */
+    /**
+     * @openapi
+     * /api/chats/{jid}/vendor:
+     *   post:
+     *     summary: Assign vendor to chat
+     *     parameters:
+     *       - in: path
+     *         name: jid
+     *         required: true
+     *         schema:
+     *           type: string
+     *     requestBody:
+     *       required: true
+     *       content:
+     *         application/json:
+     *           schema:
+     *             type: object
+     *             properties:
+     *               vendorId:
+     *                 type: string
+     *               vendorName:
+     *                 type: string
+     *               assignedBy:
+     *                 type: string
+     *     responses:
+     *       200:
+     *         description: Vendor assigned
      */
     router.post('/chats/:jid/vendor', async (req: Request, res: Response) => {
         const { jid } = req.params;
@@ -475,6 +749,21 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/chats/:jid/vendor
      * Get vendor information for a chat
+     */
+    /**
+     * @openapi
+     * /api/chats/{jid}/vendor:
+     *   get:
+     *     summary: Get vendor info for chat
+     *     parameters:
+     *       - in: path
+     *         name: jid
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Vendor info
      */
     router.get('/chats/:jid/vendor', async (req: Request, res: Response) => {
         const { jid } = req.params;
@@ -516,6 +805,21 @@ export function createApiRoutes(waService: WhatsAppService): Router {
      * DELETE /api/chats/:jid/vendor
      * Remove vendor assignment from a chat
      */
+    /**
+     * @openapi
+     * /api/chats/{jid}/vendor:
+     *   delete:
+     *     summary: Remove vendor from chat
+     *     parameters:
+     *       - in: path
+     *         name: jid
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: Vendor removed
+     */
     router.delete('/chats/:jid/vendor', async (req: Request, res: Response) => {
         const { jid } = req.params;
         const client = getWhatsAppDbClient();
@@ -542,6 +846,21 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/vendors/:vendorId/chats
      * Get all chats assigned to a specific vendor
+     */
+    /**
+     * @openapi
+     * /api/vendors/{vendorId}/chats:
+     *   get:
+     *     summary: Get all chats for vendor
+     *     parameters:
+     *       - in: path
+     *         name: vendorId
+     *         required: true
+     *         schema:
+     *           type: string
+     *     responses:
+     *       200:
+     *         description: List of chats for vendor
      */
     router.get('/vendors/:vendorId/chats', async (req: Request, res: Response) => {
         const { vendorId } = req.params;
@@ -571,6 +890,15 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     /**
      * GET /api/vendors/stats
      * Get vendor assignment statistics
+     */
+    /**
+     * @openapi
+     * /api/vendors/stats:
+     *   get:
+     *     summary: Get vendor assignment stats
+     *     responses:
+     *       200:
+     *         description: Vendor stats
      */
     router.get('/vendors/stats', async (req: Request, res: Response) => {
         const client = getWhatsAppDbClient();

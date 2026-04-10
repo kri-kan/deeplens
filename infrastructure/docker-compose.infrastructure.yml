@@ -395,7 +395,7 @@ services:
   # =============================================================================
   reasoning-api:
     build:
-      context: ../src/DeepLens.ReasoningService
+      context: ../src/DeepLens.Service/DeepLens.ReasoningService
       dockerfile: Dockerfile
     container_name: deeplens-reasoning-api
     restart: unless-stopped

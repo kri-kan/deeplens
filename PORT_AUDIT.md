@@ -36,8 +36,8 @@ All ports have been verified across code, configuration files, and documentation
 
 | Service           | File                                                       | Port      | Status    |
 | ----------------- | ---------------------------------------------------------- | --------- | --------- |
-| Identity API      | `src/NextGen.Identity.Api/Properties/launchSettings.json`  | 5198      | ✅ Correct |
-| Search API        | `src/DeepLens.SearchApi/Properties/launchSettings.json`    | 5000      | ✅ Correct |
+| Identity API      | `src/NextGen.Identity/NextGen.Identity.Api/Properties/launchSettings.json`  | 5198      | ✅ Correct |
+| Search API        | `src/DeepLens.Service/DeepLens.SearchApi/Properties/launchSettings.json`    | 5000      | ✅ Correct |
 | DeepLens Web UI   | `src/DeepLens.WebUI/vite.config.ts`                        | 5001      | ✅ Correct |
 | WhatsApp API      | `src/whatsapp-processor/.env.example`                      | 3005      | ✅ Correct |
 | WhatsApp UI (Dev) | `src/whatsapp-processor/client/vite.config.ts`             | 3006      | ✅ Correct |
@@ -70,8 +70,8 @@ All ports have been verified across code, configuration files, and documentation
 
 | Service     | Port | File                                                     | Notes              |
 | ----------- | ---- | -------------------------------------------------------- | ------------------ |
-| API Gateway | 5203 | `src/DeepLens.ApiGateway/Properties/launchSettings.json` | Not currently used |
-| Admin API   | 5205 | `src/DeepLens.AdminApi/Properties/launchSettings.json`   | Not currently used |
+| API Gateway | 5203 | `src/DeepLens.Service/DeepLens.ApiGateway/Properties/launchSettings.json` | Not currently used |
+| Admin API   | 5205 | `src/DeepLens.Service/DeepLens.AdminApi/Properties/launchSettings.json`   | Not currently used |
 
 ## Port Conflicts
 

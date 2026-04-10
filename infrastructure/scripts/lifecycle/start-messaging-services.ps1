@@ -87,16 +87,19 @@ if ($kafkaRunning) {
     podman start deeplens-kafka | Out-Null
 } else {
     Write-Host "  Creating Kafka..." -ForegroundColor Yellow
-    $kafkaEnv = "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+    # Dual listener setup: 
+    # INTERNAL (deeplens-kafka:29092) for containers
+    # EXTERNAL (localhost:9092) for host machine
     podman run -d `
         --name deeplens-kafka `
         --network deeplens-network `
         -e KAFKA_BROKER_ID=1 `
         -e KAFKA_ZOOKEEPER_CONNECT=deeplens-zookeeper:2181 `
-        -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 `
+        -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT `
+        -e KAFKA_LISTENERS=INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092 `
+        -e KAFKA_ADVERTISED_LISTENERS=INTERNAL://deeplens-kafka:29092,EXTERNAL://localhost:9092 `
+        -e KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL `
         -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 `
-        -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=$kafkaEnv `
-        -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT `
         -v deeplens-kafka-data:/var/lib/kafka/data `
         -v deeplens-kafka-secrets:/etc/kafka/secrets `
         -p 9092:9092 `

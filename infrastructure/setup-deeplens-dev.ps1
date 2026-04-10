@@ -54,6 +54,8 @@ foreach ($topic in $requiredTopics) {
     if ($LASTEXITCODE -ne 0) { Write-Host "    [WARN] Failed to create topic $topic" -ForegroundColor Yellow }
 }
 
+
+
 # 3b. Cleanup Data (Topics/Buckets) if Clean was requested
 # This runs AFTER services start because we need the services to accept delete commands
 if ($Clean) {
@@ -64,7 +66,7 @@ if ($Clean) {
     try {
         $topics = podman exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 --list 2>$null
         if ($topics) {
-            $deepLensTopics = $topics -split "\r?\n" | Where-Object { $_ -match "^deeplens-" }
+            $deepLensTopics = $topics -split "\r?\n" | Where-Object { $_ -match "^deeplens-|^competitor-" }
             foreach ($topic in $deepLensTopics) {
                  & "$CommonScriptsRoot\manage-kafka-topics.ps1" -Action "Delete" -TopicName $topic
             }
@@ -86,20 +88,39 @@ Write-Host "[4/6] Starting Observability Stack..." -ForegroundColor Yellow
 Write-Host "[5/6] Setting up Feature Extraction Service..." -ForegroundColor Yellow
 if (-not $SkipBuild) {
     Write-Host "  Building Docker image..." -ForegroundColor Gray
-    podman build -t deeplens-feature-extraction -f src/DeepLens.FeatureExtractionService/Dockerfile src/DeepLens.FeatureExtractionService | Out-Null
+    podman build -t deeplens-feature-extraction -f src/DeepLens.Service/DeepLens.FeatureExtractionService/Dockerfile src/DeepLens.Service/DeepLens.FeatureExtractionService | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Host "  [FAIL] Build failed" -ForegroundColor Red; exit 1 }
 }
 podman run -d `
     --name deeplens-feature-extraction `
     --network deeplens-network `
-    -v "${PWD}/src/DeepLens.FeatureExtractionService/models:/app/models" `
+    -v "${PWD}/src/DeepLens.Service/DeepLens.FeatureExtractionService/models:/app/models" `
     -p 8001:8001 `
     deeplens-feature-extraction | Out-Null
 Write-Host "  [OK] Feature Extraction Service started" -ForegroundColor Green
 
+# 5b. Competitor Scraper Worker
+Write-Host "[5b/6] Setting up Instagram Scraper Worker..." -ForegroundColor Yellow
+if (-not $SkipBuild) {
+    Write-Host "  Building Scraper Worker image..." -ForegroundColor Gray
+    podman build -t deeplens-scraper-worker -f src/competitor-scraper-workers/Dockerfile src/competitor-scraper-workers | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Host "  [FAIL] Scraper Build failed" -ForegroundColor Red; exit 1 }
+}
+podman run -d `
+    --name deeplens-instagram-worker `
+    --network deeplens-network `
+    -e KAFKA_BOOTSTRAP_SERVERS="deeplens-kafka:29092" `
+    -e WORKER_TYPE="instagram" `
+    deeplens-scraper-worker | Out-Null
+Write-Host "  [OK] Instagram Scraper Worker started" -ForegroundColor Green
+
 # 6. Initialize Data
 Write-Host "[6/6] Initializing & Bootstrapping Data..." -ForegroundColor Yellow
 & "$ScriptsRoot\init-bootstrap-data.ps1"
+
+# 7. Setup Competitor Intelligence (Requires DB to be initialized)
+Write-Host "[7/6] Setting up Competitor Intelligence..." -ForegroundColor Yellow
+& "$ScriptsRoot\setup-competitor-intel.ps1"
 
 Write-Host ""
 Write-Host "=== Infrastructure Setup Complete ===" -ForegroundColor Green

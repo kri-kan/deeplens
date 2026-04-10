@@ -17,7 +17,7 @@ Last Updated: December 20, 2025
     ```
 3.  **Identity API**:
     ```powershell
-    cd src/NextGen.Identity.Api
+    cd src/NextGen.Identity/NextGen.Identity.Api
     $env:ASPNETCORE_ENVIRONMENT="Development"
     dotnet run --urls "http://localhost:5198"
     ```
@@ -85,7 +85,7 @@ Last Updated: December 20, 2025
 ## 🛠️ Development Workflow
 
 ### .NET Development
-- **Solution**: Open `src/DeepLens.sln` in VS 2022 or VS Code.
+- **Solution**: Open `src/DeepLens.Service/DeepLens.sln` in VS 2022 or VS Code.
 - **Migrations**: Always use `dotnet ef database update` from the project directory.
 - **Style**: Follow C# Clean Architecture patterns.
 
@@ -199,9 +199,9 @@ WHERE slug = 'vayyari';
 1. **Start All Services**:
    ```powershell
    # Backend APIs
-   dotnet run --project src/NextGen.Identity.Api/NextGen.Identity.Api.csproj --urls http://localhost:5198
-   dotnet run --project src/DeepLens.SearchApi/DeepLens.SearchApi.csproj --urls http://localhost:5000
-   dotnet run --project src/DeepLens.WorkerService/DeepLens.WorkerService.csproj
+   dotnet run --project src/NextGen.Identity/NextGen.Identity.Api/NextGen.Identity.Api.csproj --urls http://localhost:5198
+   dotnet run --project src/DeepLens.Service/DeepLens.SearchApi/DeepLens.SearchApi.csproj --urls http://localhost:5000
+   dotnet run --project src/DeepLens.Service/DeepLens.WorkerService/DeepLens.WorkerService.csproj
    
    # Frontend
    cd src/DeepLens.WebUI

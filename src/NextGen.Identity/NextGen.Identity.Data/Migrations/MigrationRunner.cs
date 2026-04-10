@@ -43,10 +43,12 @@ public class MigrationRunner
 
     private async Task<List<string>> GetPendingMigrationsAsync()
     {
-        // For now, return hardcoded list. In production, scan Migrations folder
+        // All migrations in order
         var allMigrations = new List<string>
         {
-            "001_InitialSchema.sql"
+            "001_InitialSchema.sql",
+            "002_AddTenantSettings.sql",
+            "003_CompetitorIntelligence.sql"
         };
 
         await using var connection = new NpgsqlConnection(_connectionString);

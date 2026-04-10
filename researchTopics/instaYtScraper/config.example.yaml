@@ -1,0 +1,291 @@
+# =====================================================
+# Competitor Intelligence Scraper Configuration
+# =====================================================
+# This file controls what accounts to monitor and
+# how aggressively to scrape them
+# =====================================================
+
+# =====================================================
+# WATCHLISTS - Accounts/Channels to Monitor
+# =====================================================
+watchlists:
+  # Instagram accounts to monitor
+  instagram:
+    - username: competitor1_sarees
+      tags: [sarees, premium, wedding, bridal]
+      enabled: true
+      notes: "Main competitor, posts 2-3 times daily"
+    
+    - username: competitor2_fashion
+      tags: [daily_wear, casual, kurtis]
+      enabled: true
+      notes: "Budget segment competitor"
+    
+    - username: competitor3_boutique
+      tags: [custom, designer, premium]
+      enabled: false  # Disabled temporarily
+      notes: "Low posting frequency"
+  
+  # YouTube channels to monitor
+  youtube:
+    - channel_handle: "@competitor_styling"
+      channel_id: null  # Auto-detected on first run
+      tags: [tutorials, styling_tips, how_to_drape]
+      enabled: true
+      notes: "Weekly tutorial uploads"
+    
+    - channel_handle: "@saree_collection_reviews"
+      channel_id: null
+      tags: [reviews, unboxing, hauls]
+      enabled: true
+      notes: "Product reviews, mentions prices"
+
+# =====================================================
+# SCRAPING CONFIGURATION
+# =====================================================
+scraping:
+  # Cron-based scheduling (standard cron format)
+  # See: https://crontab.guru/ for help
+  schedule:
+    instagram: "0 */6 * * *"  # Every 6 hours (00:00, 06:00, 12:00, 18:00)
+    youtube: "0 */12 * * *"   # Every 12 hours (00:00, 12:00)
+  
+  # Instagram scraping settings
+  instagram:
+    # Account credentials (dedicated scraper account)
+    account_username: "your_scraper_account_username"
+    # Note: Password should be in environment variable INSTAGRAM_PASSWORD
+    
+    # Session management
+    session_file: "/data/sessions/instagram_session"  # Persisted across restarts
+    
+    # Content limits
+    posts_per_account: 50  # Max posts to fetch per account (newest first)
+    stories_enabled: false  # WARNING: Stories scraping increases ban risk
+    reels_enabled: true  # Fetch Instagram Reels
+    igtv_enabled: true  # Fetch IGTV videos
+    
+    # Rate limiting (CRITICAL for avoiding bans)
+    delay_between_posts: [3, 7]  # Random delay in seconds (min, max)
+    delay_between_accounts: [60, 120]  # Delay between different accounts
+    max_posts_per_hour: 40  # Global rate limit
+    
+    # Download settings
+    download_videos: true
+    download_images: true
+    download_sidecar: true  # Carousel posts
+    max_video_size_mb: 500  # Skip videos larger than this
+    
+    # Metadata extraction
+    extract_hashtags: true
+    extract_mentions: true
+    extract_location: true
+    extract_tagged_accounts: true
+  
+  # YouTube scraping settings
+  youtube:
+    # Content limits
+    videos_per_channel: 50  # Max videos to fetch per channel
+    
+    # Download settings
+    download_full_video: true  # Set false to only get metadata
+    video_quality: "best[height<=1080]"  # Max 1080p to save bandwidth
+    # Options: "worst", "best[height<=720]", "best[height<=1080]", "best"
+    
+    # Content filters
+    shorts_enabled: true  # Include YouTube Shorts
+    livestreams_enabled: false  # Skip live streams
+    premieres_enabled: true  # Include video premieres
+    
+    # Rate limiting
+    delay_between_videos: [2, 5]  # Seconds between video downloads
+    delay_between_channels: [30, 60]  # Delay between channels
+    
+    # Metadata extraction
+    extract_comments: false  # WARNING: Slow and rate-limited
+    extract_subtitles: true  # Download auto-generated subtitles if available
+    extract_chapters: true  # Video chapters/timestamps
+  
+  # General scraping settings
+  general:
+    # Retry logic
+    retry:
+      max_attempts: 3
+      backoff_factor: 2  # Exponential backoff: 1s, 2s, 4s, 8s...
+      retry_on_errors: [429, 500, 502, 503, 504]  # HTTP status codes
+    
+    # Timeout settings
+    request_timeout_seconds: 30
+    download_timeout_seconds: 300  # 5 minutes for large videos
+    
+    # Proxy settings (optional - leave empty if not using)
+    proxy:
+      enabled: false
+      http_proxy: null  # "http://user:pass@proxy:port"
+      https_proxy: null
+      rotate_per_request: false
+    
+    # User-Agent rotation
+    user_agent_rotation: true
+    user_agents:
+      - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# =====================================================
+# STORAGE CONFIGURATION
+# =====================================================
+storage:
+  # Database connection
+  # Use environment variable: DATABASE_URL
+  database_url: "${DATABASE_URL}"
+  
+  # MinIO object storage
+  minio:
+    endpoint: "${MINIO_ENDPOINT}"  # e.g., "localhost:9000"
+    access_key: "${MINIO_ACCESS_KEY}"
+    secret_key: "${MINIO_SECRET_KEY}"
+    secure: false  # Set true for HTTPS
+    
+    # Bucket configuration
+    bucket_prefix: "competitor-intel"
+    buckets:
+      media: "competitor-intel-media"  # Videos and images
+      thumbnails: "competitor-intel-thumbnails"
+      metadata: "competitor-intel-metadata"  # JSON dumps
+  
+  # Storage optimization
+  thumbnail:
+    generate: true
+    width: 400  # Pixels
+    quality: 85  # JPEG quality 0-100
+  
+  # Cleanup policies
+  cleanup:
+    enabled: true
+    delete_old_media_days: 180  # Delete media older than 6 months
+    delete_failed_downloads_days: 7
+    keep_metadata_forever: true  # Keep metadata even if media deleted
+
+# =====================================================
+# INSIGHTS & ANALYTICS
+# =====================================================
+insights:
+  # Engagement spike detection
+  engagement_spike:
+    enabled: true
+    threshold_multiplier: 2.0  # 2x average = spike
+    comparison_window_days: 30  # Compare to 30-day average
+    min_baseline_videos: 5  # Need at least 5 videos for baseline
+  
+  # Trending video detection
+  trending:
+    enabled: true
+    min_age_hours: 1  # Video must be at least 1 hour old
+    max_age_days: 7  # Only consider videos from last week
+    engagement_rate_threshold: 5.0  # 5% engagement rate
+  
+  # Design similarity (AI-powered)
+  design_matching:
+    enabled: false  # Requires AI service setup
+    model: "clip-vit-large"  # Visual similarity model
+    similarity_threshold: 0.75  # 75% similar
+    auto_suggest_skus: true
+  
+  # Price detection (from text/OCR)
+  price_detection:
+    enabled: true
+    currencies: ["₹", "INR", "Rs.", "RS"]
+    confidence_threshold: 0.8
+  
+  # Snapshot frequency for engagement tracking
+  engagement_snapshots:
+    enabled: true
+    # Take snapshots at: 1h, 6h, 24h, 7d, 30d after posting
+    intervals: [1, 6, 24, 168, 720]  # Hours
+
+# =====================================================
+# NOTIFICATIONS & ALERTS
+# =====================================================
+notifications:
+  enabled: false  # Set true to enable alerts
+  
+  # Email notifications
+  email:
+    enabled: false
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_user: "${SMTP_USER}"
+    smtp_password: "${SMTP_PASSWORD}"
+    from_address: "scraper@yourdomain.com"
+    to_addresses: ["you@yourdomain.com"]
+    
+    # Alert triggers
+    alerts:
+      - type: "engagement_spike"
+        min_score: 80
+      - type: "new_product_launch"
+        min_score: 70
+      - type: "scraper_failure"
+        consecutive_failures: 3
+  
+  # Webhook notifications (e.g., Slack, Discord)
+  webhook:
+    enabled: false
+    url: "${WEBHOOK_URL}"
+    events: ["engagement_spike", "trending", "scraper_failure"]
+
+# =====================================================
+# MONITORING & LOGGING
+# =====================================================
+monitoring:
+  # Logging level
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  
+  # Structured logging
+  log_format: "json"  # "json" or "text"
+  
+  # Performance metrics
+  metrics:
+    enabled: true
+    prometheus_port: 9090  # Expose Prometheus metrics
+  
+  # Health checks
+  health_check:
+    enabled: true
+    port: 8080
+    endpoint: "/health"
+
+# =====================================================
+# DEVELOPMENT & DEBUGGING
+# =====================================================
+development:
+  # Dry run mode (don't actually download, just log)
+  dry_run: false
+  
+  # Limit downloads for testing
+  test_mode: false
+  test_accounts_limit: 1  # Only scrape first account
+  test_posts_limit: 5  # Only fetch 5 posts per account
+  
+  # Verbose output
+  verbose: false
+  debug_save_responses: false  # Save raw API responses to files
+
+# =====================================================
+# ADVANCED SETTINGS
+# =====================================================
+advanced:
+  # Concurrent workers
+  max_concurrent_accounts: 1  # Scrape 1 account at a time (safer)
+  max_concurrent_downloads: 3  # Download 3 media files in parallel
+  
+  # Memory limits
+  max_memory_mb: 2048  # Kill process if exceeds 2GB RAM
+  
+  # Session management
+  session_refresh_days: 30  # Re-login every 30 days
+  
+  # Error handling
+  pause_on_challeng: true  # Pause scraper if Instagram shows challenge
+  auto_resume_after_hours: 24  # Auto-resume after 24h cooldown

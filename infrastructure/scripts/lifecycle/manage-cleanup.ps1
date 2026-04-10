@@ -29,7 +29,7 @@ if (podman ps --filter "name=deeplens-postgres" --format "{{.ID}}") {
 
 # 2. Kafka Topics (DeepLens Only)
 if (podman ps --filter "name=deeplens-kafka" --format "{{.ID}}") {
-    $topics = @("deeplens.images.uploaded", "deeplens.videos.uploaded", "deeplens.features.extraction", "deeplens.vectors.indexing", "deeplens.processing.completed", "deeplens.processing.failed", "deeplens.images.maintenance")
+    $topics = @("deeplens.images.uploaded", "deeplens.videos.uploaded", "deeplens.features.extraction", "deeplens.vectors.indexing", "deeplens.processing.completed", "deeplens.processing.failed", "deeplens.images.maintenance", "competitor.scrape.metadata.requests", "competitor.scrape.metadata.responses")
     foreach ($topic in $topics) {
         podman exec deeplens-kafka kafka-topics --delete --topic $topic --bootstrap-server localhost:9092 --if-exists 2>$null | Out-Null
     }

@@ -14,13 +14,13 @@ Write-Host "=== Starting DeepLens .NET Services ===" -ForegroundColor Cyan
 Write-Host ""
 
 # Stop any existing dotnet processes
-Write-Host "[1/4] Stopping existing services..." -ForegroundColor Yellow
+Write-Host "[1/5] Stopping existing services..." -ForegroundColor Yellow
 Get-Process -Name "dotnet" -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep 2
 Write-Host "  [OK] Existing services stopped" -ForegroundColor Green
 
 # Start Identity API
-Write-Host "[2/4] Starting Identity API..." -ForegroundColor Yellow
+Write-Host "[2/5] Starting Identity API..." -ForegroundColor Yellow
 Start-Process "C:\Program Files\dotnet\dotnet.exe" `
     -ArgumentList "run --project src\NextGen.Identity.Api\NextGen.Identity.Api.csproj" `
     -NoNewWindow `
@@ -30,7 +30,7 @@ Start-Sleep 5
 Write-Host "  [OK] Identity API started on http://localhost:5198" -ForegroundColor Green
 
 # Start Search API
-Write-Host "[3/4] Starting Search API..." -ForegroundColor Yellow
+Write-Host "[3/5] Starting Search API..." -ForegroundColor Yellow
 Start-Process "C:\Program Files\dotnet\dotnet.exe" `
     -ArgumentList "run --project src\DeepLens.SearchApi\DeepLens.SearchApi.csproj" `
     -NoNewWindow `
@@ -40,7 +40,7 @@ Start-Sleep 5
 Write-Host "  [OK] Search API started on http://localhost:5000" -ForegroundColor Green
 
 # Start Worker Service
-Write-Host "[4/4] Starting Worker Service..." -ForegroundColor Yellow
+Write-Host "[4/5] Starting Worker Service..." -ForegroundColor Yellow
 Start-Process "C:\Program Files\dotnet\dotnet.exe" `
     -ArgumentList "run --project src\DeepLens.WorkerService\DeepLens.WorkerService.csproj" `
     -NoNewWindow `
@@ -48,6 +48,16 @@ Start-Process "C:\Program Files\dotnet\dotnet.exe" `
 
 Start-Sleep 5
 Write-Host "  [OK] Worker Service started" -ForegroundColor Green
+
+# Start Competitor Orchestrator
+Write-Host "[5/5] Starting Competitor Intel Orchestrator..." -ForegroundColor Yellow
+Start-Process "C:\Program Files\dotnet\dotnet.exe" `
+    -ArgumentList "run --project src\CompetitorIntel.Orchestrator\CompetitorIntel.Orchestrator.csproj --urls http://localhost:5200" `
+    -NoNewWindow `
+    -WorkingDirectory (Get-Location)
+
+Start-Sleep 5
+Write-Host "  [OK] Competitor Orchestrator started on http://localhost:5200" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "=== All Services Started ===" -ForegroundColor Green
