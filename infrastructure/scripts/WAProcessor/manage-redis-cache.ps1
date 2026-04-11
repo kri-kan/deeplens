@@ -15,7 +15,7 @@ $ErrorActionPreference = "Continue"
 function Run-Redis-Cmd {
     param($Args)
     # Write-Host "DEBUG: Running redis-cli $Args" -ForegroundColor DarkGray
-    podman exec $ContainerName redis-cli $Args 2>&1
+    docker exec $ContainerName redis-cli $Args 2>&1
 }
 
 Write-Host "Redis Manager: Performing $Action..." -ForegroundColor Cyan

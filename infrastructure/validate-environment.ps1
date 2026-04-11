@@ -13,31 +13,59 @@ $ErrorActionPreference = "Continue"
 Write-Host "=== DeepLens Environment Validation ===" -ForegroundColor Cyan
 Write-Host ""
 
+# Load environment variables
+. "$PSScriptRoot/scripts/helpers/LoadEnv.ps1"
+Load-Env -EnvFile "$PSScriptRoot/.env"
+
+# Use variables from .env or fallback to baseline
+$RemoteHost = $env:INFRA_HOST ?? "192.168.0.170"
+$PgPort = $env:POSTGRES_PORT ?? 5432
+$RedisPort = $env:REDIS_PORT ?? 6379
+$KafkaPort = $env:KAFKA_PORT ?? 9092
+$MinioPort = $env:MINIO_PORT ?? 9000
+$QdrantDashPort = $env:QDRANT_DASH_PORT ?? 6333
+$InfluxPort = $env:INFLUXDB_PORT ?? 8086
+$DbPass = $env:POSTGRES_PASSWORD ?? "Krikank1$"
+
 $allGood = $true
 
 # Check remote infrastructure connectivity
-Write-Host "[Infrastructure Connectivity (192.168.0.170)]" -ForegroundColor Yellow
-$RemoteHost = "192.168.0.170"
+Write-Host "[Infrastructure Connectivity ($RemoteHost)]" -ForegroundColor Yellow
 $RequiredPorts = @(
-    @{Port = 5432; Name = "PostgreSQL"}
-    @{Port = 6379; Name = "Redis"}
-    @{Port = 9092; Name = "Kafka"}
-    @{Port = 9000; Name = "MinIO (API)"}
-    @{Port = 6333; Name = "Qdrant (Dashboard)"}
-    @{Port = 8086; Name = "InfluxDB"}
+    @{Port = $PgPort; Name = "PostgreSQL"}
+    @{Port = $RedisPort; Name = "Redis"}
+    @{Port = $KafkaPort; Name = "Kafka"}
+    @{Port = $MinioPort; Name = "MinIO (API)"}
+    @{Port = $QdrantDashPort; Name = "Qdrant (Dashboard)"}
+    @{Port = $InfluxPort; Name = "InfluxDB"}
 )
 
-foreach ($item in $RequiredPorts) {
+# Helper for cross-platform port testing
+function Test-Port {
+    param([string]$HostName, [int]$Port)
+    $tcp = New-Object System.Net.Sockets.TcpClient
     try {
-        $conn = Test-NetConnection -ComputerName $RemoteHost -Port $item.Port -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-        if ($conn.TcpTestSucceeded) {
-            Write-Host "  [OK] $($item.Name) on port $($item.Port)" -ForegroundColor Green
-        } else {
-            Write-Host "  [FAIL] $($item.Name) on port $($item.Port) (Unreachable)" -ForegroundColor Red
-            $allGood = $false
+        $ar = $tcp.BeginConnect($HostName, $Port, $null, $null)
+        $wait = $ar.AsyncWaitHandle.WaitOne(1000, $false)
+        if ($wait) {
+            $tcp.EndConnect($ar)
+            return $true
         }
+        return $false
     } catch {
-        Write-Host "  [FAIL] $($item.Name) on port $($item.Port) (Error)" -ForegroundColor Red
+        return $false
+    } finally {
+        $tcp.Close()
+        if ($null -ne $tcp.Dispose) { $tcp.Dispose() }
+    }
+}
+
+foreach ($item in $RequiredPorts) {
+    if (Test-Port -HostName $RemoteHost -Port $item.Port) {
+        Write-Host "  [OK] $($item.Name) on port $($item.Port)" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  [FAIL] $($item.Name) on port $($item.Port)" -ForegroundColor Red
         $allGood = $false
     }
 }
@@ -61,8 +89,8 @@ Write-Host "[Service Endpoints]" -ForegroundColor Yellow
 $endpoints = @(
     @{Name = "Identity API"; Url = "http://localhost:5198/.well-known/openid-configuration" }
     @{Name = "Search API"; Url = "http://localhost:5000/swagger/index.html" }
-    @{Name = "MinIO (Remote)"; Url = "http://192.168.0.170:9000/minio/health/live" }
-    @{Name = "Qdrant (Remote)"; Url = "http://192.168.0.170:6333/" }
+    @{Name = "MinIO (Remote)"; Url = "http://$RemoteHost`:$MinioPort/minio/health/live" }
+    @{Name = "Qdrant (Remote)"; Url = "http://$RemoteHost`:$QdrantDashPort/" }
 )
 
 foreach ($endpoint in $endpoints) {
@@ -86,24 +114,27 @@ foreach ($endpoint in $endpoints) {
 Write-Host ""
 Write-Host "[Remote Databases]" -ForegroundColor Yellow
 
-$DbPass = "Krikank1$"
-$DbHost = "192.168.0.170"
+$DbHost = $RemoteHost
 
-podman run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d nextgen_identity -c "SELECT 1" 2>&1 | Out-Null
+docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d nextgen_identity -c "SELECT 1" 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  [OK] nextgen_identity database" -ForegroundColor Green
 }
 else {
     Write-Host "  [FAIL] nextgen_identity database" -ForegroundColor Red
+    # Show actual error for easier debugging
+    Write-Host "    Error: $(docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d nextgen_identity -c 'SELECT 1' 2>&1)" -ForegroundColor DarkGray
     $allGood = $false
 }
 
-podman run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d tenant_metadata_template -c "SELECT 1" 2>&1 | Out-Null
+docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d tenant_metadata_template -c "SELECT 1" 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  [OK] tenant_metadata_template database" -ForegroundColor Green
 }
 else {
     Write-Host "  [FAIL] tenant_metadata_template database" -ForegroundColor Red
+    # Show actual error for easier debugging
+    Write-Host "    Error: $(docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d tenant_metadata_template -c 'SELECT 1' 2>&1)" -ForegroundColor DarkGray
     $allGood = $false
 }
 
@@ -114,11 +145,10 @@ if ($allGood) {
     exit 0
 }
 else {
-    Write-Host "=== Environment has issues ===" -ForegroundColor Red
-    Write-Host ""
+    Write-Host "=== Environment has issues ===`n" -ForegroundColor Red
     Write-Host "Troubleshooting:" -ForegroundColor Yellow
-    Write-Host "  1. Run: .\infrastructure\setup-deeplens-dev.ps1 -Clean" -ForegroundColor Gray
-    Write-Host "  2. Check logs: podman logs <container-name>" -ForegroundColor Gray
+    Write-Host "  1. Check connectivity to ($RemoteHost)(Ping or Browser)" -ForegroundColor Gray
+    Write-Host "  2. Ensure Docker Desktop / Engine is running" -ForegroundColor Gray
     exit 1
 }
 

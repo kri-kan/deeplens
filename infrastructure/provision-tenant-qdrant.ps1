@@ -16,13 +16,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Load environment variables
+. "$PSScriptRoot/scripts/helpers/LoadEnv.ps1"
+Load-Env -EnvFile "$PSScriptRoot/.env"
+
+$RemoteHost = $env:INFRA_HOST ?? "192.168.0.170"
+
 $ContainerName = "deeplens-qdrant-$TenantName"
-$VolumeName = "deeplens_qdrant_${TenantName}_data"
+$StorageRoot = "$PSScriptRoot/data/tenants/$TenantName/qdrant"
 
 function Get-NextAvailablePort {
     param([int]$StartPort)
     
-    $usedPorts = podman ps --format "{{.Ports}}" | Select-String -Pattern "(\d+):" -AllMatches | 
+    $usedPorts = docker ps --format "{{.Ports}}" | Select-String -Pattern "(\d+):" -AllMatches | 
         ForEach-Object { $_.Matches.Groups[1].Value } | Sort-Object -Unique
     
     $port = $StartPort
@@ -37,12 +43,12 @@ function Remove-TenantQdrant {
     
     # Stop and remove container
     Write-Host "[INFO] Stopping container..." -ForegroundColor Cyan
-    podman stop $ContainerName 2>&1 | Out-Null
-    podman rm $ContainerName 2>&1 | Out-Null
+    docker stop $ContainerName 2>&1 | Out-Null
+    docker rm $ContainerName 2>&1 | Out-Null
     
     # Remove volume
     Write-Host "[INFO] Removing volume..." -ForegroundColor Cyan
-    podman volume rm $VolumeName 2>&1 | Out-Null
+    docker volume rm $VolumeName 2>&1 | Out-Null
     
     Write-Host "[OK] Qdrant removed for tenant: $TenantName" -ForegroundColor Green
 }
@@ -55,7 +61,7 @@ function Provision-TenantQdrant {
     Write-Host ""
     
     # Check if container already exists
-    $existing = podman ps -a --filter "name=^${ContainerName}$" --format "{{.Names}}"
+    $existing = docker ps -a --filter "name=^${ContainerName}$" --format "{{.Names}}"
     if ($existing) {
         Write-Host "[ERROR] Qdrant container already exists for tenant: $TenantName" -ForegroundColor Red
         Write-Host "[INFO] Use -Remove to delete the existing container first" -ForegroundColor Yellow
@@ -73,20 +79,22 @@ function Provision-TenantQdrant {
         Write-Host "[INFO] Auto-assigned gRPC port: $GrpcPort" -ForegroundColor Yellow
     }
     
-    # Create named volume
-    Write-Host "`n[VOLUME] Creating named volume: $VolumeName" -ForegroundColor Cyan
-    podman volume create $VolumeName | Out-Null
-    Write-Host "[OK] Volume created" -ForegroundColor Green
+    # Ensure storage folder exists
+    Write-Host "`n[STORAGE] Ensuring folder: $StorageRoot" -ForegroundColor Cyan
+    if (!(Test-Path $StorageRoot)) {
+        New-Item -ItemType Directory -Path $StorageRoot -Force | Out-Null
+    }
+    Write-Host "[OK] Storage folder ready" -ForegroundColor Green
     
     # Start Qdrant container
     Write-Host "`n[START] Starting Qdrant container..." -ForegroundColor Cyan
-    podman run -d `
+    docker run -d `
         --name $ContainerName `
         --restart unless-stopped `
         --network deeplens-network `
         -p "${QdrantPort}:6333" `
         -p "${GrpcPort}:6334" `
-        -v "${VolumeName}:/qdrant/storage" `
+        -v "${StorageRoot}:/qdrant/storage" `
         --label "tenant=$TenantName" `
         --label "service=qdrant" `
         qdrant/qdrant:v1.7.0
@@ -102,7 +110,7 @@ function Provision-TenantQdrant {
     while (-not $ready -and $attempt -lt $maxAttempts) {
         Start-Sleep -Seconds 2
         try {
-            $response = Invoke-WebRequest -Uri "http://localhost:${QdrantPort}/collections" -TimeoutSec 2 -ErrorAction SilentlyContinue
+            $response = Invoke-WebRequest -Uri "http://$($RemoteHost):${QdrantPort}/collections" -TimeoutSec 2 -ErrorAction SilentlyContinue
             if ($response.StatusCode -eq 200) {
                 $ready = $true
             }

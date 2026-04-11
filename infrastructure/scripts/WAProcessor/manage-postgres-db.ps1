@@ -32,10 +32,10 @@ function Run-Psql-Cmd {
     
     if (-not [string]::IsNullOrEmpty($ContainerName)) {
         # Use existing local container
-        podman exec $ContainerName psql -U $DbUser -d $TargetDb -c "$Cmd" 2>&1
+        docker exec $ContainerName psql -U $DbUser -d $TargetDb -c "$Cmd" 2>&1
     } else {
         # Use temporary container for remote connection
-        podman run --rm `
+        docker run --rm `
             -e PGPASSWORD=$DbPass `
             --network host `
             postgres:15-alpine `
@@ -48,11 +48,11 @@ function Run-Psql-File {
     
     if (-not [string]::IsNullOrEmpty($ContainerName)) {
         # Use existing local container
-        podman exec $ContainerName sh -c "cd /tmp/ddl && psql -U $DbUser -d $TargetDb -f $FileName" 2>&1
+        docker exec $ContainerName sh -c "cd /tmp/ddl && psql -U $DbUser -d $TargetDb -f $FileName" 2>&1
     } else {
         # Use temporary container for remote connection
         # Mount the DDL path to /tmp/ddl inside the container
-        podman run --rm `
+        docker run --rm `
             -e PGPASSWORD=$DbPass `
             -v "${DdlPath}:/tmp/ddl:Z" `
             --network host `
@@ -79,7 +79,7 @@ try {
             # Skip local cleanup if using remote
             if (-not [string]::IsNullOrEmpty($ContainerName)) {
                 # Cleanup
-                podman exec $ContainerName rm -rf /tmp/ddl
+                docker exec $ContainerName rm -rf /tmp/ddl
             }
             Write-Host "  [OK] Database initialized." -ForegroundColor Green
         }
@@ -104,7 +104,7 @@ try {
 
              # Cleanup (only if local)
             if (-not [string]::IsNullOrEmpty($ContainerName)) {
-                podman exec $ContainerName rm -rf /tmp/ddl
+                docker exec $ContainerName rm -rf /tmp/ddl
             }
             Write-Host "  [OK] Database successfully reset." -ForegroundColor Green
         }

@@ -34,11 +34,11 @@ if (-not (Test-Path $BackupPath)) {
 }
 
 # Check if backup container already exists
-$existing = podman ps -a --filter "name=^${containerName}$" --format "{{.Names}}" 2>$null
+$existing = docker ps -a --filter "name=^${containerName}$" --format "{{.Names}}" 2>$null
 if ($existing) {
     Write-Host "[WARN] Backup container already exists: $containerName" -ForegroundColor Yellow
     Write-Host "[INFO] Removing existing container..." -ForegroundColor Cyan
-    podman rm -f $containerName 2>&1 | Out-Null
+    docker rm -f $containerName 2>&1 | Out-Null
     Write-Host "[OK] Removed old container" -ForegroundColor Green
 }
 
@@ -57,7 +57,7 @@ Write-Host "[OK] Cron schedule created" -ForegroundColor Green
 
 # Create backup container
 Write-Host "[START] Creating backup container..." -ForegroundColor Cyan
-$result = podman run -d `
+$result = docker run -d `
     --name $containerName `
     --restart unless-stopped `
     --network deeplens-network `
@@ -74,18 +74,18 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "[SCRIPT] Creating backup script in container..." -ForegroundColor Cyan
     
     # Create scripts directory
-    podman exec $containerName mkdir -p /scripts 2>&1 | Out-Null
+    docker exec $containerName mkdir -p /scripts 2>&1 | Out-Null
     
     # Write script line by line to avoid line ending issues
-    podman exec $containerName sh -c "echo '#!/bin/sh' > /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'BACKUP_DIR=/backups' >> /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'TIMESTAMP=`$(date +%Y%m%d_%H%M%S)' >> /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'BACKUP_FILE=`$BACKUP_DIR/${dbName}_`$TIMESTAMP.sql.gz' >> /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'echo [BACKUP] Starting backup' >> /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'PGPASSWORD=DeepLens123! pg_dump -h deeplens-postgres -U deeplens -d ${dbName} | gzip > `$BACKUP_FILE' >> /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'echo [OK] Backup completed' >> /scripts/backup.sh"
-    podman exec $containerName sh -c "echo 'find `$BACKUP_DIR -name *.sql.gz -type f -mtime +${RetentionDays} -delete' >> /scripts/backup.sh"
-    podman exec $containerName chmod +x /scripts/backup.sh 2>&1 | Out-Null
+    docker exec $containerName sh -c "echo '#!/bin/sh' > /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'BACKUP_DIR=/backups' >> /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'TIMESTAMP=`$(date +%Y%m%d_%H%M%S)' >> /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'BACKUP_FILE=`$BACKUP_DIR/${dbName}_`$TIMESTAMP.sql.gz' >> /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'echo [BACKUP] Starting backup' >> /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'PGPASSWORD=DeepLens123! pg_dump -h deeplens-postgres -U deeplens -d ${dbName} | gzip > `$BACKUP_FILE' >> /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'echo [OK] Backup completed' >> /scripts/backup.sh"
+    docker exec $containerName sh -c "echo 'find `$BACKUP_DIR -name *.sql.gz -type f -mtime +${RetentionDays} -delete' >> /scripts/backup.sh"
+    docker exec $containerName chmod +x /scripts/backup.sh 2>&1 | Out-Null
     
     Write-Host "[OK] Backup script created in container" -ForegroundColor Green
 } else {
@@ -99,7 +99,7 @@ if ($TestBackup) {
     Write-Host "[TEST] Running test backup..." -ForegroundColor Cyan
     Start-Sleep -Seconds 2
     
-    podman exec $containerName sh /scripts/backup.sh
+    docker exec $containerName sh /scripts/backup.sh
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
@@ -120,7 +120,7 @@ Write-Host ""
 Write-Host "[SUCCESS] Backup provisioning completed!" -ForegroundColor Green
 Write-Host ""
 Write-Host "[NEXT STEPS]" -ForegroundColor Yellow
-Write-Host "  Check logs: podman logs $containerName" -ForegroundColor Gray
+Write-Host "  Check logs: docker logs $containerName" -ForegroundColor Gray
 Write-Host "  List backups: Get-ChildItem '$BackupPath'" -ForegroundColor Gray
-Write-Host "  Manual backup: podman exec $containerName sh /scripts/backup.sh" -ForegroundColor Gray
+Write-Host "  Manual backup: docker exec $containerName sh /scripts/backup.sh" -ForegroundColor Gray
 Write-Host ""

@@ -35,8 +35,8 @@ services:
     
     volumes:
       # Persist Session Auth & Config
-      # Naming convention: deeplens_whatsapp_<Tenant>_<Session>_data
-      - deeplens_whatsapp_${TENANT_NAME}_${SESSION_ID:-default}_data:/usr/src/app/data
+      # Using bind mount instead of named volume
+      - ./data/whatsapp/${TENANT_NAME}/${SESSION_ID:-default}:/usr/src/app/data
     
     networks:
       - deeplens-network
@@ -50,6 +50,3 @@ networks:
     name: deeplens-network
     external: true
 
-volumes:
-  deeplens_whatsapp_${TENANT_NAME}_${SESSION_ID:-default}_data:
-    name: deeplens_whatsapp_${TENANT_NAME}_${SESSION_ID:-default}_data

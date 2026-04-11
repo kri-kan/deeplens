@@ -27,10 +27,10 @@ function Run-Kafka-Cmd {
     
     if (-not [string]::IsNullOrEmpty($ContainerName)) {
         # Use existing container
-        podman exec $ContainerName sh -c "$cmd" 2>&1
+        docker exec $ContainerName sh -c "$cmd" 2>&1
     } else {
         # Use temporary container
-        podman run --rm --network host apache/kafka:latest sh -c "$cmd" 2>&1
+        docker run --rm --network host apache/kafka:latest sh -c "$cmd" 2>&1
     }
 }
 

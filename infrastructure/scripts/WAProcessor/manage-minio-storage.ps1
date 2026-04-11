@@ -20,7 +20,7 @@ function Run-Mc-Cmd {
     param($Cmd)
     # Configure alias first, then run command using a temporary mc container
     $setupAlias = "mc alias set remote http://$MINIO_HOST:9000 $MINIO_USER $MINIO_PASS >/dev/null 2>&1"
-    podman run --rm --network host minio/mc sh -c "$setupAlias && mc $Cmd" 2>&1
+    docker run --rm --network host minio/mc sh -c "$setupAlias && mc $Cmd" 2>&1
 }
 
 Write-Host "MinIO Manager: Performing $Action on bucket '$BucketName'..." -ForegroundColor Cyan
