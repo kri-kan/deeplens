@@ -71,18 +71,15 @@ $buckets = @(
     "competitor-intel-metadata"
 )
 
-# Setup alias first
-podman exec deeplens-minio sh -c "mc alias set local http://localhost:9000 deeplens DeepLens123! >/dev/null 2>&1"
+$MinIOHost = "192.168.0.170"
+$MinIOUser = "krikan"
+$MinIOPass = "Krikank1$"
 
+# Setup alias and create buckets using a temporary mc container
 foreach ($bucket in $buckets) {
-    # Try to make bucket
-    podman exec deeplens-minio sh -c "mc mb --ignore-existing local/$bucket" >$null 2>&1
+    podman run --rm --network host minio/mc /bin/sh -c "mc alias set remote http://$MinIOHost:9000 $MinIOUser $MinIOPass >/dev/null && mc mb --ignore-existing remote/$bucket" >$null 2>&1
     if ($LASTEXITCODE -eq 0) { 
         Write-Host "  [OK] Bucket $bucket ready" -ForegroundColor Green
-        
-        # Set public policy for downloads (if needed, or private if app only checks)
-        # Using private for now as per architecture (pre-signed URLs)
-        # podman exec deeplens-minio sh -c "mc policy set download local/$bucket" >$null 2>&1
     }
     else { Write-Host "  [FAIL] Failed to create $bucket" -ForegroundColor Red }
 }

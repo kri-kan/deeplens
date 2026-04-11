@@ -22,9 +22,14 @@ builder.Services.AddScoped<IVendorService, VendorService>();
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 
 {
+    var config = sp.GetRequiredService<IConfiguration>();
+    var endpoint = config["Minio:Endpoint"] ?? throw new InvalidOperationException("Minio:Endpoint is not configured.");
+    var accessKey = config["Minio:AccessKey"] ?? throw new InvalidOperationException("Minio:AccessKey is not configured.");
+    var secretKey = config["Minio:SecretKey"] ?? throw new InvalidOperationException("Minio:SecretKey is not configured.");
+    
     return new Minio.MinioClient()
-        .WithEndpoint("localhost:9000") // TODO: Config
-        .WithCredentials("deeplens", "DeepLens123!")
+        .WithEndpoint(endpoint)
+        .WithCredentials(accessKey, secretKey)
         .Build();
 });
 
@@ -38,8 +43,10 @@ builder.Services.AddStackExchangeRedisCache(options =>
 // Kafka Producer Setup
 builder.Services.AddSingleton<IProducer<string, string>>(sp => 
 {
-    var config = new ProducerConfig { BootstrapServers = "127.0.0.1:9092" }; // TODO: Config
-    return new ProducerBuilder<string, string>(config).Build();
+    var config = sp.GetRequiredService<IConfiguration>();
+    var bootstrapServers = config["Kafka:BootstrapServers"] ?? throw new InvalidOperationException("Kafka:BootstrapServers is not configured.");
+    var kafkaConfig = new ProducerConfig { BootstrapServers = bootstrapServers };
+    return new ProducerBuilder<string, string>(kafkaConfig).Build();
 });
 builder.Services.AddSwaggerGen(c =>
 {

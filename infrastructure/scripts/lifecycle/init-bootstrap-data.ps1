@@ -54,10 +54,12 @@ Write-Host "  [OK] Connected to remote Postgres" -ForegroundColor Green
 $initScripts = Get-ChildItem "$InitScriptsPath\*.sql" | Sort-Object Name
 foreach ($script in $initScripts) {
     Write-Host "    Executing: $($script.Name)" -ForegroundColor DarkGray
-    # Copy script to container for reliable execution
-    podman cp $script.FullName "deeplens-postgres:/tmp/$($script.Name)"
-    # Execute inside container
-    podman exec -i deeplens-postgres psql -U postgres -d postgres -f "/tmp/$($script.Name)"
+    # Execute against remote host
+    podman run --rm -v "${script.FullName}:/tmp/script.sql" `
+        -e PGPASSWORD=$DbPass `
+        --network host `
+        postgres:15-alpine `
+        psql -h $DbHost -p $DbPort -U postgres -d postgres -f /tmp/script.sql
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "    [WARNING] Script $($script.Name) had some issues (exit code $LASTEXITCODE)." -ForegroundColor Yellow

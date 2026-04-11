@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Reasoning Service - Phi-3 based metadata extraction (Python)
+  # =============================================================================
+  reasoning-api:
+    build:
+      context: ./src/DeepLens.Service/DeepLens.ReasoningService
+      dockerfile: Dockerfile
+    container_name: deeplens-reasoning-api
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - MOCK_MODE=${REASONING_MOCK_MODE:-true}
+      - MODEL_ID=microsoft/Phi-3-mini-4k-instruct
+    networks:
+      - deeplens-network
+
+  # =============================================================================
+  # Feature Extraction Service - Vectorization (Python)
+  # =============================================================================
+  feature-extraction:
+    build:
+      context: ./src/DeepLens.Service/DeepLens.FeatureExtractionService
+      dockerfile: Dockerfile
+    container_name: deeplens-feature-extraction
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./src/DeepLens.Service/DeepLens.FeatureExtractionService/models:/app/models
+    networks:
+      - deeplens-network
+
+  # =============================================================================
+  # Instagram Scraper Worker (Python/Node)
+  # =============================================================================
+  instagram-worker:
+    build:
+      context: ./src/competitor-scraper-workers
+      dockerfile: Dockerfile
+    container_name: deeplens-instagram-worker
+    restart: unless-stopped
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=192.168.0.170:9092
+      - WORKER_TYPE=instagram
+    networks:
+      - deeplens-network
+
+networks:
+  deeplens-network:
+    name: deeplens-network
+    external: true

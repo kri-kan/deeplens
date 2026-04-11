@@ -9,11 +9,13 @@ Last Updated: December 20, 2025
 ## 🚀 Quick Start (15 Minutes)
 
 1.  **Prerequisites**: Install Podman/Docker, .NET 9 SDK, Python 3.11+, and PowerShell 7+.
-2.  **Environment**: 
+2.  **Infrastructure**: 
     ```powershell
-    cd infrastructure
-    cp .env.example .env
-    ./setup-infrastructure.ps1 -Start
+    # Copy template and update endpoints
+    cp infrastructure/.env.example infrastructure/.env
+    
+    # Start local AI/ML services
+    docker compose up -d
     ```
 3.  **Identity API**:
     ```powershell
@@ -29,7 +31,7 @@ Last Updated: December 20, 2025
     ```
 5.  **Verification**: 
     ```powershell
-    podman ps  # Ensure Postgres, Redis, Qdrant are running
+    ./infrastructure/validate-environment.ps1  # Verifies remote connectivity
     ```
 
 ---
@@ -54,11 +56,11 @@ Last Updated: December 20, 2025
 | Port     | Service    | Description            |
 | :------- | :--------- | :--------------------- |
 | **5432** (remote) | PostgreSQL | Metadata & Identity DB — `192.168.0.170` |
-| **6379** | Redis      | Caching & State        |
-| **6333** | Qdrant     | Vector DB Dashboard    |
-| **9001** | MinIO      | Object Storage Console |
-| **9092** (remote) | Kafka | Message Broker — `192.168.0.170` |
-| **8080** (remote) | Kafka UI | Kafka Management — `192.168.0.170` |
+| **6379** (remote) | Redis      | Caching & State — `192.168.0.170`        |
+| **6333** (remote) | Qdrant     | Vector DB Dashboard — `192.168.0.170`   |
+| **9001** (remote) | MinIO      | Object Storage Console — `192.168.0.170`|
+| **9092** (remote) | Kafka      | Message Broker — `192.168.0.170`         |
+| **8080** (remote) | Kafka UI   | Kafka Management — `192.168.0.170`       |
 
 ### DeepLens APIs
 | Port     | Service      | Description                 |

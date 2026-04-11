@@ -14,8 +14,7 @@ DeepLens is a high-performance, multi-tenant **visual search engine** built usin
 - **Unified .NET Backend**: Centralized orchestration, API gateway, and tenant management.
 - **Stateless AI Services**: Python-based services for feature extraction and vector operations.
 - **Event-Driven Pipeline**: Asynchronous image processing via Apache Kafka.
-- **Multi-Tenant Isolation**: Complete data separation at the database and storage layers.
-- **ByOS (Bring Your Own Storage)**: Support for enterprise cloud storage and local NFS.
+- **External Infrastructure**: Core databases (PostgreSQL), message brokers (Kafka), and storage (MinIO) are managed externally at `192.168.0.170`.
 - **Observable by Design**: Integrated OpenTelemetry, Prometheus, and Jaeger.
 
 ---
@@ -81,11 +80,11 @@ DeepLens uses a normalized catalog structure within each tenant's dedicated data
 - **Reliable Cleanup**: Deduplicated or deleted images are queued for asynchronous cleanup from MinIO and Qdrant via Kafka-driven background workers.
 
 ### System Bootstrapping
-DeepLens uses a script-based bootstrapping approach to ensure environment consistency:
-1.  **Infrastructure (Podman)**: Postgres, Redis, Qdrant, and Kafka are started.
-2.  **Platform DB Init**: SQL scripts initialize the system schemas and roles.
-3.  **Platform Admin Setup**: `init-platform-admin.ps1` creates the root `admin` tenant and global administrator user.
-4.  **Identity API**: The API starts up and handles further multi-tenant orchestration.
+DeepLens leverages a centralized infrastructure with local application services:
+1.  **Infrastructure Connectivity**: Ensure network visibility to `192.168.0.170` (Postgres, Kafka, MinIO).
+2.  **App Services (Docker)**: Reasoning API and Feature Extraction services are started using the root `docker-compose.yml`.
+3.  **Platform DB Init**: SQL scripts initialize system schemas and roles on the remote PostgreSQL.
+4.  **Backend APIs**: Identity and Search APIs are started via `dotnet run`.
 
 ---
 

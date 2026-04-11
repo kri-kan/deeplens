@@ -20,7 +20,7 @@ services:
       
       # --- MinIO Connection ---
       # Connects to the shared MinIO instance but targets the tenant-specific bucket
-      - MINIO_ENDPOINT=deeplens-minio
+      - MINIO_ENDPOINT=192.168.0.170
       - MINIO_PORT=9000
       - MINIO_BUCKET=${MINIO_BUCKET:-tenant-${TENANT_NAME}-data}
       # Ideally use the specific tenant keys generated during provisioning

@@ -36,11 +36,17 @@ $BackupsPath = "$TenantPath/backups"
 # Core Infrastructure Ports
 $CORE_PORTS = @(5432, 5433, 6379, 6333, 6334, 9000, 9001, 8080, 8082, 9092)
 
-# Remote Postgres Config
+# Remote Infrastructure Config
 $DB_HOST = "192.168.0.170"
 $DB_PORT = 5432
 $DB_PASS = "Krikank1$"
 $DB_USER = "postgres"
+
+$MINIO_HOST = "192.168.0.170"
+$MINIO_PORT = 9000
+$MINIO_CONSOLE_PORT = 9001
+$MINIO_ROOT_USER = "krikan"
+$MINIO_ROOT_PASS = "Krikank1$"
 
 function Run-Remote-Sql {
     param([string]$Sql, [string]$TargetDb = "postgres")
@@ -245,7 +251,7 @@ function Provision-Tenant {
         adminLastName  = "Admin"
         qdrantHttpPort = 0  # Will be updated later
         qdrantGrpcPort = 0  # Will be updated later
-        minioEndpoint  = "localhost:9000"
+        minioEndpoint  = "$MINIO_HOST:$MINIO_PORT"
         minioBucket    = $TenantName
     } | ConvertTo-Json
     
@@ -401,9 +407,9 @@ Login URL: http://localhost:3000
 "@
         
         try {
-            $mcAlias = "local"
-            $mcAliasSetup = "mc alias set $mcAlias http://localhost:9000 deeplens DeepLens123!"
-            $execBase = "podman exec deeplens-minio /bin/sh -c"
+            $mcAlias = "remote"
+            $mcAliasSetup = "mc alias set $mcAlias http://$MINIO_HOST:$MINIO_PORT $MINIO_ROOT_USER $MINIO_ROOT_PASS"
+            $execBase = "podman run --rm --network host minio/mc /bin/sh -c"
             
             # 1. Create bucket
             Write-Host "[INFO] Creating bucket..." -ForegroundColor Yellow
@@ -432,8 +438,8 @@ Bucket Name: $bucketName
 Access Key:  $accessKey
 Secret Key:  $secretKey
 
-Endpoint:    http://localhost:$MinioPort
-Console:     http://localhost:$MinioConsolePort
+Endpoint:    http://$MINIO_HOST:$MINIO_PORT
+Console:     http://$MINIO_HOST:$MINIO_CONSOLE_PORT
 
 Isolation:   Bucket-level (Policy: $policyName)
 "@ | Out-File -FilePath $credentialsFile -Encoding UTF8

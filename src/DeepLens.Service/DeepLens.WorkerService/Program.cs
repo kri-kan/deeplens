@@ -13,17 +13,24 @@ builder.Services.AddHttpClient<IVectorStoreService, VectorStoreService>();
 // MinIO Setup
 builder.Services.AddSingleton<IMinioClient>(sp => 
 {
+    var config = sp.GetRequiredService<IConfiguration>();
+    var endpoint = config["Minio:Endpoint"] ?? throw new InvalidOperationException("Minio:Endpoint is not configured.");
+    var accessKey = config["Minio:AccessKey"] ?? throw new InvalidOperationException("Minio:AccessKey is not configured.");
+    var secretKey = config["Minio:SecretKey"] ?? throw new InvalidOperationException("Minio:SecretKey is not configured.");
+    
     return new MinioClient()
-        .WithEndpoint("localhost:9000") // TODO: Config
-        .WithCredentials("deeplens", "DeepLens123!")
+        .WithEndpoint(endpoint)
+        .WithCredentials(accessKey, secretKey)
         .Build();
 });
 
 // Kafka Producer Setup (for workers that produce results)
 builder.Services.AddSingleton<IProducer<string, string>>(sp => 
 {
-    var config = new ProducerConfig { BootstrapServers = "127.0.0.1:9092" };
-    return new ProducerBuilder<string, string>(config).Build();
+    var config = sp.GetRequiredService<IConfiguration>();
+    var bootstrapServers = config["Kafka:BootstrapServers"] ?? throw new InvalidOperationException("Kafka:BootstrapServers is not configured.");
+    var kafkaConfig = new ProducerConfig { BootstrapServers = bootstrapServers };
+    return new ProducerBuilder<string, string>(kafkaConfig).Build();
 });
 
 // Infrastructure Drivers
