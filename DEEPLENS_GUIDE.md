@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-10 11:34:25
+**Auto-generated on:** 2026-04-11 10:40:17
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -153,14 +153,14 @@ Last Updated: December 20, 2025
 
 ## 🔑 Development Credentials
 
-**DEVELOPMENT ONLY - DO NOT USE IN PRODUCTION** (Standard Password: `Krikank1$`)
+**DEVELOPMENT ONLY - DO NOT USE IN PRODUCTION** (Standard Password: `DeepLens123!`)
 
-| Service            | Username               | Password             | Notes                |
-| :----------------- | :--------------------- | :------------------- | :------------------- |
+| Service            | Username               | Password             | Notes               |
+| :----------------- | :--------------------- | :------------------- | :------------------ |
 | **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432` |
-| **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin        |
-| **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console)  |
-| **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000            |
+| **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin       |
+| **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console) |
+| **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
 | **Kafka UI**       | -                      | -                    | `192.168.0.170:8080` |
 
 ---
@@ -168,14 +168,14 @@ Last Updated: December 20, 2025
 ## 🔌 Port Reference
 
 ### Core Services
-| Port              | Service    | Description                              |
-| :---------------- | :--------- | :--------------------------------------- |
+| Port     | Service    | Description            |
+| :------- | :--------- | :--------------------- |
 | **5432** (remote) | PostgreSQL | Metadata & Identity DB — `192.168.0.170` |
-| **6379**          | Redis      | Caching & State                          |
-| **6333**          | Qdrant     | Vector DB Dashboard                      |
-| **9001**          | MinIO      | Object Storage Console                   |
-| **9092** (remote) | Kafka      | Message Broker — `192.168.0.170`         |
-| **8080** (remote) | Kafka UI   | Kafka Management — `192.168.0.170`       |
+| **6379** | Redis      | Caching & State        |
+| **6333** | Qdrant     | Vector DB Dashboard    |
+| **9001** | MinIO      | Object Storage Console |
+| **9092** (remote) | Kafka | Message Broker — `192.168.0.170` |
+| **8080** (remote) | Kafka UI | Kafka Management — `192.168.0.170` |
 
 ### DeepLens APIs
 | Port     | Service      | Description                 |
@@ -553,11 +553,6 @@ All database names across the DeepLens project now follow a **lowercase with und
 *(Code block omitted for brevity)*
 
 
-**Legacy (uppercase - deprecated but supported):**
-
-*(Code block omitted for brevity)*
-
-
 ## 🔍 Verification
 
 ### Check Current Database Names
@@ -638,10 +633,12 @@ If you have an existing setup with mixed-case database names:
 1. Update `.env` to use lowercase: `vayyari_wa_db_connection_string`
 2. The app will still work but will show warnings
 
-### Issue: Connection Errors (Remote Postgres)
-- Ensure the remote server `192.168.0.170` is reachable.
-- Verify the password `Krikank1$` is correct.
-- If using legacy infrastructure, check port `5433`. Otherwise use `5432`.
+### Issue: Port confusion (5432 vs 5433)
+**Cause:** Podman maps PostgreSQL to port 5433 on host.
+
+**Solution:**
+- Always use port **5433** when connecting from host machine
+- Use port **5432** only for inter-container communication
 - See `DATABASE_SETUP.md` for details
 
 ## 📚 References
@@ -1307,7 +1304,7 @@ podman run -d `
   --name deeplens-postgres `
   --network deeplens-network `
   -e POSTGRES_USER=postgres `
-  -e POSTGRES_PASSWORD=Krikank1$ `
+  -e POSTGRES_PASSWORD=DeepLens123! `
   -e POSTGRES_DB=nextgen_identity `
   -p 5432:5432 `
   -v deeplens-postgres-data:/var/lib/postgresql/data `
@@ -1334,7 +1331,7 @@ podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 # Expected output:
 # NAMES              STATUS        PORTS
-# deeplens-postgres  Up X seconds  0.0.0.0:5432->5432/tcp
+# deeplens-postgres  Up X seconds  0.0.0.0:5433->5432/tcp
 # deeplens-redis     Up X seconds  0.0.0.0:6379->6379/tcp
 
 *(Code block omitted for brevity)*
@@ -1410,7 +1407,7 @@ podman network create deeplens-network
 *(Code block omitted for brevity)*
 powershell
 # Find what's using the port
-Test-NetConnection -ComputerName 192.168.0.170 -Port 5432
+netstat -ano | findstr :5433
 
 # Kill the process
 taskkill /PID <PID> /F
@@ -2273,13 +2270,12 @@ The default configuration should work with DeepLens infrastructure.
 
 ### Connection Details
 
-| Setting      | Value                   |
-| :----------- | :---------------------- |
-| **Host**     | `192.168.0.170`         |
-| **Port**     | `5432` ⚠️ remote server  |
-| **Database** | `whatsapp_vayyari_data` |
-| **Username** | `postgres`              |
-| **Password** | `Krikank1$`             |
+| Setting      | Value                  |
+| :----------- | :--------------------- |
+| **Host**     | `192.168.0.170`        |
+| **Port**     | `5432` ⚠️ remote server |
+| **Username** | `postgres`             |
+| **Password** | `Krikank1$`            |
 
 ### Environment Variables
 
@@ -2309,7 +2305,7 @@ The default configuration should work with DeepLens infrastructure.
 *(Code block omitted for brevity)*
 
 
-2. Verify port in `.env` is `5432` (Remote)
+2. Verify port in `.env` is `5432` (remote) or the appropriate port for your server.
 
 3. Restart containers if needed:
    
@@ -2325,6 +2321,10 @@ The default configuration should work with DeepLens infrastructure.
 *(Code block omitted for brevity)*
 
 
+### Issue: Connection Errors
+- Ensure the remote server `192.168.0.170` is reachable.
+- Verify the password `Krikank1$` is correct.
+- If using DeepLens infrastructure (deprecated), use port `5433`. Otherwise use `5432` for the remote server.
 
 ---
 
@@ -2353,10 +2353,10 @@ To recreate the schema:
    - Name: `DeepLens WhatsApp`
 4. **Connection Tab:**
    - Host: `192.168.0.170`
-   - Port: `5432` (Remote)
+   - Port: `5433`
    - Database: `whatsapp_vayyari_data`
    - Username: `postgres`
-   - Password: `Krikank1$`
+   - Password: `DeepLens123!`
 5. Click "Save"
 
 ---
