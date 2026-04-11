@@ -32,7 +32,7 @@ public class ImageMaintenanceWorker : BackgroundService
         _serviceProvider = serviceProvider;
         _subscriptionTopics = new[] { KafkaTopics.ImageMaintenance };
         _baseConnString = configuration.GetConnectionString("DefaultConnection") 
-            ?? "Host=localhost;Port=5433;Username=postgres;Password=DeepLens123!";
+            ?? "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$";
 
         var consumerConfig = new ConsumerConfig
         {

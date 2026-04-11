@@ -13,10 +13,10 @@ param (
     [int]$ReplicationFactor = 1,
 
     [Parameter(Mandatory=$false)]
-    [string]$BootstrapServer = "localhost:9092",
+    [string]$BootstrapServer = "192.168.0.170:9092",
 
     [Parameter(Mandatory=$false)]
-    [string]$ContainerName = "deeplens-kafka"
+    [string]$ContainerName = ""  # If empty, a temporary container will be used
 )
 
 $ErrorActionPreference = "Continue"
@@ -24,8 +24,14 @@ $ErrorActionPreference = "Continue"
 function Run-Kafka-Cmd {
     param($Arguments)
     $cmd = "kafka-topics --bootstrap-server $BootstrapServer $Arguments"
-    # Write-Host "DEBUG: Running $cmd" -ForegroundColor DarkGray
-    podman exec $ContainerName sh -c "$cmd" 2>&1
+    
+    if (-not [string]::IsNullOrEmpty($ContainerName)) {
+        # Use existing container
+        podman exec $ContainerName sh -c "$cmd" 2>&1
+    } else {
+        # Use temporary container
+        podman run --rm --network host apache/kafka:latest sh -c "$cmd" 2>&1
+    }
 }
 
 function Topic-Exists {

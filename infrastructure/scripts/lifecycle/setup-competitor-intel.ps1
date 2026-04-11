@@ -18,13 +18,15 @@ $migrationFile = "$PSScriptRoot\..\..\..\src\NextGen.Identity.Data\Migrations\00
 if (Test-Path $migrationFile) {
     try {
         # Check if table already exists to avoid re-running (although IF NOT EXISTS handles it, explicit check is cleaner)
-        $check = podman exec deeplens-postgres psql -U postgres -d nextgen_identity -t -c "SELECT to_regclass('public.competitor_watchlist');" 2>$null
+        $DbHost = "192.168.0.170"
+        $DbPass = "Krikank1$"
+        $check = podman run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d nextgen_identity -t -c "SELECT to_regclass('public.competitor_watchlist');" 2>$null
         
         if ($check -match "competitor_watchlist") {
              Write-Host "  [SKIP] Schema already applied (table found)." -ForegroundColor Gray
         } else {
              Write-Host "  Applying migration 003_CompetitorIntelligence.sql..." -ForegroundColor Gray
-             Get-Content $migrationFile | podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity >$null
+             podman run --rm -i -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d nextgen_identity < $migrationFile >$null
              if ($LASTEXITCODE -eq 0) { Write-Host "  [OK] Migration applied." -ForegroundColor Green }
              else { Write-Host "  [WARN] Migration returned non-zero exit code." -ForegroundColor Yellow }
         }
@@ -53,17 +55,10 @@ $topics = @(
     "competitor.engagement.tracking.responses"
 )
 
+$CommonScriptsRoot = "$PSScriptRoot\..\WAProcessor"
+
 foreach ($topic in $topics) {
-    # Check if topic exists
-    $exists = podman exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 --list | Select-String -Pattern "^$topic$"
-    if (-not $exists) {
-        Write-Host "  Creating topic: $topic" -ForegroundColor Gray
-        podman exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 --create --topic $topic --partitions 1 --replication-factor 1 >$null 2>&1
-        if ($LASTEXITCODE -eq 0) { Write-Host "  [OK] Created $topic" -ForegroundColor Green }
-        else { Write-Host "  [FAIL] Failed to create $topic" -ForegroundColor Red }
-    } else {
-        Write-Host "  [SKIP] Topic $topic exists" -ForegroundColor Gray
-    }
+    & "$CommonScriptsRoot\manage-kafka-topics.ps1" -Action "Create" -TopicName $topic -BootstrapServer "192.168.0.170:9092"
 }
 
 # 3. MINIO BUCKETS

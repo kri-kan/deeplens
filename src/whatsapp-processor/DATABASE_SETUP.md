@@ -34,24 +34,23 @@ npm start
 
 ### Connection Details
 
-| Setting      | Value                   |
-| :----------- | :---------------------- |
-| **Host**     | `localhost`             |
-| **Port**     | `5433` ⚠️ (not 5432!)    |
-| **Database** | `whatsapp_vayyari_data` |
-| **Username** | `postgres`              |
-| **Password** | `DeepLens123!`          |
+| Setting      | Value                  |
+| :----------- | :--------------------- |
+| **Host**     | `192.168.0.170`        |
+| **Port**     | `5432` ⚠️ remote server |
+| **Username** | `postgres`             |
+| **Password** | `Krikank1$`            |
 
 ### Environment Variables
 
 **Preferred (lowercase with underscores):**
 ```bash
-vayyari_wa_db_connection_string=postgresql://postgres:DeepLens123%21@localhost:5433/whatsapp_vayyari_data
+vayyarideeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
 ```
 
 **Legacy (uppercase - deprecated):**
 ```bash
-VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:DeepLens123%21@localhost:5433/whatsapp_vayyari_data
+VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
 ```
 
 > **Note:** The application supports both formats for backward compatibility, but lowercase is preferred.
@@ -70,7 +69,7 @@ VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:DeepLens123%21@localhost:5
    podman ps | Select-String "deeplens-postgres"
    ```
 
-2. Verify port in `.env` is `5433` (not `5432`)
+2. Verify port in `.env` is `5432` (remote) or the appropriate port for your server.
 
 3. Restart containers if needed:
    ```powershell
@@ -87,16 +86,10 @@ VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:DeepLens123%21@localhost:5
 .\setup-whatsapp-db.ps1
 ```
 
-### Issue: Port 5432 vs 5433 Confusion
-
-**Why 5433?**
-- The DeepLens Podman infrastructure maps PostgreSQL to port `5433` on the host
-- This is defined in `infrastructure/setup-deeplens-dev.ps1` line 112: `-p 5433:5432`
-- The container internally uses port 5432, but it's exposed as 5433 on your machine
-
-**How to remember:**
-- If using DeepLens infrastructure → use port `5433`
-- If using standalone PostgreSQL → use port `5432`
+### Issue: Connection Errors
+- Ensure the remote server `192.168.0.170` is reachable.
+- Verify the password `Krikank1$` is correct.
+- If using DeepLens infrastructure (deprecated), use port `5433`. Otherwise use `5432` for the remote server.
 
 ---
 
@@ -124,7 +117,7 @@ To recreate the schema:
 3. **General Tab:**
    - Name: `DeepLens WhatsApp`
 4. **Connection Tab:**
-   - Host: `localhost`
+   - Host: `192.168.0.170`
    - Port: `5433`
    - Database: `whatsapp_vayyari_data`
    - Username: `postgres`

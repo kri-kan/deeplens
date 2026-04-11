@@ -1,8 +1,11 @@
 param (
-    [string]$PostgresPassword = "DeepLens123!",
+    [string]$DbHost = "192.168.0.170",
+    [int]$DbPort = 5432,
+    [string]$PostgresPassword = "Krikank1!",
     [string]$MinioUser = "deeplens",
     [string]$MinioPassword = "DeepLens123!",
-    [switch]$SkipVolumes = $false
+    [switch]$SkipVolumes = $false,
+    [switch]$ForceLocal = $false # Only set to true if you explicitly want to start local containers
 )
 
 $ErrorActionPreference = "Stop" # Changed to Stop for robustness
@@ -20,7 +23,7 @@ function Wait-For-Port {
     Write-Host "    Waiting for $Name (Port $Port)..." -NoNewline -ForegroundColor Gray
     for ($i=0; $i -lt $MaxRetries; $i++) {
         try {
-            $conn = Test-NetConnection -ComputerName localhost -Port $Port -WarningAction SilentlyContinue  -ErrorAction SilentlyContinue
+            $conn = Test-NetConnection -ComputerName $DbHost -Port $Port -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
             if ($conn.TcpTestSucceeded) {
                 Write-Host " [OK]" -ForegroundColor Green
                 return
@@ -58,26 +61,34 @@ if (-not $SkipVolumes) {
 }
 
 # 1. Postgres
-$pgRunning = podman ps --format "{{.Names}}" | Select-String -Pattern "^deeplens-postgres$"
-$pgExists = podman ps -a --format "{{.Names}}" | Select-String -Pattern "^deeplens-postgres$"
-
-if ($pgRunning) {
-    Write-Host "  PostgreSQL already running" -ForegroundColor Gray
-} elseif ($pgExists) {
-    Write-Host "  Starting existing PostgreSQL..." -ForegroundColor Yellow
-    podman start deeplens-postgres | Out-Null
+Write-Host "  Checking PostgreSQL (External)..." -ForegroundColor Cyan
+if (-not $ForceLocal) {
+    Write-Host "    Using external Postgres at $DbHost:$DbPort" -ForegroundColor Gray
+    Wait-For-Port $DbPort "PostgreSQL ($DbHost)" -MaxRetries 10
+    Write-Host "    [OK] External Postgres ready" -ForegroundColor Green
 } else {
-    Write-Host "  Creating PostgreSQL..." -ForegroundColor Yellow
-    podman run -d `
-        --name deeplens-postgres `
-        --network deeplens-network `
-        -e POSTGRES_PASSWORD=$PostgresPassword `
-        -v deeplens-postgres-data:/var/lib/postgresql/data `
-        -p 5433:5432 `
-        postgres:16 | Out-Null
+    Write-Host "    Starting Local Postgres..." -ForegroundColor Yellow
+    $pgRunning = podman ps --format "{{.Names}}" | Select-String -Pattern "^deeplens-postgres$"
+    $pgExists = podman ps -a --format "{{.Names}}" | Select-String -Pattern "^deeplens-postgres$"
+
+    if ($pgRunning) {
+        Write-Host "      PostgreSQL already running" -ForegroundColor Gray
+    } elseif ($pgExists) {
+        Write-Host "      Starting existing PostgreSQL..." -ForegroundColor Yellow
+        podman start deeplens-postgres | Out-Null
+    } else {
+        Write-Host "      Creating PostgreSQL..." -ForegroundColor Yellow
+        podman run -d `
+            --name deeplens-postgres `
+            --network deeplens-network `
+            -e POSTGRES_PASSWORD=$PostgresPassword `
+            -v deeplens-postgres-data:/var/lib/postgresql/data `
+            -p 5432:5432 `
+            postgres:16 | Out-Null
+    }
+    Wait-For-Port 5432 "Local PostgreSQL"
+    Write-Host "      [OK] Local PostgreSQL ready" -ForegroundColor Green
 }
-Wait-For-Port 5433 "PostgreSQL"
-Write-Host "    [OK] PostgreSQL ready" -ForegroundColor Green
 
 # 2. Redis
 $redisRunning = podman ps --format "{{.Names}}" | Select-String -Pattern "^deeplens-redis$"

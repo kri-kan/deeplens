@@ -20,18 +20,31 @@ function Confirm-Step {
 Write-Host "Initializing Databases & Bootstrapping Data..." -ForegroundColor Cyan
 
 # 1. Wait for Postgres
-$maxRetries = 30
+$DbHost = "192.168.0.170"
+$DbPort = 5432
+$DbPass = "Krikank1$"
+
+Write-Host "  Checking PostgreSQL connection ($DbHost)..." -ForegroundColor Gray
+$maxRetries = 10
 $retryCount = 0
+$connected = $false
 while ($retryCount -lt $maxRetries) {
-    podman exec deeplens-postgres pg_isready -U postgres 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { break }
-    Start-Sleep 1
+    try {
+        $conn = Test-NetConnection -ComputerName $DbHost -Port $DbPort -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+        if ($conn.TcpTestSucceeded) { 
+            $connected = $true
+            break 
+        }
+    } catch {}
+    Start-Sleep 2
     $retryCount++
 }
-if ($retryCount -eq $maxRetries) {
-    Write-Host "  [FAIL] PostgreSQL failed to start in time" -ForegroundColor Red
+
+if (-not $connected) {
+    Write-Host "  [FAIL] PostgreSQL ($DbHost:$DbPort) is not reachable" -ForegroundColor Red
     exit 1
 }
+Write-Host "  [OK] Connected to remote Postgres" -ForegroundColor Green
 
 # 2. Run Init Scripts
 # Reuse manage-postgres-db module? 
@@ -62,7 +75,13 @@ dotnet run --project $CliToolPath -- bootstrap-sql "DeepLensAdmin123!" "DeepLens
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  Executing bootstrap SQL..." -ForegroundColor Gray
-    Get-Content $bootstrapFile | podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity
+    # Pipe content to remote psql
+    podman run --rm -i `
+        -e PGPASSWORD=$DbPass `
+        --network host `
+        postgres:15-alpine `
+        psql -h $DbHost -p $DbPort -U postgres -d nextgen_identity < $bootstrapFile | Out-Null
+    
     Confirm-Step "Bootstrap SQL Execution"
     Write-Host "  [OK] Database bootstrap successful" -ForegroundColor Green
 } else {
@@ -72,8 +91,10 @@ if ($LASTEXITCODE -eq 0) {
 Remove-Item $bootstrapFile -ErrorAction SilentlyContinue
 
 # 4. Create Vayyari Tenant DB
-$checkVayyariDB = podman exec -i deeplens-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'tenant_vayyari_metadata';"
+$checkSQL = "SELECT 1 FROM pg_database WHERE datname = 'tenant_vayyari_metadata';"
+$checkVayyariDB = podman run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -p $DbPort -U postgres -t -c "$checkSQL"
 if (-not ($checkVayyariDB -and $checkVayyariDB.Trim())) {
-    podman exec -i deeplens-postgres psql -U postgres -c "CREATE DATABASE tenant_vayyari_metadata WITH TEMPLATE tenant_metadata_template OWNER tenant_service;"
+    $createSQL = "CREATE DATABASE tenant_vayyari_metadata WITH TEMPLATE tenant_metadata_template OWNER tenant_service;"
+    podman run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -p $DbPort -U postgres -c "$createSQL" | Out-Null
     Write-Host "  [OK] Vayyari database created" -ForegroundColor Green
 }

@@ -22,52 +22,53 @@ $ErrorActionPreference = "Continue"
 # Configuration
 $DB_NAME = "whatsapp_vayyari_data"
 $DB_USER = "postgres"
-$CONTAINER_NAME = "deeplens-postgres"
+$DB_PASS = "Krikank1$"
+$DB_HOST = "192.168.0.170"
+$DB_PORT = 5432
+
+function Run-Remote-Sql {
+    param([string]$Sql, [string]$TargetDb = "postgres")
+    podman run --rm `
+        -e PGPASSWORD=$DB_PASS `
+        --network host `
+        postgres:15-alpine `
+        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $TargetDb -c "$Sql" 2>&1
+}
+
+function Run-Remote-Sql-File {
+    param([string]$FilePath, [string]$TargetDb = $DB_NAME)
+    podman run --rm `
+        -e PGPASSWORD=$DB_PASS `
+        -v "${FilePath}:/tmp/script.sql:Z" `
+        --network host `
+        postgres:15-alpine `
+        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $TargetDb -f "/tmp/script.sql" 2>&1
+}
 
 Write-Host "=== WhatsApp Processor Database Setup ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Check if container is running
-Write-Host "[1/4] Checking PostgreSQL container..." -ForegroundColor Yellow
-$containerStatus = podman ps --filter "name=$CONTAINER_NAME" --format "{{.Status}}" 2>$null
-if (-not $containerStatus -or $containerStatus -notmatch "Up") {
-    Write-Host "  [FAIL] Container '$CONTAINER_NAME' is not running" -ForegroundColor Red
-    Write-Host "  Please start the infrastructure first:" -ForegroundColor Yellow
-    Write-Host "    cd c:\productivity\deeplens" -ForegroundColor Gray
-    Write-Host "    .\infrastructure\setup-deeplens-dev.ps1" -ForegroundColor Gray
+# Check if host is reachable
+Write-Host "[1/4] Checking PostgreSQL host ($DB_HOST)..." -ForegroundColor Yellow
+$conn = Test-NetConnection -ComputerName $DB_HOST -Port $DB_PORT -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+if (-not $conn.TcpTestSucceeded) {
+    Write-Host "  [FAIL] PostgreSQL ($DB_HOST) is not reachable" -ForegroundColor Red
     exit 1
 }
-Write-Host "  [OK] PostgreSQL container is running" -ForegroundColor Green
-
-# Wait for PostgreSQL to be ready
-Write-Host "[2/4] Waiting for PostgreSQL to be ready..." -ForegroundColor Yellow
-$maxRetries = 30
-$retryCount = 0
-while ($retryCount -lt $maxRetries) {
-    podman exec $CONTAINER_NAME pg_isready -U $DB_USER 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { break }
-    Start-Sleep 1
-    $retryCount++
-}
-
-if ($retryCount -eq $maxRetries) {
-    Write-Host "  [FAIL] PostgreSQL failed to start in time" -ForegroundColor Red
-    exit 1
-}
-Write-Host "  [OK] PostgreSQL is ready" -ForegroundColor Green
+Write-Host "  [OK] PostgreSQL host is ready" -ForegroundColor Green
 
 # Drop database if Clean flag is set
 if ($Clean) {
-    Write-Host "[3/4] Dropping existing database..." -ForegroundColor Yellow
-    podman exec $CONTAINER_NAME psql -U $DB_USER -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>&1 | Out-Null
+    Write-Host "[2/4] Dropping existing database..." -ForegroundColor Yellow
+    Run-Remote-Sql "DROP DATABASE IF EXISTS $DB_NAME;" | Out-Null
     Write-Host "  [OK] Existing database dropped" -ForegroundColor Green
 }
 
 # Create database if it doesn't exist
 Write-Host "[3/4] Creating database..." -ForegroundColor Yellow
-$dbExists = podman exec $CONTAINER_NAME psql -U $DB_USER -t -c "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME';" 2>&1
-if (-not ($dbExists -and $dbExists.Trim())) {
-    podman exec $CONTAINER_NAME psql -U $DB_USER -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" | Out-Null
+$dbExists = Run-Remote-Sql "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME';"
+if ($dbExists -notmatch "1") {
+    Run-Remote-Sql "CREATE DATABASE $DB_NAME OWNER $DB_USER;" | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [FAIL] Failed to create database" -ForegroundColor Red
         exit 1
@@ -83,17 +84,10 @@ Write-Host "[4/4] Initializing database schema..." -ForegroundColor Yellow
 $localScriptsDir = Join-Path $PSScriptRoot "scripts\ddl"
 
 if (Test-Path $localScriptsDir) {
-    # Copy DDL to container
-    Write-Host "  Copying DDL scripts to container..." -ForegroundColor Gray
-    $copyResult = podman cp $localScriptsDir deeplens-postgres:/tmp/ddl 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [FAIL] Failed to copy scripts: $copyResult" -ForegroundColor Red
-        exit 1
-    }
-    
     # Run setup.sql
     Write-Host "  Executing setup.sql..." -ForegroundColor Gray
-    podman exec $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -f /tmp/ddl/setup.sql
+    $setupFile = Join-Path $localScriptsDir "setup.sql"
+    Run-Remote-Sql-File $setupFile
     
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [FAIL] Schema initialization failed" -ForegroundColor Red
@@ -101,9 +95,6 @@ if (Test-Path $localScriptsDir) {
     else {
         Write-Host "  [OK] setup.sql executed successfully" -ForegroundColor Green
     }
-
-    # Cleanup
-    podman exec $CONTAINER_NAME rm -rf /tmp/ddl
 }
 else {
     Write-Host "  [FAIL] scripts/ddl directory not found! Path: $localScriptsDir" -ForegroundColor Red
@@ -111,24 +102,26 @@ else {
 }
 
 # Verify tables were created
-$tableCount = podman exec $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -t -c "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public';" 2>&1
-if ($tableCount -and $tableCount.Trim() -ge 7) {
-    Write-Host "  [OK] Schema initialized successfully ($($tableCount.Trim()) tables created)" -ForegroundColor Green
-}
-else {
-    Write-Host "  [WARNING] Expected at least 7 tables, found $($tableCount.Trim())" -ForegroundColor Yellow
+$tableCountStr = Run-Remote-Sql "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public';" $DB_NAME
+if ($tableCountStr -match '(\d+)') {
+    $count = $matches[1]
+    if ($count -ge 7) {
+        Write-Host "  [OK] Schema initialized successfully ($count tables created)" -ForegroundColor Green
+    } else {
+        Write-Host "  [WARNING] Expected at least 7 tables, found $count" -ForegroundColor Yellow
+    }
 }
 
 Write-Host ""
 Write-Host "=== Database Setup Complete ===" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection Details:" -ForegroundColor Cyan
-Write-Host "  Host:     localhost" -ForegroundColor White
-Write-Host "  Port:     5433" -ForegroundColor White
+Write-Host "  Host:     192.168.0.170" -ForegroundColor White
+Write-Host "  Port:     5432" -ForegroundColor White
 Write-Host "  Database: $DB_NAME" -ForegroundColor White
 Write-Host "  Username: $DB_USER" -ForegroundColor White
-Write-Host "  Password: DeepLens123!" -ForegroundColor White
+Write-Host "  Password: Krikank1$" -ForegroundColor White
 Write-Host ""
 Write-Host "Connection String (for .env):" -ForegroundColor Cyan
-Write-Host "  vayyari_wa_db_connection_string=postgresql://${DB_USER}:DeepLens123%21@localhost:5433/${DB_NAME}" -ForegroundColor White
+Write-Host "  vayyari_wa_db_connection_string=postgresql://${DB_USER}:Krikank1%24@192.168.0.170:5432/${DB_NAME}" -ForegroundColor White
 Write-Host ""

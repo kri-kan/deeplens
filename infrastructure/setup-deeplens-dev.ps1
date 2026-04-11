@@ -62,13 +62,15 @@ if ($Clean) {
     Write-Host "  [CLEAN] Cleaning App Data (Topics/Buckets)..." -ForegroundColor Yellow
     
     # Kafka Topics
-    # We loop and use the common script
+    # We loop and use the common script targeting the remote server
     try {
-        $topics = podman exec deeplens-kafka kafka-topics --bootstrap-server localhost:9092 --list 2>$null
+        $bootstrapServer = "192.168.0.170:9092"
+        # Run a temporary container to list topics
+        $topics = podman run --rm --network host apache/kafka:latest kafka-topics --bootstrap-server $bootstrapServer --list 2>$null
         if ($topics) {
             $deepLensTopics = $topics -split "\r?\n" | Where-Object { $_ -match "^deeplens-|^competitor-" }
             foreach ($topic in $deepLensTopics) {
-                 & "$CommonScriptsRoot\manage-kafka-topics.ps1" -Action "Delete" -TopicName $topic
+                 & "$CommonScriptsRoot\manage-kafka-topics.ps1" -Action "Delete" -TopicName $topic -BootstrapServer $bootstrapServer
             }
         }
     } catch { Write-Host "    [WARN] Kafka cleanup issue: $_" -ForegroundColor Gray }
@@ -109,7 +111,7 @@ if (-not $SkipBuild) {
 podman run -d `
     --name deeplens-instagram-worker `
     --network deeplens-network `
-    -e KAFKA_BOOTSTRAP_SERVERS="deeplens-kafka:29092" `
+    -e KAFKA_BOOTSTRAP_SERVERS="192.168.0.170:9092" `
     -e WORKER_TYPE="instagram" `
     deeplens-scraper-worker | Out-Null
 Write-Host "  [OK] Instagram Scraper Worker started" -ForegroundColor Green

@@ -106,7 +106,7 @@ Get-ExecutionPolicy -List
 │              Shared Infrastructure                      │
 │ (Supports DeepLens, WhatsApp Processor, etc.)           │
 ├─────────────────────────────────────────────────────────┤
-│ PostgreSQL (5433) - Shared Relational DB                 │
+│ PostgreSQL (192.168.0.170:5432) - External Relational DB      │
 │ Kafka (9092)      - Shared Message Backbone              │
 │ MinIO (9000/9001) - Shared Object Storage                │
 │ Redis (6379)      - Shared Cache                         │
@@ -147,7 +147,7 @@ podman run -d `
   -e POSTGRES_USER=postgres `
   -e POSTGRES_PASSWORD=DeepLens123! `
   -e POSTGRES_DB=nextgen_identity `
-  -p 5433:5432 `
+  -p 5432:5432 `
   -v deeplens-postgres-data:/var/lib/postgresql/data `
   postgres:16-alpine
 
@@ -426,7 +426,7 @@ Tenant data is in `C:\productivity\deeplensData\tenants`. Simply copy the direct
 
 | Service         | Port  | URL                             | Credentials             |
 | --------------- | ----- | ------------------------------- | ----------------------- |
-| PostgreSQL      | 5433  | -                               | postgres / DeepLens123! |
+| PostgreSQL      | 5432  | 192.168.0.170                   | postgres / Krikank1$    |
 | Redis           | 6379  | -                               | (no password)           |
 | Identity API    | 5198  | http://localhost:5198           | -                       |
 | Qdrant (tenant) | 6333  | http://localhost:6333/dashboard | -                       |

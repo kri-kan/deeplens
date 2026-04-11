@@ -40,10 +40,11 @@ Last Updated: December 20, 2025
 
 | Service            | Username               | Password             | Notes               |
 | :----------------- | :--------------------- | :------------------- | :------------------ |
-| **PostgreSQL**     | `postgres`             | `DeepLens123!`       | Port 5433           |
+| **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432` |
 | **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin       |
 | **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
+| **Kafka UI**       | -                      | -                    | `192.168.0.170:8080` |
 
 ---
 
@@ -52,10 +53,12 @@ Last Updated: December 20, 2025
 ### Core Services
 | Port     | Service    | Description            |
 | :------- | :--------- | :--------------------- |
-| **5433** | PostgreSQL | Metadata & Identity DB |
+| **5432** (remote) | PostgreSQL | Metadata & Identity DB — `192.168.0.170` |
 | **6379** | Redis      | Caching & State        |
 | **6333** | Qdrant     | Vector DB Dashboard    |
 | **9001** | MinIO      | Object Storage Console |
+| **9092** (remote) | Kafka | Message Broker — `192.168.0.170` |
+| **8080** (remote) | Kafka UI | Kafka Management — `192.168.0.170` |
 
 ### DeepLens APIs
 | Port     | Service      | Description                 |
@@ -116,7 +119,7 @@ Last Updated: December 20, 2025
 1.  **Port Conflicts**: Run `Get-Process -Id (Get-NetTCPConnection -LocalPort <Port>).OwningProcess` to find blockers.
 2.  **Container Failures**: Check `podman logs <container-name>`.
 3.  **Database Errors**: Ensure `.env` in `infrastructure` matches your local config.
-4.  **Identity API Not Starting**: Check that PostgreSQL is accessible on port 5433.
+4.  **Identity API Not Starting**: Check that PostgreSQL is accessible on `192.168.0.170:5432`.
 
 ---
 

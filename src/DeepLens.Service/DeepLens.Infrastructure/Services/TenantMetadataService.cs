@@ -39,7 +39,7 @@ public class TenantMetadataService : ITenantMetadataService
     private string GetTenantConnectionString(Guid tenantId)
     {
         var baseConnString = _configuration.GetConnectionString("DefaultConnection") 
-            ?? "Host=localhost;Port=5433;Username=postgres;Password=DeepLens123!";
+            ?? "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$";
         
         var builder = new NpgsqlConnectionStringBuilder(baseConnString);
         
@@ -476,7 +476,7 @@ public class TenantMetadataService : ITenantMetadataService
         try
         {
             var baseConnString = _configuration.GetConnectionString("DefaultConnection") 
-                ?? "Host=localhost;Port=5433;Username=postgres;Password=DeepLens123!";
+                ?? "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$";
             
             var builder = new NpgsqlConnectionStringBuilder(baseConnString);
             builder.Database = "nextgen_identity"; // Query the registry/identity DB

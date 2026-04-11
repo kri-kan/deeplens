@@ -19,21 +19,22 @@ if ($dotnetProcs) {
 Write-Host "  Performing Logical Cleanup (DeepLens Only)..." -ForegroundColor Gray
 
 # 1. Databases (DeepLens Only)
-if (podman ps --filter "name=deeplens-postgres" --format "{{.ID}}") {
-    $dbs = @("deeplens_platform", "nextgen_identity", "tenant_metadata_template", "tenant_vayyari_metadata")
-    foreach ($db in $dbs) {
-        podman exec deeplens-postgres psql -U postgres -c "DROP DATABASE IF EXISTS ""$db"";" 2>$null | Out-Null
-    }
-    Write-Host "    [OK] DeepLens Databases dropped" -ForegroundColor Green
+$DbHost = "192.168.0.170"
+$DbPass = "Krikank1$"
+$dbs = @("deeplens_platform", "nextgen_identity", "tenant_metadata_template", "tenant_vayyari_metadata", "whatsapp_vayyari_data")
+foreach ($db in $dbs) {
+    Write-Host "    Dropping database: $db..." -NoNewline -ForegroundColor Gray
+    podman run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -c "DROP DATABASE IF EXISTS ""$db"";" 2>$null | Out-Null
+    Write-Host " [OK]" -ForegroundColor Green
 }
 
 # 2. Kafka Topics (DeepLens Only)
-if (podman ps --filter "name=deeplens-kafka" --format "{{.ID}}") {
-    $topics = @("deeplens.images.uploaded", "deeplens.videos.uploaded", "deeplens.features.extraction", "deeplens.vectors.indexing", "deeplens.processing.completed", "deeplens.processing.failed", "deeplens.images.maintenance", "competitor.scrape.metadata.requests", "competitor.scrape.metadata.responses")
-    foreach ($topic in $topics) {
-        podman exec deeplens-kafka kafka-topics --delete --topic $topic --bootstrap-server localhost:9092 --if-exists 2>$null | Out-Null
-    }
-    Write-Host "    [OK] DeepLens Topics deleted" -ForegroundColor Green
+$KafkaHost = "192.168.0.170:9092"
+$topics = @("deeplens.images.uploaded", "deeplens.videos.uploaded", "deeplens.features.extraction", "deeplens.vectors.indexing", "deeplens.processing.completed", "deeplens.processing.failed", "deeplens.images.maintenance", "competitor.scrape.metadata.requests", "competitor.scrape.metadata.responses", "competitor.scrape.web.requests", "competitor.scrape.web.responses")
+foreach ($topic in $topics) {
+    Write-Host "    Deleting topic: $topic..." -NoNewline -ForegroundColor Gray
+    podman run --rm --network host apache/kafka kafka-topics --delete --topic $topic --bootstrap-server $KafkaHost --if-exists 2>$null | Out-Null
+    Write-Host " [OK]" -ForegroundColor Green
 }
 
 # 3. MinIO Buckets (DeepLens Only)
@@ -57,7 +58,7 @@ if (podman ps --filter "name=deeplens-redis" --format "{{.ID}}") {
 
 # Stop and remove DeepLens containers
 $allContainers = podman ps -a --format "{{.Names}}" | Where-Object { $_ -match "^deeplens-" }
-$persistentContainers = @("deeplens-postgres", "deeplens-redis", "deeplens-minio", "deeplens-kafka", "deeplens-zookeeper")
+$persistentContainers = @("deeplens-redis", "deeplens-minio")
 
 if ($allContainers) {
     Write-Host "  Removing containers (Preserving persistent ones)..." -ForegroundColor Gray

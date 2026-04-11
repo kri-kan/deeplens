@@ -16,7 +16,7 @@ services:
       # --- Database Connection ---
       # Connects to the specific tenant database created by provision-tenant.ps1
       # Note: We use the 'postgres' user here for simplicity, but in prod should be 'tenant_service'
-      - DB_CONNECTION_STRING=postgresql://postgres:${PG_PASSWORD:-DeepLens123!}@deeplens-postgres:5432/tenant_${TENANT_NAME}_metadata
+      - DB_CONNECTION_STRING=postgresql://postgres:${PG_PASSWORD:-Krikank1%24}@192.168.0.170:5432/tenant_${TENANT_NAME}_metadata
       
       # --- MinIO Connection ---
       # Connects to the shared MinIO instance but targets the tenant-specific bucket

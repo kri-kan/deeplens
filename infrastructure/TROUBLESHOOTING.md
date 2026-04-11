@@ -62,8 +62,8 @@ podman machine start
 
 **Solution:** Find and kill the process:
 ```powershell
-# Example: Check port 5433
-netstat -ano | findstr :5433
+# Example: Check port 5432 on remote server
+Test-NetConnection -ComputerName 192.168.0.170 -Port 5432
 taskkill /PID <PID> /F
 ```
 
@@ -94,8 +94,9 @@ podman volume rm deeplens-postgres-data
 podman exec deeplens-postgres psql -U postgres -d nextgen_identity -c "SELECT 1;"
 ```
 **Common Checks:**
-- Port: Ensure it's **5433** (not 5432).
-- Password: **DeepLens123!**
+- Port: Ensure it's **5432** (for remote server) or check your specific configuration.
+- External Host: **192.168.0.170**
+- Password: **Krikank1$**
 - Network: Ensure API and DB are reachable.
 
 ---

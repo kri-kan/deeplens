@@ -18,7 +18,7 @@ This document provides a complete mapping of all ports used by DeepLens services
 | 4318  | Jaeger (OTLP HTTP)       | HTTP     | Observability  | Trace collection (HTTP)        | ✅ None        |
 | 5000  | Search API               | HTTP     | Application    | Image search & ingestion       | ⚠️ Common      |
 | 5198  | Identity API             | HTTP     | Application    | Authentication & authorization | ✅ None        |
-| 5433  | PostgreSQL               | TCP      | Infrastructure | Database (custom port)         | ✅ None        |
+| 5432  | PostgreSQL (Remote)      | TCP      | Infrastructure | Database (external server)     | ✅ None        |
 | 6333  | Qdrant (HTTP)            | HTTP     | Infrastructure | Vector database API            | ✅ None        |
 | 6334  | Qdrant (gRPC)            | gRPC     | Infrastructure | Vector database gRPC           | ✅ None        |
 | 6379  | Redis                    | TCP      | Infrastructure | Cache & session storage        | ⚠️ Common      |
@@ -38,7 +38,7 @@ This document provides a complete mapping of all ports used by DeepLens services
 ### ✅ No Known Conflicts (Safe)
 These ports are unlikely to conflict with common services:
 - **5198** - Identity API
-- **5433** - PostgreSQL (custom, avoids default 5432)
+- **5432** - PostgreSQL (Remote server at 192.168.0.170)
 - **3005** - WhatsApp Processor
 - **3100** - Loki
 - **4317/4318** - OTLP endpoints
@@ -86,7 +86,7 @@ These ports may conflict with other common services:
 
 ### Infrastructure (Core)
 ```
-PostgreSQL:  5433
+PostgreSQL:  5432
 Redis:       6379
 Zookeeper:   2181
 Kafka:       9092

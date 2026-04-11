@@ -18,14 +18,11 @@ All database names across the DeepLens project now follow a **lowercase with und
 
 **Preferred (lowercase with underscores):**
 ```bash
-vayyari_wa_db_connection_string=postgresql://postgres:DeepLens123%21@localhost:5433/whatsapp_vayyari_data
-deeplens_vayyari_connection_string=postgresql://postgres:DeepLens123%21@localhost:5433/tenant_vayyari_metadata
-```
+vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
 
-**Legacy (uppercase - deprecated but supported):**
-```bash
-VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:DeepLens123%21@localhost:5433/whatsapp_vayyari_data
-DEEPLENS_VAYYARI_CONNECTION_STRING=postgresql://postgres:DeepLens123%21@localhost:5433/tenant_vayyari_metadata
+VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+DEEPLENS_VAYYARI_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
 ```
 
 ## 🔍 Verification
@@ -135,10 +132,10 @@ podman restart whatsapp-vayyari
 
 ### PostgreSQL (via Podman)
 ```
-Host: localhost
-Port: 5433 (host) / 5432 (container)
+Host: 192.168.0.170
+Port: 5432 (Remote)
 Username: postgres
-Password: DeepLens123!
+Password: Krikank1$$ (Remote Server: 192.168.0.170:5432)
 ```
 
 ### Databases
@@ -151,9 +148,8 @@ tenant_metadata_template    - Template for new tenants
 
 ### Connection String Format
 ```
-postgresql://postgres:DeepLens123%21@localhost:5433/whatsapp_vayyari_data
-                                    ↑ Note: ! is encoded as %21
-                                            ↑ Port 5433 for host connections
+postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+                                            ↑ Port 5432 for remote connections
                                                       ↑ Lowercase database name
 ```
 

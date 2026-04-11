@@ -8,38 +8,6 @@ version: "3.8"
 #   DEEPLENS_LOGS_PATH - Base path for logs (default: ./logs)
 
 services:
-  # =============================================================================
-  # PostgreSQL - Identity & Metadata Databases
-  # =============================================================================
-  postgres:
-    image: postgres:16-alpine
-    container_name: deeplens-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-DeepLens123!}
-      POSTGRES_DB: ${POSTGRES_DB:-nextgen_identity}
-    ports:
-      - "5433:5432"
-    volumes:
-      - ${DEEPLENS_DATA_PATH:-./data}/postgres:/var/lib/postgresql/data
-      - ${DEEPLENS_LOGS_PATH:-./logs}/postgres:/var/log/postgresql
-      - ./init-scripts/postgres:/docker-entrypoint-initdb.d
-    networks:
-      - deeplens-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 1GB
-          cpus: "1.0"
-        reservations:
-          memory: 512MB
-          cpus: "0.5"
 
   # =============================================================================
   # Qdrant - Vector Database
@@ -109,96 +77,7 @@ services:
         reservations:
           memory: 512MB
           cpus: "0.25"
-
-  # =============================================================================
-  # Apache Kafka - Message Queue
-  # =============================================================================
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: deeplens-zookeeper
-    restart: unless-stopped
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    volumes:
-      - ${DEEPLENS_DATA_PATH:-./data}/zookeeper/data:/var/lib/zookeeper/data
-      - ${DEEPLENS_LOGS_PATH:-./logs}/zookeeper:/var/lib/zookeeper/log
-    networks:
-      - deeplens-network
-    deploy:
-      resources:
-        limits:
-          memory: 1GB
-          cpus: "0.5"
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: deeplens-kafka
-    restart: unless-stopped
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    volumes:
-      - ${DEEPLENS_DATA_PATH:-./data}/kafka:/var/lib/kafka/data
-      - ${DEEPLENS_LOGS_PATH:-./logs}/kafka:/var/log/kafka
-    networks:
-      - deeplens-network
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      KAFKA_NUM_PARTITIONS: 3
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "kafka-broker-api-versions",
-          "--bootstrap-server",
-          "localhost:9092",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 2GB
-          cpus: "1.0"
-        reservations:
-          memory: 1GB
-          cpus: "0.5"
-
-  # =============================================================================
-  # Kafka UI - Management Interface
-  # =============================================================================
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: deeplens-kafka-ui
-    restart: unless-stopped
-    depends_on:
-      - kafka
-    ports:
-      - "8080:8080"
-    networks:
-      - deeplens-network
-    environment:
-      KAFKA_CLUSTERS_0_NAME: deeplens-local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-    deploy:
-      resources:
-        limits:
-          memory: 512MB
-          cpus: "0.5"
-
+          
   # =============================================================================
   # Redis - Cache Layer
   # =============================================================================

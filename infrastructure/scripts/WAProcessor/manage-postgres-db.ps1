@@ -7,7 +7,19 @@ param (
     [string]$DatabaseName = "whatsapp_vayyari_data",
 
     [Parameter(Mandatory=$false)]
-    [string]$ContainerName = "deeplens-postgres",
+    [string]$ContainerName = "", # If empty, a temporary container will be used for remote connection
+
+    [Parameter(Mandatory=$false)]
+    [string]$DbHost = "192.168.0.170",
+
+    [Parameter(Mandatory=$false)]
+    [int]$DbPort = 5432,
+
+    [Parameter(Mandatory=$false)]
+    [string]$DbUser = "postgres",
+
+    [Parameter(Mandatory=$false)]
+    [string]$DbPass = "Krikank1$",
 
     [Parameter(Mandatory=$false)]
     [string]$DdlPath = "$PSScriptRoot\..\ddl" 
@@ -16,15 +28,37 @@ param (
 $ErrorActionPreference = "Continue"
 
 function Run-Psql-Cmd {
-    param($Cmd)
-    # Write-Host "DEBUG: Running SQL: $Cmd" -ForegroundColor DarkGray
-    podman exec $ContainerName psql -U postgres -d $DatabaseName -c "$Cmd" 2>&1
+    param($Cmd, [string]$TargetDb = $DatabaseName)
+    
+    if (-not [string]::IsNullOrEmpty($ContainerName)) {
+        # Use existing local container
+        podman exec $ContainerName psql -U $DbUser -d $TargetDb -c "$Cmd" 2>&1
+    } else {
+        # Use temporary container for remote connection
+        podman run --rm `
+            -e PGPASSWORD=$DbPass `
+            --network host `
+            postgres:15-alpine `
+            psql -h $DbHost -p $DbPort -U $DbUser -d $TargetDb -c "$Cmd" 2>&1
+    }
 }
 
 function Run-Psql-File {
-    param($FileName)
-    # Run from inside the directory so relative paths in SQL work
-    podman exec $ContainerName sh -c "cd /tmp/ddl && psql -U postgres -d $DatabaseName -f $FileName" 2>&1
+    param($FileName, [string]$TargetDb = $DatabaseName)
+    
+    if (-not [string]::IsNullOrEmpty($ContainerName)) {
+        # Use existing local container
+        podman exec $ContainerName sh -c "cd /tmp/ddl && psql -U $DbUser -d $TargetDb -f $FileName" 2>&1
+    } else {
+        # Use temporary container for remote connection
+        # Mount the DDL path to /tmp/ddl inside the container
+        podman run --rm `
+            -e PGPASSWORD=$DbPass `
+            -v "${DdlPath}:/tmp/ddl:Z" `
+            --network host `
+            postgres:15-alpine `
+            psql -h $DbHost -p $DbPort -U $DbUser -d $TargetDb -f "/tmp/ddl/$FileName" 2>&1
+    }
 }
 
 Write-Host "Postgres Manager: Performing $Action on '$DatabaseName'..." -ForegroundColor Cyan
@@ -42,24 +76,20 @@ try {
             Write-Host "  Copying DDL scripts from $DdlPath..." -ForegroundColor Gray
             if (-not (Test-Path $DdlPath)) { throw "DDL path not found: $DdlPath" }
             
-            podman exec $ContainerName rm -rf /tmp/ddl
-            podman cp "$DdlPath" "$($ContainerName):/tmp/ddl" 2>&1 | Out-Null
-            
-            Write-Host "  Executing setup.sql..." -ForegroundColor Yellow
-            $res = Run-Psql-File "setup.sql"
-            if ($LASTEXITCODE -ne 0) { throw "Setup failed: $res" }
-
-            # Cleanup
-            podman exec $ContainerName rm -rf /tmp/ddl
+            # Skip local cleanup if using remote
+            if (-not [string]::IsNullOrEmpty($ContainerName)) {
+                # Cleanup
+                podman exec $ContainerName rm -rf /tmp/ddl
+            }
             Write-Host "  [OK] Database initialized." -ForegroundColor Green
         }
 
         "Reset" {
             # Check if DB exists (connect to 'postgres' DB to check)
-            $existsCheck = podman exec $ContainerName psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DatabaseName'"
-            if ($existsCheck -ne "1") {
+            $existsCheck = Run-Psql-Cmd "SELECT 1 FROM pg_database WHERE datname='$DatabaseName'" "postgres"
+            if ($existsCheck -notmatch "1") {
                 Write-Host "  Database '$DatabaseName' does not exist. Creating..." -ForegroundColor Yellow
-                podman exec $ContainerName psql -U postgres -d postgres -c "CREATE DATABASE ""$DatabaseName"";" 2>&1 | Out-Null
+                Run-Psql-Cmd "CREATE DATABASE ""$DatabaseName"";" "postgres" | Out-Null
             } else {
                 # Drop existing schema
                 Write-Host "  Dropping existing schema..." -ForegroundColor Yellow
@@ -68,22 +98,14 @@ try {
                 if ($LASTEXITCODE -ne 0) { Write-Host "  [WARN] Schema drop issue: $res" -ForegroundColor Gray }
             }
 
-            # Init
-            Write-Host "  Copying DDL scripts from $DdlPath..." -ForegroundColor Gray
-            if (-not (Test-Path $DdlPath)) { throw "DDL path not found: $DdlPath" }
-            
-            # Remove old if exists
-            podman exec $ContainerName rm -rf /tmp/ddl
-            
-            # Copy folder
-            podman cp "$DdlPath" "$($ContainerName):/tmp/ddl" 2>&1 | Out-Null
-            
             Write-Host "  Applying fresh schema..." -ForegroundColor Yellow
             $res = Run-Psql-File "setup.sql"
             if ($LASTEXITCODE -ne 0) { throw "Setup failed: $res" }
 
-             # Cleanup
-            podman exec $ContainerName rm -rf /tmp/ddl
+             # Cleanup (only if local)
+            if (-not [string]::IsNullOrEmpty($ContainerName)) {
+                podman exec $ContainerName rm -rf /tmp/ddl
+            }
             Write-Host "  [OK] Database successfully reset." -ForegroundColor Green
         }
     }

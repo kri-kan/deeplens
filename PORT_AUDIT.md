@@ -18,11 +18,13 @@ All ports have been verified across code, configuration files, and documentation
 - **3006** - Dev UI (Development mode only)
 
 ### Infrastructure
-- **5433** - PostgreSQL (external port, internal 5432)
+- **5432** - PostgreSQL (Remote server: 192.168.0.170)
 - **6379** - Redis
 - **6333** - Qdrant
 - **9000** - MinIO API
 - **9001** - MinIO Console
+- **9092** - Kafka (Remote: 192.168.0.170)
+- **8080** - Kafka UI (Remote: 192.168.0.170)
 
 ### Monitoring & Observability
 - **3000** - Grafana
@@ -41,11 +43,13 @@ All ports have been verified across code, configuration files, and documentation
 | DeepLens Web UI   | `src/DeepLens.WebUI/vite.config.ts`                        | 5001      | ✅ Correct |
 | WhatsApp API      | `src/whatsapp-processor/.env.example`                      | 3005      | ✅ Correct |
 | WhatsApp UI (Dev) | `src/whatsapp-processor/client/vite.config.ts`             | 3006      | ✅ Correct |
-| PostgreSQL        | `infrastructure/scripts/lifecycle/start-core-services.ps1` | 5433:5432 | ✅ Correct |
+| PostgreSQL        | Remote (192.168.0.170) | 5432 | ✅ Correct |
 | Redis             | `infrastructure/scripts/lifecycle/start-core-services.ps1` | 6379      | ✅ Correct |
 | MinIO API         | `infrastructure/scripts/lifecycle/start-core-services.ps1` | 9000      | ✅ Correct |
 | MinIO Console     | `infrastructure/scripts/lifecycle/start-core-services.ps1` | 9001      | ✅ Correct |
 | Qdrant            | `infrastructure/scripts/lifecycle/start-core-services.ps1` | 6333      | ✅ Correct |
+| Kafka             | Remote (192.168.0.170) | 9092      | ✅ Correct |
+| Kafka UI          | Remote (192.168.0.170) | 8080      | ✅ Correct |
 | Grafana           | `infrastructure/scripts/lifecycle/start-observability.ps1` | 3000      | ✅ Correct |
 | Prometheus        | `infrastructure/scripts/lifecycle/start-observability.ps1` | 9090      | ✅ Correct |
 | Jaeger            | `infrastructure/scripts/lifecycle/start-observability.ps1` | 16686     | ✅ Correct |

@@ -121,7 +121,8 @@ podman run -d `
     --restart unless-stopped `
     --network deeplens-network `
     -e POSTGRES_USER=postgres `
-    -e POSTGRES_PASSWORD=DeepLens123! `
+    -p 5432:5432 `
+    -e POSTGRES_PASSWORD=Krikank1$ `
     -e POSTGRES_DB=nextgen_identity `
     -p 5433:5432 `
     -v "${coreDataPath}/postgresql:/var/lib/postgresql/data" `
@@ -230,7 +231,7 @@ if (Test-Path (Join-Path $tenantsPath "*")) {
                 --network deeplens-network `
                 --restart unless-stopped `
                 -v "${backupPath}:/backups" `
-                -e PGPASSWORD=DeepLens123! `
+                -e PGPASSWORD=Krikank1$ `
                 --label tenant=$tenantName `
                 --label service=postgres-backup `
                 postgres:16-alpine `

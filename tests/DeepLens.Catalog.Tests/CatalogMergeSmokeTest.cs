@@ -12,7 +12,7 @@ namespace DeepLens.Catalog.Tests;
 [TestFixture]
 public class CatalogMergeSmokeTest
 {
-    private string _connectionString = "Host=localhost;Port=5433;Username=postgres;Password=DeepLens123!;Database=tenant_vayyari_metadata";
+    private string _connectionString = "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$;Database=tenant_vayyari_metadata";
     private TenantMetadataService _service;
     private Guid _vayyariId = Guid.Parse("2abbd721-873e-4bf0-9cb2-c93c6894c584");
 
@@ -27,7 +27,7 @@ public class CatalogMergeSmokeTest
         
         _service = new TenantMetadataService(new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> {
-                {"ConnectionStrings:DefaultConnection", "Host=localhost;Port=5433;Username=postgres;Password=DeepLens123!"}
+                {"ConnectionStrings:DefaultConnection", "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$"}
             }).Build(), logger, producer);
 
         await EnsureSchemaAsync();

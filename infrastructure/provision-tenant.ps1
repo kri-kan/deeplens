@@ -34,7 +34,22 @@ $TenantPath = "$DataBasePath/tenants/$TenantName"
 $BackupsPath = "$TenantPath/backups"
 
 # Core Infrastructure Ports
-$CORE_PORTS = @(5433, 6379, 6333, 6334, 9000, 9001, 8080, 8082, 9092)
+$CORE_PORTS = @(5432, 5433, 6379, 6333, 6334, 9000, 9001, 8080, 8082, 9092)
+
+# Remote Postgres Config
+$DB_HOST = "192.168.0.170"
+$DB_PORT = 5432
+$DB_PASS = "Krikank1$"
+$DB_USER = "postgres"
+
+function Run-Remote-Sql {
+    param([string]$Sql, [string]$TargetDb = "postgres")
+    podman run --rm `
+        -e PGPASSWORD=$DB_PASS `
+        --network host `
+        postgres:15-alpine `
+        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $TargetDb -c "$Sql" 2>&1
+}
 
 function Get-NextAvailablePort {
     param([int]$StartPort)
@@ -99,10 +114,9 @@ function Remove-Tenant {
     }
     Write-Host "[OK] Backup container removed" -ForegroundColor Green
     
-    # Drop database
     Write-Host "`n[DATABASE] Dropping tenant database..." -ForegroundColor Yellow
     $dropCmd = "DROP DATABASE IF EXISTS $TenantDBName;"
-    podman exec -i deeplens-postgres psql -U postgres -c $dropCmd 2>&1 | Out-Null
+    Run-Remote-Sql $dropCmd | Out-Null
     Write-Host "[OK] Database dropped" -ForegroundColor Green
     
     # Remove data directories
@@ -125,13 +139,14 @@ function Provision-Tenant {
     # Check prerequisites
     Write-Host "[CHECK] Verifying prerequisites..." -ForegroundColor Cyan
     
-    # Check PostgreSQL
-    $pgRunning = podman ps --filter "name=^deeplens-postgres$" --format "{{.Names}}"
-    if (-not $pgRunning) {
-        Write-Host "[ERROR] PostgreSQL is not running. Start infrastructure first" -ForegroundColor Red
+    # Check PostgreSQL Connectivity
+    Write-Host "[CHECK] Verifying PostgreSQL connection ($DB_HOST)..." -ForegroundColor Cyan
+    $conn = Test-NetConnection -ComputerName $DB_HOST -Port $DB_PORT -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+    if (-not $conn.TcpTestSucceeded) {
+        Write-Host "[ERROR] PostgreSQL ($DB_HOST) is not reachable" -ForegroundColor Red
         exit 1
     }
-    Write-Host "[OK] PostgreSQL is running" -ForegroundColor Green
+    Write-Host "[OK] PostgreSQL connection verified" -ForegroundColor Green
     
     # Check if deeplens-network exists
     Write-Host "[CHECK] Verifying network configuration..." -ForegroundColor Cyan
@@ -207,7 +222,7 @@ function Provision-Tenant {
     $templateName = "tenant_metadata_template"
     $createDBCmd = "CREATE DATABASE $TenantDBName WITH TEMPLATE $templateName OWNER tenant_service;"
     try {
-        podman exec -i deeplens-postgres psql -U postgres -c $createDBCmd 2>&1 | Out-Null
+        Run-Remote-Sql $createDBCmd | Out-Null
         Write-Host "[OK] Database created: $TenantDBName (from $templateName)" -ForegroundColor Green
     }
     catch {
@@ -218,7 +233,7 @@ function Provision-Tenant {
     Write-Host "`n[IDENTITY] Creating tenant and admin user via API..." -ForegroundColor Cyan
     
     $tenantAdminEmail = "admin@${TenantName}.local"
-    $tenantAdminPassword = "DeepLens@${TenantName}123!"
+    $tenantAdminPassword = "Krikank1$@${TenantName}123!"
     
     # Prepare API request body
     $apiBody = @{
@@ -332,7 +347,7 @@ function Provision-Tenant {
         Write-Host "[INFO] Updating tenant record with Qdrant ports..." -ForegroundColor Yellow
         try {
             $updateSQL = "UPDATE tenants SET qdrant_http_port = $QdrantHttpPort, qdrant_grpc_port = $QdrantGrpcPort, updated_at = CURRENT_TIMESTAMP WHERE slug = '$TenantName';"
-            podman exec -i deeplens-postgres psql -U postgres -d nextgen_identity -c $updateSQL 2>&1 | Out-Null
+            Run-Remote-Sql $updateSQL "nextgen_identity" | Out-Null
             Write-Host "[OK] Tenant record updated with Qdrant ports" -ForegroundColor Green
         }
         catch {
@@ -352,7 +367,7 @@ Role: TenantOwner (Full tenant access)
 
 IMPORTANT SECURITY NOTES:
   - Change this password IMMEDIATELY after first login
-  - The default password follows the pattern: DeepLens@{TenantName}123!
+  - The default password follows the pattern: Krikank1$@{TenantName}123!
   - This user has full access to the tenant's resources
   - Store these credentials securely
   - Delete this file after noting the credentials
@@ -466,7 +481,7 @@ Isolation:   Bucket-level (Policy: $policyName)
         $backupScript = "#!/bin/sh`n" +
         "TIMESTAMP=`$(date +%Y%m%d_%H%M%S)`n" +
         "BACKUP_FILE=""/backups/backup_`${TIMESTAMP}.sql""`n" +
-        "PGPASSWORD='DeepLens123!' pg_dump -h deeplens-postgres -U deeplens -d $TenantDBName > ""`$BACKUP_FILE""`n" +
+        "PGPASSWORD='$DB_PASS' pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $TenantDBName > ""`$BACKUP_FILE""`n" +
         "echo ""`$(date): Backup completed - `$BACKUP_FILE"" >> /backups/backup.log`n" +
         "find /backups -name ""backup_*.sql"" -type f -mtime +$BackupRetentionDays -exec rm -f {} +`n"
         

@@ -10,7 +10,6 @@ This document defines the strict naming conventions for all DeepLens containers,
 
 - `deeplens-postgres` - PostgreSQL database
 - `deeplens-kafka` - Kafka message broker
-- `deeplens-zookeeper` - Zookeeper for Kafka
 - `deeplens-minio` - Shared MinIO object storage
 - `deeplens-qdrant` - Shared Qdrant vector database
 - `deeplens-redis` - Redis cache

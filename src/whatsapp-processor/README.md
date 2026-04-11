@@ -83,7 +83,7 @@ cd src\whatsapp-processor
 .\setup-whatsapp-db.ps1
 ```
 
-**Important:** The database runs on port **5433** (not 5432) when using DeepLens infrastructure.
+**Important:** The database runs on port **5432** at **192.168.0.170** (Remote Server).
 
 See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed database configuration and troubleshooting.
 
