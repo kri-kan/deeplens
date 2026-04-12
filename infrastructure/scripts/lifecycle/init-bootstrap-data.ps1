@@ -64,7 +64,7 @@ if (-not $connected) {
 Write-Host "  [OK] Connected to remote Postgres" -ForegroundColor Green
 
 # 2. Run Init Scripts (Service-Oriented Order)
-$serviceOrder = @("identity", "tenant-manager", "deeplens-core", "search-api", "competitor-intel")
+$serviceOrder = @("identity", "tenant-manager", "deeplens-core", "search-api", "competitor-intel", "whatsapp")
 
 foreach ($service in $serviceOrder) {
     $serviceDir = "$InitScriptsPath/$service"
