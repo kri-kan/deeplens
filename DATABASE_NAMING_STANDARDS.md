@@ -18,18 +18,15 @@ All database names across the DeepLens project now follow a **lowercase with und
 
 **Preferred (lowercase with underscores):**
 ```bash
-vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
-deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@10.31.203.89:5432/tenant_vayyari_metadata
-
-VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
-DEEPLENS_VAYYARI_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5432/tenant_vayyari_metadata
+vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
 ```
 
 ## 🔍 Verification
 
 ### Check Current Database Names
 ```powershell
-docker exec deeplens-postgres psql -U postgres -c "\l" | Select-String "vayyari"
+podman run --rm -e PGPASSWORD=Krikank1$ --network host postgres:latest psql -h 192.168.0.170 -p 5432 -U postgres -c "\l" | Select-String "vayyari"
 ```
 
 Expected output should show:
@@ -57,8 +54,8 @@ Should show lowercase variable names.
 - ✅ `deploy-debug.ps1` - Uses `tenant_vayyari_metadata`
 
 ### Infrastructure Scripts
-- ✅ `infrastructure/setup-deeplens-dev.ps1` - Creates `tenant_vayyari_metadata`
-- ✅ `infrastructure/test-vayyari-setup.ps1` - References `tenant_vayyari_metadata`
+- ✅ `infrastructure/setup-deeplens-dev.ps1` - Entry point for DB initialization (Remote)
+- ✅ `infrastructure/scripts/lifecycle/init-bootstrap-data.ps1` - Core initialization logic
 
 ### Documentation
 - ✅ `src/whatsapp-processor/DATABASE_SETUP.md` - Documents lowercase convention
@@ -130,12 +127,12 @@ podman restart whatsapp-vayyari
 
 ## 🔐 Connection Details Reference
 
-### PostgreSQL (via Podman)
+### PostgreSQL (Remote Server)
 ```
-Host: 10.31.203.89
-Port: 5432 (Remote)
+Host: 192.168.0.170
+Port: 5432
 Username: postgres
-Password: Krikank1$$ (Remote Server: 10.31.203.89:5432)
+Password: Krikank1$
 ```
 
 ### Databases
@@ -148,7 +145,7 @@ tenant_metadata_template    - Template for new tenants
 
 ### Connection String Format
 ```
-postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
+postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
                                             ↑ Port 5432 for remote connections
                                                       ↑ Lowercase database name
 ```

@@ -8,11 +8,13 @@ cd c:\productivity\deeplens
 .\infrastructure\setup-deeplens-dev.ps1
 ```
 
-### 2. Setup WhatsApp Database
+### 1. Initialize Infrastructure
 ```powershell
-cd src\whatsapp-processor
-.\setup-whatsapp-db.ps1
+cd c:\productivity\deeplens
+.\infrastructure\setup-deeplens-dev.ps1
 ```
+> [!NOTE]
+> This script automatically initializes all databases on the remote server (`192.168.0.170`) using verified Golden Copy backups.
 
 ### 3. Configure Environment
 Copy `.env.example` to `.env` (if not already done):
@@ -36,8 +38,8 @@ npm start
 
 | Setting      | Value                  |
 | :----------- | :--------------------- |
-| **Host**     | `10.31.203.89`        |
-| **Port**     | `5432` ⚠️ remote server |
+| **Host**     | `192.168.0.170`        |
+| **Port**     | `5432`                 |
 | **Username** | `postgres`             |
 | **Password** | `Krikank1$`            |
 
@@ -45,12 +47,13 @@ npm start
 
 **Preferred (lowercase with underscores):**
 ```bash
-vayyarideeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@10.31.203.89:5432/tenant_vayyari_metadata
+vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
 ```
 
 **Legacy (uppercase - deprecated):**
 ```bash
-VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
+VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
 ```
 
 > **Note:** The application supports both formats for backward compatibility, but lowercase is preferred.
@@ -86,10 +89,10 @@ VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5
 .\setup-whatsapp-db.ps1
 ```
 
-### Issue: Connection Errors
-- Ensure the remote server `10.31.203.89` is reachable.
+3. Connection Errors
+- Ensure the remote server `192.168.0.170` is reachable.
 - Verify the password `Krikank1$` is correct.
-- If using DeepLens infrastructure (deprecated), use port `5433`. Otherwise use `5432` for the remote server.
+- Use port `5432` for all connections.
 
 ---
 
@@ -113,15 +116,14 @@ To recreate the schema:
 ## Connecting with pgAdmin
 
 1. Open pgAdmin
-2. Right-click "Servers" → "Register" → "Server"
+2. Right-click "Servers" -> "Register" -> "Server"
 3. **General Tab:**
-   - Name: `DeepLens WhatsApp`
+   - Name: `DeepLens Remote`
 4. **Connection Tab:**
-   - Host: `10.31.203.89`
-   - Port: `5433`
-   - Database: `whatsapp_vayyari_data`
+   - Host: `192.168.0.170`
+   - Port: `5432`
    - Username: `postgres`
-   - Password: `DeepLens123!`
+   - Password: `Krikank1$`
 5. Click "Save"
 
 ---
@@ -130,12 +132,12 @@ To recreate the schema:
 
 ### Check if database exists
 ```powershell
-podman exec deeplens-postgres psql -U postgres -c "\l" | Select-String "whatsapp"
+podman run --rm -e PGPASSWORD=Krikank1$ --network host postgres:latest psql -h 192.168.0.170 -p 5432 -U postgres -c "\l" | Select-String "vayyari"
 ```
 
 ### List tables in database
 ```powershell
-podman exec deeplens-postgres psql -U postgres -d whatsapp_vayyari_data -c "\dt"
+podman run --rm -e PGPASSWORD=Krikank1$ --network host postgres:latest psql -h 192.168.0.170 -p 5432 -U postgres -d tenant_vayyari_metadata -c "\dt"
 ```
 
 ### Check table row counts

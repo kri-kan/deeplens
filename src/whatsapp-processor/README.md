@@ -83,7 +83,7 @@ cd src\whatsapp-processor
 .\setup-whatsapp-db.ps1
 ```
 
-**Important:** The database runs on port **5432** at **10.31.203.89** (Remote Server).
+**Important:** The database runs on port **5432** at **192.168.0.170** (Remote Server).
 
 See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed database configuration and troubleshooting.
 

@@ -18,14 +18,14 @@ Write-Host ""
 Load-Env -EnvFile "$PSScriptRoot/.env"
 
 # Use variables from .env or fallback to baseline
-$RemoteHost = $env:INFRA_HOST ?? "192.168.0.170"
-$PgPort = $env:POSTGRES_PORT ?? 5432
-$RedisPort = $env:REDIS_PORT ?? 6379
-$KafkaPort = $env:KAFKA_PORT ?? 9092
-$MinioPort = $env:MINIO_PORT ?? 9000
-$QdrantDashPort = $env:QDRANT_DASH_PORT ?? 6333
-$InfluxPort = $env:INFLUXDB_PORT ?? 8086
-$DbPass = $env:POSTGRES_PASSWORD ?? "Krikank1$"
+$RemoteHost = if ($env:INFRA_HOST) { $env:INFRA_HOST } else { "192.168.0.170" }
+$PgPort = if ($env:POSTGRES_PORT) { $env:POSTGRES_PORT } else { 5432 }
+$RedisPort = if ($env:REDIS_PORT) { $env:REDIS_PORT } else { 6379 }
+$KafkaPort = if ($env:KAFKA_PORT) { $env:KAFKA_PORT } else { 9092 }
+$MinioPort = if ($env:MINIO_PORT) { $env:MINIO_PORT } else { 9000 }
+$QdrantDashPort = if ($env:QDRANT_DASH_PORT) { $env:QDRANT_DASH_PORT } else { 6333 }
+$InfluxPort = if ($env:INFLUXDB_PORT) { $env:INFLUXDB_PORT } else { 8086 }
+$DbPass = if ($env:POSTGRES_PASSWORD) { $env:POSTGRES_PASSWORD } else { "Krikank1$" }
 
 $allGood = $true
 

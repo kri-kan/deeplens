@@ -6,7 +6,7 @@ $ErrorActionPreference = "Continue"
 $RepoRoot = Resolve-Path "$PSScriptRoot/../../.."
 
 # Paths (using forward slashes)
-$InitScriptsPath = "$RepoRoot/infrastructure/init-scripts/postgres"
+$InitScriptsPath = "$RepoRoot/setupscripts/application"
 $CliToolPath = "$RepoRoot/tools/DeepLens.CLI/DeepLens.CLI.csproj"
 
 # Helper for cross-platform port testing
@@ -63,15 +63,37 @@ if (-not $connected) {
 }
 Write-Host "  [OK] Connected to remote Postgres" -ForegroundColor Green
 
-# 2. Run Init Scripts
-$initScripts = Get-ChildItem "$InitScriptsPath/*.sql" | Sort-Object Name
-foreach ($script in $initScripts) {
-    Write-Host "    Executing: $($script.Name)" -ForegroundColor DarkGray
-    Get-Content $script.FullName | docker run --rm -i -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -p $DbPort -U postgres -d postgres | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "    [WARNING] Script $($script.Name) had some issues (exit code $LASTEXITCODE)." -ForegroundColor Yellow
+# 2. Run Init Scripts (Service-Oriented Order)
+$serviceOrder = @("identity", "tenant-manager", "deeplens-core", "search-api", "competitor-intel")
+
+foreach ($service in $serviceOrder) {
+    $serviceDir = "$InitScriptsPath/$service"
+    if (-not (Test-Path $serviceDir)) {
+        Write-Host "    [SKIP] Service folder not found: $service" -ForegroundColor Gray
+        continue
+    }
+
+    Write-Host "    Service: $service" -ForegroundColor Yellow
+    $scripts = Get-ChildItem "$serviceDir/*.sql" | Sort-Object Name
+    foreach ($script in $scripts) {
+        # Determine target database from filename or service name
+        $targetDb = "postgres"
+        if ($script.Name -match "nextgen_identity") { $targetDb = "nextgen_identity" }
+        elseif ($script.Name -match "deeplens_platform") { $targetDb = "deeplens_platform" }
+        elseif ($script.Name -match "tenant_metadata_template") { $targetDb = "tenant_metadata_template" }
+        elseif ($script.Name -match "tenant_vayyari_metadata") { $targetDb = "tenant_vayyari_metadata" }
+        elseif ($service -eq "identity") { $targetDb = "nextgen_identity" } # Fallback for granular files
+        elseif ($service -eq "deeplens-core") { $targetDb = "deeplens_platform" }
+        elseif ($service -eq "tenant-manager") { $targetDb = "tenant_metadata_template" }
+
+        Write-Host "      Executing: $($script.Name) (Target: $targetDb)" -ForegroundColor DarkGray
+        Get-Content $script.FullName | podman run --rm -i -e PGPASSWORD=$DbPass --network host postgres:latest psql -h $DbHost -p $DbPort -U postgres -d $targetDb | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "      [WARNING] Script $($script.Name) had some issues (exit code $LASTEXITCODE)." -ForegroundColor Yellow
+        }
     }
 }
+
 Write-Host "  [OK] Baseline databases initialized" -ForegroundColor Green
 
 # 3. Bootstrap Data (CLI)

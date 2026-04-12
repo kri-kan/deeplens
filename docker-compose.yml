@@ -44,7 +44,7 @@ services:
     container_name: deeplens-instagram-worker
     restart: unless-stopped
     environment:
-      - KAFKA_BOOTSTRAP_SERVERS=${INFRA_HOST:-10.31.203.89}:${KAFKA_PORT:-9092}
+      - KAFKA_BOOTSTRAP_SERVERS=${INFRA_HOST:-192.168.0.170}:${KAFKA_PORT:-9092}
       - WORKER_TYPE=instagram
     networks:
       - deeplens-network

@@ -1,4 +1,4 @@
-﻿\c nextgen_identity
+\c nextgen_identity
 
 -- NextGen Identity Database Schema
 -- PostgreSQL Migration Script
@@ -128,13 +128,9 @@ COMMENT ON TABLE users IS 'User accounts within tenants';
 COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for session management';
 COMMENT ON TABLE tenant_api_keys IS 'API keys for programmatic tenant access';
 
-
--- Migration 002
 -- Migration: Add Settings column to Tenants table
 -- Version: 1.1.0
-
 ALTER TABLE tenants 
 ADD COLUMN IF NOT EXISTS settings TEXT;
 
 COMMENT ON COLUMN tenants.settings IS 'Tenant-specific configurations stored as JSON (e.g. thumbnails, custom limits)';
-

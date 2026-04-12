@@ -11,8 +11,17 @@ All services must reside in their own dedicated directory at the repository root
     -   `README.md` (Required)
     -   `setup.sh` (Optional: Host-side preparation script)
     -   `init.sh` (Optional: Container-side initialization script)
- 
-## 2. Docker Compose Standards
+
+## 2. Database Initialization (SQL)
+To ensure simplified and reliable environment setup, all services that require database initialization must follow the **Golden Copy** pattern:
+
+-   **Primary Script**: Each service directory must contain exactly one "Golden Copy" `.sql` file in its root (e.g., `identity/nextgen_identity.sql`).
+-   **Content**: This script must be a comprehensive dump of both the schema and any baseline data.
+-   **Format**: Scripts must be encoded in **UTF-8 (without BOM)** and avoid `OWNER` or `PRIVILEGE` statements to ensure portability.
+-   **Archival**: All older, granular, or developmental scripts (e.g., `01-init.sql`) must be moved to an **`arch/`** subfolder within the service directory.
+-   **Automation**: The `DeepLens.CLI init-db` command and `infrastructure/setup-deeplens-dev.ps1` will automatically find and execute these root-level `.sql` files.
+
+## 3. Docker Compose Standards
 Every service folder must contain a `docker-compose.yaml` file to ensure standardized orchestration.
  
 -   **Filename**: Always use `docker-compose.yaml` (not `.yml`).

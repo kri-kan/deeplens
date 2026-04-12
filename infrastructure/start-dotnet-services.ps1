@@ -64,7 +64,8 @@ Write-Host "[6/6] Starting Web UI..." -ForegroundColor Yellow
 if (Test-Path "infrastructure/start-ui.ps1") {
     Start-Process "pwsh" -ArgumentList "./infrastructure/start-ui.ps1" -NoNewWindow
     Write-Host "  [OK] Web UI startup initiated" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "  [SKIP] Web UI startup script not found" -ForegroundColor Yellow
 }
 

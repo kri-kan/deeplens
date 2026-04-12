@@ -37,12 +37,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "  [OK] Dependencies installed" -ForegroundColor Green
 
-Write-Host "[2/2] Starting UI development server..." -ForegroundColor Yellow
-# Using '&' to run in background or Start-Process if we want it to persist
-Start-Process "npm" -ArgumentList "run dev" -NoNewWindow -WorkingDirectory (Get-Location)
+# Using 'cmd /c npm' to correctly resolve the npm (cmd/ps1) wrapper on Windows
+Start-Process "cmd" -ArgumentList "/c npm run dev" -NoNewWindow -WorkingDirectory (Get-Location)
 
 Start-Sleep 3
 Write-Host ""
 Write-Host "=== UI Started ===" -ForegroundColor Green
-Write-Host "  URL: http://localhost:3000" -ForegroundColor White
+Write-Host "  URL: http://localhost:5001" -ForegroundColor White
 Write-Host ""

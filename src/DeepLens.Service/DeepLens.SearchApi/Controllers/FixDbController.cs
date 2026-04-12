@@ -19,7 +19,7 @@ public class FixDbController : ControllerBase
     public async Task<IActionResult> Fix()
     {
         var connString = _configuration.GetConnectionString("DefaultConnection") 
-                         ?? "Host=10.31.203.89;Port=5432;Database=nextgen_identity;Username=postgres;Password=Krikank1$";
+                         ?? "Host=192.168.0.170;Port=5432;Database=nextgen_identity;Username=postgres;Password=Krikank1$";
         
         using var conn = new NpgsqlConnection(connString);
         await conn.OpenAsync();

@@ -80,7 +80,9 @@ public static class IdentityServerConfig
                 AllowedCorsOrigins = 
                 { 
                     "http://localhost:3000",
-                    "https://localhost:3000"
+                    "https://localhost:3000",
+                    "http://localhost:5001",
+                    "https://localhost:5001"
                 },
                 
                 // Token lifetimes
@@ -116,17 +118,25 @@ public static class IdentityServerConfig
                     "http://localhost:3000/callback",
                     "http://localhost:3000/silent-renew",
                     "https://localhost:3000/callback",
-                    "https://localhost:3000/silent-renew"
+                    "https://localhost:3000/silent-renew",
+                    "http://localhost:5001/callback",
+                    "http://localhost:5001/silent-renew",
+                    "https://localhost:5001/callback",
+                    "https://localhost:5001/silent-renew"
                 },
                 PostLogoutRedirectUris = 
                 { 
                     "http://localhost:3000",
-                    "https://localhost:3000"
+                    "https://localhost:3000",
+                    "http://localhost:5001",
+                    "https://localhost:5001"
                 },
                 AllowedCorsOrigins = 
                 { 
                     "http://localhost:3000",
-                    "https://localhost:3000"
+                    "https://localhost:3000",
+                    "http://localhost:5001",
+                    "https://localhost:5001"
                 },
                 
                 // Scopes this client can access

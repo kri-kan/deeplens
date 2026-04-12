@@ -155,12 +155,12 @@ Last Updated: December 20, 2025
 
 **DEVELOPMENT ONLY - DO NOT USE IN PRODUCTION** (Standard Password: `DeepLens123!`)
 
-| Service            | Username               | Password             | Notes               |
-| :----------------- | :--------------------- | :------------------- | :------------------ |
+| Service            | Username               | Password             | Notes                |
+| :----------------- | :--------------------- | :------------------- | :------------------- |
 | **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432` |
-| **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin       |
-| **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console) |
-| **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
+| **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin        |
+| **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console)  |
+| **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000            |
 | **Kafka UI**       | -                      | -                    | `192.168.0.170:8080` |
 
 ---
@@ -168,12 +168,12 @@ Last Updated: December 20, 2025
 ## 🔌 Port Reference
 
 ### Core Services
-| Port     | Service    | Description            |
-| :------- | :--------- | :--------------------- |
+| Port              | Service    | Description                              |
+| :---------------- | :--------- | :--------------------------------------- |
 | **5432** (remote) | PostgreSQL | Metadata & Identity DB — `192.168.0.170` |
 | **6379** (remote) | Redis      | Caching & State — `192.168.0.170`        |
-| **6333** (remote) | Qdrant     | Vector DB Dashboard — `192.168.0.170`   |
-| **9001** (remote) | MinIO      | Object Storage Console — `192.168.0.170`|
+| **6333** (remote) | Qdrant     | Vector DB Dashboard — `192.168.0.170`    |
+| **9001** (remote) | MinIO      | Object Storage Console — `192.168.0.170` |
 | **9092** (remote) | Kafka      | Message Broker — `192.168.0.170`         |
 | **8080** (remote) | Kafka UI   | Kafka Management — `192.168.0.170`       |
 
@@ -1178,16 +1178,16 @@ This directory contains scripts for provisioning tenants and managing applicatio
 
 The following services are managed externally and utilized by DeepLens:
 
-| Service         | Endpoint                    | Default Credentials     |
-| --------------- | --------------------------- | ----------------------- |
-| PostgreSQL      | `192.168.0.170:5432`        | `postgres` / `Krikank1$` |
-| MinIO (API)     | `http://192.168.0.170:9000` | `krikan` / `Krikank1$`   |
-| MinIO Console   | `http://192.168.0.170:9001` | `krikan` / `Krikank1$`   |
-| Kafka           | `192.168.0.170:9092`        | None                    |
-| Redis           | `192.168.0.170:6379`        | None                    |
-| InfluxDB        | `http://192.168.0.170:8086` | `krikan` / `Krikank1$`   |
-| Grafana         | `http://192.168.0.170:3000` | `krikan` / `Krikank1$`   |
-| Qdrant Dash     | `http://192.168.0.170:6333` | None                    |
+| Service       | Endpoint                    | Default Credentials      |
+| ------------- | --------------------------- | ------------------------ |
+| PostgreSQL    | `192.168.0.170:5432`        | `postgres` / `Krikank1$` |
+| MinIO (API)   | `http://192.168.0.170:9000` | `krikan` / `Krikank1$`   |
+| MinIO Console | `http://192.168.0.170:9001` | `krikan` / `Krikank1$`   |
+| Kafka         | `192.168.0.170:9092`        | None                     |
+| Redis         | `192.168.0.170:6379`        | None                     |
+| InfluxDB      | `http://192.168.0.170:8086` | `krikan` / `Krikank1$`   |
+| Grafana       | `http://192.168.0.170:3000` | `krikan` / `Krikank1$`   |
+| Qdrant Dash   | `http://192.168.0.170:6333` | None                     |
 
 ## 🚀 Application Services (Local)
 
@@ -1197,11 +1197,11 @@ While the core infrastructure is external, the specialized DeepLens application 
 *(Code block omitted for brevity)*
 
 
-| Service              | Port   | Purpose                      |
-| -------------------- | ------ | ---------------------------- |
-| Reasoning API        | `8002` | Phi-3 Metadata Extraction    |
-| Feature Extraction   | `8001` | Image/Video Vectorization    |
-| Instagram Worker     | -      | Competitor Data Ingestion    |
+| Service            | Port   | Purpose                   |
+| ------------------ | ------ | ------------------------- |
+| Reasoning API      | `8002` | Phi-3 Metadata Extraction |
+| Feature Extraction | `8001` | Image/Video Vectorization |
+| Instagram Worker   | -      | Competitor Data Ingestion |
 
 ## 🏢 Tenant Management
 
@@ -1459,7 +1459,7 @@ The WhatsApp Processor requires a PostgreSQL database. If you're using the DeepL
 *(Code block omitted for brevity)*
 
 
-**Important:** The database runs on port **5432** at **10.31.203.89** (Remote Server).
+**Important:** The database runs on port **5432** at **192.168.0.170** (Remote Server).
 
 See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed database configuration and troubleshooting.
 
@@ -1753,7 +1753,7 @@ The default configuration should work with DeepLens infrastructure.
 
 | Setting      | Value                  |
 | :----------- | :--------------------- |
-| **Host**     | `10.31.203.89`        |
+| **Host**     | `192.168.0.170`        |
 | **Port**     | `5432` ⚠️ remote server |
 | **Username** | `postgres`             |
 | **Password** | `Krikank1$`            |
@@ -1803,7 +1803,7 @@ The default configuration should work with DeepLens infrastructure.
 
 
 ### Issue: Connection Errors
-- Ensure the remote server `10.31.203.89` is reachable.
+- Ensure the remote server `192.168.0.170` is reachable.
 - Verify the password `Krikank1$` is correct.
 - If using DeepLens infrastructure (deprecated), use port `5433`. Otherwise use `5432` for the remote server.
 
@@ -1833,7 +1833,7 @@ To recreate the schema:
 3. **General Tab:**
    - Name: `DeepLens WhatsApp`
 4. **Connection Tab:**
-   - Host: `10.31.203.89`
+   - Host: `192.168.0.170`
    - Port: `5433`
    - Database: `whatsapp_vayyari_data`
    - Username: `postgres`

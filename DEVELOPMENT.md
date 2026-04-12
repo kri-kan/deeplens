@@ -42,11 +42,12 @@ Last Updated: December 20, 2025
 
 | Service            | Username               | Password             | Notes               |
 | :----------------- | :--------------------- | :------------------- | :------------------ |
-| **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432` |
+| **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432`|
 | **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin       |
-| **MinIO**          | `deeplens`             | `DeepLens123!`       | Port 9001 (Console) |
+| **Vayyari Admin**  | `admin@vayyari.local`  | `DeepLens@Vayyari123!`| Vayyari Admin       |
+| **MinIO**          | `krikan`               | `Krikank1$`          | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
-| **Kafka UI**       | -                      | -                    | `192.168.0.170:8080` |
+| **Kafka UI**       | -                      | -                    | `192.168.0.170:8080`|
 
 ---
 
@@ -67,7 +68,7 @@ Last Updated: December 20, 2025
 | :------- | :----------- | :-------------------------- |
 | **5198** | Identity API | Auth & Tenant Orchestration |
 | **5000** | Search API   | Image Upload & Search       |
-| **5001** | Web UI       | React Frontend (Optional)   |
+| **5001** | Web UI       | React Frontend              |
 | **8001** | Feature Ext. | Python AI Microservice      |
 
 ### WhatsApp Processor
@@ -118,9 +119,9 @@ Last Updated: December 20, 2025
 
 ## 🆘 Troubleshooting
 
-1.  **Port Conflicts**: Run `Get-Process -Id (Get-NetTCPConnection -LocalPort <Port>).OwningProcess` to find blockers.
-2.  **Container Failures**: Check `podman logs <container-name>`.
-3.  **Database Errors**: Ensure `.env` in `infrastructure` matches your local config.
+1.  **Port Conflicts**: Run `Get-NetTCPConnection -LocalPort <Port>` to find blockers.
+2.  **Container Failures**: Check `podman logs <container-name>` on the remote server.
+3.  **Database Errors**: Ensure `.env` infrastructure host points to `192.168.0.170`.
 4.  **Identity API Not Starting**: Check that PostgreSQL is accessible on `192.168.0.170:5432`.
 
 ---

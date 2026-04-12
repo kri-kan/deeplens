@@ -6,7 +6,7 @@ Write-Host "🚀 Deploying WhatsApp Processor for Tenant: Vayyari" -ForegroundCo
 . "./infrastructure/scripts/helpers/LoadEnv.ps1"
 Load-Env -EnvFile "./infrastructure/.env"
 
-$DbHost = $env:INFRA_HOST ?? "10.31.203.89"
+$DbHost = $env:INFRA_HOST ?? "192.168.0.170"
 $DbPort = $env:POSTGRES_PORT ?? 5432
 $DbPass = $env:POSTGRES_PASSWORD ?? "Krikank1$"
 
