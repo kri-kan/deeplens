@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-11 17:15:17
+**Auto-generated on:** 2026-04-12 09:11:53
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -1459,7 +1459,7 @@ The WhatsApp Processor requires a PostgreSQL database. If you're using the DeepL
 *(Code block omitted for brevity)*
 
 
-**Important:** The database runs on port **5432** at **192.168.0.170** (Remote Server).
+**Important:** The database runs on port **5432** at **10.31.203.89** (Remote Server).
 
 See [DATABASE_SETUP.md](./DATABASE_SETUP.md) for detailed database configuration and troubleshooting.
 
@@ -1753,7 +1753,7 @@ The default configuration should work with DeepLens infrastructure.
 
 | Setting      | Value                  |
 | :----------- | :--------------------- |
-| **Host**     | `192.168.0.170`        |
+| **Host**     | `10.31.203.89`        |
 | **Port**     | `5432` ⚠️ remote server |
 | **Username** | `postgres`             |
 | **Password** | `Krikank1$`            |
@@ -1803,7 +1803,7 @@ The default configuration should work with DeepLens infrastructure.
 
 
 ### Issue: Connection Errors
-- Ensure the remote server `192.168.0.170` is reachable.
+- Ensure the remote server `10.31.203.89` is reachable.
 - Verify the password `Krikank1$` is correct.
 - If using DeepLens infrastructure (deprecated), use port `5433`. Otherwise use `5432` for the remote server.
 
@@ -1833,7 +1833,7 @@ To recreate the schema:
 3. **General Tab:**
    - Name: `DeepLens WhatsApp`
 4. **Connection Tab:**
-   - Host: `192.168.0.170`
+   - Host: `10.31.203.89`
    - Port: `5433`
    - Database: `whatsapp_vayyari_data`
    - Username: `postgres`
