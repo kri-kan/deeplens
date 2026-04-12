@@ -1,0 +1,27 @@
+services:
+  gateway:
+    image: nginx:latest
+    container_name: gateway
+    restart: unless-stopped
+    ports:
+      - "${GATEWAY_PORT}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - deeplens-network
+
+  # [PHASE 3] Cloudflare Tunnel
+  # To enable, run: docker run cloudflare/cloudflared tunnel login
+  # and update the command with your tunnel token in settings.env
+  # tunnel:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: cloudflare-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   networks:
+  #     - deeplens-network
+
+networks:
+  deeplens-network:
+    external: true

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepLens Console</title>
+    <style>
+        :root {
+            --primary: #00f2fe;
+            --secondary: #4facfe;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+        }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        header {
+            padding: 2rem;
+            text-align: center;
+        }
+        h1 {
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            margin: 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            width: 90%;
+            max-width: 1200px;
+            padding: 2rem;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            border-color: var(--primary);
+        }
+        .card h3 { margin: 0 0 0.5rem 0; color: var(--primary); }
+        .card p { margin: 0; opacity: 0.7; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DeepLens Service Console</h1>
+        <p>Unified access to your infrastructure</p>
+    </header>
+    <div class="grid">
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':3000'" class="card">
+            <h3>📈 Grafana</h3>
+            <p>Dashboards & Visualization</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':9001'" class="card">
+            <h3>📦 MinIO</h3>
+            <p>Object Storage Console</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':6333/dashboard/'" class="card">
+            <h3>🧠 Qdrant</h3>
+            <p>Vector Database UI</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':8080'" class="card">
+            <h3>🚀 Kafka UI</h3>
+            <p>Topic & Cluster Management</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':8086/'" class="card">
+            <h3>📊 InfluxDB</h3>
+            <p>Time-Series Data Explorer</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':5050'" class="card">
+            <h3>🐘 pgAdmin</h3>
+            <p>PostgreSQL Management UI</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':16686'" class="card">
+            <h3>🔍 Jaeger</h3>
+            <p>Distributed Tracing UI</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':9090'" class="card">
+            <h3>⏱️ Prometheus</h3>
+            <p>Metrics Query Tool</p>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':11435'" class="card">
+            <h3>🤖 Open WebUI</h3>
+            <p>Ollama AI Chat Interface</p>
+        </a>
+    </div>
+</body>
+</html>

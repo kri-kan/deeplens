@@ -1,0 +1,23 @@
+name: deeplens-core
+
+# Core Infrastructure Orchestration
+include:
+  # Core Infrastructure
+  - path: Kafka/docker-compose.yaml
+  - path: postgres/docker-compose.yaml
+  
+  # Backend Data Stack
+  - path: redis/docker-compose.yaml
+  - path: minio/docker-compose.yaml
+  - path: qdrant/docker-compose.yaml
+  - path: influxdb/docker-compose.yaml
+  
+  # Observability Stack
+  - path: grafana/docker-compose.yaml
+  - path: prometheus/docker-compose.yaml
+  - path: loki/docker-compose.yaml
+  - path: jaeger/docker-compose.yaml
+  - path: otel-collector/docker-compose.yaml
+ 
+  # Gateway & Exposure
+  - path: gateway/docker-compose.yaml

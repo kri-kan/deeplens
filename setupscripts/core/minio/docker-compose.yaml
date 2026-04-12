@@ -1,0 +1,20 @@
+services:
+  minio:
+    image: quay.io/minio/minio
+    container_name: minio
+    restart: unless-stopped
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    environment:
+      MINIO_ROOT_USER: ${INFRA_ADMIN_USER}
+      MINIO_ROOT_PASSWORD: ${INFRA_ADMIN_PASSWORD}
+    volumes:
+      - ${MINIO_DATA_PATH}:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - deeplens-network
+
+networks:
+  deeplens-network:
+    external: true

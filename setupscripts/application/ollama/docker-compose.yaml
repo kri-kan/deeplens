@@ -1,0 +1,41 @@
+services:
+  ollama-gpu:
+    container_name: ollama-gpu
+    image: ollama/ollama
+    restart: always
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    volumes:
+      - ${OLLAMA_DATA_PATH}:/root/.ollama
+      - ./init.sh:/init.sh
+    ports:
+      - "${OLLAMA_PORT}:11434"
+    environment:
+      OLLAMA_VULKAN: "1"
+      HSA_OVERRIDE_GFX_VERSION: "8.0.3"
+      OLLAMA_INTEL_GPU: "0"
+    entrypoint: ["/bin/bash", "/init.sh"]
+    networks:
+      - deeplens-network
+
+  open-webui:
+    container_name: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    restart: always
+    ports:
+      - "${OPEN_WEBUI_PORT}:8080"
+    environment:
+      - 'OLLAMA_BASE_URL=http://ollama-gpu:11434'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${OPEN_WEBUI_DATA_PATH}:/app/backend/data
+    depends_on:
+      - ollama-gpu
+    networks:
+      - deeplens-network
+
+networks:
+  deeplens-network:
+    external: true

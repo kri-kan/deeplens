@@ -1,0 +1,7 @@
+name: deeplens
+
+# Global Orchestration for all DeepLens Services
+# This file includes grouped configurations from core and application folders
+
+include:
+  - path: core/docker-compose.yaml

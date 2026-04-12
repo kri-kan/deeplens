@@ -1,0 +1,23 @@
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    user: root
+    restart: unless-stopped
+    ports:
+      - "${JAEGER_UI_PORT}:16686" # UI only - OTLP ingestion handled by otel-collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+      - BADGER_TTL=168h # Keep traces for 7 days
+    volumes:
+      - ${JAEGER_DATA_PATH}:/badger
+    networks:
+      - deeplens-network
+
+networks:
+  deeplens-network:
+    external: true
