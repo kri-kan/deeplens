@@ -18,18 +18,18 @@ All database names across the DeepLens project now follow a **lowercase with und
 
 **Preferred (lowercase with underscores):**
 ```bash
-vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
-deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
+vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
+deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@10.31.203.89:5432/tenant_vayyari_metadata
 
-VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
-DEEPLENS_VAYYARI_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
+VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
+DEEPLENS_VAYYARI_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5432/tenant_vayyari_metadata
 ```
 
 ## 🔍 Verification
 
 ### Check Current Database Names
 ```powershell
-podman exec deeplens-postgres psql -U postgres -c "\l" | Select-String "vayyari"
+docker exec deeplens-postgres psql -U postgres -c "\l" | Select-String "vayyari"
 ```
 
 Expected output should show:
@@ -41,7 +41,7 @@ Expected output should show:
 **WhatsApp Processor:**
 ```powershell
 # Check .env file
-Get-Content c:\productivity\deeplens\src\whatsapp-processor\.env | Select-String "connection_string"
+Get-Content ./src/whatsapp-processor/.env | Select-String "connection_string"
 ```
 
 Should show lowercase variable names.
@@ -132,10 +132,10 @@ podman restart whatsapp-vayyari
 
 ### PostgreSQL (via Podman)
 ```
-Host: 192.168.0.170
+Host: 10.31.203.89
 Port: 5432 (Remote)
 Username: postgres
-Password: Krikank1$$ (Remote Server: 192.168.0.170:5432)
+Password: Krikank1$$ (Remote Server: 10.31.203.89:5432)
 ```
 
 ### Databases
@@ -148,7 +148,7 @@ tenant_metadata_template    - Template for new tenants
 
 ### Connection String Format
 ```
-postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
                                             ↑ Port 5432 for remote connections
                                                       ↑ Lowercase database name
 ```

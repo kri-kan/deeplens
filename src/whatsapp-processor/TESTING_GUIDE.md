@@ -138,7 +138,7 @@ SELECT COUNT(*) FROM messages;
 curl http://localhost:3000/api/status
 
 # Check database
-psql -h 192.168.0.170 -p 5432 -U vayyari_wa_user -d vayyari_wa_db -c "SELECT COUNT(*) FROM chats;"
+psql -h 10.31.203.89 -p 5432 -U vayyari_wa_user -d vayyari_wa_db -c "SELECT COUNT(*) FROM chats;"
 
 # Check API endpoint
 curl http://localhost:3000/api/conversations/chats
@@ -167,7 +167,7 @@ rm -r sessions/default_session/*
 ```powershell
 # Check logs for errors
 # Manually update to test:
-psql -h 192.168.0.170 -p 5432 -U vayyari_wa_user -d vayyari_wa_db -c "
+psql -h 10.31.203.89 -p 5432 -U vayyari_wa_user -d vayyari_wa_db -c "
 UPDATE chats SET unread_count = 5 WHERE jid = 'YOUR_JID';
 "
 # Refresh frontend
@@ -227,7 +227,7 @@ API_PORT=3000
 LOG_LEVEL=info
 
 # Database
-vayyari_wa_db_connection_string=postgresql://user:pass@192.168.0.170:5432/vayyari_wa_db
+vayyari_wa_db_connection_string=postgresql://user:pass@10.31.203.89:5432/vayyari_wa_db
 ```
 
 ### Database Migration

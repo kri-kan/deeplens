@@ -23,7 +23,7 @@ $ErrorActionPreference = "Continue"
 $DB_NAME = "whatsapp_vayyari_data"
 $DB_USER = "postgres"
 $DB_PASS = "Krikank1$"
-$DB_HOST = "192.168.0.170"
+$DB_HOST = "10.31.203.89"
 $DB_PORT = 5432
 
 function Run-Remote-Sql {
@@ -116,12 +116,12 @@ Write-Host ""
 Write-Host "=== Database Setup Complete ===" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection Details:" -ForegroundColor Cyan
-Write-Host "  Host:     192.168.0.170" -ForegroundColor White
+Write-Host "  Host:     10.31.203.89" -ForegroundColor White
 Write-Host "  Port:     5432" -ForegroundColor White
 Write-Host "  Database: $DB_NAME" -ForegroundColor White
 Write-Host "  Username: $DB_USER" -ForegroundColor White
 Write-Host "  Password: Krikank1$" -ForegroundColor White
 Write-Host ""
 Write-Host "Connection String (for .env):" -ForegroundColor Cyan
-Write-Host "  vayyari_wa_db_connection_string=postgresql://${DB_USER}:Krikank1%24@192.168.0.170:5432/${DB_NAME}" -ForegroundColor White
+Write-Host "  vayyari_wa_db_connection_string=postgresql://${DB_USER}:Krikank1%24@10.31.203.89:5432/${DB_NAME}" -ForegroundColor White
 Write-Host ""

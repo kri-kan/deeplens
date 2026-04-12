@@ -6,7 +6,7 @@ services:
   # =============================================================================
   reasoning-api:
     build:
-      context: ./src/DeepLens.Service/DeepLens.ReasoningService
+      context: ./src/DeepLens.ReasoningService
       dockerfile: Dockerfile
     container_name: deeplens-reasoning-api
     restart: unless-stopped
@@ -23,7 +23,7 @@ services:
   # =============================================================================
   feature-extraction:
     build:
-      context: ./src/DeepLens.Service/DeepLens.FeatureExtractionService
+      context: ./src/DeepLens.FeatureExtractionService
       dockerfile: Dockerfile
     container_name: deeplens-feature-extraction
     restart: unless-stopped
@@ -44,7 +44,7 @@ services:
     container_name: deeplens-instagram-worker
     restart: unless-stopped
     environment:
-      - KAFKA_BOOTSTRAP_SERVERS=192.168.0.170:9092
+      - KAFKA_BOOTSTRAP_SERVERS=${INFRA_HOST:-10.31.203.89}:${KAFKA_PORT:-9092}
       - WORKER_TYPE=instagram
     networks:
       - deeplens-network

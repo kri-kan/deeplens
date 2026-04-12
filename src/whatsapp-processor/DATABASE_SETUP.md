@@ -36,7 +36,7 @@ npm start
 
 | Setting      | Value                  |
 | :----------- | :--------------------- |
-| **Host**     | `192.168.0.170`        |
+| **Host**     | `10.31.203.89`        |
 | **Port**     | `5432` ⚠️ remote server |
 | **Username** | `postgres`             |
 | **Password** | `Krikank1$`            |
@@ -45,12 +45,12 @@ npm start
 
 **Preferred (lowercase with underscores):**
 ```bash
-vayyarideeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
+vayyarideeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@10.31.203.89:5432/tenant_vayyari_metadata
 ```
 
 **Legacy (uppercase - deprecated):**
 ```bash
-VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
+VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@10.31.203.89:5432/whatsapp_vayyari_data
 ```
 
 > **Note:** The application supports both formats for backward compatibility, but lowercase is preferred.
@@ -87,7 +87,7 @@ VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:
 ```
 
 ### Issue: Connection Errors
-- Ensure the remote server `192.168.0.170` is reachable.
+- Ensure the remote server `10.31.203.89` is reachable.
 - Verify the password `Krikank1$` is correct.
 - If using DeepLens infrastructure (deprecated), use port `5433`. Otherwise use `5432` for the remote server.
 
@@ -117,7 +117,7 @@ To recreate the schema:
 3. **General Tab:**
    - Name: `DeepLens WhatsApp`
 4. **Connection Tab:**
-   - Host: `192.168.0.170`
+   - Host: `10.31.203.89`
    - Port: `5433`
    - Database: `whatsapp_vayyari_data`
    - Username: `postgres`
