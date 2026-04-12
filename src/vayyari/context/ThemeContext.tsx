@@ -28,12 +28,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Load persisted theme
     const loadTheme = async () => {
       try {
-        const savedTheme = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-        if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
-          setThemeModeState(savedTheme as ThemeMode);
+        // Safety timeout to prevent black screen if AsyncStorage hangs
+        const storageReady = await Promise.race([
+          AsyncStorage.getItem(THEME_STORAGE_KEY),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1000))
+        ]) as string | null;
+
+        if (storageReady === 'light' || storageReady === 'dark' || storageReady === 'system') {
+          setThemeModeState(storageReady as ThemeMode);
         }
       } catch (e) {
-        console.warn('Failed to load theme preference', e);
+        console.warn('Failed to load theme preference, failing back to system:', e);
       } finally {
         setIsLoaded(true);
       }

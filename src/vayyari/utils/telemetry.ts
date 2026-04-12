@@ -11,15 +11,15 @@ export const initOtel = () => {
   if (isInitialized) return;
 
   const exporter = new OTLPTraceExporter({
-    url: process.env.EXPO_PUBLIC_OTEL_ENDPOINT || 'http://localhost:4318/v1/traces', 
-    headers: {}, 
+    url: process.env.EXPO_PUBLIC_OTEL_ENDPOINT!,
+    headers: {},
   });
 
   const provider = new WebTracerProvider({
-    sampler: new TraceIdRatioBasedSampler(Number(process.env.EXPO_PUBLIC_OTEL_SAMPLING_RATIO || 0.1)), 
+    sampler: new TraceIdRatioBasedSampler(Number(process.env.EXPO_PUBLIC_OTEL_SAMPLING_RATIO || 0.1)),
     spanProcessors: [new BatchSpanProcessor(exporter)],
   });
-  
+
   // Initialize the Provider with default context manager and propagator
   provider.register();
 
@@ -43,7 +43,7 @@ export const initOtel = () => {
  */
 export const wrapInSpan = async <T>(spanName: string, operation: () => Promise<T>): Promise<T> => {
   const tracer = trace.getTracer('manual-instrumentation');
-  
+
   return tracer.startActiveSpan(spanName, async (span: Span) => {
     try {
       const result = await operation();
