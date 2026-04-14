@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-14 15:17:25
+**Auto-generated on:** 2026-04-14 15:50:19
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -1454,8 +1454,11 @@ Or use the combined command:
 
 ### 3. Setup Database
 
-The WhatsApp Processor requires a PostgreSQL database. If you're using the DeepLens infrastructure:
+The WhatsApp Processor assumes the PostgreSQL database and its schema are managed externally (e.g., via the main DeepLens `setupscripts`). 
 
+The schema is managed externally in the root `setupscripts/` directory.
+
+To apply or refresh the schema, use the centralized bootstrap script:
 
 *(Code block omitted for brevity)*
 
@@ -1801,6 +1804,7 @@ The default configuration should work with DeepLens infrastructure.
 **Cause:** Database hasn't been created yet.
 
 **Solution:**
+Recreate the database using the centralized orchestration scripts:
 
 *(Code block omitted for brevity)*
 
@@ -1873,7 +1877,7 @@ To recreate the schema:
 If you were previously using JSON files for tracking state (`exclusions.json`, `tracking_state.json`), the application now uses the database instead. The old files are no longer used and can be safely deleted.
 
 The migration happens automatically when you:
-1. Set up the database using the centralized bootstrap script in `infrastructure/scripts/lifecycle/init-bootstrap-data.ps1`
+1. Set up the database using `powershell ./infrastructure/scripts/lifecycle/init-bootstrap-data.ps1`
 2. Start the application with the correct database connection string
 
 ---
@@ -1882,7 +1886,7 @@ The migration happens automatically when you:
 
 - [Main DeepLens Troubleshooting Guide](../../TROUBLESHOOTING_SUMMARY.md)
 - [Infrastructure Setup Script](../../infrastructure/setup-deeplens-dev.ps1)
-- [Database DDL Scripts](./scripts/ddl/)
+- [Database Schema](../../setupscripts/application/whatsapp/whatsapp_vayyari_data.sql)
 
 
 ---
@@ -3315,180 +3319,6 @@ If needed in the future:
 
 - [Baileys v7 Migration Guide](https://baileys.wiki/docs/migration/to-v7.0.0)
 - [Baileys LID Documentation](https://baileys.wiki/docs/migration/to-v7.0.0#lids)
-
-
----
-
-<a name='source-src-whatsapp-processor-scripts-ddl-readme-md'></a>
-
-# Documentation: src/whatsapp-processor/scripts/ddl/README.md
-------------------------------
-
-# Database Scripts
-
-This folder contains all DDL (Data Definition Language) scripts for the WhatsApp Processor database.
-
-## Database Structure
-
-### Database: `whatsapp_vayyari_data`
-
-This is a standalone database dedicated to storing WhatsApp messages, chats, and media metadata.
-
-### Separate from DeepLens Core
-
-- **DeepLens Core DB** (`deeplens_vayyari_core`): Tenant metadata, feature extraction, etc.
-- **WhatsApp Data DB** (`whatsapp_vayyari_data`): WhatsApp messages, chats, media
-
-## DDL Scripts
-
-All table definitions are in separate files for easy maintenance:
-
-| File                          | Table                 | Description                        |
-| ----------------------------- | --------------------- | ---------------------------------- |
-| `001_chats.sql`               | `chats`               | WhatsApp chats and groups          |
-| `002_messages.sql`            | `messages`            | All WhatsApp messages              |
-| `003_chat_tracking_state.sql` | `chat_tracking_state` | Exclusion list and tracking state  |
-| `004_processing_state.sql`    | `processing_state`    | Global pause/resume state          |
-| `005_media_files.sql`         | `media_files`         | Media file metadata and MinIO URLs |
-
-## Setup Instructions
-
-### Option 1: Using Master Script (Recommended)
-
-
-*(Code block omitted for brevity)*
-
-
-### Option 2: Manual Execution
-
-Execute each file in order:
-
-
-*(Code block omitted for brevity)*
-
-
-## Development Workflow
-
-### During Development Phase
-
-- **No migrations needed** - we're in active development
-- **Update DDL files directly** - replace existing scripts with new schema
-- **Keep files up-to-date** - always reflect current schema
-
-### When Adding New Tables
-
-1. Create new file: `00X_table_name.sql`
-2. Add DDL with proper comments and indexes
-3. Update `setup.sql` to include new file
-4. Update this README
-
-### When Modifying Existing Tables
-
-1. Update the corresponding DDL file
-2. Document changes in comments
-3. For first-time deployment, just run updated DDL
-4. No migration scripts needed during development
-
-## Schema Overview
-
-### Tables
-
-#### 1. chats
-Stores all WhatsApp chats (individual and group).
-
-**Key Fields:**
-- `jid` (PK): WhatsApp JID
-- `name`: Chat/group name
-- `is_group`: Boolean flag
-- `metadata`: JSONB for additional data
-
-#### 2. messages
-Stores all WhatsApp messages with full-text search support.
-
-**Key Fields:**
-- `id` (PK): Auto-increment
-- `message_id` (Unique): WhatsApp message ID
-- `jid` (FK): Reference to chats
-- `content`: Message text
-- `media_url`: MinIO URL for media
-- `timestamp`: Unix timestamp
-
-**Features:**
-- Full-text search on content
-- Foreign key to chats
-- Indexes on timestamp, sender, media type
-
-#### 3. chat_tracking_state
-Manages exclusion list and tracking state per chat.
-
-**Key Fields:**
-- `jid` (PK, FK): Reference to chats
-- `is_excluded`: Exclusion flag
-- `last_processed_message_id`: Resume point
-- `resume_mode`: 'from_last' or 'from_now'
-
-#### 4. processing_state
-Singleton table for global pause/resume state.
-
-**Key Fields:**
-- `id` (PK): Always 1
-- `is_paused`: Global pause flag
-- `paused_at`, `resumed_at`: Timestamps
-
-#### 5. media_files
-Tracks all media files with MinIO and DeepLens URLs.
-
-**Key Fields:**
-- `id` (PK): Auto-increment
-- `minio_url`: Current MinIO location
-- `deeplens_url`: Future DeepLens location
-- `message_id` (FK): Reference to messages
-- `media_type`: photo, video, audio, document
-
-**Features:**
-- Supports migration to DeepLens bucket
-- Tracks upload status
-- JSONB metadata
-
-## Indexes
-
-All tables have appropriate indexes for:
-- Primary keys
-- Foreign keys
-- Timestamp queries
-- Search operations
-- Filtering by status/type
-
-## Foreign Keys
-
-Proper referential integrity with cascade deletes:
-- `messages.jid` → `chats.jid` (CASCADE)
-- `chat_tracking_state.jid` → `chats.jid` (CASCADE)
-- `media_files.jid` → `chats.jid` (CASCADE)
-- `media_files.message_id` → `messages.message_id` (SET NULL)
-
-## Future Enhancements
-
-When moving to production:
-- Add migration scripts (Flyway, Liquibase, or custom)
-- Version control for schema changes
-- Rollback procedures
-- Data migration scripts
-
-## Connection String
-
-Set in `.env`:
-
-*(Code block omitted for brevity)*
-
-
-## Notes
-
-- All DDL scripts use `IF NOT EXISTS` for idempotency
-- Scripts can be run multiple times safely
-- Comments included for all tables and columns
-- JSONB used for flexible metadata storage
-- Full-text search enabled on message content
 
 
 ---
