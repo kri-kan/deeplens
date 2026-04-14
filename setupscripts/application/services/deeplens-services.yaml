@@ -1,20 +1,18 @@
-version: '3.8'
-
 services:
   # =============================================================================
   # Reasoning Service - Phi-3 based metadata extraction (Python)
   # =============================================================================
   reasoning-api:
     build:
-      context: ./src/DeepLens.ReasoningService
+      context: ../../../src/DeepLens.ReasoningService
       dockerfile: Dockerfile
     container_name: deeplens-reasoning-api
     restart: unless-stopped
     ports:
-      - "8002:8002"
+      - "${REASONING_API_PORT:-8002}:8002"
     environment:
-      - MOCK_MODE=${REASONING_MOCK_MODE:-true}
-      - MODEL_ID=microsoft/Phi-3-mini-4k-instruct
+      MOCK_MODE: ${REASONING_MOCK_MODE:-true}
+      MODEL_ID: microsoft/Phi-3-mini-4k-instruct
     networks:
       - deeplens-network
 
@@ -23,14 +21,14 @@ services:
   # =============================================================================
   feature-extraction:
     build:
-      context: ./src/DeepLens.FeatureExtractionService
+      context: ../../../src/DeepLens.FeatureExtractionService
       dockerfile: Dockerfile
     container_name: deeplens-feature-extraction
     restart: unless-stopped
     ports:
-      - "8001:8001"
+      - "${FEATURE_EXTRACTION_PORT:-8001}:8001"
     volumes:
-      - ./src/DeepLens.Service/DeepLens.FeatureExtractionService/models:/app/models
+      - ../../../src/DeepLens.Service/DeepLens.FeatureExtractionService/models:/app/models
     networks:
       - deeplens-network
 
@@ -39,17 +37,16 @@ services:
   # =============================================================================
   instagram-worker:
     build:
-      context: ./src/competitor-scraper-workers
+      context: ../../../src/competitor-scraper-workers
       dockerfile: Dockerfile
     container_name: deeplens-instagram-worker
     restart: unless-stopped
     environment:
-      - KAFKA_BOOTSTRAP_SERVERS=${INFRA_HOST:-192.168.0.170}:${KAFKA_PORT:-9092}
-      - WORKER_TYPE=instagram
+      KAFKA_BOOTSTRAP_SERVERS: ${INFRA_HOST:-192.168.0.170}:${KAFKA_PORT:-9092}
+      WORKER_TYPE: instagram
     networks:
       - deeplens-network
 
 networks:
   deeplens-network:
-    name: deeplens-network
     external: true

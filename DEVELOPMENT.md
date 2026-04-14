@@ -14,8 +14,11 @@ Last Updated: December 20, 2025
     # Copy template and update endpoints
     cp infrastructure/.env.example infrastructure/.env
     
-    # Start local AI/ML services
-    docker compose up -d
+    # Start core infrastructure (Postgres, Kafka, etc.)
+    bash setupscripts/core/orchestrate-linux.sh start
+
+    # Start application services (AI, Workers)
+    cd setupscripts/application && docker compose up -d
     ```
 3.  **Identity API**:
     ```powershell
@@ -120,7 +123,7 @@ Last Updated: December 20, 2025
 ## 🆘 Troubleshooting
 
 1.  **Port Conflicts**: Run `Get-NetTCPConnection -LocalPort <Port>` to find blockers.
-2.  **Container Failures**: Check `podman logs <container-name>` on the remote server.
+2.  **Container Failures**: Check logs using `bash setupscripts/core/orchestrate-linux.sh logs <service-name>`.
 3.  **Database Errors**: Ensure `.env` infrastructure host points to `192.168.0.170`.
 4.  **Identity API Not Starting**: Check that PostgreSQL is accessible on `192.168.0.170:5432`.
 

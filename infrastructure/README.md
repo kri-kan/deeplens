@@ -21,9 +21,9 @@ The following services are managed externally and utilized by DeepLens:
 
 While the core infrastructure is external, the specialized DeepLens application services (AI/ML) run locally via Docker:
 
-```powershell
-# Start local reasoning and feature extraction services
-docker compose up -d
+```bash
+# Start application layer from root
+cd setupscripts/application && docker compose up -d
 ```
 
 | Service              | Port   | Purpose                      |

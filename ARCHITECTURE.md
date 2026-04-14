@@ -14,7 +14,7 @@ DeepLens is a high-performance, multi-tenant **visual search engine** built usin
 - **Unified .NET Backend**: Centralized orchestration, API gateway, and tenant management.
 - **Stateless AI Services**: Python-based services for feature extraction and vector operations.
 - **Event-Driven Pipeline**: Asynchronous image processing via Apache Kafka.
-- **External Infrastructure**: Core databases (PostgreSQL), message brokers (Kafka), and storage (MinIO) are managed externally at `192.168.0.170`.
+- **External Infrastructure**: Core databases (PostgreSQL), message brokers (Kafka), and storage (MinIO) are managed at `192.168.0.170`.
 - **Observable by Design**: Integrated OpenTelemetry, Prometheus, and Jaeger.
 
 ---
@@ -82,7 +82,7 @@ DeepLens uses a normalized catalog structure within each tenant's dedicated data
 ### System Bootstrapping
 DeepLens leverages a centralized infrastructure with local application services:
 1.  **Infrastructure Connectivity**: Ensure network visibility to `192.168.0.170` (Postgres, Kafka, MinIO).
-2.  **App Services (Docker)**: Reasoning API and Feature Extraction services are started using the root `docker-compose.yml`.
+2.  **App Services (Docker)**: Core AI and worker services are started using `setupscripts/application/docker-compose.yaml`.
 3.  **Platform DB Init**: SQL scripts initialize system schemas and roles on the remote PostgreSQL.
 4.  **Backend APIs**: Identity and Search APIs are started via `dotnet run`.
 

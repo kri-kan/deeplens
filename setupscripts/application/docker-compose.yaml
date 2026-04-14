@@ -1,4 +1,7 @@
 name: deeplens-app
 
 # Application Services Orchestration
-include: []
+include:
+  - path: services/deeplens-services.yaml
+  - path: whatsapp/docker-compose.yaml
+

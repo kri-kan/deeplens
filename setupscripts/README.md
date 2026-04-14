@@ -21,18 +21,18 @@ Run these from the project root:
 
 | Command | Action |
 | :--- | :--- |
-| `bash core/orchestrate-linux.sh start` | Initializes network and starts all core services |
-| `bash core/orchestrate-linux.sh status` | Checks health of the core infrastructure |
-| `bash core/orchestrate-linux.sh validate` | Performs deep health checks (ports, HTTP, logs) |
-| `bash core/orchestrate-linux.sh stop` | Shuts down the core stack safely |
-| `bash core/orchestrate-linux.sh clean` | Prunes unused Docker objects |
+| `bash setupscripts/core/orchestrate-linux.sh start` | Initializes network and starts all core services |
+| `bash setupscripts/core/orchestrate-linux.sh status` | Checks health of the core infrastructure |
+| `bash setupscripts/core/orchestrate-linux.sh validate` | Performs deep health checks (ports, HTTP, logs) |
+| `bash setupscripts/core/orchestrate-linux.sh stop` | Shuts down the core stack safely |
+| `bash setupscripts/core/orchestrate-linux.sh clean` | Prunes unused Docker objects |
 
 ### Single Service Operations
 Target specific core services:
 
-- **Start Kafka ONLY**: `bash core/orchestrate-linux.sh start kafka-prod`
-- **Follow Redis Logs**: `bash core/orchestrate-linux.sh logs redis`
-- **Reset Postgres DB**: `bash core/postgres/manage-db.sh Reset`
+- **Start Kafka ONLY**: `bash setupscripts/core/orchestrate-linux.sh start kafka-prod`
+- **Follow Redis Logs**: `bash setupscripts/core/orchestrate-linux.sh logs redis`
+- **Reset Postgres DB**: `bash setupscripts/core/postgres/manage-db.sh Reset`
 
 ---
 
@@ -40,8 +40,10 @@ Target specific core services:
 
 Application services are hosted in the `application/` folder. These can be managed independently using the local `docker-compose.yaml`.
 
-- **Start App Layer**: `cd application && docker compose up -d`
-- **Services**: Specialized application workers.
+- **Start App Layer**: `cd setupscripts/application && docker compose up -d`
+- **Sub-Services**:
+    - **`services/`**: Core AI reasoning, feature extraction, and competitor workers.
+    - **`whatsapp/`**: Multi-tenant WhatsApp processing instances.
 
 ---
 
@@ -50,7 +52,7 @@ Application services are hosted in the `application/` folder. These can be manag
 To ensure the core infrastructure is stable and all dependencies (networking, volumes, auth) are correct, run the automated test suite:
 
 ```bash
-bash core/tests/test-orchestrator.sh
+bash setupscripts/core/tests/test-orchestrator.sh
 ```
 
 ---
