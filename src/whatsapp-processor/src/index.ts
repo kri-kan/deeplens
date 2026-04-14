@@ -12,7 +12,7 @@ import { WhatsAppService } from './services/whatsapp.service';
 import { createApiRoutes } from './routes/api.routes';
 import { createConversationRoutes } from './routes/conversation.routes';
 import { createAdminRoutes } from './routes/admin.routes';
-import { initializeDatabaseSchema } from './utils/db-init';
+// import { initializeDatabaseSchema } from './utils/db-init';
 import { initializeMessageQueue, shutdownMessageQueue } from './init-message-queue';
 
 // --- Ensure Required Directories ---
@@ -45,7 +45,7 @@ async function initializeServices() {
     // --- Services Initialization ---
     await initializeDeepLensDbClient();
     await initializeWhatsAppDbClient();
-    await initializeDatabaseSchema();
+    // await initializeDatabaseSchema(); // Handled externally by setupscripts
 
     // Initialize message processing queue
     await initializeMessageQueue();

@@ -294,8 +294,7 @@ podman exec -it deeplens-postgres psql -U postgres -d whatsapp_vayyari_data
 
 Or use the setup script:
 ```bash
-cd src/whatsapp-processor
-.\setup-whatsapp-db.ps1
+# Initialize the database using `powershell ./infrastructure/scripts/lifecycle/init-bootstrap-data.ps1`
 ```
 
 ---

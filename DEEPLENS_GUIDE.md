@@ -1873,7 +1873,7 @@ To recreate the schema:
 If you were previously using JSON files for tracking state (`exclusions.json`, `tracking_state.json`), the application now uses the database instead. The old files are no longer used and can be safely deleted.
 
 The migration happens automatically when you:
-1. Set up the database with `setup-whatsapp-db.ps1`
+1. Set up the database using the centralized bootstrap script in `infrastructure/scripts/lifecycle/init-bootstrap-data.ps1`
 2. Start the application with the correct database connection string
 
 ---

@@ -71,16 +71,13 @@ npm run build:all
 
 ### 3. Setup Database
 
-The WhatsApp Processor requires a PostgreSQL database. If you're using the DeepLens infrastructure:
+The WhatsApp Processor assumes the PostgreSQL database and its schema are managed externally (e.g., via the main DeepLens `setupscripts`). 
 
-```bash
-# Make sure DeepLens infrastructure is running
-cd c:\productivity\deeplens
-.\infrastructure\setup-deeplens-dev.ps1
+The schema is managed externally in the root `setupscripts/` directory.
 
-# Setup WhatsApp database
-cd src\whatsapp-processor
-.\setup-whatsapp-db.ps1
+To apply or refresh the schema, use the centralized bootstrap script:
+```powershell
+powershell ./infrastructure/scripts/lifecycle/init-bootstrap-data.ps1
 ```
 
 **Important:** The database runs on port **5432** at **192.168.0.170** (Remote Server).

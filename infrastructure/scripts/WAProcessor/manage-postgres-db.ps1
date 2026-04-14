@@ -22,7 +22,7 @@ param (
     [string]$DbPass = "Krikank1$",
 
     [Parameter(Mandatory=$false)]
-    [string]$DdlPath = "$PSScriptRoot\..\ddl" 
+    [string]$DdlPath = "$PSScriptRoot\..\..\..\setupscripts\application\whatsapp" 
 )
 
 $ErrorActionPreference = "Continue"
@@ -98,8 +98,8 @@ try {
                 if ($LASTEXITCODE -ne 0) { Write-Host "  [WARN] Schema drop issue: $res" -ForegroundColor Gray }
             }
 
-            Write-Host "  Applying fresh schema..." -ForegroundColor Yellow
-            $res = Run-Psql-File "setup.sql"
+            Write-Host "  Applying fresh schema from whatsapp_vayyari_data.sql..." -ForegroundColor Yellow
+            $res = Run-Psql-File "whatsapp_vayyari_data.sql"
             if ($LASTEXITCODE -ne 0) { throw "Setup failed: $res" }
 
              # Cleanup (only if local)

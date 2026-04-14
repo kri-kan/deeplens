@@ -85,8 +85,12 @@ VAYYARI_WA_DB_CONNECTION_STRING=postgresql://postgres:Krikank1%24@192.168.0.170:
 **Cause:** Database hasn't been created yet.
 
 **Solution:**
+Recreate the database using the centralized orchestration scripts:
 ```powershell
-.\setup-whatsapp-db.ps1
+# From root directory
+bash setupscripts/core/orchestrate-linux.sh start # Ensures network and core services
+# Then run the initialization
+powershell ./infrastructure/scripts/lifecycle/init-bootstrap-data.ps1
 ```
 
 3. Connection Errors
@@ -108,7 +112,8 @@ The WhatsApp Processor uses 5 tables:
 
 To recreate the schema:
 ```powershell
-.\setup-whatsapp-db.ps1 -Clean
+# Use the centralized bootstrap script
+powershell ./infrastructure/scripts/lifecycle/init-bootstrap-data.ps1
 ```
 
 ---
@@ -168,7 +173,7 @@ node -e "const { Client } = require('pg'); require('dotenv').config(); const cli
 If you were previously using JSON files for tracking state (`exclusions.json`, `tracking_state.json`), the application now uses the database instead. The old files are no longer used and can be safely deleted.
 
 The migration happens automatically when you:
-1. Set up the database with `setup-whatsapp-db.ps1`
+1. Set up the database using `powershell ./infrastructure/scripts/lifecycle/init-bootstrap-data.ps1`
 2. Start the application with the correct database connection string
 
 ---
@@ -177,4 +182,4 @@ The migration happens automatically when you:
 
 - [Main DeepLens Troubleshooting Guide](../../TROUBLESHOOTING_SUMMARY.md)
 - [Infrastructure Setup Script](../../infrastructure/setup-deeplens-dev.ps1)
-- [Database DDL Scripts](./scripts/ddl/)
+- [Database Schema](../../setupscripts/application/whatsapp/whatsapp_vayyari_data.sql)

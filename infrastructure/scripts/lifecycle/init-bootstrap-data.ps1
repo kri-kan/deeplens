@@ -81,10 +81,12 @@ foreach ($service in $serviceOrder) {
         if ($script.Name -match "nextgen_identity") { $targetDb = "nextgen_identity" }
         elseif ($script.Name -match "deeplens_platform") { $targetDb = "deeplens_platform" }
         elseif ($script.Name -match "tenant_metadata_template") { $targetDb = "tenant_metadata_template" }
-        elseif ($script.Name -match "tenant_vayyari_metadata") { $targetDb = "tenant_vayyari_metadata" }
+        elseif ($script.Name -match "tenant_vayyari_metadata" -or $script.Name -match "whatsapp_vayyari_data") { $targetDb = "tenant_vayyari_metadata" }
+        elseif ($script.Name -match "tenant_metadata_template") { $targetDb = "tenant_metadata_template" }
         elseif ($service -eq "identity") { $targetDb = "nextgen_identity" } # Fallback for granular files
         elseif ($service -eq "deeplens-core") { $targetDb = "deeplens_platform" }
         elseif ($service -eq "tenant-manager") { $targetDb = "tenant_metadata_template" }
+        elseif ($service -eq "whatsapp") { $targetDb = "tenant_vayyari_metadata" } # Default for the whatsapp service folder
 
         Write-Host "      Executing: $($script.Name) (Target: $targetDb)" -ForegroundColor DarkGray
         Get-Content $script.FullName | podman run --rm -i -e PGPASSWORD=$DbPass --network host postgres:latest psql -h $DbHost -p $DbPort -U postgres -d $targetDb | Out-Null
