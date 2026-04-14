@@ -4,8 +4,8 @@ A modular, configuration-driven ecosystem for orchestrating DeepLens services. T
 
 ## 📂 Project Structure
 
-- **`core/`**: Infrastructure, databases, and observability stack. Contains management scripts and health tests.
-- **`application/`**: AI models, compute services, and application-specific logic (e.g., Ollama).
+- **`core/`**: Infrastructure, databases, AI compute (Ollama), and observability stack.
+- **`application/`**: Application-specific logic and specialized workers.
 - **`server/`**: Documentation and setup guides for the host environment.
 - **`tests/`**: Located inside `core/tests/`, these validate infrastructure stability.
 - **`.env`**: Centralized configuration and secrets for the entire stack.
@@ -41,7 +41,7 @@ Target specific core services:
 Application services are hosted in the `application/` folder. These can be managed independently using the local `docker-compose.yaml`.
 
 - **Start App Layer**: `cd application && docker compose up -d`
-- **Services**: Currently includes `ollama` for AI compute.
+- **Services**: Specialized application workers.
 
 ---
 

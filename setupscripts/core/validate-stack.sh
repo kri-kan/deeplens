@@ -16,7 +16,7 @@ echo -e "${CYAN}==================================================${NC}"
  
 # 1. Container Status Check
 echo -e "\n${YELLOW}[1/3] Checking Container States...${NC}"
-SERVICES=("krikanpg" "pgadmin" "kafka-prod" "kafka-test" "kafka-ui" "minio" "redis" "qdrant" "influxdb" "grafana" "prometheus" "loki" "jaeger" "ollama-cpu" "open-webui" "otel-collector" "gateway")
+SERVICES=("krikanpg" "pgadmin" "kafka-prod" "kafka-test" "kafka-ui" "minio" "redis" "qdrant" "influxdb" "grafana" "prometheus" "loki" "jaeger" "ollama-gpu" "open-webui" "otel-collector" "gateway")
  
 for service in "${SERVICES[@]}"; do
     STATE=$(docker inspect -f '{{.State.Status}}' "$service" 2>/dev/null)

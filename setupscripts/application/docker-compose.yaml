@@ -1,5 +1,4 @@
 name: deeplens-app
 
 # Application Services Orchestration
-include:
-  - path: ollama/docker-compose.yaml
+include: []

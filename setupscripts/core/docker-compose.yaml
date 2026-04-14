@@ -11,6 +11,7 @@ include:
   - path: minio/docker-compose.yaml
   - path: qdrant/docker-compose.yaml
   - path: influxdb/docker-compose.yaml
+  - path: ollama/docker-compose.yaml
   
   # Observability Stack
   - path: grafana/docker-compose.yaml
