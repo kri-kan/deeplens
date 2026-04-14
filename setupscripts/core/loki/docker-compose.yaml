@@ -6,7 +6,7 @@ services:
     ports:
       - "${LOKI_PORT}:3100"
     volumes:
-      - ./loki-config.yaml:/etc/loki/local-config.yaml
+      - ./loki.yml:/etc/loki/local-config.yaml
       - ${LOKI_DATA_PATH}:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:

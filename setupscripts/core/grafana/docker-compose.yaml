@@ -9,6 +9,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${INFRA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${INFRA_ADMIN_PASSWORD}
     volumes:
+      - ./provisioning:/etc/grafana/provisioning
       - ${GRAFANA_DATA_PATH}:/var/lib/grafana
     networks:
       - deeplens-network

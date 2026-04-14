@@ -1,52 +1,51 @@
+# DeepLens Grafana Datasource Configuration
+# Automatically configures Prometheus, Loki, and Jaeger as data sources
+
 apiVersion: 1
 
 datasources:
-  # ---------------------------------------------------------
-  # METRICS (Prometheus)
-  # ---------------------------------------------------------
+  # Prometheus - Metrics (Default)
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://deeplens-prometheus:9090
     isDefault: true
+    editable: true
     jsonData:
-      httpMethod: POST
-      manageAlerts: true
+      timeInterval: "5s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
 
-  # ---------------------------------------------------------
-  # LOGS (Loki)
-  # ---------------------------------------------------------
+  # Loki - Logs
   - name: Loki
     type: loki
     access: proxy
-    url: http://loki:3100
+    url: http://deeplens-loki:3100
+    editable: true
     jsonData:
-      # Link Logs to Traces: Detect TraceID and link to Jaeger
+      maxLines: 1000
       derivedFields:
         - datasourceUid: jaeger
-          matcherRegex: "(?:traceID|trace_id|traceid)=(\\w+)"
+          matcherRegex: "traceID=(\\w+)"
           name: TraceID
           url: "$${__value.raw}"
 
-  # ---------------------------------------------------------
-  # TRACES (Jaeger)
-  # ---------------------------------------------------------
+  # Jaeger - Traces
   - name: Jaeger
     type: jaeger
-    uid: jaeger # Explicitly set UID to match Loki's correlation above
     access: proxy
-    url: http://jaeger:16686
+    url: http://deeplens-jaeger:16686
+    editable: true
+    uid: jaeger
     jsonData:
-      # Link Traces back to Logs: Link span to Loki
       tracesToLogs:
-        datasourceUid: Loki
-        tags: ["service.name"]
-        mapTagNamesEnabled: false
-        spanStartTimeShift: "1h"
+        datasourceUid: loki
+        tags: ["service.name", "service.namespace"]
+        mappedTags: [{ key: "service.name", value: "service" }]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: "-1h"
         spanEndTimeShift: "1h"
         filterByTraceID: true
         filterBySpanID: false
       nodeGraph:
         enabled: true
-      serviceMap:
-        datasourceUid: Prometheus

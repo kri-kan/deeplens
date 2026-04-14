@@ -13,10 +13,12 @@ include:
   - path: influxdb/docker-compose.yaml
   - path: ollama/docker-compose.yaml
   
-  # Observability Stack
+   # Observability Stack
   - path: grafana/docker-compose.yaml
   - path: prometheus/docker-compose.yaml
+  - path: alertmanager/docker-compose.yaml
   - path: loki/docker-compose.yaml
+  - path: promtail/docker-compose.yaml
   - path: jaeger/docker-compose.yaml
   - path: otel-collector/docker-compose.yaml
  
