@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-14 15:50:19
+**Auto-generated on:** 2026-04-15 17:56:19
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -294,6 +294,15 @@ Configure per-tenant thumbnail settings in the database:
 
 ---
 
+## 🌐 Networking & CORS
+
+DeepLens is designed to be accessible across an intranet. Key settings in `src/NextGen.Identity/NextGen.Identity.Api/appsettings.json`:
+
+- **`Cors:AllowAnyIntranetOrigin`**: Set to `true` to automatically allow any request from a local network (10.*, 192.168.*, 172.16-31.*, and localhost).
+- **`Cors:AllowedOrigins`**: Array of explicit URLs to allow if they don't fall into the intranet IP ranges.
+
+---
+
 ## 📖 Documentation Index
 - [**ARCHITECTURE.md**](ARCHITECTURE.md) - High-level design & ADRs.
 - [**infrastructure/README.md**](infrastructure/README.md) - Deep dive into container setup.
@@ -405,6 +414,10 @@ DeepLens leverages a centralized infrastructure with local application services:
 ### ADR-004: Data Access Strategy
 - **Decision**: Hybrid EF Core + Dapper.
 - **Rationale**: EF Core for complex domain models and migrations; Dapper for high-frequency search metadata queries.
+
+### ADR-005: Intranet-Ready CORS Strategy
+- **Decision**: Implement a dynamic CORS predicate for intranet IP ranges (RFC1918) driven by a configuration toggle.
+- **Rationale**: Avoids the "whack-a-mole" process of manually adding developer/test IP addresses to the configuration, while maintaining security outside the local network.
 
 ---
 
