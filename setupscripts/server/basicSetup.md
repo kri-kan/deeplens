@@ -32,6 +32,11 @@
   - [2. Install the .NET SDK](#2-install-the-net-sdk)
   - [3. Verify Installation](#3-verify-installation)
 
+- [Setting Up CopyQ (Clipboard Manager)](#setting-up-copyq-clipboard-manager)
+  - [1. Install via Terminal](#1-install-via-terminal)
+  - [2. Initial Setup](#2-initial-setup)
+  - [3. Set a Global Shortcut (Super + V)](#3-set-a-global-shortcut-super--v)
+
 - [Summary Checklist for New Machines](#summary-checklist-for-new-machines)
 
 
@@ -341,6 +346,51 @@ Check the installed version:
 ```bash
 dotnet --version
 ```
+
+---
+
+# Setting Up CopyQ (Clipboard Manager)
+
+Keep your clipboard history and organize snippets with CopyQ. This is especially useful for managing multiple database connection strings and environment variables across XRDP sessions.
+
+## 1. Install via Terminal 
+
+Open your terminal and run these commands in order: 
+
+### Add the Repository
+```bash
+sudo add-apt-repository ppa:hluk/copyq -y
+```
+
+### Update Your Packages
+```bash
+sudo apt update
+```
+
+### Install CopyQ
+```bash
+sudo apt install copyq -y
+```
+
+## 2. Initial Setup
+After installation, launch and configure it to run automatically: 
+
+- **Launch:** Open your Applications menu, search for **CopyQ**, and click to open it.
+- **Enable Autostart:**
+    1. Right-click the CopyQ icon in your system tray (top right of the screen).
+    2. Select **Preferences** > **General**.
+    3. Check the box for **Autostart** so it launches every time you log in. 
+
+## 3. Set a Global Shortcut (Super + V) 
+Since Ubuntu uses the GNOME desktop, setting a shortcut inside CopyQ sometimes fails. It is best to set it in Ubuntu Settings: 
+
+1. Open **Settings** > **Keyboard** > **View and Customise Shortcuts**.
+2. Scroll to **Custom Shortcuts** and click the **+** (plus) icon.
+3. Fill in the following:
+  - **Name:** `CopyQ Toggle`
+  - **Command:** `copyq toggle`
+  - **Shortcut:** Press **Super (Windows key) + V**.
+4. Click **Add**. 
 
 ---
 

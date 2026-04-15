@@ -96,7 +96,7 @@ function Provision-Tenant {
 
     # 4. Identity API Entry
     $tenantAdminEmail = "admin@${TenantName}.local"
-    $tenantAdminPassword = "Krikank1$@${TenantName}123!"
+    $tenantAdminPassword = "Krikank1$"
     $apiBody = @{
         tenantName     = $TenantName
         databaseName   = $TenantDBName

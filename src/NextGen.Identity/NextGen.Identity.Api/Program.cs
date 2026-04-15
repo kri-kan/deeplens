@@ -13,6 +13,8 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using OpenTelemetry.Metrics;
 using Serilog;
+using Duende.IdentityServer.Services;
+
 
 // Configure Serilog
 Log.Logger = new LoggerConfiguration()
@@ -50,18 +52,34 @@ try
     builder.Services.AddScoped<ITenantService, TenantService>();
     builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 
-    // Configure CORS for WebUI - read from appsettings.json
-    var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-        ?? new[] { "http://localhost:3000", "http://localhost:5001", "http://localhost:5002" };
-    
+    // Configure CORS - Unified policy for intranet and explicit origins
+    var corsConfig = builder.Configuration.GetSection("Cors");
+    var allowIntranet = corsConfig.GetValue<bool>("AllowAnyIntranetOrigin");
+    var allowedOrigins = corsConfig.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowWebUI", policy =>
         {
-            policy.WithOrigins(corsOrigins)
-                  .AllowAnyMethod()
-                  .AllowAnyHeader()
-                  .AllowCredentials();
+            policy.SetIsOriginAllowed(origin => 
+            {
+                if (string.IsNullOrEmpty(origin)) return false;
+
+                // 1. Check explicit list
+                if (allowedOrigins.Any(o => origin.Equals(o, StringComparison.OrdinalIgnoreCase))) return true;
+
+                // 2. Check Intranet IPs (if enabled)
+                if (!allowIntranet) return false;
+                
+                var host = new Uri(origin).Host.ToLower();
+                return host == "localhost" || host == "127.0.0.1" || host == "[::1]" ||
+                       host.StartsWith("192.168.") || host.StartsWith("10.") ||
+                       (host.StartsWith("172.") && 
+                        int.TryParse(host.Split('.').ElementAtOrDefault(1), out var b2) && b2 >= 16 && b2 <= 31);
+            })
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
         });
     });
 
@@ -84,6 +102,13 @@ try
     .AddInMemoryClients(IdentityServerConfig.Clients)
     .AddProfileService<DeepLensProfileService>()
     .AddResourceOwnerValidator<DeepLensResourceOwnerPasswordValidator>();
+
+    // Support any CORS origin from intranet for IdentityServer clients
+    builder.Services.AddSingleton<ICorsPolicyService>(new DefaultCorsPolicyService(new LoggerFactory().CreateLogger<DefaultCorsPolicyService>()) 
+    { 
+        AllowAll = allowIntranet 
+    });
+
 
     // Add developer signing credential (for development only!)
     if (builder.Environment.IsDevelopment())

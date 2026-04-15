@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('admin@vayyari.local');
-  const [password, setPassword] = useState('DeepLens@Vayyari123!');
+  const [password, setPassword] = useState('Krikank1$');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

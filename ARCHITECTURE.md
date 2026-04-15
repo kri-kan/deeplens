@@ -109,6 +109,10 @@ DeepLens leverages a centralized infrastructure with local application services:
 - **Decision**: Hybrid EF Core + Dapper.
 - **Rationale**: EF Core for complex domain models and migrations; Dapper for high-frequency search metadata queries.
 
+### ADR-005: Intranet-Ready CORS Strategy
+- **Decision**: Implement a dynamic CORS predicate for intranet IP ranges (RFC1918) driven by a configuration toggle.
+- **Rationale**: Avoids the "whack-a-mole" process of manually adding developer/test IP addresses to the configuration, while maintaining security outside the local network.
+
 ---
 
 ## 📊 Observability Strategy

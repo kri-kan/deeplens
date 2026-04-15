@@ -158,8 +158,8 @@ Last Updated: December 20, 2025
 | Service            | Username               | Password             | Notes               |
 | :----------------- | :--------------------- | :------------------- | :------------------ |
 | **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432`|
-| **Identity Admin** | `admin@deeplens.local` | `DeepLens@Admin123!` | Initial Admin       |
-| **Vayyari Admin**  | `admin@vayyari.local`  | `DeepLens@Vayyari123!`| Vayyari Admin       |
+| **Identity Admin** | `admin@deeplens.local` | `Krikank1$` | Initial Admin       |
+| **Vayyari Admin**  | `admin@vayyari.local`  | `Krikank1$` | Vayyari Admin       |
 | **MinIO**          | `krikan`               | `Krikank1$`          | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
 | **Kafka UI**       | -                      | -                    | `192.168.0.170:8080`|

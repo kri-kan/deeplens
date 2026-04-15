@@ -110,7 +110,7 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-dotnet run --project $CliToolPath -- bootstrap-sql "DeepLensAdmin123!" "DeepLens@Vayyari123!" $ADMIN_ID $VAYYARI_ID > $bootstrapFile
+dotnet run --project $CliToolPath -- bootstrap-sql "Krikank1$" "Krikank1$" $ADMIN_ID $VAYYARI_ID > $bootstrapFile
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  Executing bootstrap SQL..." -ForegroundColor Gray

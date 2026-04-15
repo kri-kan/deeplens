@@ -255,7 +255,7 @@ ON CONFLICT (id) DO NOTHING;
             tenantName = tenantName,
             databaseName = $"tenant_{tenantName}_metadata",
             adminEmail = $"admin@{tenantName}.local",
-            adminPassword = $"Krikank1$@{tenantName}123!",
+            adminPassword = $"Krikank1$",
             adminFirstName = "Vayyari",
             adminLastName = "Admin",
             minioEndpoint = $"{_host}:9000",

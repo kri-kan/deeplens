@@ -82,7 +82,9 @@ public static class IdentityServerConfig
                     "http://localhost:3000",
                     "https://localhost:3000",
                     "http://localhost:5001",
-                    "https://localhost:5001"
+                    "https://localhost:5001",
+                    "http://localhost:3006",
+                    "http://127.0.0.1:3006"
                 },
                 
                 // Token lifetimes
@@ -136,7 +138,9 @@ public static class IdentityServerConfig
                     "http://localhost:3000",
                     "https://localhost:3000",
                     "http://localhost:5001",
-                    "https://localhost:5001"
+                    "https://localhost:5001",
+                    "http://localhost:3006",
+                    "http://127.0.0.1:3006"
                 },
                 
                 // Scopes this client can access
