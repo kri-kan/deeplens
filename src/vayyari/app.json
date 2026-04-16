@@ -23,7 +23,18 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro",
+      "pwa": {
+        "name": "Vayyari Business Suite",
+        "shortName": "Vayyari",
+        "description": "Premium Business suite for Vayyari marketplace catalog and image processing.",
+        "display": "standalone",
+        "startUrl": "/",
+        "backgroundColor": "#FFFFFF",
+        "themeColor": "#00A86B",
+        "orientation": "portrait"
+      }
     },
     "plugins": [
       "expo-router",
