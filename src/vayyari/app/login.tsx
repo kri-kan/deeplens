@@ -27,7 +27,8 @@ export default function LoginScreen() {
 
     try {
       await signIn(email, password);
-      // AuthContext will update, leading RootLayout to redirect to (tabs)
+      // Explicitly navigate to the dashboard (tabs) on success
+      router.replace('/(tabs)');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
