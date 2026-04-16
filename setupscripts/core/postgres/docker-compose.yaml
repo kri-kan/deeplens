@@ -31,6 +31,8 @@ services:
       - PGADMIN_CONFIG_SERVER_MODE=False
     ports:
       - "${PGADMIN_PORT}:80"
+    volumes:
+      - ${PGADMIN_DATA_PATH}:/var/lib/pgadmin
     networks:
       - deeplens-network
     depends_on:
