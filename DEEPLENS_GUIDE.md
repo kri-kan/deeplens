@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-15 17:56:19
+**Auto-generated on:** 2026-04-18 13:45:28
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -542,127 +542,53 @@ Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiG
 # Documentation: DATABASE_NAMING_STANDARDS.md
 ------------------------------
 
-# Database Naming Standards - DeepLens Project
+# DeepLens Database Architecture (Single-Tenant)
 
-## ✅ Standardized Naming Convention
+Following the transition to a simplified single-tenant architecture, the DeepLens project now relies on exactly **two** primary databases.
 
-All database names across the DeepLens project now follow a **lowercase with underscores** naming convention.
+## 🗄️ Core Databases
 
-### Primary Databases
+| Database            | Role                                      | Status |
+|---------------------|-------------------------------------------|--------|
+| `nextgen_identity`  | IdentityServer, User Auth, Roles & Claims | Active |
+| `deeplens_platform` | Product Catalog, Media, Vendors, Listings | Active |
 
-| Database            | Purpose                        | Status     |
-| :------------------ | :----------------------------- | :--------- |
-| `deeplens_platform` | Core application and media data | ✅ Unified  |
-| `nextgen_identity`  | Identity and authentication    | ✅ Unified  |
-| `whatsapp_data`     | WhatsApp message and chat data | ✅ Unified  |
+---
 
-## 🔍 Verification
+## 🗑️ Deprecated / Legacy Databases
 
-### Check Current Database Names
+The following databases were used during the multi-tenant phase and are now **OBSOLETE**:
 
-Expected output should show:
-- `deeplens_platform`
-- `nextgen_identity`
-- `whatsapp_data`
+- `tenant_vayyari_metadata` (Migrated to `deeplens_platform`)
+- `whatsapp_vayyari_data` (Consolidated)
+- `tenant_metadata_template` (Infrastructure no longer required)
 
-### Verify Connection Strings
+---
 
-**WhatsApp Processor:**
-Check `.env` for:
-- `deeplens_connection_string`
-- `whatsapp_wa_db_connection_string`
+## 🔐 Connection Configuration
 
-## 📝 Updated Files
+All services (Search API, Worker Service) should use the `DefaultConnection` pointing to the single-tenant platform database.
 
-### Configuration Files
-- ✅ `src/whatsapp-processor/.env.example` - Uses unified env vars
-
-### Infrastructure Scripts
-- ✅ `infrastructure/setup-deeplens-dev.ps1` - Entry point for DB initialization
-- ✅ `infrastructure/validate-environment.ps1` - Checks unified databases
-- ✅ `infrastructure/scripts/lifecycle/init-bootstrap-data.ps1` - Core initialization logic
-
-### Documentation
-- ✅ `src/whatsapp-processor/DATABASE_SETUP.md` - Documents lowercase convention
-- ✅ `src/whatsapp-processor/README.md` - Updated with database setup
-- ✅ `TROUBLESHOOTING_SUMMARY.md` - Uses correct database names
-
-## 🎯 Migration Checklist
-
-If you have an existing setup with mixed-case database names:
-
-### 1. Check Current State
+### Search API (`appsettings.json`)
 
 *(Code block omitted for brevity)*
 
 
-### 2. Rename Databases (if needed)
-
-*(Code block omitted for brevity)*
-
-
-### 3. Update Environment Files
-
-*(Code block omitted for brevity)*
-
-
-### 4. Restart Services
-
-*(Code block omitted for brevity)*
-
-
-## 🚨 Common Issues
-
-### Issue: "database does not exist"
-**Cause:** Database name mismatch between code and actual database.
-
-**Solution:**
-1. Check actual database name: `podman exec deeplens-postgres psql -U postgres -c "\l"`
-2. Ensure it matches the connection string in `.env`
-3. Both should be lowercase with underscores
-
-### Issue: "WARNING: Using deprecated uppercase env var"
-**Cause:** Using old uppercase environment variable names.
-
-**Solution:**
-1. Update `.env` to use lowercase: `vayyari_wa_db_connection_string`
-2. The app will still work but will show warnings
-
-### Issue: Port confusion (5432 vs 5433)
-**Cause:** Podman maps PostgreSQL to port 5433 on host.
-
-**Solution:**
-- Always use port **5433** when connecting from host machine
-- Use port **5432** only for inter-container communication
-- See `DATABASE_SETUP.md` for details
-
-## 📚 References
-
-- [WhatsApp Processor Database Setup](../src/whatsapp-processor/DATABASE_SETUP.md)
-- [Infrastructure Setup Script](../infrastructure/setup-deeplens-dev.ps1)
-- [Troubleshooting Guide](../TROUBLESHOOTING_SUMMARY.md)
-
-## 🔐 Connection Details Reference
-
-### PostgreSQL (Remote Server)
-
-*(Code block omitted for brevity)*
-
-
-### Databases
-
-*(Code block omitted for brevity)*
-
-
-### Connection String Format
+### Identity API (`appsettings.json`)
 
 *(Code block omitted for brevity)*
 
 
 ---
 
-**Last Updated:** 2025-12-29  
-**Status:** ✅ All databases and references standardized to lowercase with underscores
+## 📚 General Standards
+
+1. **Naming**: Use `lowercase_with_underscores`.
+2. **Persistence**: All data is stored in host-based volumes at `/data/postgres`.
+3. **Connectivity**: Use port `5432` for internal container networking.
+
+**Last Updated:** 2026-04-16  
+**Status:** ✅ Unified Single-Tenant Architecture
 
 
 ---
