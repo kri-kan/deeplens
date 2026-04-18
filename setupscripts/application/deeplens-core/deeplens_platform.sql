@@ -816,6 +816,7 @@ CREATE TABLE public."orderId" (
     customer_address text,
     order_details text,
     source_handle character varying(255),
+    instagram_user_id character varying(100),
     created_at timestamp with time zone DEFAULT now()
 );
 

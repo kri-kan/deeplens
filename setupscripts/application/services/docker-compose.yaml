@@ -56,6 +56,20 @@ services:
     networks:
       - deeplens-network
 
+  instagram-sidecar:
+    build:
+      context: ../../../src/deeplens.sidecarservices/instagram-service
+    container_name: instagram-sidecar
+    restart: unless-stopped
+    ports:
+      - "${INSTAGRAM_SIDECAR_PORT:-8005}:8005"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEBUG_MOCK_INSTAGRAM=1
+      - INSTAGRAM_ACCOUNTS=${INSTAGRAM_ACCOUNTS}
+    networks:
+      - deeplens-network
+
 networks:
   deeplens-network:
     external: true

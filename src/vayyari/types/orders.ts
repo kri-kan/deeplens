@@ -8,6 +8,7 @@ export interface OrderIdEntry {
   timestamp: string;
   customerPhone?: string;
   instagramHandle?: string;
+  instagramUserId?: string;
   customerAddress?: string;
   orderDetails?: string;
   items?: OrderItem[];

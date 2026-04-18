@@ -9,12 +9,12 @@ public interface IIdGeneratorService
     /// <summary>
     /// Generates a new unique alphanumeric Order ID.
     /// </summary>
-    Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null);
+    Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null);
     
     /// <summary>
     /// Generates a new unique alphanumeric Order ID and its items.
     /// </summary>
-    Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null);
+    Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null);
 
     /// <summary>
     /// Generates a sub-ID for an order item.

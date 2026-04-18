@@ -80,3 +80,19 @@ Use the [OIDC Debugger](https://oidcdebugger.com/) or the built-in Swagger UI at
 
 ### Common Scopes
 - `openid`, `profile`, `deeplens.api.read`, `deeplens.api.write`.
+
+---
+
+## 🚗 Sidecar Services
+
+Sidecars are lightweight, synchronous services that extend the platform's capabilities with external integrations.
+
+### Instagram Sidecar Service
+- **Service Name**: `instagram-sidecar`
+- **Port**: `8005`
+- **Technology**: Python 3.11 / FastAPI / Instaloader
+- **Purpose**: Provides a unified API for retrieving public Instagram profile and post metadata without requiring complex scrapers for standard lookups.
+- **Key Endpoints**:
+    - `GET /profile/{username}`: Metadata for any public profile.
+    - `GET /profile/{username}/posts`: Recent posts (shortcode, caption, media URLs).
+- **Rate Limiting**: Implementation relies on `instaloader` internal sleep mechanisms. Public endpoint usage only.

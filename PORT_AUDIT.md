@@ -12,6 +12,7 @@ All ports have been verified across code, configuration files, and documentation
 - **5000** - Search API (Image Upload & Search)  
 - **5001** - Web UI (React Frontend - Optional)
 - **8001** - Feature Extraction (Python AI Service)
+- **8005** - Instagram Sidecar (External Integration)
 
 ### WhatsApp Processor (3000 range)
 - **3005** - Backend API + Production UI
@@ -41,6 +42,7 @@ All ports have been verified across code, configuration files, and documentation
 | Identity API      | `src/NextGen.Identity/NextGen.Identity.Api/Properties/launchSettings.json`  | 5198      | ✅ Correct |
 | Search API        | `src/DeepLens.Service/DeepLens.SearchApi/Properties/launchSettings.json`    | 5000      | ✅ Correct |
 | DeepLens Web UI   | `src/DeepLens.WebUI/vite.config.ts`                        | 5001      | ✅ Correct |
+| Instagram Sidecar | `src/deeplens.sidecarservices/instagram-service/main.py`   | 8005      | ✅ Correct |
 | WhatsApp API      | `src/whatsapp-processor/.env.example`                      | 3005      | ✅ Correct |
 | WhatsApp UI (Dev) | `src/whatsapp-processor/client/vite.config.ts`             | 3006      | ✅ Correct |
 | PostgreSQL        | Remote (192.168.0.170) | 5432 | ✅ Correct |

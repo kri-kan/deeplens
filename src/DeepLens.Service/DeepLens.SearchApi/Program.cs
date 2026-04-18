@@ -18,6 +18,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddScoped<IMetadataService, MetadataService>();
 
 builder.Services.AddHttpClient<IAttributeExtractionService, LlmAttributeExtractionService>();
+builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService>();
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();

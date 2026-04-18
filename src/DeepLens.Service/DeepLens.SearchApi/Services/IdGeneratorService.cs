@@ -7,12 +7,14 @@ public class IdGeneratorService : IIdGeneratorService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<IdGeneratorService> _logger;
+    private readonly IInstagramSidecarService _instagramSidecar;
     private readonly string _connectionString;
 
-    public IdGeneratorService(IConfiguration configuration, ILogger<IdGeneratorService> logger)
+    public IdGeneratorService(IConfiguration configuration, ILogger<IdGeneratorService> logger, IInstagramSidecarService instagramSidecar)
     {
         _configuration = configuration;
         _logger = logger;
+        _instagramSidecar = instagramSidecar;
         _connectionString = _configuration.GetConnectionString("DefaultConnection") 
                          ?? throw new InvalidOperationException("DefaultConnection string not found");
     }
@@ -24,13 +26,13 @@ public class IdGeneratorService : IIdGeneratorService
         return conn;
     }
 
-    public async Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null)
+    public async Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
     {
-        var (orderId, _) = await GenerateOrderInternalAsync(source, paymentMode, sourceHandle);
+        var (orderId, _) = await GenerateOrderInternalAsync(source, paymentMode, sourceHandle, instagramUserId);
         return orderId;
     }
 
-    private async Task<(string OrderId, int InternalId)> GenerateOrderInternalAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null)
+    private async Task<(string OrderId, int InternalId)> GenerateOrderInternalAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
     {
         using var conn = await GetConnectionAsync();
         
@@ -58,34 +60,50 @@ public class IdGeneratorService : IIdGeneratorService
         var orderId = ToBase36(nextValValue, 5);
 
         // 3. Determine which column to populate for the handle
-        string? instagramHandle = null;
+        string? finalInstagramUserId = instagramUserId;
         string? customerPhone = null;
         
         if (source?.ToLower() == "whatsapp") {
             customerPhone = sourceHandle;
-        } else if (source?.ToLower() == "instagram") {
-            instagramHandle = sourceHandle;
+        } else if (source?.ToLower() == "instagram" && !string.IsNullOrEmpty(sourceHandle)) {
+            // Only fetch if not already provided by frontend
+            if (string.IsNullOrEmpty(finalInstagramUserId))
+            {
+                try 
+                {
+                    var profile = await _instagramSidecar.GetProfileAsync(sourceHandle);
+                    if (profile != null) 
+                    {
+                        finalInstagramUserId = profile.UserId;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to fetch Instagram User ID for {Handle}", sourceHandle);
+                }
+            }
         }
 
         // 4. Insert the order record
         await conn.ExecuteAsync(@"
-            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, instagram_handle, customer_phone)
-            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @InstagramHandle, @CustomerPhone)", 
+            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, source_handle, instagram_user_id, customer_phone)
+            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @SourceHandle, @InstagramUserId, @CustomerPhone)", 
             new { 
                 Id = nextValValue, 
                 OrderId = orderId, 
                 SourceId = sourceId, 
                 PaymentModeId = paymentModeId, 
-                InstagramHandle = instagramHandle,
+                SourceHandle = sourceHandle,
+                InstagramUserId = finalInstagramUserId,
                 CustomerPhone = customerPhone
             });
 
         return (orderId, (int)nextValValue);
     }
 
-    public async Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null)
+    public async Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
     {
-        var (orderId, internalId) = await GenerateOrderInternalAsync(source, paymentMode, sourceHandle);
+        var (orderId, internalId) = await GenerateOrderInternalAsync(source, paymentMode, sourceHandle, instagramUserId);
         
         using var conn = await GetConnectionAsync();
         var itemIds = new List<string>();
@@ -142,7 +160,8 @@ public class IdGeneratorService : IIdGeneratorService
                 s.name as source, 
                 p.name as paymentMethod, 
                 o.customer_phone as customerPhone,
-                o.instagram_handle as instagramHandle,
+                o.source_handle as sourceHandle,
+                o.instagram_user_id as instagramUserId,
                 o.customer_address as customerAddress,
                 o.order_details as orderDetails,
                 o.created_at as timestamp
@@ -164,7 +183,8 @@ public class IdGeneratorService : IIdGeneratorService
                 s.name as source, 
                 p.name as paymentMethod, 
                 o.customer_phone as customerPhone,
-                o.instagram_handle as instagramHandle,
+                o.source_handle as sourceHandle,
+                o.instagram_user_id as instagramUserId,
                 o.customer_address as customerAddress,
                 o.order_details as orderDetails,
                 o.created_at as timestamp
@@ -191,7 +211,8 @@ public class IdGeneratorService : IIdGeneratorService
             order.source,
             order.paymentMethod,
             order.customerPhone,
-            order.instagramHandle,
+            order.sourceHandle,
+            order.instagramUserId,
             order.customerAddress,
             order.orderDetails,
             order.timestamp,
@@ -225,7 +246,7 @@ public class IdGeneratorService : IIdGeneratorService
             UPDATE ""orderId"" 
             SET customer_phone = COALESCE(@Phone, customer_phone),
                 source_id = COALESCE(@SourceId, source_id),
-                instagram_handle = COALESCE(@InstagramHandle, instagram_handle),
+                source_handle = COALESCE(@SourceHandle, source_handle),
                 payment_mode_id = COALESCE(@PaymentModeId, payment_mode_id),
                 customer_address = COALESCE(@Address, customer_address),
                 order_details = COALESCE(@Details, order_details)
@@ -234,7 +255,7 @@ public class IdGeneratorService : IIdGeneratorService
                 OrderId = orderId, 
                 Phone = phone, 
                 SourceId = sourceId,
-                InstagramHandle = sourceHandle,
+                SourceHandle = sourceHandle,
                 PaymentModeId = paymentModeId,
                 Address = address,
                 Details = details

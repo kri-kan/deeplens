@@ -13,6 +13,7 @@ DeepLens is a high-performance, multi-tenant **visual search engine** built usin
 ### Core Design Principles
 - **Unified .NET Backend**: Centralized orchestration, API gateway, and tenant management.
 - **Stateless AI Services**: Python-based services for feature extraction and vector operations.
+- **Sidecar Services**: Lightweight Python/FastAPI services for external data retrieval (e.g., Instagram, YouTube).
 - **Event-Driven Pipeline**: Asynchronous image processing via Apache Kafka.
 - **External Infrastructure**: Core databases (PostgreSQL), message brokers (Kafka), and storage (MinIO) are managed at `192.168.0.170`.
 - **Observable by Design**: Integrated OpenTelemetry, Prometheus, and Jaeger.

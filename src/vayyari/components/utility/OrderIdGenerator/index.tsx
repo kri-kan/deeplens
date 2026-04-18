@@ -28,10 +28,45 @@ export const OrderIdGenerator = () => {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sourceHandle, setSourceHandle] = useState('');
+  const [detectedInstaId, setDetectedInstaId] = useState<string | null>(null);
+  const [isLookupLoading, setIsLookupLoading] = useState(false);
 
   useEffect(() => {
     loadRecentIds();
   }, []);
+
+  useEffect(() => {
+    if (selectedSource === 'instagram' && sourceHandle.trim().length > 3) {
+      const handler = setTimeout(() => {
+        fetchInstagramId(sourceHandle.trim());
+      }, 1000);
+      return () => clearTimeout(handler);
+    } else {
+      setDetectedInstaId(null);
+    }
+  }, [sourceHandle, selectedSource]);
+
+  const fetchInstagramId = async (handle: string) => {
+    let username = handle;
+    if (handle.includes('instagram.com/')) {
+       const parts = handle.split('instagram.com/')[1].split('/')[0].split('?')[0];
+       if (parts) username = parts;
+    }
+    
+    // Remote any @ if present
+    username = username.replace('@', '');
+
+    try {
+      setIsLookupLoading(true);
+      const response = await searchApiClient.get<{ userId: string }>(`/api/v1/insta/profile/${username}`);
+      setDetectedInstaId(response.userId);
+    } catch (e) {
+      console.warn('[OrderIdGenerator] Failed to fetch insta id', e);
+      setDetectedInstaId(null);
+    } finally {
+      setIsLookupLoading(false);
+    }
+  };
 
   const loadRecentIds = async () => {
     try {
@@ -86,7 +121,8 @@ export const OrderIdGenerator = () => {
         params: { 
           source: selectedSource, 
           paymentMode: paymentMethod || '' ,
-          sourceHandle: sourceHandle || ''
+          sourceHandle: sourceHandle || '',
+          instagramUserId: detectedInstaId || ''
         }
       });
       const newEntry: OrderIdEntry = {
@@ -96,6 +132,7 @@ export const OrderIdGenerator = () => {
         timestamp: new Date().toISOString(),
         customerPhone: selectedSource === 'whatsapp' ? sourceHandle : undefined,
         instagramHandle: selectedSource === 'instagram' ? sourceHandle : undefined,
+        instagramUserId: selectedSource === 'instagram' ? (detectedInstaId || undefined) : undefined,
       };
       
       const updated = [newEntry, ...recentIds].slice(0, 10);
@@ -241,16 +278,24 @@ export const OrderIdGenerator = () => {
         </View>
         
         {selectedSource && (
-          <TextInput
-            label={selectedSource === 'whatsapp' ? 'Phone Number (Optional)' : 'Instagram URL (Optional)'}
-            value={sourceHandle}
-            onChangeText={setSourceHandle}
-            mode="outlined"
-            style={styles.sourceHandleInput}
-            keyboardType={selectedSource === 'whatsapp' ? 'phone-pad' : 'default'}
-            left={<TextInput.Icon icon={selectedSource === 'whatsapp' ? 'phone' : 'instagram'} />}
-            placeholder={selectedSource === 'whatsapp' ? '+91 99999 00000' : 'instagram.com/username'}
-          />
+          <View>
+            <TextInput
+              label={selectedSource === 'whatsapp' ? 'Phone Number (Optional)' : 'Instagram URL (Optional)'}
+              value={sourceHandle}
+              onChangeText={setSourceHandle}
+              mode="outlined"
+              style={styles.sourceHandleInput}
+              keyboardType={selectedSource === 'whatsapp' ? 'phone-pad' : 'default'}
+              left={<TextInput.Icon icon={selectedSource === 'whatsapp' ? 'phone' : 'instagram'} />}
+              right={isLookupLoading ? <TextInput.Icon icon={() => <ActivityIndicator size="small" color={theme.colors.primary} />} /> : null}
+              placeholder={selectedSource === 'whatsapp' ? '+91 99999 00000' : 'instagram.com/username'}
+            />
+            {selectedSource === 'instagram' && detectedInstaId && (
+              <Text style={{ fontSize: 11, color: theme.colors.outline, marginTop: 4, marginLeft: 12 }}>
+                Permanent ID: <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>{detectedInstaId}</Text>
+              </Text>
+            )}
+          </View>
         )}
 
         <Button 

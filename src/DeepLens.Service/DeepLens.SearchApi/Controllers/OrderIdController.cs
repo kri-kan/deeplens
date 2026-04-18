@@ -27,7 +27,7 @@ public class OrderIdController : ControllerBase
     [HttpGet("{orderId}")]
     public async Task<ActionResult<object>> GetOrder(string orderId)
     {
-        var order = await _idService.GetOrderDetailsAsync(orderId);
+        var order = await _idGenerator.GetOrderDetailsAsync(orderId);
         if (order == null) return NotFound(new { message = $"Order ID {orderId} not found" });
         return Ok(order);
     }
@@ -43,9 +43,9 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID.
     /// </summary>
     [HttpPost("order")]
-    public async Task<IActionResult> GenerateOrderId([FromQuery] string? source, [FromQuery] string? paymentMode, [FromQuery] string? sourceHandle)
+    public async Task<IActionResult> GenerateOrderId([FromQuery] string? source, [FromQuery] string? paymentMode, [FromQuery] string? sourceHandle, [FromQuery] string? instagramUserId)
     {
-        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode, sourceHandle);
+        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode, sourceHandle, instagramUserId);
         return Ok(new { orderId });
     }
 
@@ -53,12 +53,12 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID and a set of item sub-IDs.
     /// </summary>
     [HttpPost("orderwithitems")]
-    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] string? source = null, [FromQuery] string? paymentMode = null, [FromQuery] string? sourceHandle = null)
+    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] string? source = null, [FromQuery] string? paymentMode = null, [FromQuery] string? sourceHandle = null, [FromQuery] string? instagramUserId = null)
     {
         if (itemCount < 1 || itemCount > 100)
             return BadRequest(new { message = "Item count must be between 1 and 100" });
 
-        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode, sourceHandle);
+        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode, sourceHandle, instagramUserId);
 
         return Ok(new { orderId, itemIds });
     }
