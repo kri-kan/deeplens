@@ -10,26 +10,24 @@ using DeepLens.Contracts.Events;
 namespace DeepLens.SearchApi.Controllers;
 
 /// <summary>
-/// Handles image ingestion and metadata tagging for the multi-tenant search platform.
-/// Satisfies generic E-commerce needs while handling specific patterns for sellers and SKU deduplication.
+/// Handles image ingestion and metadata tagging. Single-tenant version.
 /// </summary>
 [ApiController]
 [Route("api/v1/ingest")]
-[Authorize(Policy = "IngestPolicy")]
 public class IngestionController : ControllerBase
 {
     private readonly ILogger<IngestionController> _logger;
     private readonly IStorageService _storageService;
-    private readonly ITenantMetadataService _metadataService;
+    private readonly IMetadataService _metadataService;
     private readonly IAttributeExtractionService _attributeService;
     private readonly IProducer<string, string> _kafkaProducer;
 
     public IngestionController(
         ILogger<IngestionController> logger,
         IStorageService storageService,
-        ITenantMetadataService metadataService,
+        IMetadataService metadataService,
         IAttributeExtractionService attributeService,
-        IProducer<string, string>? kafkaProducer = null) // Kafka optional for now to allow dev testing
+        IProducer<string, string>? kafkaProducer = null)
     {
         _logger = logger;
         _storageService = storageService;
@@ -39,19 +37,12 @@ public class IngestionController : ControllerBase
     }
 
     /// <summary>
-    /// Uploads an image from a seller, tags it with metadata, and initiates background categorization.
+    /// Uploads an image, tags it with metadata, and initiates background processing.
     /// </summary>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
-    [AllowAnonymous]
-    public async Task<ActionResult<UploadImageResponse>> IngestImage([FromForm] UploadImageRequest request, [FromQuery] string? tenant = null)
+    public async Task<ActionResult<UploadImageResponse>> IngestImage([FromForm] UploadImageRequest request)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id in token" });
-        }
-
         if (request.File == null || request.File.Length == 0)
         {
             return BadRequest(new { message = "No file uploaded" });
@@ -59,35 +50,29 @@ public class IngestionController : ControllerBase
 
         try
         {
-            _logger.LogInformation("Processing ingestion for tenant {TenantId}, Seller {SellerId}", tenantId, request.SellerId);
+            _logger.LogInformation("Processing ingestion for Seller {SellerId}", request.SellerId);
 
-            // 1. Save to Storage (MinIO)
+            // 1. Save to Storage
             using var stream = request.File.OpenReadStream();
-            var storagePath = await _storageService.UploadFileAsync(tenantId, request.File.FileName, stream, request.File.ContentType);
+            var storagePath = await _storageService.UploadFileAsync(request.File.FileName, stream, request.File.ContentType);
 
-            // 2. Save Metadata to Tenant DB
+            // 2. Save Metadata
             var imageId = Guid.NewGuid();
-            await _metadataService.SaveIngestionDataAsync(tenantId, imageId, storagePath, request.File.ContentType, request.File.Length, request);
+            await _metadataService.SaveIngestionDataAsync(imageId, storagePath, request.File.ContentType, request.File.Length, request);
 
-            // 3. Resolve Tenant Settings for custom processing (Quality/Size)
-            var tenantSettings = await _metadataService.GetThumbnailSettingsAsync(tenantId);
-            var processingOptions = new ProcessingOptions();
-            
-            if (tenantSettings != null && tenantSettings.Specifications != null && tenantSettings.Specifications.Any())
+            // 3. Default Processing Options (Simplified)
+            var processingOptions = new ProcessingOptions
             {
-                var spec = tenantSettings.Specifications.First(); // Phase 1: Use first spec for main grid
-                processingOptions.ThumbnailWidth = spec.MaxWidth > 0 ? spec.MaxWidth : 512;
-                processingOptions.ThumbnailHeight = spec.MaxHeight > 0 ? spec.MaxHeight : 512;
-                processingOptions.ThumbnailFormat = spec.Format.ToString().ToLower();
-                
-                if (spec.Options?.WebP != null) processingOptions.ThumbnailQuality = spec.Options.WebP.Quality;
-                else if (spec.Options?.Jpeg != null) processingOptions.ThumbnailQuality = spec.Options.Jpeg.Quality;
-            }
+                ThumbnailWidth = 512,
+                ThumbnailHeight = 512,
+                ThumbnailFormat = "webp",
+                ThumbnailQuality = 80
+            };
 
-            // 4. Notify Processing Pipeline (Kafka)
+            // 4. Notify Processing Pipeline
             if (_kafkaProducer != null)
             {
-                await NotifyPipeline(tenantId, imageId, storagePath, request, processingOptions);
+                await NotifyPipeline(imageId, storagePath, request, processingOptions);
             }
 
             return Ok(new UploadImageResponse
@@ -99,28 +84,18 @@ public class IngestionController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Ingestion failed for tenant {TenantId}", tenantId);
+            _logger.LogError(ex, "Ingestion failed");
             return StatusCode(500, new { message = "An internal error occurred during ingestion" });
         }
     }
 
     /// <summary>
-    /// Bulk uploads multiple images with associated metadata.
-    /// Uses parallel processing with concurrency control for high throughput.
+    /// Bulk uploads multiple images.
     /// </summary>
     [HttpPost("bulk")]
     [Consumes("multipart/form-data")]
-    [AllowAnonymous]
     public async Task<ActionResult<BulkUploadResponse>> BulkIngestImage([FromForm] IFormFileCollection files, [FromForm] string metadata)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value;
-        if (string.IsNullOrEmpty(tenantIdClaim)) tenantIdClaim = "2abbd721-873e-4bf0-9cb2-c93c6894c584"; // Vayyari Test ID
-        
-        if (!Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id in token" });
-        }
-
         if (files == null || files.Count == 0)
         {
             return BadRequest(new { message = "No files uploaded" });
@@ -140,7 +115,6 @@ public class IngestionController : ControllerBase
         var response = new BulkUploadResponse { TotalProcessed = files.Count };
         var results = new System.Collections.Concurrent.ConcurrentBag<ImageResult>();
         
-        // Limit concurrency to avoid saturating resources (e.g., 5 parallel tasks)
         using var semaphore = new SemaphoreSlim(5);
         
         var tasks = files.Select(async file =>
@@ -150,11 +124,9 @@ public class IngestionController : ControllerBase
             
             try
             {
-                // Find matching metadata for this file
                 var itemMetadata = bulkRequest.Images.FirstOrDefault(i => i.FileName == file.FileName) 
                                  ?? new BulkImageItem { FileName = file.FileName };
 
-                // Enrich metadata if description is available but primary attributes are missing
                 if (!string.IsNullOrEmpty(itemMetadata.Description) && 
                    (string.IsNullOrEmpty(itemMetadata.Fabric) || string.IsNullOrEmpty(itemMetadata.Color)))
                 {
@@ -170,7 +142,6 @@ public class IngestionController : ControllerBase
                     };
                 }
 
-                // Map BulkImageItem to UploadImageRequest for the service
                 var singleRequest = new UploadImageRequest
                 {
                     File = file,
@@ -191,37 +162,18 @@ public class IngestionController : ControllerBase
                     AdditionalMetadata = itemMetadata.AdditionalMetadata
                 };
 
-                // 1. Upload
                 using var stream = file.OpenReadStream();
-                var storagePath = await _storageService.UploadFileAsync(tenantId, file.FileName, stream, file.ContentType);
+                var storagePath = await _storageService.UploadFileAsync(file.FileName, stream, file.ContentType);
 
-                // 2. Persist
                 var imageId = Guid.NewGuid();
-                await _metadataService.SaveIngestionDataAsync(tenantId, imageId, storagePath, file.ContentType, file.Length, singleRequest);
+                await _metadataService.SaveIngestionDataAsync(imageId, storagePath, file.ContentType, file.Length, singleRequest);
 
-                // 3. Resolve Custom Processing Settings
-                var tenantSettings = await _metadataService.GetThumbnailSettingsAsync(tenantId);
-                var processingOptions = new ProcessingOptions();
-                
-                if (tenantSettings != null && tenantSettings.Specifications != null && tenantSettings.Specifications.Any())
-                {
-                    var spec = tenantSettings.Specifications.First();
-                    processingOptions.ThumbnailWidth = spec.MaxWidth > 0 ? spec.MaxWidth : 512;
-                    processingOptions.ThumbnailHeight = spec.MaxHeight > 0 ? spec.MaxHeight : 512;
-                    processingOptions.ThumbnailFormat = spec.Format.ToString().ToLower();
-                    
-                    if (spec.Options?.WebP != null) processingOptions.ThumbnailQuality = spec.Options.WebP.Quality;
-                }
+                var processingOptions = new ProcessingOptions { ThumbnailWidth = 512, ThumbnailHeight = 512 };
 
-                // 4. Notify
                 if (_kafkaProducer != null)
                 {
-                    var isVideo = file.ContentType.StartsWith("video/");
-                    if (isVideo)
-                    {
-                        processingOptions.GenerateGifPreview = true;
-                    }
-                    await NotifyPipeline(tenantId, imageId, storagePath, singleRequest, processingOptions);
+                    if (file.ContentType.StartsWith("video/")) processingOptions.GenerateGifPreview = true;
+                    await NotifyPipeline(imageId, storagePath, singleRequest, processingOptions);
                 }
 
                 result.Success = true;
@@ -249,10 +201,6 @@ public class IngestionController : ControllerBase
         return Ok(response);
     }
 
-    /// <summary>
-    /// Ad-hoc metadata extraction from unstructured text using AI reasoning.
-    /// Useful for UI previews or background enrichment.
-    /// </summary>
     [HttpPost("extract")]
     public async Task<ActionResult<ExtractedAttributes>> ExtractMetadata([FromBody] ExtractionRequest request)
     {
@@ -265,7 +213,7 @@ public class IngestionController : ControllerBase
 
     public record ExtractionRequest(string Text, string? Category);
 
-    private async Task NotifyPipeline(Guid tenantId, Guid id, string storagePath, UploadImageRequest request, ProcessingOptions processingOptions)
+    private async Task NotifyPipeline(Guid id, string storagePath, UploadImageRequest request, ProcessingOptions processingOptions)
     {
         var contentType = request.File.ContentType;
         var isVideo = contentType.StartsWith("video/");
@@ -281,7 +229,7 @@ public class IngestionController : ControllerBase
                 EventType = EventTypes.VideoUploaded,
                 EventVersion = "1.0",
                 Timestamp = DateTime.UtcNow,
-                TenantId = tenantId.ToString(),
+                TenantId = "SINGLE_TENANT",
                 Data = new VideoUploadedData
                 {
                     VideoId = id,
@@ -303,7 +251,7 @@ public class IngestionController : ControllerBase
                 EventType = EventTypes.ImageUploaded,
                 EventVersion = "1.0",
                 Timestamp = DateTime.UtcNow,
-                TenantId = tenantId.ToString(),
+                TenantId = "SINGLE_TENANT",
                 Data = new ImageUploadedData
                 {
                     ImageId = id,

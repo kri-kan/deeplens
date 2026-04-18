@@ -10,74 +10,55 @@ using Confluent.Kafka;
 
 namespace DeepLens.Infrastructure.Services;
 
-public interface ITenantMetadataService
+/// <summary>
+/// Service for catalog metadata management. Single-tenant version.
+/// </summary>
+public interface IMetadataService
 {
-    Task SaveIngestionDataAsync(Guid tenantId, Guid id, string storagePath, string mimeType, long fileSize, UploadImageRequest request);
-    Task MergeProductsAsync(Guid tenantId, string targetSku, string sourceSku, bool deleteSource);
-    Task SetDefaultMediaAsync(Guid tenantId, Guid id, bool isDefault);
-    Task SetFavoriteListingAsync(Guid tenantId, Guid listingId, bool isFavorite);
-    Task UpdateMediaDimensionsAsync(Guid tenantId, Guid id, int width, int height);
-    Task UpdateMediaStatusAsync(Guid tenantId, Guid id, int status);
-    Task UpdateVideoMetadataAsync(Guid tenantId, Guid id, decimal duration, string? thumbnailPath, string? previewPath);
-    Task<IEnumerable<MediaDto>> ListMediaAsync(Guid tenantId, int page, int pageSize, int? mediaType = null);
-    Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync(Guid tenantId);
+    Task SaveIngestionDataAsync(Guid id, string storagePath, string mimeType, long fileSize, UploadImageRequest request);
+    Task MergeProductsAsync(string targetSku, string sourceSku, bool deleteSource);
+    Task SetDefaultMediaAsync(Guid id, bool isDefault);
+    Task SetFavoriteListingAsync(Guid listingId, bool isFavorite);
+    Task UpdateMediaDimensionsAsync(Guid id, int width, int height);
+    Task UpdateMediaStatusAsync(Guid id, int status);
+    Task UpdateVideoMetadataAsync(Guid id, decimal duration, string? thumbnailPath, string? previewPath);
+    Task<IEnumerable<MediaDto>> ListMediaAsync(int page, int pageSize, int? mediaType = null);
+    Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync();
 }
 
-public class TenantMetadataService : ITenantMetadataService
+public class MetadataService : IMetadataService
 {
     private readonly IConfiguration _configuration;
-    private readonly ILogger<TenantMetadataService> _logger;
+    private readonly ILogger<MetadataService> _logger;
     private readonly IProducer<string, string>? _kafkaProducer;
+    private readonly string _connectionString;
 
-    public TenantMetadataService(IConfiguration configuration, ILogger<TenantMetadataService> logger, IProducer<string, string>? kafkaProducer = null)
+    public MetadataService(IConfiguration configuration, ILogger<MetadataService> logger, IProducer<string, string>? kafkaProducer = null)
     {
         _configuration = configuration;
         _logger = logger;
         _kafkaProducer = kafkaProducer;
+        _connectionString = _configuration.GetConnectionString("DefaultConnection") 
+                         ?? throw new InvalidOperationException("DefaultConnection string not found");
     }
 
-    private string GetTenantConnectionString(Guid tenantId)
+    private IDbConnection GetConnection()
     {
-        var baseConnString = _configuration.GetConnectionString("DefaultConnection") 
-            ?? "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$";
-        
-        var builder = new NpgsqlConnectionStringBuilder(baseConnString);
-        
-        if (tenantId == Guid.Parse("2abbd721-873e-4bf0-9cb2-c93c6894c584") || tenantId == Guid.Parse("d715a589-7b3e-4e1f-82ce-0d426b0806dd")) // Vayyari ID
-        {
-            builder.Database = "tenant_vayyari_metadata";
-        }
-        else
-        {
-            builder.Database = $"tenant_{tenantId:N}_metadata";
-        }
-        
-        return builder.ConnectionString;
+        return new NpgsqlConnection(_connectionString);
     }
 
-    private IDbConnection GetConnection(Guid tenantId)
+    public async Task SaveIngestionDataAsync(Guid id, string storagePath, string contentType, long fileSize, UploadImageRequest request)
     {
-        return new NpgsqlConnection(GetTenantConnectionString(tenantId));
-    }
-
-    public async Task SaveIngestionDataAsync(Guid tenantId, Guid id, string storagePath, string contentType, long fileSize, UploadImageRequest request)
-    {
-        using var connection = GetConnection(tenantId);
+        using var connection = GetConnection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
 
         try
         {
-            // 1. Resolve Seller
             var sellerId = await GetOrCreateSeller(connection, request.SellerId, transaction);
-
-            // 2. Get or Create Product (Master SKU)
             var productId = await GetOrCreateProduct(connection, request, transaction);
-
-            // 3. Get or Create Variant (Sub-SKU)
             var variantId = await GetOrCreateVariant(connection, productId, request, transaction);
 
-            // 4. Save Media Record
             var mediaType = contentType.StartsWith("video/") ? 2 : 1;
             const string mediaSql = @"
                 INSERT INTO media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, phash, quality_score, status)
@@ -91,11 +72,10 @@ public class TenantMetadataService : ITenantMetadataService
                 OriginalFilename = request.File.FileName,
                 FileSize = fileSize,
                 MimeType = contentType,
-                PHash = (string?)null, // To be filled by async pipeline
+                PHash = (string?)null,
                 Quality = (decimal?)null
             }, transaction);
 
-            // 5. Save/Update Seller Listing & Price History
             await UpsertSellerListing(connection, variantId, sellerId, request, transaction);
 
             transaction.Commit();
@@ -103,26 +83,26 @@ public class TenantMetadataService : ITenantMetadataService
         catch (Exception ex)
         {
             transaction.Rollback();
-            _logger.LogError(ex, "Failed to save ingestion metadata for tenant {TenantId}", tenantId);
+            _logger.LogError(ex, "Failed to save ingestion metadata");
             throw;
         }
     }
 
-    public async Task SetFavoriteListingAsync(Guid tenantId, Guid listingId, bool isFavorite)
+    public async Task SetFavoriteListingAsync(Guid listingId, bool isFavorite)
     {
-        using var db = GetConnection(tenantId);
+        using var db = GetConnection();
         await db.ExecuteAsync("UPDATE seller_listings SET is_favorite = @IsFavorite WHERE id = @Id", new { IsFavorite = isFavorite, Id = listingId });
     }
 
-    public async Task SetDefaultMediaAsync(Guid tenantId, Guid id, bool isDefault)
+    public async Task SetDefaultMediaAsync(Guid id, bool isDefault)
     {
-        using var db = GetConnection(tenantId);
+        using var db = GetConnection();
         await db.ExecuteAsync("UPDATE media SET is_default = @IsDefault WHERE id = @Id", new { IsDefault = isDefault, Id = id });
     }
 
-    public async Task MergeProductsAsync(Guid tenantId, string targetSku, string sourceSku, bool deleteSource)
+    public async Task MergeProductsAsync(string targetSku, string sourceSku, bool deleteSource)
     {
-        using var db = GetConnection(tenantId);
+        using var db = GetConnection();
         db.Open();
         using var trans = db.BeginTransaction();
 
@@ -137,7 +117,6 @@ public class TenantMetadataService : ITenantMetadataService
             if (target.Id == default || source.Id == default)
                 throw new InvalidOperationException("SKU not found");
 
-            // 1. Unified Attributes (Union of tags)
             var consolidatedTags = (target.Tags ?? Array.Empty<string>())
                 .Union(source.Tags ?? Array.Empty<string>())
                 .Distinct()
@@ -146,14 +125,12 @@ public class TenantMetadataService : ITenantMetadataService
             await db.ExecuteAsync("UPDATE products SET tags = @Tags WHERE id = @Id", 
                 new { Tags = consolidatedTags, Id = target.Id }, trans);
 
-            // 2. Harmonize Variants
             var sourceVariants = await db.QueryAsync<(Guid Id, string Color, string Fabric, string Stitch, string Work)>(
                 "SELECT id, color, fabric, stitch_type, work_heaviness FROM product_variants WHERE product_id = @Id", 
                 new { Id = source.Id }, trans);
 
             foreach (var sVar in sourceVariants)
             {
-                // Find if target already has this color/fabric combo
                 var targetVarId = await db.QuerySingleOrDefaultAsync<Guid?>(@"
                     SELECT id FROM product_variants 
                     WHERE product_id = @TargetId 
@@ -163,26 +140,19 @@ public class TenantMetadataService : ITenantMetadataService
 
                 if (targetVarId.HasValue)
                 {
-                    // Merge Listings from Source Variant to Target Variant
                     await MergeListings(db, sVar.Id, targetVarId.Value, trans);
-                    
-                    // Move Images
                     await db.ExecuteAsync("UPDATE media SET variant_id = @TargetVarId WHERE variant_id = @SourceVarId", 
                         new { TargetVarId = targetVarId.Value, SourceVarId = sVar.Id }, trans);
-                    
-                    // Cleanup orphaned source variant
                     await db.ExecuteAsync("DELETE FROM product_variants WHERE id = @Id", new { Id = sVar.Id }, trans);
                 }
                 else
                 {
-                    // No match, just move the variant to the new product
                     await db.ExecuteAsync("UPDATE product_variants SET product_id = @TargetId WHERE id = @VarId", 
                         new { TargetId = target.Id, VarId = sVar.Id }, trans);
                 }
             }
 
-            // 3. Deduction & Cleanup Flow for redundant images
-            await DeduplicateImages(db, target.Id, tenantId, trans);
+            await DeduplicateImages(db, target.Id, trans);
 
             if (deleteSource)
                 await db.ExecuteAsync("DELETE FROM products WHERE id = @Id", new { Id = source.Id }, trans);
@@ -205,35 +175,27 @@ public class TenantMetadataService : ITenantMetadataService
 
         foreach (var sl in sourceListings)
         {
-            // Check if seller already has a listing on target variant
             var existingListingId = await db.QuerySingleOrDefaultAsync<Guid?>(
                 "SELECT id FROM seller_listings WHERE variant_id = @VarId AND seller_id = @SellerId", 
                 new { VarId = targetVarId, SellerId = (Guid)sl.seller_id }, trans);
 
             if (existingListingId.HasValue)
             {
-                // Move old price to history if it changed
                 await ArchivePriceIfChanged(db, existingListingId.Value, (decimal)sl.current_price, (string)sl.currency, trans);
-                
-                // Update existing listing with potentially newer description
                 await db.ExecuteAsync("UPDATE seller_listings SET current_price = @Price, description = @Desc, updated_at = NOW() WHERE id = @Id",
                     new { Price = (decimal)sl.current_price, Desc = (string)sl.description, Id = existingListingId.Value }, trans);
-                
-                // Delete the moving listing
                 await db.ExecuteAsync("DELETE FROM seller_listings WHERE id = @Id", new { Id = (Guid)sl.id }, trans);
             }
             else
             {
-                // Just move it
                 await db.ExecuteAsync("UPDATE seller_listings SET variant_id = @TargetId WHERE id = @Id",
                     new { TargetId = targetVarId, Id = (Guid)sl.id }, trans);
             }
         }
     }
 
-    private async Task DeduplicateImages(IDbConnection db, Guid productId, Guid tenantId, IDbTransaction trans)
+    private async Task DeduplicateImages(IDbConnection db, Guid productId, IDbTransaction trans)
     {
-        // Identify duplicates by phash within variants of this product
         var duplicates = await db.QueryAsync<(Guid Id, string Path)>(@"
             WITH RankedImages AS (
                 SELECT id, storage_path, 
@@ -246,15 +208,11 @@ public class TenantMetadataService : ITenantMetadataService
 
         foreach (var dup in duplicates)
         {
-            // 1. Mark for deletion in DB
             await db.ExecuteAsync("UPDATE media SET status = 98 WHERE id = @Id", new { Id = dup.Id }, trans);
-
-            // 2. Add to reliable Deletion Queue
             await db.ExecuteAsync(@"
                 INSERT INTO media_deletion_queue (media_id, storage_path) 
                 VALUES (@Id, @Path)", new { Id = dup.Id, Path = dup.Path }, trans);
 
-            // 3. Emit Kafka event for async cleanup
             if (_kafkaProducer != null)
             {
                 var evt = new ImageDeletionRequestedEvent
@@ -263,7 +221,7 @@ public class TenantMetadataService : ITenantMetadataService
                     EventType = EventTypes.ImageDeletionRequested,
                     EventVersion = "1.0",
                     Timestamp = DateTime.UtcNow,
-                    TenantId = tenantId.ToString(),
+                    TenantId = "SINGLE_TENANT",
                     Data = new ImageDeletionData {
                         ImageId = dup.Id,
                         StoragePath = dup.Path,
@@ -302,7 +260,6 @@ public class TenantMetadataService : ITenantMetadataService
             
             if (existingId.HasValue) 
             {
-                // Update tags union
                 if (request.Tags?.Any() == true)
                 {
                     await db.ExecuteAsync("UPDATE products SET tags = Array_Cat(tags, @NewTags) WHERE id = @Id", 
@@ -414,9 +371,9 @@ public class TenantMetadataService : ITenantMetadataService
         }
     }
 
-    public async Task<IEnumerable<MediaDto>> ListMediaAsync(Guid tenantId, int page, int pageSize, int? mediaType = null)
+    public async Task<IEnumerable<MediaDto>> ListMediaAsync(int page, int pageSize, int? mediaType = null)
     {
-        using var connection = GetConnection(tenantId);
+        using var connection = GetConnection();
         string typeFilter = mediaType.HasValue ? "AND i.media_type = @MediaType" : "";
         string sql = @$"
             SELECT i.id, i.storage_path as StoragePath, i.media_type as MediaType, i.status, 
@@ -439,29 +396,29 @@ public class TenantMetadataService : ITenantMetadataService
         });
     }
 
-    public async Task UpdateMediaDimensionsAsync(Guid tenantId, Guid id, int width, int height)
+    public async Task UpdateMediaDimensionsAsync(Guid id, int width, int height)
     {
-        using var connection = GetConnection(tenantId);
+        using var connection = GetConnection();
         const string sql = "UPDATE media SET width = @Width, height = @Height WHERE id = @Id";
         await connection.ExecuteAsync(sql, new { Id = id, Width = width, Height = height });
     }
 
-    public async Task UpdateMediaStatusAsync(Guid tenantId, Guid id, int status)
+    public async Task UpdateMediaStatusAsync(Guid id, int status)
     {
-        using var connection = GetConnection(tenantId);
+        using var connection = GetConnection();
         const string sql = "UPDATE media SET status = @Status WHERE id = @Id";
         await connection.ExecuteAsync(sql, new { Id = id, Status = status });
     }
 
-    public async Task UpdateVideoMetadataAsync(Guid tenantId, Guid id, decimal duration, string? thumbnailPath, string? previewPath)
+    public async Task UpdateVideoMetadataAsync(Guid id, decimal duration, string? thumbnailPath, string? previewPath)
     {
-        using var connection = GetConnection(tenantId);
+        using var connection = GetConnection();
         const string sql = @"
             UPDATE media 
             SET duration_seconds = @Duration, 
                 thumbnail_path = @ThumbPath, 
                 preview_path = @PreviewPath,
-                status = 1 -- Mark as processed
+                status = 1 
             WHERE id = @Id";
         await connection.ExecuteAsync(sql, new { 
             Id = id, 
@@ -471,36 +428,9 @@ public class TenantMetadataService : ITenantMetadataService
         });
     }
 
-    public async Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync(Guid tenantId)
+    public async Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync()
     {
-        try
-        {
-            var baseConnString = _configuration.GetConnectionString("DefaultConnection") 
-                ?? "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$";
-            
-            var builder = new NpgsqlConnectionStringBuilder(baseConnString);
-            builder.Database = "nextgen_identity"; // Query the registry/identity DB
-            
-            using var connection = new NpgsqlConnection(builder.ConnectionString);
-            var settingsJson = await connection.QuerySingleOrDefaultAsync<string>(
-                "SELECT settings FROM tenants WHERE id = @Id", new { Id = tenantId });
-            
-            if (string.IsNullOrEmpty(settingsJson)) return null;
-            
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var settings = JsonSerializer.Deserialize<Dictionary<string, object>>(settingsJson, options);
-            
-            if (settings != null && settings.TryGetValue("thumbnails", out var thumbObj))
-            {
-                return JsonSerializer.Deserialize<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto>(thumbObj.ToString()!, options);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to fetch custom settings for tenant {TenantId}. Falling back to defaults.", tenantId);
-        }
-        
-        return null;
+        return null; // Simplified for single tenant
     }
 }
 
@@ -508,7 +438,7 @@ public class MediaDto
 {
     public Guid Id { get; set; }
     public required string StoragePath { get; set; }
-    public int MediaType { get; set; } // 1=Image, 2=Video
+    public int MediaType { get; set; }
     public int Status { get; set; }
     public int? Width { get; set; }
     public int? Height { get; set; }

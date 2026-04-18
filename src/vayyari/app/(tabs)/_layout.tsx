@@ -19,10 +19,10 @@ export default function TabLayout() {
         }} 
       />
       <Tabs.Screen 
-        name="scan" 
+        name="utility" 
         options={{ 
-          title: 'Scan',
-          tabBarIcon: () => 'camera-outline'
+          title: 'Utility',
+          tabBarIcon: () => 'tools'
         }} 
       />
       <Tabs.Screen 

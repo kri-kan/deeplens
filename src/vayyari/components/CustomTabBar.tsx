@@ -75,6 +75,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                     marginTop: 4,
                     fontWeight: isFocused ? 'bold' : 'normal'
                   }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {label as string}
                 </Text>

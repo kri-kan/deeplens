@@ -33,6 +33,7 @@ export default function ProductScreen() {
       <Appbar.Header>
         <Appbar.BackAction onPress={() => router.back()} />
         <Appbar.Content title={`Product Details`} />
+        <Appbar.Action icon="cog" onPress={() => router.push('/modal')} />
       </Appbar.Header>
       
       <View style={styles.content}>

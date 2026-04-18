@@ -159,7 +159,6 @@ Last Updated: December 20, 2025
 | :----------------- | :--------------------- | :------------------- | :------------------ |
 | **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432`|
 | **Identity Admin** | `admin@deeplens.local` | `Krikank1$` | Initial Admin       |
-| **Vayyari Admin**  | `admin@vayyari.local`  | `Krikank1$` | Vayyari Admin       |
 | **MinIO**          | `krikan`               | `Krikank1$`          | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
 | **Kafka UI**       | -                      | -                    | `192.168.0.170:8080`|
@@ -549,55 +548,38 @@ Every critical operation is wrapped in an `Activity`. Traces flow from the `ApiG
 
 All database names across the DeepLens project now follow a **lowercase with underscores** naming convention.
 
-### Database Names
+### Primary Databases
 
-| Database                   | Purpose                        |     Status     |
-| :------------------------- | :----------------------------- | :------------: |
-| `whatsapp_vayyari_data`    | WhatsApp message and chat data | ✅ Standardized |
-| `tenant_vayyari_metadata`  | Tenant metadata and media info | ✅ Standardized |
-| `nextgen_identity`         | Identity and authentication    | ✅ Standardized |
-| `tenant_metadata_template` | Template for new tenants       | ✅ Standardized |
-| `deeplens_platform`        | Platform-wide data             | ✅ Standardized |
-
-### Environment Variable Names
-
-**Preferred (lowercase with underscores):**
-
-*(Code block omitted for brevity)*
-
+| Database            | Purpose                        | Status     |
+| :------------------ | :----------------------------- | :--------- |
+| `deeplens_platform` | Core application and media data | ✅ Unified  |
+| `nextgen_identity`  | Identity and authentication    | ✅ Unified  |
+| `whatsapp_data`     | WhatsApp message and chat data | ✅ Unified  |
 
 ## 🔍 Verification
 
 ### Check Current Database Names
 
-*(Code block omitted for brevity)*
-
-
 Expected output should show:
-- `tenant_vayyari_metadata`
-- `whatsapp_vayyari_data`
+- `deeplens_platform`
+- `nextgen_identity`
+- `whatsapp_data`
 
 ### Verify Connection Strings
 
 **WhatsApp Processor:**
-
-*(Code block omitted for brevity)*
-
-
-Should show lowercase variable names.
+Check `.env` for:
+- `deeplens_connection_string`
+- `whatsapp_wa_db_connection_string`
 
 ## 📝 Updated Files
 
 ### Configuration Files
-- ✅ `src/whatsapp-processor/.env.example` - Uses lowercase env vars
-- ✅ `src/whatsapp-processor/src/config/index.ts` - Supports both cases with warnings
-
-### Deployment Scripts
-- ✅ `deploy-whatsapp-vayyari.ps1` - Uses `tenant_vayyari_metadata`
-- ✅ `deploy-debug.ps1` - Uses `tenant_vayyari_metadata`
+- ✅ `src/whatsapp-processor/.env.example` - Uses unified env vars
 
 ### Infrastructure Scripts
-- ✅ `infrastructure/setup-deeplens-dev.ps1` - Entry point for DB initialization (Remote)
+- ✅ `infrastructure/setup-deeplens-dev.ps1` - Entry point for DB initialization
+- ✅ `infrastructure/validate-environment.ps1` - Checks unified databases
 - ✅ `infrastructure/scripts/lifecycle/init-bootstrap-data.ps1` - Core initialization logic
 
 ### Documentation

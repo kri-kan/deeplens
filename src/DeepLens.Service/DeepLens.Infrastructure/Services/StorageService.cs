@@ -4,18 +4,22 @@ using Microsoft.Extensions.Logging;
 
 namespace DeepLens.Infrastructure.Services;
 
+/// <summary>
+/// Service for storage management (MinIO). Single-tenant version.
+/// </summary>
 public interface IStorageService
 {
-    Task<string> UploadFileAsync(Guid tenantId, string fileName, Stream data, string contentType);
-    Task<string> UploadThumbnailAsync(Guid tenantId, string storagePath, Stream data, string contentType);
-    Task<Stream> GetFileAsync(Guid tenantId, string storagePath);
-    Task DeleteFileAsync(Guid tenantId, string storagePath);
+    Task<string> UploadFileAsync(string fileName, Stream data, string contentType);
+    Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType);
+    Task<Stream> GetFileAsync(string storagePath);
+    Task DeleteFileAsync(string storagePath);
 }
 
 public class MinioStorageService : IStorageService
 {
     private readonly IMinioClient _minioClient;
     private readonly ILogger<MinioStorageService> _logger;
+    private const string DefaultBucket = "deeplens-storage";
 
     public MinioStorageService(IMinioClient minioClient, ILogger<MinioStorageService> logger)
     {
@@ -23,24 +27,26 @@ public class MinioStorageService : IStorageService
         _logger = logger;
     }
 
-    public async Task<string> UploadFileAsync(Guid tenantId, string fileName, Stream data, string contentType)
+    private async Task EnsureBucketExistsAsync()
     {
-        // One bucket per tenant - ensure it exists
-        var bucketName = $"tenant-{tenantId}".ToLower();
-        
-        var beArgs = new BucketExistsArgs().WithBucket(bucketName);
+        var beArgs = new BucketExistsArgs().WithBucket(DefaultBucket);
         bool found = await _minioClient.BucketExistsAsync(beArgs);
         if (!found)
         {
-            var mbArgs = new MakeBucketArgs().WithBucket(bucketName);
+            var mbArgs = new MakeBucketArgs().WithBucket(DefaultBucket);
             await _minioClient.MakeBucketAsync(mbArgs);
         }
+    }
+
+    public async Task<string> UploadFileAsync(string fileName, Stream data, string contentType)
+    {
+        await EnsureBucketExistsAsync();
 
         // Generate unique path
         var path = $"raw/{DateTime.UtcNow:yyyy/MM/dd}/{Guid.NewGuid()}_{fileName}";
 
         var putArgs = new PutObjectArgs()
-            .WithBucket(bucketName)
+            .WithBucket(DefaultBucket)
             .WithObject(path)
             .WithStreamData(data)
             .WithObjectSize(data.Length)
@@ -48,52 +54,41 @@ public class MinioStorageService : IStorageService
 
         await _minioClient.PutObjectAsync(putArgs);
         
-        _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", bucketName, path);
+        _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", DefaultBucket, path);
         
-        return $"{bucketName}/{path}";
+        return $"{DefaultBucket}/{path}";
     }
 
-    public async Task<string> UploadThumbnailAsync(Guid tenantId, string storagePath, Stream data, string contentType)
+    public async Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType)
     {
-        var bucketName = $"tenant-{tenantId}".ToLower();
+        await EnsureBucketExistsAsync();
 
         var putArgs = new PutObjectArgs()
-            .WithBucket(bucketName)
+            .WithBucket(DefaultBucket)
             .WithObject(storagePath)
             .WithStreamData(data)
             .WithObjectSize(data.Length)
             .WithContentType(contentType);
 
         await _minioClient.PutObjectAsync(putArgs);
-        return $"{bucketName}/{storagePath}";
+        return $"{DefaultBucket}/{storagePath}";
     }
 
-    public async Task<Stream> GetFileAsync(Guid tenantId, string storagePath)
+    public async Task<Stream> GetFileAsync(string storagePath)
     {
         string bucketName;
         string objectName;
         
-        // Check if storagePath includes bucket prefix (e.g., "tenant-xxx/raw/...")
-        // or is just the object path (e.g., "thumbnails/...")
+        // Handle paths that might or might not include the bucket prefix
         var parts = storagePath.Split('/', 2);
-        if (parts.Length > 1 && parts[0].StartsWith("tenant-"))
+        if (parts.Length > 1 && (parts[0] == DefaultBucket || parts[0].StartsWith("tenant-")))
         {
-            // Path includes bucket prefix
             bucketName = parts[0];
             objectName = parts[1];
         }
         else
         {
-            // Path is just the object name, prepend tenant bucket
-            // Special case: Map dynamically generated Vayyari tenant ID to the test bucket
-            if (tenantId == Guid.Parse("d715a589-7b3e-4e1f-82ce-0d426b0806dd"))
-            {
-                bucketName = "tenant-2abbd721-873e-4bf0-9cb2-c93c6894c584";
-            }
-            else
-            {
-                bucketName = $"tenant-{tenantId}".ToLower();
-            }
+            bucketName = DefaultBucket;
             objectName = storagePath;
         }
 
@@ -108,14 +103,22 @@ public class MinioStorageService : IStorageService
         return memoryStream;
     }
 
-    public async Task DeleteFileAsync(Guid tenantId, string storagePath)
+    public async Task DeleteFileAsync(string storagePath)
     {
-        // storagePath format is "tenant-xxx/path/to/file"
         var parts = storagePath.Split('/', 2);
-        if (parts.Length < 2) return;
+        string bucketName;
+        string objectName;
 
-        var bucketName = parts[0];
-        var objectName = parts[1];
+        if (parts.Length < 2)
+        {
+            bucketName = DefaultBucket;
+            objectName = storagePath;
+        }
+        else
+        {
+            bucketName = parts[0];
+            objectName = parts[1];
+        }
 
         var rmArgs = new RemoveObjectArgs()
             .WithBucket(bucketName)

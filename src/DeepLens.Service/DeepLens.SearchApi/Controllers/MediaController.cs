@@ -8,18 +8,21 @@ using SixLabors.ImageSharp.Processing;
 
 namespace DeepLens.SearchApi.Controllers;
 
+/// <summary>
+/// Controller for serving media content (images, thumbnails, video previews).
+/// Single-tenant version.
+/// </summary>
 [ApiController]
 [Route("api/v1/catalog/media")]
-[Authorize(Policy = "SearchPolicy")]
 public class MediaController : ControllerBase
 {
-    private readonly ITenantMetadataService _metadataService;
+    private readonly IMetadataService _metadataService;
     private readonly IStorageService _storageService;
     private readonly IDistributedCache _cache;
     private readonly ILogger<MediaController> _logger;
 
     public MediaController(
-        ITenantMetadataService metadataService, 
+        IMetadataService metadataService, 
         IStorageService storageService,
         IDistributedCache cache,
         ILogger<MediaController> logger)
@@ -31,33 +34,22 @@ public class MediaController : ControllerBase
     }
 
     /// <summary>
-    /// Lists media for the tenant with pagination and filtering.
+    /// Lists media with pagination and filtering.
     /// </summary>
     [HttpGet]
-    [AllowAnonymous]
-    public async Task<ActionResult<IEnumerable<MediaDto>>> ListMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] string? tenant = null, [FromQuery] int? type = null)
+    public async Task<ActionResult<IEnumerable<MediaDto>>> ListMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] int? type = null)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid tenant_id" });
-        }
-
-        var media = await _metadataService.ListMediaAsync(tenantId, page, pageSize, type);
+        var media = await _metadataService.ListMediaAsync(page, pageSize, type);
         return Ok(media);
     }
 
     /// <summary>
-    /// Serves a thumbnail for the given media (Image poster or Video poster frame).
+    /// Serves a thumbnail for the given media.
     /// </summary>
     [HttpGet("{mediaId}/thumbnail")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetThumbnail(Guid mediaId, [FromQuery] string tenant)
+    public async Task<IActionResult> GetThumbnail(Guid mediaId)
     {
-        if (!Guid.TryParse(tenant, out var tenantId))
-            return BadRequest("Invalid tenant ID");
-
-        string cacheKey = $"thumb:{tenantId}:{mediaId}";
+        string cacheKey = $"thumb:{mediaId}";
         byte[]? cachedThumb = await _cache.GetAsync(cacheKey);
         
         if (cachedThumb != null)
@@ -67,15 +59,13 @@ public class MediaController : ControllerBase
 
         try
         {
-            // Try to find the media record
-            var items = await _metadataService.ListMediaAsync(tenantId, 1, 1000); 
+            var items = await _metadataService.ListMediaAsync(1, 1000); 
             var item = items.FirstOrDefault(i => i.Id == mediaId);
             
             if (item == null) return NotFound();
 
             string? thumbPath = item.ThumbnailPath;
             
-            // Fallback for images if ThumbnailPath is not set (legacy or auto-generation logic)
             if (string.IsNullOrEmpty(thumbPath) && item.MediaType == 1)
             {
                 thumbPath = item.StoragePath.Replace("raw/", "thumbnails/");
@@ -91,7 +81,7 @@ public class MediaController : ControllerBase
 
             try
             {
-                using var thumbStream = await _storageService.GetFileAsync(tenantId, thumbPath);
+                using var thumbStream = await _storageService.GetFileAsync(thumbPath);
                 using var ms = new MemoryStream();
                 await thumbStream.CopyToAsync(ms);
                 byte[] data = ms.ToArray();
@@ -104,21 +94,14 @@ public class MediaController : ControllerBase
             }
             catch
             {
-                // If it's an image and thumbnail missing, create on demand
                 if (item.MediaType == 1)
                 {
                     _logger.LogInformation("Thumbnail not found for Image {ImageId}, creating on-demand", mediaId);
                     
-                    using var rawStream = await _storageService.GetFileAsync(tenantId, item.StoragePath);
+                    using var rawStream = await _storageService.GetFileAsync(item.StoragePath);
                     using var imageObj = await Image.LoadAsync(rawStream);
                     
-                    var tenantSettings = await _metadataService.GetThumbnailSettingsAsync(tenantId);
                     int width = 512, height = 512;
-                    if (tenantSettings != null && tenantSettings.Specifications.Any())
-                    {
-                        width = tenantSettings.Specifications.First().MaxWidth;
-                        height = tenantSettings.Specifications.First().MaxHeight;
-                    }
 
                     imageObj.Mutate(x => x.Resize(new ResizeOptions {
                         Size = new Size(width, height),
@@ -150,13 +133,9 @@ public class MediaController : ControllerBase
     /// Serves a short GIF preview for video media.
     /// </summary>
     [HttpGet("{mediaId}/preview")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetPreview(Guid mediaId, [FromQuery] string tenant)
+    public async Task<IActionResult> GetPreview(Guid mediaId)
     {
-        if (!Guid.TryParse(tenant, out var tenantId))
-            return BadRequest("Invalid tenant ID");
-
-        string cacheKey = $"preview:{tenantId}:{mediaId}";
+        string cacheKey = $"preview:{mediaId}";
         byte[]? cachedPreview = await _cache.GetAsync(cacheKey);
         
         if (cachedPreview != null)
@@ -166,18 +145,17 @@ public class MediaController : ControllerBase
 
         try
         {
-            var items = await _metadataService.ListMediaAsync(tenantId, 1, 1000); 
+            var items = await _metadataService.ListMediaAsync(1, 1000); 
             var item = items.FirstOrDefault(i => i.Id == mediaId);
             
             if (item == null || item.MediaType != 2) return NotFound("Video media not found.");
             if (string.IsNullOrEmpty(item.PreviewPath)) return NotFound("Preview GIF not yet generated.");
 
-            using var previewStream = await _storageService.GetFileAsync(tenantId, item.PreviewPath);
+            using var previewStream = await _storageService.GetFileAsync(item.PreviewPath);
             using var ms = new MemoryStream();
             await previewStream.CopyToAsync(ms);
             byte[] data = ms.ToArray();
             
-            // Cache in Redis for quick access
             await _cache.SetAsync(cacheKey, data, new DistributedCacheEntryOptions {
                 AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
             });
@@ -193,29 +171,20 @@ public class MediaController : ControllerBase
 
     /// <summary>
     /// Serves the original high-quality media file.
-    /// Supports range requests for video streaming.
     /// </summary>
     [HttpGet("{mediaId}/raw")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetRawMedia(Guid mediaId, [FromQuery] string tenant)
+    public async Task<IActionResult> GetRawMedia(Guid mediaId)
     {
-        if (!Guid.TryParse(tenant, out var tenantId))
-            return BadRequest("Invalid tenant ID");
-
         try
         {
-            // We use ListMediaAsync to find the record (it's fast enough with 1000 items, 
-            // but ideally we'd have a GetMediaById method)
-            var items = await _metadataService.ListMediaAsync(tenantId, 1, 1000); 
+            var items = await _metadataService.ListMediaAsync(1, 1000); 
             var item = items.FirstOrDefault(i => i.Id == mediaId);
             
             if (item == null) return NotFound();
 
-            var stream = await _storageService.GetFileAsync(tenantId, item.StoragePath);
-            
+            var stream = await _storageService.GetFileAsync(item.StoragePath);
             string contentType = item.MimeType ?? (item.MediaType == 1 ? "image/jpeg" : "video/mp4");
             
-            // enableRangeProcessing: true is CRITICAL for video seeking/streaming
             return File(stream, contentType, enableRangeProcessing: true);
         }
         catch (Exception ex)

@@ -1,0 +1,80 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using DeepLens.SearchApi.Services;
+
+namespace DeepLens.SearchApi.Controllers;
+
+/// <summary>
+/// API to generate custom IDs for orders and products.
+/// Single-tenant version.
+/// </summary>
+[ApiController]
+[Route("api/v1/orderid")]
+public class OrderIdController : ControllerBase
+{
+    private readonly IIdGeneratorService _idGenerator;
+    private readonly ILogger<OrderIdController> _logger;
+
+    public OrderIdController(IIdGeneratorService idGenerator, ILogger<OrderIdController> logger)
+    {
+        _idGenerator = idGenerator;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Gets the most recent order IDs from the database.
+    /// </summary>
+    [HttpGet("history")]
+    public async Task<IActionResult> GetRecentOrders([FromQuery] int limit = 20)
+    {
+        var history = await _idGenerator.GetRecentOrderHistoryAsync(limit);
+        return Ok(history);
+    }
+
+    /// <summary>
+    /// Generates a new unique Order ID.
+    /// </summary>
+    [HttpPost("order")]
+    public async Task<IActionResult> GenerateOrderId([FromQuery] string? source, [FromQuery] string? paymentMode)
+    {
+        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode);
+        return Ok(new { orderId });
+    }
+
+    /// <summary>
+    /// Generates a new unique Order ID and a set of item sub-IDs.
+    /// </summary>
+    [HttpPost("orderwithitems")]
+    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] string? source = null, [FromQuery] string? paymentMode = null)
+    {
+        if (itemCount < 1 || itemCount > 100)
+            return BadRequest(new { message = "Item count must be between 1 and 100" });
+
+        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode);
+
+        return Ok(new { orderId, itemIds });
+    }
+
+    /// <summary>
+    /// Generates a new unique Product ID.
+    /// </summary>
+    [HttpPost("product")]
+    public async Task<IActionResult> GenerateProductId()
+    {
+        var productId = await _idGenerator.GenerateProductIdAsync();
+        return Ok(new { productId });
+    }
+
+    /// <summary>
+    /// Generates a sub-ID for an existing Order ID.
+    /// </summary>
+    [HttpGet("order-item")]
+    public IActionResult GenerateOrderItemId([FromQuery] string orderId, [FromQuery] int itemIndex)
+    {
+        if (string.IsNullOrWhiteSpace(orderId)) return BadRequest(new { message = "OrderId is required" });
+        if (itemIndex < 1) return BadRequest(new { message = "Item index must be >= 1" });
+
+        var itemId = _idGenerator.GenerateOrderItemId(orderId, itemIndex);
+        return Ok(new { itemId });
+    }
+}

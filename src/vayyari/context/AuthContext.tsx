@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { identityService } from '../services/deepLens/identity.service';
+import { identityService } from '../services/identity.service';
 import { AuthState, UserProfile } from '../types/auth';
 import { wrapInSpan } from '../utils/telemetry';
 

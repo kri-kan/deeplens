@@ -6,19 +6,19 @@ using DeepLens.SearchApi.Services;
 namespace DeepLens.SearchApi.Controllers;
 
 /// <summary>
-/// Manages Vendors/manufacturers for product catalog
+/// Manages Vendors/manufacturers for product catalog.
+/// Single-tenant version.
 /// </summary>
 [ApiController]
 [Route("api/v1/Vendors")]
-[Authorize(Policy = "SearchPolicy")]
 public class VendorsController : ControllerBase
 {
-    private readonly IVendorService _VendorService;
+    private readonly IVendorService _vendorService;
     private readonly ILogger<VendorsController> _logger;
 
-    public VendorsController(IVendorService VendorService, ILogger<VendorsController> logger)
+    public VendorsController(IVendorService vendorService, ILogger<VendorsController> logger)
     {
-        _VendorService = VendorService;
+        _vendorService = vendorService;
         _logger = logger;
     }
 
@@ -26,23 +26,16 @@ public class VendorsController : ControllerBase
     /// Create a new Vendor/manufacturer
     /// </summary>
     [HttpPost]
-    [AllowAnonymous]
-    public async Task<ActionResult<VendorResponse>> CreateVendor([FromBody] CreateVendorRequest request, [FromQuery] string? tenant = null)
+    public async Task<ActionResult<VendorResponse>> CreateVendor([FromBody] CreateVendorRequest request)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
         try
         {
-            var Vendor = await _VendorService.CreateVendorAsync(tenantId, request);
-            return CreatedAtAction(nameof(GetVendor), new { VendorId = Vendor.Id, tenant = tenantId }, Vendor);
+            var vendor = await _vendorService.CreateVendorAsync(request);
+            return CreatedAtAction(nameof(GetVendor), new { vendorId = vendor.Id }, vendor);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create Vendor for tenant {TenantId}", tenantId);
+            _logger.LogError(ex, "Failed to create Vendor");
             return StatusCode(500, new { message = "Failed to create Vendor", error = ex.Message });
         }
     }
@@ -50,64 +43,41 @@ public class VendorsController : ControllerBase
     /// <summary>
     /// Get a Vendor by ID
     /// </summary>
-    [HttpGet("{VendorId}")]
-    [AllowAnonymous]
-    public async Task<ActionResult<VendorResponse>> GetVendor(Guid VendorId, [FromQuery] string? tenant = null)
+    [HttpGet("{vendorId}")]
+    public async Task<ActionResult<VendorResponse>> GetVendor(Guid vendorId)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
-        var Vendor = await _VendorService.GetVendorByIdAsync(tenantId, VendorId);
-        if (Vendor == null)
+        var vendor = await _vendorService.GetVendorByIdAsync(vendorId);
+        if (vendor == null)
             return NotFound(new { message = "Vendor not found" });
 
-        return Ok(Vendor);
+        return Ok(vendor);
     }
 
     /// <summary>
     /// List all Vendors with pagination
     /// </summary>
     [HttpGet]
-    [AllowAnonymous]
     public async Task<ActionResult<VendorListResponse>> ListVendors(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
-        [FromQuery] bool? activeOnly = null,
-        [FromQuery] string? tenant = null)
+        [FromQuery] bool? activeOnly = null)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
-        var result = await _VendorService.ListVendorsAsync(tenantId, page, pageSize, activeOnly);
+        var result = await _vendorService.ListVendorsAsync(page, pageSize, activeOnly);
         return Ok(result);
     }
 
     /// <summary>
     /// Update an existing Vendor
     /// </summary>
-    [HttpPatch("{VendorId}")]
-    [AllowAnonymous]
+    [HttpPatch("{vendorId}")]
     public async Task<ActionResult<VendorResponse>> UpdateVendor(
-        Guid VendorId,
-        [FromBody] UpdateVendorRequest request,
-        [FromQuery] string? tenant = null)
+        Guid vendorId,
+        [FromBody] UpdateVendorRequest request)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
         try
         {
-            var Vendor = await _VendorService.UpdateVendorAsync(tenantId, VendorId, request);
-            return Ok(Vendor);
+            var vendor = await _vendorService.UpdateVendorAsync(vendorId, request);
+            return Ok(vendor);
         }
         catch (InvalidOperationException ex)
         {
@@ -115,7 +85,7 @@ public class VendorsController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update Vendor {VendorId}", VendorId);
+            _logger.LogError(ex, "Failed to update Vendor {VendorId}", vendorId);
             return StatusCode(500, new { message = "Failed to update Vendor" });
         }
     }
@@ -123,17 +93,10 @@ public class VendorsController : ControllerBase
     /// <summary>
     /// Delete a Vendor
     /// </summary>
-    [HttpDelete("{VendorId}")]
-    [AllowAnonymous]
-    public async Task<IActionResult> DeleteVendor(Guid VendorId, [FromQuery] string? tenant = null)
+    [HttpDelete("{vendorId}")]
+    public async Task<IActionResult> DeleteVendor(Guid vendorId)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
-        var deleted = await _VendorService.DeleteVendorAsync(tenantId, VendorId);
+        var deleted = await _vendorService.DeleteVendorAsync(vendorId);
         if (!deleted)
             return NotFound(new { message = "Vendor not found" });
 
@@ -143,23 +106,15 @@ public class VendorsController : ControllerBase
     /// <summary>
     /// Add a contact person to a Vendor
     /// </summary>
-    [HttpPost("{VendorId}/contacts")]
-    [AllowAnonymous]
+    [HttpPost("{vendorId}/contacts")]
     public async Task<ActionResult<VendorContactResponse>> AddContact(
-        Guid VendorId,
-        [FromBody] VendorContactRequest request,
-        [FromQuery] string? tenant = null)
+        Guid vendorId,
+        [FromBody] VendorContactRequest request)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
         try
         {
-            var contact = await _VendorService.AddContactAsync(tenantId, VendorId, request);
-            return CreatedAtAction(nameof(GetVendor), new { VendorId, tenant = tenantId }, contact);
+            var contact = await _vendorService.AddContactAsync(vendorId, request);
+            return CreatedAtAction(nameof(GetVendor), new { vendorId }, contact);
         }
         catch (InvalidOperationException ex)
         {
@@ -171,16 +126,9 @@ public class VendorsController : ControllerBase
     /// Remove a contact person from a Vendor
     /// </summary>
     [HttpDelete("contacts/{contactId}")]
-    [AllowAnonymous]
-    public async Task<IActionResult> RemoveContact(Guid contactId, [FromQuery] string? tenant = null)
+    public async Task<IActionResult> RemoveContact(Guid contactId)
     {
-        var tenantIdClaim = User.FindFirst("tenant_id")?.Value ?? tenant;
-        if (string.IsNullOrEmpty(tenantIdClaim) || !Guid.TryParse(tenantIdClaim, out var tenantId))
-        {
-            return Unauthorized(new { message = "Invalid or missing tenant_id" });
-        }
-
-        var removed = await _VendorService.RemoveContactAsync(tenantId, contactId);
+        var removed = await _vendorService.RemoveContactAsync(contactId);
         if (!removed)
             return NotFound(new { message = "Contact not found" });
 

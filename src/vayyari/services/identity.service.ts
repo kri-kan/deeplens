@@ -1,5 +1,6 @@
-import ApiClient from '../../api/client';
-import { TokenResponse, UserProfile } from '../../types/auth';
+import ApiClient from '../api/client';
+import { TokenResponse, UserProfile } from '../types/auth';
+import { API_ROUTES } from '../constants/api-routes';
 
 const identityApiUrl = process.env.EXPO_PUBLIC_IDENTITY_API_URL!;
 
@@ -27,9 +28,8 @@ class IdentityService {
       .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key]))
       .join('&');
 
-    console.log(`[IdentityService] POST ${identityApiUrl}/connect/token (Login attempt)`);
     try {
-      const response = await fetch(`${identityApiUrl}/connect/token`, {
+      const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.LOGIN}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -59,7 +59,7 @@ class IdentityService {
    * Retrieves the current user profile using the access token.
    */
   async getProfile(token: string): Promise<UserProfile> {
-    return this.client.get<UserProfile>('/api/auth/me', {
+    return this.client.get<UserProfile>(API_ROUTES.AUTH.PROFILE, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

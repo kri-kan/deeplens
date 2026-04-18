@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Text, TextInput, Button, useTheme, Surface, HelperText } from 'react-native-paper';
+import { Text, TextInput, Button, useTheme, Surface, HelperText, IconButton } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { StatusBar } from 'expo-status-bar';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('admin@vayyari.local');
+  const [email, setEmail] = useState('admin@deeplens.platform');
   const [password, setPassword] = useState('Krikank1$');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,6 +39,12 @@ export default function LoginScreen() {
   return (
     <Surface style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar style="auto" />
+      <IconButton 
+        icon="cog" 
+        size={24} 
+        onPress={() => router.push('/modal')} 
+        style={styles.settingsIcon}
+      />
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -139,6 +145,12 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  settingsIcon: {
+    position: 'absolute',
+    top: 40,
+    right: 16,
+    zIndex: 10,
   },
   title: {
     fontWeight: '800',

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { searchService } from '../services/deepLens/search.service';
+import { searchService } from '../services/search.service';
 import { MediaDto, SearchFilters } from '../types/search';
 import { ApiException } from '../types/api';
 import { wrapInSpan } from '../utils/telemetry';

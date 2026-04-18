@@ -2,15 +2,16 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Net.Http.Json;
 using Npgsql;
 using BCrypt.Net;
 
 namespace DeepLens.CLI;
 
+/// <summary>
+/// CLI tool for DeepLens administrative tasks. Single-tenant version.
+/// </summary>
 public class Program
 {
-    private static string? _connectionString;
     private static string _host = "192.168.0.170";
     private static int _port = 5432;
     private static string _user = "postgres";
@@ -50,16 +51,6 @@ public class Program
                     Console.WriteLine(BCrypt.Net.BCrypt.HashPassword(args[1], 11));
                     break;
 
-                case "provision-tenant":
-                    if (args.Length < 2) throw new ArgumentException("Tenant name required.");
-                    ProvisionTenant(args[1]).Wait();
-                    break;
-
-                case "bootstrap-sql":
-                    if (args.Length < 5) throw new ArgumentException("Admin PW, Tenant PW, Admin ID, and Tenant ID required.");
-                    Console.WriteLine(GenerateBootstrapSql(args[1], args[2], args[3], args[4]));
-                    break;
-
                 default:
                     Console.Error.WriteLine($"Unknown command: {command}");
                     PrintUsage();
@@ -76,18 +67,17 @@ public class Program
 
     private static void PrintUsage()
     {
+        Console.WriteLine("DeepLens CLI - Single-Tenant Version");
         Console.WriteLine("Usage:");
-        Console.WriteLine("  test-connection                                Test connection to remote Postgres");
-        Console.WriteLine("  init-db                                        Run all initialization scripts from setupscripts/application");
-        Console.WriteLine("  run-sql-file <path>                            Run a specific SQL file (handles \\c database_name)");
-        Console.WriteLine("  hash <password>                                Generate a BCrypt hash");
-        Console.WriteLine("  bootstrap-sql <admin_pw> <tenant_pw> <a_id> <t_id> Generate bootstrap SQL");
+        Console.WriteLine("  test-connection         Test connection to remote Postgres");
+        Console.WriteLine("  init-db                 Run initialization scripts");
+        Console.WriteLine("  run-sql-file <path>     Run a specific SQL file");
+        Console.WriteLine("  hash <password>         Generate a BCrypt hash");
     }
 
     private static void LoadEnv()
     {
-        // Try to load from ../../infrastructure/.env
-        var envPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "../../../infrastructure/.env");
+        var envPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "../../../setupscripts/.env");
         if (!File.Exists(envPath)) return;
 
         foreach (var line in File.ReadAllLines(envPath))
@@ -99,10 +89,10 @@ public class Program
 
             switch (key)
             {
-                case "INFRA_HOST": _host = val; break;
+                case "INFRA_IP": _host = val; break;
                 case "POSTGRES_PORT": int.TryParse(val, out _port); break;
-                case "POSTGRES_USER": _user = val; break;
-                case "POSTGRES_PASSWORD": _pass = val; break;
+                case "INFRA_ADMIN_USER": _user = val; break;
+                case "INFRA_ADMIN_PASSWORD": _pass = val; break;
             }
         }
     }
@@ -155,7 +145,10 @@ public class Program
 
             try 
             {
-                ExecuteSql(sqlToRun, currentDb);
+                using var conn = new NpgsqlConnection(GetConnString(currentDb));
+                conn.Open();
+                using var cmd = new NpgsqlCommand(sqlToRun, conn);
+                cmd.ExecuteNonQuery();
             }
             catch (Exception ex)
             {
@@ -164,116 +157,18 @@ public class Program
         }
     }
 
-    private static void ExecuteSql(string sql, string db)
-    {
-        using var conn = new NpgsqlConnection(GetConnString(db));
-        conn.Open();
-        
-        using var cmd = new NpgsqlCommand(sql, conn);
-        if (sql.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
-        {
-            using var reader = cmd.ExecuteReader();
-            var columns = new List<string>();
-            for (int i = 0; i < reader.FieldCount; i++) columns.Add(reader.GetName(i));
-            
-            while (reader.Read())
-            {
-                var vals = new List<string>();
-                for (int i = 0; i < reader.FieldCount; i++) vals.Add(reader[i]?.ToString() ?? "NULL");
-                Console.WriteLine(string.Join(" | ", vals));
-            }
-        }
-        else
-        {
-            var rows = cmd.ExecuteNonQuery();
-            if (rows > 0) Console.WriteLine($"{rows} rows affected.");
-        }
-    }
-
     private static void InitializeDatabases()
     {
-        // Navigate up from bin/Debug/netX.X/ (3 levels) + project folder (1 level) + tools folder (1 level)
-        var baseDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "../../../../../setupscripts/application"));
-        var serviceOrder = new[] { "identity", "tenant-manager", "deeplens-core", "search-api", "competitor-intel" };
+        var baseDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "../../../../../setupscripts/application/search-api/arch"));
+        if (!Directory.Exists(baseDir)) return;
 
-        if (!Directory.Exists(baseDir))
-        {
-            // Try fallback for different execution contexts
-            baseDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "setupscripts/application"));
-        }
-
-        foreach (var service in serviceOrder)
-        {
-            var serviceDir = Path.Combine(baseDir, service);
-            if (!Directory.Exists(serviceDir))
-            {
-                Console.WriteLine($"[WARNING] Service directory not found: {service}");
-                continue;
-            }
-
-            Console.WriteLine($"\n>>> Initializing Service: {service}");
-            var sqlFiles = Directory.GetFiles(serviceDir, "*.sql").OrderBy(f => f).ToList();
-            
-            foreach (var file in sqlFiles)
-            {
-                RunSqlFile(file);
-                Console.WriteLine($"[SUCCESS] Executed {Path.GetFileName(file)}");
-            }
-        }
-    }
-
-    private static string GenerateBootstrapSql(string adminPass, string tenantPass, string adminId, string tenantId)
-    {
-        var adminHash = BCrypt.Net.BCrypt.HashPassword(adminPass, 11);
-        var tenantHash = BCrypt.Net.BCrypt.HashPassword(tenantPass, 11);
-
-        return $@"
--- 1. Create Demo Tenant (Vayyari)
-INSERT INTO tenants (id, name, slug, database_name, qdrant_container_name, qdrant_http_port, qdrant_grpc_port, minio_endpoint, minio_bucket_name, status, tier, created_at)
-VALUES ('{tenantId}', 'Vayyari', 'vayyari', 'tenant_vayyari_metadata', 'deeplens-qdrant', 6333, 6334, 'http://localhost:9000', 'vayyari', 1, 1, NOW())
-ON CONFLICT (id) DO NOTHING;
-
--- 2. Create Platform Admin Tenant
-INSERT INTO tenants (id, name, slug, database_name, qdrant_container_name, qdrant_http_port, qdrant_grpc_port, minio_endpoint, minio_bucket_name, status, tier, created_at)
-VALUES ('{adminId}', 'DeepLens Administration', 'admin', 'nextgen_identity', 'deeplens-qdrant', 6333, 6334, 'http://localhost:9000', 'platform-admin', 1, 3, NOW())
-ON CONFLICT (id) DO NOTHING;
-
--- 3. Create Admin Users
-INSERT INTO users (id, tenant_id, email, password_hash, first_name, last_name, role, is_active, created_at)
-VALUES 
-('9d1645f7-c93d-4c31-97f2-aed8c56275a5', '{adminId}', 'admin@deeplens.local', '{adminHash}', 'System', 'Admin', 2, true, NOW()),
-('798f62b3-2828-45f0-8ba4-6dd94c1787ff', '{tenantId}', 'admin@vayyari.local', '{tenantHash}', 'Vayyari', 'Admin', 2, true, NOW())
-ON CONFLICT (id) DO NOTHING;
-";
-    }
-
-    private static async System.Threading.Tasks.Task ProvisionTenant(string tenantName)
-    {
-        using var client = new System.Net.Http.HttpClient();
-        var body = new
-        {
-            tenantName = tenantName,
-            databaseName = $"tenant_{tenantName}_metadata",
-            adminEmail = $"admin@{tenantName}.local",
-            adminPassword = $"Krikank1$",
-            adminFirstName = "Vayyari",
-            adminLastName = "Admin",
-            minioEndpoint = $"{_host}:9000",
-            minioBucket = tenantName
-        };
-
-        Console.WriteLine($"Registering tenant '{tenantName}' via Identity API...");
-        var response = await client.PostAsJsonAsync("http://localhost:5198/api/tenant/provision", body);
+        Console.WriteLine(">>> Initializing Platform Database Schema");
+        var sqlFiles = Directory.GetFiles(baseDir, "*.sql").OrderBy(f => f).ToList();
         
-        if (response.IsSuccessStatusCode)
+        foreach (var file in sqlFiles)
         {
-            var result = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[OK] Tenant registered: {result}");
-        }
-        else
-        {
-            var error = await response.Content.ReadAsStringAsync();
-            Console.Error.WriteLine($"[FAIL] API error ({response.StatusCode}): {error}");
+            RunSqlFile(file, "deeplens_platform");
+            Console.WriteLine($"[SUCCESS] Executed {Path.GetFileName(file)}");
         }
     }
 }

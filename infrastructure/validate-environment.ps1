@@ -127,14 +127,14 @@ else {
     $allGood = $false
 }
 
-docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d tenant_metadata_template -c "SELECT 1" 2>&1 | Out-Null
+docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d deeplens_platform -c "SELECT 1" 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  [OK] tenant_metadata_template database" -ForegroundColor Green
+    Write-Host "  [OK] deeplens_platform database" -ForegroundColor Green
 }
 else {
-    Write-Host "  [FAIL] tenant_metadata_template database" -ForegroundColor Red
+    Write-Host "  [FAIL] deeplens_platform database" -ForegroundColor Red
     # Show actual error for easier debugging
-    Write-Host "    Error: $(docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d tenant_metadata_template -c 'SELECT 1' 2>&1)" -ForegroundColor DarkGray
+    Write-Host "    Error: $(docker run --rm -e PGPASSWORD=$DbPass --network host postgres:15-alpine psql -h $DbHost -U postgres -d deeplens_platform -c 'SELECT 1' 2>&1)" -ForegroundColor DarkGray
     $allGood = $false
 }
 

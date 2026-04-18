@@ -48,7 +48,7 @@ npm start
 **Preferred (lowercase with underscores):**
 ```bash
 vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
-deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
+deeplens_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/deeplens_platform
 ```
 
 **Legacy (uppercase - deprecated):**

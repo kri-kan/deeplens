@@ -2,13 +2,16 @@ using DeepLens.Contracts.Vendors;
 
 namespace DeepLens.SearchApi.Services;
 
+/// <summary>
+/// Service for vendor management. Single-tenant version.
+/// </summary>
 public interface IVendorService
 {
-    Task<VendorResponse> CreateVendorAsync(Guid tenantId, CreateVendorRequest request);
-    Task<VendorResponse?> GetVendorByIdAsync(Guid tenantId, Guid vendorId);
-    Task<VendorListResponse> ListVendorsAsync(Guid tenantId, int page, int pageSize, bool? activeOnly);
-    Task<VendorResponse> UpdateVendorAsync(Guid tenantId, Guid vendorId, UpdateVendorRequest request);
-    Task<bool> DeleteVendorAsync(Guid tenantId, Guid vendorId);
-    Task<VendorContactResponse> AddContactAsync(Guid tenantId, Guid vendorId, VendorContactRequest request);
-    Task<bool> RemoveContactAsync(Guid tenantId, Guid contactId);
+    Task<VendorResponse> CreateVendorAsync(CreateVendorRequest request);
+    Task<VendorResponse?> GetVendorByIdAsync(Guid vendorId);
+    Task<VendorListResponse> ListVendorsAsync(int page, int pageSize, bool? activeOnly);
+    Task<VendorResponse> UpdateVendorAsync(Guid vendorId, UpdateVendorRequest request);
+    Task<bool> DeleteVendorAsync(Guid vendorId);
+    Task<VendorContactResponse> AddContactAsync(Guid vendorId, VendorContactRequest request);
+    Task<bool> RemoveContactAsync(Guid contactId);
 }

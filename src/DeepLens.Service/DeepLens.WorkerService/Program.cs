@@ -36,7 +36,8 @@ builder.Services.AddSingleton<IProducer<string, string>>(sp =>
 // Infrastructure Drivers
 builder.Services.AddScoped<IStorageService, MinioStorageService>();
 builder.Services.AddScoped<IVectorStoreService, VectorStoreService>();
-builder.Services.AddScoped<ITenantMetadataService, TenantMetadataService>();
+builder.Services.AddScoped<IMetadataService, MetadataService>();
+
 
 // Background Workers
 builder.Services.AddHostedService<ImageProcessingWorker>();

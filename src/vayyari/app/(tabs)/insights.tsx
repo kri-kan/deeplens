@@ -1,15 +1,17 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Surface, Text, Appbar } from 'react-native-paper';
-import { useTheme } from 'react-native-paper';
+import { Surface, Text, Appbar, useTheme } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 
 export default function InsightsScreen() {
   const theme = useTheme();
+  const router = useRouter();
 
   return (
     <Surface style={[styles.container, { backgroundColor: theme.colors.background }]} elevation={0}>
       <Appbar.Header style={{ backgroundColor: theme.colors.background }}>
         <Appbar.Content title="Analytics Hub" titleStyle={{ fontWeight: 'bold' }} />
+        <Appbar.Action icon="cog" onPress={() => router.push('/modal')} />
       </Appbar.Header>
 
       <View style={styles.content}>

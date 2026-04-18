@@ -1,156 +1,51 @@
-# Database Naming Standards - DeepLens Project
+# DeepLens Database Architecture (Single-Tenant)
 
-## ✅ Standardized Naming Convention
+Following the transition to a simplified single-tenant architecture, the DeepLens project now relies on exactly **two** primary databases.
 
-All database names across the DeepLens project now follow a **lowercase with underscores** naming convention.
+## 🗄️ Core Databases
 
-### Database Names
+| Database            | Role                                      | Status |
+|---------------------|-------------------------------------------|--------|
+| `nextgen_identity`  | IdentityServer, User Auth, Roles & Claims | Active |
+| `deeplens_platform` | Product Catalog, Media, Vendors, Listings | Active |
 
-| Database                   | Purpose                        |     Status     |
-| :------------------------- | :----------------------------- | :------------: |
-| `whatsapp_vayyari_data`    | WhatsApp message and chat data | ✅ Standardized |
-| `tenant_vayyari_metadata`  | Tenant metadata and media info | ✅ Standardized |
-| `nextgen_identity`         | Identity and authentication    | ✅ Standardized |
-| `tenant_metadata_template` | Template for new tenants       | ✅ Standardized |
-| `deeplens_platform`        | Platform-wide data             | ✅ Standardized |
+---
 
-### Environment Variable Names
+## 🗑️ Deprecated / Legacy Databases
 
-**Preferred (lowercase with underscores):**
-```bash
-vayyari_wa_db_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
-deeplens_vayyari_connection_string=postgresql://postgres:Krikank1%24@192.168.0.170:5432/tenant_vayyari_metadata
+The following databases were used during the multi-tenant phase and are now **OBSOLETE**:
+
+- `tenant_vayyari_metadata` (Migrated to `deeplens_platform`)
+- `whatsapp_vayyari_data` (Consolidated)
+- `tenant_metadata_template` (Infrastructure no longer required)
+
+---
+
+## 🔐 Connection Configuration
+
+All services (Search API, Worker Service) should use the `DefaultConnection` pointing to the single-tenant platform database.
+
+### Search API (`appsettings.json`)
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Host=192.168.0.170;Port=5432;Database=deeplens_platform;Username=postgres;Password=..."
+}
 ```
 
-## 🔍 Verification
-
-### Check Current Database Names
-```powershell
-podman run --rm -e PGPASSWORD=Krikank1$ --network host postgres:latest psql -h 192.168.0.170 -p 5432 -U postgres -c "\l" | Select-String "vayyari"
-```
-
-Expected output should show:
-- `tenant_vayyari_metadata`
-- `whatsapp_vayyari_data`
-
-### Verify Connection Strings
-
-**WhatsApp Processor:**
-```powershell
-# Check .env file
-Get-Content ./src/whatsapp-processor/.env | Select-String "connection_string"
-```
-
-Should show lowercase variable names.
-
-## 📝 Updated Files
-
-### Configuration Files
-- ✅ `src/whatsapp-processor/.env.example` - Uses lowercase env vars
-- ✅ `src/whatsapp-processor/src/config/index.ts` - Supports both cases with warnings
-
-### Deployment Scripts
-- ✅ `deploy-whatsapp-vayyari.ps1` - Uses `tenant_vayyari_metadata`
-- ✅ `deploy-debug.ps1` - Uses `tenant_vayyari_metadata`
-
-### Infrastructure Scripts
-- ✅ `infrastructure/setup-deeplens-dev.ps1` - Entry point for DB initialization (Remote)
-- ✅ `infrastructure/scripts/lifecycle/init-bootstrap-data.ps1` - Core initialization logic
-
-### Documentation
-- ✅ `src/whatsapp-processor/DATABASE_SETUP.md` - Documents lowercase convention
-- ✅ `src/whatsapp-processor/README.md` - Updated with database setup
-- ✅ `TROUBLESHOOTING_SUMMARY.md` - Uses correct database names
-
-## 🎯 Migration Checklist
-
-If you have an existing setup with mixed-case database names:
-
-### 1. Check Current State
-```powershell
-podman exec deeplens-postgres psql -U postgres -c "\l"
-```
-
-### 2. Rename Databases (if needed)
-```powershell
-# Only if you have old mixed-case databases
-podman exec deeplens-postgres psql -U postgres -c "ALTER DATABASE tenant_Vayyari_metadata RENAME TO tenant_vayyari_metadata;"
-podman exec deeplens-postgres psql -U postgres -c "ALTER DATABASE whastapp_Vayyari_data RENAME TO whatsapp_vayyari_data;"
-```
-
-### 3. Update Environment Files
-```powershell
-# Update .env files to use lowercase variable names
-cd c:\productivity\deeplens\src\whatsapp-processor
-# Edit .env to use lowercase: vayyari_wa_db_connection_string
-```
-
-### 4. Restart Services
-```powershell
-# Restart WhatsApp processor
-podman restart whatsapp-vayyari
-
-# Or rebuild and redeploy
-.\deploy-whatsapp-vayyari.ps1
-```
-
-## 🚨 Common Issues
-
-### Issue: "database does not exist"
-**Cause:** Database name mismatch between code and actual database.
-
-**Solution:**
-1. Check actual database name: `podman exec deeplens-postgres psql -U postgres -c "\l"`
-2. Ensure it matches the connection string in `.env`
-3. Both should be lowercase with underscores
-
-### Issue: "WARNING: Using deprecated uppercase env var"
-**Cause:** Using old uppercase environment variable names.
-
-**Solution:**
-1. Update `.env` to use lowercase: `vayyari_wa_db_connection_string`
-2. The app will still work but will show warnings
-
-### Issue: Port confusion (5432 vs 5433)
-**Cause:** Podman maps PostgreSQL to port 5433 on host.
-
-**Solution:**
-- Always use port **5433** when connecting from host machine
-- Use port **5432** only for inter-container communication
-- See `DATABASE_SETUP.md` for details
-
-## 📚 References
-
-- [WhatsApp Processor Database Setup](../src/whatsapp-processor/DATABASE_SETUP.md)
-- [Infrastructure Setup Script](../infrastructure/setup-deeplens-dev.ps1)
-- [Troubleshooting Guide](../TROUBLESHOOTING_SUMMARY.md)
-
-## 🔐 Connection Details Reference
-
-### PostgreSQL (Remote Server)
-```
-Host: 192.168.0.170
-Port: 5432
-Username: postgres
-Password: Krikank1$
-```
-
-### Databases
-```
-whatsapp_vayyari_data       - WhatsApp messages and chats
-tenant_vayyari_metadata     - Media metadata and tenant data
-nextgen_identity            - User authentication
-tenant_metadata_template    - Template for new tenants
-```
-
-### Connection String Format
-```
-postgresql://postgres:Krikank1%24@192.168.0.170:5432/whatsapp_vayyari_data
-                                            ↑ Port 5432 for remote connections
-                                                      ↑ Lowercase database name
+### Identity API (`appsettings.json`)
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Host=192.168.0.170;Port=5432;Database=nextgen_identity;Username=postgres;Password=..."
+}
 ```
 
 ---
 
-**Last Updated:** 2025-12-29  
-**Status:** ✅ All databases and references standardized to lowercase with underscores
+## 📚 General Standards
+
+1. **Naming**: Use `lowercase_with_underscores`.
+2. **Persistence**: All data is stored in host-based volumes at `/data/postgres`.
+3. **Connectivity**: Use port `5432` for internal container networking.
+
+**Last Updated:** 2026-04-16  
+**Status:** ✅ Unified Single-Tenant Architecture

@@ -14,10 +14,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // Custom services
-builder.Services.AddScoped<ITenantMetadataService, TenantMetadataService>();
+// Custom services
+builder.Services.AddScoped<IMetadataService, MetadataService>();
+
 builder.Services.AddHttpClient<IAttributeExtractionService, LlmAttributeExtractionService>();
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
+builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();
+
 
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 

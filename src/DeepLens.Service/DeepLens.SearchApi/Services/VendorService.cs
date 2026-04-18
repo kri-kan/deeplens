@@ -8,39 +8,37 @@ public class VendorService : IVendorService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<VendorService> _logger;
+    private readonly string _connectionString;
 
     public VendorService(IConfiguration configuration, ILogger<VendorService> logger)
     {
         _configuration = configuration;
         _logger = logger;
+        _connectionString = _configuration.GetConnectionString("DefaultConnection") 
+                         ?? throw new InvalidOperationException("DefaultConnection string not found");
     }
 
-    private async Task<NpgsqlConnection> GetConnectionAsync(Guid tenantId)
+    private async Task<NpgsqlConnection> GetConnectionAsync()
     {
-        var connString = _configuration.GetConnectionString($"Tenant_{tenantId}") 
-                      ?? _configuration.GetConnectionString("DefaultTenant")
-                      ?? throw new InvalidOperationException("No database connection configured");
-        
-        var conn = new NpgsqlConnection(connString);
+        var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
         return conn;
     }
 
-    public async Task<VendorResponse> CreateVendorAsync(Guid tenantId, CreateVendorRequest request)
+    public async Task<VendorResponse> CreateVendorAsync(CreateVendorRequest request)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
         using var transaction = await conn.BeginTransactionAsync();
 
         try
         {
             // Insert Vendor
-            var VendorId = await conn.QuerySingleAsync<Guid>(
-                @"INSERT INTO Vendors (tenant_id, Vendor_name, Vendor_code, address, city, state, country, postal_code, email, website, notes)
-                  VALUES (@TenantId, @VendorName, @VendorCode, @Address, @City, @State, @Country, @PostalCode, @Email, @Website, @Notes)
+            var vendorId = await conn.QuerySingleAsync<Guid>(
+                @"INSERT INTO Vendors (vendor_name, vendor_code, address, city, state, country, postal_code, email, website, notes)
+                  VALUES (@VendorName, @VendorCode, @Address, @City, @State, @Country, @PostalCode, @Email, @Website, @Notes)
                   RETURNING id",
                 new
                 {
-                    TenantId = tenantId,
                     request.VendorName,
                     request.VendorCode,
                     request.Address,
@@ -61,11 +59,11 @@ public class VendorService : IVendorService
                 foreach (var contact in request.Contacts)
                 {
                     await conn.ExecuteAsync(
-                        @"INSERT INTO Vendor_contacts (Vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary)
+                        @"INSERT INTO Vendor_contacts (vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary)
                           VALUES (@VendorId, @ContactName, @ContactRole, @PhoneNumber, @AlternatePhone, @Email, @IsPrimary)",
                         new
                         {
-                            VendorId = VendorId,
+                            VendorId = vendorId,
                             contact.ContactName,
                             contact.ContactRole,
                             contact.PhoneNumber,
@@ -79,11 +77,9 @@ public class VendorService : IVendorService
             }
 
             await transaction.CommitAsync();
+            _logger.LogInformation("Created Vendor {VendorId}", vendorId);
 
-            _logger.LogInformation("Created Vendor {VendorId} for tenant {TenantId}", VendorId, tenantId);
-
-            // Return the created Vendor
-            return await GetVendorByIdAsync(tenantId, VendorId) 
+            return await GetVendorByIdAsync(vendorId) 
                 ?? throw new InvalidOperationException("Failed to retrieve created Vendor");
         }
         catch
@@ -93,74 +89,68 @@ public class VendorService : IVendorService
         }
     }
 
-    public async Task<VendorResponse?> GetVendorByIdAsync(Guid tenantId, Guid VendorId)
+    public async Task<VendorResponse?> GetVendorByIdAsync(Guid vendorId)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
 
-        var Vendor = await conn.QuerySingleOrDefaultAsync<VendorResponse>(
-            @"SELECT id, tenant_id, Vendor_name, Vendor_code, address, city, state, country, postal_code, 
+        var vendor = await conn.QuerySingleOrDefaultAsync<VendorResponse>(
+            @"SELECT id, vendor_name, vendor_code, address, city, state, country, postal_code, 
                      email, website, notes, is_active, created_at, updated_at
               FROM Vendors
-              WHERE tenant_id = @TenantId AND id = @VendorId",
-            new { TenantId = tenantId, VendorId = VendorId }
+              WHERE id = @VendorId",
+            new { VendorId = vendorId }
         );
 
-        if (Vendor == null) return null;
+        if (vendor == null) return null;
 
-        // Load contacts
         var contacts = await conn.QueryAsync<VendorContactResponse>(
-            @"SELECT id, Vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
+            @"SELECT id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
               FROM Vendor_contacts
-              WHERE Vendor_id = @VendorId
+              WHERE vendor_id = @VendorId
               ORDER BY is_primary DESC, contact_name",
-            new { VendorId = VendorId }
+            new { VendorId = vendorId }
         );
 
-        return Vendor with { Contacts = contacts.ToList() };
+        return vendor with { Contacts = contacts.ToList() };
     }
 
-    public async Task<VendorListResponse> ListVendorsAsync(Guid tenantId, int page, int pageSize, bool? activeOnly)
+    public async Task<VendorListResponse> ListVendorsAsync(int page, int pageSize, bool? activeOnly)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
 
         var offset = (page - 1) * pageSize;
-        var whereClause = activeOnly == true ? "AND is_active = TRUE" : "";
+        var whereClause = activeOnly == true ? "WHERE is_active = TRUE" : "";
 
-        // Get total count
         var totalCount = await conn.QuerySingleAsync<int>(
-            $@"SELECT COUNT(*) FROM Vendors WHERE tenant_id = @TenantId {whereClause}",
-            new { TenantId = tenantId }
-        );
+            $@"SELECT COUNT(*) FROM Vendors {whereClause}");
 
-        // Get Vendors
-        var Vendors = await conn.QueryAsync<VendorResponse>(
-            $@"SELECT id, tenant_id, Vendor_name, Vendor_code, address, city, state, country, postal_code, 
+        var vendors = await conn.QueryAsync<VendorResponse>(
+            $@"SELECT id, vendor_name, vendor_code, address, city, state, country, postal_code, 
                       email, website, notes, is_active, created_at, updated_at
                FROM Vendors
-               WHERE tenant_id = @TenantId {whereClause}
-               ORDER BY Vendor_name
+               {whereClause}
+               ORDER BY vendor_name
                LIMIT @PageSize OFFSET @Offset",
-            new { TenantId = tenantId, PageSize = pageSize, Offset = offset }
+            new { PageSize = pageSize, Offset = offset }
         );
 
-        // Load contacts for each Vendor
-        var VendorsList = new List<VendorResponse>();
-        foreach (var Vendor in Vendors)
+        var vendorsList = new List<VendorResponse>();
+        foreach (var v in vendors)
         {
             var contacts = await conn.QueryAsync<VendorContactResponse>(
-                @"SELECT id, Vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
+                @"SELECT id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
                   FROM Vendor_contacts
-                  WHERE Vendor_id = @VendorId
+                  WHERE vendor_id = @VendorId
                   ORDER BY is_primary DESC, contact_name",
-                new { VendorId = Vendor.Id }
+                new { VendorId = v.Id }
             );
 
-            VendorsList.Add(Vendor with { Contacts = contacts.ToList() });
+            vendorsList.Add(v with { Contacts = contacts.ToList() });
         }
 
         return new VendorListResponse
         {
-            Vendors = VendorsList,
+            Vendors = vendorsList,
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize,
@@ -168,17 +158,16 @@ public class VendorService : IVendorService
         };
     }
 
-    public async Task<VendorResponse> UpdateVendorAsync(Guid tenantId, Guid VendorId, UpdateVendorRequest request)
+    public async Task<VendorResponse> UpdateVendorAsync(Guid vendorId, UpdateVendorRequest request)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
 
         var updates = new List<string>();
         var parameters = new DynamicParameters();
-        parameters.Add("TenantId", tenantId);
-        parameters.Add("VendorId", VendorId);
+        parameters.Add("VendorId", vendorId);
 
-        if (request.VendorName != null) { updates.Add("Vendor_name = @VendorName"); parameters.Add("VendorName", request.VendorName); }
-        if (request.VendorCode != null) { updates.Add("Vendor_code = @VendorCode"); parameters.Add("VendorCode", request.VendorCode); }
+        if (request.VendorName != null) { updates.Add("vendor_name = @VendorName"); parameters.Add("VendorName", request.VendorName); }
+        if (request.VendorCode != null) { updates.Add("vendor_code = @VendorCode"); parameters.Add("VendorCode", request.VendorCode); }
         if (request.Address != null) { updates.Add("address = @Address"); parameters.Add("Address", request.Address); }
         if (request.City != null) { updates.Add("city = @City"); parameters.Add("City", request.City); }
         if (request.State != null) { updates.Add("state = @State"); parameters.Add("State", request.State); }
@@ -196,50 +185,48 @@ public class VendorService : IVendorService
 
         await conn.ExecuteAsync(
             $@"UPDATE Vendors SET {string.Join(", ", updates)}
-               WHERE tenant_id = @TenantId AND id = @VendorId",
+               WHERE id = @VendorId",
             parameters
         );
 
-        _logger.LogInformation("Updated Vendor {VendorId} for tenant {TenantId}", VendorId, tenantId);
+        _logger.LogInformation("Updated Vendor {VendorId}", vendorId);
 
-        return await GetVendorByIdAsync(tenantId, VendorId)
+        return await GetVendorByIdAsync(vendorId)
             ?? throw new InvalidOperationException("Vendor not found after update");
     }
 
-    public async Task<bool> DeleteVendorAsync(Guid tenantId, Guid VendorId)
+    public async Task<bool> DeleteVendorAsync(Guid vendorId)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
 
         var rowsAffected = await conn.ExecuteAsync(
-            "DELETE FROM Vendors WHERE tenant_id = @TenantId AND id = @VendorId",
-            new { TenantId = tenantId, VendorId = VendorId }
+            "DELETE FROM Vendors WHERE id = @VendorId",
+            new { VendorId = vendorId }
         );
 
-        _logger.LogInformation("Deleted Vendor {VendorId} for tenant {TenantId}", VendorId, tenantId);
-
+        _logger.LogInformation("Deleted Vendor {VendorId}", vendorId);
         return rowsAffected > 0;
     }
 
-    public async Task<VendorContactResponse> AddContactAsync(Guid tenantId, Guid VendorId, VendorContactRequest request)
+    public async Task<VendorContactResponse> AddContactAsync(Guid vendorId, VendorContactRequest request)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
 
-        // Verify Vendor exists and belongs to tenant
-        var VendorExists = await conn.QuerySingleOrDefaultAsync<bool>(
-            "SELECT EXISTS(SELECT 1 FROM Vendors WHERE tenant_id = @TenantId AND id = @VendorId)",
-            new { TenantId = tenantId, VendorId = VendorId }
+        var vendorExists = await conn.QuerySingleOrDefaultAsync<bool>(
+            "SELECT EXISTS(SELECT 1 FROM Vendors WHERE id = @VendorId)",
+            new { VendorId = vendorId }
         );
 
-        if (!VendorExists)
+        if (!vendorExists)
             throw new InvalidOperationException("Vendor not found");
 
         var contactId = await conn.QuerySingleAsync<Guid>(
-            @"INSERT INTO Vendor_contacts (Vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary)
+            @"INSERT INTO Vendor_contacts (vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary)
               VALUES (@VendorId, @ContactName, @ContactRole, @PhoneNumber, @AlternatePhone, @Email, @IsPrimary)
               RETURNING id",
             new
             {
-                VendorId = VendorId,
+                VendorId = vendorId,
                 request.ContactName,
                 request.ContactRole,
                 request.PhoneNumber,
@@ -250,23 +237,20 @@ public class VendorService : IVendorService
         );
 
         return await conn.QuerySingleAsync<VendorContactResponse>(
-            @"SELECT id, Vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
+            @"SELECT id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
               FROM Vendor_contacts
               WHERE id = @ContactId",
             new { ContactId = contactId }
         );
     }
 
-    public async Task<bool> RemoveContactAsync(Guid tenantId, Guid contactId)
+    public async Task<bool> RemoveContactAsync(Guid contactId)
     {
-        using var conn = await GetConnectionAsync(tenantId);
+        using var conn = await GetConnectionAsync();
 
-        // Verify contact belongs to a Vendor in this tenant
         var rowsAffected = await conn.ExecuteAsync(
-            @"DELETE FROM Vendor_contacts 
-              WHERE id = @ContactId 
-              AND Vendor_id IN (SELECT id FROM Vendors WHERE tenant_id = @TenantId)",
-            new { TenantId = tenantId, ContactId = contactId }
+            "DELETE FROM Vendor_contacts WHERE id = @ContactId",
+            new { ContactId = contactId }
         );
 
         return rowsAffected > 0;
