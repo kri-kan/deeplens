@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-18 18:58:06
+**Auto-generated on:** 2026-04-18 20:01:12
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -184,6 +184,7 @@ Last Updated: December 20, 2025
 | **5000** | Search API   | Image Upload & Search       |
 | **5001** | Web UI       | React Frontend              |
 | **8001** | Feature Ext. | Python AI Microservice      |
+| **8005** | Instagram.   | Instagram Sidecar Service   |
 
 ### WhatsApp Processor
 | Port     | Service      | Description               |
@@ -331,6 +332,7 @@ DeepLens is a high-performance, multi-tenant **visual search engine** built usin
 ### Core Design Principles
 - **Unified .NET Backend**: Centralized orchestration, API gateway, and tenant management.
 - **Stateless AI Services**: Python-based services for feature extraction and vector operations.
+- **Sidecar Services**: Lightweight Python/FastAPI services for external data retrieval (e.g., Instagram, YouTube).
 - **Event-Driven Pipeline**: Asynchronous image processing via Apache Kafka.
 - **External Infrastructure**: Core databases (PostgreSQL), message brokers (Kafka), and storage (MinIO) are managed at `192.168.0.170`.
 - **Observable by Design**: Integrated OpenTelemetry, Prometheus, and Jaeger.
@@ -1018,6 +1020,22 @@ Use the [OIDC Debugger](https://oidcdebugger.com/) or the built-in Swagger UI at
 
 ### Common Scopes
 - `openid`, `profile`, `deeplens.api.read`, `deeplens.api.write`.
+
+---
+
+## 🚗 Sidecar Services
+
+Sidecars are lightweight, synchronous services that extend the platform's capabilities with external integrations.
+
+### Instagram Sidecar Service
+- **Service Name**: `instagram-sidecar`
+- **Port**: `8005`
+- **Technology**: Python 3.11 / FastAPI / Instaloader
+- **Purpose**: Provides a unified API for retrieving public Instagram profile and post metadata without requiring complex scrapers for standard lookups.
+- **Key Endpoints**:
+    - `GET /profile/{username}`: Metadata for any public profile.
+    - `GET /profile/{username}/posts`: Recent posts (shortcode, caption, media URLs).
+- **Rate Limiting**: Implementation relies on `instaloader` internal sleep mechanisms. Public endpoint usage only.
 
 
 ---
