@@ -14,6 +14,7 @@ export const API_ROUTES = {
     GENERATE: '/api/v1/orderid/order',
     GENERATE_WITH_ITEMS: '/api/v1/orderid/orderwithitems',
     HISTORY: '/api/v1/orderid/history',
+    UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
   },
   
   PRODUCTS: {

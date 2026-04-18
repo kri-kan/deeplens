@@ -21,7 +21,10 @@ export const getStyles = (theme: MD3Theme) => {
     content: {
       paddingHorizontal: 12,
       paddingTop: 8,
-      gap: 12,
+      gap: 16,
+    },
+    sourceHandleInput: {
+      backgroundColor: theme.colors.background,
     },
     selectionRow: {
       flexDirection: 'row',
@@ -216,7 +219,8 @@ export const getStyles = (theme: MD3Theme) => {
     historyId: {
       fontWeight: 'bold',
       fontSize: 16,
-      color: theme.colors.onSurface,
+      color: theme.colors.primary,
+      textDecorationLine: 'underline',
     },
     historySubtitle: {
       fontSize: 12,

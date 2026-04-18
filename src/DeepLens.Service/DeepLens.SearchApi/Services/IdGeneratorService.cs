@@ -24,13 +24,13 @@ public class IdGeneratorService : IIdGeneratorService
         return conn;
     }
 
-    public async Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null)
+    public async Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null)
     {
-        var (orderId, _) = await GenerateOrderInternalAsync(source, paymentMode);
+        var (orderId, _) = await GenerateOrderInternalAsync(source, paymentMode, sourceHandle);
         return orderId;
     }
 
-    private async Task<(string OrderId, int InternalId)> GenerateOrderInternalAsync(string? source = null, string? paymentMode = null)
+    private async Task<(string OrderId, int InternalId)> GenerateOrderInternalAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null)
     {
         using var conn = await GetConnectionAsync();
         
@@ -57,18 +57,35 @@ public class IdGeneratorService : IIdGeneratorService
         var nextValValue = await conn.QuerySingleAsync<long>("SELECT nextval('\"orderId_id_seq\"')");
         var orderId = ToBase36(nextValValue, 5);
 
-        // 3. Insert the order record
+        // 3. Determine which column to populate for the handle
+        string? instagramHandle = null;
+        string? customerPhone = null;
+        
+        if (source?.ToLower() == "whatsapp") {
+            customerPhone = sourceHandle;
+        } else if (source?.ToLower() == "instagram") {
+            instagramHandle = sourceHandle;
+        }
+
+        // 4. Insert the order record
         await conn.ExecuteAsync(@"
-            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id)
-            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId)", 
-            new { Id = nextValValue, OrderId = orderId, SourceId = sourceId, PaymentModeId = paymentModeId });
+            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, instagram_handle, customer_phone)
+            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @InstagramHandle, @CustomerPhone)", 
+            new { 
+                Id = nextValValue, 
+                OrderId = orderId, 
+                SourceId = sourceId, 
+                PaymentModeId = paymentModeId, 
+                InstagramHandle = instagramHandle,
+                CustomerPhone = customerPhone
+            });
 
         return (orderId, (int)nextValValue);
     }
 
-    public async Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null)
+    public async Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null)
     {
-        var (orderId, internalId) = await GenerateOrderInternalAsync(source, paymentMode);
+        var (orderId, internalId) = await GenerateOrderInternalAsync(source, paymentMode, sourceHandle);
         
         using var conn = await GetConnectionAsync();
         var itemIds = new List<string>();
@@ -124,6 +141,10 @@ public class IdGeneratorService : IIdGeneratorService
                 o.order_id as id, 
                 s.name as source, 
                 p.name as paymentMethod, 
+                o.customer_phone as customerPhone,
+                o.instagram_handle as instagramHandle,
+                o.customer_address as customerAddress,
+                o.order_details as orderDetails,
                 o.created_at as timestamp
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
@@ -131,6 +152,120 @@ public class IdGeneratorService : IIdGeneratorService
             ORDER BY o.created_at DESC
             LIMIT @Limit", 
             new { Limit = limit });
+    }
+
+    public async Task<object?> GetOrderDetailsAsync(string orderId)
+    {
+        using var conn = await GetConnectionAsync();
+        
+        var order = await conn.QueryFirstOrDefaultAsync(@"
+            SELECT 
+                o.order_id as id, 
+                s.name as source, 
+                p.name as paymentMethod, 
+                o.customer_phone as customerPhone,
+                o.instagram_handle as instagramHandle,
+                o.customer_address as customerAddress,
+                o.order_details as orderDetails,
+                o.created_at as timestamp
+            FROM ""orderId"" o
+            LEFT JOIN order_sources s ON o.source_id = s.id
+            LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
+            WHERE o.order_id = @OrderId",
+            new { OrderId = orderId });
+
+        if (order == null) return null;
+
+        var items = await conn.QueryAsync(@"
+            SELECT 
+                product_id_text as productId,
+                photo_url as photoUrl,
+                comments
+            FROM ""orderItem""
+            WHERE order_id_ref = (SELECT id FROM ""orderId"" WHERE order_id = @OrderId)
+            ORDER BY item_index",
+            new { OrderId = orderId });
+
+        return new {
+            order.id,
+            order.source,
+            order.paymentMethod,
+            order.customerPhone,
+            order.instagramHandle,
+            order.customerAddress,
+            order.orderDetails,
+            order.timestamp,
+            items = items
+        };
+    }
+
+    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? details = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null)
+    {
+        using var conn = await GetConnectionAsync();
+        
+        int? sourceId = null;
+        if (!string.IsNullOrEmpty(source))
+        {
+            if (Enum.TryParse<DeepLens.Domain.Enums.OrderSource>(source, true, out var srcEnum))
+            {
+                sourceId = (int)srcEnum;
+            }
+        }
+
+        int? paymentModeId = null;
+        if (!string.IsNullOrEmpty(paymentMode))
+        {
+            if (Enum.TryParse<DeepLens.Domain.Enums.PaymentMode>(paymentMode, true, out var payEnum))
+            {
+                paymentModeId = (int)payEnum;
+            }
+        }
+
+        var rows = await conn.ExecuteAsync(@"
+            UPDATE ""orderId"" 
+            SET customer_phone = COALESCE(@Phone, customer_phone),
+                source_id = COALESCE(@SourceId, source_id),
+                instagram_handle = COALESCE(@InstagramHandle, instagram_handle),
+                payment_mode_id = COALESCE(@PaymentModeId, payment_mode_id),
+                customer_address = COALESCE(@Address, customer_address),
+                order_details = COALESCE(@Details, order_details)
+            WHERE order_id = @OrderId",
+            new { 
+                OrderId = orderId, 
+                Phone = phone, 
+                SourceId = sourceId,
+                InstagramHandle = sourceHandle,
+                PaymentModeId = paymentModeId,
+                Address = address,
+                Details = details
+            });
+        
+        if (items != null)
+        {
+            // 1. Get internal ID
+            var internalId = await conn.QuerySingleAsync<int>("SELECT id FROM \"orderId\" WHERE order_id = @OrderId", new { OrderId = orderId });
+            
+            // 2. Clear existing items
+            await conn.ExecuteAsync("DELETE FROM \"orderItem\" WHERE order_id_ref = @InternalId", new { InternalId = internalId });
+            
+            // 3. Insert new items
+            int index = 1;
+            foreach (var item in items)
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id_text, photo_url, comments)
+                    VALUES (@InternalId, @Index, @ProdId, @PhotoUrl, @Comments)",
+                    new { 
+                        InternalId = internalId, 
+                        Index = index++, 
+                        ProdId = item.ProductId, 
+                        PhotoUrl = item.PhotoUrl, 
+                        Comments = item.Comments 
+                    });
+            }
+        }
+
+        return rows > 0;
     }
 
     private static string ToBase36(long value, int minLength)

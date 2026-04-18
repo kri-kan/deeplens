@@ -812,8 +812,24 @@ CREATE TABLE public."orderId" (
     order_id character varying(10) CONSTRAINT studio_orders_order_id_not_null NOT NULL,
     source_id integer,
     payment_mode_id integer,
+    customer_phone character varying(20),
+    customer_address text,
+    order_details text,
+    source_handle character varying(255),
     created_at timestamp with time zone DEFAULT now()
 );
+
+CREATE TABLE public."orderItem" (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    order_id_ref integer NOT NULL,
+    item_index integer NOT NULL,
+    product_id_ref uuid,
+    metadata jsonb,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+ALTER TABLE ONLY public."orderItem" ADD CONSTRAINT order_item_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public."orderItem" ADD CONSTRAINT order_item_order_id_ref_fkey FOREIGN KEY (order_id_ref) REFERENCES public."orderId"(id) ON DELETE CASCADE;
 
 
 ALTER TABLE public."orderId" OWNER TO postgres;

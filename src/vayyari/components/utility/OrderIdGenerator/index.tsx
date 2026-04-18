@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { Surface, Text, Appbar, Button, Icon, ActivityIndicator, IconButton, useTheme, Snackbar } from 'react-native-paper';
+import { Surface, Text, Appbar, Button, Icon, ActivityIndicator, IconButton, useTheme, Snackbar, TextInput } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
@@ -27,6 +27,7 @@ export const OrderIdGenerator = () => {
   const [isNewId, setIsNewId] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sourceHandle, setSourceHandle] = useState('');
 
   useEffect(() => {
     loadRecentIds();
@@ -84,7 +85,8 @@ export const OrderIdGenerator = () => {
       const response = await searchApiClient.post<{ orderId: string }>(API_ROUTES.ORDERS.GENERATE, null, {
         params: { 
           source: selectedSource, 
-          paymentMode: paymentMethod || '' 
+          paymentMode: paymentMethod || '' ,
+          sourceHandle: sourceHandle || ''
         }
       });
       const newEntry: OrderIdEntry = {
@@ -92,6 +94,8 @@ export const OrderIdGenerator = () => {
         source: selectedSource,
         paymentMethod: paymentMethod,
         timestamp: new Date().toISOString(),
+        customerPhone: selectedSource === 'whatsapp' ? sourceHandle : undefined,
+        instagramHandle: selectedSource === 'instagram' ? sourceHandle : undefined,
       };
       
       const updated = [newEntry, ...recentIds].slice(0, 10);
@@ -102,6 +106,7 @@ export const OrderIdGenerator = () => {
       
       setSelectedSource(null);
       setPaymentMethod(null);
+      setSourceHandle('');
     } catch (error) {
       console.error('Failed to generate Order ID:', error);
       Alert.alert('Error', 'Failed to generate Order ID. Please try again.');
@@ -111,12 +116,30 @@ export const OrderIdGenerator = () => {
   };
 
   const handleUpdate = async (id: string, updatedEntry: OrderIdEntry) => {
-    const updated = recentIds.map(item => item.id === id ? updatedEntry : item);
-    await saveRecentIds(updated);
-    if (displayId?.id === id) {
-      setDisplayId(updatedEntry);
+    try {
+      setLoading(true);
+      await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(id), {
+        phone: updatedEntry.customerPhone,
+        address: updatedEntry.customerAddress,
+        orderDetails: updatedEntry.orderDetails,
+        source: updatedEntry.source,
+        sourceHandle: updatedEntry.instagramHandle,
+        paymentMode: updatedEntry.paymentMethod
+      });
+
+      const updated = recentIds.map(item => item.id === id ? updatedEntry : item);
+      await saveRecentIds(updated);
+      
+      if (displayId?.id === id) {
+        setDisplayId(updatedEntry);
+      }
+      setEditingId(null);
+    } catch (error) {
+      console.error('Failed to update order:', error);
+      Alert.alert('Error', 'Failed to update order in database.');
+    } finally {
+      setLoading(false);
     }
-    setEditingId(null);
   };
 
   const copyToClipboard = async (id: string, includePrefix: boolean = false) => {
@@ -216,6 +239,19 @@ export const OrderIdGenerator = () => {
             </Text>
           </TouchableOpacity>
         </View>
+        
+        {selectedSource && (
+          <TextInput
+            label={selectedSource === 'whatsapp' ? 'Phone Number (Optional)' : 'Instagram URL (Optional)'}
+            value={sourceHandle}
+            onChangeText={setSourceHandle}
+            mode="outlined"
+            style={styles.sourceHandleInput}
+            keyboardType={selectedSource === 'whatsapp' ? 'phone-pad' : 'default'}
+            left={<TextInput.Icon icon={selectedSource === 'whatsapp' ? 'phone' : 'instagram'} />}
+            placeholder={selectedSource === 'whatsapp' ? '+91 99999 00000' : 'instagram.com/username'}
+          />
+        )}
 
         <Button 
           mode="contained" 

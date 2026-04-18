@@ -9,12 +9,12 @@ public interface IIdGeneratorService
     /// <summary>
     /// Generates a new unique alphanumeric Order ID.
     /// </summary>
-    Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null);
+    Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null);
     
     /// <summary>
     /// Generates a new unique alphanumeric Order ID and its items.
     /// </summary>
-    Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null);
+    Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null);
 
     /// <summary>
     /// Generates a sub-ID for an order item.
@@ -30,4 +30,14 @@ public interface IIdGeneratorService
     /// Gets recent order IDs from the database.
     /// </summary>
     Task<IEnumerable<object>> GetRecentOrderHistoryAsync(int limit = 20);
+    
+    /// <summary>
+    /// Gets specific order details including its items.
+    /// </summary>
+    Task<object?> GetOrderDetailsAsync(string orderId);
+
+    /// <summary>
+    /// Updates details for an existing order.
+    /// </summary>
+    Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? details = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null);
 }

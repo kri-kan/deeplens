@@ -24,6 +24,14 @@ public class OrderIdController : ControllerBase
     /// <summary>
     /// Gets the most recent order IDs from the database.
     /// </summary>
+    [HttpGet("{orderId}")]
+    public async Task<ActionResult<object>> GetOrder(string orderId)
+    {
+        var order = await _idService.GetOrderDetailsAsync(orderId);
+        if (order == null) return NotFound(new { message = $"Order ID {orderId} not found" });
+        return Ok(order);
+    }
+
     [HttpGet("history")]
     public async Task<IActionResult> GetRecentOrders([FromQuery] int limit = 20)
     {
@@ -35,9 +43,9 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID.
     /// </summary>
     [HttpPost("order")]
-    public async Task<IActionResult> GenerateOrderId([FromQuery] string? source, [FromQuery] string? paymentMode)
+    public async Task<IActionResult> GenerateOrderId([FromQuery] string? source, [FromQuery] string? paymentMode, [FromQuery] string? sourceHandle)
     {
-        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode);
+        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode, sourceHandle);
         return Ok(new { orderId });
     }
 
@@ -45,12 +53,12 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID and a set of item sub-IDs.
     /// </summary>
     [HttpPost("orderwithitems")]
-    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] string? source = null, [FromQuery] string? paymentMode = null)
+    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] string? source = null, [FromQuery] string? paymentMode = null, [FromQuery] string? sourceHandle = null)
     {
         if (itemCount < 1 || itemCount > 100)
             return BadRequest(new { message = "Item count must be between 1 and 100" });
 
-        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode);
+        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode, sourceHandle);
 
         return Ok(new { orderId, itemIds });
     }
@@ -77,4 +85,42 @@ public class OrderIdController : ControllerBase
         var itemId = _idGenerator.GenerateOrderItemId(orderId, itemIndex);
         return Ok(new { itemId });
     }
+
+    /// <summary>
+    /// Updates details (phone, address, items) for an existing order ID.
+    /// </summary>
+    [HttpPut("order/{orderId}")]
+    public async Task<IActionResult> UpdateOrderDetails(string orderId, [FromBody] OrderUpdateDto details)
+    {
+        var success = await _idGenerator.UpdateOrderDetailsAsync(
+            orderId, 
+            details.Phone, 
+            details.Address, 
+            details.OrderDetails,
+            details.Source,
+            details.SourceHandle,
+            details.PaymentMode,
+            details.Items);
+            
+        if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
+        return Ok(new { message = "Details updated successfully" });
+    }
+}
+
+public class OrderUpdateDto
+{
+    public string? Phone { get; set; }
+    public string? Address { get; set; }
+    public string? OrderDetails { get; set; }
+    public string? Source { get; set; }
+    public string? SourceHandle { get; set; }
+    public string? PaymentMode { get; set; }
+    public List<OrderItemUpdateDto>? Items { get; set; }
+}
+
+public class OrderItemUpdateDto
+{
+    public string? ProductId { get; set; }
+    public string? PhotoUrl { get; set; }
+    public string? Comments { get; set; }
 }

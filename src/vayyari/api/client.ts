@@ -37,6 +37,21 @@ class ApiClient {
   }
 
   /**
+   * Performs a typed PUT request.
+   */
+  async put<T>(path: string, body?: any, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+  }
+
+  /**
    * Internal request handler with telemetry and standardized error parsing.
    */
   private async request<T>(path: string, options: RequestOptions): Promise<T> {
