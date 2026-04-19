@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
-import { Surface, Text, Icon, IconButton, useTheme, Portal, Dialog, Button, TextInput } from 'react-native-paper';
+import { Surface, Text, Icon, IconButton, useTheme, Portal, Dialog, Button, TextInput, ActivityIndicator } from 'react-native-paper';
+import { searchApiClient } from '@/api/client';
 import { useRouter } from 'expo-router';
 import { OrderIdEntry } from '@/types/orders';
 import { ProfileCopyIcon } from '../../icons/ProfileCopyIcon';
+import { PlatformHandle } from '../../ui/PlatformHandle';
 
 interface HistoryItemProps {
   item: OrderIdEntry;
@@ -29,6 +31,8 @@ export const HistoryItem = ({
   const [editSource, setEditSource] = useState(item.source);
   const [editPayment, setEditPayment] = useState(item.paymentMethod);
   const [editHandle, setEditHandle] = useState(item.source === 'whatsapp' ? item.customerPhone || '' : item.instagramHandle || '');
+  const [detectedInstaId, setDetectedInstaId] = useState<string | null>(item.instagramUserId || null);
+  const [isLookupLoading, setIsLookupLoading] = useState(false);
   
   const hasChanged = editSource !== item.source || 
                     editPayment !== item.paymentMethod || 
@@ -43,6 +47,37 @@ export const HistoryItem = ({
     setEditSource(item.source);
     setEditPayment(item.paymentMethod);
     setEditHandle(item.source === 'whatsapp' ? item.customerPhone || '' : item.instagramHandle || '');
+    setDetectedInstaId(item.instagramUserId || null);
+  };
+
+  // Debounced Instagram ID Lookup
+  React.useEffect(() => {
+    if (isEditing && editSource === 'instagram' && editHandle.trim().length > 3) {
+      const handler = setTimeout(() => {
+        fetchInstagramId(editHandle.trim());
+      }, 400); 
+      return () => clearTimeout(handler);
+    }
+  }, [editHandle, editSource, isEditing]);
+
+  const fetchInstagramId = async (handle: string) => {
+    let username = handle;
+    if (handle.includes('instagram.com/')) {
+        const parts = handle.split('instagram.com/')[1].split('/')[0].split('?')[0];
+        if (parts) username = parts;
+    }
+    username = username.replace('@', '');
+
+    try {
+      setIsLookupLoading(true);
+      const response = await searchApiClient.get<{ userId: string }>(`/api/v1/insta/profile/${username}`);
+      setDetectedInstaId(response.userId);
+    } catch (e) {
+      console.warn('[HistoryItem] Failed to fetch insta id', e);
+      // Keep existing ID if lookup fails
+    } finally {
+      setIsLookupLoading(false);
+    }
   };
 
   const handleSave = () => {
@@ -58,6 +93,7 @@ export const HistoryItem = ({
       paymentMethod: editPayment,
       customerPhone: editSource === 'whatsapp' ? handleValue : '',
       instagramHandle: editSource === 'instagram' ? handleValue : '',
+      instagramUserId: editSource === 'instagram' ? (detectedInstaId || item.instagramUserId) : undefined,
     });
     onEdit(null);
   };
@@ -71,14 +107,17 @@ export const HistoryItem = ({
     <>
     <Surface style={styles.historyItem} elevation={0}>
       <View style={styles.historyLeft}>
-        <Icon 
-          source={item.source === 'whatsapp' ? 'whatsapp' : 'instagram'} 
-          size={28} 
-          color={item.source === 'whatsapp' ? '#25D366' : '#E4405F'} 
+        <PlatformHandle 
+          source={item.source} 
+          handle={item.source === 'whatsapp' ? (item.customerPhone || '') : (item.instagramHandle || item.sourceHandle || '')}
+          size={32}
+          showText={false}
         />
-        <View>
+        <View style={{ flex: 1, marginLeft: 2 }}>
           <TouchableOpacity onPress={() => router.push(`/utilities/order-details/${item.id}`)}>
-            <Text style={styles.historyId}>{item.id}</Text>
+            <Text style={[styles.historySubtitle, { marginBottom: -2 }]}>
+              ID: <Text style={{ fontWeight: '700', color: theme.colors.primary }}>{item.id}</Text>
+            </Text>
           </TouchableOpacity>
           <Text style={styles.historySubtitle}>
             {item.paymentMethod ? `${item.paymentMethod} • ` : ''}{formatTimeAgo(item.timestamp)}
@@ -142,15 +181,23 @@ export const HistoryItem = ({
             </TouchableOpacity>
           </View>
 
-          <TextInput
-            label={editSource === 'whatsapp' ? 'Phone Number' : 'Instagram URL'}
-            value={editHandle}
-            onChangeText={setEditHandle}
-            mode="outlined"
-            dense
-            keyboardType={editSource === 'whatsapp' ? 'phone-pad' : 'default'}
-            left={<TextInput.Icon icon={editSource === 'whatsapp' ? 'phone' : 'instagram'} />}
-          />
+          <View>
+            <TextInput
+              label={editSource === 'whatsapp' ? 'Phone Number' : 'Instagram URL'}
+              value={editHandle}
+              onChangeText={setEditHandle}
+              mode="outlined"
+              dense
+              keyboardType={editSource === 'whatsapp' ? 'phone-pad' : 'default'}
+              left={<TextInput.Icon icon={editSource === 'whatsapp' ? 'phone' : 'instagram'} />}
+              right={isLookupLoading ? <TextInput.Icon icon={() => <ActivityIndicator size="small" color={theme.colors.primary} />} /> : null}
+            />
+            {editSource === 'instagram' && detectedInstaId && (
+              <Text style={{ fontSize: 11, color: theme.colors.outline, marginTop: 4, marginLeft: 12 }}>
+                Permanent ID: <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>{detectedInstaId}</Text>
+              </Text>
+            )}
+          </View>
 
           <View style={styles.selectionRow}>
             <TouchableOpacity 
@@ -188,7 +235,7 @@ export const HistoryItem = ({
                 icon="check" 
                 size={28} 
                 onPress={handleSave}
-                disabled={!hasChanged}
+                disabled={!hasChanged || isLookupLoading}
                 iconColor={theme.colors.primary}
                 mode="contained"
                 style={{ backgroundColor: theme.colors.primaryContainer }}

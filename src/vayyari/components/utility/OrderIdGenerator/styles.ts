@@ -133,7 +133,7 @@ export const getStyles = (theme: MD3Theme) => {
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.outlineVariant,
       backgroundColor: theme.colors.background,
-      minHeight: 80,
+      minHeight: 56,
     },
     editContainer: {
       flex: 1,
@@ -212,13 +212,13 @@ export const getStyles = (theme: MD3Theme) => {
     historyLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 16,
+      gap: 8,
       paddingLeft: 12,
       flex: 1,
     },
     historyId: {
       fontWeight: 'bold',
-      fontSize: 16,
+      fontSize: 18,
       color: theme.colors.primary,
       textDecorationLine: 'underline',
     },

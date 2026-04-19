@@ -96,11 +96,11 @@ public class OrderIdController : ControllerBase
             orderId, 
             details.Phone, 
             details.Address, 
-            details.OrderDetails,
             details.Source,
             details.SourceHandle,
             details.PaymentMode,
-            details.Items);
+            details.Items,
+            details.TransactionId);
             
         if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
         return Ok(new { message = "Details updated successfully" });
@@ -111,16 +111,15 @@ public class OrderUpdateDto
 {
     public string? Phone { get; set; }
     public string? Address { get; set; }
-    public string? OrderDetails { get; set; }
     public string? Source { get; set; }
     public string? SourceHandle { get; set; }
     public string? PaymentMode { get; set; }
+    public string? TransactionId { get; set; }
     public List<OrderItemUpdateDto>? Items { get; set; }
 }
 
 public class OrderItemUpdateDto
 {
     public string? ProductId { get; set; }
-    public string? PhotoUrl { get; set; }
     public string? Comments { get; set; }
 }

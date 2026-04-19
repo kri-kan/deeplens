@@ -29,7 +29,7 @@ public interface IIdGeneratorService
     /// <summary>
     /// Gets recent order IDs from the database.
     /// </summary>
-    Task<IEnumerable<object>> GetRecentOrderHistoryAsync(int limit = 20);
+    Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20);
     
     /// <summary>
     /// Gets specific order details including its items.
@@ -39,5 +39,5 @@ public interface IIdGeneratorService
     /// <summary>
     /// Updates details for an existing order.
     /// </summary>
-    Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? details = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null);
+    Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null, string? transactionId = null);
 }

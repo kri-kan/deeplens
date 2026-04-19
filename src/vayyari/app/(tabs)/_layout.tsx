@@ -12,17 +12,17 @@ export default function TabLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen 
-        name="index" 
-        options={{ 
-          title: 'Studio',
-          tabBarIcon: () => 'view-grid' // Injecting string name mapping directly back to UI
-        }} 
-      />
-      <Tabs.Screen 
         name="utility" 
         options={{ 
           title: 'Utility',
           tabBarIcon: () => 'tools'
+        }} 
+      />
+      <Tabs.Screen 
+        name="index" 
+        options={{ 
+          title: 'Studio',
+          tabBarIcon: () => 'view-grid' // Injecting string name mapping directly back to UI
         }} 
       />
       <Tabs.Screen 

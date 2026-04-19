@@ -22,6 +22,8 @@ builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();
+builder.Services.AddScoped<IAttachmentService, AttachmentService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
 
 
 // MinIO Setup

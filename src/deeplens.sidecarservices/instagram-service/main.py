@@ -1,13 +1,17 @@
 import logging
-import instaloader
 import os
 import json
-import random
+import re
+import html
+import requests
 from time import time
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import List, Optional
 from datetime import datetime
+
+# Helper for dynamic browser fingerprinting
+from fingerprints import get_mobile_fingerprint
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,12 +19,77 @@ logger = logging.getLogger("InstagramSidecar")
 
 app = FastAPI(
     title="DeepLens Instagram Sidecar Service",
-    description="Synchronous API for retrieving Instagram profile and post metadata using rotated burner accounts.",
-    version="1.1.0"
+    description="Mobile-UA scraper for public Instagram profiles with optional session-based burner account rotation.",
+    version="2.0.0"
 )
 
-# --- Data Models ---
+# --- Mock Mode ---
+MOCK_ENABLED = os.getenv("DEBUG_MOCK_INSTAGRAM", "0") == "1"
 
+# --- Session Account Pool ---
+class SessionPool:
+    def __init__(self):
+        self.accounts = []
+        self.current_index = 0
+        self._load_accounts()
+
+    def _load_accounts(self):
+        raw = os.getenv("INSTAGRAM_ACCOUNTS", "[]")
+        try:
+            parsed = json.loads(raw)
+            for acc in parsed:
+                if "sessionid" in acc and "username" in acc:
+                    self.accounts.append({
+                        "username": acc["username"],
+                        "sessionid": acc["sessionid"],
+                        "csrftoken": acc.get("csrftoken", ""),
+                        "penalty_until": 0,
+                        "use_count": 0,
+                    })
+            logger.info(f"Loaded {len(self.accounts)} burner account(s) into session pool")
+        except Exception as e:
+            logger.error(f"Failed to parse INSTAGRAM_ACCOUNTS: {e}")
+
+    def get_next_cookies(self, base_cookies: dict) -> tuple:
+        """Returns (cookies, username) for the next available account (round-robin).
+        Falls back to base_cookies if no accounts are configured."""
+        if not self.accounts:
+            return dict(base_cookies), None
+
+        now = time()
+        for _ in range(len(self.accounts)):
+            acc = self.accounts[self.current_index]
+            self.current_index = (self.current_index + 1) % len(self.accounts)
+            if acc["penalty_until"] < now:
+                acc["use_count"] += 1
+                cookies = dict(base_cookies)
+                cookies["sessionid"] = acc["sessionid"]
+                if acc["csrftoken"]:
+                    cookies["csrftoken"] = acc["csrftoken"]
+                logger.info(f"Using burner account: {acc['username']}")
+                return cookies, acc["username"]
+
+        logger.warning("All burner accounts are throttled. Falling back to anonymous.")
+        return dict(base_cookies), None
+
+    def apply_penalty(self, username: str, duration: int = 1800):
+        for acc in self.accounts:
+            if acc["username"] == username:
+                acc["penalty_until"] = time() + duration
+                logger.warning(f"Account '{username}' penalized for {duration}s")
+
+    def status(self):
+        now = time()
+        return {
+            "total": len(self.accounts),
+            "active": [a["username"] for a in self.accounts if a["penalty_until"] < now],
+            "throttled": [a["username"] for a in self.accounts if a["penalty_until"] >= now],
+            "anonymous_fallback": len(self.accounts) == 0,
+        }
+
+pool = SessionPool()
+
+# --- Data Models ---
 class InstagramProfile(BaseModel):
     user_id: str
     username: str
@@ -34,201 +103,182 @@ class InstagramProfile(BaseModel):
     is_verified: bool
     profile_pic_url: str
 
-class InstagramPost(BaseModel):
-    shortcode: str
-    caption: Optional[str] = None
-    timestamp: datetime
-    media_url: str
-    is_video: bool
-    likes: int
-    comments_count: int
-
-# --- Session Management ---
-
-class SessionManager:
-    def __init__(self):
-        self.loaders = []
-        self.current_index = 0
-        self.mock_enabled = os.getenv("DEBUG_MOCK_INSTAGRAM", "0") == "1"
-        self.load_accounts()
-
-    def load_accounts(self):
-        accounts_json = os.getenv("INSTAGRAM_ACCOUNTS", "[]")
-        try:
-            accounts = json.loads(accounts_json)
-            for acc in accounts:
-                if "username" in acc and "sessionid" in acc:
-                    loader = instaloader.Instaloader(
-                        sleep=True,
-                        download_pictures=False,
-                        download_videos=False,
-                        download_video_thumbnails=False,
-                        download_geotags=False,
-                        download_comments=False,
-                        save_metadata=False,
-                        compress_json=False,
-                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                    )
-                    # Inject session cookie
-                    loader.context._session.cookies.set('sessionid', acc['sessionid'], domain='.instagram.com')
-                    loader.context.username = acc['username']
-                    
-                    self.loaders.append({
-                        "instance": loader,
-                        "username": acc['username'],
-                        "penalty_until": 0,
-                        "use_count": 0
-                    })
-            logger.info(f"Initialized SessionManager with {len(self.loaders)} active burner accounts")
-        except Exception as e:
-            logger.error(f"Failed to parse INSTAGRAM_ACCOUNTS: {e}")
-
-    def get_next_loader(self) -> Optional[Dict]:
-        if not self.loaders:
-            return None
-        
-        now = time()
-        # Find next available loader (Round Robin)
-        for _ in range(len(self.loaders)):
-            candidate = self.loaders[self.current_index]
-            self.current_index = (self.current_index + 1) % len(self.loaders)
-            
-            if candidate["penalty_until"] < now:
-                candidate["use_count"] += 1
-                return candidate
-        
-        return None
-
-    def apply_penalty(self, username: str, duration: int = 1800):
-        """Apply a cool-down period to an account (30 mins by default)"""
-        for l in self.loaders:
-            if l["username"] == username:
-                l["penalty_until"] = time() + duration
-                logger.warning(f"Account {username} throttled. Penalty applied until {datetime.fromtimestamp(l['penalty_until'])}")
-                break
-
-    def get_status(self):
-        now = time()
-        active = [l["username"] for l in self.loaders if l["penalty_until"] < now]
-        throttled = [l["username"] for l in self.loaders if l["penalty_until"] >= now]
-        return {
-            "total_accounts": len(self.loaders),
-            "active": active,
-            "throttled": throttled,
-            "mock_fallback": self.mock_enabled
-        }
-
-# Initialize Global Session Manager
-session_manager = SessionManager()
-
-# --- Mock Data Helper ---
-
-def get_mock_profile(username: str) -> InstagramProfile:
+# --- Helpers ---
+def get_mock_profile(username: str) -> dict:
     fake_id = str(sum(ord(c) for c in username) * 123456)
-    return InstagramProfile(
-        user_id=fake_id,
-        username=username,
-        full_name=f"Mock {username.capitalize()}",
-        biography=f"This is a mocked profile for {username} because of rate limits or missing credentials.",
-        followers=1234,
-        following=567,
-        posts_count=42,
-        external_url=f"https://{username}.com",
-        is_private=False,
-        is_verified=True,
-        profile_pic_url="https://via.placeholder.com/150"
-    )
+    return {
+        "user_id": fake_id,
+        "username": username,
+        "full_name": f"Mock {username.capitalize()}",
+        "biography": "Mock profile (rate limited or no accounts configured).",
+        "followers": 1234,
+        "following": 567,
+        "posts_count": 42,
+        "external_url": f"https://{username}.com",
+        "is_private": False,
+        "is_verified": True,
+        "profile_pic_url": "https://via.placeholder.com/150",
+    }
+
+def scrape_profile(username: str) -> dict:
+    """Scrape a public Instagram profile using dynamic mobile browser headers."""
+    url = f"https://www.instagram.com/{username}/"
+    
+    headers, base_cookies = get_mobile_fingerprint()
+    cookies, acc_username = pool.get_next_cookies(base_cookies)
+
+    cookies["referer"] = url
+
+    try:
+        resp = requests.get(
+            url,
+            headers={**headers, "referer": url},
+            cookies=cookies,
+            timeout=15,
+            allow_redirects=True
+        )
+    except requests.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Network error reaching Instagram: {e}")
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"Profile '{username}' not found")
+
+    if resp.status_code == 429:
+        if acc_username:
+            pool.apply_penalty(acc_username)
+        raise HTTPException(status_code=429, detail="Instagram rate limit hit. Try again later.")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Instagram returned HTTP {resp.status_code}")
+
+    raw_html = resp.text
+
+    # --- Extract profile data from embedded JSON in page HTML ---
+    # Instagram embeds structured data in a <script type="application/ld+json"> block
+    user_id = ""
+    full_name = ""
+    biography = ""
+    followers = 0
+    following = 0
+    posts_count = 0
+    is_private = False
+    is_verified = False
+    profile_pic_url = ""
+    external_url = None
+
+    # Try to extract from `window.__additionalDataLoaded` or inline JSON blobs
+    # Pattern 1: look for "user_id":"..." or "id":"..."
+    uid_match = re.search(r'"user_id"\s*:\s*"(\d+)"', raw_html)
+    if not uid_match:
+        uid_match = re.search(r'"profilePage_(\d+)"', raw_html)
+    if uid_match:
+        user_id = uid_match.group(1)
+
+    # Pattern 2: ld+json structured data
+    ld_match = re.search(r'<script type="application/ld\+json">(.*?)</script>', raw_html, re.DOTALL)
+    if ld_match:
+        try:
+            ld = json.loads(ld_match.group(1))
+            full_name = ld.get("name", "")
+            description = ld.get("description", "")
+            biography = description
+            main_entity = ld.get("mainEntityofPage", {})
+            interaction_stats = ld.get("interactionStatistic", [])
+            for stat in interaction_stats:
+                itype = stat.get("interactionType", "")
+                val = int(stat.get("userInteractionCount", 0))
+                if "Follow" in itype:
+                    followers = val
+            profile_pic_url = ld.get("image", "")
+        except Exception:
+            pass
+
+    # Pattern 3: og:description contains follower count
+    if not followers:
+        og_desc = re.search(r'<meta property="og:description" content="([^"]+)"', raw_html)
+        if og_desc:
+            text = og_desc.group(1)
+            # Format: "X Followers, Y Following, Z Posts"
+            nums = re.findall(r'([\d,]+)\s+(Follower|Following|Post)', text)
+            for val, kind in nums:
+                n = int(val.replace(",", ""))
+                if kind == "Follower":
+                    followers = n
+                elif kind == "Following":
+                    following = n
+                elif kind == "Post":
+                    posts_count = n
+
+    # Pattern 4: og:image for profile pic
+    if not profile_pic_url:
+        og_img = re.search(r'<meta property="og:image" content="([^"]+)"', raw_html)
+        if og_img:
+            profile_pic_url = og_img.group(1)
+
+    # Pattern 5: full name from og:title
+    if not full_name:
+        og_title = re.search(r'<meta property="og:title" content="([^"]+)"', raw_html)
+        if og_title:
+            full_name = og_title.group(1)
+
+    # Clean up fields: Instagram embeds page title in og:title, strip the suffix
+    if full_name:
+        full_name = html.unescape(full_name)
+        # og:title format: "Name (@handle) • Instagram photos and videos"
+        full_name = re.sub(r'\s*\(@[^)]+\)\s*[\u2022\u00b7•·].*$', '', full_name).strip()
+    biography = html.unescape(biography)
+
+    if not user_id:
+        logger.warning(f"Could not extract user_id for {username} from HTML. Instagram may have changed page structure.")
+
+    return {
+        "user_id": user_id,
+        "username": username,
+        "full_name": full_name,
+        "biography": biography,
+        "followers": followers,
+        "following": following,
+        "posts_count": posts_count,
+        "external_url": external_url,
+        "is_private": is_private,
+        "is_verified": is_verified,
+        "profile_pic_url": profile_pic_url,
+    }
 
 # --- Routes ---
 
 @app.get("/")
 async def root():
     return {
-        "message": "DeepLens Instagram Sidecar Service (Rotated Burners)",
-        "status": session_manager.get_status()
+        "message": "DeepLens Instagram Sidecar (Mobile UA Scraper v2.0)",
+        "pool": pool.status(),
+        "mock_mode": MOCK_ENABLED,
     }
 
 @app.get("/health")
 async def health():
     return {
-        "status": "ok", 
+        "status": "ok",
         "timestamp": datetime.now().isoformat(),
-        "pool": session_manager.get_status()
+        "pool": pool.status(),
+        "mock_mode": MOCK_ENABLED,
     }
 
 @app.get("/profile/{username}", response_model=InstagramProfile)
 async def get_profile(username: str):
-    loader_data = session_manager.get_next_loader()
-    
-    if not loader_data:
-        if session_manager.mock_enabled:
-            logger.warning(f"No active accounts. Returning mock data for {username}")
-            return get_mock_profile(username)
-        raise HTTPException(status_code=503, detail="No active Instagram accounts in pool (all throttled)")
+    logger.info(f"Profile request: {username}")
 
-    loader = loader_data["instance"]
-    acc_name = loader_data["username"]
-    logger.info(f"Fetching profile for {username} using account: {acc_name}")
+    if MOCK_ENABLED:
+        logger.warning(f"MOCK MODE active for {username}")
+        return get_mock_profile(username)
 
     try:
-        profile = instaloader.Profile.from_username(loader.context, username)
-        return InstagramProfile(
-            user_id=str(profile.userid),
-            username=profile.username,
-            full_name=profile.full_name,
-            biography=profile.biography,
-            followers=profile.followers,
-            following=profile.followees,
-            posts_count=profile.mediacount,
-            external_url=profile.external_url,
-            is_private=profile.is_private,
-            is_verified=profile.is_verified,
-            profile_pic_url=profile.profile_pic_url
-        )
-    except instaloader.exceptions.ProfileNotExistsException:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    except instaloader.exceptions.ConnectionException as e:
-        if "429" in str(e):
-            session_manager.apply_penalty(acc_name)
-            # Recursive retry with another loader if available
-            return await get_profile(username)
-        logger.error(f"Connection error for {acc_name}: {e}")
-        raise HTTPException(status_code=503, detail=str(e))
+        data = scrape_profile(username)
+        return InstagramProfile(**data)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Unexpected error using {acc_name}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/profile/{username}/posts", response_model=List[InstagramPost])
-async def get_recent_posts(username: str, count: int = Query(default=10, le=50)):
-    loader_data = session_manager.get_next_loader()
-    if not loader_data:
-        raise HTTPException(status_code=503, detail="No active Instagram accounts in pool")
-
-    loader = loader_data["instance"]
-    acc_name = loader_data["username"]
-    logger.info(f"Fetching posts for {username} using account: {acc_name}")
-
-    try:
-        profile = instaloader.Profile.from_username(loader.context, username)
-        if profile.is_private:
-            raise HTTPException(status_code=403, detail="Profile is private")
-            
-        posts = []
-        for post in profile.get_posts():
-            if len(posts) >= count:
-                break
-            posts.append(InstagramPost(
-                shortcode=post.shortcode,
-                caption=post.caption,
-                timestamp=post.date_utc,
-                media_url=post.url,
-                is_video=post.is_video,
-                likes=post.likes,
-                comments_count=post.comments
-            ))
-        return posts
-    except Exception as e:
-        logger.error(f"Error fetching posts using {acc_name}: {e}")
+        logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -65,7 +65,7 @@ services:
       - "${INSTAGRAM_SIDECAR_PORT:-8005}:8005"
     environment:
       - PYTHONUNBUFFERED=1
-      - DEBUG_MOCK_INSTAGRAM=1
+      - DEBUG_MOCK_INSTAGRAM=0
       - INSTAGRAM_ACCOUNTS=${INSTAGRAM_ACCOUNTS}
     networks:
       - deeplens-network

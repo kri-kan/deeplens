@@ -10,10 +10,16 @@ export const API_ROUTES = {
   },
 
   // Order & Product ID Generation
+  ATTACHMENTS: {
+    UPLOAD: '/api/v1/Attachment/upload',
+    DOWNLOAD: (path: string) => `/api/v1/Attachment/download?path=${encodeURIComponent(path)}`,
+  },
+  
   ORDERS: {
     GENERATE: '/api/v1/orderid/order',
     GENERATE_WITH_ITEMS: '/api/v1/orderid/orderwithitems',
     HISTORY: '/api/v1/orderid/history',
+    GET_BY_ID: (orderId: string) => `/api/v1/orderid/${orderId}`,
     UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
   },
   

@@ -50,6 +50,12 @@ class ApiClient {
       },
     });
   }
+  /**
+   * Performs a typed DELETE request.
+   */
+  async delete<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, { ...options, method: 'DELETE' });
+  }
 
   /**
    * Internal request handler with telemetry and standardized error parsing.

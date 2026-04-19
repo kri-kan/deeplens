@@ -39,7 +39,7 @@ export const OrderIdGenerator = () => {
     if (selectedSource === 'instagram' && sourceHandle.trim().length > 3) {
       const handler = setTimeout(() => {
         fetchInstagramId(sourceHandle.trim());
-      }, 1000);
+      }, 400); // Faster trigger after paste
       return () => clearTimeout(handler);
     } else {
       setDetectedInstaId(null);
@@ -183,7 +183,6 @@ export const OrderIdGenerator = () => {
     const textToCopy = includePrefix ? `order id # ${id}` : id;
     console.log('Copied to clipboard:', textToCopy);
     await Clipboard.setStringAsync(textToCopy);
-    setSnackbarVisible(true);
   };
 
   const formatTimeAgo = (timestamp: string) => {
@@ -301,7 +300,7 @@ export const OrderIdGenerator = () => {
         <Button 
           mode="contained" 
           onPress={handleGenerate} 
-          disabled={!selectedSource || loading}
+          disabled={!selectedSource || loading || isLookupLoading}
           loading={loading}
           style={[
             styles.generateButton,
@@ -335,9 +334,6 @@ export const OrderIdGenerator = () => {
         />
       </View>
 
-      <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000}>
-        ID copied to clipboard
-      </Snackbar>
     </Surface>
   );
 };

@@ -151,20 +151,21 @@ public class IdGeneratorService : IIdGeneratorService
         return productId;
     }
 
-    public async Task<IEnumerable<object>> GetRecentOrderHistoryAsync(int limit = 20)
+    public async Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20)
     {
         using var conn = await GetConnectionAsync();
-        return await conn.QueryAsync<object>(@"
+        return await conn.QueryAsync<OrderHistoryDto>(@"
             SELECT 
-                o.order_id as id, 
-                s.name as source, 
-                p.name as paymentMethod, 
-                o.customer_phone as customerPhone,
-                o.source_handle as sourceHandle,
-                o.instagram_user_id as instagramUserId,
-                o.customer_address as customerAddress,
-                o.order_details as orderDetails,
-                o.created_at as timestamp
+                o.order_id as Id, 
+                s.name as Source, 
+                p.name as PaymentMethod, 
+                o.customer_phone as CustomerPhone,
+                o.source_handle as SourceHandle,
+                o.instagram_handle as InstagramHandle,
+                o.instagram_user_id as InstagramUserId,
+                o.customer_address as CustomerAddress,
+                o.transaction_id as TransactionId,
+                o.created_at as Timestamp
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
@@ -181,12 +182,13 @@ public class IdGeneratorService : IIdGeneratorService
             SELECT 
                 o.order_id as id, 
                 s.name as source, 
-                p.name as paymentMethod, 
-                o.customer_phone as customerPhone,
-                o.source_handle as sourceHandle,
-                o.instagram_user_id as instagramUserId,
-                o.customer_address as customerAddress,
-                o.order_details as orderDetails,
+                p.name as paymentmethod, 
+                o.customer_phone as customerphone,
+                o.source_handle as sourcehandle,
+                o.instagram_handle as instagramhandle,
+                o.instagram_user_id as instagramuserid,
+                o.customer_address as customeraddress,
+                o.transaction_id as transactionid,
                 o.created_at as timestamp
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
@@ -196,31 +198,55 @@ public class IdGeneratorService : IIdGeneratorService
 
         if (order == null) return null;
 
-        var items = await conn.QueryAsync(@"
+        var items = await conn.QueryAsync<dynamic>(@"
             SELECT 
-                product_id_text as productId,
-                photo_url as photoUrl,
-                comments
-            FROM ""orderItem""
-            WHERE order_id_ref = (SELECT id FROM ""orderId"" WHERE order_id = @OrderId)
-            ORDER BY item_index",
+                i.id,
+                i.product_id,
+                i.comments
+            FROM ""orderItem"" i
+            WHERE i.order_id_ref = (SELECT id FROM ""orderId"" WHERE order_id = @OrderId)
+            ORDER BY i.item_index",
             new { OrderId = orderId });
 
-        return new {
-            order.id,
-            order.source,
-            order.paymentMethod,
-            order.customerPhone,
-            order.sourceHandle,
-            order.instagramUserId,
-            order.customerAddress,
-            order.orderDetails,
-            order.timestamp,
-            items = items
+        var orderWithAttachments = (IDictionary<string, object>)order;
+        orderWithAttachments["attachments"] = await conn.QueryAsync(@"
+            SELECT a.id, a.bucket_name as bucket, a.object_key as key, a.original_filename as name, ea.tag
+            FROM attachments a
+            JOIN entity_attachments ea ON a.id = ea.attachment_id
+            WHERE ea.entity_type = 'order' AND ea.entity_id = @OrderId",
+            new { OrderId = orderId });
+
+        var itemsList = new List<object>();
+        foreach (var item in items) {
+            var itemDict = (IDictionary<string, object>)item;
+            var itemId = (int)itemDict["id"];
+            itemDict["attachments"] = await conn.QueryAsync(@"
+                SELECT a.id, a.bucket_name as bucket, a.object_key as key, a.original_filename as name
+                FROM attachments a
+                JOIN entity_attachments ea ON a.id = ea.attachment_id
+                WHERE ea.entity_type = 'order_item' AND ea.entity_id = @ItemId",
+                new { ItemId = itemId.ToString() });
+            itemsList.Add(itemDict);
+        }
+
+        return new
+        {
+            id = order.id,
+            source = order.source,
+            paymentMethod = order.paymentmethod, // paymentmethod is likely lowercase too
+            customerPhone = order.customerphone,
+            sourceHandle = order.sourcehandle,
+            instagramHandle = order.instagramhandle,
+            instagramUserId = order.instagramuserid,
+            customerAddress = order.customeraddress,
+            transactionId = order.transactionid,
+            timestamp = order.timestamp,
+            attachments = orderWithAttachments["attachments"],
+            items = itemsList
         };
     }
 
-    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? details = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null)
+    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null, string? transactionId = null)
     {
         using var conn = await GetConnectionAsync();
         
@@ -249,7 +275,7 @@ public class IdGeneratorService : IIdGeneratorService
                 source_handle = COALESCE(@SourceHandle, source_handle),
                 payment_mode_id = COALESCE(@PaymentModeId, payment_mode_id),
                 customer_address = COALESCE(@Address, customer_address),
-                order_details = COALESCE(@Details, order_details)
+                transaction_id = COALESCE(@TransactionId, transaction_id)
             WHERE order_id = @OrderId",
             new { 
                 OrderId = orderId, 
@@ -258,7 +284,7 @@ public class IdGeneratorService : IIdGeneratorService
                 SourceHandle = sourceHandle,
                 PaymentModeId = paymentModeId,
                 Address = address,
-                Details = details
+                TransactionId = transactionId
             });
         
         if (items != null)
@@ -274,13 +300,12 @@ public class IdGeneratorService : IIdGeneratorService
             foreach (var item in items)
             {
                 await conn.ExecuteAsync(@"
-                    INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id_text, photo_url, comments)
-                    VALUES (@InternalId, @Index, @ProdId, @PhotoUrl, @Comments)",
+                    INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id, comments)
+                    VALUES (@InternalId, @Index, @ProdId, @Comments)",
                     new { 
                         InternalId = internalId, 
                         Index = index++, 
                         ProdId = item.ProductId, 
-                        PhotoUrl = item.PhotoUrl, 
                         Comments = item.Comments 
                     });
             }
@@ -306,3 +331,16 @@ public class IdGeneratorService : IIdGeneratorService
         return s.Length < minLength ? s.PadLeft(minLength, '0') : s;
     }
 }
+
+public record OrderHistoryDto(
+    string Id,
+    string? Source,
+    string? PaymentMethod,
+    string? CustomerPhone,
+    string? SourceHandle,
+    string? InstagramHandle,
+    string? InstagramUserId,
+    string? CustomerAddress,
+    string? TransactionId,
+    DateTime Timestamp
+);
