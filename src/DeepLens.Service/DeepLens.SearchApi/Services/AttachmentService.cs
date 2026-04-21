@@ -1,4 +1,5 @@
 using System.Data;
+using System.IO;
 using Dapper;
 using Minio;
 using Minio.DataModel.Args;
@@ -72,7 +73,9 @@ public class AttachmentService : IAttachmentService
             }
             else if (entityType.Equals("product", StringComparison.OrdinalIgnoreCase))
             {
-                objectKey = StoragePathRegistry.GetProductPath(tag ?? "general", fileName);
+                string hash = Guid.NewGuid().ToString("N");
+                string extension = Path.GetExtension(fileName);
+                objectKey = StoragePathRegistry.GetProductPath(tag ?? "general", hash, extension);
             }
             else
             {

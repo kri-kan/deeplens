@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DeepLens.Contracts\DeepLens.Contracts.csproj" />
+    <ProjectReference Include="..\DeepLens.Shared.Common\DeepLens.Shared.Common.csproj" />
+    <ProjectReference Include="..\DeepLens.Domain\DeepLens.Domain.csproj" />
   </ItemGroup>
 
 </Project>

@@ -54,7 +54,7 @@ public class IngestionController : ControllerBase
 
             // 1. Save to Storage
             using var stream = request.File.OpenReadStream();
-            var storagePath = await _storageService.UploadFileAsync(request.File.FileName, stream, request.File.ContentType);
+            var storagePath = await _storageService.UploadFileAsync(request.File.FileName, stream, request.File.ContentType, request.Category);
 
             // 2. Save Metadata
             var imageId = Guid.NewGuid();
@@ -163,7 +163,7 @@ public class IngestionController : ControllerBase
                 };
 
                 using var stream = file.OpenReadStream();
-                var storagePath = await _storageService.UploadFileAsync(file.FileName, stream, file.ContentType);
+                var storagePath = await _storageService.UploadFileAsync(file.FileName, stream, file.ContentType, singleRequest.Category);
 
                 var imageId = Guid.NewGuid();
                 await _metadataService.SaveIngestionDataAsync(imageId, storagePath, file.ContentType, file.Length, singleRequest);

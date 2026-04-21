@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KPcno8TBwmtBhLArtoCiaCsXy4gVVYOCh6sddkwzxG30T2shGcNxCWsHsaNPend
+\restrict 7UOtmw7APa1X2GldAWQW0G8knnvEveTCkDZ7tRMWs5wXdsrVd3ILE8i9e8MBLR3
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -19,6 +19,259 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
+ALTER TABLE IF EXISTS ONLY public.video_insights DROP CONSTRAINT IF EXISTS video_insights_video_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.vendor_contacts DROP CONSTRAINT IF EXISTS vendor_contacts_vendor_id_fkey;
+ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_source_id_fkey;
+ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_payment_mode_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.seller_listings DROP CONSTRAINT IF EXISTS seller_listings_variant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.seller_listings DROP CONSTRAINT IF EXISTS seller_listings_seller_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.search_queries DROP CONSTRAINT IF EXISTS search_queries_session_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.search_queries DROP CONSTRAINT IF EXISTS search_queries_collection_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_watchlist_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_scraper_session_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_category_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.product_variants DROP CONSTRAINT IF EXISTS product_variants_product_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.media DROP CONSTRAINT IF EXISTS media_variant_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_namespace_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_namespace_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_resource_metrics DROP CONSTRAINT IF EXISTS k8s_resource_metrics_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_workload_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_namespace_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_nodes DROP CONSTRAINT IF EXISTS k8s_nodes_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_namespaces DROP CONSTRAINT IF EXISTS k8s_namespaces_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_events DROP CONSTRAINT IF EXISTS k8s_events_namespace_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_events DROP CONSTRAINT IF EXISTS k8s_events_cluster_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.infisical_secrets DROP CONSTRAINT IF EXISTS infisical_secrets_project_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.follower_snapshots DROP CONSTRAINT IF EXISTS follower_snapshots_watchlist_id_fkey;
+ALTER TABLE IF EXISTS ONLY public."orderItem" DROP CONSTRAINT IF EXISTS fk_order_ref;
+ALTER TABLE IF EXISTS ONLY public.entity_attachments DROP CONSTRAINT IF EXISTS entity_attachments_attachment_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.engagement_snapshots DROP CONSTRAINT IF EXISTS engagement_snapshots_video_id_fkey;
+ALTER TABLE IF EXISTS ONLY public.competitor_videos DROP CONSTRAINT IF EXISTS competitor_videos_watchlist_id_fkey;
+DROP TRIGGER IF EXISTS trigger_watchlist_updated_at ON public.competitor_watchlist;
+DROP TRIGGER IF EXISTS trigger_videos_updated_at ON public.competitor_videos;
+DROP TRIGGER IF EXISTS trigger_sessions_updated_at ON public.scraper_sessions;
+DROP INDEX IF EXISTS public.idx_watchlist_platform;
+DROP INDEX IF EXISTS public.idx_videos_posted_at;
+DROP INDEX IF EXISTS public.idx_vendors_name;
+DROP INDEX IF EXISTS public.idx_vendors_active;
+DROP INDEX IF EXISTS public.idx_vendor_contacts_vendor;
+DROP INDEX IF EXISTS public.idx_system_health_status;
+DROP INDEX IF EXISTS public.idx_system_health_service;
+DROP INDEX IF EXISTS public.idx_system_health_recorded_at;
+DROP INDEX IF EXISTS public.idx_system_health_metric;
+DROP INDEX IF EXISTS public.idx_snapshots_video_time;
+DROP INDEX IF EXISTS public.idx_service_dependencies_status;
+DROP INDEX IF EXISTS public.idx_service_dependencies_service;
+DROP INDEX IF EXISTS public.idx_service_dependencies_dependency;
+DROP INDEX IF EXISTS public.idx_service_dependencies_critical;
+DROP INDEX IF EXISTS public.idx_search_queries_timestamp;
+DROP INDEX IF EXISTS public.idx_products_sku;
+DROP INDEX IF EXISTS public.idx_platform_configs_updated_at;
+DROP INDEX IF EXISTS public.idx_media_type;
+DROP INDEX IF EXISTS public.idx_media_phash;
+DROP INDEX IF EXISTS public.idx_k8s_workloads_type;
+DROP INDEX IF EXISTS public.idx_k8s_workloads_namespace_id;
+DROP INDEX IF EXISTS public.idx_k8s_workloads_name;
+DROP INDEX IF EXISTS public.idx_k8s_workloads_last_sync;
+DROP INDEX IF EXISTS public.idx_k8s_workloads_cluster_namespace;
+DROP INDEX IF EXISTS public.idx_k8s_workloads_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_services_type;
+DROP INDEX IF EXISTS public.idx_k8s_services_namespace_id;
+DROP INDEX IF EXISTS public.idx_k8s_services_name;
+DROP INDEX IF EXISTS public.idx_k8s_services_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_pods_workload_id;
+DROP INDEX IF EXISTS public.idx_k8s_pods_phase;
+DROP INDEX IF EXISTS public.idx_k8s_pods_node_name;
+DROP INDEX IF EXISTS public.idx_k8s_pods_namespace_id;
+DROP INDEX IF EXISTS public.idx_k8s_pods_name;
+DROP INDEX IF EXISTS public.idx_k8s_pods_cluster_namespace;
+DROP INDEX IF EXISTS public.idx_k8s_pods_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_nodes_status;
+DROP INDEX IF EXISTS public.idx_k8s_nodes_role;
+DROP INDEX IF EXISTS public.idx_k8s_nodes_name;
+DROP INDEX IF EXISTS public.idx_k8s_nodes_heartbeat;
+DROP INDEX IF EXISTS public.idx_k8s_nodes_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_namespaces_status;
+DROP INDEX IF EXISTS public.idx_k8s_namespaces_name;
+DROP INDEX IF EXISTS public.idx_k8s_namespaces_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_metrics_resource_type;
+DROP INDEX IF EXISTS public.idx_k8s_metrics_resource_name;
+DROP INDEX IF EXISTS public.idx_k8s_metrics_recorded_at;
+DROP INDEX IF EXISTS public.idx_k8s_metrics_metric_name;
+DROP INDEX IF EXISTS public.idx_k8s_metrics_cluster_resource_time;
+DROP INDEX IF EXISTS public.idx_k8s_metrics_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_events_type;
+DROP INDEX IF EXISTS public.idx_k8s_events_timestamps;
+DROP INDEX IF EXISTS public.idx_k8s_events_reason;
+DROP INDEX IF EXISTS public.idx_k8s_events_object_kind;
+DROP INDEX IF EXISTS public.idx_k8s_events_namespace_id;
+DROP INDEX IF EXISTS public.idx_k8s_events_cluster_time;
+DROP INDEX IF EXISTS public.idx_k8s_events_cluster_id;
+DROP INDEX IF EXISTS public.idx_k8s_clusters_provider;
+DROP INDEX IF EXISTS public.idx_k8s_clusters_name;
+DROP INDEX IF EXISTS public.idx_k8s_clusters_last_sync;
+DROP INDEX IF EXISTS public.idx_k8s_clusters_active;
+DROP INDEX IF EXISTS public.idx_jobs_status;
+DROP INDEX IF EXISTS public.idx_insta_cache_scraped_at;
+DROP INDEX IF EXISTS public.idx_infisical_secrets_project_id;
+DROP INDEX IF EXISTS public.idx_infisical_secrets_last_accessed;
+DROP INDEX IF EXISTS public.idx_infisical_secrets_key;
+DROP INDEX IF EXISTS public.idx_infisical_projects_tenant_id;
+DROP INDEX IF EXISTS public.idx_infisical_projects_project_id;
+DROP INDEX IF EXISTS public.idx_infisical_projects_active;
+DROP INDEX IF EXISTS public.idx_follower_snapshots_watchlist_time;
+DROP INDEX IF EXISTS public.idx_entity_attachments_lookup;
+DROP INDEX IF EXISTS public.idx_comments_entity;
+DROP INDEX IF EXISTS public.idx_comments_attachments;
+DROP INDEX IF EXISTS public.idx_attachments_original_filename;
+DROP INDEX IF EXISTS public.idx_attachments_metadata;
+DROP INDEX IF EXISTS public.idx_api_usage_tenant_timestamp;
+DROP INDEX IF EXISTS public.idx_api_usage_logs_timestamp;
+DROP INDEX IF EXISTS public.idx_api_usage_logs_tenant_id;
+DROP INDEX IF EXISTS public.idx_api_usage_logs_status_code;
+DROP INDEX IF EXISTS public.idx_api_usage_logs_endpoint;
+ALTER TABLE IF EXISTS ONLY public.video_insights DROP CONSTRAINT IF EXISTS video_insights_video_id_insight_type_key;
+ALTER TABLE IF EXISTS ONLY public.video_insights DROP CONSTRAINT IF EXISTS video_insights_pkey;
+ALTER TABLE IF EXISTS ONLY public.vendors DROP CONSTRAINT IF EXISTS vendors_pkey;
+ALTER TABLE IF EXISTS ONLY public.vendor_contacts DROP CONSTRAINT IF EXISTS vendor_contacts_pkey;
+ALTER TABLE IF EXISTS ONLY public.user_preferences DROP CONSTRAINT IF EXISTS user_preferences_user_id_preference_key_key;
+ALTER TABLE IF EXISTS ONLY public.user_preferences DROP CONSTRAINT IF EXISTS user_preferences_pkey;
+ALTER TABLE IF EXISTS ONLY public."orderItem" DROP CONSTRAINT IF EXISTS uk_order_item_index;
+ALTER TABLE IF EXISTS ONLY public.system_health_metrics DROP CONSTRAINT IF EXISTS system_health_metrics_pkey;
+ALTER TABLE IF EXISTS ONLY public."productId" DROP CONSTRAINT IF EXISTS studio_products_product_id_key;
+ALTER TABLE IF EXISTS ONLY public."productId" DROP CONSTRAINT IF EXISTS studio_products_pkey;
+ALTER TABLE IF EXISTS ONLY public.payment_modes DROP CONSTRAINT IF EXISTS studio_payment_modes_pkey;
+ALTER TABLE IF EXISTS ONLY public.payment_modes DROP CONSTRAINT IF EXISTS studio_payment_modes_name_key;
+ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_pkey;
+ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_order_id_key;
+ALTER TABLE IF EXISTS ONLY public.order_sources DROP CONSTRAINT IF EXISTS studio_order_sources_pkey;
+ALTER TABLE IF EXISTS ONLY public.order_sources DROP CONSTRAINT IF EXISTS studio_order_sources_name_key;
+ALTER TABLE IF EXISTS ONLY public.service_dependencies DROP CONSTRAINT IF EXISTS service_dependencies_service_name_dependency_name_key;
+ALTER TABLE IF EXISTS ONLY public.service_dependencies DROP CONSTRAINT IF EXISTS service_dependencies_pkey;
+ALTER TABLE IF EXISTS ONLY public.sellers DROP CONSTRAINT IF EXISTS sellers_pkey;
+ALTER TABLE IF EXISTS ONLY public.sellers DROP CONSTRAINT IF EXISTS sellers_external_id_key;
+ALTER TABLE IF EXISTS ONLY public.seller_listings DROP CONSTRAINT IF EXISTS seller_listings_pkey;
+ALTER TABLE IF EXISTS ONLY public.search_sessions DROP CONSTRAINT IF EXISTS search_sessions_pkey;
+ALTER TABLE IF EXISTS ONLY public.search_queries DROP CONSTRAINT IF EXISTS search_queries_pkey;
+ALTER TABLE IF EXISTS ONLY public.scraper_sessions DROP CONSTRAINT IF EXISTS scraper_sessions_platform_username_key;
+ALTER TABLE IF EXISTS ONLY public.scraper_sessions DROP CONSTRAINT IF EXISTS scraper_sessions_pkey;
+ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_pkey;
+ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_job_id_key;
+ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_pkey;
+ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_base_sku_key;
+ALTER TABLE IF EXISTS ONLY public.product_variants DROP CONSTRAINT IF EXISTS product_variants_pkey;
+ALTER TABLE IF EXISTS ONLY public.platform_configs DROP CONSTRAINT IF EXISTS platform_configs_pkey;
+ALTER TABLE IF EXISTS ONLY public."orderItem" DROP CONSTRAINT IF EXISTS "orderItem_pkey";
+ALTER TABLE IF EXISTS ONLY public.media DROP CONSTRAINT IF EXISTS media_pkey;
+ALTER TABLE IF EXISTS ONLY public.media_deletion_queue DROP CONSTRAINT IF EXISTS media_deletion_queue_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_cluster_id_namespace_id_workload_name_workloa_key;
+ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_cluster_id_namespace_id_service_name_key;
+ALTER TABLE IF EXISTS ONLY public.k8s_resource_metrics DROP CONSTRAINT IF EXISTS k8s_resource_metrics_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_cluster_id_namespace_id_pod_name_key;
+ALTER TABLE IF EXISTS ONLY public.k8s_nodes DROP CONSTRAINT IF EXISTS k8s_nodes_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_nodes DROP CONSTRAINT IF EXISTS k8s_nodes_cluster_id_node_name_key;
+ALTER TABLE IF EXISTS ONLY public.k8s_namespaces DROP CONSTRAINT IF EXISTS k8s_namespaces_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_namespaces DROP CONSTRAINT IF EXISTS k8s_namespaces_cluster_id_namespace_name_key;
+ALTER TABLE IF EXISTS ONLY public.k8s_events DROP CONSTRAINT IF EXISTS k8s_events_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_clusters DROP CONSTRAINT IF EXISTS k8s_clusters_pkey;
+ALTER TABLE IF EXISTS ONLY public.k8s_clusters DROP CONSTRAINT IF EXISTS k8s_clusters_name_key;
+ALTER TABLE IF EXISTS ONLY public.instagram_profile_cache DROP CONSTRAINT IF EXISTS instagram_profile_cache_pkey;
+ALTER TABLE IF EXISTS ONLY public.ingestion_meta DROP CONSTRAINT IF EXISTS ingestion_meta_pkey;
+ALTER TABLE IF EXISTS ONLY public.infisical_secrets DROP CONSTRAINT IF EXISTS infisical_secrets_project_id_secret_key_key;
+ALTER TABLE IF EXISTS ONLY public.infisical_secrets DROP CONSTRAINT IF EXISTS infisical_secrets_pkey;
+ALTER TABLE IF EXISTS ONLY public.infisical_projects DROP CONSTRAINT IF EXISTS infisical_projects_project_id_key;
+ALTER TABLE IF EXISTS ONLY public.infisical_projects DROP CONSTRAINT IF EXISTS infisical_projects_pkey;
+ALTER TABLE IF EXISTS ONLY public.image_collections DROP CONSTRAINT IF EXISTS image_collections_pkey;
+ALTER TABLE IF EXISTS ONLY public.image_collections DROP CONSTRAINT IF EXISTS image_collections_name_key;
+ALTER TABLE IF EXISTS ONLY public.follower_snapshots DROP CONSTRAINT IF EXISTS follower_snapshots_watchlist_id_snapshot_at_key;
+ALTER TABLE IF EXISTS ONLY public.follower_snapshots DROP CONSTRAINT IF EXISTS follower_snapshots_pkey;
+ALTER TABLE IF EXISTS ONLY public.entity_attachments DROP CONSTRAINT IF EXISTS entity_attachments_pkey;
+ALTER TABLE IF EXISTS ONLY public.engagement_snapshots DROP CONSTRAINT IF EXISTS engagement_snapshots_video_id_snapshot_at_key;
+ALTER TABLE IF EXISTS ONLY public.engagement_snapshots DROP CONSTRAINT IF EXISTS engagement_snapshots_pkey;
+ALTER TABLE IF EXISTS ONLY public.competitor_watchlist DROP CONSTRAINT IF EXISTS competitor_watchlist_platform_username_key;
+ALTER TABLE IF EXISTS ONLY public.competitor_watchlist DROP CONSTRAINT IF EXISTS competitor_watchlist_pkey;
+ALTER TABLE IF EXISTS ONLY public.competitor_videos DROP CONSTRAINT IF EXISTS competitor_videos_platform_platform_video_id_key;
+ALTER TABLE IF EXISTS ONLY public.competitor_videos DROP CONSTRAINT IF EXISTS competitor_videos_pkey;
+ALTER TABLE IF EXISTS ONLY public.comments DROP CONSTRAINT IF EXISTS comments_pkey;
+ALTER TABLE IF EXISTS ONLY public.categories DROP CONSTRAINT IF EXISTS categories_slug_key;
+ALTER TABLE IF EXISTS ONLY public.categories DROP CONSTRAINT IF EXISTS categories_pkey;
+ALTER TABLE IF EXISTS ONLY public.attachments DROP CONSTRAINT IF EXISTS attachments_pkey;
+ALTER TABLE IF EXISTS ONLY public.api_usage_logs DROP CONSTRAINT IF EXISTS api_usage_logs_pkey;
+ALTER TABLE IF EXISTS public."productId" ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.payment_modes ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.order_sources ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public."orderItem" ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public."orderId" ALTER COLUMN id DROP DEFAULT;
+DROP TABLE IF EXISTS public.video_insights;
+DROP TABLE IF EXISTS public.vendors;
+DROP TABLE IF EXISTS public.vendor_contacts;
+DROP TABLE IF EXISTS public.user_preferences;
+DROP TABLE IF EXISTS public.system_health_metrics;
+DROP SEQUENCE IF EXISTS public.studio_payment_modes_id_seq;
+DROP SEQUENCE IF EXISTS public.studio_order_sources_id_seq;
+DROP TABLE IF EXISTS public.service_dependencies;
+DROP TABLE IF EXISTS public.sellers;
+DROP TABLE IF EXISTS public.seller_listings;
+DROP TABLE IF EXISTS public.search_sessions;
+DROP TABLE IF EXISTS public.search_queries;
+DROP TABLE IF EXISTS public.scraper_sessions;
+DROP TABLE IF EXISTS public.scraper_jobs;
+DROP TABLE IF EXISTS public.products;
+DROP TABLE IF EXISTS public.product_variants;
+DROP SEQUENCE IF EXISTS public."productId_id_seq";
+DROP TABLE IF EXISTS public."productId";
+DROP TABLE IF EXISTS public.platform_configs;
+DROP TABLE IF EXISTS public.payment_modes;
+DROP TABLE IF EXISTS public.order_sources;
+DROP SEQUENCE IF EXISTS public."orderItem_id_seq";
+DROP TABLE IF EXISTS public."orderItem";
+DROP SEQUENCE IF EXISTS public."orderId_id_seq";
+DROP TABLE IF EXISTS public."orderId";
+DROP TABLE IF EXISTS public.media_deletion_queue;
+DROP TABLE IF EXISTS public.media;
+DROP TABLE IF EXISTS public.k8s_workloads;
+DROP TABLE IF EXISTS public.k8s_services;
+DROP TABLE IF EXISTS public.k8s_resource_metrics;
+DROP TABLE IF EXISTS public.k8s_pods;
+DROP TABLE IF EXISTS public.k8s_nodes;
+DROP TABLE IF EXISTS public.k8s_namespaces;
+DROP TABLE IF EXISTS public.k8s_events;
+DROP TABLE IF EXISTS public.k8s_clusters;
+DROP TABLE IF EXISTS public.instagram_profile_cache;
+DROP TABLE IF EXISTS public.ingestion_meta;
+DROP TABLE IF EXISTS public.infisical_secrets;
+DROP TABLE IF EXISTS public.infisical_projects;
+DROP TABLE IF EXISTS public.image_collections;
+DROP TABLE IF EXISTS public.follower_snapshots;
+DROP TABLE IF EXISTS public.entity_attachments;
+DROP TABLE IF EXISTS public.engagement_snapshots;
+DROP TABLE IF EXISTS public.competitor_watchlist;
+DROP TABLE IF EXISTS public.competitor_videos;
+DROP TABLE IF EXISTS public.comments;
+DROP TABLE IF EXISTS public.categories;
+DROP TABLE IF EXISTS public.attachments;
+DROP TABLE IF EXISTS public.api_usage_logs;
+DROP FUNCTION IF EXISTS public.update_updated_at_column();
+DROP FUNCTION IF EXISTS public.set_tenant_context(p_tenant_id uuid);
+DROP FUNCTION IF EXISTS public.list_tenants(p_active_only boolean, p_plan_type character varying);
+DROP FUNCTION IF EXISTS public.initialize_tenant_redis_database(p_tenant_id uuid);
+DROP FUNCTION IF EXISTS public.get_tenant_info(p_tenant_id uuid);
+DROP FUNCTION IF EXISTS public.delete_tenant(p_tenant_id uuid, p_confirm_deletion boolean);
+DROP FUNCTION IF EXISTS public.create_tenant_qdrant_collection(p_tenant_id uuid, p_tenant_name character varying);
+DROP FUNCTION IF EXISTS public.create_tenant_database(p_tenant_id uuid, p_tenant_name character varying, p_database_suffix character varying);
+DROP FUNCTION IF EXISTS public.create_tenant(p_name character varying, p_domain character varying, p_subdomain character varying, p_plan_type character varying, p_storage_provider character varying, p_storage_config jsonb);
+DROP FUNCTION IF EXISTS public.configure_tenant_storage(p_tenant_id uuid, p_provider character varying, p_configuration jsonb);
+DROP FUNCTION IF EXISTS public.cleanup_instagram_cache(p_days integer);
+DROP EXTENSION IF EXISTS "uuid-ossp";
+DROP EXTENSION IF EXISTS pgcrypto;
+DROP EXTENSION IF EXISTS pg_trgm;
+DROP EXTENSION IF EXISTS hstore;
 --
 -- Name: hstore; Type: EXTENSION; Schema: -; Owner: -
 --
@@ -74,6 +327,27 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
+
+--
+-- Name: cleanup_instagram_cache(integer); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.cleanup_instagram_cache(p_days integer DEFAULT 7) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_deleted_count INTEGER;
+BEGIN
+    DELETE FROM instagram_profile_cache
+    WHERE scraped_at < NOW() - (p_days || ' days')::INTERVAL;
+    
+    GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
+    RETURN v_deleted_count;
+END;
+$$;
+
+
+ALTER FUNCTION public.cleanup_instagram_cache(p_days integer) OWNER TO postgres;
 
 --
 -- Name: configure_tenant_storage(uuid, character varying, jsonb); Type: FUNCTION; Schema: public; Owner: postgres
@@ -372,6 +646,45 @@ CREATE TABLE public.api_usage_logs (
 ALTER TABLE public.api_usage_logs OWNER TO postgres;
 
 --
+-- Name: attachments; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.attachments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    bucket_name character varying(63) NOT NULL,
+    object_key text NOT NULL,
+    content_type character varying(100),
+    file_size_bytes bigint,
+    original_filename character varying(255),
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.attachments OWNER TO postgres;
+
+--
+-- Name: TABLE attachments; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.attachments IS 'Centralized registry for all files uploaded to MinIO across the DeepLens platform';
+
+
+--
+-- Name: COLUMN attachments.id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.attachments.id IS 'The unique ID used to reference this file in other tables';
+
+
+--
+-- Name: COLUMN attachments.object_key; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.attachments.object_key IS 'The full path/key inside the MinIO bucket';
+
+
+--
 -- Name: categories; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -385,6 +698,38 @@ CREATE TABLE public.categories (
 
 
 ALTER TABLE public.categories OWNER TO postgres;
+
+--
+-- Name: comments; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.comments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    entity_type character varying(50) NOT NULL,
+    entity_id text NOT NULL,
+    author_id uuid,
+    content text NOT NULL,
+    attachment_ids uuid[] DEFAULT '{}'::uuid[],
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.comments OWNER TO postgres;
+
+--
+-- Name: TABLE comments; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.comments IS 'Structured messages/notes for any entity in the system, supporting multiple file attachments per comment';
+
+
+--
+-- Name: COLUMN comments.attachment_ids; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.comments.attachment_ids IS 'Array of UUIDs referring to the centralized attachments table';
+
 
 --
 -- Name: competitor_videos; Type: TABLE; Schema: public; Owner: postgres
@@ -486,6 +831,44 @@ CREATE TABLE public.engagement_snapshots (
 ALTER TABLE public.engagement_snapshots OWNER TO postgres;
 
 --
+-- Name: entity_attachments; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.entity_attachments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    attachment_id uuid NOT NULL,
+    entity_type character varying(50) NOT NULL,
+    entity_id text NOT NULL,
+    tag character varying(50),
+    sort_order integer DEFAULT 0,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.entity_attachments OWNER TO postgres;
+
+--
+-- Name: TABLE entity_attachments; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.entity_attachments IS 'Universal junction table linking any business entity to attachments stored in MinIO';
+
+
+--
+-- Name: COLUMN entity_attachments.entity_type; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.entity_attachments.entity_type IS 'The name of the table or business entity (e.g., order, category)';
+
+
+--
+-- Name: COLUMN entity_attachments.entity_id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.entity_attachments.entity_id IS 'The primary key of the related entity (stored as string for flexibility)';
+
+
+--
 -- Name: follower_snapshots; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -571,6 +954,29 @@ CREATE TABLE public.ingestion_meta (
 
 
 ALTER TABLE public.ingestion_meta OWNER TO postgres;
+
+--
+-- Name: instagram_profile_cache; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.instagram_profile_cache (
+    username character varying(255) NOT NULL,
+    user_id character varying(255),
+    full_name text,
+    biography text,
+    followers_count integer,
+    following_count integer,
+    posts_count integer,
+    profile_pic_url text,
+    external_url text,
+    is_private boolean,
+    is_verified boolean,
+    scraped_at timestamp with time zone DEFAULT now(),
+    raw_json jsonb
+);
+
+
+ALTER TABLE public.instagram_profile_cache OWNER TO postgres;
 
 --
 -- Name: k8s_clusters; Type: TABLE; Schema: public; Owner: postgres
@@ -812,28 +1218,38 @@ CREATE TABLE public."orderId" (
     order_id character varying(10) CONSTRAINT studio_orders_order_id_not_null NOT NULL,
     source_id integer,
     payment_mode_id integer,
+    created_at timestamp with time zone DEFAULT now(),
     customer_phone character varying(20),
-    customer_address text,
-    order_details text,
     source_handle character varying(255),
     instagram_user_id character varying(100),
-    created_at timestamp with time zone DEFAULT now()
+    customer_address text,
+    transaction_id character varying(100),
+    instagram_handle character varying(255)
 );
-
-CREATE TABLE public."orderItem" (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    order_id_ref integer NOT NULL,
-    item_index integer NOT NULL,
-    product_id_ref uuid,
-    metadata jsonb,
-    created_at timestamp with time zone DEFAULT now()
-);
-
-ALTER TABLE ONLY public."orderItem" ADD CONSTRAINT order_item_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public."orderItem" ADD CONSTRAINT order_item_order_id_ref_fkey FOREIGN KEY (order_id_ref) REFERENCES public."orderId"(id) ON DELETE CASCADE;
 
 
 ALTER TABLE public."orderId" OWNER TO postgres;
+
+--
+-- Name: TABLE "orderId"; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public."orderId" IS 'Stores generated order IDs and associated metadata. Source handle can be whatsapp number or instagram handle.';
+
+
+--
+-- Name: COLUMN "orderId".transaction_id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public."orderId".transaction_id IS 'UPI or bank transaction ID for the order payment';
+
+
+--
+-- Name: COLUMN "orderId".instagram_handle; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public."orderId".instagram_handle IS 'Fallback/Original instagram handle for the order.';
+
 
 --
 -- Name: orderId_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
@@ -855,6 +1271,53 @@ ALTER SEQUENCE public."orderId_id_seq" OWNER TO postgres;
 --
 
 ALTER SEQUENCE public."orderId_id_seq" OWNED BY public."orderId".id;
+
+
+--
+-- Name: orderItem; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."orderItem" (
+    id integer NOT NULL,
+    order_id_ref integer NOT NULL,
+    item_index integer NOT NULL,
+    quantity integer DEFAULT 1,
+    price numeric(10,2),
+    created_at timestamp with time zone DEFAULT now(),
+    product_id text,
+    comments text
+);
+
+
+ALTER TABLE public."orderItem" OWNER TO postgres;
+
+--
+-- Name: COLUMN "orderItem".product_id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public."orderItem".product_id IS 'Unified text field for product identification (handles both generated and manual IDs).';
+
+
+--
+-- Name: orderItem_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public."orderItem_id_seq"
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public."orderItem_id_seq" OWNER TO postgres;
+
+--
+-- Name: orderItem_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public."orderItem_id_seq" OWNED BY public."orderItem".id;
 
 
 --
@@ -1280,6 +1743,13 @@ ALTER TABLE ONLY public."orderId" ALTER COLUMN id SET DEFAULT nextval('public."o
 
 
 --
+-- Name: orderItem id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."orderItem" ALTER COLUMN id SET DEFAULT nextval('public."orderItem_id_seq"'::regclass);
+
+
+--
 -- Name: order_sources id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1309,10 +1779,61 @@ COPY public.api_usage_logs (id, tenant_id, endpoint, method, status_code, respon
 
 
 --
+-- Data for Name: attachments; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.attachments (id, bucket_name, object_key, content_type, file_size_bytes, original_filename, metadata, created_at) FROM stdin;
+7831c6ae-d438-4008-aad3-84753334e08e	deeplens-storage	orders/0000Q/transactions/2026-04-19/ac09f0fb86e24ea1b3617f848e5bf16f_txn_0000Q.jpg	image/jpeg	312500	txn_0000Q.jpg	{}	2026-04-19 18:17:34.892143+00
+36262a57-d433-4360-acac-444150af39c5	deeplens-storage	orders/0000Q/transactions/2026-04-19/e79489f638de422facf5698e0692d0e2_txn_0000Q.jpg	image/jpeg	312500	txn_0000Q.jpg	{}	2026-04-19 18:18:29.707126+00
+e8a74332-bbe9-448f-85b4-35ae5ebf4703	deeplens-storage	orders/0000Q/transactions/2026-04-19/4d4c0e23996c4340a88c82c2ffa1bca0_txn_0000Q.jpg	image/jpeg	164139	txn_0000Q.jpg	{}	2026-04-19 18:26:32.23966+00
+a057fc0a-f1fa-4c03-83d9-7c6dc1152a45	deeplens-storage	orders/0000Q/transactions/2026-04-19/cda0960ec9a948ce87238801c731d04e_txn_0000Q.jpg	image/jpeg	298633	txn_0000Q.jpg	{}	2026-04-19 19:01:12.847437+00
+8831feab-bfa6-4fdb-980e-5f70373ad081	deeplens-storage	orders/0000R/comments/2026-04-19/401e785f555741ea9bf771920a4ee1d6_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 19:58:28.990568+00
+2f8fa93c-0078-4f5d-998a-8137d8bce3d3	deeplens-storage	orders/0000R/comments/2026-04-19/12514a2cecf04357936491ceffc816eb_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 19:59:55.705432+00
+ed8e90f5-cd8a-49cf-a1bb-11238db56798	deeplens-storage	orders/0000R/comments/2026-04-19/05524626716c4a809c05d97e87f7916f_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:00:52.629383+00
+50f5013f-ca6c-4bea-9e48-6c1b09204179	deeplens-storage	orders/0000R/comments/2026-04-19/60c50f992007407ba29b40ec76cf601f_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:00:52.793406+00
+14d76737-be23-491c-a9e4-bccc664cb1d0	deeplens-storage	orders/0000R/comments/2026-04-19/74184a923b8442e0b50b53d0186b0066_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:02:16.456753+00
+e0998844-ec1f-462e-9be3-ec54d95897ab	deeplens-storage	orders/0000R/comments/2026-04-19/2018eafa20b34bf5a14e3b771f2cbec9_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:02:16.702387+00
+81c7eb8c-a8e7-4ea5-a778-9f2780a74375	deeplens-storage	orders/0000R/comments/2026-04-19/be001e223c4f4a7da354f4c4e807ad4e_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:03:09.777047+00
+2193cab9-5b66-434f-9a70-50527ff252da	deeplens-storage	orders/0000R/comments/2026-04-19/4fca80594caa499eaf43322e1e4d8920_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:03:09.925824+00
+5467cd49-4990-46d0-8c22-b0660b1f89c3	deeplens-storage	orders/0000R/transactions/2026-04-19/8c3056fbf38441008e9704e21be32285_txn_0000R.jpg	image/jpeg	1016280	txn_0000R.jpg	{}	2026-04-19 20:04:15.39907+00
+d9e2609d-b572-4b11-ae3d-69078b81b927	deeplens-storage	orders/0000R/comments/2026-04-19/5c4556d9172e43fdb963066dd17660a7_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:05:10.462227+00
+dd4a4870-ff5b-4509-bd43-870f958dc793	deeplens-storage	orders/0000R/comments/2026-04-19/16edf19934fe4160a4ad1a62a6fdec18_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:05:10.610536+00
+147e4941-9767-4039-8c86-f5058f572a36	deeplens-storage	orders/0000R/comments/2026-04-19/1a4ae957654e487bbe6548180fd2e490_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:08:04.704142+00
+bea1da5c-f721-4ea4-9892-b8cdb8c8fa51	deeplens-storage	orders/0000R/comments/2026-04-19/dc5b085387694e89876293d9924d8b56_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:08:12.00406+00
+1d702927-3573-4833-9160-9f333301ba4a	deeplens-storage	orders/0000R/comments/2026-04-19/786672af814b41fc9de400861f7e9921_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:11:34.571907+00
+11cde790-6eb3-4637-98a8-c9ac7e449005	deeplens-storage	orders/0000R/comments/2026-04-19/f69d442fd0d44b2ca2210469bc9c0e07_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:14:33.998582+00
+9cd02a49-f2bf-4f18-bd8f-596198f6c85c	deeplens-storage	orders/0000R/comments/2026-04-19/179118245c454739b70191aa9f53cb97_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:17:25.310101+00
+fc3d1029-cf24-44d8-b2ce-a2788a935e68	deeplens-storage	orders/0000R/comments/2026-04-19/c289cc1b66184bfb84851e029d29099c_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:22:38.725648+00
+62e436b4-d10e-42bf-a072-c2690d0d4a85	deeplens-storage	orders/0000R/comments/2026-04-19/2ad428370b8b4d0997d4f8da28b1bf8e_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:22:54.349794+00
+3a628a38-5420-4605-b041-abd2b8afa217	deeplens-storage	orders/0000R/comments/2026-04-20/d10f0142ca704b4a8295c1e6787de50f_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-20 18:27:09.40503+00
+ee09bc64-dd25-4453-ab6e-d12b9a5ea962	deeplens-storage	orders/0000R/comments/2026-04-20/817892d784884e3cbe7c7eee1872100c_Screenshot_20260420-213422.png	image/png	1615772	Screenshot_20260420-213422.png	{}	2026-04-20 19:05:21.58574+00
+2503263c-6aa2-4c2e-8913-881d6b13ade9	deeplens-storage	orders/0000R/comments/2026-04-20/e9b796335a9c47bfb3b8a8afad2a236b_Screenshot_20260420-213422.png	image/png	1615772	Screenshot_20260420-213422.png	{}	2026-04-20 19:06:38.761157+00
+07450f72-5a72-438a-9b82-a94f4d36c0c1	deeplens-storage	orders/0000R/comments/2026-04-20/ffe26bf51a984d25bf6b66f16d1c0f06_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-20 19:06:50.968659+00
+\.
+
+
+--
 -- Data for Name: categories; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
 COPY public.categories (id, name, slug, metadata_json, created_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: comments; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.comments (id, entity_type, entity_id, author_id, content, attachment_ids, created_at, updated_at) FROM stdin;
+a4bc0b7a-cd67-49bd-ba72-3b13b079c411	order	0000P	\N	something	{}	2026-04-19 12:55:48.841933+00	2026-04-19 12:55:48.841933+00
+36fe8f6b-1d40-4afb-a841-28bb3d164ba0	order	0000P	\N	New thing	{}	2026-04-19 12:56:03.995344+00	2026-04-19 12:56:03.995344+00
+9cf31065-4a99-46d0-babf-568af2ddea08	order	0000P	\N	I'm a very big comment message that spans in multiple lines in the screen	{}	2026-04-19 13:09:02.059762+00	2026-04-19 13:09:02.059762+00
+6bc6724a-36d2-4e30-a3c1-6f209f7d2963	order	0000R	\N	Hey some comment	{}	2026-04-19 19:52:17.651654+00	2026-04-19 19:52:17.651654+00
+72802e87-b914-49df-9e4d-029524bed232	order	0000R	\N	Hey	{bea1da5c-f721-4ea4-9892-b8cdb8c8fa51}	2026-04-19 20:08:12.07822+00	2026-04-19 20:08:12.07822+00
+bfe71f3e-afbc-48a3-9fcf-8e68bc3dd74c	order	0000R	\N		{11cde790-6eb3-4637-98a8-c9ac7e449005}	2026-04-19 20:21:36.089563+00	2026-04-19 20:21:36.089563+00
+b5053446-1485-4a0d-a294-f5dca6d4cca4	order	0000R	\N		{11cde790-6eb3-4637-98a8-c9ac7e449005}	2026-04-19 20:27:21.177007+00	2026-04-19 20:27:21.177007+00
+d7ad319a-fa2d-455a-bbfa-5fd71a4312c5	order	0000R	\N	This is a very long comment that span across multiple lens at least four lines is what I am expecting such comment is posted let's have it so much content appears 	{ee09bc64-dd25-4453-ab6e-d12b9a5ea962}	2026-04-20 18:27:09.595294+00	2026-04-20 19:05:21.697595+00
+b6ec029f-0859-4f87-a7c5-30087bf83eef	order	0000R	\N		{2503263c-6aa2-4c2e-8913-881d6b13ade9,07450f72-5a72-438a-9b82-a94f4d36c0c1}	2026-04-20 19:06:51.057159+00	2026-04-20 19:06:51.057159+00
 \.
 
 
@@ -1337,6 +1858,38 @@ COPY public.competitor_watchlist (id, platform, username, platform_id, display_n
 --
 
 COPY public.engagement_snapshots (id, video_id, view_count, like_count, comment_count, share_count, repost_count, video_age_hours, tracking_phase, snapshot_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: entity_attachments; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.entity_attachments (id, attachment_id, entity_type, entity_id, tag, sort_order, created_at) FROM stdin;
+6a011d90-beb1-40e8-a91f-1ad498aa39b1	7831c6ae-d438-4008-aad3-84753334e08e	order	0000Q	receipt	0	2026-04-19 18:17:34.895336+00
+e546d650-16b3-4bcc-a288-3e08049683f2	36262a57-d433-4360-acac-444150af39c5	order	0000Q	receipt	0	2026-04-19 18:18:29.708699+00
+04bb2d87-7ad8-4dbf-ba1e-0576e19e56a2	e8a74332-bbe9-448f-85b4-35ae5ebf4703	order	0000Q	receipt	0	2026-04-19 18:26:32.243954+00
+bf31299b-5672-41ec-83a0-ee750089bbf9	a057fc0a-f1fa-4c03-83d9-7c6dc1152a45	order	0000Q	receipt	0	2026-04-19 19:01:12.848733+00
+b8c3b98f-ceda-466b-a163-a8d43bf0c549	8831feab-bfa6-4fdb-980e-5f70373ad081	order	0000R	note_attachment	0	2026-04-19 19:58:28.994319+00
+bf32b050-a9e1-4bb8-b969-786b11d8e4ab	2f8fa93c-0078-4f5d-998a-8137d8bce3d3	order	0000R	note_attachment	0	2026-04-19 19:59:55.707185+00
+368bcb7a-1725-43e0-87f7-bcebf99d2152	ed8e90f5-cd8a-49cf-a1bb-11238db56798	order	0000R	note_attachment	0	2026-04-19 20:00:52.631089+00
+c85081d1-e890-41cf-a185-13e1611e9c74	50f5013f-ca6c-4bea-9e48-6c1b09204179	order	0000R	note_attachment	0	2026-04-19 20:00:52.795984+00
+9d4061e8-4d55-4283-a9ad-9e9e989a75e7	14d76737-be23-491c-a9e4-bccc664cb1d0	order	0000R	note_attachment	0	2026-04-19 20:02:16.472914+00
+db19980b-6ded-4567-9870-03f910567382	e0998844-ec1f-462e-9be3-ec54d95897ab	order	0000R	note_attachment	0	2026-04-19 20:02:16.704524+00
+c0022353-44e5-4d01-ac17-73537d059f34	81c7eb8c-a8e7-4ea5-a778-9f2780a74375	order	0000R	note_attachment	0	2026-04-19 20:03:09.782624+00
+74078a38-bd0f-402a-bd5e-0244f7e52d64	2193cab9-5b66-434f-9a70-50527ff252da	order	0000R	note_attachment	0	2026-04-19 20:03:09.927438+00
+2cd77e3b-311a-4e77-8273-954daf6e1fad	5467cd49-4990-46d0-8c22-b0660b1f89c3	order	0000R	receipt	0	2026-04-19 20:04:15.401675+00
+103bd81b-1821-424b-8baf-11d22be6f7cc	d9e2609d-b572-4b11-ae3d-69078b81b927	order	0000R	note_attachment	0	2026-04-19 20:05:10.466648+00
+170a6043-8e88-4179-ae60-aeeb4b47c75e	dd4a4870-ff5b-4509-bd43-870f958dc793	order	0000R	note_attachment	0	2026-04-19 20:05:10.612549+00
+dd41896f-5956-414a-8566-a62d58b0af79	147e4941-9767-4039-8c86-f5058f572a36	order	0000R	note_attachment	0	2026-04-19 20:08:04.708154+00
+fd45be52-2b8e-4860-a109-88eebcf760f5	bea1da5c-f721-4ea4-9892-b8cdb8c8fa51	order	0000R	note_attachment	0	2026-04-19 20:08:12.005298+00
+7104c569-d4a4-4f38-8864-3927066210a7	1d702927-3573-4833-9160-9f333301ba4a	order	0000R	note_attachment	0	2026-04-19 20:11:34.578661+00
+eb8918b1-f5fb-4fa1-b808-f3d7c4808110	11cde790-6eb3-4637-98a8-c9ac7e449005	order	0000R	note_attachment	0	2026-04-19 20:14:34.00651+00
+417e9693-da8a-40a1-bb6a-6090299db823	9cd02a49-f2bf-4f18-bd8f-596198f6c85c	order	0000R	note_attachment	0	2026-04-19 20:17:25.314003+00
+8dea98a7-572d-43d9-95dc-aba5ee5e9466	3a628a38-5420-4605-b041-abd2b8afa217	order	0000R	note_attachment	0	2026-04-20 18:27:09.410959+00
+f0bced58-8e45-428a-9a7f-ddf27fc76589	ee09bc64-dd25-4453-ab6e-d12b9a5ea962	order	0000R	note_attachment	0	2026-04-20 19:05:21.588316+00
+5e73a28a-be80-4814-b79b-3bd39c955d08	2503263c-6aa2-4c2e-8913-881d6b13ade9	order	0000R	note_attachment	0	2026-04-20 19:06:38.763529+00
+b8435752-0114-46d4-905a-4553299177e3	07450f72-5a72-438a-9b82-a94f4d36c0c1	order	0000R	note_attachment	0	2026-04-20 19:06:50.969909+00
 \.
 
 
@@ -1377,6 +1930,15 @@ COPY public.infisical_secrets (id, project_id, secret_key, secret_version, creat
 --
 
 COPY public.ingestion_meta (id, key, value, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: instagram_profile_cache; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.instagram_profile_cache (username, user_id, full_name, biography, followers_count, following_count, posts_count, profile_pic_url, external_url, is_private, is_verified, scraped_at, raw_json) FROM stdin;
+kri_kan	1109543189	Sai krishna kanth		0	0	0	https://scontent.cdninstagram.com/v/t51.2885-19/299867876_1125316438060402_6350604429767258935_n.jpg?stp=dst-jpg_s100x100_tt6&amp;_nc_cat=102&amp;ccb=7-5&amp;_nc_sid=bf7eb4&amp;efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLnd3dy4xMDgwLkMzIn0%3D&amp;_nc_ohc=VoWDhTLhNtoQ7kNvwGItAZr&amp;_nc_oc=Ador7I56fJi50Dws-Z1cWaFUtmKVKEEtxLN2fgeegH70s48UvgYgy3A7_T_q8jzNJEo&amp;_nc_zt=24&amp;_nc_ht=scontent.cdninstagram.com&amp;_nc_ss=7a289&amp;oh=00_Af3pgZZcqT2NBiVZS4tOYf74YmV6rjEAKxGzvNJG45JgTA&amp;oe=69EA9A0D	\N	f	f	2026-04-19 10:36:49.816474+00	\N
 \.
 
 
@@ -1449,6 +2011,8 @@ COPY public.k8s_workloads (id, cluster_id, namespace_id, workload_name, workload
 --
 
 COPY public.media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, vector_id, phash, is_default, quality_score, width, height, duration_seconds, thumbnail_path, preview_path, features_extracted, indexed, uploaded_at, metadata_json) FROM stdin;
+8c724a74-fb2c-4e56-8c62-ce639f5fc2d5	\N	products/saree/Q226/378767b8846359ed2345c090350929630817ef1cc01deca87cba40f819ea311f.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-21 19:15:41.969145+00	\N
+cb5e5448-7554-4c3d-9a8b-352d141c6665	\N	products/saree/Q226/39ed0f45703c86f47856da05bf2bcdff2211d4eaff6c802a6f44bbcdd89a5823.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-21 19:15:41.969145+00	\N
 \.
 
 
@@ -1464,21 +2028,40 @@ COPY public.media_deletion_queue (id, media_id, storage_path, deleted_from_disk,
 -- Data for Name: orderId; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public."orderId" (id, order_id, source_id, payment_mode_id, created_at) FROM stdin;
-1	00001	1	1	2026-04-17 20:45:53.497731+00
-2	00002	2	\N	2026-04-17 20:45:59.589658+00
-3	00003	1	2	2026-04-17 20:46:03.305033+00
-4	00004	2	\N	2026-04-17 20:46:30.325451+00
-5	00005	1	\N	2026-04-17 20:57:36.914314+00
-6	00006	1	1	2026-04-17 20:57:42.495526+00
-7	00007	1	1	2026-04-17 20:57:46.619895+00
-8	00008	2	2	2026-04-17 20:57:49.013951+00
-9	00009	2	2	2026-04-17 20:58:07.490669+00
-10	0000A	1	\N	2026-04-18 07:07:56.029171+00
-11	0000B	2	\N	2026-04-18 07:30:35.488589+00
-12	0000C	1	\N	2026-04-18 07:30:38.925498+00
-13	0000D	2	\N	2026-04-18 08:56:41.685341+00
-14	0000E	1	\N	2026-04-18 08:56:46.585115+00
+COPY public."orderId" (id, order_id, source_id, payment_mode_id, created_at, customer_phone, source_handle, instagram_user_id, customer_address, transaction_id, instagram_handle) FROM stdin;
+20	0000K	1	1	2026-04-18 18:36:51.517349+00	8015096669		\N	\N	\N	\N
+23	0000N	1	\N	2026-04-19 10:10:37.262692+00	8015096669	8015096669	\N	\N	\N	\N
+1	00001	1	1	2026-04-17 20:45:53.497731+00	\N	\N	\N	\N	\N	\N
+3	00003	1	2	2026-04-17 20:46:03.305033+00	\N	\N	\N	\N	\N	\N
+5	00005	1	\N	2026-04-17 20:57:36.914314+00	\N	\N	\N	\N	\N	\N
+6	00006	1	1	2026-04-17 20:57:42.495526+00	\N	\N	\N	\N	\N	\N
+7	00007	1	1	2026-04-17 20:57:46.619895+00	\N	\N	\N	\N	\N	\N
+10	0000A	1	\N	2026-04-18 07:07:56.029171+00	\N	\N	\N	\N	\N	\N
+12	0000C	1	\N	2026-04-18 07:30:38.925498+00	\N	\N	\N	\N	\N	\N
+14	0000E	1	\N	2026-04-18 08:56:46.585115+00	\N	\N	\N	\N	\N	\N
+15	0000F	1	\N	2026-04-18 17:49:01.451039+00	\N	\N	\N	\N	\N	\N
+16	0000G	1	1	2026-04-18 17:59:39.049189+00	\N	\N	\N	\N	\N	\N
+17	0000H	1	2	2026-04-18 18:01:52.555482+00	\N	\N	\N	\N	\N	\N
+18	0000I	1	\N	2026-04-18 18:06:48.955738+00	8015096669	\N	\N	\N	\N	\N
+19	0000J	1	\N	2026-04-18 18:30:22.66034+00	8015096669	\N	\N	\N	\N	\N
+25	0000P	1	\N	2026-04-19 10:37:24.755182+00	8015096669	8015096669	\N	\N	789654654564	\N
+2	00002	2	\N	2026-04-17 20:45:59.589658+00	\N	\N	\N	\N	\N	\N
+8	00008	2	2	2026-04-17 20:57:49.013951+00	\N	\N	\N	\N	\N	\N
+9	00009	2	2	2026-04-17 20:58:07.490669+00	\N	\N	\N	\N	\N	\N
+11	0000B	2	\N	2026-04-18 07:30:35.488589+00	\N	\N	\N	\N	\N	\N
+13	0000D	2	\N	2026-04-18 08:56:41.685341+00	\N	\N	\N	\N	\N	\N
+4	00004	2	2	2026-04-17 20:46:30.325451+00	\N	\N	\N	\N	\N	\N
+24	0000O	2	2	2026-04-19 10:37:15.435436+00		https://www.instagram.com/kri_kan/	1109543189	\N	\N	https://www.instagram.com/kri_kan/
+26	0000Q	2	1	2026-04-19 16:02:00.716602+00	\N	https://www.instagram.com/kri_kan/	1109543189	\N	Ghhvcf	\N
+27	0000R	1	\N	2026-04-19 19:04:10.839329+00	8015096669	8015096669	\N	\N	\N	\N
+\.
+
+
+--
+-- Data for Name: orderItem; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."orderItem" (id, order_id_ref, item_index, quantity, price, created_at, product_id, comments) FROM stdin;
 \.
 
 
@@ -1541,6 +2124,7 @@ COPY public."productId" (id, product_id, created_at) FROM stdin;
 --
 
 COPY public.product_variants (id, product_id, variant_sku, color, fabric, stitch_type, work_heaviness, search_keywords, attributes_json, created_at) FROM stdin;
+545dcdd1-06f4-4dae-a7cf-717d544ca07b	aab50605-d82e-4a53-8cfb-e41d5d4faec5	\N	\N	\N	\N	\N	\N	\N	2026-04-21 19:15:41.969145+00
 \.
 
 
@@ -1549,6 +2133,7 @@ COPY public.product_variants (id, product_id, variant_sku, color, fabric, stitch
 --
 
 COPY public.products (id, category_id, base_sku, title, tags, unified_attributes, created_at) FROM stdin;
+aab50605-d82e-4a53-8cfb-e41d5d4faec5	\N	SKU-3D4AF1BC	Viscose saree	{saree}	\N	2026-04-21 19:15:41.969145+00
 \.
 
 
@@ -1589,6 +2174,7 @@ COPY public.search_sessions (id, user_id, session_start, session_end, total_sear
 --
 
 COPY public.seller_listings (id, variant_id, seller_id, external_id, current_price, currency, shipping_info, is_favorite, is_active, description, url, last_priced_at, raw_data_json, updated_at) FROM stdin;
+081b37e5-a8e7-4148-b43d-fd03ac410d01	545dcdd1-06f4-4dae-a7cf-717d544ca07b	8c6b0d03-a8a8-4f76-970f-22e29e389e73	081b37e5-a8e7-4148-b43d-fd03ac410d01	850.00	INR	plus shipping	f	t	Dine describe	\N	2026-04-21 19:15:41.969145+00	\N	2026-04-21 19:15:41.969145+00
 \.
 
 
@@ -1597,6 +2183,7 @@ COPY public.seller_listings (id, variant_id, seller_id, external_id, current_pri
 --
 
 COPY public.sellers (id, external_id, name, contact_info, rating, is_trusted, created_at) FROM stdin;
+8c6b0d03-a8a8-4f76-970f-22e29e389e73	DEFAULT	Default Seller	\N	0	f	2026-04-21 19:15:41.969145+00
 \.
 
 
@@ -1652,7 +2239,14 @@ COPY public.video_insights (id, video_id, insight_type, insight_score, insight_d
 -- Name: orderId_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public."orderId_id_seq"', 14, true);
+SELECT pg_catalog.setval('public."orderId_id_seq"', 27, true);
+
+
+--
+-- Name: orderItem_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public."orderItem_id_seq"', 1, false);
 
 
 --
@@ -1685,6 +2279,14 @@ ALTER TABLE ONLY public.api_usage_logs
 
 
 --
+-- Name: attachments attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.attachments
+    ADD CONSTRAINT attachments_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: categories categories_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1698,6 +2300,14 @@ ALTER TABLE ONLY public.categories
 
 ALTER TABLE ONLY public.categories
     ADD CONSTRAINT categories_slug_key UNIQUE (slug);
+
+
+--
+-- Name: comments comments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT comments_pkey PRIMARY KEY (id);
 
 
 --
@@ -1746,6 +2356,14 @@ ALTER TABLE ONLY public.engagement_snapshots
 
 ALTER TABLE ONLY public.engagement_snapshots
     ADD CONSTRAINT engagement_snapshots_video_id_snapshot_at_key UNIQUE (video_id, snapshot_at);
+
+
+--
+-- Name: entity_attachments entity_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entity_attachments
+    ADD CONSTRAINT entity_attachments_pkey PRIMARY KEY (id);
 
 
 --
@@ -1818,6 +2436,14 @@ ALTER TABLE ONLY public.infisical_secrets
 
 ALTER TABLE ONLY public.ingestion_meta
     ADD CONSTRAINT ingestion_meta_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: instagram_profile_cache instagram_profile_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.instagram_profile_cache
+    ADD CONSTRAINT instagram_profile_cache_pkey PRIMARY KEY (username);
 
 
 --
@@ -1946,6 +2572,14 @@ ALTER TABLE ONLY public.media_deletion_queue
 
 ALTER TABLE ONLY public.media
     ADD CONSTRAINT media_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: orderItem orderItem_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."orderItem"
+    ADD CONSTRAINT "orderItem_pkey" PRIMARY KEY (id);
 
 
 --
@@ -2141,6 +2775,14 @@ ALTER TABLE ONLY public.system_health_metrics
 
 
 --
+-- Name: orderItem uk_order_item_index; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."orderItem"
+    ADD CONSTRAINT uk_order_item_index UNIQUE (order_id_ref, item_index);
+
+
+--
 -- Name: user_preferences user_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2224,6 +2866,41 @@ CREATE INDEX idx_api_usage_tenant_timestamp ON public.api_usage_logs USING btree
 
 
 --
+-- Name: idx_attachments_metadata; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_attachments_metadata ON public.attachments USING gin (metadata);
+
+
+--
+-- Name: idx_attachments_original_filename; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_attachments_original_filename ON public.attachments USING btree (original_filename);
+
+
+--
+-- Name: idx_comments_attachments; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_comments_attachments ON public.comments USING gin (attachment_ids);
+
+
+--
+-- Name: idx_comments_entity; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_comments_entity ON public.comments USING btree (entity_type, entity_id, created_at DESC);
+
+
+--
+-- Name: idx_entity_attachments_lookup; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_entity_attachments_lookup ON public.entity_attachments USING btree (entity_type, entity_id);
+
+
+--
 -- Name: idx_follower_snapshots_watchlist_time; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -2270,6 +2947,13 @@ CREATE INDEX idx_infisical_secrets_last_accessed ON public.infisical_secrets USI
 --
 
 CREATE INDEX idx_infisical_secrets_project_id ON public.infisical_secrets USING btree (project_id);
+
+
+--
+-- Name: idx_insta_cache_scraped_at; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_insta_cache_scraped_at ON public.instagram_profile_cache USING btree (scraped_at);
 
 
 --
@@ -2744,6 +3428,22 @@ ALTER TABLE ONLY public.engagement_snapshots
 
 
 --
+-- Name: entity_attachments entity_attachments_attachment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.entity_attachments
+    ADD CONSTRAINT entity_attachments_attachment_id_fkey FOREIGN KEY (attachment_id) REFERENCES public.attachments(id) ON DELETE CASCADE;
+
+
+--
+-- Name: orderItem fk_order_ref; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."orderItem"
+    ADD CONSTRAINT fk_order_ref FOREIGN KEY (order_id_ref) REFERENCES public."orderId"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: follower_snapshots follower_snapshots_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2963,5 +3663,5 @@ ALTER TABLE ONLY public.video_insights
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KPcno8TBwmtBhLArtoCiaCsXy4gVVYOCh6sddkwzxG30T2shGcNxCWsHsaNPend
+\unrestrict 7UOtmw7APa1X2GldAWQW0G8knnvEveTCkDZ7tRMWs5wXdsrVd3ILE8i9e8MBLR3
 

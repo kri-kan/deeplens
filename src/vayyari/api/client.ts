@@ -37,6 +37,21 @@ class ApiClient {
   }
 
   /**
+   * Performs a typed POST request with FormData.
+   */
+  async postFormData<T>(path: string, formData: FormData, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, {
+      ...options,
+      method: 'POST',
+      body: formData,
+      headers: {
+        // Headers are automatically set for FormData
+        ...options?.headers,
+      },
+    });
+  }
+
+  /**
    * Performs a typed PUT request.
    */
   async put<T>(path: string, body?: any, options?: RequestOptions): Promise<T> {
@@ -143,6 +158,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Singleton instances with token injection
 export const searchApiClient = new ApiClient(
+  process.env.EXPO_PUBLIC_SEARCH_API_URL!,
+  async () => await AsyncStorage.getItem('auth_token')
+);
+
+export const productMgmtApiClient = new ApiClient(
   process.env.EXPO_PUBLIC_SEARCH_API_URL!,
   async () => await AsyncStorage.getItem('auth_token')
 );

@@ -1,5 +1,6 @@
 using Dapper;
 using Npgsql;
+using DeepLens.SearchApi.DTOs;
 
 namespace DeepLens.SearchApi.Services;
 
@@ -246,7 +247,7 @@ public class IdGeneratorService : IIdGeneratorService
         };
     }
 
-    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null, string? transactionId = null)
+    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null)
     {
         using var conn = await GetConnectionAsync();
         

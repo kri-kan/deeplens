@@ -1,3 +1,5 @@
+using DeepLens.SearchApi.DTOs;
+
 namespace DeepLens.SearchApi.Services;
 
 /// <summary>
@@ -10,9 +12,9 @@ public interface IIdGeneratorService
     /// Generates a new unique alphanumeric Order ID.
     /// </summary>
     Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null);
-    
+
     /// <summary>
-    /// Generates a new unique alphanumeric Order ID and its items.
+    /// Generates a new unique alphanumeric Order ID and a set of item sub-IDs.
     /// </summary>
     Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null);
 
@@ -25,12 +27,12 @@ public interface IIdGeneratorService
     /// Generates a new Product ID with 'VF' prefix and alphanumeric suffix.
     /// </summary>
     Task<string> GenerateProductIdAsync();
-    
+
     /// <summary>
     /// Gets recent order IDs from the database.
     /// </summary>
     Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20);
-    
+
     /// <summary>
     /// Gets specific order details including its items.
     /// </summary>
@@ -39,5 +41,5 @@ public interface IIdGeneratorService
     /// <summary>
     /// Updates details for an existing order.
     /// </summary>
-    Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<DeepLens.SearchApi.Controllers.OrderItemUpdateDto>? items = null, string? transactionId = null);
+    Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null);
 }

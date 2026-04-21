@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using DeepLens.SearchApi.Services;
+using DeepLens.SearchApi.DTOs;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -105,21 +106,4 @@ public class OrderIdController : ControllerBase
         if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
         return Ok(new { message = "Details updated successfully" });
     }
-}
-
-public class OrderUpdateDto
-{
-    public string? Phone { get; set; }
-    public string? Address { get; set; }
-    public string? Source { get; set; }
-    public string? SourceHandle { get; set; }
-    public string? PaymentMode { get; set; }
-    public string? TransactionId { get; set; }
-    public List<OrderItemUpdateDto>? Items { get; set; }
-}
-
-public class OrderItemUpdateDto
-{
-    public string? ProductId { get; set; }
-    public string? Comments { get; set; }
 }

@@ -9,12 +9,13 @@ export const API_ROUTES = {
     PROFILE: '/api/auth/me',
   },
 
-  // Order & Product ID Generation
+  // Attachment management
   ATTACHMENTS: {
     UPLOAD: '/api/v1/Attachment/upload',
     DOWNLOAD: (path: string) => `/api/v1/Attachment/download?path=${encodeURIComponent(path)}`,
   },
-  
+
+  // Order & ID generation
   ORDERS: {
     GENERATE: '/api/v1/orderid/order',
     GENERATE_WITH_ITEMS: '/api/v1/orderid/orderwithitems',
@@ -22,12 +23,21 @@ export const API_ROUTES = {
     GET_BY_ID: (orderId: string) => `/api/v1/orderid/${orderId}`,
     UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
   },
-  
-  PRODUCTS: {
+
+  // Product ID generation (separate concern from catalog CRUD)
+  PRODUCT_IDS: {
     GENERATE: '/api/v1/orderid/product',
   },
 
-  // Catalog & Media
+  // Product catalog CRUD (backed by ProductsController)
+  PRODUCT_CATALOG: {
+    LIST:   '/api/products',
+    CREATE: '/api/products',
+    MERGE:  '/api/products/merge',
+    GET_BY_ID: (id: string) => `/api/products/${id}`,
+  },
+
+  // Catalog & Media (legacy search/ingest flow)
   CATALOG: {
     MEDIA: '/catalog/media',
     THUMBNAIL: (mediaId: string) => `/catalog/media/${mediaId}/thumbnail`,

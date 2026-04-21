@@ -17,10 +17,15 @@ interface UtilityItem {
   color?: string;
 }
 
-const ORDER_UTILITIES: UtilityItem[] = [
+const OPERATIONAL_UTILITIES: UtilityItem[] = [
   { id: 'gen-id', title: 'Generate ID', icon: 'identifier', route: '/utilities/order-id-generator', color: '#6200ee' },
-  { id: 'stub2', title: 'Reserved', icon: 'clock-outline', route: '', color: '#999' },
   { id: 'stub3', title: 'Reserved', icon: 'clock-outline', route: '', color: '#999' },
+];
+
+const PRODUCT_UTILITIES: UtilityItem[] = [
+  { id: 'view-catalog', title: 'Product Catalog', icon: 'format-list-bulleted', route: '/utilities/product-list', color: '#6200ee' },
+  { id: 'create-product', title: 'Create Product', icon: 'plus-box', route: '/utilities/create-product', color: '#00a86b' },
+  { id: 'merge-products', title: 'Merge Products', icon: 'call-merge', route: '', color: '#999' },
 ];
 
 export default function UtilityScreen() {
@@ -62,10 +67,16 @@ export default function UtilityScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.sectionHeader}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Order Utilities</Text>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Operational Utilities</Text>
         </View>
         
-        {renderGrid(ORDER_UTILITIES)}
+        {renderGrid(OPERATIONAL_UTILITIES)}
+
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Product Utilities</Text>
+        </View>
+        
+        {renderGrid(PRODUCT_UTILITIES)}
 
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Text variant="titleMedium" style={styles.sectionTitle}>Business Insights</Text>

@@ -6,6 +6,7 @@ using DeepLens.SearchApi.Services;
 using DeepLens.Infrastructure.Services;
 using Minio;
 using Confluent.Kafka;
+using DeepLens.Contracts.Catalog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // Custom services
+builder.Services.AddScoped<IProductService, DeepLens.Infrastructure.Services.ProductService>();
 // Custom services
 builder.Services.AddScoped<IMetadataService, MetadataService>();
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using DeepLens.SearchApi.Services;
+using DeepLens.SearchApi.DTOs;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -22,44 +23,29 @@ public class CommentController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> AddComment([FromBody] System.Text.Json.JsonElement json)
+    public async Task<IActionResult> AddComment([FromBody] CommentCreateDto dto)
     {
-        var raw = json.GetRawText();
-        Console.WriteLine($"[CommentController] RAW JSON: {raw}");
-        
-        try
-        {
-            var dto = System.Text.Json.JsonSerializer.Deserialize<CommentCreateDto>(raw, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            
-            if (dto == null || (string.IsNullOrEmpty(dto.Content) && (dto.AttachmentIds == null || dto.AttachmentIds.Length == 0)))
-            {
-                 return BadRequest(new { message = $"Missing content/attachments. Raw: {raw}" });
-            }
+        if (string.IsNullOrEmpty(dto.Content) && (dto.AttachmentIds == null || dto.AttachmentIds.Length == 0))
+            return BadRequest(new { message = "A comment must have content or at least one attachment." });
 
-            var guids = new List<Guid>();
-            if (dto.AttachmentIds != null)
-            {
-                foreach (var idStr in dto.AttachmentIds)
-                {
-                    if (Guid.TryParse(idStr, out var g)) guids.Add(g);
-                }
-            }
-
-            var commentId = await _commentService.AddCommentAsync(dto.EntityType, dto.EntityId, dto.Content, guids.ToArray());
-            return Ok(new { id = commentId, status = "created" });
-        }
-        catch (Exception ex)
+        var guids = new List<Guid>();
+        if (dto.AttachmentIds != null)
         {
-            Console.WriteLine($"[CommentController] DESERIALIZATION FAILED: {ex.Message}");
-            return BadRequest(new { message = $"Payload error: {ex.Message}", raw = raw });
+            foreach (var idStr in dto.AttachmentIds)
+            {
+                if (Guid.TryParse(idStr, out var g)) guids.Add(g);
+            }
         }
+
+        var commentId = await _commentService.AddCommentAsync(dto.EntityType, dto.EntityId, dto.Content, guids.ToArray());
+        return Ok(new { id = commentId, status = "created" });
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateComment(Guid id, [FromBody] CommentUpdateDto dto)
     {
         if (string.IsNullOrEmpty(dto.Content) && (dto.AttachmentIds == null || dto.AttachmentIds.Length == 0))
-            return BadRequest("Content or attachments cannot be empty");
+            return BadRequest(new { message = "Content or attachments cannot be empty." });
 
         var success = await _commentService.UpdateCommentAsync(id, dto.Content, dto.AttachmentIds);
         if (!success) return NotFound();
@@ -73,18 +59,4 @@ public class CommentController : ControllerBase
         if (!success) return NotFound();
         return Ok(new { status = "deleted" });
     }
-}
-
-public class CommentCreateDto
-{
-    public string EntityType { get; set; } = string.Empty;
-    public string EntityId { get; set; } = string.Empty;
-    public string Content { get; set; } = string.Empty;
-    public string[]? AttachmentIds { get; set; }
-}
-
-public class CommentUpdateDto
-{
-    public string Content { get; set; } = string.Empty;
-    public Guid[]? AttachmentIds { get; set; }
 }
