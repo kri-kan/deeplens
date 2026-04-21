@@ -4,6 +4,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using DeepLens.SearchApi.Services;
 using DeepLens.Infrastructure.Services;
+using DeepLens.Application;
+using DeepLens.Infrastructure;
+using DeepLens.Application.Abstractions.Services;
 using Minio;
 using Confluent.Kafka;
 using DeepLens.Contracts.Catalog;
@@ -14,11 +17,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// Custom services
-builder.Services.AddScoped<IProductService, DeepLens.Infrastructure.Services.ProductService>();
-// Custom services
-builder.Services.AddScoped<IMetadataService, MetadataService>();
+// --- ENTERPRISE LAYERING REGISTRATIONS ---
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure();
 
+// Custom services (Remaining for now)
+builder.Services.AddScoped<IProductService, DeepLens.Infrastructure.Services.ProductService>();
+builder.Services.AddScoped<IMetadataService, MetadataService>();
 builder.Services.AddHttpClient<IAttributeExtractionService, LlmAttributeExtractionService>();
 builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService>();
 builder.Services.AddScoped<DeepLens.Infrastructure.Services.IStorageService, DeepLens.Infrastructure.Services.MinioStorageService>();
@@ -26,7 +31,6 @@ builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
-
 
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 
@@ -57,6 +61,7 @@ builder.Services.AddSingleton<IProducer<string, string>>(sp =>
     var kafkaConfig = new ProducerConfig { BootstrapServers = bootstrapServers };
     return new ProducerBuilder<string, string>(kafkaConfig).Build();
 });
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "DeepLens Search API", Version = "v1" });

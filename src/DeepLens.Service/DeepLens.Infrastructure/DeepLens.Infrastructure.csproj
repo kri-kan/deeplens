@@ -9,7 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.12.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.1" />
     <PackageReference Include="Minio" Version="6.0.2" />
     <PackageReference Include="Npgsql" Version="8.0.2" />
     <PackageReference Include="Dapper" Version="2.1.35" />
@@ -19,6 +19,7 @@
     <ProjectReference Include="..\DeepLens.Contracts\DeepLens.Contracts.csproj" />
     <ProjectReference Include="..\DeepLens.Shared.Common\DeepLens.Shared.Common.csproj" />
     <ProjectReference Include="..\DeepLens.Domain\DeepLens.Domain.csproj" />
+    <ProjectReference Include="..\DeepLens.Application\DeepLens.Application.csproj" />
   </ItemGroup>
 
 </Project>
