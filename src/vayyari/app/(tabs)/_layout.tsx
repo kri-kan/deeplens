@@ -12,14 +12,14 @@ export default function TabLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tabs.Screen 
-        name="utility" 
+        name="index" 
         options={{ 
           title: 'Utility',
           tabBarIcon: () => 'tools'
         }} 
       />
       <Tabs.Screen 
-        name="index" 
+        name="studio" 
         options={{ 
           title: 'Studio',
           tabBarIcon: () => 'view-grid' // Injecting string name mapping directly back to UI

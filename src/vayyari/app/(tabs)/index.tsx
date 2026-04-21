@@ -1,76 +1,79 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View } from 'react-native';
-import { Surface, Text, Appbar, IconButton, useTheme } from 'react-native-paper';
+import { StyleSheet, View, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { Surface, Text, Appbar, Icon, useTheme } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { BentoCard } from '@/components/ui/BentoCard';
-import { TimelineItem } from '@/components/ui/TimelineItem';
 
-export default function DashboardScreen() {
+const { width } = Dimensions.get('window');
+const COLUMN_COUNT = 3;
+const GAP = 12;
+const TILE_SIZE = (width - 32 - (GAP * (COLUMN_COUNT - 1))) / COLUMN_COUNT;
+
+interface UtilityItem {
+  id: string;
+  title: string;
+  icon: string;
+  route: string;
+  color?: string;
+}
+
+const ORDER_UTILITIES: UtilityItem[] = [
+  { id: 'gen-id', title: 'Generate ID', icon: 'identifier', route: '/utilities/order-id-generator', color: '#6200ee' },
+  { id: 'stub2', title: 'Reserved', icon: 'clock-outline', route: '', color: '#999' },
+  { id: 'stub3', title: 'Reserved', icon: 'clock-outline', route: '', color: '#999' },
+];
+
+export default function UtilityScreen() {
   const theme = useTheme();
   const router = useRouter();
+
+  const renderGrid = (items: UtilityItem[]) => {
+    return (
+      <View style={styles.grid}>
+        {items.map((item) => (
+          <TouchableOpacity 
+            key={item.id} 
+            onPress={() => item.route && router.push(item.route as any)}
+            disabled={!item.route}
+          >
+            <BentoCard 
+              style={[styles.tile, { width: TILE_SIZE, height: TILE_SIZE }]}
+              surfaceLevel="surfaceContainerLow"
+            >
+              <View style={styles.tileContent}>
+                <Icon source={item.icon} size={32} color={item.route ? item.color || theme.colors.primary : '#ccc'} />
+                <Text variant="labelSmall" style={[styles.tileTitle, { color: item.route ? theme.colors.onSurface : '#999' }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </View>
+            </BentoCard>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
 
   return (
     <Surface style={[styles.container, { backgroundColor: theme.colors.background }]} elevation={0}>
       <Appbar.Header style={{ backgroundColor: theme.colors.background }}>
-        <Appbar.Content title="Dashboard" titleStyle={{ fontWeight: 'bold' }} />
+        <Appbar.Content title="Utilities" titleStyle={{ fontWeight: 'bold' }} />
         <Appbar.Action icon="cog" onPress={() => router.push('/modal')} />
       </Appbar.Header>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Orders Today */}
-        <BentoCard>
-          <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8, letterSpacing: 1.5, textTransform: 'uppercase' }}>Orders Today</Text>
-          <Text variant="displaySmall" style={{ color: theme.colors.onSurface, fontWeight: '800' }}>₹1,24,500</Text>
-          <Text variant="bodyMedium" style={{ color: theme.colors.primary, marginTop: 4 }}>Total Transaction Value</Text>
-        </BentoCard>
-
-        {/* Split View */}
-        <View style={styles.splitRow}>
-          <BentoCard surfaceLevel="surfaceContainerLow" style={styles.splitCard}>
-            <IconButton icon="bell-ring" containerColor={theme.colors.secondaryContainer} iconColor={theme.colors.onSecondaryContainer} size={28} />
-            <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 12, fontWeight: 'bold' }}>Pending</Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>3 Reminders</Text>
-          </BentoCard>
-
-          <BentoCard surfaceLevel="surfaceContainerLow" style={styles.splitCard}>
-            <IconButton icon="truck-fast" containerColor={theme.colors.primaryContainer} iconColor={theme.colors.onPrimaryContainer} size={28} />
-            <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 12, fontWeight: 'bold' }}>Logistics</Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>Partners Active</Text>
-          </BentoCard>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.sectionHeader}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Order Utilities</Text>
         </View>
+        
+        {renderGrid(ORDER_UTILITIES)}
 
-        {/* Timeline */}
-        <BentoCard paddingBottom={8}>
-          <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 16, letterSpacing: 1.5, textTransform: 'uppercase' }}>Customer Timeline</Text>
-          
-          <TimelineItem
-            icon="message-text"
-            title="&quot;Can you please confirm the measurements for the Silk Saree (Order #8244)? I'm worried it might be too long.&quot;"
-            timestampSubtitle="12 mins ago • Omnichannel Interaction"
-          />
-
-          <TimelineItem
-            style={{ marginTop: 24 }}
-            icon="instagram"
-            iconBgColor={theme.colors.secondaryContainer}
-            iconColor={theme.colors.onSecondaryContainer}
-            title="Mentioned Vayyari in a story: &quot;Obsessed with the new fit! Highly recommend #VayyariStyle&quot;"
-            timestampSubtitle="1 hr ago • Social Engagement"
-          />
-
-          <TimelineItem
-            style={{ marginTop: 24, marginBottom: 16 }}
-            icon="shopping-outline"
-            iconBgColor={theme.colors.primaryContainer}
-            iconColor={theme.colors.onPrimaryContainer}
-            title="New Order #8245 placed by anonymous guest."
-            timestampSubtitle="3 hrs ago • Transaction"
-            extraNode={
-              <Text variant="bodySmall" style={{ color: theme.colors.primary }}>Subtotal: ₹8,400 | Item: Pashmina Wrap</Text>
-            }
-          />
-
-        </BentoCard>
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Business Insights</Text>
+        </View>
+        {/* Placeholder for future rows */}
+        <View style={styles.emptyGridPlaceholder}>
+           <Text variant="bodySmall" style={{ opacity: 0.3 }}>More utilities coming soon...</Text>
+        </View>
       </ScrollView>
     </Surface>
   );
@@ -80,20 +83,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
+  content: {
     padding: 16,
-    paddingBottom: 40,
-    maxWidth: 800,
-    width: '100%',
-    alignSelf: 'center',
   },
-  splitRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  sectionHeader: {
     marginBottom: 16,
   },
-  splitCard: {
-    width: '48%',
-    marginBottom: 0,
+  sectionTitle: {
+    fontWeight: 'bold',
+    opacity: 0.8,
   },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GAP,
+  },
+  tile: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 0, // Reset default bento margin
+  },
+  tileContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  tileTitle: {
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  emptyGridPlaceholder: {
+    height: 100,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  }
 });

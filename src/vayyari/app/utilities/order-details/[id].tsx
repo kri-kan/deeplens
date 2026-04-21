@@ -23,7 +23,7 @@ export default function OrderFormScreen() {
     const [comments, setComments] = useState<OrderComment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-    const [newCommentAttachments, setNewCommentAttachments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
+    const [newCommentAttachments, setNewCommentAttachments] = useState<any[]>([]);
     const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
     const [transactionId, setTransactionId] = useState('');
     const [isEditingTxn, setIsEditingTxn] = useState(false);
@@ -31,6 +31,8 @@ export default function OrderFormScreen() {
     const [isUploading, setIsUploading] = useState(false);
     const [lastTap, setLastTap] = useState(0);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isProductsExpanded, setIsProductsExpanded] = useState(true);
+    const [isCommentsExpanded, setIsCommentsExpanded] = useState(true);
 
     useEffect(() => {
         fetchOrderDetails();
@@ -82,7 +84,14 @@ export default function OrderFormScreen() {
         if (!id) return;
         try {
             const data = await searchApiClient.get<OrderComment[]>(`/api/v1/Comment/order/${id}`);
-            setComments(data);
+            
+            // Parse attachments if they come back as a JSON string from Postgres
+            const parsed = data.map(comment => ({
+                ...comment,
+                attachments: typeof comment.attachments === 'string' ? JSON.parse(comment.attachments) : comment.attachments
+            }));
+            
+            setComments(parsed);
         } catch (error) {
             console.error('Failed to fetch comments:', error);
         }
@@ -104,8 +113,11 @@ export default function OrderFormScreen() {
             });
 
             if (!result.canceled) {
-                // Documents usually have assets array
-                setNewCommentAttachments(prev => [...prev, ...result.assets]);
+                const mapped = result.assets.map(a => ({
+                    ...a,
+                    isExisting: false
+                }));
+                setNewCommentAttachments(prev => [...prev, ...mapped]);
             }
         } catch (error) {
             console.error('Pick Document Error:', error);
@@ -153,6 +165,11 @@ export default function OrderFormScreen() {
             console.log(`[Adding Comment] Starting sequential upload for ${newCommentAttachments.length} files...`);
             for (let i = 0; i < newCommentAttachments.length; i++) {
                 const doc = newCommentAttachments[i];
+                if (doc.isExisting && doc.id) {
+                    attachmentIds.push(doc.id);
+                    continue;
+                }
+                
                 try {
                     console.log(`[Upload] Processing ${i + 1}/${newCommentAttachments.length}: ${doc.name}`);
                     const result = await uploadCommentAttachment(doc.uri, doc.name, doc.mimeType);
@@ -219,6 +236,21 @@ export default function OrderFormScreen() {
     const startEditComment = (comment: OrderComment) => {
         setNewComment(comment.content);
         setEditingCommentId(comment.id || null);
+        
+        // Map existing attachments to our attachment format
+        if (comment.attachments) {
+            const existing = comment.attachments.map(att => ({
+                id: att.id,
+                name: att.name,
+                uri: `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`,
+                mimeType: att.contentType,
+                isExisting: true,
+                key: att.key
+            }));
+            setNewCommentAttachments(existing);
+        } else {
+            setNewCommentAttachments([]);
+        }
     };
 
     const copyToClipboard = async (text: string, label: string) => {
@@ -489,11 +521,31 @@ export default function OrderFormScreen() {
                 {/* Product List */}
                 <View style={{ gap: 16 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Product Details</Text>
+                        <TouchableOpacity 
+                            onPress={() => setIsProductsExpanded(!isProductsExpanded)}
+                            style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                            activeOpacity={0.7}
+                        >
+                            <Icon source={isProductsExpanded ? "chevron-down" : "chevron-right"} size={24} color={theme.colors.onSurface} />
+                            <Text variant="titleLarge" style={{ fontWeight: 'bold', marginLeft: 4 }}>Product Details</Text>
+                            <View style={{ 
+                                marginLeft: 8, 
+                                backgroundColor: theme.colors.surfaceVariant, 
+                                paddingHorizontal: 8, 
+                                borderRadius: 12,
+                                height: 20,
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }}>
+                                <Text style={{ fontSize: 11, fontWeight: 'bold', lineHeight: 14 }}>{items.length}</Text>
+                            </View>
+                        </TouchableOpacity>
                         <Button icon="plus" mode="contained-tonal" onPress={handleAddItem}>Add Item</Button>
                     </View>
 
-                    {items.map((item, index) => (
+                    {isProductsExpanded && (
+                        <>
+                            {items.map((item, index) => (
                         <Card key={index} mode="outlined" style={{ borderRadius: 16 }}>
                             <Card.Title 
                                 title={`#${index + 1} Product`} 
@@ -579,21 +631,43 @@ export default function OrderFormScreen() {
                         </Card>
                     ))}
 
-                    {items.length === 0 && (
-                        <View style={{ padding: 40, alignItems: 'center' }}>
-                            <IconButton icon="package-variant" size={48} style={{ opacity: 0.3 }} />
-                            <Text style={{ opacity: 0.5 }}>No products added yet.</Text>
-                            <Button onPress={handleAddItem} style={{ marginTop: 8 }}>Initialize Items</Button>
-                        </View>
+                            {items.length === 0 && (
+                                <View style={{ padding: 40, alignItems: 'center' }}>
+                                    <IconButton icon="package-variant" size={48} style={{ opacity: 0.3 }} />
+                                    <Text style={{ opacity: 0.5 }}>No products added yet.</Text>
+                                    <Button onPress={handleAddItem} style={{ marginTop: 8 }}>Initialize Items</Button>
+                                </View>
+                            )}
+                        </>
                     )}
                 </View>
 
 
                 {/* Order Comments Timeline */}
                 <View style={{ gap: 8 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Order Notes & Comments</Text>
+                    <TouchableOpacity 
+                        onPress={() => setIsCommentsExpanded(!isCommentsExpanded)}
+                        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}
+                        activeOpacity={0.7}
+                    >
+                        <Icon source={isCommentsExpanded ? "chevron-down" : "chevron-right"} size={24} color={theme.colors.onSurface} />
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginLeft: 4 }}>Order Notes & Comments</Text>
+                        <View style={{ 
+                            marginLeft: 8, 
+                            backgroundColor: theme.colors.surfaceVariant, 
+                            paddingHorizontal: 8, 
+                            borderRadius: 10,
+                            height: 18,
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                        }}>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', lineHeight: 12 }}>{comments.length}</Text>
+                        </View>
+                    </TouchableOpacity>
                     
-                    {/* Add/Edit Comment Input */}
+                    {isCommentsExpanded && (
+                        <>
+                            {/* Add/Edit Comment Input */}
                     <View style={{ marginBottom: 4 }}>
                         {editingCommentId && (
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -763,29 +837,19 @@ export default function OrderFormScreen() {
                                     <Text style={{marginBottom:4}} variant="bodyMedium">{comment.content}</Text>
                                     
                                     {Array.isArray(comment.attachments) && comment.attachments.length > 0 && (
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, paddingBottom: 8 }}>
-                                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                                {comment.attachments.map((att: any) => (
-                                                    <View key={att.id} style={{ alignItems: 'center' }}>
-                                                        <TouchableOpacity onPress={() => setPreviewImage(`${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`)}>
-                                                            <Image 
-                                                                source={{ uri: `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}` }} 
-                                                                style={{ width: 100, height: 100, borderRadius: 8, backgroundColor: theme.colors.surfaceVariant }} 
-                                                            />
-                                                        </TouchableOpacity>
-                                                        <Text variant="labelSmall" style={{ opacity: 0.5, marginTop: 4, maxWidth: 80 }} numberOfLines={1}>
-                                                            {att.name || 'File'}
-                                                        </Text>
-                                                    </View>
-                                                ))}
-                                            </View>
-                                        </ScrollView>
+                                        <ScrollableImageRow 
+                                            attachments={comment.attachments} 
+                                            onPreview={(url) => setPreviewImage(url)} 
+                                            theme={theme}
+                                        />
                                     )}
                                 </View>
                             );
                         })}
                     </View>
-                </View>
+                </>
+            )}
+        </View>
 
 
                 <View style={{ height: 40 }} />
@@ -797,5 +861,84 @@ export default function OrderFormScreen() {
                 title="Image Preview" 
             />
         </Surface>
+    );
+}
+
+// Helper component for horizontal scrollable image row with chevrons
+function ScrollableImageRow({ attachments, onPreview, theme }: { attachments: any[], onPreview: (url: string) => void, theme: any }) {
+    const scrollRef = React.useRef<ScrollView>(null);
+    const [scrollPos, setScrollPos] = useState(0);
+    const [contentWidth, setContentWidth] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(0);
+
+    const scroll = (direction: 'left' | 'right') => {
+        const offset = direction === 'left' ? -150 : 150;
+        scrollRef.current?.scrollTo({ x: scrollPos + offset, animated: true });
+    };
+
+    const showLeft = scrollPos > 20;
+    const showRight = scrollPos + containerWidth < contentWidth - 20;
+
+    return (
+        <View style={{ position: 'relative', marginTop: 8, paddingBottom: 8 }}>
+            {showLeft && (
+                <View style={{ position: 'absolute', left: -4, top: 35, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 15 }}>
+                    <IconButton icon="chevron-left" size={20} style={{ margin: 0 }} onPress={() => scroll('left')} />
+                </View>
+            )}
+            
+            <ScrollView 
+                ref={scrollRef}
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                onScroll={(e) => setScrollPos(e.nativeEvent.contentOffset.x)}
+                onContentSizeChange={(w) => setContentWidth(w)}
+                onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+                scrollEventThrottle={16}
+            >
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {attachments.map((att: any) => {
+                        const downloadUrl = `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`;
+                        const isImg = att.contentType?.startsWith('image/') || att.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                        
+                        return (
+                        <View key={att.id} style={{ alignItems: 'center' }}>
+                            <TouchableOpacity onPress={() => {
+                                if (isImg) onPreview(downloadUrl);
+                                else Linking.openURL(downloadUrl);
+                            }}>
+                                <View style={{ 
+                                    width: 100, 
+                                    height: 100, 
+                                    borderRadius: 8, 
+                                    backgroundColor: theme.colors.surfaceVariant,
+                                    overflow: 'hidden',
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.outlineVariant,
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                }}>
+                                    {isImg ? (
+                                        <Image source={{ uri: downloadUrl }} style={{ width: '100%', height: '100%' }} />
+                                    ) : (
+                                        <Icon source="file-document-outline" size={40} color={theme.colors.onSurfaceVariant} />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                            <Text variant="labelSmall" style={{ opacity: 0.5, marginTop: 4, maxWidth: 80 }} numberOfLines={1}>
+                                {att.name || 'File'}
+                            </Text>
+                        </View>
+                        );
+                    })}
+                </View>
+            </ScrollView>
+
+            {showRight && (
+                <View style={{ position: 'absolute', right: -4, top: 35, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 15 }}>
+                    <IconButton icon="chevron-right" size={20} style={{ margin: 0 }} onPress={() => scroll('right')} />
+                </View>
+            )}
+        </View>
     );
 }

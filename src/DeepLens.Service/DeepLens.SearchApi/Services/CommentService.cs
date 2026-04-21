@@ -39,7 +39,7 @@ public class CommentService : ICommentService
                 c.created_at as createdAt,
                 -- We can join with attachments here if needed to return full metadata
                 (
-                    SELECT json_agg(json_build_object('id', a.id, 'name', a.original_filename, 'bucket', a.bucket_name, 'key', a.object_key))
+                    SELECT json_agg(json_build_object('id', a.id, 'name', a.original_filename, 'bucket', a.bucket_name, 'key', a.object_key, 'contentType', a.content_type))
                     FROM attachments a
                     WHERE a.id = ANY(c.attachment_ids)
                 ) as attachments
