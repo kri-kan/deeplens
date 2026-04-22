@@ -1,6 +1,11 @@
 using Minio;
 using Minio.DataModel.Args;
+using Minio.DataModel.ILM;
+using Minio.DataModel.Tags;
 using Microsoft.Extensions.Logging;
+using DeepLens.Contracts.Media;
+using DeepLens.Shared.Common;
+using System.Collections.Generic;
 
 namespace DeepLens.Infrastructure.Services;
 
@@ -9,12 +14,10 @@ namespace DeepLens.Infrastructure.Services;
 /// </summary>
 public interface IStorageService
 {
-    Task<string> UploadFileAsync(string fileName, Stream data, string contentType, string? category = null);
-    Task<string> UploadToPathAsync(string storagePath, Stream data, string contentType, string? category = null, Dictionary<string, string>? tags = null);
-    Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType);
+    Task<string> UploadFileAsync(string fileName, Stream data, string contentType, StorageContext context, Dictionary<string, string>? tags = null);
+    Task<string> UploadToPathAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null);
+    Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null);
     Task<Stream> GetFileAsync(string storagePath);
-    Task SetObjectTagsAsync(string storagePath, Dictionary<string, string> tags);
-    Task MarkForDeletionAsync(string storagePath);
     Task DeleteFileAsync(string storagePath);
 }
 
@@ -30,43 +33,83 @@ public class MinioStorageService : IStorageService
         _logger = logger;
     }
 
-    private async Task EnsureBucketExistsAsync()
+    private async Task EnsureBucketExistsAsync(string? bucketName = null)
     {
-        var beArgs = new BucketExistsArgs().WithBucket(DefaultBucket);
+        string target = bucketName ?? DefaultBucket;
+        var beArgs = new BucketExistsArgs().WithBucket(target);
         bool found = await _minioClient.BucketExistsAsync(beArgs);
         if (!found)
         {
-            var mbArgs = new MakeBucketArgs().WithBucket(DefaultBucket);
+            var mbArgs = new MakeBucketArgs().WithBucket(target);
             await _minioClient.MakeBucketAsync(mbArgs);
+            await InitializeLifecyclePoliciesAsync(target);
         }
     }
 
-    public async Task<string> UploadFileAsync(string fileName, Stream data, string contentType, string? category = null)
+    private async Task InitializeLifecyclePoliciesAsync(string bucketName)
     {
-        // Use SHA256 for content-addressable storage
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        byte[] hashBytes = await sha256.ComputeHashAsync(data);
-        string hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-        data.Position = 0;
+        try
+        {
+            _logger.LogInformation("Initializing lifecycle policies for bucket: {Bucket}", bucketName);
+            
+            var rules = new List<LifecycleRule>();
+            
+            // Create a rule for each standard retention period
+            foreach (var daysStr in MediaConstants.Retention.AllOptions)
+            {
+                if (daysStr == MediaConstants.Retention.Infinite) continue;
+                
+                // Parse "days30" -> 30
+                string numericPart = daysStr.Replace("days", "", StringComparison.OrdinalIgnoreCase);
+                if (!int.TryParse(numericPart, out int days)) continue;
 
-        string extension = System.IO.Path.GetExtension(fileName);
-        
-        // Use the shared registry to determine the path
-        string fullPath = DeepLens.Shared.Common.StoragePathRegistry.GetProductPath(category, hash, extension);
-        
-        return await UploadToPathAsync(fullPath, data, contentType, category);
+                rules.Add(new LifecycleRule
+                {
+                    ID = $"ExpireAfter{days}Days",
+                    Status = "Enabled",
+                    Filter = new RuleFilter
+                    {
+                        Tag = new Tagging(new Dictionary<string, string> { { MediaConstants.Retention.TagKey, daysStr } }, false)
+                    },
+                    Expiration = new Expiration
+                    {
+                        Days = days
+                    }
+                });
+            }
+
+            var lifecycleConfig = new LifecycleConfiguration(rules);
+            var args = new SetBucketLifecycleArgs()
+                .WithBucket(bucketName)
+                .WithLifecycleConfiguration(lifecycleConfig);
+
+            await _minioClient.SetBucketLifecycleAsync(args);
+            _logger.LogInformation("Successfully applied {Count} lifecycle rules to {Bucket}", rules.Count, bucketName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set lifecycle policies for bucket {Bucket}. Lifecycle tags may not work automatically.", bucketName);
+        }
     }
 
-    public async Task<string> UploadToPathAsync(string storagePath, Stream data, string contentType, string? category = null, Dictionary<string, string>? tags = null)
+    public async Task<string> UploadFileAsync(string fileName, Stream data, string contentType, StorageContext context, Dictionary<string, string>? tags = null)
+    {
+        // Use GUID for globally unique filenames to avoid collision and deletion issues
+        string identifier = $"{Guid.NewGuid():N}{System.IO.Path.GetExtension(fileName)}";
+        
+        string fullPath = StoragePathRegistry.GetPath(context, identifier);
+        return await UploadToPathAsync(fullPath, data, contentType, tags);
+    }
+
+    public async Task<string> UploadToPathAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null)
     {
         var parts = storagePath.Split('/', 2);
         string bucketName = parts.Length > 1 ? parts[0] : DefaultBucket;
         string objectName = parts.Length > 1 ? parts[1] : storagePath;
 
-        var beArgs = new BucketExistsArgs().WithBucket(bucketName);
-        if (!await _minioClient.BucketExistsAsync(beArgs))
+        if (!await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(bucketName)))
         {
-            await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(bucketName));
+            await EnsureBucketExistsAsync(bucketName);
         }
 
         var putArgs = new PutObjectArgs()
@@ -76,34 +119,19 @@ public class MinioStorageService : IStorageService
             .WithObjectSize(data.Length)
             .WithContentType(contentType);
 
+        if (tags != null && tags.Count > 0)
+        {
+            putArgs.WithTagging(new Tagging(tags, false));
+        }
+
         await _minioClient.PutObjectAsync(putArgs);
-
-        // Build tags: start from caller-supplied tags, then add auto-derived tags.
-        var finalTags = new Dictionary<string, string>(tags ?? new Dictionary<string, string>());
-
-        // Auto-calculate period tag if not already set by caller
-        if (!finalTags.ContainsKey("period"))
-        {
-            int quarter = (DateTime.UtcNow.Month + 2) / 3;
-            finalTags["period"] = $"Q{quarter}{DateTime.UtcNow:yy}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(category) && !finalTags.ContainsKey("category"))
-        {
-            finalTags["category"] = category.ToLowerInvariant().Trim();
-        }
-
-        if (finalTags.Count > 0)
-        {
-            await SetObjectTagsAsync(storagePath, finalTags);
-        }
         
-        _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path} with Tags: {Tags}", bucketName, objectName, string.Join(", ", finalTags.Select(t => $"{t.Key}={t.Value}")));
+        _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", bucketName, objectName);
         
         return storagePath; // Now returning the full path starting with bucket
     }
 
-    public async Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType)
+    public async Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null)
     {
         await EnsureBucketExistsAsync();
 
@@ -113,8 +141,14 @@ public class MinioStorageService : IStorageService
             .WithStreamData(data)
             .WithObjectSize(data.Length)
             .WithContentType(contentType);
+        
+        if (tags != null && tags.Count > 0)
+        {
+            putArgs.WithTagging(new Tagging(tags, false));
+        }
 
         await _minioClient.PutObjectAsync(putArgs);
+
         return $"{DefaultBucket}/{storagePath}";
     }
 
@@ -147,35 +181,6 @@ public class MinioStorageService : IStorageService
         return memoryStream;
     }
 
-    public async Task MarkForDeletionAsync(string storagePath)
-    {
-        await SetObjectTagsAsync(storagePath, new Dictionary<string, string> { { "status", "deleted" } });
-        _logger.LogInformation("Marked object for deletion: {Path}", storagePath);
-    }
-
-    public async Task SetObjectTagsAsync(string storagePath, Dictionary<string, string> tags)
-    {
-        if (tags == null || tags.Count == 0) return;
-
-        var parts = storagePath.Split('/', 2);
-        string bucketName = parts.Length > 1 ? parts[0] : DefaultBucket;
-        string objectName = parts.Length > 1 ? parts[1] : storagePath;
-
-        try 
-        {
-            var tagging = new Minio.DataModel.Tags.Tagging(tags, false);
-            var args = new SetObjectTagsArgs()
-                .WithBucket(bucketName)
-                .WithObject(objectName)
-                .WithTagging(tagging);
-
-            await _minioClient.SetObjectTagsAsync(args);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to set tags for {Path} using SDK", storagePath);
-        }
-    }
 
     public async Task DeleteFileAsync(string storagePath)
     {

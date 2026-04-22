@@ -43,4 +43,15 @@ export const API_ROUTES = {
     THUMBNAIL: (mediaId: string) => `/catalog/media/${mediaId}/thumbnail`,
     FAVORITE: (listingId: string) => `/catalog/listings/${listingId}/favorite`,
   },
+  
+  // Media processing & retention settings (Hierarchical)
+  MEDIA_SETTINGS: {
+    GET_ALL: '/api/media/settings',
+    UPSERT: '/api/media/settings',
+    DELETE: (id: string) => `/api/media/settings/${id}`,
+    LOOKUP: (category: string, subCategory?: string) => 
+      `/api/media/settings/lookup?category=${category}${subCategory ? `&subcategory=${subCategory}` : ''}`,
+    RETENTION_OPTIONS: '/api/media/settings/retention-options',
+    SCHEMA: '/api/media/settings/schema',
+  }
 };

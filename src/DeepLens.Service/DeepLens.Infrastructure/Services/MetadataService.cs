@@ -7,6 +7,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Data;
 using Confluent.Kafka;
+using DeepLens.Contracts.Media;
+using DeepLens.Shared.Common;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace DeepLens.Infrastructure.Services;
 
@@ -23,20 +26,33 @@ public interface IMetadataService
     Task UpdateMediaStatusAsync(Guid id, int status);
     Task UpdateVideoMetadataAsync(Guid id, decimal duration, string? thumbnailPath, string? previewPath);
     Task<IEnumerable<MediaDto>> ListMediaAsync(int page, int pageSize, int? mediaType = null);
-    Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync();
+    Task<MediaPreferenceDto> ResolveMediaPreferencesAsync(MediaCategory category, string subCategory);
+    Task<IEnumerable<MediaPreferenceDto>> GetAllMediaPreferencesAsync();
+    Task<Guid> UpsertMediaPreferenceAsync(MediaPreferenceDto dto);
+    Task<bool> DeleteMediaPreferenceAsync(Guid id);
+    IEnumerable<string> GetRetentionOptions();
+    
 }
 
 public class MetadataService : IMetadataService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<MetadataService> _logger;
+    private readonly IMemoryCache _cache;
     private readonly IProducer<string, string>? _kafkaProducer;
     private readonly string _connectionString;
 
-    public MetadataService(IConfiguration configuration, ILogger<MetadataService> logger, IProducer<string, string>? kafkaProducer = null)
+    private const string PrefsCacheKeyPrefix = "MediaPrefs_";
+
+    public MetadataService(
+        IConfiguration configuration,
+        ILogger<MetadataService> logger,
+        IMemoryCache cache,
+        IProducer<string, string>? kafkaProducer = null)
     {
         _configuration = configuration;
         _logger = logger;
+        _cache = cache;
         _kafkaProducer = kafkaProducer;
         _connectionString = _configuration.GetConnectionString("DefaultConnection") 
                          ?? throw new InvalidOperationException("DefaultConnection string not found");
@@ -61,8 +77,8 @@ public class MetadataService : IMetadataService
 
             var mediaType = contentType.StartsWith("video/") ? 2 : 1;
             const string mediaSql = @"
-                INSERT INTO media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, phash, quality_score, status)
-                VALUES (@Id, @VariantId, @StoragePath, @MediaType, @OriginalFilename, @FileSize, @MimeType, @PHash, @Quality, 0)";
+                INSERT INTO media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, phash, quality_score, status, category, subcategory)
+                VALUES (@Id, @VariantId, @StoragePath, @MediaType, @OriginalFilename, @FileSize, @MimeType, @PHash, @Quality, 0, @Category, @SubCategory)";
             
             await connection.ExecuteAsync(mediaSql, new {
                 Id = id,
@@ -73,7 +89,9 @@ public class MetadataService : IMetadataService
                 FileSize = fileSize,
                 MimeType = contentType,
                 PHash = (string?)null,
-                Quality = (decimal?)null
+                Quality = (decimal?)null,
+                Category = request.Category.ToString().ToLowerInvariant() ?? "product",
+                SubCategory = request.SubCategory?.ToLowerInvariant()
             }, transaction);
 
             await UpsertSellerListing(connection, variantId, sellerId, request, transaction);
@@ -428,9 +446,138 @@ public class MetadataService : IMetadataService
         });
     }
 
-    public async Task<DeepLens.Contracts.Tenants.ThumbnailConfigurationDto?> GetThumbnailSettingsAsync()
+    public async Task<MediaPreferenceDto> ResolveMediaPreferencesAsync(MediaCategory category, string subCategory)
     {
-        return null; // Simplified for single tenant
+        string sub = subCategory ?? "General";
+        string cacheKey = $"{PrefsCacheKeyPrefix}{category}_{sub}";
+
+        if (_cache.TryGetValue(cacheKey, out MediaPreferenceDto? cachedPrefs) && cachedPrefs != null)
+        {
+            _logger.LogDebug("Cache HIT for media preferences: {CacheKey}", cacheKey);
+            return cachedPrefs;
+        }
+
+        _logger.LogDebug("Cache MISS for media preferences: {CacheKey}", cacheKey);
+
+        using var connection = GetConnection();
+        const string sql = @"
+            SELECT category, subcategory, thumbnail_sizes, default_retention, is_active
+            FROM media_preferences 
+            WHERE (category = @Category AND subcategory = @SubCategory)
+               OR (category = @Category AND subcategory IS NULL)
+               OR (category IS NULL AND subcategory IS NULL)
+            AND is_active = TRUE
+            ORDER BY 
+                CASE 
+                    WHEN category = @Category AND subcategory = @SubCategory THEN 1
+                    WHEN category = @Category AND subcategory IS NULL THEN 2
+                    WHEN category IS NULL AND subcategory IS NULL THEN 3
+                    ELSE 4
+                END
+            LIMIT 1";
+
+        var result = await connection.QueryFirstOrDefaultAsync<dynamic>(sql, new { 
+            Category = category.ToString().ToLowerInvariant(), 
+            SubCategory = sub.ToLowerInvariant() 
+        });
+
+        MediaPreferenceDto resolved;
+
+        if (result != null)
+        {
+            resolved = new MediaPreferenceDto
+            {
+                Category = result.category,
+                SubCategory = result.subcategory,
+                ThumbnailSizes = (string[])result.thumbnail_sizes,
+                Retention = result.default_retention,
+                IsActive = result.is_active,
+                IsGlobal = false
+            };
+        }
+        else 
+        {
+            resolved = new MediaPreferenceDto
+            {
+                ThumbnailSizes = new[] { "icon", "medium", "large" },
+                Retention = "days180",
+                IsActive = true,
+                IsGlobal = true
+            };
+        }
+
+        _cache.Set(cacheKey, resolved, TimeSpan.FromMinutes(10));
+        return resolved;
+    }
+
+    public async Task<IEnumerable<MediaPreferenceDto>> GetAllMediaPreferencesAsync()
+    {
+        using var connection = GetConnection();
+        const string sql = "SELECT id, category, subcategory, thumbnail_sizes as ThumbnailSizes, default_retention as Retention, is_active as IsActive FROM media_preferences ORDER BY category NULLS FIRST, subcategory NULLS FIRST";
+        return await connection.QueryAsync<MediaPreferenceDto>(sql);
+    }
+
+    public async Task<Guid> UpsertMediaPreferenceAsync(MediaPreferenceDto dto)
+    {
+        using var connection = GetConnection();
+        
+        var cat = dto.Category?.ToLowerInvariant();
+        var sub = dto.SubCategory?.ToLowerInvariant();
+
+        // 1. Try to find existing record by Cat/SubCat (Business Key)
+        var existingId = await connection.QuerySingleOrDefaultAsync<Guid?>(
+            "SELECT id FROM media_preferences WHERE (category = @Category OR (category IS NULL AND @Category IS NULL)) AND (subcategory = @SubCategory OR (subcategory IS NULL AND @SubCategory IS NULL))",
+            new { Category = cat, SubCategory = sub });
+
+        // 2. Use provided ID or existing ID or new ID
+        var targetId = dto.Id ?? existingId ?? Guid.NewGuid();
+
+        const string sql = @"
+            INSERT INTO media_preferences (id, category, subcategory, thumbnail_sizes, default_retention, is_active, updated_at)
+            VALUES (@Id, @Category, @SubCategory, @ThumbnailSizes, @Retention, @IsActive, NOW())
+            ON CONFLICT (id) 
+            DO UPDATE SET 
+                category = EXCLUDED.category, 
+                subcategory = EXCLUDED.subcategory,
+                thumbnail_sizes = EXCLUDED.thumbnail_sizes, 
+                default_retention = EXCLUDED.default_retention, 
+                is_active = EXCLUDED.is_active,
+                updated_at = NOW()
+            RETURNING id";
+
+        var res = await connection.ExecuteScalarAsync<Guid>(sql, new {
+            Id = targetId,
+            Category = cat,
+            SubCategory = sub,
+            ThumbnailSizes = dto.ThumbnailSizes,
+            Retention = dto.Retention,
+            IsActive = dto.IsActive
+        });
+
+        // Invalidate all related caches. Safer to purge prefix if possible, but for simplicity:
+        _cache.Remove($"{PrefsCacheKeyPrefix}{cat}_{sub ?? "General"}");
+        _cache.Remove($"{PrefsCacheKeyPrefix}_global"); // Invalidate potential global lookups
+        
+        return res;
+    }
+
+    public async Task<bool> DeleteMediaPreferenceAsync(Guid id)
+    {
+        using var connection = GetConnection();
+        const string sql = "DELETE FROM media_preferences WHERE id = @Id RETURNING category, subcategory"; 
+        var result = await connection.QueryFirstOrDefaultAsync<dynamic>(sql, new { Id = id });
+        
+        if (result != null)
+        {
+            _cache.Remove($"{PrefsCacheKeyPrefix}{result.category}_{result.subcategory ?? "General"}");
+            return true;
+        }
+        return false;
+    }
+
+    public IEnumerable<string> GetRetentionOptions()
+    {
+        return MediaConstants.Retention.AllOptions;
     }
 }
 

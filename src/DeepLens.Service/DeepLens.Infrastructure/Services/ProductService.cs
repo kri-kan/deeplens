@@ -7,6 +7,9 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using System.Data;
 using System.Text.Json;
+using DeepLens.Contracts.Media;
+using DeepLens.Shared.Common;
+using Minio.DataModel.Tags;
 
 namespace DeepLens.Infrastructure.Services;
 
@@ -46,20 +49,24 @@ public class ProductService : IProductService
             foreach (var file in mediaFiles)
             {
                 // Upload and get path/hash
-                var storagePath = await _storageService.UploadFileAsync(file.FileName, file.Content, file.ContentType, data.Category);
+                var context = StorageContext.Create(data.Category, data.SubCategory);
+                var tags = string.IsNullOrEmpty(data.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, data.Retention } };
+                var storagePath = await _storageService.UploadFileAsync(file.FileName, file.Content, file.ContentType, context, tags);
                 
                 // Deduplicate/Get Media Record by storage path (or hash if we had it)
                 // For simplicity here, we create a new media record
                 var mediaId = Guid.NewGuid();
                 const string mediaSql = @"
-                    INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status)
-                    VALUES (@Id, @Path, @Mime, 0, 1, 0)
+                    INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
+                    VALUES (@Id, @Path, @Mime, 0, 1, 0, @Category, @SubCategory)
                     RETURNING id";
                 
                 await connection.ExecuteAsync(mediaSql, new {
                     Id = mediaId,
                     Path = storagePath,
-                    Mime = file.ContentType
+                    Mime = file.ContentType,
+                    Category = context.Bucket,
+                    SubCategory = context.Folder
                 }, transaction);
 
                 mediaIds.Add(mediaId);
@@ -80,7 +87,7 @@ public class ProductService : IProductService
                 Id = masterId,
                 Title = data.MasterTitle ?? "New Product",
                 Sku = $"SKU-{Guid.NewGuid().ToString()[..8].ToUpper()}",
-                Tags = new string[] { data.Category ?? "General" }
+                Tags = new string[] { data.Category.ToString() }
             }, transaction);
 
             // 3. Create Listing (Vendor Product)
@@ -114,7 +121,7 @@ public class ProductService : IProductService
                 MasterProductId = masterId,
                 VendorPrice = data.VendorPrice,
                 ExclusiveDescription = data.Description,
-                Category = data.Category,
+                Category = data.Category.ToString(),
                 MediaMap = mediaMap
             };
         }

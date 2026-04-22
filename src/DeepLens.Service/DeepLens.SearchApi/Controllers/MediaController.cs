@@ -5,6 +5,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Caching.Distributed;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
+using DeepLens.Shared.Common;
+using DeepLens.Contracts.Events;
+using Confluent.Kafka;
+using System.Text.Json;
+using DeepLens.Contracts.Media;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -44,40 +50,36 @@ public class MediaController : ControllerBase
     }
 
     /// <summary>
-    /// Serves a thumbnail for the given media.
+    /// Serves a thumbnail for the given media with a specific size specification.
     /// </summary>
+    /// <param name="mediaId">Unique media identifier</param>
+    /// <param name="spec">Specification: icon, medium, large (default: medium)</param>
     [HttpGet("{mediaId}/thumbnail")]
-    public async Task<IActionResult> GetThumbnail(Guid mediaId)
+    [ProducesResponseType(typeof(FileStreamResult), 200)]
+    public async Task<IActionResult> GetThumbnail(Guid mediaId, [FromQuery] string spec = MediaConstants.ThumbnailSpecs.Medium)
     {
-        string cacheKey = $"thumb:{mediaId}";
+        // Validate spec
+        if (!MediaConstants.ThumbnailSpecs.Presets.ContainsKey(spec)) spec = MediaConstants.ThumbnailSpecs.Medium;
+
+        string cacheKey = $"thumb:{mediaId}:{spec}";
         byte[]? cachedThumb = await _cache.GetAsync(cacheKey);
         
         if (cachedThumb != null)
         {
-            return File(cachedThumb, "image/webp");
+            return File(cachedThumb, MediaConstants.Formats.WebP);
         }
 
         try
         {
+            // Note: In an enterprise app, we'd use a single DB lookup for this specific ID
             var items = await _metadataService.ListMediaAsync(1, 1000); 
             var item = items.FirstOrDefault(i => i.Id == mediaId);
             
             if (item == null) return NotFound();
 
-            string? thumbPath = item.ThumbnailPath;
-            
-            if (string.IsNullOrEmpty(thumbPath) && item.MediaType == 1)
-            {
-                thumbPath = item.StoragePath.Replace("raw/", "thumbnails/");
-                var lastDot = thumbPath.LastIndexOf('.');
-                if (lastDot > 0) thumbPath = thumbPath.Substring(0, lastDot);
-                thumbPath += ".webp";
-            }
-
-            if (string.IsNullOrEmpty(thumbPath))
-            {
-                return NotFound("No thumbnail available yet for this media.");
-            }
+            // Standardization: We construct the thumbnail path based on the hash (filename) and spec
+            string fileName = Path.GetFileNameWithoutExtension(item.StoragePath);
+            string thumbPath = StoragePathRegistry.GetThumbnailPath(fileName, spec);
 
             try
             {
@@ -90,18 +92,18 @@ public class MediaController : ControllerBase
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
                 });
 
-                return File(data, "image/webp");
+                return File(data, MediaConstants.Formats.WebP);
             }
-            catch
+            catch (Exception ex)
             {
-                if (item.MediaType == 1)
+                _logger.LogWarning("Thumbnail file {Path} not found in storage. Fallback to on-demand generation.", thumbPath);
+
+                if (item.MediaType == 1) // Image
                 {
-                    _logger.LogInformation("Thumbnail not found for Image {ImageId}, creating on-demand", mediaId);
-                    
                     using var rawStream = await _storageService.GetFileAsync(item.StoragePath);
                     using var imageObj = await Image.LoadAsync(rawStream);
                     
-                    int width = 512, height = 512;
+                    var (width, height) = MediaConstants.ThumbnailSpecs.Presets[spec];
 
                     imageObj.Mutate(x => x.Resize(new ResizeOptions {
                         Size = new Size(width, height),
@@ -116,15 +118,21 @@ public class MediaController : ControllerBase
                         AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
                     });
 
-                    return File(outData, "image/webp");
+                    // Optional: Proactively upload to MinIO to avoid future generations
+                    try {
+                        outMs.Position = 0;
+                        await _storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP);
+                    } catch { /* Suppress upload errors in delivery path */ }
+
+                    return File(outData, MediaConstants.Formats.WebP);
                 }
                 
-                return NotFound("Thumbnail file missing.");
+                return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error serving thumbnail for {MediaId}", mediaId);
+            _logger.LogError(ex, "Error serving thumbnail for {MediaId} (Spec: {Spec})", mediaId, spec);
             return StatusCode(500);
         }
     }
@@ -190,6 +198,51 @@ public class MediaController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error serving raw media for {MediaId}", mediaId);
+            return StatusCode(500);
+        }
+    }
+
+    /// <summary>
+    /// Deletes a media item and all its associated thumbnails.
+    /// </summary>
+    [HttpDelete("{mediaId}")]
+    public async Task<IActionResult> DeleteMedia(Guid mediaId)
+    {
+        try
+        {
+            var items = await _metadataService.ListMediaAsync(1, 1000); 
+            var item = items.FirstOrDefault(i => i.Id == mediaId);
+            if (item == null) return NotFound();
+
+            var evt = new ImageDeletionRequestedEvent
+            {
+                EventId = Guid.NewGuid(),
+                EventType = EventTypes.ImageDeletionRequested,
+                EventVersion = "1.0",
+                Timestamp = DateTime.UtcNow,
+                TenantId = "SINGLE_TENANT",
+                Data = new ImageDeletionData {
+                    ImageId = mediaId,
+                    StoragePath = item.StoragePath,
+                    DeleteThumbnails = true,
+                    Reason = "user_requested_deletion"
+                }
+            };
+
+            var producer = HttpContext.RequestServices.GetService<IProducer<string, string>>();
+            if (producer != null)
+            {
+                await producer.ProduceAsync(KafkaTopics.ImageMaintenance, new Message<string, string> {
+                    Key = mediaId.ToString(),
+                    Value = JsonSerializer.Serialize(evt)
+                });
+            }
+
+            return Accepted(new { message = "Deletion request queued." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting media {MediaId}", mediaId);
             return StatusCode(500);
         }
     }

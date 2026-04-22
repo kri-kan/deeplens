@@ -65,6 +65,21 @@ class ApiClient {
       },
     });
   }
+
+  /**
+   * Performs a typed PATCH request.
+   */
+  async patch<T>(path: string, body?: any, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, {
+      ...options,
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+  }
   /**
    * Performs a typed DELETE request.
    */

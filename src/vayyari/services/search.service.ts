@@ -30,9 +30,9 @@ class SearchService {
   /**
    * Generates a fully qualified thumbnail URL for a given media ID.
    */
-  getThumbnailUrl(mediaId: string, tenantId: string): string {
+  getThumbnailUrl(mediaId: string, tenantId: string, spec: 'icon' | 'medium' | 'large' = 'medium'): string {
     const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
-    return `${baseUrl}${API_ROUTES.CATALOG.THUMBNAIL(mediaId)}?tenant=${tenantId}`;
+    return `${baseUrl}${API_ROUTES.CATALOG.THUMBNAIL(mediaId)}?tenant=${tenantId}&spec=${spec}`;
   }
 
   /**

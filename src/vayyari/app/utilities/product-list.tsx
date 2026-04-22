@@ -35,14 +35,26 @@ export default function ProductListScreen() {
     <List.Item
       title={item.title || 'Untitled Product'}
       description={`₹${item.vendorPrice} • ${item.category || 'No Category'}`}
-      left={props => (
-        <Avatar.Icon 
-          {...props} 
-          icon="package-variant" 
-          size={48} 
-          style={{ backgroundColor: theme.colors.surfaceVariant }} 
-        />
-      )}
+      left={props => {
+        const mediaId = item.media && item.media.length > 0 ? item.media[0].id : null;
+        if (mediaId) {
+          return (
+            <Avatar.Image 
+              {...props} 
+              source={{ uri: productService.getThumbnailUrl(mediaId, 'medium') }} 
+              size={48} 
+            />
+          );
+        }
+        return (
+          <Avatar.Icon 
+            {...props} 
+            icon="package-variant" 
+            size={48} 
+            style={{ backgroundColor: theme.colors.surfaceVariant }} 
+          />
+        );
+      }}
       right={props => <List.Icon {...props} icon="chevron-right" />}
       onPress={() => {
         // Implement product detail navigation later

@@ -28,6 +28,11 @@ const PRODUCT_UTILITIES: UtilityItem[] = [
   { id: 'merge-products', title: 'Merge Products', icon: 'call-merge', route: '', color: '#999' },
 ];
 
+const SYSTEM_UTILITIES: UtilityItem[] = [
+  { id: 'media-settings', title: 'Media Settings', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722' },
+  { id: 'app-config', title: 'App Config', icon: 'cog-outline', route: '', color: '#999' },
+];
+
 export default function UtilityScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -77,6 +82,12 @@ export default function UtilityScreen() {
         </View>
         
         {renderGrid(PRODUCT_UTILITIES)}
+
+        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>System Utilities</Text>
+        </View>
+        
+        {renderGrid(SYSTEM_UTILITIES)}
 
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
           <Text variant="titleMedium" style={styles.sectionTitle}>Business Insights</Text>

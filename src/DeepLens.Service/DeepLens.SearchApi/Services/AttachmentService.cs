@@ -6,6 +6,7 @@ using Minio.DataModel.Args;
 using Npgsql;
 using DeepLens.Shared.Common;
 using DeepLens.Infrastructure.Services;
+using DeepLens.Contracts.Media;
 
 namespace DeepLens.SearchApi.Services;
 
@@ -21,13 +22,15 @@ public class AttachmentService : IAttachmentService
     private readonly IConfiguration _config;
     private readonly IMinioClient _minioClient;
     private readonly IStorageService _storageService;
+    private readonly IMetadataService _metadataService;
     private readonly string _connectionString;
 
-    public AttachmentService(IConfiguration config, IMinioClient minioClient, IStorageService storageService)
+    public AttachmentService(IConfiguration config, IMinioClient minioClient, IStorageService storageService, IMetadataService metadataService)
     {
         _config = config;
         _minioClient = minioClient;
         _storageService = storageService;
+        _metadataService = metadataService;
         _connectionString = _config.GetConnectionString("DefaultConnection") ?? throw new ArgumentNullException("Connection string not found");
     }
 
@@ -38,79 +41,36 @@ public class AttachmentService : IAttachmentService
         return conn;
     }
 
-    private string DetermineBucket(string? entityType)
-    {
-        // For now, everything goes to the main storage bucket, 
-        // but we can split to 'vayyari-assets' here if needed.
-        return "deeplens-storage";
-    }
 
     public async Task<Guid> UploadAttachmentAsync(Stream fileStream, string fileName, string contentType, string? entityType = null, string? entityId = null, string? tag = null)
     {
-        string bucketName = DetermineBucket(entityType);
+        // Use generalized storage service logic
+        // For orders: bucket="order", subCategory=tag (transaction/reference/comments)
+        var context = StorageContext.Create(MediaCategory.Order, tag ?? "Transaction");
+        string fullPath = await _storageService.UploadFileAsync(fileName, fileStream, contentType, context);
         
-        // 1. Ensure bucket exists
-        var beArgs = new BucketExistsArgs().WithBucket(bucketName);
-        bool found = await _minioClient.BucketExistsAsync(beArgs);
-        if (!found)
-        {
-            var mbArgs = new MakeBucketArgs().WithBucket(bucketName);
-            await _minioClient.MakeBucketAsync(mbArgs);
-        }
-
-        // 2. Generate path using the Registry if entity info is provided
-        string objectKey;
-        if (!string.IsNullOrEmpty(entityType) && !string.IsNullOrEmpty(entityId))
-        {
-            if (entityType.Equals("order", StringComparison.OrdinalIgnoreCase))
-            {
-                // If tag is receipt or transaction, use transaction path
-                string type = (tag?.ToLower() == "receipt" || tag?.ToLower() == "transaction") 
-                    ? StoragePathRegistry.OrderAttachmentTypes.Transaction 
-                    : StoragePathRegistry.OrderAttachmentTypes.Comment;
-                
-                objectKey = StoragePathRegistry.GetOrderPath(entityId, type, fileName);
-            }
-            else if (entityType.Equals("product", StringComparison.OrdinalIgnoreCase))
-            {
-                string hash = Guid.NewGuid().ToString("N");
-                string extension = Path.GetExtension(fileName);
-                objectKey = StoragePathRegistry.GetProductPath(tag ?? "general", hash, extension);
-            }
-            else
-            {
-                objectKey = $"{entityType}/{entityId}/{Guid.NewGuid():N}_{fileName}";
-            }
-        }
-        else
-        {
-            // Fallback for untagged uploads
-            objectKey = $"uploads/{DateTime.UtcNow:yyyy/MM/dd}/{Guid.NewGuid():N}_{fileName}";
-        }
-
-        // 3. Upload to MinIO
-        var putObjectArgs = new PutObjectArgs()
-            .WithBucket(bucketName)
-            .WithObject(objectKey)
-            .WithStreamData(fileStream)
-            .WithObjectSize(fileStream.Length)
-            .WithContentType(contentType);
-
-        await _minioClient.PutObjectAsync(putObjectArgs);
+        // Deconstruct path for DB storage (if schema requires separate bucket/key)
+        var parts = fullPath.Split('/', 2);
+        string bucketName = parts[0];
+        string objectKey = parts[1];
 
         // 4. Save metadata to Database
         var attachmentId = Guid.NewGuid();
         using var conn = await GetConnectionAsync();
-        await conn.ExecuteAsync(@"
-            INSERT INTO attachments (id, bucket_name, object_key, content_type, file_size_bytes, original_filename)
-            VALUES (@Id, @Bucket, @Key, @ContentType, @Size, @FileName)",
+        const string insertSql = @"
+            INSERT INTO attachments (id, bucket_name, object_key, content_type, file_size_bytes, original_filename, category, subcategory)
+            VALUES (@Id, @Bucket, @Key, @ContentType, @Size, @FileName, @Category, @SubCategory)";
+
+        await conn.ExecuteAsync(insertSql,
             new { 
                 Id = attachmentId, 
                 Bucket = bucketName, 
                 Key = objectKey, 
                 ContentType = contentType, 
                 Size = fileStream.Length, 
-                FileName = fileName 
+                FileName = fileName,
+                Category = context.Bucket,
+                SubCategory = context.Folder
             });
 
         return attachmentId;
@@ -146,8 +106,8 @@ public class AttachmentService : IAttachmentService
 
         string path = $"{attachment.bucket_name}/{attachment.object_key}";
 
-        // 2. Mark for deletion in MinIO
-        await _storageService.MarkForDeletionAsync(path);
+        // 2. Delete from MinIO
+        await _storageService.DeleteFileAsync(path);
 
         // 3. Remove from database (both link and metadata)
         // Note: Using CASCADE or separate deletes depends on schema.

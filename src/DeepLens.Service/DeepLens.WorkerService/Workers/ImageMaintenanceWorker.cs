@@ -9,6 +9,7 @@ using Confluent.Kafka;
 using DeepLens.Infrastructure.Services;
 using Npgsql;
 using Dapper;
+using DeepLens.Shared.Common;
 
 namespace DeepLens.WorkerService.Workers;
 
@@ -89,11 +90,18 @@ public class ImageMaintenanceWorker : BackgroundService
 
             if (evt.Data.DeleteThumbnails)
             {
-                var thumbBase = evt.Data.StoragePath.Replace("raw/", "thumbnails/");
-                var lastDot = thumbBase.LastIndexOf('.');
-                if (lastDot > 0) thumbBase = thumbBase.Substring(0, lastDot);
+                string fileName = Path.GetFileNameWithoutExtension(evt.Data.StoragePath);
+                
+                // 1. Delete all possible thumbnail presets (loop through all known keys)
+                foreach (var spec in MediaConstants.ThumbnailSpecs.Presets.Keys)
+                {
+                    string thumbPath = StoragePathRegistry.GetThumbnailPath(fileName, spec);
+                    try { await storage.DeleteFileAsync(thumbPath); } catch { }
+                }
 
-                await storage.DeleteFileAsync($"{thumbBase}.webp");
+                // 2. Delete preview GIF if it exists (for videos)
+                string previewPath = $"{MediaConstants.Paths.PreviewsDir}/{fileName}.gif";
+                try { await storage.DeleteFileAsync(previewPath); } catch { }
             }
 
             await vectorStore.DeleteVectorAsync("SINGLE_TENANT", "resnet50", evt.Data.ImageId.ToString(), ct);

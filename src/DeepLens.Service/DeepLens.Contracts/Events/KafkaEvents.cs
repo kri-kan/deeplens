@@ -76,6 +76,12 @@ public class ImageUploadedData
     [JsonPropertyName("contentType")]
     public required string ContentType { get; set; }
 
+    [JsonPropertyName("category")]
+    public string? Category { get; set; }
+
+    [JsonPropertyName("subCategory")]
+    public string? SubCategory { get; set; }
+
     [JsonPropertyName("uploadedBy")]
     public string? UploadedBy { get; set; }
 
@@ -100,17 +106,18 @@ public class ProcessingOptions
     [JsonPropertyName("generateThumbnail")]
     public bool GenerateThumbnail { get; set; } = true;
 
+    [JsonPropertyName("targetThumbnailSizes")]
+    public string[] TargetThumbnailSizes { get; set; } = new[] { "medium" };
+
+
     [JsonPropertyName("generateGifPreview")]
     public bool GenerateGifPreview { get; set; } = true;
 
+    [JsonPropertyName("retention")]
+    public string Retention { get; set; } = "days180";
+
     [JsonPropertyName("thumbnailQuality")]
     public int ThumbnailQuality { get; set; } = 75;
-
-    [JsonPropertyName("thumbnailWidth")]
-    public int ThumbnailWidth { get; set; } = 512;
-
-    [JsonPropertyName("thumbnailHeight")]
-    public int ThumbnailHeight { get; set; } = 512;
 
     [JsonPropertyName("thumbnailFormat")]
     public string ThumbnailFormat { get; set; } = "webp";
@@ -156,6 +163,12 @@ public class VideoUploadedData
 
     [JsonPropertyName("contentType")]
     public required string ContentType { get; set; }
+
+    [JsonPropertyName("category")]
+    public string? Category { get; set; }
+
+    [JsonPropertyName("subCategory")]
+    public string? SubCategory { get; set; }
 
     [JsonPropertyName("uploadedBy")]
     public string? UploadedBy { get; set; }

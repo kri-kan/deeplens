@@ -1,12 +1,14 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using DeepLens.Contracts.Events;
 using System.Text.Json;
 using Confluent.Kafka;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using DeepLens.Infrastructure.Services;
+using DeepLens.Shared.Common;
 
 namespace DeepLens.WorkerService.Workers;
 
@@ -103,7 +105,7 @@ public class ImageProcessingWorker : BackgroundService
 
         try 
         {
-            await GenerateWebpThumbnail(uploadEvent, cancellationToken);
+            await GenerateWebpThumbnails(uploadEvent.Data, uploadEvent.ProcessingOptions, cancellationToken);
 
             var extractionEvent = new FeatureExtractionRequestedEvent
             {
@@ -144,7 +146,7 @@ public class ImageProcessingWorker : BackgroundService
         await metadataService.UpdateMediaStatusAsync(imageId, (int)status);
     }
 
-    private async Task GenerateWebpThumbnail(ImageUploadedEvent uploadEvent, CancellationToken cancellationToken)
+    private async Task GenerateWebpThumbnails(ImageUploadedData data, ProcessingOptions options, CancellationToken cancellationToken)
     {
         using var scope = _serviceProvider.CreateScope();
         var storageService = scope.ServiceProvider.GetRequiredService<IStorageService>();
@@ -152,32 +154,45 @@ public class ImageProcessingWorker : BackgroundService
         
         try
         {
-            using var rawStream = await storageService.GetFileAsync(uploadEvent.Data.FilePath);
-            using var imageObj = await Image.LoadAsync(rawStream, cancellationToken);
+            using var rawStream = await storageService.GetFileAsync(data.FilePath);
+            using var originalImage = await Image.LoadAsync(rawStream, cancellationToken);
             
-            var options = uploadEvent.ProcessingOptions;
-            imageObj.Mutate(x => x.Resize(new ResizeOptions {
-                Size = new Size(options.ThumbnailWidth, options.ThumbnailHeight),
-                Mode = ResizeMode.Max
-            }));
+            string fileName = Path.GetFileNameWithoutExtension(data.FilePath);
+            string hash = fileName;
 
-            var thumbPath = uploadEvent.Data.FilePath.Replace("raw/", "thumbnails/");
-            var lastDot = thumbPath.LastIndexOf('.');
-            if (lastDot > 0) thumbPath = thumbPath.Substring(0, lastDot);
-            thumbPath += ".webp";
+            // 1. Generate Multiple Thumbnails based on TargetThumbnailSizes
+            var targetSizes = options.TargetThumbnailSizes ?? new[] { "medium" };
 
-            using var outMs = new MemoryStream();
-            await imageObj.SaveAsWebpAsync(outMs, cancellationToken);
-            outMs.Position = 0;
+            foreach (var specName in targetSizes)
+            {
+                if (!MediaConstants.ThumbnailSpecs.Presets.TryGetValue(specName, out var preset)) continue;
 
-            await storageService.UploadThumbnailAsync(thumbPath, outMs, "image/webp");
+                var (width, height) = preset;
+                _logger.LogInformation("Generating {SpecName} thumbnail ({Width}x{Height}) for {ImageId}", specName, width, height, data.ImageId);
+
+                using var thumbImage = originalImage.Clone(x => x.Resize(new ResizeOptions
+                {
+                    Size = new Size(width, height),
+                    Mode = ResizeMode.Max
+                }));
+
+                string thumbPath = StoragePathRegistry.GetThumbnailPath(hash, specName);
+                
+                var thumbTags = string.IsNullOrEmpty(options.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, options.Retention } };
+                
+                using var outMs = new MemoryStream();
+                await thumbImage.SaveAsWebpAsync(outMs, cancellationToken);
+                outMs.Position = 0;
+
+                await storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP, thumbTags);
+            }
             
-            await metadataService.UpdateMediaDimensionsAsync(uploadEvent.Data.ImageId, imageObj.Width, imageObj.Height);
-            await metadataService.UpdateMediaStatusAsync(uploadEvent.Data.ImageId, (int)MediaProcessingStatus.Processed);
+            await metadataService.UpdateMediaDimensionsAsync(data.ImageId, originalImage.Width, originalImage.Height);
+            await metadataService.UpdateMediaStatusAsync(data.ImageId, (int)MediaProcessingStatus.Processed);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate thumbnail");
+            _logger.LogError(ex, "Failed to generate thumbnails for {ImageId}", data.ImageId);
         }
     }
 

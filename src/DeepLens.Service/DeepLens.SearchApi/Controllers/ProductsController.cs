@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using DeepLens.Contracts.Catalog;
+using DeepLens.Contracts.Media;
 using DeepLens.Domain.Entities.Catalog;
 using DeepLens.SearchApi.DTOs;
 using Microsoft.AspNetCore.Http;
@@ -60,7 +61,8 @@ public class ProductsController : ControllerBase
             VendorPrice = request.VendorPrice,
             Description = request.Description,
             MasterTitle = request.Title,
-            Category = request.Category
+            Retention = request.Retention,
+            Category = Enum.TryParse<MediaCategory>(request.Category, true, out var cat) ? cat : MediaCategory.Product
         };
 
         var result = await _productService.CreateProductAsync(ingestionDto, mediaFiles);

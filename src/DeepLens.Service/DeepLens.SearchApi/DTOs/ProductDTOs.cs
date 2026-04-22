@@ -15,6 +15,7 @@ public class ProductRequest
     public string? Description { get; set; }
     public decimal VendorPrice { get; set; }
     public string? Category { get; set; }
+    public string? Retention { get; set; }
     public List<IFormFile>? Files { get; set; }
 }
 

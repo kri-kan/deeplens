@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using DeepLens.Domain.Entities.Catalog;
+using DeepLens.Contracts.Media;
 
 namespace DeepLens.Contracts.Catalog;
 
@@ -28,7 +29,9 @@ public class ProductIngestionDto
     public decimal VendorPrice { get; set; }
     public string? Description { get; set; }
     public string? MasterTitle { get; set; }
-    public string? Category { get; set; }
+    public MediaCategory Category { get; set; } = MediaCategory.Product;
+    public string SubCategory { get; set; } = "General";
+    public string? Retention { get; set; }
 }
 
 public class MediaFileDto

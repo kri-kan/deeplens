@@ -43,6 +43,11 @@ class ProductService {
       params: { skip, take },
     });
   }
+
+  getThumbnailUrl(mediaId: string, spec: 'icon' | 'medium' | 'large' = 'medium'): string {
+    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
+    return `${baseUrl}${API_ROUTES.CATALOG.THUMBNAIL(mediaId)}?spec=${spec}`;
+  }
 }
 
 export const productService = new ProductService();

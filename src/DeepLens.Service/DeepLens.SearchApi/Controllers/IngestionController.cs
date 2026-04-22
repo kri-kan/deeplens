@@ -6,11 +6,13 @@ using Confluent.Kafka;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using DeepLens.Contracts.Events;
+using DeepLens.Contracts.Media;
+using DeepLens.Shared.Common;
 
 namespace DeepLens.SearchApi.Controllers;
 
 /// <summary>
-/// Handles image ingestion and metadata tagging. Single-tenant version.
+/// Handles image ingestion. Single-tenant version.
 /// </summary>
 [ApiController]
 [Route("api/v1/ingest")]
@@ -50,26 +52,33 @@ public class IngestionController : ControllerBase
 
         try
         {
-            _logger.LogInformation("Processing ingestion for Seller {SellerId}", request.SellerId);
+            _logger.LogInformation("Processing ingestion for {Category}/{SubCategory}", request.Category, request.SubCategory);
 
-            // 1. Save to Storage
+            // 2. Resolve Hierarchical Preferences
+            var prefs = await _metadataService.ResolveMediaPreferencesAsync(request.Category, request.SubCategory);
+            var retention = request.Retention ?? prefs.Retention;
+
+            // 3. Save to Storage
             using var stream = request.File.OpenReadStream();
-            var storagePath = await _storageService.UploadFileAsync(request.File.FileName, stream, request.File.ContentType, request.Category);
+            var context = StorageContext.Create(request.Category, request.SubCategory);
+            
+            var tags = string.IsNullOrEmpty(retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, retention } };
+            var storagePath = await _storageService.UploadFileAsync(request.File.FileName, stream, request.File.ContentType, context, tags);
 
-            // 2. Save Metadata
+            // 3. Save Metadata
             var imageId = Guid.NewGuid();
             await _metadataService.SaveIngestionDataAsync(imageId, storagePath, request.File.ContentType, request.File.Length, request);
 
-            // 3. Default Processing Options (Simplified)
+            // 5. Processing Options from Preferences
             var processingOptions = new ProcessingOptions
             {
-                ThumbnailWidth = 512,
-                ThumbnailHeight = 512,
+                TargetThumbnailSizes = prefs.ThumbnailSizes,
                 ThumbnailFormat = "webp",
-                ThumbnailQuality = 80
+                ThumbnailQuality = 80,
+                Retention = retention
             };
 
-            // 4. Notify Processing Pipeline
+            // 5. Notify Processing Pipeline
             if (_kafkaProducer != null)
             {
                 await NotifyPipeline(imageId, storagePath, request, processingOptions);
@@ -79,7 +88,7 @@ public class IngestionController : ControllerBase
             {
                 ImageId = imageId,
                 Status = "Uploaded",
-                Message = "Image successfully ingested and queued for processing."
+                Message = $"Image grouped under {request.Category}/{request.SubCategory} ingested and queued for processing."
             });
         }
         catch (Exception ex)
@@ -112,6 +121,7 @@ public class IngestionController : ControllerBase
             return BadRequest(new { message = $"Failed to parse metadata: {ex.Message}" });
         }
 
+
         var response = new BulkUploadResponse { TotalProcessed = files.Count };
         var results = new System.Collections.Concurrent.ConcurrentBag<ImageResult>();
         
@@ -130,7 +140,7 @@ public class IngestionController : ControllerBase
                 if (!string.IsNullOrEmpty(itemMetadata.Description) && 
                    (string.IsNullOrEmpty(itemMetadata.Fabric) || string.IsNullOrEmpty(itemMetadata.Color)))
                 {
-                    var extracted = await _attributeService.ExtractAttributesAsync(itemMetadata.Description, bulkRequest.Category ?? "Apparel");
+                    var extracted = await _attributeService.ExtractAttributesAsync(itemMetadata.Description, bulkRequest.Category.ToString());
                     
                     itemMetadata = itemMetadata with {
                         Fabric = itemMetadata.Fabric ?? extracted.Fabric,
@@ -151,6 +161,7 @@ public class IngestionController : ControllerBase
                     Currency = itemMetadata.Currency ?? "INR",
                     Description = itemMetadata.Description,
                     Category = bulkRequest.Category,
+                    SubCategory = bulkRequest.SubCategory,
                     Tags = itemMetadata.Tags,
                     Sku = itemMetadata.Sku,
                     Color = itemMetadata.Color,
@@ -159,16 +170,29 @@ public class IngestionController : ControllerBase
                     WorkHeaviness = itemMetadata.WorkHeaviness,
                     Occasion = itemMetadata.Occasion,
                     Patterns = itemMetadata.Patterns,
+                    Retention = bulkRequest.Retention,
                     AdditionalMetadata = itemMetadata.AdditionalMetadata
                 };
 
                 using var stream = file.OpenReadStream();
-                var storagePath = await _storageService.UploadFileAsync(file.FileName, stream, file.ContentType, singleRequest.Category);
+                var context = StorageContext.Create(singleRequest.Category, singleRequest.SubCategory);
+                
+                var prefs = await _metadataService.ResolveMediaPreferencesAsync(singleRequest.Category, singleRequest.SubCategory);
+                var retention = singleRequest.Retention ?? prefs.Retention;
+
+                var tags = string.IsNullOrEmpty(retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, retention } };
+                var storagePath = await _storageService.UploadFileAsync(file.FileName, stream, file.ContentType, context, tags);
 
                 var imageId = Guid.NewGuid();
                 await _metadataService.SaveIngestionDataAsync(imageId, storagePath, file.ContentType, file.Length, singleRequest);
 
-                var processingOptions = new ProcessingOptions { ThumbnailWidth = 512, ThumbnailHeight = 512 };
+                var processingOptions = new ProcessingOptions 
+                {
+                    TargetThumbnailSizes = prefs.ThumbnailSizes,
+                    ThumbnailFormat = "webp",
+                    ThumbnailQuality = 80,
+                    Retention = retention
+                };
 
                 if (_kafkaProducer != null)
                 {
@@ -237,6 +261,8 @@ public class IngestionController : ControllerBase
                     FilePath = storagePath,
                     FileSize = request.File.Length,
                     ContentType = contentType,
+                    Category = request.Category.ToString(),
+                    SubCategory = request.SubCategory,
                     UploadedBy = "system"
                 },
                 ProcessingOptions = processingOptions
@@ -259,6 +285,8 @@ public class IngestionController : ControllerBase
                     FilePath = storagePath,
                     FileSize = request.File.Length,
                     ContentType = contentType,
+                    Category = request.Category.ToString(),
+                    SubCategory = request.SubCategory,
                     UploadedBy = "system",
                     Metadata = new ImageMetadata
                     {

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using DeepLens.Contracts.Media;
 
 namespace DeepLens.Contracts.Ingestion;
 
@@ -12,7 +13,9 @@ public record UploadImageRequest
     public string? Currency { get; init; } = "INR";
     public string? Description { get; init; } // Unstructured data
     
-    public string? Category { get; init; } // e.g. "Saree"
+    public MediaCategory Category { get; init; } = MediaCategory.Product;
+    public string SubCategory { get; init; } = "General";
+    public string? Retention { get; init; } // e.g., "days30", "days90"
     public List<string>? Tags { get; init; } // ["unstitched", "silk"]
     
     public string? Sku { get; init; } // User provided SKU (if any)
@@ -31,7 +34,9 @@ public record UploadImageRequest
 public record BulkUploadImageRequest
 {
     public string? SellerId { get; init; }
-    public string? Category { get; init; }
+    public MediaCategory Category { get; init; } = MediaCategory.Product;
+    public string SubCategory { get; init; } = "General";
+    public string? Retention { get; init; } // e.g., "days30", "days90"
     public List<BulkImageItem> Images { get; init; } = new();
 }
 

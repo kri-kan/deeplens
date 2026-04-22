@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 7UOtmw7APa1X2GldAWQW0G8knnvEveTCkDZ7tRMWs5wXdsrVd3ILE8i9e8MBLR3
+\restrict YZa79xpqxHg10truUWv8l2kNA2jyi7eoSQmHxOowZIWDviYGwl4El4hdZJ9fhff
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -19,259 +19,6 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
-ALTER TABLE IF EXISTS ONLY public.video_insights DROP CONSTRAINT IF EXISTS video_insights_video_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.vendor_contacts DROP CONSTRAINT IF EXISTS vendor_contacts_vendor_id_fkey;
-ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_source_id_fkey;
-ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_payment_mode_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.seller_listings DROP CONSTRAINT IF EXISTS seller_listings_variant_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.seller_listings DROP CONSTRAINT IF EXISTS seller_listings_seller_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.search_queries DROP CONSTRAINT IF EXISTS search_queries_session_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.search_queries DROP CONSTRAINT IF EXISTS search_queries_collection_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_watchlist_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_scraper_session_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_category_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.product_variants DROP CONSTRAINT IF EXISTS product_variants_product_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.media DROP CONSTRAINT IF EXISTS media_variant_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_namespace_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_namespace_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_resource_metrics DROP CONSTRAINT IF EXISTS k8s_resource_metrics_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_workload_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_namespace_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_nodes DROP CONSTRAINT IF EXISTS k8s_nodes_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_namespaces DROP CONSTRAINT IF EXISTS k8s_namespaces_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_events DROP CONSTRAINT IF EXISTS k8s_events_namespace_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_events DROP CONSTRAINT IF EXISTS k8s_events_cluster_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.infisical_secrets DROP CONSTRAINT IF EXISTS infisical_secrets_project_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.follower_snapshots DROP CONSTRAINT IF EXISTS follower_snapshots_watchlist_id_fkey;
-ALTER TABLE IF EXISTS ONLY public."orderItem" DROP CONSTRAINT IF EXISTS fk_order_ref;
-ALTER TABLE IF EXISTS ONLY public.entity_attachments DROP CONSTRAINT IF EXISTS entity_attachments_attachment_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.engagement_snapshots DROP CONSTRAINT IF EXISTS engagement_snapshots_video_id_fkey;
-ALTER TABLE IF EXISTS ONLY public.competitor_videos DROP CONSTRAINT IF EXISTS competitor_videos_watchlist_id_fkey;
-DROP TRIGGER IF EXISTS trigger_watchlist_updated_at ON public.competitor_watchlist;
-DROP TRIGGER IF EXISTS trigger_videos_updated_at ON public.competitor_videos;
-DROP TRIGGER IF EXISTS trigger_sessions_updated_at ON public.scraper_sessions;
-DROP INDEX IF EXISTS public.idx_watchlist_platform;
-DROP INDEX IF EXISTS public.idx_videos_posted_at;
-DROP INDEX IF EXISTS public.idx_vendors_name;
-DROP INDEX IF EXISTS public.idx_vendors_active;
-DROP INDEX IF EXISTS public.idx_vendor_contacts_vendor;
-DROP INDEX IF EXISTS public.idx_system_health_status;
-DROP INDEX IF EXISTS public.idx_system_health_service;
-DROP INDEX IF EXISTS public.idx_system_health_recorded_at;
-DROP INDEX IF EXISTS public.idx_system_health_metric;
-DROP INDEX IF EXISTS public.idx_snapshots_video_time;
-DROP INDEX IF EXISTS public.idx_service_dependencies_status;
-DROP INDEX IF EXISTS public.idx_service_dependencies_service;
-DROP INDEX IF EXISTS public.idx_service_dependencies_dependency;
-DROP INDEX IF EXISTS public.idx_service_dependencies_critical;
-DROP INDEX IF EXISTS public.idx_search_queries_timestamp;
-DROP INDEX IF EXISTS public.idx_products_sku;
-DROP INDEX IF EXISTS public.idx_platform_configs_updated_at;
-DROP INDEX IF EXISTS public.idx_media_type;
-DROP INDEX IF EXISTS public.idx_media_phash;
-DROP INDEX IF EXISTS public.idx_k8s_workloads_type;
-DROP INDEX IF EXISTS public.idx_k8s_workloads_namespace_id;
-DROP INDEX IF EXISTS public.idx_k8s_workloads_name;
-DROP INDEX IF EXISTS public.idx_k8s_workloads_last_sync;
-DROP INDEX IF EXISTS public.idx_k8s_workloads_cluster_namespace;
-DROP INDEX IF EXISTS public.idx_k8s_workloads_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_services_type;
-DROP INDEX IF EXISTS public.idx_k8s_services_namespace_id;
-DROP INDEX IF EXISTS public.idx_k8s_services_name;
-DROP INDEX IF EXISTS public.idx_k8s_services_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_pods_workload_id;
-DROP INDEX IF EXISTS public.idx_k8s_pods_phase;
-DROP INDEX IF EXISTS public.idx_k8s_pods_node_name;
-DROP INDEX IF EXISTS public.idx_k8s_pods_namespace_id;
-DROP INDEX IF EXISTS public.idx_k8s_pods_name;
-DROP INDEX IF EXISTS public.idx_k8s_pods_cluster_namespace;
-DROP INDEX IF EXISTS public.idx_k8s_pods_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_nodes_status;
-DROP INDEX IF EXISTS public.idx_k8s_nodes_role;
-DROP INDEX IF EXISTS public.idx_k8s_nodes_name;
-DROP INDEX IF EXISTS public.idx_k8s_nodes_heartbeat;
-DROP INDEX IF EXISTS public.idx_k8s_nodes_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_namespaces_status;
-DROP INDEX IF EXISTS public.idx_k8s_namespaces_name;
-DROP INDEX IF EXISTS public.idx_k8s_namespaces_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_metrics_resource_type;
-DROP INDEX IF EXISTS public.idx_k8s_metrics_resource_name;
-DROP INDEX IF EXISTS public.idx_k8s_metrics_recorded_at;
-DROP INDEX IF EXISTS public.idx_k8s_metrics_metric_name;
-DROP INDEX IF EXISTS public.idx_k8s_metrics_cluster_resource_time;
-DROP INDEX IF EXISTS public.idx_k8s_metrics_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_events_type;
-DROP INDEX IF EXISTS public.idx_k8s_events_timestamps;
-DROP INDEX IF EXISTS public.idx_k8s_events_reason;
-DROP INDEX IF EXISTS public.idx_k8s_events_object_kind;
-DROP INDEX IF EXISTS public.idx_k8s_events_namespace_id;
-DROP INDEX IF EXISTS public.idx_k8s_events_cluster_time;
-DROP INDEX IF EXISTS public.idx_k8s_events_cluster_id;
-DROP INDEX IF EXISTS public.idx_k8s_clusters_provider;
-DROP INDEX IF EXISTS public.idx_k8s_clusters_name;
-DROP INDEX IF EXISTS public.idx_k8s_clusters_last_sync;
-DROP INDEX IF EXISTS public.idx_k8s_clusters_active;
-DROP INDEX IF EXISTS public.idx_jobs_status;
-DROP INDEX IF EXISTS public.idx_insta_cache_scraped_at;
-DROP INDEX IF EXISTS public.idx_infisical_secrets_project_id;
-DROP INDEX IF EXISTS public.idx_infisical_secrets_last_accessed;
-DROP INDEX IF EXISTS public.idx_infisical_secrets_key;
-DROP INDEX IF EXISTS public.idx_infisical_projects_tenant_id;
-DROP INDEX IF EXISTS public.idx_infisical_projects_project_id;
-DROP INDEX IF EXISTS public.idx_infisical_projects_active;
-DROP INDEX IF EXISTS public.idx_follower_snapshots_watchlist_time;
-DROP INDEX IF EXISTS public.idx_entity_attachments_lookup;
-DROP INDEX IF EXISTS public.idx_comments_entity;
-DROP INDEX IF EXISTS public.idx_comments_attachments;
-DROP INDEX IF EXISTS public.idx_attachments_original_filename;
-DROP INDEX IF EXISTS public.idx_attachments_metadata;
-DROP INDEX IF EXISTS public.idx_api_usage_tenant_timestamp;
-DROP INDEX IF EXISTS public.idx_api_usage_logs_timestamp;
-DROP INDEX IF EXISTS public.idx_api_usage_logs_tenant_id;
-DROP INDEX IF EXISTS public.idx_api_usage_logs_status_code;
-DROP INDEX IF EXISTS public.idx_api_usage_logs_endpoint;
-ALTER TABLE IF EXISTS ONLY public.video_insights DROP CONSTRAINT IF EXISTS video_insights_video_id_insight_type_key;
-ALTER TABLE IF EXISTS ONLY public.video_insights DROP CONSTRAINT IF EXISTS video_insights_pkey;
-ALTER TABLE IF EXISTS ONLY public.vendors DROP CONSTRAINT IF EXISTS vendors_pkey;
-ALTER TABLE IF EXISTS ONLY public.vendor_contacts DROP CONSTRAINT IF EXISTS vendor_contacts_pkey;
-ALTER TABLE IF EXISTS ONLY public.user_preferences DROP CONSTRAINT IF EXISTS user_preferences_user_id_preference_key_key;
-ALTER TABLE IF EXISTS ONLY public.user_preferences DROP CONSTRAINT IF EXISTS user_preferences_pkey;
-ALTER TABLE IF EXISTS ONLY public."orderItem" DROP CONSTRAINT IF EXISTS uk_order_item_index;
-ALTER TABLE IF EXISTS ONLY public.system_health_metrics DROP CONSTRAINT IF EXISTS system_health_metrics_pkey;
-ALTER TABLE IF EXISTS ONLY public."productId" DROP CONSTRAINT IF EXISTS studio_products_product_id_key;
-ALTER TABLE IF EXISTS ONLY public."productId" DROP CONSTRAINT IF EXISTS studio_products_pkey;
-ALTER TABLE IF EXISTS ONLY public.payment_modes DROP CONSTRAINT IF EXISTS studio_payment_modes_pkey;
-ALTER TABLE IF EXISTS ONLY public.payment_modes DROP CONSTRAINT IF EXISTS studio_payment_modes_name_key;
-ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_pkey;
-ALTER TABLE IF EXISTS ONLY public."orderId" DROP CONSTRAINT IF EXISTS studio_orders_order_id_key;
-ALTER TABLE IF EXISTS ONLY public.order_sources DROP CONSTRAINT IF EXISTS studio_order_sources_pkey;
-ALTER TABLE IF EXISTS ONLY public.order_sources DROP CONSTRAINT IF EXISTS studio_order_sources_name_key;
-ALTER TABLE IF EXISTS ONLY public.service_dependencies DROP CONSTRAINT IF EXISTS service_dependencies_service_name_dependency_name_key;
-ALTER TABLE IF EXISTS ONLY public.service_dependencies DROP CONSTRAINT IF EXISTS service_dependencies_pkey;
-ALTER TABLE IF EXISTS ONLY public.sellers DROP CONSTRAINT IF EXISTS sellers_pkey;
-ALTER TABLE IF EXISTS ONLY public.sellers DROP CONSTRAINT IF EXISTS sellers_external_id_key;
-ALTER TABLE IF EXISTS ONLY public.seller_listings DROP CONSTRAINT IF EXISTS seller_listings_pkey;
-ALTER TABLE IF EXISTS ONLY public.search_sessions DROP CONSTRAINT IF EXISTS search_sessions_pkey;
-ALTER TABLE IF EXISTS ONLY public.search_queries DROP CONSTRAINT IF EXISTS search_queries_pkey;
-ALTER TABLE IF EXISTS ONLY public.scraper_sessions DROP CONSTRAINT IF EXISTS scraper_sessions_platform_username_key;
-ALTER TABLE IF EXISTS ONLY public.scraper_sessions DROP CONSTRAINT IF EXISTS scraper_sessions_pkey;
-ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_pkey;
-ALTER TABLE IF EXISTS ONLY public.scraper_jobs DROP CONSTRAINT IF EXISTS scraper_jobs_job_id_key;
-ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_pkey;
-ALTER TABLE IF EXISTS ONLY public.products DROP CONSTRAINT IF EXISTS products_base_sku_key;
-ALTER TABLE IF EXISTS ONLY public.product_variants DROP CONSTRAINT IF EXISTS product_variants_pkey;
-ALTER TABLE IF EXISTS ONLY public.platform_configs DROP CONSTRAINT IF EXISTS platform_configs_pkey;
-ALTER TABLE IF EXISTS ONLY public."orderItem" DROP CONSTRAINT IF EXISTS "orderItem_pkey";
-ALTER TABLE IF EXISTS ONLY public.media DROP CONSTRAINT IF EXISTS media_pkey;
-ALTER TABLE IF EXISTS ONLY public.media_deletion_queue DROP CONSTRAINT IF EXISTS media_deletion_queue_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_workloads DROP CONSTRAINT IF EXISTS k8s_workloads_cluster_id_namespace_id_workload_name_workloa_key;
-ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_services DROP CONSTRAINT IF EXISTS k8s_services_cluster_id_namespace_id_service_name_key;
-ALTER TABLE IF EXISTS ONLY public.k8s_resource_metrics DROP CONSTRAINT IF EXISTS k8s_resource_metrics_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_pods DROP CONSTRAINT IF EXISTS k8s_pods_cluster_id_namespace_id_pod_name_key;
-ALTER TABLE IF EXISTS ONLY public.k8s_nodes DROP CONSTRAINT IF EXISTS k8s_nodes_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_nodes DROP CONSTRAINT IF EXISTS k8s_nodes_cluster_id_node_name_key;
-ALTER TABLE IF EXISTS ONLY public.k8s_namespaces DROP CONSTRAINT IF EXISTS k8s_namespaces_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_namespaces DROP CONSTRAINT IF EXISTS k8s_namespaces_cluster_id_namespace_name_key;
-ALTER TABLE IF EXISTS ONLY public.k8s_events DROP CONSTRAINT IF EXISTS k8s_events_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_clusters DROP CONSTRAINT IF EXISTS k8s_clusters_pkey;
-ALTER TABLE IF EXISTS ONLY public.k8s_clusters DROP CONSTRAINT IF EXISTS k8s_clusters_name_key;
-ALTER TABLE IF EXISTS ONLY public.instagram_profile_cache DROP CONSTRAINT IF EXISTS instagram_profile_cache_pkey;
-ALTER TABLE IF EXISTS ONLY public.ingestion_meta DROP CONSTRAINT IF EXISTS ingestion_meta_pkey;
-ALTER TABLE IF EXISTS ONLY public.infisical_secrets DROP CONSTRAINT IF EXISTS infisical_secrets_project_id_secret_key_key;
-ALTER TABLE IF EXISTS ONLY public.infisical_secrets DROP CONSTRAINT IF EXISTS infisical_secrets_pkey;
-ALTER TABLE IF EXISTS ONLY public.infisical_projects DROP CONSTRAINT IF EXISTS infisical_projects_project_id_key;
-ALTER TABLE IF EXISTS ONLY public.infisical_projects DROP CONSTRAINT IF EXISTS infisical_projects_pkey;
-ALTER TABLE IF EXISTS ONLY public.image_collections DROP CONSTRAINT IF EXISTS image_collections_pkey;
-ALTER TABLE IF EXISTS ONLY public.image_collections DROP CONSTRAINT IF EXISTS image_collections_name_key;
-ALTER TABLE IF EXISTS ONLY public.follower_snapshots DROP CONSTRAINT IF EXISTS follower_snapshots_watchlist_id_snapshot_at_key;
-ALTER TABLE IF EXISTS ONLY public.follower_snapshots DROP CONSTRAINT IF EXISTS follower_snapshots_pkey;
-ALTER TABLE IF EXISTS ONLY public.entity_attachments DROP CONSTRAINT IF EXISTS entity_attachments_pkey;
-ALTER TABLE IF EXISTS ONLY public.engagement_snapshots DROP CONSTRAINT IF EXISTS engagement_snapshots_video_id_snapshot_at_key;
-ALTER TABLE IF EXISTS ONLY public.engagement_snapshots DROP CONSTRAINT IF EXISTS engagement_snapshots_pkey;
-ALTER TABLE IF EXISTS ONLY public.competitor_watchlist DROP CONSTRAINT IF EXISTS competitor_watchlist_platform_username_key;
-ALTER TABLE IF EXISTS ONLY public.competitor_watchlist DROP CONSTRAINT IF EXISTS competitor_watchlist_pkey;
-ALTER TABLE IF EXISTS ONLY public.competitor_videos DROP CONSTRAINT IF EXISTS competitor_videos_platform_platform_video_id_key;
-ALTER TABLE IF EXISTS ONLY public.competitor_videos DROP CONSTRAINT IF EXISTS competitor_videos_pkey;
-ALTER TABLE IF EXISTS ONLY public.comments DROP CONSTRAINT IF EXISTS comments_pkey;
-ALTER TABLE IF EXISTS ONLY public.categories DROP CONSTRAINT IF EXISTS categories_slug_key;
-ALTER TABLE IF EXISTS ONLY public.categories DROP CONSTRAINT IF EXISTS categories_pkey;
-ALTER TABLE IF EXISTS ONLY public.attachments DROP CONSTRAINT IF EXISTS attachments_pkey;
-ALTER TABLE IF EXISTS ONLY public.api_usage_logs DROP CONSTRAINT IF EXISTS api_usage_logs_pkey;
-ALTER TABLE IF EXISTS public."productId" ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.payment_modes ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public.order_sources ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public."orderItem" ALTER COLUMN id DROP DEFAULT;
-ALTER TABLE IF EXISTS public."orderId" ALTER COLUMN id DROP DEFAULT;
-DROP TABLE IF EXISTS public.video_insights;
-DROP TABLE IF EXISTS public.vendors;
-DROP TABLE IF EXISTS public.vendor_contacts;
-DROP TABLE IF EXISTS public.user_preferences;
-DROP TABLE IF EXISTS public.system_health_metrics;
-DROP SEQUENCE IF EXISTS public.studio_payment_modes_id_seq;
-DROP SEQUENCE IF EXISTS public.studio_order_sources_id_seq;
-DROP TABLE IF EXISTS public.service_dependencies;
-DROP TABLE IF EXISTS public.sellers;
-DROP TABLE IF EXISTS public.seller_listings;
-DROP TABLE IF EXISTS public.search_sessions;
-DROP TABLE IF EXISTS public.search_queries;
-DROP TABLE IF EXISTS public.scraper_sessions;
-DROP TABLE IF EXISTS public.scraper_jobs;
-DROP TABLE IF EXISTS public.products;
-DROP TABLE IF EXISTS public.product_variants;
-DROP SEQUENCE IF EXISTS public."productId_id_seq";
-DROP TABLE IF EXISTS public."productId";
-DROP TABLE IF EXISTS public.platform_configs;
-DROP TABLE IF EXISTS public.payment_modes;
-DROP TABLE IF EXISTS public.order_sources;
-DROP SEQUENCE IF EXISTS public."orderItem_id_seq";
-DROP TABLE IF EXISTS public."orderItem";
-DROP SEQUENCE IF EXISTS public."orderId_id_seq";
-DROP TABLE IF EXISTS public."orderId";
-DROP TABLE IF EXISTS public.media_deletion_queue;
-DROP TABLE IF EXISTS public.media;
-DROP TABLE IF EXISTS public.k8s_workloads;
-DROP TABLE IF EXISTS public.k8s_services;
-DROP TABLE IF EXISTS public.k8s_resource_metrics;
-DROP TABLE IF EXISTS public.k8s_pods;
-DROP TABLE IF EXISTS public.k8s_nodes;
-DROP TABLE IF EXISTS public.k8s_namespaces;
-DROP TABLE IF EXISTS public.k8s_events;
-DROP TABLE IF EXISTS public.k8s_clusters;
-DROP TABLE IF EXISTS public.instagram_profile_cache;
-DROP TABLE IF EXISTS public.ingestion_meta;
-DROP TABLE IF EXISTS public.infisical_secrets;
-DROP TABLE IF EXISTS public.infisical_projects;
-DROP TABLE IF EXISTS public.image_collections;
-DROP TABLE IF EXISTS public.follower_snapshots;
-DROP TABLE IF EXISTS public.entity_attachments;
-DROP TABLE IF EXISTS public.engagement_snapshots;
-DROP TABLE IF EXISTS public.competitor_watchlist;
-DROP TABLE IF EXISTS public.competitor_videos;
-DROP TABLE IF EXISTS public.comments;
-DROP TABLE IF EXISTS public.categories;
-DROP TABLE IF EXISTS public.attachments;
-DROP TABLE IF EXISTS public.api_usage_logs;
-DROP FUNCTION IF EXISTS public.update_updated_at_column();
-DROP FUNCTION IF EXISTS public.set_tenant_context(p_tenant_id uuid);
-DROP FUNCTION IF EXISTS public.list_tenants(p_active_only boolean, p_plan_type character varying);
-DROP FUNCTION IF EXISTS public.initialize_tenant_redis_database(p_tenant_id uuid);
-DROP FUNCTION IF EXISTS public.get_tenant_info(p_tenant_id uuid);
-DROP FUNCTION IF EXISTS public.delete_tenant(p_tenant_id uuid, p_confirm_deletion boolean);
-DROP FUNCTION IF EXISTS public.create_tenant_qdrant_collection(p_tenant_id uuid, p_tenant_name character varying);
-DROP FUNCTION IF EXISTS public.create_tenant_database(p_tenant_id uuid, p_tenant_name character varying, p_database_suffix character varying);
-DROP FUNCTION IF EXISTS public.create_tenant(p_name character varying, p_domain character varying, p_subdomain character varying, p_plan_type character varying, p_storage_provider character varying, p_storage_config jsonb);
-DROP FUNCTION IF EXISTS public.configure_tenant_storage(p_tenant_id uuid, p_provider character varying, p_configuration jsonb);
-DROP FUNCTION IF EXISTS public.cleanup_instagram_cache(p_days integer);
-DROP EXTENSION IF EXISTS "uuid-ossp";
-DROP EXTENSION IF EXISTS pgcrypto;
-DROP EXTENSION IF EXISTS pg_trgm;
-DROP EXTENSION IF EXISTS hstore;
 --
 -- Name: hstore; Type: EXTENSION; Schema: -; Owner: -
 --
@@ -280,7 +27,7 @@ CREATE EXTENSION IF NOT EXISTS hstore WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION hstore; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION hstore; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION hstore IS 'data type for storing sets of (key, value) pairs';
@@ -294,7 +41,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pg_trgm; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION pg_trgm; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
@@ -308,7 +55,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
@@ -322,14 +69,14 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 
 --
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
 --
--- Name: cleanup_instagram_cache(integer); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: cleanup_instagram_cache(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.cleanup_instagram_cache(p_days integer DEFAULT 7) RETURNS integer
@@ -347,10 +94,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.cleanup_instagram_cache(p_days integer) OWNER TO postgres;
-
 --
--- Name: configure_tenant_storage(uuid, character varying, jsonb); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: configure_tenant_storage(uuid, character varying, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.configure_tenant_storage(p_tenant_id uuid, p_provider character varying, p_configuration jsonb) RETURNS uuid
@@ -367,10 +112,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.configure_tenant_storage(p_tenant_id uuid, p_provider character varying, p_configuration jsonb) OWNER TO postgres;
-
 --
--- Name: create_tenant(character varying, character varying, character varying, character varying, character varying, jsonb); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_tenant(character varying, character varying, character varying, character varying, character varying, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.create_tenant(p_name character varying, p_domain character varying DEFAULT NULL::character varying, p_subdomain character varying DEFAULT NULL::character varying, p_plan_type character varying DEFAULT 'free'::character varying, p_storage_provider character varying DEFAULT 'minio'::character varying, p_storage_config jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(tenant_id uuid, tenant_name character varying, database_name character varying, storage_config_id uuid, status character varying)
@@ -392,10 +135,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.create_tenant(p_name character varying, p_domain character varying, p_subdomain character varying, p_plan_type character varying, p_storage_provider character varying, p_storage_config jsonb) OWNER TO postgres;
-
 --
--- Name: create_tenant_database(uuid, character varying, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_tenant_database(uuid, character varying, character varying); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.create_tenant_database(p_tenant_id uuid, p_tenant_name character varying, p_database_suffix character varying DEFAULT 'metadata'::character varying) RETURNS character varying
@@ -416,10 +157,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.create_tenant_database(p_tenant_id uuid, p_tenant_name character varying, p_database_suffix character varying) OWNER TO postgres;
-
 --
--- Name: create_tenant_qdrant_collection(uuid, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_tenant_qdrant_collection(uuid, character varying); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.create_tenant_qdrant_collection(p_tenant_id uuid, p_tenant_name character varying) RETURNS character varying
@@ -452,10 +191,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.create_tenant_qdrant_collection(p_tenant_id uuid, p_tenant_name character varying) OWNER TO postgres;
-
 --
--- Name: delete_tenant(uuid, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: delete_tenant(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.delete_tenant(p_tenant_id uuid, p_confirm_deletion boolean DEFAULT false) RETURNS TABLE(tenant_id uuid, databases_dropped integer, status character varying)
@@ -495,10 +232,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.delete_tenant(p_tenant_id uuid, p_confirm_deletion boolean) OWNER TO postgres;
-
 --
--- Name: get_tenant_info(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: get_tenant_info(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.get_tenant_info(p_tenant_id uuid) RETURNS TABLE(tenant_id uuid, tenant_name character varying, domain character varying, subdomain character varying, plan_type character varying, is_active boolean, created_at timestamp with time zone, usage_limits jsonb, database_count integer, storage_provider character varying, storage_status character varying)
@@ -524,10 +259,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.get_tenant_info(p_tenant_id uuid) OWNER TO postgres;
-
 --
--- Name: initialize_tenant_redis_database(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: initialize_tenant_redis_database(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.initialize_tenant_redis_database(p_tenant_id uuid) RETURNS integer
@@ -560,10 +293,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.initialize_tenant_redis_database(p_tenant_id uuid) OWNER TO postgres;
-
 --
--- Name: list_tenants(boolean, character varying); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: list_tenants(boolean, character varying); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.list_tenants(p_active_only boolean DEFAULT true, p_plan_type character varying DEFAULT NULL::character varying) RETURNS TABLE(tenant_id uuid, tenant_name character varying, domain character varying, plan_type character varying, is_active boolean, created_at timestamp with time zone, database_count integer)
@@ -588,10 +319,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.list_tenants(p_active_only boolean, p_plan_type character varying) OWNER TO postgres;
-
 --
--- Name: set_tenant_context(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: set_tenant_context(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.set_tenant_context(p_tenant_id uuid) RETURNS void
@@ -604,10 +333,8 @@ END;
 $$;
 
 
-ALTER FUNCTION public.set_tenant_context(p_tenant_id uuid) OWNER TO postgres;
-
 --
--- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: update_updated_at_column(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
@@ -620,14 +347,12 @@ END;
 $$;
 
 
-ALTER FUNCTION public.update_updated_at_column() OWNER TO postgres;
-
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
 --
--- Name: api_usage_logs; Type: TABLE; Schema: public; Owner: postgres
+-- Name: api_usage_logs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.api_usage_logs (
@@ -643,10 +368,8 @@ CREATE TABLE public.api_usage_logs (
 );
 
 
-ALTER TABLE public.api_usage_logs OWNER TO postgres;
-
 --
--- Name: attachments; Type: TABLE; Schema: public; Owner: postgres
+-- Name: attachments; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.attachments (
@@ -657,35 +380,35 @@ CREATE TABLE public.attachments (
     file_size_bytes bigint,
     original_filename character varying(255),
     metadata jsonb DEFAULT '{}'::jsonb,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    category character varying(50),
+    subcategory character varying(50)
 );
 
 
-ALTER TABLE public.attachments OWNER TO postgres;
-
 --
--- Name: TABLE attachments; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: TABLE attachments; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON TABLE public.attachments IS 'Centralized registry for all files uploaded to MinIO across the DeepLens platform';
 
 
 --
--- Name: COLUMN attachments.id; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN attachments.id; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.attachments.id IS 'The unique ID used to reference this file in other tables';
 
 
 --
--- Name: COLUMN attachments.object_key; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN attachments.object_key; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.attachments.object_key IS 'The full path/key inside the MinIO bucket';
 
 
 --
--- Name: categories; Type: TABLE; Schema: public; Owner: postgres
+-- Name: categories; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.categories (
@@ -697,10 +420,8 @@ CREATE TABLE public.categories (
 );
 
 
-ALTER TABLE public.categories OWNER TO postgres;
-
 --
--- Name: comments; Type: TABLE; Schema: public; Owner: postgres
+-- Name: comments; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.comments (
@@ -715,24 +436,22 @@ CREATE TABLE public.comments (
 );
 
 
-ALTER TABLE public.comments OWNER TO postgres;
-
 --
--- Name: TABLE comments; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: TABLE comments; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON TABLE public.comments IS 'Structured messages/notes for any entity in the system, supporting multiple file attachments per comment';
 
 
 --
--- Name: COLUMN comments.attachment_ids; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN comments.attachment_ids; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.comments.attachment_ids IS 'Array of UUIDs referring to the centralized attachments table';
 
 
 --
--- Name: competitor_videos; Type: TABLE; Schema: public; Owner: postgres
+-- Name: competitor_videos; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.competitor_videos (
@@ -779,10 +498,8 @@ CREATE TABLE public.competitor_videos (
 );
 
 
-ALTER TABLE public.competitor_videos OWNER TO postgres;
-
 --
--- Name: competitor_watchlist; Type: TABLE; Schema: public; Owner: postgres
+-- Name: competitor_watchlist; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.competitor_watchlist (
@@ -808,10 +525,8 @@ CREATE TABLE public.competitor_watchlist (
 );
 
 
-ALTER TABLE public.competitor_watchlist OWNER TO postgres;
-
 --
--- Name: engagement_snapshots; Type: TABLE; Schema: public; Owner: postgres
+-- Name: engagement_snapshots; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.engagement_snapshots (
@@ -828,10 +543,8 @@ CREATE TABLE public.engagement_snapshots (
 );
 
 
-ALTER TABLE public.engagement_snapshots OWNER TO postgres;
-
 --
--- Name: entity_attachments; Type: TABLE; Schema: public; Owner: postgres
+-- Name: entity_attachments; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.entity_attachments (
@@ -845,31 +558,29 @@ CREATE TABLE public.entity_attachments (
 );
 
 
-ALTER TABLE public.entity_attachments OWNER TO postgres;
-
 --
--- Name: TABLE entity_attachments; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: TABLE entity_attachments; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON TABLE public.entity_attachments IS 'Universal junction table linking any business entity to attachments stored in MinIO';
 
 
 --
--- Name: COLUMN entity_attachments.entity_type; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN entity_attachments.entity_type; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.entity_attachments.entity_type IS 'The name of the table or business entity (e.g., order, category)';
 
 
 --
--- Name: COLUMN entity_attachments.entity_id; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN entity_attachments.entity_id; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public.entity_attachments.entity_id IS 'The primary key of the related entity (stored as string for flexibility)';
 
 
 --
--- Name: follower_snapshots; Type: TABLE; Schema: public; Owner: postgres
+-- Name: follower_snapshots; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.follower_snapshots (
@@ -883,10 +594,8 @@ CREATE TABLE public.follower_snapshots (
 );
 
 
-ALTER TABLE public.follower_snapshots OWNER TO postgres;
-
 --
--- Name: image_collections; Type: TABLE; Schema: public; Owner: postgres
+-- Name: image_collections; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.image_collections (
@@ -902,10 +611,8 @@ CREATE TABLE public.image_collections (
 );
 
 
-ALTER TABLE public.image_collections OWNER TO postgres;
-
 --
--- Name: infisical_projects; Type: TABLE; Schema: public; Owner: postgres
+-- Name: infisical_projects; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.infisical_projects (
@@ -922,10 +629,8 @@ CREATE TABLE public.infisical_projects (
 );
 
 
-ALTER TABLE public.infisical_projects OWNER TO postgres;
-
 --
--- Name: infisical_secrets; Type: TABLE; Schema: public; Owner: postgres
+-- Name: infisical_secrets; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.infisical_secrets (
@@ -939,10 +644,8 @@ CREATE TABLE public.infisical_secrets (
 );
 
 
-ALTER TABLE public.infisical_secrets OWNER TO postgres;
-
 --
--- Name: ingestion_meta; Type: TABLE; Schema: public; Owner: postgres
+-- Name: ingestion_meta; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.ingestion_meta (
@@ -953,10 +656,8 @@ CREATE TABLE public.ingestion_meta (
 );
 
 
-ALTER TABLE public.ingestion_meta OWNER TO postgres;
-
 --
--- Name: instagram_profile_cache; Type: TABLE; Schema: public; Owner: postgres
+-- Name: instagram_profile_cache; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.instagram_profile_cache (
@@ -976,10 +677,8 @@ CREATE TABLE public.instagram_profile_cache (
 );
 
 
-ALTER TABLE public.instagram_profile_cache OWNER TO postgres;
-
 --
--- Name: k8s_clusters; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_clusters; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_clusters (
@@ -997,10 +696,8 @@ CREATE TABLE public.k8s_clusters (
 );
 
 
-ALTER TABLE public.k8s_clusters OWNER TO postgres;
-
 --
--- Name: k8s_events; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_events; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_events (
@@ -1022,10 +719,8 @@ CREATE TABLE public.k8s_events (
 );
 
 
-ALTER TABLE public.k8s_events OWNER TO postgres;
-
 --
--- Name: k8s_namespaces; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_namespaces; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_namespaces (
@@ -1039,10 +734,8 @@ CREATE TABLE public.k8s_namespaces (
 );
 
 
-ALTER TABLE public.k8s_namespaces OWNER TO postgres;
-
 --
--- Name: k8s_nodes; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_nodes; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_nodes (
@@ -1065,10 +758,8 @@ CREATE TABLE public.k8s_nodes (
 );
 
 
-ALTER TABLE public.k8s_nodes OWNER TO postgres;
-
 --
--- Name: k8s_pods; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_pods; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_pods (
@@ -1090,10 +781,8 @@ CREATE TABLE public.k8s_pods (
 );
 
 
-ALTER TABLE public.k8s_pods OWNER TO postgres;
-
 --
--- Name: k8s_resource_metrics; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_resource_metrics; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_resource_metrics (
@@ -1110,10 +799,8 @@ CREATE TABLE public.k8s_resource_metrics (
 );
 
 
-ALTER TABLE public.k8s_resource_metrics OWNER TO postgres;
-
 --
--- Name: k8s_services; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_services; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_services (
@@ -1133,10 +820,8 @@ CREATE TABLE public.k8s_services (
 );
 
 
-ALTER TABLE public.k8s_services OWNER TO postgres;
-
 --
--- Name: k8s_workloads; Type: TABLE; Schema: public; Owner: postgres
+-- Name: k8s_workloads; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.k8s_workloads (
@@ -1158,10 +843,8 @@ CREATE TABLE public.k8s_workloads (
 );
 
 
-ALTER TABLE public.k8s_workloads OWNER TO postgres;
-
 --
--- Name: media; Type: TABLE; Schema: public; Owner: postgres
+-- Name: media; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.media (
@@ -1185,14 +868,14 @@ CREATE TABLE public.media (
     features_extracted boolean DEFAULT false,
     indexed boolean DEFAULT false,
     uploaded_at timestamp with time zone DEFAULT now(),
-    metadata_json jsonb
+    metadata_json jsonb,
+    category character varying(50),
+    subcategory character varying(50)
 );
 
 
-ALTER TABLE public.media OWNER TO postgres;
-
 --
--- Name: media_deletion_queue; Type: TABLE; Schema: public; Owner: postgres
+-- Name: media_deletion_queue; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.media_deletion_queue (
@@ -1207,10 +890,24 @@ CREATE TABLE public.media_deletion_queue (
 );
 
 
-ALTER TABLE public.media_deletion_queue OWNER TO postgres;
+--
+-- Name: media_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.media_preferences (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    category character varying(50),
+    subcategory character varying(50),
+    thumbnail_sizes text[],
+    default_retention text,
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+
 
 --
--- Name: orderId; Type: TABLE; Schema: public; Owner: postgres
+-- Name: orderId; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public."orderId" (
@@ -1228,31 +925,29 @@ CREATE TABLE public."orderId" (
 );
 
 
-ALTER TABLE public."orderId" OWNER TO postgres;
-
 --
--- Name: TABLE "orderId"; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: TABLE "orderId"; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON TABLE public."orderId" IS 'Stores generated order IDs and associated metadata. Source handle can be whatsapp number or instagram handle.';
 
 
 --
--- Name: COLUMN "orderId".transaction_id; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN "orderId".transaction_id; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public."orderId".transaction_id IS 'UPI or bank transaction ID for the order payment';
 
 
 --
--- Name: COLUMN "orderId".instagram_handle; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN "orderId".instagram_handle; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public."orderId".instagram_handle IS 'Fallback/Original instagram handle for the order.';
 
 
 --
--- Name: orderId_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: orderId_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public."orderId_id_seq"
@@ -1264,17 +959,15 @@ CREATE SEQUENCE public."orderId_id_seq"
     CACHE 1;
 
 
-ALTER SEQUENCE public."orderId_id_seq" OWNER TO postgres;
-
 --
--- Name: orderId_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: orderId_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public."orderId_id_seq" OWNED BY public."orderId".id;
 
 
 --
--- Name: orderItem; Type: TABLE; Schema: public; Owner: postgres
+-- Name: orderItem; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public."orderItem" (
@@ -1289,17 +982,15 @@ CREATE TABLE public."orderItem" (
 );
 
 
-ALTER TABLE public."orderItem" OWNER TO postgres;
-
 --
--- Name: COLUMN "orderItem".product_id; Type: COMMENT; Schema: public; Owner: postgres
+-- Name: COLUMN "orderItem".product_id; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON COLUMN public."orderItem".product_id IS 'Unified text field for product identification (handles both generated and manual IDs).';
 
 
 --
--- Name: orderItem_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: orderItem_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public."orderItem_id_seq"
@@ -1311,17 +1002,15 @@ CREATE SEQUENCE public."orderItem_id_seq"
     CACHE 1;
 
 
-ALTER SEQUENCE public."orderItem_id_seq" OWNER TO postgres;
-
 --
--- Name: orderItem_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: orderItem_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public."orderItem_id_seq" OWNED BY public."orderItem".id;
 
 
 --
--- Name: order_sources; Type: TABLE; Schema: public; Owner: postgres
+-- Name: order_sources; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.order_sources (
@@ -1330,10 +1019,8 @@ CREATE TABLE public.order_sources (
 );
 
 
-ALTER TABLE public.order_sources OWNER TO postgres;
-
 --
--- Name: payment_modes; Type: TABLE; Schema: public; Owner: postgres
+-- Name: payment_modes; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.payment_modes (
@@ -1342,10 +1029,8 @@ CREATE TABLE public.payment_modes (
 );
 
 
-ALTER TABLE public.payment_modes OWNER TO postgres;
-
 --
--- Name: platform_configs; Type: TABLE; Schema: public; Owner: postgres
+-- Name: platform_configs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.platform_configs (
@@ -1357,10 +1042,8 @@ CREATE TABLE public.platform_configs (
 );
 
 
-ALTER TABLE public.platform_configs OWNER TO postgres;
-
 --
--- Name: productId; Type: TABLE; Schema: public; Owner: postgres
+-- Name: productId; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public."productId" (
@@ -1370,10 +1053,8 @@ CREATE TABLE public."productId" (
 );
 
 
-ALTER TABLE public."productId" OWNER TO postgres;
-
 --
--- Name: productId_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: productId_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public."productId_id_seq"
@@ -1385,17 +1066,15 @@ CREATE SEQUENCE public."productId_id_seq"
     CACHE 1;
 
 
-ALTER SEQUENCE public."productId_id_seq" OWNER TO postgres;
-
 --
--- Name: productId_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: productId_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public."productId_id_seq" OWNED BY public."productId".id;
 
 
 --
--- Name: product_variants; Type: TABLE; Schema: public; Owner: postgres
+-- Name: product_variants; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.product_variants (
@@ -1412,10 +1091,8 @@ CREATE TABLE public.product_variants (
 );
 
 
-ALTER TABLE public.product_variants OWNER TO postgres;
-
 --
--- Name: products; Type: TABLE; Schema: public; Owner: postgres
+-- Name: products; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.products (
@@ -1429,10 +1106,8 @@ CREATE TABLE public.products (
 );
 
 
-ALTER TABLE public.products OWNER TO postgres;
-
 --
--- Name: scraper_jobs; Type: TABLE; Schema: public; Owner: postgres
+-- Name: scraper_jobs; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.scraper_jobs (
@@ -1462,10 +1137,8 @@ CREATE TABLE public.scraper_jobs (
 );
 
 
-ALTER TABLE public.scraper_jobs OWNER TO postgres;
-
 --
--- Name: scraper_sessions; Type: TABLE; Schema: public; Owner: postgres
+-- Name: scraper_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.scraper_sessions (
@@ -1493,10 +1166,8 @@ CREATE TABLE public.scraper_sessions (
 );
 
 
-ALTER TABLE public.scraper_sessions OWNER TO postgres;
-
 --
--- Name: search_queries; Type: TABLE; Schema: public; Owner: postgres
+-- Name: search_queries; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.search_queries (
@@ -1514,10 +1185,8 @@ CREATE TABLE public.search_queries (
 );
 
 
-ALTER TABLE public.search_queries OWNER TO postgres;
-
 --
--- Name: search_sessions; Type: TABLE; Schema: public; Owner: postgres
+-- Name: search_sessions; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.search_sessions (
@@ -1532,10 +1201,8 @@ CREATE TABLE public.search_sessions (
 );
 
 
-ALTER TABLE public.search_sessions OWNER TO postgres;
-
 --
--- Name: seller_listings; Type: TABLE; Schema: public; Owner: postgres
+-- Name: seller_listings; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.seller_listings (
@@ -1556,10 +1223,8 @@ CREATE TABLE public.seller_listings (
 );
 
 
-ALTER TABLE public.seller_listings OWNER TO postgres;
-
 --
--- Name: sellers; Type: TABLE; Schema: public; Owner: postgres
+-- Name: sellers; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.sellers (
@@ -1573,10 +1238,8 @@ CREATE TABLE public.sellers (
 );
 
 
-ALTER TABLE public.sellers OWNER TO postgres;
-
 --
--- Name: service_dependencies; Type: TABLE; Schema: public; Owner: postgres
+-- Name: service_dependencies; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.service_dependencies (
@@ -1592,10 +1255,8 @@ CREATE TABLE public.service_dependencies (
 );
 
 
-ALTER TABLE public.service_dependencies OWNER TO postgres;
-
 --
--- Name: studio_order_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: studio_order_sources_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.studio_order_sources_id_seq
@@ -1607,17 +1268,15 @@ CREATE SEQUENCE public.studio_order_sources_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.studio_order_sources_id_seq OWNER TO postgres;
-
 --
--- Name: studio_order_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: studio_order_sources_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.studio_order_sources_id_seq OWNED BY public.order_sources.id;
 
 
 --
--- Name: studio_payment_modes_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- Name: studio_payment_modes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE public.studio_payment_modes_id_seq
@@ -1629,17 +1288,15 @@ CREATE SEQUENCE public.studio_payment_modes_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.studio_payment_modes_id_seq OWNER TO postgres;
-
 --
--- Name: studio_payment_modes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- Name: studio_payment_modes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE public.studio_payment_modes_id_seq OWNED BY public.payment_modes.id;
 
 
 --
--- Name: system_health_metrics; Type: TABLE; Schema: public; Owner: postgres
+-- Name: system_health_metrics; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.system_health_metrics (
@@ -1654,10 +1311,8 @@ CREATE TABLE public.system_health_metrics (
 );
 
 
-ALTER TABLE public.system_health_metrics OWNER TO postgres;
-
 --
--- Name: user_preferences; Type: TABLE; Schema: public; Owner: postgres
+-- Name: user_preferences; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.user_preferences (
@@ -1670,10 +1325,8 @@ CREATE TABLE public.user_preferences (
 );
 
 
-ALTER TABLE public.user_preferences OWNER TO postgres;
-
 --
--- Name: vendor_contacts; Type: TABLE; Schema: public; Owner: postgres
+-- Name: vendor_contacts; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.vendor_contacts (
@@ -1690,10 +1343,8 @@ CREATE TABLE public.vendor_contacts (
 );
 
 
-ALTER TABLE public.vendor_contacts OWNER TO postgres;
-
 --
--- Name: vendors; Type: TABLE; Schema: public; Owner: postgres
+-- Name: vendors; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.vendors (
@@ -1714,10 +1365,8 @@ CREATE TABLE public.vendors (
 );
 
 
-ALTER TABLE public.vendors OWNER TO postgres;
-
 --
--- Name: video_insights; Type: TABLE; Schema: public; Owner: postgres
+-- Name: video_insights; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.video_insights (
@@ -1733,45 +1382,43 @@ CREATE TABLE public.video_insights (
 );
 
 
-ALTER TABLE public.video_insights OWNER TO postgres;
-
 --
--- Name: orderId id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: orderId id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderId" ALTER COLUMN id SET DEFAULT nextval('public."orderId_id_seq"'::regclass);
 
 
 --
--- Name: orderItem id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: orderItem id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderItem" ALTER COLUMN id SET DEFAULT nextval('public."orderItem_id_seq"'::regclass);
 
 
 --
--- Name: order_sources id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: order_sources id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.order_sources ALTER COLUMN id SET DEFAULT nextval('public.studio_order_sources_id_seq'::regclass);
 
 
 --
--- Name: payment_modes id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: payment_modes id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payment_modes ALTER COLUMN id SET DEFAULT nextval('public.studio_payment_modes_id_seq'::regclass);
 
 
 --
--- Name: productId id; Type: DEFAULT; Schema: public; Owner: postgres
+-- Name: productId id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."productId" ALTER COLUMN id SET DEFAULT nextval('public."productId_id_seq"'::regclass);
 
 
 --
--- Data for Name: api_usage_logs; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: api_usage_logs; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.api_usage_logs (id, tenant_id, endpoint, method, status_code, response_time_ms, user_id, "timestamp", metadata) FROM stdin;
@@ -1779,41 +1426,42 @@ COPY public.api_usage_logs (id, tenant_id, endpoint, method, status_code, respon
 
 
 --
--- Data for Name: attachments; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: attachments; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.attachments (id, bucket_name, object_key, content_type, file_size_bytes, original_filename, metadata, created_at) FROM stdin;
-7831c6ae-d438-4008-aad3-84753334e08e	deeplens-storage	orders/0000Q/transactions/2026-04-19/ac09f0fb86e24ea1b3617f848e5bf16f_txn_0000Q.jpg	image/jpeg	312500	txn_0000Q.jpg	{}	2026-04-19 18:17:34.892143+00
-36262a57-d433-4360-acac-444150af39c5	deeplens-storage	orders/0000Q/transactions/2026-04-19/e79489f638de422facf5698e0692d0e2_txn_0000Q.jpg	image/jpeg	312500	txn_0000Q.jpg	{}	2026-04-19 18:18:29.707126+00
-e8a74332-bbe9-448f-85b4-35ae5ebf4703	deeplens-storage	orders/0000Q/transactions/2026-04-19/4d4c0e23996c4340a88c82c2ffa1bca0_txn_0000Q.jpg	image/jpeg	164139	txn_0000Q.jpg	{}	2026-04-19 18:26:32.23966+00
-a057fc0a-f1fa-4c03-83d9-7c6dc1152a45	deeplens-storage	orders/0000Q/transactions/2026-04-19/cda0960ec9a948ce87238801c731d04e_txn_0000Q.jpg	image/jpeg	298633	txn_0000Q.jpg	{}	2026-04-19 19:01:12.847437+00
-8831feab-bfa6-4fdb-980e-5f70373ad081	deeplens-storage	orders/0000R/comments/2026-04-19/401e785f555741ea9bf771920a4ee1d6_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 19:58:28.990568+00
-2f8fa93c-0078-4f5d-998a-8137d8bce3d3	deeplens-storage	orders/0000R/comments/2026-04-19/12514a2cecf04357936491ceffc816eb_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 19:59:55.705432+00
-ed8e90f5-cd8a-49cf-a1bb-11238db56798	deeplens-storage	orders/0000R/comments/2026-04-19/05524626716c4a809c05d97e87f7916f_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:00:52.629383+00
-50f5013f-ca6c-4bea-9e48-6c1b09204179	deeplens-storage	orders/0000R/comments/2026-04-19/60c50f992007407ba29b40ec76cf601f_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:00:52.793406+00
-14d76737-be23-491c-a9e4-bccc664cb1d0	deeplens-storage	orders/0000R/comments/2026-04-19/74184a923b8442e0b50b53d0186b0066_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:02:16.456753+00
-e0998844-ec1f-462e-9be3-ec54d95897ab	deeplens-storage	orders/0000R/comments/2026-04-19/2018eafa20b34bf5a14e3b771f2cbec9_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:02:16.702387+00
-81c7eb8c-a8e7-4ea5-a778-9f2780a74375	deeplens-storage	orders/0000R/comments/2026-04-19/be001e223c4f4a7da354f4c4e807ad4e_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:03:09.777047+00
-2193cab9-5b66-434f-9a70-50527ff252da	deeplens-storage	orders/0000R/comments/2026-04-19/4fca80594caa499eaf43322e1e4d8920_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:03:09.925824+00
-5467cd49-4990-46d0-8c22-b0660b1f89c3	deeplens-storage	orders/0000R/transactions/2026-04-19/8c3056fbf38441008e9704e21be32285_txn_0000R.jpg	image/jpeg	1016280	txn_0000R.jpg	{}	2026-04-19 20:04:15.39907+00
-d9e2609d-b572-4b11-ae3d-69078b81b927	deeplens-storage	orders/0000R/comments/2026-04-19/5c4556d9172e43fdb963066dd17660a7_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:05:10.462227+00
-dd4a4870-ff5b-4509-bd43-870f958dc793	deeplens-storage	orders/0000R/comments/2026-04-19/16edf19934fe4160a4ad1a62a6fdec18_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:05:10.610536+00
-147e4941-9767-4039-8c86-f5058f572a36	deeplens-storage	orders/0000R/comments/2026-04-19/1a4ae957654e487bbe6548180fd2e490_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:08:04.704142+00
-bea1da5c-f721-4ea4-9892-b8cdb8c8fa51	deeplens-storage	orders/0000R/comments/2026-04-19/dc5b085387694e89876293d9924d8b56_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:08:12.00406+00
-1d702927-3573-4833-9160-9f333301ba4a	deeplens-storage	orders/0000R/comments/2026-04-19/786672af814b41fc9de400861f7e9921_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:11:34.571907+00
-11cde790-6eb3-4637-98a8-c9ac7e449005	deeplens-storage	orders/0000R/comments/2026-04-19/f69d442fd0d44b2ca2210469bc9c0e07_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:14:33.998582+00
-9cd02a49-f2bf-4f18-bd8f-596198f6c85c	deeplens-storage	orders/0000R/comments/2026-04-19/179118245c454739b70191aa9f53cb97_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:17:25.310101+00
-fc3d1029-cf24-44d8-b2ce-a2788a935e68	deeplens-storage	orders/0000R/comments/2026-04-19/c289cc1b66184bfb84851e029d29099c_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:22:38.725648+00
-62e436b4-d10e-42bf-a072-c2690d0d4a85	deeplens-storage	orders/0000R/comments/2026-04-19/2ad428370b8b4d0997d4f8da28b1bf8e_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:22:54.349794+00
-3a628a38-5420-4605-b041-abd2b8afa217	deeplens-storage	orders/0000R/comments/2026-04-20/d10f0142ca704b4a8295c1e6787de50f_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-20 18:27:09.40503+00
-ee09bc64-dd25-4453-ab6e-d12b9a5ea962	deeplens-storage	orders/0000R/comments/2026-04-20/817892d784884e3cbe7c7eee1872100c_Screenshot_20260420-213422.png	image/png	1615772	Screenshot_20260420-213422.png	{}	2026-04-20 19:05:21.58574+00
-2503263c-6aa2-4c2e-8913-881d6b13ade9	deeplens-storage	orders/0000R/comments/2026-04-20/e9b796335a9c47bfb3b8a8afad2a236b_Screenshot_20260420-213422.png	image/png	1615772	Screenshot_20260420-213422.png	{}	2026-04-20 19:06:38.761157+00
-07450f72-5a72-438a-9b82-a94f4d36c0c1	deeplens-storage	orders/0000R/comments/2026-04-20/ffe26bf51a984d25bf6b66f16d1c0f06_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-20 19:06:50.968659+00
+COPY public.attachments (id, bucket_name, object_key, content_type, file_size_bytes, original_filename, metadata, created_at, category, subcategory) FROM stdin;
+7831c6ae-d438-4008-aad3-84753334e08e	deeplens-storage	orders/0000Q/transactions/2026-04-19/ac09f0fb86e24ea1b3617f848e5bf16f_txn_0000Q.jpg	image/jpeg	312500	txn_0000Q.jpg	{}	2026-04-19 18:17:34.892143+00	\N	\N
+36262a57-d433-4360-acac-444150af39c5	deeplens-storage	orders/0000Q/transactions/2026-04-19/e79489f638de422facf5698e0692d0e2_txn_0000Q.jpg	image/jpeg	312500	txn_0000Q.jpg	{}	2026-04-19 18:18:29.707126+00	\N	\N
+e8a74332-bbe9-448f-85b4-35ae5ebf4703	deeplens-storage	orders/0000Q/transactions/2026-04-19/4d4c0e23996c4340a88c82c2ffa1bca0_txn_0000Q.jpg	image/jpeg	164139	txn_0000Q.jpg	{}	2026-04-19 18:26:32.23966+00	\N	\N
+a057fc0a-f1fa-4c03-83d9-7c6dc1152a45	deeplens-storage	orders/0000Q/transactions/2026-04-19/cda0960ec9a948ce87238801c731d04e_txn_0000Q.jpg	image/jpeg	298633	txn_0000Q.jpg	{}	2026-04-19 19:01:12.847437+00	\N	\N
+8831feab-bfa6-4fdb-980e-5f70373ad081	deeplens-storage	orders/0000R/comments/2026-04-19/401e785f555741ea9bf771920a4ee1d6_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 19:58:28.990568+00	\N	\N
+2f8fa93c-0078-4f5d-998a-8137d8bce3d3	deeplens-storage	orders/0000R/comments/2026-04-19/12514a2cecf04357936491ceffc816eb_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 19:59:55.705432+00	\N	\N
+ed8e90f5-cd8a-49cf-a1bb-11238db56798	deeplens-storage	orders/0000R/comments/2026-04-19/05524626716c4a809c05d97e87f7916f_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:00:52.629383+00	\N	\N
+50f5013f-ca6c-4bea-9e48-6c1b09204179	deeplens-storage	orders/0000R/comments/2026-04-19/60c50f992007407ba29b40ec76cf601f_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:00:52.793406+00	\N	\N
+14d76737-be23-491c-a9e4-bccc664cb1d0	deeplens-storage	orders/0000R/comments/2026-04-19/74184a923b8442e0b50b53d0186b0066_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:02:16.456753+00	\N	\N
+e0998844-ec1f-462e-9be3-ec54d95897ab	deeplens-storage	orders/0000R/comments/2026-04-19/2018eafa20b34bf5a14e3b771f2cbec9_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:02:16.702387+00	\N	\N
+81c7eb8c-a8e7-4ea5-a778-9f2780a74375	deeplens-storage	orders/0000R/comments/2026-04-19/be001e223c4f4a7da354f4c4e807ad4e_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:03:09.777047+00	\N	\N
+2193cab9-5b66-434f-9a70-50527ff252da	deeplens-storage	orders/0000R/comments/2026-04-19/4fca80594caa499eaf43322e1e4d8920_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:03:09.925824+00	\N	\N
+5467cd49-4990-46d0-8c22-b0660b1f89c3	deeplens-storage	orders/0000R/transactions/2026-04-19/8c3056fbf38441008e9704e21be32285_txn_0000R.jpg	image/jpeg	1016280	txn_0000R.jpg	{}	2026-04-19 20:04:15.39907+00	\N	\N
+d9e2609d-b572-4b11-ae3d-69078b81b927	deeplens-storage	orders/0000R/comments/2026-04-19/5c4556d9172e43fdb963066dd17660a7_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:05:10.462227+00	\N	\N
+dd4a4870-ff5b-4509-bd43-870f958dc793	deeplens-storage	orders/0000R/comments/2026-04-19/16edf19934fe4160a4ad1a62a6fdec18_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:05:10.610536+00	\N	\N
+147e4941-9767-4039-8c86-f5058f572a36	deeplens-storage	orders/0000R/comments/2026-04-19/1a4ae957654e487bbe6548180fd2e490_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:08:04.704142+00	\N	\N
+bea1da5c-f721-4ea4-9892-b8cdb8c8fa51	deeplens-storage	orders/0000R/comments/2026-04-19/dc5b085387694e89876293d9924d8b56_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:08:12.00406+00	\N	\N
+1d702927-3573-4833-9160-9f333301ba4a	deeplens-storage	orders/0000R/comments/2026-04-19/786672af814b41fc9de400861f7e9921_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:11:34.571907+00	\N	\N
+11cde790-6eb3-4637-98a8-c9ac7e449005	deeplens-storage	orders/0000R/comments/2026-04-19/f69d442fd0d44b2ca2210469bc9c0e07_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:14:33.998582+00	\N	\N
+9cd02a49-f2bf-4f18-bd8f-596198f6c85c	deeplens-storage	orders/0000R/comments/2026-04-19/179118245c454739b70191aa9f53cb97_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:17:25.310101+00	\N	\N
+fc3d1029-cf24-44d8-b2ce-a2788a935e68	deeplens-storage	orders/0000R/comments/2026-04-19/c289cc1b66184bfb84851e029d29099c_Screenshot_20260419-220628.png	image/png	1016259	Screenshot_20260419-220628.png	{}	2026-04-19 20:22:38.725648+00	\N	\N
+62e436b4-d10e-42bf-a072-c2690d0d4a85	deeplens-storage	orders/0000R/comments/2026-04-19/2ad428370b8b4d0997d4f8da28b1bf8e_IMG_20260418_224510_000.jpg	image/jpeg	174407	IMG_20260418_224510_000.jpg	{}	2026-04-19 20:22:54.349794+00	\N	\N
+3a628a38-5420-4605-b041-abd2b8afa217	deeplens-storage	orders/0000R/comments/2026-04-20/d10f0142ca704b4a8295c1e6787de50f_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-20 18:27:09.40503+00	\N	\N
+ee09bc64-dd25-4453-ab6e-d12b9a5ea962	deeplens-storage	orders/0000R/comments/2026-04-20/817892d784884e3cbe7c7eee1872100c_Screenshot_20260420-213422.png	image/png	1615772	Screenshot_20260420-213422.png	{}	2026-04-20 19:05:21.58574+00	\N	\N
+2503263c-6aa2-4c2e-8913-881d6b13ade9	deeplens-storage	orders/0000R/comments/2026-04-20/e9b796335a9c47bfb3b8a8afad2a236b_Screenshot_20260420-213422.png	image/png	1615772	Screenshot_20260420-213422.png	{}	2026-04-20 19:06:38.761157+00	\N	\N
+07450f72-5a72-438a-9b82-a94f4d36c0c1	deeplens-storage	orders/0000R/comments/2026-04-20/ffe26bf51a984d25bf6b66f16d1c0f06_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-20 19:06:50.968659+00	\N	\N
+27b30573-e0e3-4d91-8696-1337f089cc2b	deeplens-storage	order/0000R/comment/e34c98e1e10c47998cc65a2bac68dee4_Screenshot_20260420-213231.png	image/png	794707	Screenshot_20260420-213231.png	{}	2026-04-22 18:09:56.98424+00	order	note_attachment
 \.
 
 
 --
--- Data for Name: categories; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: categories; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.categories (id, name, slug, metadata_json, created_at) FROM stdin;
@@ -1821,7 +1469,7 @@ COPY public.categories (id, name, slug, metadata_json, created_at) FROM stdin;
 
 
 --
--- Data for Name: comments; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: comments; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.comments (id, entity_type, entity_id, author_id, content, attachment_ids, created_at, updated_at) FROM stdin;
@@ -1831,14 +1479,13 @@ a4bc0b7a-cd67-49bd-ba72-3b13b079c411	order	0000P	\N	something	{}	2026-04-19 12:5
 6bc6724a-36d2-4e30-a3c1-6f209f7d2963	order	0000R	\N	Hey some comment	{}	2026-04-19 19:52:17.651654+00	2026-04-19 19:52:17.651654+00
 72802e87-b914-49df-9e4d-029524bed232	order	0000R	\N	Hey	{bea1da5c-f721-4ea4-9892-b8cdb8c8fa51}	2026-04-19 20:08:12.07822+00	2026-04-19 20:08:12.07822+00
 bfe71f3e-afbc-48a3-9fcf-8e68bc3dd74c	order	0000R	\N		{11cde790-6eb3-4637-98a8-c9ac7e449005}	2026-04-19 20:21:36.089563+00	2026-04-19 20:21:36.089563+00
-b5053446-1485-4a0d-a294-f5dca6d4cca4	order	0000R	\N		{11cde790-6eb3-4637-98a8-c9ac7e449005}	2026-04-19 20:27:21.177007+00	2026-04-19 20:27:21.177007+00
-d7ad319a-fa2d-455a-bbfa-5fd71a4312c5	order	0000R	\N	This is a very long comment that span across multiple lens at least four lines is what I am expecting such comment is posted let's have it so much content appears 	{ee09bc64-dd25-4453-ab6e-d12b9a5ea962}	2026-04-20 18:27:09.595294+00	2026-04-20 19:05:21.697595+00
 b6ec029f-0859-4f87-a7c5-30087bf83eef	order	0000R	\N		{2503263c-6aa2-4c2e-8913-881d6b13ade9,07450f72-5a72-438a-9b82-a94f4d36c0c1}	2026-04-20 19:06:51.057159+00	2026-04-20 19:06:51.057159+00
+d7ad319a-fa2d-455a-bbfa-5fd71a4312c5	order	0000R	\N	This is a very long comment that span across multiple lens at least four lines is what I am expecting such comment is posted let's have it so much content appears 	{27b30573-e0e3-4d91-8696-1337f089cc2b}	2026-04-20 18:27:09.595294+00	2026-04-22 18:09:57.051523+00
 \.
 
 
 --
--- Data for Name: competitor_videos; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: competitor_videos; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.competitor_videos (id, watchlist_id, platform, platform_video_id, url, title, description, posted_at, view_count, like_count, comment_count, share_count, repost_count, media_type, thumbnail_url, media_url, media_urls, duration_seconds, width, height, file_size_bytes, hashtags, mentions, location, is_reel, is_short, category, raw_metadata, tagged_sku_ids, ai_suggested_sku_ids, tagging_confidence, tagging_notes, download_status, download_error, downloaded_at, tracking_phase, last_engagement_snapshot_at, scraped_at, updated_at) FROM stdin;
@@ -1846,7 +1493,7 @@ COPY public.competitor_videos (id, watchlist_id, platform, platform_video_id, ur
 
 
 --
--- Data for Name: competitor_watchlist; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: competitor_watchlist; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.competitor_watchlist (id, platform, username, platform_id, display_name, profile_pic_url, bio, tags, enabled, follower_count, following_count, post_count, last_scraped_at, scrape_failures_count, last_follower_sync_at, follower_count_at_last_sync, created_at, updated_at) FROM stdin;
@@ -1854,7 +1501,7 @@ COPY public.competitor_watchlist (id, platform, username, platform_id, display_n
 
 
 --
--- Data for Name: engagement_snapshots; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: engagement_snapshots; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.engagement_snapshots (id, video_id, view_count, like_count, comment_count, share_count, repost_count, video_age_hours, tracking_phase, snapshot_at) FROM stdin;
@@ -1862,7 +1509,7 @@ COPY public.engagement_snapshots (id, video_id, view_count, like_count, comment_
 
 
 --
--- Data for Name: entity_attachments; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: entity_attachments; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.entity_attachments (id, attachment_id, entity_type, entity_id, tag, sort_order, created_at) FROM stdin;
@@ -1890,11 +1537,12 @@ eb8918b1-f5fb-4fa1-b808-f3d7c4808110	11cde790-6eb3-4637-98a8-c9ac7e449005	order	
 f0bced58-8e45-428a-9a7f-ddf27fc76589	ee09bc64-dd25-4453-ab6e-d12b9a5ea962	order	0000R	note_attachment	0	2026-04-20 19:05:21.588316+00
 5e73a28a-be80-4814-b79b-3bd39c955d08	2503263c-6aa2-4c2e-8913-881d6b13ade9	order	0000R	note_attachment	0	2026-04-20 19:06:38.763529+00
 b8435752-0114-46d4-905a-4553299177e3	07450f72-5a72-438a-9b82-a94f4d36c0c1	order	0000R	note_attachment	0	2026-04-20 19:06:50.969909+00
+46fec46f-730b-4691-894f-ceca15af7a67	27b30573-e0e3-4d91-8696-1337f089cc2b	order	0000R	note_attachment	0	2026-04-22 18:09:56.987722+00
 \.
 
 
 --
--- Data for Name: follower_snapshots; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: follower_snapshots; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.follower_snapshots (id, watchlist_id, follower_count, following_count, follower_following_ratio, engagement_rate, snapshot_at) FROM stdin;
@@ -1902,7 +1550,7 @@ COPY public.follower_snapshots (id, watchlist_id, follower_count, following_coun
 
 
 --
--- Data for Name: image_collections; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: image_collections; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.image_collections (id, name, description, created_by, created_at, updated_at, is_public, total_images, metadata) FROM stdin;
@@ -1910,7 +1558,7 @@ COPY public.image_collections (id, name, description, created_by, created_at, up
 
 
 --
--- Data for Name: infisical_projects; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: infisical_projects; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.infisical_projects (id, tenant_id, project_id, project_name, environment, client_id, client_secret_encrypted, is_active, created_at, last_sync) FROM stdin;
@@ -1918,7 +1566,7 @@ COPY public.infisical_projects (id, tenant_id, project_id, project_name, environ
 
 
 --
--- Data for Name: infisical_secrets; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: infisical_secrets; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.infisical_secrets (id, project_id, secret_key, secret_version, created_at, last_accessed, access_count) FROM stdin;
@@ -1926,7 +1574,7 @@ COPY public.infisical_secrets (id, project_id, secret_key, secret_version, creat
 
 
 --
--- Data for Name: ingestion_meta; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: ingestion_meta; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.ingestion_meta (id, key, value, updated_at) FROM stdin;
@@ -1934,7 +1582,7 @@ COPY public.ingestion_meta (id, key, value, updated_at) FROM stdin;
 
 
 --
--- Data for Name: instagram_profile_cache; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: instagram_profile_cache; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.instagram_profile_cache (username, user_id, full_name, biography, followers_count, following_count, posts_count, profile_pic_url, external_url, is_private, is_verified, scraped_at, raw_json) FROM stdin;
@@ -1943,7 +1591,7 @@ kri_kan	1109543189	Sai krishna kanth		0	0	0	https://scontent.cdninstagram.com/v/
 
 
 --
--- Data for Name: k8s_clusters; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_clusters; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_clusters (id, name, cluster_endpoint, cluster_version, provider, region, is_active, created_at, last_sync, metadata, kubeconfig_encrypted) FROM stdin;
@@ -1951,7 +1599,7 @@ COPY public.k8s_clusters (id, name, cluster_endpoint, cluster_version, provider,
 
 
 --
--- Data for Name: k8s_events; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_events; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_events (id, cluster_id, namespace_id, event_type, reason, message, involved_object_kind, involved_object_name, involved_object_namespace, source_component, source_host, first_timestamp, last_timestamp, event_count, created_at) FROM stdin;
@@ -1959,7 +1607,7 @@ COPY public.k8s_events (id, cluster_id, namespace_id, event_type, reason, messag
 
 
 --
--- Data for Name: k8s_namespaces; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_namespaces; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_namespaces (id, cluster_id, namespace_name, status, created_at, labels, annotations) FROM stdin;
@@ -1967,7 +1615,7 @@ COPY public.k8s_namespaces (id, cluster_id, namespace_name, status, created_at, 
 
 
 --
--- Data for Name: k8s_nodes; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_nodes; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_nodes (id, cluster_id, node_name, node_role, node_status, cpu_capacity, memory_capacity, storage_capacity, os_image, kernel_version, container_runtime, kubelet_version, created_at, last_heartbeat, labels, annotations) FROM stdin;
@@ -1975,7 +1623,7 @@ COPY public.k8s_nodes (id, cluster_id, node_name, node_role, node_status, cpu_ca
 
 
 --
--- Data for Name: k8s_pods; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_pods; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_pods (id, cluster_id, namespace_id, workload_id, pod_name, pod_ip, node_name, phase, restart_count, created_at, started_at, last_sync, labels, annotations, containers) FROM stdin;
@@ -1983,7 +1631,7 @@ COPY public.k8s_pods (id, cluster_id, namespace_id, workload_id, pod_name, pod_i
 
 
 --
--- Data for Name: k8s_resource_metrics; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_resource_metrics; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_resource_metrics (id, cluster_id, resource_type, resource_name, namespace_name, metric_name, metric_value, metric_unit, recorded_at, metadata) FROM stdin;
@@ -1991,7 +1639,7 @@ COPY public.k8s_resource_metrics (id, cluster_id, resource_type, resource_name, 
 
 
 --
--- Data for Name: k8s_services; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_services; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_services (id, cluster_id, namespace_id, service_name, service_type, cluster_ip, external_ips, ports, selector, created_at, last_sync, labels, annotations) FROM stdin;
@@ -1999,7 +1647,7 @@ COPY public.k8s_services (id, cluster_id, namespace_id, service_name, service_ty
 
 
 --
--- Data for Name: k8s_workloads; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: k8s_workloads; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.k8s_workloads (id, cluster_id, namespace_id, workload_name, workload_type, replicas_desired, replicas_ready, replicas_available, image_names, created_at, last_sync, labels, annotations, spec, status) FROM stdin;
@@ -2007,17 +1655,18 @@ COPY public.k8s_workloads (id, cluster_id, namespace_id, workload_name, workload
 
 
 --
--- Data for Name: media; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: media; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, vector_id, phash, is_default, quality_score, width, height, duration_seconds, thumbnail_path, preview_path, features_extracted, indexed, uploaded_at, metadata_json) FROM stdin;
-8c724a74-fb2c-4e56-8c62-ce639f5fc2d5	\N	products/saree/Q226/378767b8846359ed2345c090350929630817ef1cc01deca87cba40f819ea311f.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-21 19:15:41.969145+00	\N
-cb5e5448-7554-4c3d-9a8b-352d141c6665	\N	products/saree/Q226/39ed0f45703c86f47856da05bf2bcdff2211d4eaff6c802a6f44bbcdd89a5823.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-21 19:15:41.969145+00	\N
+COPY public.media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, vector_id, phash, is_default, quality_score, width, height, duration_seconds, thumbnail_path, preview_path, features_extracted, indexed, uploaded_at, metadata_json, category, subcategory) FROM stdin;
+8c724a74-fb2c-4e56-8c62-ce639f5fc2d5	\N	products/saree/Q226/378767b8846359ed2345c090350929630817ef1cc01deca87cba40f819ea311f.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-21 19:15:41.969145+00	\N	\N	\N
+cb5e5448-7554-4c3d-9a8b-352d141c6665	\N	products/saree/Q226/39ed0f45703c86f47856da05bf2bcdff2211d4eaff6c802a6f44bbcdd89a5823.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-21 19:15:41.969145+00	\N	\N	\N
+00e0a9f3-6952-45c7-a20b-192ee5399df5	\N	products/saree/Q226/2d72dad92544c18be31b2970fa8daf42a43b41703a653fdbfa4eaae3b7523f35.jpg	1	\N	0	image/jpeg	0	\N	\N	f	\N	\N	\N	\N	\N	\N	f	f	2026-04-22 05:02:04.325414+00	\N	\N	\N
 \.
 
 
 --
--- Data for Name: media_deletion_queue; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: media_deletion_queue; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.media_deletion_queue (id, media_id, storage_path, deleted_from_disk, deleted_from_vector, retries, created_at, processed_at) FROM stdin;
@@ -2025,7 +1674,16 @@ COPY public.media_deletion_queue (id, media_id, storage_path, deleted_from_disk,
 
 
 --
--- Data for Name: orderId; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: media_preferences; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+COPY public.media_preferences (id, category, subcategory, thumbnail_sizes, default_retention, is_active, created_at, updated_at) FROM stdin;
+13c0a1f1-8b0c-4a56-85da-8f6511824e13	\N	\N	{icon,medium}	days180	t	2026-04-22 20:27:52.268205+00	2026-04-22 20:27:52.268205+00
+\.
+
+
+--
+-- Data for Name: orderId; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public."orderId" (id, order_id, source_id, payment_mode_id, created_at, customer_phone, source_handle, instagram_user_id, customer_address, transaction_id, instagram_handle) FROM stdin;
@@ -2058,7 +1716,7 @@ COPY public."orderId" (id, order_id, source_id, payment_mode_id, created_at, cus
 
 
 --
--- Data for Name: orderItem; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: orderItem; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public."orderItem" (id, order_id_ref, item_index, quantity, price, created_at, product_id, comments) FROM stdin;
@@ -2066,7 +1724,7 @@ COPY public."orderItem" (id, order_id_ref, item_index, quantity, price, created_
 
 
 --
--- Data for Name: order_sources; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: order_sources; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.order_sources (id, name) FROM stdin;
@@ -2076,7 +1734,7 @@ COPY public.order_sources (id, name) FROM stdin;
 
 
 --
--- Data for Name: payment_modes; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: payment_modes; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.payment_modes (id, name) FROM stdin;
@@ -2086,7 +1744,7 @@ COPY public.payment_modes (id, name) FROM stdin;
 
 
 --
--- Data for Name: platform_configs; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: platform_configs; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.platform_configs (key, value, description, updated_at, updated_by) FROM stdin;
@@ -2112,7 +1770,7 @@ metrics_retention_days	90	Number of days to retain performance metrics	2026-04-1
 
 
 --
--- Data for Name: productId; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: productId; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public."productId" (id, product_id, created_at) FROM stdin;
@@ -2120,25 +1778,27 @@ COPY public."productId" (id, product_id, created_at) FROM stdin;
 
 
 --
--- Data for Name: product_variants; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: product_variants; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.product_variants (id, product_id, variant_sku, color, fabric, stitch_type, work_heaviness, search_keywords, attributes_json, created_at) FROM stdin;
 545dcdd1-06f4-4dae-a7cf-717d544ca07b	aab50605-d82e-4a53-8cfb-e41d5d4faec5	\N	\N	\N	\N	\N	\N	\N	2026-04-21 19:15:41.969145+00
+75ad369b-5b56-43bf-aca9-97e2e58ebbe2	e5a1c698-0e9c-40f6-8baf-f0ddb8fcab3c	\N	\N	\N	\N	\N	\N	\N	2026-04-22 05:02:04.325414+00
 \.
 
 
 --
--- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.products (id, category_id, base_sku, title, tags, unified_attributes, created_at) FROM stdin;
 aab50605-d82e-4a53-8cfb-e41d5d4faec5	\N	SKU-3D4AF1BC	Viscose saree	{saree}	\N	2026-04-21 19:15:41.969145+00
+e5a1c698-0e9c-40f6-8baf-f0ddb8fcab3c	\N	SKU-4BD705B6	Some product	{saree}	\N	2026-04-22 05:02:04.325414+00
 \.
 
 
 --
--- Data for Name: scraper_jobs; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: scraper_jobs; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.scraper_jobs (id, job_id, watchlist_id, job_type, status, items_found, items_processed, items_failed, error_message, error_details, retry_count, max_retries, started_at, completed_at, duration_ms, worker_id, scraper_session_id, kafka_topic, kafka_partition, kafka_offset, triggered_by, config_snapshot, created_at) FROM stdin;
@@ -2146,7 +1806,7 @@ COPY public.scraper_jobs (id, job_id, watchlist_id, job_type, status, items_foun
 
 
 --
--- Data for Name: scraper_sessions; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: scraper_sessions; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.scraper_sessions (id, platform, username, display_name, session_cookies, session_metadata, api_token, last_used_at, last_health_check_at, health_status, consecutive_failures, total_requests_today, on_cooldown, cooldown_until, rotation_strategy, usage_count, enabled, notes, created_at, updated_at) FROM stdin;
@@ -2154,7 +1814,7 @@ COPY public.scraper_sessions (id, platform, username, display_name, session_cook
 
 
 --
--- Data for Name: search_queries; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: search_queries; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.search_queries (id, session_id, query_type, query_vector_id, query_text, collection_id, results_count, response_time_ms, similarity_threshold, "timestamp", metadata) FROM stdin;
@@ -2162,7 +1822,7 @@ COPY public.search_queries (id, session_id, query_type, query_vector_id, query_t
 
 
 --
--- Data for Name: search_sessions; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: search_sessions; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.search_sessions (id, user_id, session_start, session_end, total_searches, ip_address, user_agent, metadata) FROM stdin;
@@ -2170,16 +1830,17 @@ COPY public.search_sessions (id, user_id, session_start, session_end, total_sear
 
 
 --
--- Data for Name: seller_listings; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: seller_listings; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.seller_listings (id, variant_id, seller_id, external_id, current_price, currency, shipping_info, is_favorite, is_active, description, url, last_priced_at, raw_data_json, updated_at) FROM stdin;
 081b37e5-a8e7-4148-b43d-fd03ac410d01	545dcdd1-06f4-4dae-a7cf-717d544ca07b	8c6b0d03-a8a8-4f76-970f-22e29e389e73	081b37e5-a8e7-4148-b43d-fd03ac410d01	850.00	INR	plus shipping	f	t	Dine describe	\N	2026-04-21 19:15:41.969145+00	\N	2026-04-21 19:15:41.969145+00
+92f6332f-9802-465a-b0de-495b74206dc6	75ad369b-5b56-43bf-aca9-97e2e58ebbe2	8c6b0d03-a8a8-4f76-970f-22e29e389e73	92f6332f-9802-465a-b0de-495b74206dc6	580.00	INR	plus shipping	f	t	New details about this product	\N	2026-04-22 05:02:04.325414+00	\N	2026-04-22 05:02:04.325414+00
 \.
 
 
 --
--- Data for Name: sellers; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: sellers; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.sellers (id, external_id, name, contact_info, rating, is_trusted, created_at) FROM stdin;
@@ -2188,7 +1849,7 @@ COPY public.sellers (id, external_id, name, contact_info, rating, is_trusted, cr
 
 
 --
--- Data for Name: service_dependencies; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: service_dependencies; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.service_dependencies (id, service_name, dependency_name, dependency_type, is_critical, health_check_url, last_check, status, response_time_ms) FROM stdin;
@@ -2196,7 +1857,7 @@ COPY public.service_dependencies (id, service_name, dependency_name, dependency_
 
 
 --
--- Data for Name: system_health_metrics; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: system_health_metrics; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.system_health_metrics (id, service_name, metric_name, metric_value, metric_unit, status, recorded_at, metadata) FROM stdin;
@@ -2204,7 +1865,7 @@ COPY public.system_health_metrics (id, service_name, metric_name, metric_value, 
 
 
 --
--- Data for Name: user_preferences; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: user_preferences; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.user_preferences (id, user_id, preference_key, preference_value, created_at, updated_at) FROM stdin;
@@ -2212,7 +1873,7 @@ COPY public.user_preferences (id, user_id, preference_key, preference_value, cre
 
 
 --
--- Data for Name: vendor_contacts; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: vendor_contacts; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.vendor_contacts (id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at, updated_at) FROM stdin;
@@ -2220,7 +1881,7 @@ COPY public.vendor_contacts (id, vendor_id, contact_name, contact_role, phone_nu
 
 
 --
--- Data for Name: vendors; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: vendors; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.vendors (id, vendor_name, vendor_code, address, city, state, country, postal_code, email, website, notes, is_active, created_at, updated_at) FROM stdin;
@@ -2228,7 +1889,7 @@ COPY public.vendors (id, vendor_name, vendor_code, address, city, state, country
 
 
 --
--- Data for Name: video_insights; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: video_insights; Type: TABLE DATA; Schema: public; Owner: -
 --
 
 COPY public.video_insights (id, video_id, insight_type, insight_score, insight_data, detected_at, dismissed, dismissed_at, dismissed_by) FROM stdin;
@@ -2236,42 +1897,42 @@ COPY public.video_insights (id, video_id, insight_type, insight_score, insight_d
 
 
 --
--- Name: orderId_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: orderId_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
 SELECT pg_catalog.setval('public."orderId_id_seq"', 27, true);
 
 
 --
--- Name: orderItem_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: orderItem_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
 SELECT pg_catalog.setval('public."orderItem_id_seq"', 1, false);
 
 
 --
--- Name: productId_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: productId_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
 SELECT pg_catalog.setval('public."productId_id_seq"', 1, false);
 
 
 --
--- Name: studio_order_sources_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: studio_order_sources_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
 SELECT pg_catalog.setval('public.studio_order_sources_id_seq', 2, true);
 
 
 --
--- Name: studio_payment_modes_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+-- Name: studio_payment_modes_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
 SELECT pg_catalog.setval('public.studio_payment_modes_id_seq', 2, true);
 
 
 --
--- Name: api_usage_logs api_usage_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: api_usage_logs api_usage_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.api_usage_logs
@@ -2279,7 +1940,7 @@ ALTER TABLE ONLY public.api_usage_logs
 
 
 --
--- Name: attachments attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: attachments attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.attachments
@@ -2287,7 +1948,7 @@ ALTER TABLE ONLY public.attachments
 
 
 --
--- Name: categories categories_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: categories categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.categories
@@ -2295,7 +1956,7 @@ ALTER TABLE ONLY public.categories
 
 
 --
--- Name: categories categories_slug_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: categories categories_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.categories
@@ -2303,7 +1964,7 @@ ALTER TABLE ONLY public.categories
 
 
 --
--- Name: comments comments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: comments comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.comments
@@ -2311,7 +1972,7 @@ ALTER TABLE ONLY public.comments
 
 
 --
--- Name: competitor_videos competitor_videos_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: competitor_videos competitor_videos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.competitor_videos
@@ -2319,7 +1980,7 @@ ALTER TABLE ONLY public.competitor_videos
 
 
 --
--- Name: competitor_videos competitor_videos_platform_platform_video_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: competitor_videos competitor_videos_platform_platform_video_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.competitor_videos
@@ -2327,7 +1988,7 @@ ALTER TABLE ONLY public.competitor_videos
 
 
 --
--- Name: competitor_watchlist competitor_watchlist_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: competitor_watchlist competitor_watchlist_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.competitor_watchlist
@@ -2335,7 +1996,7 @@ ALTER TABLE ONLY public.competitor_watchlist
 
 
 --
--- Name: competitor_watchlist competitor_watchlist_platform_username_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: competitor_watchlist competitor_watchlist_platform_username_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.competitor_watchlist
@@ -2343,7 +2004,7 @@ ALTER TABLE ONLY public.competitor_watchlist
 
 
 --
--- Name: engagement_snapshots engagement_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: engagement_snapshots engagement_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.engagement_snapshots
@@ -2351,7 +2012,7 @@ ALTER TABLE ONLY public.engagement_snapshots
 
 
 --
--- Name: engagement_snapshots engagement_snapshots_video_id_snapshot_at_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: engagement_snapshots engagement_snapshots_video_id_snapshot_at_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.engagement_snapshots
@@ -2359,7 +2020,7 @@ ALTER TABLE ONLY public.engagement_snapshots
 
 
 --
--- Name: entity_attachments entity_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: entity_attachments entity_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.entity_attachments
@@ -2367,7 +2028,7 @@ ALTER TABLE ONLY public.entity_attachments
 
 
 --
--- Name: follower_snapshots follower_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: follower_snapshots follower_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.follower_snapshots
@@ -2375,7 +2036,7 @@ ALTER TABLE ONLY public.follower_snapshots
 
 
 --
--- Name: follower_snapshots follower_snapshots_watchlist_id_snapshot_at_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: follower_snapshots follower_snapshots_watchlist_id_snapshot_at_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.follower_snapshots
@@ -2383,7 +2044,7 @@ ALTER TABLE ONLY public.follower_snapshots
 
 
 --
--- Name: image_collections image_collections_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: image_collections image_collections_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.image_collections
@@ -2391,7 +2052,7 @@ ALTER TABLE ONLY public.image_collections
 
 
 --
--- Name: image_collections image_collections_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: image_collections image_collections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.image_collections
@@ -2399,7 +2060,7 @@ ALTER TABLE ONLY public.image_collections
 
 
 --
--- Name: infisical_projects infisical_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: infisical_projects infisical_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.infisical_projects
@@ -2407,7 +2068,7 @@ ALTER TABLE ONLY public.infisical_projects
 
 
 --
--- Name: infisical_projects infisical_projects_project_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: infisical_projects infisical_projects_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.infisical_projects
@@ -2415,7 +2076,7 @@ ALTER TABLE ONLY public.infisical_projects
 
 
 --
--- Name: infisical_secrets infisical_secrets_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: infisical_secrets infisical_secrets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.infisical_secrets
@@ -2423,7 +2084,7 @@ ALTER TABLE ONLY public.infisical_secrets
 
 
 --
--- Name: infisical_secrets infisical_secrets_project_id_secret_key_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: infisical_secrets infisical_secrets_project_id_secret_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.infisical_secrets
@@ -2431,7 +2092,7 @@ ALTER TABLE ONLY public.infisical_secrets
 
 
 --
--- Name: ingestion_meta ingestion_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: ingestion_meta ingestion_meta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ingestion_meta
@@ -2439,7 +2100,7 @@ ALTER TABLE ONLY public.ingestion_meta
 
 
 --
--- Name: instagram_profile_cache instagram_profile_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: instagram_profile_cache instagram_profile_cache_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.instagram_profile_cache
@@ -2447,7 +2108,7 @@ ALTER TABLE ONLY public.instagram_profile_cache
 
 
 --
--- Name: k8s_clusters k8s_clusters_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_clusters k8s_clusters_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_clusters
@@ -2455,7 +2116,7 @@ ALTER TABLE ONLY public.k8s_clusters
 
 
 --
--- Name: k8s_clusters k8s_clusters_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_clusters k8s_clusters_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_clusters
@@ -2463,7 +2124,7 @@ ALTER TABLE ONLY public.k8s_clusters
 
 
 --
--- Name: k8s_events k8s_events_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_events k8s_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_events
@@ -2471,7 +2132,7 @@ ALTER TABLE ONLY public.k8s_events
 
 
 --
--- Name: k8s_namespaces k8s_namespaces_cluster_id_namespace_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_namespaces k8s_namespaces_cluster_id_namespace_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_namespaces
@@ -2479,7 +2140,7 @@ ALTER TABLE ONLY public.k8s_namespaces
 
 
 --
--- Name: k8s_namespaces k8s_namespaces_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_namespaces k8s_namespaces_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_namespaces
@@ -2487,7 +2148,7 @@ ALTER TABLE ONLY public.k8s_namespaces
 
 
 --
--- Name: k8s_nodes k8s_nodes_cluster_id_node_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_nodes k8s_nodes_cluster_id_node_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_nodes
@@ -2495,7 +2156,7 @@ ALTER TABLE ONLY public.k8s_nodes
 
 
 --
--- Name: k8s_nodes k8s_nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_nodes k8s_nodes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_nodes
@@ -2503,7 +2164,7 @@ ALTER TABLE ONLY public.k8s_nodes
 
 
 --
--- Name: k8s_pods k8s_pods_cluster_id_namespace_id_pod_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_pods k8s_pods_cluster_id_namespace_id_pod_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_pods
@@ -2511,7 +2172,7 @@ ALTER TABLE ONLY public.k8s_pods
 
 
 --
--- Name: k8s_pods k8s_pods_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_pods k8s_pods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_pods
@@ -2519,7 +2180,7 @@ ALTER TABLE ONLY public.k8s_pods
 
 
 --
--- Name: k8s_resource_metrics k8s_resource_metrics_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_resource_metrics k8s_resource_metrics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_resource_metrics
@@ -2527,7 +2188,7 @@ ALTER TABLE ONLY public.k8s_resource_metrics
 
 
 --
--- Name: k8s_services k8s_services_cluster_id_namespace_id_service_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_services k8s_services_cluster_id_namespace_id_service_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_services
@@ -2535,7 +2196,7 @@ ALTER TABLE ONLY public.k8s_services
 
 
 --
--- Name: k8s_services k8s_services_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_services k8s_services_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_services
@@ -2543,7 +2204,7 @@ ALTER TABLE ONLY public.k8s_services
 
 
 --
--- Name: k8s_workloads k8s_workloads_cluster_id_namespace_id_workload_name_workloa_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_workloads k8s_workloads_cluster_id_namespace_id_workload_name_workloa_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_workloads
@@ -2551,7 +2212,7 @@ ALTER TABLE ONLY public.k8s_workloads
 
 
 --
--- Name: k8s_workloads k8s_workloads_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_workloads k8s_workloads_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_workloads
@@ -2559,7 +2220,7 @@ ALTER TABLE ONLY public.k8s_workloads
 
 
 --
--- Name: media_deletion_queue media_deletion_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: media_deletion_queue media_deletion_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.media_deletion_queue
@@ -2567,7 +2228,7 @@ ALTER TABLE ONLY public.media_deletion_queue
 
 
 --
--- Name: media media_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: media media_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.media
@@ -2575,7 +2236,15 @@ ALTER TABLE ONLY public.media
 
 
 --
--- Name: orderItem orderItem_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: media_preferences media_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.media_preferences
+    ADD CONSTRAINT media_preferences_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: orderItem orderItem_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderItem"
@@ -2583,7 +2252,7 @@ ALTER TABLE ONLY public."orderItem"
 
 
 --
--- Name: platform_configs platform_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: platform_configs platform_configs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.platform_configs
@@ -2591,7 +2260,7 @@ ALTER TABLE ONLY public.platform_configs
 
 
 --
--- Name: product_variants product_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: product_variants product_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.product_variants
@@ -2599,7 +2268,7 @@ ALTER TABLE ONLY public.product_variants
 
 
 --
--- Name: products products_base_sku_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: products products_base_sku_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.products
@@ -2607,7 +2276,7 @@ ALTER TABLE ONLY public.products
 
 
 --
--- Name: products products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: products products_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.products
@@ -2615,7 +2284,7 @@ ALTER TABLE ONLY public.products
 
 
 --
--- Name: scraper_jobs scraper_jobs_job_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scraper_jobs scraper_jobs_job_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scraper_jobs
@@ -2623,7 +2292,7 @@ ALTER TABLE ONLY public.scraper_jobs
 
 
 --
--- Name: scraper_jobs scraper_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scraper_jobs scraper_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scraper_jobs
@@ -2631,7 +2300,7 @@ ALTER TABLE ONLY public.scraper_jobs
 
 
 --
--- Name: scraper_sessions scraper_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scraper_sessions scraper_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scraper_sessions
@@ -2639,7 +2308,7 @@ ALTER TABLE ONLY public.scraper_sessions
 
 
 --
--- Name: scraper_sessions scraper_sessions_platform_username_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scraper_sessions scraper_sessions_platform_username_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scraper_sessions
@@ -2647,7 +2316,7 @@ ALTER TABLE ONLY public.scraper_sessions
 
 
 --
--- Name: search_queries search_queries_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: search_queries search_queries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.search_queries
@@ -2655,7 +2324,7 @@ ALTER TABLE ONLY public.search_queries
 
 
 --
--- Name: search_sessions search_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: search_sessions search_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.search_sessions
@@ -2663,7 +2332,7 @@ ALTER TABLE ONLY public.search_sessions
 
 
 --
--- Name: seller_listings seller_listings_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: seller_listings seller_listings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.seller_listings
@@ -2671,7 +2340,7 @@ ALTER TABLE ONLY public.seller_listings
 
 
 --
--- Name: sellers sellers_external_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: sellers sellers_external_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sellers
@@ -2679,7 +2348,7 @@ ALTER TABLE ONLY public.sellers
 
 
 --
--- Name: sellers sellers_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: sellers sellers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.sellers
@@ -2687,7 +2356,7 @@ ALTER TABLE ONLY public.sellers
 
 
 --
--- Name: service_dependencies service_dependencies_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: service_dependencies service_dependencies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.service_dependencies
@@ -2695,7 +2364,7 @@ ALTER TABLE ONLY public.service_dependencies
 
 
 --
--- Name: service_dependencies service_dependencies_service_name_dependency_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: service_dependencies service_dependencies_service_name_dependency_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.service_dependencies
@@ -2703,7 +2372,7 @@ ALTER TABLE ONLY public.service_dependencies
 
 
 --
--- Name: order_sources studio_order_sources_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: order_sources studio_order_sources_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.order_sources
@@ -2711,7 +2380,7 @@ ALTER TABLE ONLY public.order_sources
 
 
 --
--- Name: order_sources studio_order_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: order_sources studio_order_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.order_sources
@@ -2719,7 +2388,7 @@ ALTER TABLE ONLY public.order_sources
 
 
 --
--- Name: orderId studio_orders_order_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: orderId studio_orders_order_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderId"
@@ -2727,7 +2396,7 @@ ALTER TABLE ONLY public."orderId"
 
 
 --
--- Name: orderId studio_orders_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: orderId studio_orders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderId"
@@ -2735,7 +2404,7 @@ ALTER TABLE ONLY public."orderId"
 
 
 --
--- Name: payment_modes studio_payment_modes_name_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: payment_modes studio_payment_modes_name_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payment_modes
@@ -2743,7 +2412,7 @@ ALTER TABLE ONLY public.payment_modes
 
 
 --
--- Name: payment_modes studio_payment_modes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: payment_modes studio_payment_modes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.payment_modes
@@ -2751,7 +2420,7 @@ ALTER TABLE ONLY public.payment_modes
 
 
 --
--- Name: productId studio_products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: productId studio_products_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."productId"
@@ -2759,7 +2428,7 @@ ALTER TABLE ONLY public."productId"
 
 
 --
--- Name: productId studio_products_product_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: productId studio_products_product_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."productId"
@@ -2767,7 +2436,7 @@ ALTER TABLE ONLY public."productId"
 
 
 --
--- Name: system_health_metrics system_health_metrics_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: system_health_metrics system_health_metrics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.system_health_metrics
@@ -2775,7 +2444,7 @@ ALTER TABLE ONLY public.system_health_metrics
 
 
 --
--- Name: orderItem uk_order_item_index; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: orderItem uk_order_item_index; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderItem"
@@ -2783,7 +2452,7 @@ ALTER TABLE ONLY public."orderItem"
 
 
 --
--- Name: user_preferences user_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_preferences user_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_preferences
@@ -2791,7 +2460,7 @@ ALTER TABLE ONLY public.user_preferences
 
 
 --
--- Name: user_preferences user_preferences_user_id_preference_key_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_preferences user_preferences_user_id_preference_key_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_preferences
@@ -2799,7 +2468,7 @@ ALTER TABLE ONLY public.user_preferences
 
 
 --
--- Name: vendor_contacts vendor_contacts_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: vendor_contacts vendor_contacts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.vendor_contacts
@@ -2807,7 +2476,7 @@ ALTER TABLE ONLY public.vendor_contacts
 
 
 --
--- Name: vendors vendors_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: vendors vendors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.vendors
@@ -2815,7 +2484,7 @@ ALTER TABLE ONLY public.vendors
 
 
 --
--- Name: video_insights video_insights_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: video_insights video_insights_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.video_insights
@@ -2823,7 +2492,7 @@ ALTER TABLE ONLY public.video_insights
 
 
 --
--- Name: video_insights video_insights_video_id_insight_type_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: video_insights video_insights_video_id_insight_type_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.video_insights
@@ -2831,588 +2500,595 @@ ALTER TABLE ONLY public.video_insights
 
 
 --
--- Name: idx_api_usage_logs_endpoint; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_api_usage_logs_endpoint; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_usage_logs_endpoint ON public.api_usage_logs USING btree (endpoint);
 
 
 --
--- Name: idx_api_usage_logs_status_code; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_api_usage_logs_status_code; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_usage_logs_status_code ON public.api_usage_logs USING btree (status_code);
 
 
 --
--- Name: idx_api_usage_logs_tenant_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_api_usage_logs_tenant_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_usage_logs_tenant_id ON public.api_usage_logs USING btree (tenant_id);
 
 
 --
--- Name: idx_api_usage_logs_timestamp; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_api_usage_logs_timestamp; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_usage_logs_timestamp ON public.api_usage_logs USING btree ("timestamp");
 
 
 --
--- Name: idx_api_usage_tenant_timestamp; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_api_usage_tenant_timestamp; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_api_usage_tenant_timestamp ON public.api_usage_logs USING btree (tenant_id, "timestamp");
 
 
 --
--- Name: idx_attachments_metadata; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_attachments_metadata; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_attachments_metadata ON public.attachments USING gin (metadata);
 
 
 --
--- Name: idx_attachments_original_filename; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_attachments_original_filename; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_attachments_original_filename ON public.attachments USING btree (original_filename);
 
 
 --
--- Name: idx_comments_attachments; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_comments_attachments; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_comments_attachments ON public.comments USING gin (attachment_ids);
 
 
 --
--- Name: idx_comments_entity; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_comments_entity; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_comments_entity ON public.comments USING btree (entity_type, entity_id, created_at DESC);
 
 
 --
--- Name: idx_entity_attachments_lookup; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_entity_attachments_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_entity_attachments_lookup ON public.entity_attachments USING btree (entity_type, entity_id);
 
 
 --
--- Name: idx_follower_snapshots_watchlist_time; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_follower_snapshots_watchlist_time; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_follower_snapshots_watchlist_time ON public.follower_snapshots USING btree (watchlist_id, snapshot_at DESC);
 
 
 --
--- Name: idx_infisical_projects_active; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_infisical_projects_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_infisical_projects_active ON public.infisical_projects USING btree (is_active);
 
 
 --
--- Name: idx_infisical_projects_project_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_infisical_projects_project_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_infisical_projects_project_id ON public.infisical_projects USING btree (project_id);
 
 
 --
--- Name: idx_infisical_projects_tenant_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_infisical_projects_tenant_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_infisical_projects_tenant_id ON public.infisical_projects USING btree (tenant_id);
 
 
 --
--- Name: idx_infisical_secrets_key; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_infisical_secrets_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_infisical_secrets_key ON public.infisical_secrets USING btree (secret_key);
 
 
 --
--- Name: idx_infisical_secrets_last_accessed; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_infisical_secrets_last_accessed; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_infisical_secrets_last_accessed ON public.infisical_secrets USING btree (last_accessed);
 
 
 --
--- Name: idx_infisical_secrets_project_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_infisical_secrets_project_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_infisical_secrets_project_id ON public.infisical_secrets USING btree (project_id);
 
 
 --
--- Name: idx_insta_cache_scraped_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_insta_cache_scraped_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_insta_cache_scraped_at ON public.instagram_profile_cache USING btree (scraped_at);
 
 
 --
--- Name: idx_jobs_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_jobs_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_jobs_status ON public.scraper_jobs USING btree (status, created_at DESC);
 
 
 --
--- Name: idx_k8s_clusters_active; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_clusters_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_clusters_active ON public.k8s_clusters USING btree (is_active);
 
 
 --
--- Name: idx_k8s_clusters_last_sync; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_clusters_last_sync; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_clusters_last_sync ON public.k8s_clusters USING btree (last_sync);
 
 
 --
--- Name: idx_k8s_clusters_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_clusters_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_clusters_name ON public.k8s_clusters USING btree (name);
 
 
 --
--- Name: idx_k8s_clusters_provider; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_clusters_provider; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_clusters_provider ON public.k8s_clusters USING btree (provider);
 
 
 --
--- Name: idx_k8s_events_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_cluster_id ON public.k8s_events USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_events_cluster_time; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_cluster_time; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_cluster_time ON public.k8s_events USING btree (cluster_id, first_timestamp);
 
 
 --
--- Name: idx_k8s_events_namespace_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_namespace_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_namespace_id ON public.k8s_events USING btree (namespace_id);
 
 
 --
--- Name: idx_k8s_events_object_kind; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_object_kind; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_object_kind ON public.k8s_events USING btree (involved_object_kind);
 
 
 --
--- Name: idx_k8s_events_reason; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_reason; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_reason ON public.k8s_events USING btree (reason);
 
 
 --
--- Name: idx_k8s_events_timestamps; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_timestamps; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_timestamps ON public.k8s_events USING btree (first_timestamp, last_timestamp);
 
 
 --
--- Name: idx_k8s_events_type; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_events_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_events_type ON public.k8s_events USING btree (event_type);
 
 
 --
--- Name: idx_k8s_metrics_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_metrics_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_metrics_cluster_id ON public.k8s_resource_metrics USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_metrics_cluster_resource_time; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_metrics_cluster_resource_time; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_metrics_cluster_resource_time ON public.k8s_resource_metrics USING btree (cluster_id, resource_type, recorded_at);
 
 
 --
--- Name: idx_k8s_metrics_metric_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_metrics_metric_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_metrics_metric_name ON public.k8s_resource_metrics USING btree (metric_name);
 
 
 --
--- Name: idx_k8s_metrics_recorded_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_metrics_recorded_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_metrics_recorded_at ON public.k8s_resource_metrics USING btree (recorded_at);
 
 
 --
--- Name: idx_k8s_metrics_resource_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_metrics_resource_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_metrics_resource_name ON public.k8s_resource_metrics USING btree (resource_name);
 
 
 --
--- Name: idx_k8s_metrics_resource_type; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_metrics_resource_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_metrics_resource_type ON public.k8s_resource_metrics USING btree (resource_type);
 
 
 --
--- Name: idx_k8s_namespaces_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_namespaces_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_namespaces_cluster_id ON public.k8s_namespaces USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_namespaces_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_namespaces_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_namespaces_name ON public.k8s_namespaces USING btree (namespace_name);
 
 
 --
--- Name: idx_k8s_namespaces_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_namespaces_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_namespaces_status ON public.k8s_namespaces USING btree (status);
 
 
 --
--- Name: idx_k8s_nodes_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_nodes_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_nodes_cluster_id ON public.k8s_nodes USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_nodes_heartbeat; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_nodes_heartbeat; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_nodes_heartbeat ON public.k8s_nodes USING btree (last_heartbeat);
 
 
 --
--- Name: idx_k8s_nodes_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_nodes_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_nodes_name ON public.k8s_nodes USING btree (node_name);
 
 
 --
--- Name: idx_k8s_nodes_role; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_nodes_role; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_nodes_role ON public.k8s_nodes USING btree (node_role);
 
 
 --
--- Name: idx_k8s_nodes_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_nodes_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_nodes_status ON public.k8s_nodes USING btree (node_status);
 
 
 --
--- Name: idx_k8s_pods_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_cluster_id ON public.k8s_pods USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_pods_cluster_namespace; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_cluster_namespace; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_cluster_namespace ON public.k8s_pods USING btree (cluster_id, namespace_id);
 
 
 --
--- Name: idx_k8s_pods_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_name ON public.k8s_pods USING btree (pod_name);
 
 
 --
--- Name: idx_k8s_pods_namespace_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_namespace_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_namespace_id ON public.k8s_pods USING btree (namespace_id);
 
 
 --
--- Name: idx_k8s_pods_node_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_node_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_node_name ON public.k8s_pods USING btree (node_name);
 
 
 --
--- Name: idx_k8s_pods_phase; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_phase; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_phase ON public.k8s_pods USING btree (phase);
 
 
 --
--- Name: idx_k8s_pods_workload_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_pods_workload_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_pods_workload_id ON public.k8s_pods USING btree (workload_id);
 
 
 --
--- Name: idx_k8s_services_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_services_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_services_cluster_id ON public.k8s_services USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_services_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_services_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_services_name ON public.k8s_services USING btree (service_name);
 
 
 --
--- Name: idx_k8s_services_namespace_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_services_namespace_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_services_namespace_id ON public.k8s_services USING btree (namespace_id);
 
 
 --
--- Name: idx_k8s_services_type; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_services_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_services_type ON public.k8s_services USING btree (service_type);
 
 
 --
--- Name: idx_k8s_workloads_cluster_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_workloads_cluster_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_workloads_cluster_id ON public.k8s_workloads USING btree (cluster_id);
 
 
 --
--- Name: idx_k8s_workloads_cluster_namespace; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_workloads_cluster_namespace; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_workloads_cluster_namespace ON public.k8s_workloads USING btree (cluster_id, namespace_id);
 
 
 --
--- Name: idx_k8s_workloads_last_sync; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_workloads_last_sync; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_workloads_last_sync ON public.k8s_workloads USING btree (last_sync);
 
 
 --
--- Name: idx_k8s_workloads_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_workloads_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_workloads_name ON public.k8s_workloads USING btree (workload_name);
 
 
 --
--- Name: idx_k8s_workloads_namespace_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_workloads_namespace_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_workloads_namespace_id ON public.k8s_workloads USING btree (namespace_id);
 
 
 --
--- Name: idx_k8s_workloads_type; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_k8s_workloads_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_k8s_workloads_type ON public.k8s_workloads USING btree (workload_type);
 
 
 --
--- Name: idx_media_phash; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_media_phash; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_media_phash ON public.media USING btree (phash);
 
 
 --
--- Name: idx_media_type; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_media_prefs_cat_sub; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_media_prefs_cat_sub ON public.media_preferences USING btree (COALESCE(category, 'GLOBAL_NULL'::character varying), COALESCE(subcategory, 'GLOBAL_NULL'::character varying));
+
+
+--
+-- Name: idx_media_type; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_media_type ON public.media USING btree (media_type);
 
 
 --
--- Name: idx_platform_configs_updated_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_platform_configs_updated_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_platform_configs_updated_at ON public.platform_configs USING btree (updated_at);
 
 
 --
--- Name: idx_products_sku; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_products_sku; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_products_sku ON public.products USING btree (base_sku);
 
 
 --
--- Name: idx_search_queries_timestamp; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_search_queries_timestamp; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_search_queries_timestamp ON public.search_queries USING btree ("timestamp");
 
 
 --
--- Name: idx_service_dependencies_critical; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_service_dependencies_critical; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_service_dependencies_critical ON public.service_dependencies USING btree (is_critical);
 
 
 --
--- Name: idx_service_dependencies_dependency; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_service_dependencies_dependency; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_service_dependencies_dependency ON public.service_dependencies USING btree (dependency_name);
 
 
 --
--- Name: idx_service_dependencies_service; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_service_dependencies_service; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_service_dependencies_service ON public.service_dependencies USING btree (service_name);
 
 
 --
--- Name: idx_service_dependencies_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_service_dependencies_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_service_dependencies_status ON public.service_dependencies USING btree (status);
 
 
 --
--- Name: idx_snapshots_video_time; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_snapshots_video_time; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_snapshots_video_time ON public.engagement_snapshots USING btree (video_id, snapshot_at DESC);
 
 
 --
--- Name: idx_system_health_metric; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_system_health_metric; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_health_metric ON public.system_health_metrics USING btree (metric_name);
 
 
 --
--- Name: idx_system_health_recorded_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_system_health_recorded_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_health_recorded_at ON public.system_health_metrics USING btree (recorded_at);
 
 
 --
--- Name: idx_system_health_service; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_system_health_service; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_health_service ON public.system_health_metrics USING btree (service_name);
 
 
 --
--- Name: idx_system_health_status; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_system_health_status; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_system_health_status ON public.system_health_metrics USING btree (status);
 
 
 --
--- Name: idx_vendor_contacts_vendor; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_vendor_contacts_vendor; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_vendor_contacts_vendor ON public.vendor_contacts USING btree (vendor_id);
 
 
 --
--- Name: idx_vendors_active; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_vendors_active; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_vendors_active ON public.vendors USING btree (is_active);
 
 
 --
--- Name: idx_vendors_name; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_vendors_name; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_vendors_name ON public.vendors USING btree (vendor_name);
 
 
 --
--- Name: idx_videos_posted_at; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_videos_posted_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_videos_posted_at ON public.competitor_videos USING btree (posted_at DESC);
 
 
 --
--- Name: idx_watchlist_platform; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_watchlist_platform; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_watchlist_platform ON public.competitor_watchlist USING btree (platform);
 
 
 --
--- Name: scraper_sessions trigger_sessions_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
+-- Name: scraper_sessions trigger_sessions_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_sessions_updated_at BEFORE UPDATE ON public.scraper_sessions FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: competitor_videos trigger_videos_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
+-- Name: competitor_videos trigger_videos_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_videos_updated_at BEFORE UPDATE ON public.competitor_videos FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: competitor_watchlist trigger_watchlist_updated_at; Type: TRIGGER; Schema: public; Owner: postgres
+-- Name: competitor_watchlist trigger_watchlist_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trigger_watchlist_updated_at BEFORE UPDATE ON public.competitor_watchlist FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
--- Name: competitor_videos competitor_videos_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: competitor_videos competitor_videos_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.competitor_videos
@@ -3420,7 +3096,7 @@ ALTER TABLE ONLY public.competitor_videos
 
 
 --
--- Name: engagement_snapshots engagement_snapshots_video_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: engagement_snapshots engagement_snapshots_video_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.engagement_snapshots
@@ -3428,7 +3104,7 @@ ALTER TABLE ONLY public.engagement_snapshots
 
 
 --
--- Name: entity_attachments entity_attachments_attachment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: entity_attachments entity_attachments_attachment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.entity_attachments
@@ -3436,7 +3112,7 @@ ALTER TABLE ONLY public.entity_attachments
 
 
 --
--- Name: orderItem fk_order_ref; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: orderItem fk_order_ref; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderItem"
@@ -3444,7 +3120,7 @@ ALTER TABLE ONLY public."orderItem"
 
 
 --
--- Name: follower_snapshots follower_snapshots_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: follower_snapshots follower_snapshots_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.follower_snapshots
@@ -3452,7 +3128,7 @@ ALTER TABLE ONLY public.follower_snapshots
 
 
 --
--- Name: infisical_secrets infisical_secrets_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: infisical_secrets infisical_secrets_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.infisical_secrets
@@ -3460,7 +3136,7 @@ ALTER TABLE ONLY public.infisical_secrets
 
 
 --
--- Name: k8s_events k8s_events_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_events k8s_events_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_events
@@ -3468,7 +3144,7 @@ ALTER TABLE ONLY public.k8s_events
 
 
 --
--- Name: k8s_events k8s_events_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_events k8s_events_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_events
@@ -3476,7 +3152,7 @@ ALTER TABLE ONLY public.k8s_events
 
 
 --
--- Name: k8s_namespaces k8s_namespaces_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_namespaces k8s_namespaces_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_namespaces
@@ -3484,7 +3160,7 @@ ALTER TABLE ONLY public.k8s_namespaces
 
 
 --
--- Name: k8s_nodes k8s_nodes_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_nodes k8s_nodes_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_nodes
@@ -3492,7 +3168,7 @@ ALTER TABLE ONLY public.k8s_nodes
 
 
 --
--- Name: k8s_pods k8s_pods_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_pods k8s_pods_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_pods
@@ -3500,7 +3176,7 @@ ALTER TABLE ONLY public.k8s_pods
 
 
 --
--- Name: k8s_pods k8s_pods_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_pods k8s_pods_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_pods
@@ -3508,7 +3184,7 @@ ALTER TABLE ONLY public.k8s_pods
 
 
 --
--- Name: k8s_pods k8s_pods_workload_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_pods k8s_pods_workload_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_pods
@@ -3516,7 +3192,7 @@ ALTER TABLE ONLY public.k8s_pods
 
 
 --
--- Name: k8s_resource_metrics k8s_resource_metrics_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_resource_metrics k8s_resource_metrics_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_resource_metrics
@@ -3524,7 +3200,7 @@ ALTER TABLE ONLY public.k8s_resource_metrics
 
 
 --
--- Name: k8s_services k8s_services_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_services k8s_services_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_services
@@ -3532,7 +3208,7 @@ ALTER TABLE ONLY public.k8s_services
 
 
 --
--- Name: k8s_services k8s_services_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_services k8s_services_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_services
@@ -3540,7 +3216,7 @@ ALTER TABLE ONLY public.k8s_services
 
 
 --
--- Name: k8s_workloads k8s_workloads_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_workloads k8s_workloads_cluster_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_workloads
@@ -3548,7 +3224,7 @@ ALTER TABLE ONLY public.k8s_workloads
 
 
 --
--- Name: k8s_workloads k8s_workloads_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: k8s_workloads k8s_workloads_namespace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.k8s_workloads
@@ -3556,7 +3232,7 @@ ALTER TABLE ONLY public.k8s_workloads
 
 
 --
--- Name: media media_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: media media_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.media
@@ -3564,7 +3240,7 @@ ALTER TABLE ONLY public.media
 
 
 --
--- Name: product_variants product_variants_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: product_variants product_variants_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.product_variants
@@ -3572,7 +3248,7 @@ ALTER TABLE ONLY public.product_variants
 
 
 --
--- Name: products products_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: products products_category_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.products
@@ -3580,7 +3256,7 @@ ALTER TABLE ONLY public.products
 
 
 --
--- Name: scraper_jobs scraper_jobs_scraper_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scraper_jobs scraper_jobs_scraper_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scraper_jobs
@@ -3588,7 +3264,7 @@ ALTER TABLE ONLY public.scraper_jobs
 
 
 --
--- Name: scraper_jobs scraper_jobs_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: scraper_jobs scraper_jobs_watchlist_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.scraper_jobs
@@ -3596,7 +3272,7 @@ ALTER TABLE ONLY public.scraper_jobs
 
 
 --
--- Name: search_queries search_queries_collection_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: search_queries search_queries_collection_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.search_queries
@@ -3604,7 +3280,7 @@ ALTER TABLE ONLY public.search_queries
 
 
 --
--- Name: search_queries search_queries_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: search_queries search_queries_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.search_queries
@@ -3612,7 +3288,7 @@ ALTER TABLE ONLY public.search_queries
 
 
 --
--- Name: seller_listings seller_listings_seller_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: seller_listings seller_listings_seller_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.seller_listings
@@ -3620,7 +3296,7 @@ ALTER TABLE ONLY public.seller_listings
 
 
 --
--- Name: seller_listings seller_listings_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: seller_listings seller_listings_variant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.seller_listings
@@ -3628,7 +3304,7 @@ ALTER TABLE ONLY public.seller_listings
 
 
 --
--- Name: orderId studio_orders_payment_mode_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: orderId studio_orders_payment_mode_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderId"
@@ -3636,7 +3312,7 @@ ALTER TABLE ONLY public."orderId"
 
 
 --
--- Name: orderId studio_orders_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: orderId studio_orders_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public."orderId"
@@ -3644,7 +3320,7 @@ ALTER TABLE ONLY public."orderId"
 
 
 --
--- Name: vendor_contacts vendor_contacts_vendor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: vendor_contacts vendor_contacts_vendor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.vendor_contacts
@@ -3652,7 +3328,7 @@ ALTER TABLE ONLY public.vendor_contacts
 
 
 --
--- Name: video_insights video_insights_video_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: video_insights video_insights_video_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.video_insights
@@ -3663,5 +3339,5 @@ ALTER TABLE ONLY public.video_insights
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 7UOtmw7APa1X2GldAWQW0G8knnvEveTCkDZ7tRMWs5wXdsrVd3ILE8i9e8MBLR3
+\unrestrict YZa79xpqxHg10truUWv8l2kNA2jyi7eoSQmHxOowZIWDviYGwl4El4hdZJ9fhff
 
