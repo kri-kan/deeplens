@@ -143,7 +143,14 @@ export default function MediaSettingsScreen() {
                 
                 <View style={styles.chipRow}>
                   {item.thumbnailSizes.map(size => (
-                    <Chip key={size} style={styles.chip} textStyle={{ fontSize: 10 }}>{size.toUpperCase()}</Chip>
+                    <Chip 
+                      key={size} 
+                      mode="outlined"
+                      style={styles.chip} 
+                      textStyle={[styles.chipText, { color: theme.colors.onSurfaceVariant }]}
+                    >
+                      {size.toUpperCase()}
+                    </Chip>
                   ))}
                 </View>
               </Card.Content>
@@ -168,6 +175,7 @@ export default function MediaSettingsScreen() {
                 selected={category === ''}
                 onPress={() => { setCategory(''); setSubCategory(''); }}
                 style={styles.selectableChip}
+                textStyle={{ color: category === '' ? theme.colors.onSecondaryContainer : theme.colors.onSurface }}
               >
                 Global (None)
               </Chip>
@@ -180,6 +188,7 @@ export default function MediaSettingsScreen() {
                     setSubCategory(''); // Reset subcat when cat changes
                   }}
                   style={styles.selectableChip}
+                  textStyle={{ color: category.toLowerCase() === cat.toLowerCase() ? theme.colors.onSecondaryContainer : theme.colors.onSurface }}
                 >
                   {cat}
                 </Chip>
@@ -194,6 +203,7 @@ export default function MediaSettingsScreen() {
                     selected={subCategory === ''}
                     onPress={() => setSubCategory('')}
                     style={styles.selectableChip}
+                    textStyle={{ color: subCategory === '' ? theme.colors.onSecondaryContainer : theme.colors.onSurface }}
                   >
                     All {category}
                   </Chip>
@@ -203,6 +213,7 @@ export default function MediaSettingsScreen() {
                       selected={subCategory.toLowerCase() === sub.toLowerCase()}
                       onPress={() => setSubCategory(sub)}
                       style={styles.selectableChip}
+                      textStyle={{ color: subCategory.toLowerCase() === sub.toLowerCase() ? theme.colors.onSecondaryContainer : theme.colors.onSurface }}
                     >
                       {sub}
                     </Chip>
@@ -225,6 +236,7 @@ export default function MediaSettingsScreen() {
                   selected={retention === opt}
                   onPress={() => setRetention(opt)}
                   style={styles.selectableChip}
+                  textStyle={{ color: retention === opt ? theme.colors.onSecondaryContainer : theme.colors.onSurface }}
                 >
                   {opt}
                 </Chip>
@@ -239,6 +251,7 @@ export default function MediaSettingsScreen() {
                   selected={sizes.includes(s)} 
                   onPress={() => toggleSize(s)}
                   style={styles.selectableChip}
+                  textStyle={{ color: sizes.includes(s) ? theme.colors.onSecondaryContainer : theme.colors.onSurface }}
                 >
                   {s}
                 </Chip>
@@ -300,8 +313,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chip: {
-    height: 26,
-    borderRadius: 6,
+    height: 24,
+    borderRadius: 8,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  chipText: {
+    fontSize: 9,
+    fontWeight: 'bold',
   },
   selectableChip: {
     margin: 4,

@@ -44,9 +44,47 @@ class ProductService {
     });
   }
 
+  async getCatalog(params: { category?: string; sortBy?: string; skip?: number; take?: number }): Promise<{ products: VendorProduct[], totalCount: number }> {
+    return productMgmtApiClient.get<{ products: VendorProduct[], totalCount: number }>(API_ROUTES.PRODUCT_CATALOG.LIST + '/catalog', {
+      params,
+    });
+  }
+
+  async getProductById(id: string): Promise<VendorProduct> {
+    return productMgmtApiClient.get<VendorProduct>(API_ROUTES.PRODUCT_CATALOG.GET_BY_ID(id));
+  }
+
+  async deleteProduct(productId: string): Promise<void> {
+    return productMgmtApiClient.delete(`${API_ROUTES.PRODUCT_CATALOG.LIST}/${productId}`);
+  }
+
+  async starMedia(productId: string, mediaId: string): Promise<void> {
+    return productMgmtApiClient.post(`${API_ROUTES.PRODUCT_CATALOG.LIST}/${productId}/star/${mediaId}`);
+  }
+
+  async reorderMedia(productId: string, mediaIds: string[]): Promise<void> {
+    return productMgmtApiClient.post(`${API_ROUTES.PRODUCT_CATALOG.LIST}/${productId}/reorder`, mediaIds);
+  }
+
   getThumbnailUrl(mediaId: string, spec: 'icon' | 'medium' | 'large' = 'medium'): string {
     const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
+    if (!baseUrl) {
+      console.warn('EXPO_PUBLIC_SEARCH_API_URL is not defined');
+      return `https://via.placeholder.com/150?text=No+API+URL`;
+    }
     return `${baseUrl}${API_ROUTES.CATALOG.THUMBNAIL(mediaId)}?spec=${spec}`;
+  }
+
+  getThumbnailUrlByPath(path: string, spec: 'icon' | 'medium' | 'large' = 'medium'): string {
+    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
+    if (!baseUrl) return `https://via.placeholder.com/150`;
+    return `${baseUrl}/api/v1/catalog/media/thumbnail-by-path?path=${encodeURIComponent(path)}&spec=${spec}`;
+  }
+
+  getMediaUrlByPath(path: string): string {
+    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
+    if (!baseUrl) return `https://via.placeholder.com/150`;
+    return `${baseUrl}/api/v1/catalog/media/serve?path=${encodeURIComponent(path)}`;
   }
 }
 

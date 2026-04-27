@@ -58,16 +58,25 @@ public class IngestionController : ControllerBase
             var prefs = await _metadataService.ResolveMediaPreferencesAsync(request.Category, request.SubCategory);
             var retention = request.Retention ?? prefs.Retention;
 
+            // Auto-bucketing logic: detect "saree" from description if SubCategory is not explicitly valid
+            var finalSubCat = "General";
+            if (!string.IsNullOrEmpty(request.Description) && 
+                request.Description.Contains("saree", StringComparison.OrdinalIgnoreCase))
+            {
+                finalSubCat = "Saree";
+            }
+            var updatedRequest = request with { SubCategory = finalSubCat };
+
             // 3. Save to Storage
-            using var stream = request.File.OpenReadStream();
-            var context = StorageContext.Create(request.Category, request.SubCategory);
+            using var stream = updatedRequest.File.OpenReadStream();
+            var context = StorageContext.Create(updatedRequest.Category, updatedRequest.SubCategory);
             
             var tags = string.IsNullOrEmpty(retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, retention } };
-            var storagePath = await _storageService.UploadFileAsync(request.File.FileName, stream, request.File.ContentType, context, tags);
+            var storagePath = await _storageService.UploadFileAsync(updatedRequest.File.FileName, stream, updatedRequest.File.ContentType, context, tags);
 
             // 3. Save Metadata
             var imageId = Guid.NewGuid();
-            await _metadataService.SaveIngestionDataAsync(imageId, storagePath, request.File.ContentType, request.File.Length, request);
+            await _metadataService.SaveIngestionDataAsync(imageId, storagePath, updatedRequest.File.ContentType, updatedRequest.File.Length, updatedRequest);
 
             // 5. Processing Options from Preferences
             var processingOptions = new ProcessingOptions
@@ -81,14 +90,14 @@ public class IngestionController : ControllerBase
             // 5. Notify Processing Pipeline
             if (_kafkaProducer != null)
             {
-                await NotifyPipeline(imageId, storagePath, request, processingOptions);
+                await NotifyPipeline(imageId, storagePath, updatedRequest, processingOptions);
             }
 
             return Ok(new UploadImageResponse
             {
                 ImageId = imageId,
                 Status = "Uploaded",
-                Message = $"Image grouped under {request.Category}/{request.SubCategory} ingested and queued for processing."
+                Message = $"Image grouped under {updatedRequest.Category}/{updatedRequest.SubCategory} ingested and queued for processing."
             });
         }
         catch (Exception ex)
@@ -152,6 +161,14 @@ public class IngestionController : ControllerBase
                     };
                 }
 
+                // Auto-bucketing logic: detect "saree" in description, otherwise default to "General"
+                var detectedSubCat = "General";
+                if (!string.IsNullOrEmpty(itemMetadata.Description) && 
+                    itemMetadata.Description.Contains("saree", StringComparison.OrdinalIgnoreCase))
+                {
+                    detectedSubCat = "Saree";
+                }
+
                 var singleRequest = new UploadImageRequest
                 {
                     File = file,
@@ -161,7 +178,7 @@ public class IngestionController : ControllerBase
                     Currency = itemMetadata.Currency ?? "INR",
                     Description = itemMetadata.Description,
                     Category = bulkRequest.Category,
-                    SubCategory = bulkRequest.SubCategory,
+                    SubCategory = detectedSubCat,
                     Tags = itemMetadata.Tags,
                     Sku = itemMetadata.Sku,
                     Color = itemMetadata.Color,

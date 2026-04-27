@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DeepLens.SearchApi.Controllers;
 
 [ApiController]
-[Route("api/media/settings")]
+[Route("api/v1/media/settings")]
 public class MediaSettingsController : ControllerBase
 {
     private readonly IMetadataService _metadataService;

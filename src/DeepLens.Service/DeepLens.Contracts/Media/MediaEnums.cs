@@ -22,10 +22,7 @@ public enum ProductSubCategory
     Saree = 1,
     Lehanga = 2,
     Dress = 3,
-    Suits = 4,
-    Fabric = 5,
-    Jewelry = 6,
-    Accessory = 7
+    Kids=4
 }
 
 /// <summary>

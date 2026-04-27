@@ -42,27 +42,57 @@ public class ProductService : IProductService
 
         try
         {
-            // 1. Storage & Registry (using existing IStorageService)
+            // 0. Generate Hex ID (Product Code) from sequence
+            var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')", null, transaction);
+            var hexId = nextVal.ToString("X3");
+
+            // 1. Create Product (Master)
+            var masterId = Guid.NewGuid();
+            const string masterSql = @"
+                INSERT INTO products (id, title, base_sku, tags, created_at)
+                VALUES (@Id, @Title, @Sku, @Tags, @CreatedAt)
+                RETURNING id";
+            
+            // Auto-tag with subcategory for catalog filtering
+            var tags = data.Tags ?? new List<string>();
+            if (!string.IsNullOrEmpty(data.SubCategory) && data.SubCategory != "General")
+            {
+                var tag = data.SubCategory.ToLowerInvariant();
+                if (!tags.Contains(tag)) tags.Add(tag);
+            }
+
+            await connection.ExecuteAsync(masterSql, new {
+                Id = masterId,
+                Title = data.MasterTitle ?? "New Product",
+                Sku = hexId,
+                Tags = tags.ToArray(),
+                CreatedAt = DateTime.UtcNow
+            }, transaction);
+
+            // 2. Create Variant
+            var variantId = Guid.NewGuid();
+            await connection.ExecuteAsync("INSERT INTO product_variants (id, product_id) VALUES (@Id, @Pid)", 
+                new { Id = variantId, Pid = masterId }, transaction);
+
+            // 3. Storage & Registry
             var mediaIds = new List<Guid>();
             var mediaMap = new Dictionary<string, Guid>();
 
             foreach (var file in mediaFiles)
             {
-                // Upload and get path/hash
                 var context = StorageContext.Create(data.Category, data.SubCategory);
-                var tags = string.IsNullOrEmpty(data.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, data.Retention } };
-                var storagePath = await _storageService.UploadFileAsync(file.FileName, file.Content, file.ContentType, context, tags);
+                var storageTags = string.IsNullOrEmpty(data.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, data.Retention } };
+                var storagePath = await _storageService.UploadFileAsync(file.FileName, file.Content, file.ContentType, context, storageTags);
                 
-                // Deduplicate/Get Media Record by storage path (or hash if we had it)
-                // For simplicity here, we create a new media record
                 var mediaId = Guid.NewGuid();
                 const string mediaSql = @"
-                    INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
-                    VALUES (@Id, @Path, @Mime, 0, 1, 0, @Category, @SubCategory)
-                    RETURNING id";
-                
+                    INSERT INTO media (id, variant_id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
+                    VALUES (@Id, @VarId, @Path, @Mime, 0, 1, 0, @Category, @SubCategory)";
+
+                _logger.LogInformation("Creating media record {MediaId} for variant {VarId} at path {StoragePath}", mediaId, variantId, storagePath);
                 await connection.ExecuteAsync(mediaSql, new {
                     Id = mediaId,
+                    VarId = variantId,
                     Path = storagePath,
                     Mime = file.ContentType,
                     Category = context.Bucket,
@@ -76,33 +106,13 @@ public class ProductService : IProductService
                 }
             }
 
-            // 2. Create/Update Product (Master)
-            var masterId = Guid.NewGuid();
-            const string masterSql = @"
-                INSERT INTO products (id, title, base_sku, tags)
-                VALUES (@Id, @Title, @Sku, @Tags)
-                RETURNING id";
-            
-            await connection.ExecuteAsync(masterSql, new {
-                Id = masterId,
-                Title = data.MasterTitle ?? "New Product",
-                Sku = $"SKU-{Guid.NewGuid().ToString()[..8].ToUpper()}",
-                Tags = new string[] { data.Category.ToString() }
-            }, transaction);
-
-            // 3. Create Listing (Vendor Product)
+            // 4. Create Listing (Vendor Product)
             var vendorProductId = Guid.NewGuid();
+            var sellerId = await GetOrCreateDefaultSeller(connection, transaction);
+
             const string vendorSql = @"
                 INSERT INTO seller_listings (id, seller_id, variant_id, current_price, description, external_id)
                 VALUES (@Id, @SellerId, @VarId, @Price, @Desc, @ExtId)";
-            
-            // We need a variant for the listing in the current schema
-            var variantId = Guid.NewGuid();
-            await connection.ExecuteAsync("INSERT INTO product_variants (id, product_id) VALUES (@Id, @Pid)", 
-                new { Id = variantId, Pid = masterId }, transaction);
-
-            // For now, assume a default seller or handle seller logic similarly to MetadataService
-            var sellerId = await GetOrCreateDefaultSeller(connection, transaction);
 
             await connection.ExecuteAsync(vendorSql, new {
                 Id = vendorProductId,
@@ -122,15 +132,202 @@ public class ProductService : IProductService
                 VendorPrice = data.VendorPrice,
                 ExclusiveDescription = data.Description,
                 Category = data.Category.ToString(),
+                ProductCode = hexId,
                 MediaMap = mediaMap
             };
         }
         catch (Exception ex)
         {
             transaction.Rollback();
-            _logger.LogError(ex, "Failed to ingest product into SearchApi database");
+            _logger.LogError(ex, "Failed to create product");
             throw;
         }
+    }
+
+    public async Task<ProductCatalogResult> GetCatalogAsync(ProductCatalogFilter filter)
+    {
+        using var db = GetConnection();
+        var sql = @"
+            SELECT 
+                sl.id as id,
+                p.id as masterproductid,
+                p.title as title,
+                p.base_sku as productcode,
+                p.tags as tags,
+                sl.current_price as vendorprice,
+                sl.description as description,
+                p.created_at as CreatedAt,
+                COALESCE((
+                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'is_default', m.is_default))
+                    FROM media m 
+                    WHERE m.variant_id = pv.id
+                ), '[]'::json) as media_json
+            FROM products p
+            JOIN product_variants pv ON p.id = pv.product_id
+            JOIN seller_listings sl ON pv.id = sl.variant_id
+            WHERE 1=1";
+
+        var parameters = new DynamicParameters();
+        parameters.Add("Take", filter.Take);
+        parameters.Add("Skip", filter.Skip);
+
+        if (!string.IsNullOrEmpty(filter.Category))
+        {
+            sql += " AND p.tags::text[] @> ARRAY[@Category]::text[]";
+            parameters.Add("Category", filter.Category);
+        }
+
+        if (filter.StartDate.HasValue)
+        {
+            sql += " AND p.created_at >= @StartDate";
+            parameters.Add("StartDate", filter.StartDate.Value);
+        }
+
+        if (filter.EndDate.HasValue)
+        {
+            sql += " AND p.created_at <= @EndDate";
+            parameters.Add("EndDate", filter.EndDate.Value);
+        }
+
+        sql += filter.SortBy switch
+        {
+            "price_low" => " ORDER BY sl.current_price ASC",
+            "price_high" => " ORDER BY sl.current_price DESC",
+            _ => " ORDER BY p.created_at DESC"
+        };
+
+        sql += " LIMIT @Take OFFSET @Skip";
+
+        var results = await db.QueryAsync<dynamic>(sql, parameters);
+        
+        var products = results.Select(r => {
+            var vp = new VendorProduct
+            {
+                Id = r.id ?? Guid.Empty,
+                MasterProductId = r.masterproductid ?? Guid.Empty,
+                Title = r.title,
+                ProductCode = r.productcode,
+                VendorPrice = r.vendorprice ?? 0m,
+                ExclusiveDescription = r.description,
+                CreatedAt = r.createdat
+            };
+
+            if (r.tags != null)
+            {
+                vp.Category = ((string[])r.tags).FirstOrDefault();
+            }
+
+            if (r.media_json != null)
+            {
+                var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(r.media_json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (mediaList != null) vp.Media = mediaList;
+            }
+
+            return vp;
+        });
+
+        var countSql = "SELECT COUNT(*) FROM products p WHERE 1=1";
+        var countParameters = new DynamicParameters();
+        if (!string.IsNullOrEmpty(filter.Category))
+        {
+            countSql += " AND p.tags::text[] @> ARRAY[@Category]::text[]";
+            countParameters.Add("Category", filter.Category);
+        }
+
+        var totalCount = await db.ExecuteScalarAsync<int>(countSql, countParameters);
+
+        return new ProductCatalogResult { Products = products, TotalCount = totalCount };
+    }
+
+    public async Task<bool> DeleteProductAsync(Guid productId)
+    {
+        using var db = GetConnection();
+        // cascade delete should handle variants and listings
+        return await db.ExecuteAsync("DELETE FROM products WHERE id = @Id", new { Id = productId }) > 0;
+    }
+
+    public async Task<bool> StarMediaAsync(Guid productId, Guid mediaId)
+    {
+        using var db = GetConnection();
+        using var transaction = db.BeginTransaction();
+        try {
+            // Unstar all media for this product's variants
+            await db.ExecuteAsync(@"
+                UPDATE media SET is_default = false 
+                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Pid)", 
+                new { Pid = productId }, transaction);
+            
+            // Star the selected one
+            await db.ExecuteAsync("UPDATE media SET is_default = true WHERE id = @Id", new { Id = mediaId }, transaction);
+            transaction.Commit();
+            return true;
+        } catch {
+            transaction.Rollback();
+            return false;
+        }
+    }
+
+    public async Task<bool> ReorderMediaAsync(Guid productId, List<Guid> mediaIds)
+    {
+        // For now, order can be implicitly chronological or we add a sort_order column.
+        return true;
+    }
+
+    public async Task<VendorProduct?> GetProductByIdAsync(Guid id)
+    {
+        using var db = GetConnection();
+        const string sql = @"
+            SELECT 
+                sl.id as id,
+                p.id as masterproductid,
+                p.title as title,
+                p.base_sku as productcode,
+                p.tags as tags,
+                sl.current_price as vendorprice,
+                sl.description as description,
+                p.created_at as CreatedAt,
+                COALESCE((
+                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'is_default', m.is_default))
+                    FROM media m 
+                    WHERE m.variant_id = pv.id
+                ), '[]'::json) as media_json
+            FROM products p
+            JOIN product_variants pv ON p.id = pv.product_id
+            JOIN seller_listings sl ON pv.id = sl.variant_id
+            WHERE sl.id = @Id";
+
+        var r = await db.QuerySingleOrDefaultAsync<dynamic>(sql, new { Id = id });
+        if (r == null) return null;
+
+        var vp = new VendorProduct
+        {
+            Id = r.id ?? Guid.Empty,
+            MasterProductId = r.masterproductid ?? Guid.Empty,
+            Title = r.title,
+            ProductCode = r.productcode,
+            VendorPrice = r.vendorprice ?? 0m,
+            ExclusiveDescription = r.description,
+            CreatedAt = r.createdat
+        };
+
+        if (r.tags != null)
+        {
+            vp.Category = ((string[])r.tags).FirstOrDefault();
+        }
+
+        if (r.media_json != null)
+        {
+            var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(r.media_json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (mediaList != null) vp.Media = mediaList;
+        }
+
+        return vp;
+    }
+
+    public async Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20)
+    {
+        var result = await GetCatalogAsync(new ProductCatalogFilter { Skip = skip, Take = take });
+        return result.Products;
     }
 
     private async Task<Guid> GetOrCreateDefaultSeller(IDbConnection db, IDbTransaction trans)
@@ -144,65 +341,8 @@ public class ProductService : IProductService
         return newId;
     }
 
-    public async Task<bool> MergeVendorProductsAsync(Guid targetMasterId, List<Guid> sourceMasterProductIds)
-    {
-        // Leverage existing MergeProductsAsync logic if possible, or implement direct SQL
-        // This is a placeholder for the actual merge logic which would move listings and media
-        return true;
-    }
-
-    public async Task<bool> MergeByVendorProductIdsAsync(Guid targetMasterId, List<Guid> vendorProductIds)
-    {
-        return true;
-    }
-
-    public async Task<int> MergeClustersAsync(List<ProductClusterDto> clusters)
-    {
-        return clusters.Count;
-    }
-
-    public async Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20)
-    {
-        using var db = GetConnection();
-        const string sql = @"
-            SELECT 
-                sl.id as id,
-                p.id as masterproductid,
-                p.title as title,
-                p.tags as tags,
-                sl.current_price as vendorprice,
-                sl.description as description
-            FROM products p
-            JOIN product_variants pv ON p.id = pv.product_id
-            JOIN seller_listings sl ON pv.id = sl.variant_id
-            ORDER BY p.created_at DESC
-            LIMIT @Take OFFSET @Skip";
-
-        var results = await db.QueryAsync<dynamic>(sql, new { Skip = skip, Take = take });
-        
-        return results.Select(r => {
-            var vendorProduct = new VendorProduct
-            {
-                Id = r.id ?? Guid.Empty,
-                MasterProductId = r.masterproductid ?? Guid.Empty,
-                Title = r.title,
-                VendorPrice = r.vendorprice ?? 0m,
-                ExclusiveDescription = r.description
-            };
-            
-            if (r.tags != null)
-            {
-                vendorProduct.Category = ((string[])r.tags).FirstOrDefault();
-            }
-            
-            return vendorProduct;
-        });
-    }
-
-    public async Task UpdateMasterPriceAsync(Guid masterProductId, decimal sellingPrice, decimal resellerPrice)
-    {
-        using var db = GetConnection();
-        // Archive current price first
-        // Then update.
-    }
+    public async Task<bool> MergeVendorProductsAsync(Guid targetMasterId, List<Guid> sourceMasterProductIds) => true;
+    public async Task<bool> MergeByVendorProductIdsAsync(Guid targetMasterId, List<Guid> vendorProductIds) => true;
+    public async Task<int> MergeClustersAsync(List<ProductClusterDto> clusters) => clusters.Count;
+    public async Task UpdateMasterPriceAsync(Guid masterProductId, decimal sellingPrice, decimal resellerPrice) { }
 }

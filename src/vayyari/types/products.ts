@@ -14,6 +14,15 @@ export interface VendorProduct {
   vendorPrice: number;
   category?: string;
   exclusiveDescription?: string;
+  productCode: string;
+  media: MediaEntry[];
+  createdAt?: string;
+}
+
+export interface MediaEntry {
+  id: string;
+  path: string;
+  isDefault: boolean;
 }
 
 /**

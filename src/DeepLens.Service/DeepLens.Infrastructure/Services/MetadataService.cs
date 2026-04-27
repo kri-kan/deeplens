@@ -31,7 +31,7 @@ public interface IMetadataService
     Task<Guid> UpsertMediaPreferenceAsync(MediaPreferenceDto dto);
     Task<bool> DeleteMediaPreferenceAsync(Guid id);
     IEnumerable<string> GetRetentionOptions();
-    
+    Task<MediaDto?> GetMediaByIdAsync(Guid id);
 }
 
 public class MetadataService : IMetadataService
@@ -80,6 +80,7 @@ public class MetadataService : IMetadataService
                 INSERT INTO media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, phash, quality_score, status, category, subcategory)
                 VALUES (@Id, @VariantId, @StoragePath, @MediaType, @OriginalFilename, @FileSize, @MimeType, @PHash, @Quality, 0, @Category, @SubCategory)";
             
+            _logger.LogInformation("Saving ingestion media record {MediaId} for variant {VarId} at path {StoragePath}", id, variantId, storagePath);
             await connection.ExecuteAsync(mediaSql, new {
                 Id = id,
                 VariantId = variantId,
@@ -271,10 +272,11 @@ public class MetadataService : IMetadataService
 
     private async Task<Guid> GetOrCreateProduct(IDbConnection db, UploadImageRequest request, IDbTransaction trans)
     {
-        if (!string.IsNullOrEmpty(request.Sku))
+        string? sku = request.Sku;
+        if (!string.IsNullOrEmpty(sku))
         {
             var existingId = await db.QuerySingleOrDefaultAsync<Guid?>(
-                "SELECT id FROM products WHERE base_sku = @Sku", new { Sku = request.Sku }, trans);
+                "SELECT id FROM products WHERE base_sku = @Sku", new { Sku = sku }, trans);
             
             if (existingId.HasValue) 
             {
@@ -286,6 +288,11 @@ public class MetadataService : IMetadataService
                 return existingId.Value;
             }
         }
+        else
+        {
+            var nextVal = await db.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')", null, trans);
+            sku = nextVal.ToString("X3");
+        }
 
         var productId = Guid.NewGuid();
         const string sql = @"
@@ -293,11 +300,18 @@ public class MetadataService : IMetadataService
             VALUES (@Id, @Sku, @Title, @Tags)
             RETURNING id";
         
+        var tags = request.Tags ?? new List<string>();
+        if (!string.IsNullOrEmpty(request.SubCategory) && request.SubCategory != "General")
+        {
+            var tag = request.SubCategory.ToLowerInvariant();
+            if (!tags.Contains(tag)) tags.Add(tag);
+        }
+
         return await db.ExecuteScalarAsync<Guid>(sql, new {
             Id = productId,
-            Sku = request.Sku ?? $"SKU-{Guid.NewGuid().ToString().Substring(0, 8).ToUpper()}",
+            Sku = sku,
             Title = request.Description?.Substring(0, Math.Min(request.Description.Length, 100)) ?? "New Product",
-            Tags = request.Tags?.ToArray() ?? Array.Empty<string>()
+            Tags = tags.ToArray()
         }, trans);
     }
 
@@ -426,6 +440,24 @@ public class MetadataService : IMetadataService
         using var connection = GetConnection();
         const string sql = "UPDATE media SET status = @Status WHERE id = @Id";
         await connection.ExecuteAsync(sql, new { Id = id, Status = status });
+    }
+
+    public async Task<MediaDto?> GetMediaByIdAsync(Guid id)
+    {
+        using var connection = GetConnection();
+        const string sql = @"
+            SELECT i.id, i.storage_path as StoragePath, i.media_type as MediaType, i.status, 
+                   i.width, i.height, i.duration_seconds as DurationSeconds,
+                   i.thumbnail_path as ThumbnailPath, i.preview_path as PreviewPath,
+                   i.mime_type as MimeType,
+                   i.uploaded_at as UploadedAt,
+                   p.base_sku as Sku, p.title as ProductTitle
+            FROM media i
+            LEFT JOIN product_variants v ON i.variant_id = v.id
+            LEFT JOIN products p ON v.product_id = p.id
+            WHERE i.id = @Id";
+
+        return await connection.QuerySingleOrDefaultAsync<MediaDto>(sql, new { Id = id });
     }
 
     public async Task UpdateVideoMetadataAsync(Guid id, decimal duration, string? thumbnailPath, string? previewPath)

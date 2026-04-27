@@ -154,20 +154,24 @@ public class MinioStorageService : IStorageService
 
     public async Task<Stream> GetFileAsync(string storagePath)
     {
-        string bucketName;
-        string objectName;
-        
-        // Handle paths that might or might not include the bucket prefix
+        // Handle paths that include the bucket prefix
         var parts = storagePath.Split('/', 2);
-        if (parts.Length > 1 && (parts[0] == DefaultBucket || parts[0].StartsWith("tenant-")))
+        
+        string bucketName = DefaultBucket;
+        string objectName = storagePath;
+
+        if (parts.Length > 1)
         {
-            bucketName = parts[0];
-            objectName = parts[1];
-        }
-        else
-        {
-            bucketName = DefaultBucket;
-            objectName = storagePath;
+            // Try to see if the first part is a bucket
+            try {
+                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
+                {
+                    bucketName = parts[0];
+                    objectName = parts[1];
+                }
+            } catch {
+                // Fallback to default bucket if check fails
+            }
         }
 
         var memoryStream = new MemoryStream();
@@ -185,18 +189,18 @@ public class MinioStorageService : IStorageService
     public async Task DeleteFileAsync(string storagePath)
     {
         var parts = storagePath.Split('/', 2);
-        string bucketName;
-        string objectName;
+        string bucketName = DefaultBucket;
+        string objectName = storagePath;
 
-        if (parts.Length < 2)
+        if (parts.Length > 1)
         {
-            bucketName = DefaultBucket;
-            objectName = storagePath;
-        }
-        else
-        {
-            bucketName = parts[0];
-            objectName = parts[1];
+            try {
+                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
+                {
+                    bucketName = parts[0];
+                    objectName = parts[1];
+                }
+            } catch { }
         }
 
         var rmArgs = new RemoveObjectArgs()

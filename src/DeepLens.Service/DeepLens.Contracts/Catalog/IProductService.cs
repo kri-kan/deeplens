@@ -15,6 +15,27 @@ public interface IProductService
     Task<int> MergeClustersAsync(List<ProductClusterDto> clusters);
     Task UpdateMasterPriceAsync(Guid masterProductId, decimal sellingPrice, decimal resellerPrice);
     Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20);
+    Task<ProductCatalogResult> GetCatalogAsync(ProductCatalogFilter filter);
+    Task<bool> DeleteProductAsync(Guid productId);
+    Task<bool> StarMediaAsync(Guid productId, Guid mediaId);
+    Task<bool> ReorderMediaAsync(Guid productId, List<Guid> mediaIds);
+    Task<VendorProduct?> GetProductByIdAsync(Guid id);
+}
+
+public class ProductCatalogFilter
+{
+    public string? Category { get; set; }
+    public string? SortBy { get; set; } // recent, price_low, price_high
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public int Skip { get; set; } = 0;
+    public int Take { get; set; } = 20;
+}
+
+public class ProductCatalogResult
+{
+    public IEnumerable<VendorProduct> Products { get; set; } = new List<VendorProduct>();
+    public int TotalCount { get; set; }
 }
 
 public class ProductClusterDto
@@ -32,6 +53,7 @@ public class ProductIngestionDto
     public MediaCategory Category { get; set; } = MediaCategory.Product;
     public string SubCategory { get; set; } = "General";
     public string? Retention { get; set; }
+    public List<string> Tags { get; set; } = new();
 }
 
 public class MediaFileDto

@@ -31,27 +31,27 @@ export const API_ROUTES = {
 
   // Product catalog CRUD (backed by ProductsController)
   PRODUCT_CATALOG: {
-    LIST:   '/api/products',
-    CREATE: '/api/products',
-    MERGE:  '/api/products/merge',
-    GET_BY_ID: (id: string) => `/api/products/${id}`,
+    LIST:   '/api/v1/products',
+    CREATE: '/api/v1/products',
+    MERGE:  '/api/v1/products/merge',
+    GET_BY_ID: (id: string) => `/api/v1/products/${id}`,
   },
 
   // Catalog & Media (legacy search/ingest flow)
   CATALOG: {
-    MEDIA: '/catalog/media',
-    THUMBNAIL: (mediaId: string) => `/catalog/media/${mediaId}/thumbnail`,
-    FAVORITE: (listingId: string) => `/catalog/listings/${listingId}/favorite`,
+    MEDIA: '/api/v1/catalog/media',
+    THUMBNAIL: (mediaId: string) => `/api/v1/catalog/media/${mediaId}/thumbnail`,
+    FAVORITE: (listingId: string) => `/api/v1/catalog/listings/${listingId}/favorite`,
   },
   
   // Media processing & retention settings (Hierarchical)
   MEDIA_SETTINGS: {
-    GET_ALL: '/api/media/settings',
-    UPSERT: '/api/media/settings',
-    DELETE: (id: string) => `/api/media/settings/${id}`,
+    GET_ALL: '/api/v1/media/settings',
+    UPSERT: '/api/v1/media/settings',
+    DELETE: (id: string) => `/api/v1/media/settings/${id}`,
     LOOKUP: (category: string, subCategory?: string) => 
-      `/api/media/settings/lookup?category=${category}${subCategory ? `&subcategory=${subCategory}` : ''}`,
-    RETENTION_OPTIONS: '/api/media/settings/retention-options',
-    SCHEMA: '/api/media/settings/schema',
+      `/api/v1/media/settings/lookup?category=${category}${subCategory ? `&subcategory=${subCategory}` : ''}`,
+    RETENTION_OPTIONS: '/api/v1/media/settings/retention-options',
+    SCHEMA: '/api/v1/media/settings/schema',
   }
 };

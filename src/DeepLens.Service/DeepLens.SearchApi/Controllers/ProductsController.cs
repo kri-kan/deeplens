@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DeepLens.SearchApi.Controllers;
 
 [ApiController]
-[Route("api/products")]
+[Route("api/v1/products")]
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
@@ -31,6 +31,41 @@ public class ProductsController : ControllerBase
     {
         var result = await _productService.GetProductsAsync(skip, take);
         return Ok(result);
+    }
+
+    [HttpGet("catalog")]
+    public async Task<IActionResult> GetCatalog([FromQuery] ProductCatalogFilter filter)
+    {
+        var result = await _productService.GetCatalogAsync(filter);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetProductById(Guid id)
+    {
+        var result = await _productService.GetProductByIdAsync(id);
+        return result != null ? Ok(result) : NotFound();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteProduct(Guid id)
+    {
+        var success = await _productService.DeleteProductAsync(id);
+        return success ? Ok() : NotFound();
+    }
+
+    [HttpPost("{id}/star/{mediaId}")]
+    public async Task<IActionResult> StarMedia(Guid id, Guid mediaId)
+    {
+        var success = await _productService.StarMediaAsync(id, mediaId);
+        return success ? Ok() : BadRequest();
+    }
+
+    [HttpPost("{id}/reorder")]
+    public async Task<IActionResult> ReorderMedia(Guid id, [FromBody] List<Guid> mediaIds)
+    {
+        var success = await _productService.ReorderMediaAsync(id, mediaIds);
+        return success ? Ok() : BadRequest();
     }
 
     [HttpPost]
@@ -62,7 +97,9 @@ public class ProductsController : ControllerBase
             Description = request.Description,
             MasterTitle = request.Title,
             Retention = request.Retention,
-            Category = Enum.TryParse<MediaCategory>(request.Category, true, out var cat) ? cat : MediaCategory.Product
+            Tags = request.Tags,
+            Category = Enum.TryParse<MediaCategory>(request.Category, true, out var cat) ? cat : MediaCategory.Product,
+            SubCategory = request.SubCategory ?? "General"
         };
 
         var result = await _productService.CreateProductAsync(ingestionDto, mediaFiles);

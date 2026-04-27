@@ -1,23 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
-using DeepLens.SearchApi.Services;
-using DeepLens.Infrastructure.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Caching.Distributed;
+using DeepLens.Contracts.Media;
+using DeepLens.Infrastructure.Services;
+using DeepLens.Contracts.Events;
+using DeepLens.Shared.Common;
+using Confluent.Kafka;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
-using DeepLens.Shared.Common;
-using DeepLens.Contracts.Events;
-using Confluent.Kafka;
 using System.Text.Json;
-using DeepLens.Contracts.Media;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace DeepLens.SearchApi.Controllers;
 
-/// <summary>
-/// Controller for serving media content (images, thumbnails, video previews).
-/// Single-tenant version.
-/// </summary>
 [ApiController]
 [Route("api/v1/catalog/media")]
 public class MediaController : ControllerBase
@@ -40,66 +33,96 @@ public class MediaController : ControllerBase
     }
 
     /// <summary>
-    /// Lists media with pagination and filtering.
+    /// Serves a thumbnail for a media item. If the thumbnail doesn't exist, it is generated on-demand.
     /// </summary>
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<MediaDto>>> ListMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 50, [FromQuery] int? type = null)
+    [HttpGet("{mediaId}/thumbnail")]
+    public async Task<IActionResult> GetThumbnail(Guid mediaId, [FromQuery] string spec = "medium")
     {
-        var media = await _metadataService.ListMediaAsync(page, pageSize, type);
-        return Ok(media);
+        try {
+            var item = await _metadataService.GetMediaByIdAsync(mediaId);
+            if (item == null) {
+                _logger.LogWarning("Media item {MediaId} not found in database.", mediaId);
+                return NotFound();
+            }
+
+            return await ServeThumbnail(item, spec);
+        } catch (Exception ex) {
+            _logger.LogError(ex, "Error fetching thumbnail for {MediaId}", mediaId);
+            return StatusCode(500, "Error processing thumbnail request.");
+        }
     }
 
     /// <summary>
-    /// Serves a thumbnail for the given media with a specific size specification.
+    /// Serves a thumbnail for a media item by its direct storage path.
+    /// Useful when database records are missing or when relying explicitly on physical paths.
     /// </summary>
-    /// <param name="mediaId">Unique media identifier</param>
-    /// <param name="spec">Specification: icon, medium, large (default: medium)</param>
-    [HttpGet("{mediaId}/thumbnail")]
-    [ProducesResponseType(typeof(FileStreamResult), 200)]
-    public async Task<IActionResult> GetThumbnail(Guid mediaId, [FromQuery] string spec = MediaConstants.ThumbnailSpecs.Medium)
+    [HttpGet("thumbnail-by-path")]
+    public async Task<IActionResult> GetThumbnailByPath([FromQuery] string path, [FromQuery] string spec = "medium")
+    {
+        if (string.IsNullOrEmpty(path)) return BadRequest("Path is required.");
+
+        try {
+            // Try to find the item in metadata service if it exists (for ID benefit)
+            // But don't fail if not found, just use the path
+            var item = new MediaDto { 
+                Id = Guid.Empty, 
+                StoragePath = path, 
+                MediaType = path.Contains(".mp4", StringComparison.OrdinalIgnoreCase) ? 2 : 1,
+                MimeType = path.Contains(".mp4", StringComparison.OrdinalIgnoreCase) ? "video/mp4" : "image/jpeg"
+            };
+
+            return await ServeThumbnail(item, spec);
+        } catch (Exception ex) {
+            _logger.LogError(ex, "Error fetching thumbnail by path: {Path}", path);
+            return StatusCode(500, "Error processing path-based thumbnail request.");
+        }
+    }
+
+    private async Task<IActionResult> ServeThumbnail(MediaDto item, string spec)
     {
         // Validate spec
         if (!MediaConstants.ThumbnailSpecs.Presets.ContainsKey(spec)) spec = MediaConstants.ThumbnailSpecs.Medium;
 
-        string cacheKey = $"thumb:{mediaId}:{spec}";
-        byte[]? cachedThumb = await _cache.GetAsync(cacheKey);
-        
-        if (cachedThumb != null)
-        {
-            return File(cachedThumb, MediaConstants.Formats.WebP);
-        }
+        string fileName = Path.GetFileNameWithoutExtension(item.StoragePath);
+        string thumbPath = StoragePathRegistry.GetThumbnailPath(fileName, spec);
+        string cacheKey = $"thumb:path:{item.StoragePath}:{spec}";
 
         try
         {
-            // Note: In an enterprise app, we'd use a single DB lookup for this specific ID
-            var items = await _metadataService.ListMediaAsync(1, 1000); 
-            var item = items.FirstOrDefault(i => i.Id == mediaId);
+            byte[]? cachedThumb = await _cache.GetAsync(cacheKey);
+            if (cachedThumb != null) return File(cachedThumb, MediaConstants.Formats.WebP);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Cache access failed for {Path}: {Msg}", item.StoragePath, ex.Message);
+        }
+
+        _logger.LogInformation("Serving thumbnail for {Path}. Derived thumb path: {ThumbPath}", item.StoragePath, thumbPath);
+
+        try
+        {
+            var thumbStream = await _storageService.GetFileAsync(thumbPath);
+            using var ms = new MemoryStream();
+            await thumbStream.CopyToAsync(ms);
+            byte[] data = ms.ToArray();
             
-            if (item == null) return NotFound();
-
-            // Standardization: We construct the thumbnail path based on the hash (filename) and spec
-            string fileName = Path.GetFileNameWithoutExtension(item.StoragePath);
-            string thumbPath = StoragePathRegistry.GetThumbnailPath(fileName, spec);
-
-            try
-            {
-                using var thumbStream = await _storageService.GetFileAsync(thumbPath);
-                using var ms = new MemoryStream();
-                await thumbStream.CopyToAsync(ms);
-                byte[] data = ms.ToArray();
-                
+            try {
                 await _cache.SetAsync(cacheKey, data, new DistributedCacheEntryOptions {
                     AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
                 });
-
-                return File(data, MediaConstants.Formats.WebP);
+            } catch (Exception ex) {
+                _logger.LogWarning("Failed to update cache for {Path}: {Msg}", item.StoragePath, ex.Message);
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Thumbnail file {Path} not found in storage. Fallback to on-demand generation.", thumbPath);
 
-                if (item.MediaType == 1) // Image
-                {
+            return File(data, MediaConstants.Formats.WebP);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Thumbnail file {ThumbPath} not found or inaccessible. Attempting on-demand generation from {OriginalPath}. Error: {Msg}", thumbPath, item.StoragePath, ex.Message);
+
+            if (item.MediaType == 1) // Image
+            {
+                try {
                     using var rawStream = await _storageService.GetFileAsync(item.StoragePath);
                     using var imageObj = await Image.LoadAsync(rawStream);
                     
@@ -114,26 +137,36 @@ public class MediaController : ControllerBase
                     await imageObj.SaveAsWebpAsync(outMs);
                     byte[] outData = outMs.ToArray();
 
-                    await _cache.SetAsync(cacheKey, outData, new DistributedCacheEntryOptions {
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
-                    });
+                    try {
+                        await _cache.SetAsync(cacheKey, outData, new DistributedCacheEntryOptions {
+                            AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
+                        });
+                    } catch { }
 
-                    // Optional: Proactively upload to MinIO to avoid future generations
+                    // Proactively upload to MinIO
                     try {
                         outMs.Position = 0;
                         await _storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP);
-                    } catch { /* Suppress upload errors in delivery path */ }
+                    } catch (Exception uploadEx) { 
+                        _logger.LogWarning("Failed to proactively upload generated thumbnail for {Path}: {Msg}", item.StoragePath, uploadEx.Message);
+                    }
 
                     return File(outData, MediaConstants.Formats.WebP);
+                } catch (Exception genEx) {
+                    _logger.LogError(genEx, "Failed to generate thumbnail on-demand for {Path}", item.StoragePath);
+                    
+                    // Final fallback: serve the original content if generation failed but file exists
+                    try {
+                        var originalStream = await _storageService.GetFileAsync(item.StoragePath);
+                        return File(originalStream, item.MimeType ?? "image/jpeg");
+                    } catch (Exception originalEx) {
+                        _logger.LogError(originalEx, "Final fallback failed for {Path}", item.StoragePath);
+                        return NotFound($"Media content unavailable: {item.StoragePath}");
+                    }
                 }
-                
-                return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error serving thumbnail for {MediaId} (Spec: {Spec})", mediaId, spec);
-            return StatusCode(500);
+            
+            return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
         }
     }
 
@@ -144,17 +177,16 @@ public class MediaController : ControllerBase
     public async Task<IActionResult> GetPreview(Guid mediaId)
     {
         string cacheKey = $"preview:{mediaId}";
-        byte[]? cachedPreview = await _cache.GetAsync(cacheKey);
-        
-        if (cachedPreview != null)
-        {
-            return File(cachedPreview, "image/gif");
+        try {
+            byte[]? cachedPreview = await _cache.GetAsync(cacheKey);
+            if (cachedPreview != null) return File(cachedPreview, "image/gif");
+        } catch (Exception ex) {
+             _logger.LogWarning("Preview cache access failed for {MediaId}: {Msg}", mediaId, ex.Message);
         }
 
         try
         {
-            var items = await _metadataService.ListMediaAsync(1, 1000); 
-            var item = items.FirstOrDefault(i => i.Id == mediaId);
+            var item = await _metadataService.GetMediaByIdAsync(mediaId);
             
             if (item == null || item.MediaType != 2) return NotFound("Video media not found.");
             if (string.IsNullOrEmpty(item.PreviewPath)) return NotFound("Preview GIF not yet generated.");
@@ -164,9 +196,11 @@ public class MediaController : ControllerBase
             await previewStream.CopyToAsync(ms);
             byte[] data = ms.ToArray();
             
-            await _cache.SetAsync(cacheKey, data, new DistributedCacheEntryOptions {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
-            });
+            try {
+                await _cache.SetAsync(cacheKey, data, new DistributedCacheEntryOptions {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+                });
+            } catch { }
 
             return File(data, "image/gif");
         }
@@ -185,9 +219,7 @@ public class MediaController : ControllerBase
     {
         try
         {
-            var items = await _metadataService.ListMediaAsync(1, 1000); 
-            var item = items.FirstOrDefault(i => i.Id == mediaId);
-            
+            var item = await _metadataService.GetMediaByIdAsync(mediaId);
             if (item == null) return NotFound();
 
             var stream = await _storageService.GetFileAsync(item.StoragePath);
@@ -210,8 +242,7 @@ public class MediaController : ControllerBase
     {
         try
         {
-            var items = await _metadataService.ListMediaAsync(1, 1000); 
-            var item = items.FirstOrDefault(i => i.Id == mediaId);
+            var item = await _metadataService.GetMediaByIdAsync(mediaId);
             if (item == null) return NotFound();
 
             var evt = new ImageDeletionRequestedEvent

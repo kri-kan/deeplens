@@ -11,11 +11,16 @@ public class VendorProduct
     public string? ExclusiveDescription { get; set; }
     public string? Category { get; set; }
     public string? Title { get; set; }
+    public string? ProductCode { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // References to the Master media IDs (maps vendor-specific keys to MediaRegistry IDs)
+    public List<MediaEntry> Media { get; set; } = new();
     public Dictionary<string, Guid> MediaMap { get; set; } = new();
+}
 
-    // Navigation
-    public MasterProduct? MasterProduct { get; set; }
+public class MediaEntry
+{
+    public Guid Id { get; set; }
+    public string? Path { get; set; }
+    public bool IsDefault { get; set; }
 }

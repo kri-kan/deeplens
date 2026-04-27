@@ -30,7 +30,8 @@ const PRODUCT_UTILITIES: UtilityItem[] = [
 
 const SYSTEM_UTILITIES: UtilityItem[] = [
   { id: 'media-settings', title: 'Media Settings', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722' },
-  { id: 'app-config', title: 'App Config', icon: 'cog-outline', route: '', color: '#999' },
+  { id: 'scraper-creds', title: 'Scraper Creds', icon: 'account-key-outline', route: '/utilities/scraper-settings', color: '#00bcd4' },
+  { id: 'insta-explorer', title: 'Instagram Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C' },
 ];
 
 export default function UtilityScreen() {

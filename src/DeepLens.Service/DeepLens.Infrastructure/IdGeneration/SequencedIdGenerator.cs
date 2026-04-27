@@ -25,13 +25,7 @@ public class SequencedIdGenerator : ISequencedIdGenerator
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var nextValue = await connection.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')");
         
-        string suffix = ToBase36(nextValue, 0); 
-        if (suffix.Length < 3)
-        {
-            suffix = suffix.PadLeft(3, '0');
-        }
-        
-        return $"VF{suffix}";
+        return nextValue.ToString("X3");
     }
 
     private static string ToBase36(long value, int minLength)
