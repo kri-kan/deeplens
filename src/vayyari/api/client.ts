@@ -182,8 +182,6 @@ export const productMgmtApiClient = new ApiClient(
   async () => await AsyncStorage.getItem('auth_token')
 );
 
-export const instagramApiClient = undefined; // Removed — Python sidecar replaced by Meta Graph API
-
 export const competitorApiClient = new ApiClient(
   process.env.EXPO_PUBLIC_COMPETITOR_API_URL || 'http://192.168.0.170:8006'
 );

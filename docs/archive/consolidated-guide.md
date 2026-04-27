@@ -184,7 +184,6 @@ Last Updated: December 20, 2025
 | **5000** | Search API   | Image Upload & Search       |
 | **5001** | Web UI       | React Frontend              |
 | **8001** | Feature Ext. | Python AI Microservice      |
-| **8005** | Instagram.   | Instagram Sidecar Service   |
 
 ### WhatsApp Processor
 | Port     | Service      | Description               |
@@ -1026,16 +1025,6 @@ Use the [OIDC Debugger](https://oidcdebugger.com/) or the built-in Swagger UI at
 ## 🚗 Sidecar Services
 
 Sidecars are lightweight, synchronous services that extend the platform's capabilities with external integrations.
-
-### Instagram Sidecar Service
-- **Service Name**: `instagram-sidecar`
-- **Port**: `8005`
-- **Technology**: Python 3.11 / FastAPI / Instaloader
-- **Purpose**: Provides a unified API for retrieving public Instagram profile and post metadata without requiring complex scrapers for standard lookups.
-- **Key Endpoints**:
-    - `GET /profile/{username}`: Metadata for any public profile.
-    - `GET /profile/{username}/posts`: Recent posts (shortcode, caption, media URLs).
-- **Rate Limiting**: Implementation relies on `instaloader` internal sleep mechanisms. Public endpoint usage only.
 
 
 ---

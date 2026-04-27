@@ -167,7 +167,6 @@ Last Updated: December 20, 2025
 | **5000** | Search API   | Image Upload & Search       |
 | **5001** | Web UI       | React Frontend              |
 | **8001** | Feature Ext. | Python AI Microservice      |
-| **8005** | Instagram.   | Instagram Sidecar Service   |
 
 ### WhatsApp Processor
 | Port     | Service      | Description               |
