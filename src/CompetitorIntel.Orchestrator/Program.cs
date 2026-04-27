@@ -21,7 +21,8 @@ builder.Services.AddDbContext<CompetitorContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
            .UseSnakeCaseNamingConvention());
 
-// Meta Graph API Services
+// Meta Graph API & App Settings Services
+builder.Services.AddSingleton<AppSettingsService>();
 builder.Services.AddSingleton<MetaGraphService>();
 builder.Services.AddHostedService<InstagramSyncService>();
 
@@ -41,6 +42,13 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Run DB seeding (idempotent, creates `app_settings` if missing)
+using (var scope = app.Services.CreateScope())
+{
+    var settingsService = scope.ServiceProvider.GetRequiredService<AppSettingsService>();
+    settingsService.SeedDefaultsAsync().GetAwaiter().GetResult();
+}
 
 app.UseCors("AllowAll");
 

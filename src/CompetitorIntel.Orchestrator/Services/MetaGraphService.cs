@@ -5,7 +5,7 @@ namespace CompetitorIntel.Orchestrator.Services
 {
     /// <summary>
     /// Strongly-typed config for the Meta Graph API.
-    /// Values come from appsettings.json / environment variables (Meta__AccessToken etc.)
+    /// Values come from the app_settings DB table, falling back to appsettings.json.
     /// </summary>
     public class MetaOptions
     {
@@ -154,20 +154,49 @@ namespace CompetitorIntel.Orchestrator.Services
         private readonly ILogger<MetaGraphService> _logger;
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
+        private readonly AppSettingsService _appSettings;
         private MetaOptions _opts;
 
         public MetaGraphService(
             ILogger<MetaGraphService> logger,
             IConfiguration configuration,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            AppSettingsService appSettings)
         {
             _logger = logger;
             _configuration = configuration;
             _httpClient = httpClientFactory.CreateClient("MetaGraph");
-            _opts = LoadOptions();
+            _appSettings = appSettings;
+            _opts = LoadOptionsFromConfig(); // Sync load at startup; DB override is loaded async
         }
 
-        private MetaOptions LoadOptions()
+        /// <summary>
+        /// Reload Meta credentials from DB. Called by InstagramSyncService at the
+        /// start of each cycle so live token updates are picked up without restart.
+        /// </summary>
+        public async Task ReloadFromDbAsync()
+        {
+            var opts = LoadOptionsFromConfig(); // Start with appsettings baseline
+
+            // DB values override appsettings (if non-empty)
+            async Task Override(string key, Action<string> apply)
+            {
+                var v = await _appSettings.GetRawAsync(key);
+                if (!string.IsNullOrWhiteSpace(v)) apply(v);
+            }
+
+            await Override("Meta:AppId",                  v => opts.AppId = v);
+            await Override("Meta:AppSecret",              v => opts.AppSecret = v);
+            await Override("Meta:IgBizId",                v => opts.IgBizId = v);
+            await Override("Meta:AccessToken",            v => opts.AccessToken = v);
+            await Override("Meta:SyncIntervalMinutes",    v => { if (int.TryParse(v, out var i)) opts.SyncIntervalMinutes = i; });
+            await Override("Meta:EngagementRefreshLimit", v => { if (int.TryParse(v, out var i)) opts.EngagementRefreshLimit = i; });
+            await Override("Meta:TokenLastRefreshed",     v => { if (DateTime.TryParse(v, out var d)) opts.TokenLastRefreshed = d.ToUniversalTime(); });
+
+            _opts = opts;
+        }
+
+        private MetaOptions LoadOptionsFromConfig()
         {
             var opts = new MetaOptions();
             _configuration.GetSection("Meta").Bind(opts);
@@ -219,11 +248,14 @@ namespace CompetitorIntel.Orchestrator.Services
 
                 if (!string.IsNullOrEmpty(result?.AccessToken))
                 {
-                    // Persist new token + reset timestamp in config (runtime only; 
-                    // on-disk update requires the operator to copy the token to env vars)
                     _opts.AccessToken = result.AccessToken;
                     _opts.TokenLastRefreshed = DateTime.UtcNow;
-                    _logger.LogInformation("Token refreshed successfully. Expires in {Days} days.", result.ExpiresIn / 86400);
+
+                    // Persist to DB so the new token survives a restart
+                    await _appSettings.UpsertAsync("Meta:AccessToken", result.AccessToken);
+                    await _appSettings.UpsertAsync("Meta:TokenLastRefreshed", _opts.TokenLastRefreshed.ToString("O"));
+
+                    _logger.LogInformation("Token refreshed and persisted to DB. Expires in {Days} days.", result.ExpiresIn / 86400);
                     return true;
                 }
 

@@ -52,6 +52,9 @@ namespace CompetitorIntel.Orchestrator.Services
 
         private async Task RunSyncCycleAsync(CancellationToken ct)
         {
+            // ── Step 0: Reload Configuration from DB ──────────────────────────
+            await _graph.ReloadFromDbAsync();
+
             // ── Step 1: Token Health ──────────────────────────────────────────
             var health = _graph.GetTokenHealth();
             if (health.IsExpired)

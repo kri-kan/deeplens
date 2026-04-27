@@ -14,6 +14,7 @@ namespace CompetitorIntel.Orchestrator.Data
         public DbSet<ScraperJobActive> ActiveJobs { get; set; }
         public DbSet<ScraperJobHistory> JobHistory { get; set; }
         public DbSet<CompetitorPost> Posts { get; set; }
+        public DbSet<AppSetting> AppSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -39,6 +40,13 @@ namespace CompetitorIntel.Orchestrator.Data
             modelBuilder.Entity<CompetitorPost>()
                 .HasIndex(p => new { p.Platform, p.PlatformPostId })
                 .IsUnique();
+
+            // AppSetting has a string PK — tell EF not to auto-generate it
+            modelBuilder.Entity<AppSetting>()
+                .HasKey(s => s.Key);
+            modelBuilder.Entity<AppSetting>()
+                .Property(s => s.Key)
+                .ValueGeneratedNever();
         }
     }
 }
