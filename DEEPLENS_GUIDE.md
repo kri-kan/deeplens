@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-04-23 06:22:34
+**Auto-generated on:** 2026-04-27 17:15:50
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -167,6 +167,7 @@ Last Updated: December 20, 2025
 | **5000** | Search API   | Image Upload & Search       |
 | **5001** | Web UI       | React Frontend              |
 | **8001** | Feature Ext. | Python AI Microservice      |
+| **8006** | Competitor Orchestrator | Meta Graph API sync & competitor intel |
 
 ### WhatsApp Processor
 | Port     | Service      | Description               |
