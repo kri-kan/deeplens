@@ -13,6 +13,7 @@ namespace CompetitorIntel.Orchestrator.Data
         public DbSet<FollowerSnapshot> FollowerSnapshots { get; set; }
         public DbSet<ScraperJobActive> ActiveJobs { get; set; }
         public DbSet<ScraperJobHistory> JobHistory { get; set; }
+        public DbSet<CompetitorPost> Posts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -29,6 +30,15 @@ namespace CompetitorIntel.Orchestrator.Data
                 .HasOne(j => j.Watchlist)
                 .WithMany()
                 .HasForeignKey(j => j.WatchlistId);
+
+            modelBuilder.Entity<CompetitorPost>()
+                .HasOne(p => p.Watchlist)
+                .WithMany()
+                .HasForeignKey(p => p.WatchlistId);
+
+            modelBuilder.Entity<CompetitorPost>()
+                .HasIndex(p => new { p.Platform, p.PlatformPostId })
+                .IsUnique();
         }
     }
 }

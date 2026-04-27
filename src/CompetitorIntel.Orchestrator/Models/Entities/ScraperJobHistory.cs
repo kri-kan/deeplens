@@ -43,8 +43,7 @@ namespace CompetitorIntel.Orchestrator.Models.Entities
         [Column("error_message")]
         public string? ErrorMessage { get; set; }
 
-        [Column("metadata")]
-        [Column(TypeName = "jsonb")]
+        [Column("metadata", TypeName = "jsonb")]
         public string? Metadata { get; set; }
 
         // Navigation

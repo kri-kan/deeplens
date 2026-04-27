@@ -1,5 +1,6 @@
 using CompetitorIntel.Orchestrator.Data;
 using CompetitorIntel.Orchestrator.Models.Entities;
+using CompetitorIntel.Orchestrator.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,10 +11,12 @@ namespace CompetitorIntel.Orchestrator.Controllers
     public class ScraperManagerController : ControllerBase
     {
         private readonly CompetitorContext _context;
+        private readonly MetaGraphService _graph;
 
-        public ScraperManagerController(CompetitorContext context)
+        public ScraperManagerController(CompetitorContext context, MetaGraphService graph)
         {
             _context = context;
+            _graph = graph;
         }
 
         [HttpGet("active")]
@@ -114,8 +117,7 @@ namespace CompetitorIntel.Orchestrator.Controllers
         [HttpPost("heal")]
         public async Task<IActionResult> HealQueue()
         {
-            // Self-healing logic ported to C#
-            // 1. Remove jobs for disabled profiles
+            // Remove jobs for disabled profiles
             var disabledProfileIds = await _context.Competitors
                 .Where(c => !c.IsActive)
                 .Select(c => c.Id)
@@ -126,38 +128,39 @@ namespace CompetitorIntel.Orchestrator.Controllers
                 .ToListAsync();
 
             if (orphanedJobs.Any())
-            {
                 _context.ActiveJobs.RemoveRange(orphanedJobs);
-            }
-
-            // 2. Add missing jobs for enabled profiles
-            var enabledProfiles = await _context.Competitors
-                .Where(c => c.IsActive)
-                .ToListAsync();
-
-            var activeJobWatchlistIds = await _context.ActiveJobs
-                .Select(j => j.WatchlistId)
-                .Distinct()
-                .ToListAsync();
-
-            int addedCount = 0;
-            foreach (var profile in enabledProfiles)
-            {
-                if (!activeJobWatchlistIds.Contains(profile.Id))
-                {
-                    _context.ActiveJobs.Add(new ScraperJobActive
-                    {
-                        WatchlistId = profile.Id,
-                        JobType = "routine",
-                        Origin = "SYSTEM",
-                        NextRunAt = DateTime.UtcNow
-                    });
-                    addedCount++;
-                }
-            }
 
             await _context.SaveChangesAsync();
-            return Ok(new { Healed = addedCount, Pruned = orphanedJobs.Count });
+            return Ok(new { Pruned = orphanedJobs.Count });
+        }
+
+        // ── Token Management ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns the health of the Meta long-lived access token.
+        /// DaysRemaining < 10 means action is required.
+        /// </summary>
+        [HttpGet("token")]
+        public IActionResult GetTokenHealth()
+        {
+            var health = _graph.GetTokenHealth();
+            return Ok(health);
+        }
+
+        /// <summary>
+        /// Manually triggers a token refresh via graph.instagram.com.
+        /// Useful when the automatic 50-day threshold hasn't been hit yet
+        /// but you want to refresh ahead of a deployment.
+        /// </summary>
+        [HttpPost("token/refresh")]
+        public async Task<IActionResult> RefreshToken()
+        {
+            var success = await _graph.RefreshTokenAsync();
+            if (!success)
+                return StatusCode(502, new { message = "Token refresh failed. Check logs." });
+
+            var health = _graph.GetTokenHealth();
+            return Ok(new { message = "Token refreshed successfully.", health });
         }
     }
 
