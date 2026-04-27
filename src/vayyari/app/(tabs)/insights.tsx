@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Surface, Text, Appbar, useTheme, List, Divider } from 'react-native-paper';
+import { Surface, Text, Appbar, useTheme, Icon } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 
 export default function InsightsScreen() {
@@ -15,25 +15,17 @@ export default function InsightsScreen() {
       </Appbar.Header>
 
       <View style={styles.content}>
-        <Text variant="titleLarge" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 20 }}>Intelligence Center</Text>
-        
-        <Surface style={styles.menuCard} elevation={1}>
-          <List.Item
-            title="Instagram Explorer"
-            description="View tracked profile metadata and posts"
-            left={props => <List.Icon {...props} icon="instagram" color="#E1306C" />}
-            onPress={() => router.push('/utilities/instagram-explorer')}
-            right={props => <List.Icon {...props} icon="chevron-right" />}
-          />
-          <Divider />
-          <List.Item
-            title="Competitor Scraper"
-            description="Manually sync fresh profile data"
-            left={props => <List.Icon {...props} icon="database-search" color={theme.colors.primary} />}
-            onPress={() => router.push('/utilities/instagram-scraper')}
-            right={props => <List.Icon {...props} icon="chevron-right" />}
-          />
-        </Surface>
+        <Icon source="chart-line" size={64} color={theme.colors.outlineVariant} />
+        <Text variant="titleLarge" style={{ color: theme.colors.onSurfaceVariant, marginTop: 16, fontWeight: 'bold' }}>
+          Intelligence Center
+        </Text>
+        <Text variant="bodyMedium" style={{ color: theme.colors.outlineVariant, marginTop: 8, textAlign: 'center' }}>
+          Business analytics and insights are coming here.{'\n\n'}
+          For competitor tracking, use the{'\n'}
+          <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>IG Explorer</Text> and{' '}
+          <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>Graph API Sync</Text>{'\n'}
+          tools in Utilities → System Utilities.
+        </Text>
       </View>
     </Surface>
   );
@@ -47,11 +39,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
-  },
-  menuCard: {
-    width: '100%',
-    borderRadius: 12,
-    overflow: 'hidden',
+    padding: 32,
   },
 });
