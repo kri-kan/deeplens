@@ -270,6 +270,54 @@ namespace CompetitorIntel.Orchestrator.Services
         }
 
         /// <summary>
+        /// Exchanges a short-lived user access token for a long-lived access token.
+        /// </summary>
+        public async Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken)
+        {
+            try
+            {
+                var url = $"{_opts.BaseUrl}/{_opts.ApiVersion}/oauth/access_token" +
+                          $"?grant_type=fb_exchange_token" +
+                          $"&client_id={_opts.AppId}" +
+                          $"&client_secret={_opts.AppSecret}" +
+                          $"&fb_exchange_token={shortLivedToken}";
+
+                _logger.LogInformation("Exchanging short-lived token for long-lived Meta token...");
+                var response = await _httpClient.GetAsync(url);
+                var body = await response.Content.ReadAsStringAsync();
+
+                var result = JsonSerializer.Deserialize<GraphTokenRefreshResponse>(body);
+
+                if (result?.Error != null)
+                {
+                    _logger.LogError("Token exchange failed: {Msg}", result.Error.Message);
+                    return null;
+                }
+
+                if (!string.IsNullOrEmpty(result?.AccessToken))
+                {
+                    _opts.AccessToken = result.AccessToken;
+                    _opts.TokenLastRefreshed = DateTime.UtcNow;
+
+                    // Persist to DB so the new token survives a restart
+                    await _appSettings.UpsertAsync("Meta:AccessToken", result.AccessToken);
+                    await _appSettings.UpsertAsync("Meta:TokenLastRefreshed", _opts.TokenLastRefreshed.ToString("O"));
+
+                    _logger.LogInformation("Token exchanged and persisted to DB. Expires in {Days} days.", result.ExpiresIn / 86400);
+                    return result.AccessToken;
+                }
+
+                _logger.LogError("Token exchange returned empty token. Response: {Body}", body);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception during token exchange");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Step 3A: Business Discovery profile fetch.
         /// Returns follower count, media count, bio.
         /// </summary>
