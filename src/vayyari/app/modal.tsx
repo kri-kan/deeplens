@@ -96,8 +96,18 @@ export default function ModalScreen() {
     if (isEditing) {
       return (
         <View key={setting.key} style={styles.editContainer}>
-          <Text variant="labelMedium" style={{ fontWeight: 'bold', marginBottom: 4 }}>{setting.label}</Text>
-          <Text variant="bodySmall" style={{ marginBottom: 12, color: theme.colors.outline }}>{setting.description}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>{setting.label}</Text>
+            {setting.description ? (
+              <IconButton 
+                icon="information-outline"
+                size={18}
+                style={{ margin: 0, marginLeft: 8 }}
+                iconColor={theme.colors.outline}
+                onPress={() => Alert.alert(setting.label, setting.description!)}
+              />
+            ) : null}
+          </View>
           
           <TextInput
             mode="outlined"
@@ -130,16 +140,27 @@ export default function ModalScreen() {
         key={setting.key}
         title={setting.label}
         titleStyle={{ fontWeight: '600' }}
-        description={`${displayValue}\n${setting.description || ''}`}
-        descriptionNumberOfLines={3}
+        description={displayValue}
+        descriptionNumberOfLines={1}
         descriptionStyle={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
         right={props => (
-          <IconButton 
-            {...props} 
-            icon="pencil-outline" 
-            onPress={() => startEdit(setting)}
-            disabled={setting.dataType === 'datetime'} // read-only check
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {setting.description ? (
+              <IconButton 
+                icon="information-outline" 
+                iconColor={theme.colors.outline}
+                size={22}
+                onPress={() => Alert.alert(setting.label, setting.description!)}
+              />
+            ) : null}
+            <IconButton 
+              icon="pencil-outline" 
+              iconColor={props.color}
+              size={24}
+              onPress={() => startEdit(setting)}
+              disabled={setting.dataType === 'datetime'} // read-only check
+            />
+          </View>
         )}
       />
     );

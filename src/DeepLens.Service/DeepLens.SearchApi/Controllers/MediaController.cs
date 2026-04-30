@@ -35,7 +35,7 @@ public class MediaController : ControllerBase
     /// <summary>
     /// Serves a thumbnail for a media item. If the thumbnail doesn't exist, it is generated on-demand.
     /// </summary>
-    [HttpGet("{mediaId}/thumbnail")]
+    [HttpGet("{mediaId:guid}/thumbnail")]
     public async Task<IActionResult> GetThumbnail(Guid mediaId, [FromQuery] string spec = "medium")
     {
         try {
@@ -173,7 +173,7 @@ public class MediaController : ControllerBase
     /// <summary>
     /// Serves a short GIF preview for video media.
     /// </summary>
-    [HttpGet("{mediaId}/preview")]
+    [HttpGet("{mediaId:guid}/preview")]
     public async Task<IActionResult> GetPreview(Guid mediaId)
     {
         string cacheKey = $"preview:{mediaId}";
@@ -214,7 +214,7 @@ public class MediaController : ControllerBase
     /// <summary>
     /// Serves the original high-quality media file.
     /// </summary>
-    [HttpGet("{mediaId}/raw")]
+    [HttpGet("{mediaId:guid}/raw")]
     public async Task<IActionResult> GetRawMedia(Guid mediaId)
     {
         try
@@ -237,7 +237,7 @@ public class MediaController : ControllerBase
     /// <summary>
     /// Deletes a media item and all its associated thumbnails.
     /// </summary>
-    [HttpDelete("{mediaId}")]
+    [HttpDelete("{mediaId:guid}")]
     public async Task<IActionResult> DeleteMedia(Guid mediaId)
     {
         try

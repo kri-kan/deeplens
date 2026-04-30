@@ -1,4 +1,4 @@
-import competitorApiClient from '../api/client';
+import { competitorApiClient } from '../api/client';
 
 export interface AppSetting {
   key: string;
@@ -15,12 +15,12 @@ export type AppSettingsGrouped = Record<string, AppSetting[]>;
 class AppSettingsService {
   async getAll(): Promise<AppSettingsGrouped> {
     const response = await competitorApiClient.get<AppSettingsGrouped>('/api/AppSettings');
-    return response.data;
+    return response || {};
   }
 
   async getSection(section: string): Promise<AppSetting[]> {
     const response = await competitorApiClient.get<AppSetting[]>(`/api/AppSettings/${section}`);
-    return response.data;
+    return response || [];
   }
 
   async update(key: string, value: string): Promise<AppSetting> {
@@ -29,7 +29,7 @@ class AppSettingsService {
       `/api/AppSettings/${encodeURIComponent(key)}`,
       { value }
     );
-    return response.data.setting;
+    return response.setting;
   }
 
   async seed(): Promise<void> {

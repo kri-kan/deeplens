@@ -127,13 +127,18 @@ function CategoryPage({ categoryId }: { categoryId: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   const fetchProducts = useCallback(async (isRefresh = false) => {
     if (loading && !isRefresh) return;
     if (!hasMore && !isRefresh) return;
+    if (error && !isRefresh) return;
     
-    if (isRefresh) setRefreshing(true);
+    if (isRefresh) {
+      setRefreshing(true);
+      setError(null);
+    }
     else setLoading(true);
 
     try {
@@ -152,13 +157,14 @@ function CategoryPage({ categoryId }: { categoryId: string }) {
         setHasMore(updated.length < totalCount && newData.length > 0);
         return updated;
       });
-    } catch (error) {
-      console.error('Failed to fetch products:', error);
+    } catch (err) {
+      console.error('Failed to fetch products:', err);
+      setError('Failed to load products');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [categoryId, products.length, loading, hasMore]);
+  }, [categoryId, products.length, loading, hasMore, error]);
 
   useEffect(() => {
     fetchProducts(true);
@@ -213,7 +219,9 @@ function CategoryPage({ categoryId }: { categoryId: string }) {
         ListFooterComponent={loading && !refreshing ? <ActivityIndicator style={{ margin: 20 }} /> : null}
         ListEmptyComponent={!loading ? (
           <View style={styles.emptyContainer}>
-            <Text variant="bodyMedium" style={{ opacity: 0.5 }}>No products found</Text>
+            <Text variant="bodyMedium" style={{ opacity: 0.5 }}>
+              {error ? error : 'No products found'}
+            </Text>
           </View>
         ) : null}
       />
