@@ -1,13 +1,25 @@
 using DeepLens.WorkerService;
 using DeepLens.WorkerService.Workers;
 using DeepLens.Infrastructure.Services;
+using DeepLens.Application.Abstractions.Services;
+using DeepLens.Application;
+using DeepLens.Infrastructure;
 using Minio;
 using Confluent.Kafka;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 // External Services
+builder.Services.AddMemoryCache();
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+    options.InstanceName = "DeepLens_";
+});
+
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<IMetaGraphService, MetaGraphService>();
+builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService>();
 builder.Services.AddHttpClient<IVectorStoreService, VectorStoreService>();
 
 // MinIO Setup
@@ -33,7 +45,11 @@ builder.Services.AddSingleton<IProducer<string, string>>(sp =>
     return new ProducerBuilder<string, string>(kafkaConfig).Build();
 });
 
-// Infrastructure Drivers
+// Enterprise Layering
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure();
+
+// Infrastructure Drivers (Remaining overrides or specialized worker services)
 builder.Services.AddScoped<IStorageService, MinioStorageService>();
 builder.Services.AddScoped<IVectorStoreService, VectorStoreService>();
 builder.Services.AddScoped<IMetadataService, MetadataService>();
@@ -45,6 +61,7 @@ builder.Services.AddHostedService<VideoProcessingWorker>();
 builder.Services.AddHostedService<FeatureExtractionWorker>();
 builder.Services.AddHostedService<VectorIndexingWorker>();
 builder.Services.AddHostedService<ImageMaintenanceWorker>();
+builder.Services.AddHostedService<InstagramSyncWorker>();
 
 var host = builder.Build();
 host.Run();

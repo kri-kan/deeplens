@@ -47,8 +47,7 @@ public class MigrationRunner
         var allMigrations = new List<string>
         {
             "001_InitialSchema.sql",
-            "002_AddTenantSettings.sql",
-            "003_CompetitorIntelligence.sql"
+            "002_AddTenantSettings.sql"
         };
 
         await using var connection = new NpgsqlConnection(_connectionString);

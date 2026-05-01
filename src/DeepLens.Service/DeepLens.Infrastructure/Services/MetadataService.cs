@@ -71,7 +71,7 @@ public class MetadataService : IMetadataService
 
         try
         {
-            var sellerId = await GetOrCreateSeller(connection, request.SellerId, transaction);
+            var vendorId = await GetOrCreateVendor(connection, request.SellerId, transaction);
             var productId = await GetOrCreateProduct(connection, request, transaction);
             var variantId = await GetOrCreateVariant(connection, productId, request, transaction);
 
@@ -95,7 +95,7 @@ public class MetadataService : IMetadataService
                 SubCategory = request.SubCategory?.ToLowerInvariant()
             }, transaction);
 
-            await UpsertSellerListing(connection, variantId, sellerId, request, transaction);
+            await UpsertVendorListing(connection, variantId, vendorId, request, transaction);
 
             transaction.Commit();
         }
@@ -110,7 +110,7 @@ public class MetadataService : IMetadataService
     public async Task SetFavoriteListingAsync(Guid listingId, bool isFavorite)
     {
         using var db = GetConnection();
-        await db.ExecuteAsync("UPDATE seller_listings SET is_favorite = @IsFavorite WHERE id = @Id", new { IsFavorite = isFavorite, Id = listingId });
+        await db.ExecuteAsync("UPDATE vendor_listings SET is_favorite = @IsFavorite WHERE id = @Id", new { IsFavorite = isFavorite, Id = listingId });
     }
 
     public async Task SetDefaultMediaAsync(Guid id, bool isDefault)
@@ -189,25 +189,25 @@ public class MetadataService : IMetadataService
     private async Task MergeListings(IDbConnection db, Guid sourceVarId, Guid targetVarId, IDbTransaction trans)
     {
         var sourceListings = await db.QueryAsync<dynamic>(
-            "SELECT id, seller_id, current_price, currency, description FROM seller_listings WHERE variant_id = @Id", 
+            "SELECT id, vendor_id as seller_id, current_price, currency, description FROM vendor_listings WHERE variant_id = @Id", 
             new { Id = sourceVarId }, trans);
 
         foreach (var sl in sourceListings)
         {
             var existingListingId = await db.QuerySingleOrDefaultAsync<Guid?>(
-                "SELECT id FROM seller_listings WHERE variant_id = @VarId AND seller_id = @SellerId", 
-                new { VarId = targetVarId, SellerId = (Guid)sl.seller_id }, trans);
+                "SELECT id FROM vendor_listings WHERE variant_id = @VarId AND vendor_id = @VendorId", 
+                new { VarId = targetVarId, VendorId = (Guid)sl.seller_id }, trans);
 
             if (existingListingId.HasValue)
             {
                 await ArchivePriceIfChanged(db, existingListingId.Value, (decimal)sl.current_price, (string)sl.currency, trans);
-                await db.ExecuteAsync("UPDATE seller_listings SET current_price = @Price, description = @Desc, updated_at = NOW() WHERE id = @Id",
+                await db.ExecuteAsync("UPDATE vendor_listings SET current_price = @Price, description = @Desc, updated_at = NOW() WHERE id = @Id",
                     new { Price = (decimal)sl.current_price, Desc = (string)sl.description, Id = existingListingId.Value }, trans);
-                await db.ExecuteAsync("DELETE FROM seller_listings WHERE id = @Id", new { Id = (Guid)sl.id }, trans);
+                await db.ExecuteAsync("DELETE FROM vendor_listings WHERE id = @Id", new { Id = (Guid)sl.id }, trans);
             }
             else
             {
-                await db.ExecuteAsync("UPDATE seller_listings SET variant_id = @TargetId WHERE id = @Id",
+                await db.ExecuteAsync("UPDATE vendor_listings SET variant_id = @TargetId WHERE id = @Id",
                     new { TargetId = targetVarId, Id = (Guid)sl.id }, trans);
             }
         }
@@ -256,16 +256,16 @@ public class MetadataService : IMetadataService
         }
     }
 
-    private async Task<Guid> GetOrCreateSeller(IDbConnection db, string externalId, IDbTransaction trans)
+    private async Task<Guid> GetOrCreateVendor(IDbConnection db, string externalId, IDbTransaction trans)
     {
         var id = await db.QuerySingleOrDefaultAsync<Guid?>(
-            "SELECT id FROM sellers WHERE external_id = @Id", new { Id = externalId }, trans);
+            "SELECT id FROM vendors WHERE external_id = @Id", new { Id = externalId }, trans);
         
         if (id.HasValue) return id.Value;
 
         var newId = Guid.NewGuid();
-        await db.ExecuteAsync("INSERT INTO sellers (id, external_id, name) VALUES (@Id, @ExtId, @Name)", 
-            new { Id = newId, ExtId = externalId, Name = $"Seller {externalId}" }, trans);
+        await db.ExecuteAsync("INSERT INTO vendors (id, external_id, vendor_name) VALUES (@Id, @ExtId, @Name)", 
+            new { Id = newId, ExtId = externalId, Name = $"Vendor {externalId}" }, trans);
         
         return newId;
     }
@@ -351,18 +351,18 @@ public class MetadataService : IMetadataService
         }, trans);
     }
 
-    private async Task UpsertSellerListing(IDbConnection db, Guid variantId, Guid sellerId, UploadImageRequest request, IDbTransaction trans)
+    private async Task UpsertVendorListing(IDbConnection db, Guid variantId, Guid vendorId, UploadImageRequest request, IDbTransaction trans)
     {
         var existing = await db.QuerySingleOrDefaultAsync<dynamic>(
-            "SELECT id, current_price, currency FROM seller_listings WHERE variant_id = @VarId AND seller_id = @SellerId", 
-            new { VarId = variantId, SellerId = sellerId }, trans);
+            "SELECT id, current_price, currency FROM vendor_listings WHERE variant_id = @VarId AND vendor_id = @VendorId", 
+            new { VarId = variantId, VendorId = vendorId }, trans);
 
         if (existing != null)
         {
             await ArchivePriceIfChanged(db, (Guid)existing.id, (decimal?)request.Price ?? 0, request.Currency ?? "INR", trans);
 
             await db.ExecuteAsync(@"
-                UPDATE seller_listings 
+                UPDATE vendor_listings 
                 SET current_price = @Price, shipping_info = @Shipping, description = @Desc, updated_at = NOW() 
                 WHERE id = @Id",
                 new { 
@@ -375,11 +375,11 @@ public class MetadataService : IMetadataService
         else
         {
             await db.ExecuteAsync(@"
-                INSERT INTO seller_listings (variant_id, seller_id, external_id, current_price, currency, shipping_info, description)
-                VALUES (@VariantId, @SellerId, @ExtId, @Price, @Currency, @Shipping, @Description)",
+                INSERT INTO vendor_listings (variant_id, vendor_id, external_id, current_price, currency, shipping_info, description)
+                VALUES (@VariantId, @VendorId, @ExtId, @Price, @Currency, @Shipping, @Description)",
                 new {
                     VariantId = variantId,
-                    SellerId = sellerId,
+                    VendorId = vendorId,
                     ExtId = request.ExternalId,
                     Price = request.Price,
                     Currency = request.Currency ?? "INR",
@@ -392,7 +392,7 @@ public class MetadataService : IMetadataService
     private async Task ArchivePriceIfChanged(IDbConnection db, Guid listingId, decimal newPrice, string currency, IDbTransaction trans)
     {
         var current = await db.QuerySingleOrDefaultAsync<decimal?>(
-            "SELECT current_price FROM seller_listings WHERE id = @Id", new { Id = listingId }, trans);
+            "SELECT current_price FROM vendor_listings WHERE id = @Id", new { Id = listingId }, trans);
 
         if (current.HasValue && current.Value != newPrice)
         {

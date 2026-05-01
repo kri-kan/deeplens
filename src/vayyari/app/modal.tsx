@@ -87,6 +87,26 @@ export default function ModalScreen() {
     
     // Determine display value
     let displayValue = setting.value || 'Not set';
+    
+    // Format dates to local time
+    const isDateTime = setting.dataType?.toLowerCase() === 'datetime' || 
+                       setting.key.toLowerCase().endsWith('refreshed') ||
+                       setting.key.toLowerCase().endsWith('at');
+
+    if (isDateTime && setting.value && setting.value !== 'Not set' && setting.value !== '••••••••') {
+      try {
+        const date = new Date(setting.value);
+        if (!isNaN(date.getTime())) {
+          displayValue = date.toLocaleString(undefined, { 
+            dateStyle: 'medium', 
+            timeStyle: 'short' 
+          });
+        }
+      } catch (e) {
+        displayValue = setting.value;
+      }
+    }
+
     if (isSecret && !isRevealed && setting.value === '••••••••') {
       displayValue = '••••••••';
     } else if (isSecret && isRevealed && setting.value === '••••••••') {

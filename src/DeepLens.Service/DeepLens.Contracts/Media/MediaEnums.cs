@@ -10,7 +10,8 @@ public enum MediaCategory
     Order = 2,
     Archive = 3,
     Profile = 4,
-    System = 5
+    System = 5,
+    Instagram = 6
 }
 
 /// <summary>
@@ -50,6 +51,7 @@ public static class MediaHierarchy
         {
             MediaCategory.Product => Enum.GetNames<ProductSubCategory>(),
             MediaCategory.Order => Enum.GetNames<OrderSubCategory>(),
+            MediaCategory.Instagram => Array.Empty<string>(),
             _ => Array.Empty<string>()
         };
     }
@@ -83,6 +85,8 @@ public abstract record StorageContext(MediaCategory Category, string Folder)
                 ? new OrderContext(oSub) 
                 : new OrderContext(OrderSubCategory.General),
             
+            MediaCategory.Instagram => new InstagramContext(subCategory),
+
             _ => new GenericContext(category, subCategory.ToLowerInvariant())
         };
     }
@@ -99,6 +103,11 @@ public record ProductContext(ProductSubCategory Type)
 /// </summary>
 public record OrderContext(OrderSubCategory Type) 
     : StorageContext(MediaCategory.Order, Type.ToString().ToLowerInvariant());
+
+/// <summary>
+/// Context for Instagram media. Folder is usually the Instagram User ID (external_id).
+/// </summary>
+public record InstagramContext(string UserId) : StorageContext(MediaCategory.Instagram, UserId);
 
 /// <summary>
 /// Simple context for any other storage needs.

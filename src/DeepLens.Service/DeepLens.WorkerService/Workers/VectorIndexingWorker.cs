@@ -51,6 +51,7 @@ public class VectorIndexingWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
         _logger.LogInformation("VectorIndexingWorker starting.");
         try
         {

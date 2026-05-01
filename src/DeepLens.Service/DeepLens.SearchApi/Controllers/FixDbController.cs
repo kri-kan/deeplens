@@ -31,7 +31,7 @@ public class FixDbController : ControllerBase
             using var conn = new NpgsqlConnection(connString);
             await conn.OpenAsync();
             
-            await conn.ExecuteAsync("ALTER TABLE seller_listings ADD COLUMN IF NOT EXISTS shipping_info VARCHAR(50) DEFAULT 'plus shipping'");
+            await conn.ExecuteAsync("ALTER TABLE vendor_listings ADD COLUMN IF NOT EXISTS shipping_info VARCHAR(50) DEFAULT 'plus shipping'");
             
             // Migrate images to media
             await conn.ExecuteAsync(@"

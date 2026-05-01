@@ -32,6 +32,7 @@ builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
+builder.Services.AddHttpClient<IMetaGraphService, MetaGraphService>();
 
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 
@@ -150,5 +151,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Seed App Settings on startup
+using (var scope = app.Services.CreateScope())
+{
+    var settingsService = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
+    await settingsService.SeedDefaultsAsync();
+}
 
 app.Run();

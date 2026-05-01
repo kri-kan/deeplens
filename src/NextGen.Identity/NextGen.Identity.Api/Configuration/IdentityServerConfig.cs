@@ -84,7 +84,11 @@ public static class IdentityServerConfig
                     "http://localhost:5001",
                     "https://localhost:5001",
                     "http://localhost:3006",
-                    "http://127.0.0.1:3006"
+                    "http://127.0.0.1:3006",
+                    "http://192.168.0.170:3000",
+                    "http://192.168.0.170:3006",
+                    "http://192.168.0.170:5173",
+                    "http://192.168.0.170:8081"
                 },
                 
                 // Token lifetimes
@@ -124,14 +128,20 @@ public static class IdentityServerConfig
                     "http://localhost:5001/callback",
                     "http://localhost:5001/silent-renew",
                     "https://localhost:5001/callback",
-                    "https://localhost:5001/silent-renew"
+                    "https://localhost:5001/silent-renew",
+                    "http://192.168.0.170:3000/callback",
+                    "http://192.168.0.170:3000/silent-renew",
+                    "http://192.168.0.170:5173/callback",
+                    "http://192.168.0.170:5173/silent-renew"
                 },
                 PostLogoutRedirectUris = 
                 { 
                     "http://localhost:3000",
                     "https://localhost:3000",
                     "http://localhost:5001",
-                    "https://localhost:5001"
+                    "https://localhost:5001",
+                    "http://192.168.0.170:3000",
+                    "http://192.168.0.170:5173"
                 },
                 AllowedCorsOrigins = 
                 { 
@@ -140,7 +150,9 @@ public static class IdentityServerConfig
                     "http://localhost:5001",
                     "https://localhost:5001",
                     "http://localhost:3006",
-                    "http://127.0.0.1:3006"
+                    "http://127.0.0.1:3006",
+                    "http://192.168.0.170:3000",
+                    "http://192.168.0.170:5173"
                 },
                 
                 // Scopes this client can access

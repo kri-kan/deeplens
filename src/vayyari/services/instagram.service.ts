@@ -1,159 +1,191 @@
-import { competitorApiClient } from '../api/client';
+import { searchApiClient } from '../api/client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface InstagramProfile {
   id: string;
   username: string;
-  display_name?: string;
-  bio?: string;
-  follower_count: number;
-  following_count?: number;
-  post_count: number;
-  profile_pic_url?: string;
-  last_scraped_at?: string;
-  is_active?: boolean;
+  name?: string;
+  biography?: string;
+  followersCount: number;
+  followsCount?: number;
+  mediaCount: number;
+  profilePictureUrl?: string;
+  lastSyncedAt?: string;
 }
 
 export interface InstagramPost {
   id: string;
-  platform_post_id: string;
-  url?: string;
-  thumbnail_url?: string;
   caption?: string;
-  media_type?: string;
-  like_count: number;
-  comment_count: number;
-  view_count: number;
-  posted_at?: string;
-}
-
-export interface FollowerSnapshot {
-  follower_count: number;
-  snapshot_at: string;
+  mediaUrl?: string;
+  thumbnailUrl?: string;
+  permalink?: string;
+  likeCount: number;
+  commentsCount: number;
+  timestamp?: string;
+  mediaType?: string;
+  mediaProductType?: string;
 }
 
 export interface ProfileDetailsResponse {
-  profile: InstagramProfile;
-  videos: InstagramPost[];
-  growth: FollowerSnapshot[];
+  profile: {
+    username: string;
+    name?: string;
+    biography?: string;
+    followersCount: number;
+    followsCount: number;
+    mediaCount: number;
+    profilePictureUrl?: string;
+    website?: string;
+    is_active: boolean;
+    is_verified: boolean;
+    is_business: boolean;
+    last_synced_at?: string;
+    is_data_deleted: boolean;
+  };
+  videos: any[];
+  metrics: {
+    avgLikes: number;
+    engagementRate: number;
+    postFrequency: number;
+  };
 }
 
 export interface SyncResult {
-  status: string;
-  profile: {
-    username: string;
-    display_name?: string;
-    follower_count: number;
-    post_count: number;
-    last_scraped_at: string;
-  };
-  new_posts: number;
-  engagement_updated: number;
-  total_posts: number;
+  message: string;
+  profile: any;
+  postCount: number;
+  posts: any[];
+  new_posts?: number;
+  engagement_updated?: number;
+  jobId?: string;
 }
 
 export interface TokenHealth {
-  last_refreshed: string;
-  expires_at: string;
-  days_remaining: number;
-  needs_refresh: boolean;
-  is_expired: boolean;
+  lastRefreshed: string;
+  expiresAt: string;
+  daysRemaining: number;
+  needsRefresh: boolean;
+  isExpired: boolean;
+}
+
+export interface InstagramVideo {
+  id: string;
+  caption?: string;
+  thumbnailUrl?: string;
+  mediaUrl?: string;
+  permalink?: string;
+  likeCount: number;
+  commentsCount: number;
+  timestamp?: string;
+  mediaType?: string;
 }
 
 export interface ScraperJob {
   id: string;
   username: string;
-  watchlist_id: string;
   job_type: string;
   status: string;
-  priority: number;
-  origin: string;
-  next_run_at?: string;
+  target_count: number;
   scraped_count: number;
-  error_message?: string;
+  priority: number;
+  next_run_at?: string;
+  completed_at?: string;
+  origin?: string;
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
-// All Instagram intelligence routes through the C# CompetitorIntel.Orchestrator.
-// The Python sidecar service has been replaced by the Meta Graph API v25.0.
 export const instagramService = {
 
   // ── Watchlist Management ────────────────────────────────────────────────────
 
   getWatchlist: async (): Promise<InstagramProfile[]> => {
-    return competitorApiClient.get<InstagramProfile[]>('/api/Competitor');
+    return searchApiClient.get<InstagramProfile[]>('/api/v1/Insta');
   },
 
   getProfileDetails: async (username: string): Promise<ProfileDetailsResponse> => {
-    return competitorApiClient.get<ProfileDetailsResponse>(`/api/Competitor/${username}`);
+    return searchApiClient.get<ProfileDetailsResponse>(`/api/v1/Insta/profile/${username}`);
   },
 
   addToWatchlist: async (username: string): Promise<{ message: string; profile: InstagramProfile }> => {
-    return competitorApiClient.post(`/api/Competitor/${username}`);
+    return searchApiClient.post(`/api/v1/Insta/profile/${username}`);
   },
 
   removeFromWatchlist: async (username: string): Promise<void> => {
-    return competitorApiClient.delete(`/api/Competitor/${username}`);
+    return searchApiClient.delete(`/api/v1/Insta/profile/${username}`);
   },
 
-  updateConfig: async (id: string, config: { isActive?: boolean; frequencyProfileMins?: number }): Promise<void> => {
-    return competitorApiClient.post(`/api/Competitor/${id}/config`, config);
+  deleteProfileData: async (username: string): Promise<void> => {
+    return searchApiClient.delete(`/api/v1/Insta/profile/${username}/data`);
   },
 
   // ── On-Demand Sync (Graph API) ──────────────────────────────────────────────
 
-  /**
-   * Triggers a live Graph API sync for a single profile:
-   * profile data → new posts → engagement refresh.
-   * Returns a summary of what was inserted/updated.
-   */
-  syncProfile: async (username: string): Promise<SyncResult> => {
-    return competitorApiClient.post<SyncResult>(`/api/Competitor/${username}/sync`);
-  },
-
-  // ── Scraper Job Queue ───────────────────────────────────────────────────────
-
-  getActiveJobs: async (): Promise<ScraperJob[]> => {
-    return competitorApiClient.get<ScraperJob[]>('/api/ScraperManager/active');
-  },
-
-  getJobHistory: async (limit = 50): Promise<ScraperJob[]> => {
-    return competitorApiClient.get<ScraperJob[]>('/api/ScraperManager/history', { params: { limit } });
-  },
-
-  createJob: async (watchlistId: string, jobType = 'routine', priority = 5): Promise<any> => {
-    return competitorApiClient.post('/api/ScraperManager/job', { watchlistId, jobType, priority });
-  },
-
-  deleteJob: async (id: string): Promise<void> => {
-    return competitorApiClient.delete(`/api/ScraperManager/job/${id}`);
-  },
-
-  updateJob: async (id: string, updates: { priority?: number; status?: string }): Promise<void> => {
-    return competitorApiClient.patch(`/api/ScraperManager/job/${id}`, updates);
-  },
-
-  healQueue: async (): Promise<{ pruned: number }> => {
-    return competitorApiClient.post('/api/ScraperManager/heal');
+  syncProfile: async (username: string, maxPosts: number = 50): Promise<SyncResult> => {
+    return searchApiClient.post<SyncResult>(`/api/v1/Insta/profile/${username}/sync?maxPosts=${maxPosts}`);
   },
 
   // ── Token Management ────────────────────────────────────────────────────────
 
-  /**
-   * Returns health info for the Meta long-lived access token.
-   * days_remaining < 10 → urgent action needed.
-   */
   getTokenHealth: async (): Promise<TokenHealth> => {
-    return competitorApiClient.get<TokenHealth>('/api/ScraperManager/token');
+    return searchApiClient.get<TokenHealth>('/api/v1/Insta/token');
   },
 
-  /**
-   * Manually triggers the token refresh via graph.instagram.com.
-   * Resets the 60-day expiry clock.
-   */
   refreshToken: async (): Promise<{ message: string; health: TokenHealth }> => {
-    return competitorApiClient.post('/api/ScraperManager/token/refresh');
+    return searchApiClient.post('/api/v1/Insta/token/refresh');
+  },
+
+  exchangeToken: async (shortLivedToken: string): Promise<{ message: string }> => {
+    return searchApiClient.post('/api/v1/Insta/token/exchange', shortLivedToken);
+  },
+
+  getQuota: async (): Promise<MetaQuotaInfo> => {
+    return searchApiClient.get<MetaQuotaInfo>('/api/v1/Insta/quota');
+  },
+
+  // ── Job & Queue Management ──────────────────────────────────────────────────
+
+  getActiveJobs: async (): Promise<ScraperJob[]> => {
+    return searchApiClient.get<ScraperJob[]>('/api/v1/Insta/jobs/active');
+  },
+
+  getJobHistory: async (): Promise<ScraperJob[]> => {
+    return searchApiClient.get<ScraperJob[]>('/api/v1/Insta/jobs/history');
+  },
+
+  createJob: async (payload: any): Promise<void> => {
+    return searchApiClient.post('/api/v1/Insta/jobs', payload);
+  },
+
+  updateJob: async (id: string, payload: any): Promise<void> => {
+    return searchApiClient.patch(`/api/v1/Insta/jobs/${id}`, payload);
+  },
+
+  getJobLogs: async (jobId: string): Promise<any[]> => {
+    return searchApiClient.get<any[]>(`/api/v1/Insta/jobs/${jobId}/logs`);
+  },
+
+  toggleWatchStatus: async (username: string, active: boolean): Promise<any> => {
+    return searchApiClient.post(`/api/v1/Insta/watchlist/toggle?username=${username}&active=${active}`, {});
+  },
+
+  deleteJob: async (id: string): Promise<void> => {
+    return searchApiClient.delete(`/api/v1/Insta/jobs/${id}`);
+  },
+
+  healQueue: async (): Promise<void> => {
+    return searchApiClient.post('/api/v1/Insta/jobs/heal');
   },
 };
+
+export interface MetaQuotaInfo {
+  requestsInLastHour: number;
+  estimatedRemainingRequests: number;
+  metrics: {
+    callCount: number;
+    totalCpuTime: number;
+    totalTime: number;
+  };
+  lastUpdated: string;
+}

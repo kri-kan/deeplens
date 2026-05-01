@@ -54,6 +54,7 @@ public class VideoProcessingWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
         _logger.LogInformation("VideoProcessingWorker starting.");
         try
         {

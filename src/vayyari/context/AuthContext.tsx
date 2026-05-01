@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { identityService } from '../services/identity.service';
+import { identityService, TOKEN_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRY_KEY, LAST_ACTIVITY_KEY } from '../services/identity.service';
 import { AuthState, UserProfile } from '../types/auth';
 import { wrapInSpan } from '../utils/telemetry';
+import { authEvents, AUTH_UNAUTHORIZED_EVENT } from '../api/client';
+import { router } from 'expo-router';
 
-const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
+
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
@@ -59,6 +61,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadStoredData();
   }, [loadStoredData]);
 
+  // ── Listen for 401 events from ApiClient ──────────────────────────────────
+  useEffect(() => {
+    const handleUnauthorized = async () => {
+      console.warn('[AuthContext] Session expired (401). Signing out...');
+      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRY_KEY, LAST_ACTIVITY_KEY]);
+      setState({ token: null, user: null, isLoading: false });
+      router.replace('/login');
+    };
+
+    authEvents.on(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => { authEvents.off(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized); };
+  }, []);
+
   const signIn = async (email: string, password: string) => {
     return wrapInSpan('AuthContext: signIn', async () => {
       setState(prev => ({ ...prev, isLoading: true }));
@@ -87,8 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     return wrapInSpan('AuthContext: signOut', async () => {
-      await AsyncStorage.removeItem(TOKEN_KEY);
-      await AsyncStorage.removeItem(USER_KEY);
+      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRY_KEY, LAST_ACTIVITY_KEY]);
       setState({
         token: null,
         user: null,

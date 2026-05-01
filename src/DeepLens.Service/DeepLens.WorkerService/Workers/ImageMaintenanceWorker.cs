@@ -48,6 +48,7 @@ public class ImageMaintenanceWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
         _logger.LogInformation("ImageMaintenanceWorker starting.");
         try
         {

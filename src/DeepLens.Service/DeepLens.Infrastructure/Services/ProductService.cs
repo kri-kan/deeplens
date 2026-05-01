@@ -108,15 +108,15 @@ public class ProductService : IProductService
 
             // 4. Create Listing (Vendor Product)
             var vendorProductId = Guid.NewGuid();
-            var sellerId = await GetOrCreateDefaultSeller(connection, transaction);
+            var vendorId = await GetOrCreateDefaultVendor(connection, transaction);
 
             const string vendorSql = @"
-                INSERT INTO seller_listings (id, seller_id, variant_id, current_price, description, external_id)
-                VALUES (@Id, @SellerId, @VarId, @Price, @Desc, @ExtId)";
+                INSERT INTO vendor_listings (id, vendor_id, variant_id, current_price, description, external_id)
+                VALUES (@Id, @VendorId, @VarId, @Price, @Desc, @ExtId)";
 
             await connection.ExecuteAsync(vendorSql, new {
                 Id = vendorProductId,
-                SellerId = sellerId,
+                VendorId = vendorId,
                 VarId = variantId,
                 Price = data.VendorPrice,
                 Desc = data.Description,
@@ -164,7 +164,7 @@ public class ProductService : IProductService
                 ), '[]'::json) as media_json
             FROM products p
             JOIN product_variants pv ON p.id = pv.product_id
-            JOIN seller_listings sl ON pv.id = sl.variant_id
+            JOIN vendor_listings sl ON pv.id = sl.variant_id
             WHERE 1=1";
 
         var parameters = new DynamicParameters();
@@ -293,7 +293,7 @@ public class ProductService : IProductService
                 ), '[]'::json) as media_json
             FROM products p
             JOIN product_variants pv ON p.id = pv.product_id
-            JOIN seller_listings sl ON pv.id = sl.variant_id
+            JOIN vendor_listings sl ON pv.id = sl.variant_id
             WHERE sl.id = @Id";
 
         var r = await db.QuerySingleOrDefaultAsync<dynamic>(sql, new { Id = id });
@@ -330,13 +330,13 @@ public class ProductService : IProductService
         return result.Products;
     }
 
-    private async Task<Guid> GetOrCreateDefaultSeller(IDbConnection db, IDbTransaction trans)
+    private async Task<Guid> GetOrCreateDefaultVendor(IDbConnection db, IDbTransaction trans)
     {
-        var id = await db.QuerySingleOrDefaultAsync<Guid?>("SELECT id FROM sellers LIMIT 1", null, trans);
+        var id = await db.QuerySingleOrDefaultAsync<Guid?>("SELECT id FROM vendors LIMIT 1", null, trans);
         if (id.HasValue) return id.Value;
 
         var newId = Guid.NewGuid();
-        await db.ExecuteAsync("INSERT INTO sellers (id, external_id, name) VALUES (@Id, 'DEFAULT', 'Default Seller')", 
+        await db.ExecuteAsync("INSERT INTO vendors (id, vendor_name) VALUES (@Id, 'Default Vendor')", 
             new { Id = newId }, trans);
         return newId;
     }

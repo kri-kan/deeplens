@@ -1,9 +1,15 @@
 import { wrapInSpan } from '../utils/telemetry';
 import { ApiResponse, ApiError, ApiException } from '../types/api';
+import { EventEmitter } from 'eventemitter3';
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  _isRetry?: boolean; // internal flag to prevent infinite refresh loops
 }
+
+// Global event bus for auth events
+export const authEvents = new EventEmitter();
+export const AUTH_UNAUTHORIZED_EVENT = 'auth:unauthorized';
 
 class ApiClient {
   private baseUrl: string;
@@ -94,7 +100,7 @@ class ApiClient {
     const url = this.buildUrl(path, options.params);
     const spanName = `API ${options.method || 'GET'} ${path}`;
 
-    // Inject token if available
+    // Inject token if available (uses proactive refresh when near expiry)
     let headers = { ...options.headers };
     if (this.getAccessToken) {
       const token = await this.getAccessToken();
@@ -112,6 +118,27 @@ class ApiClient {
         const response = await fetch(url, { ...options, headers });
 
         if (!response.ok) {
+          // ── 401 Intercept: attempt silent refresh once ──────────────────
+          if (response.status === 401 && !options._isRetry) {
+            console.warn('[ApiClient] Got 401, attempting silent token refresh...');
+            const { identityService } = await import('../services/identity.service');
+            const newToken = await identityService.refreshToken();
+
+            if (newToken) {
+              // Retry original request with new token
+              return this.request<T>(path, {
+                ...options,
+                _isRetry: true,
+                headers: { ...options.headers, Authorization: `Bearer ${newToken}` },
+              });
+            } else {
+              // Refresh failed — kick user to login
+              console.error('[ApiClient] Silent refresh failed. Redirecting to login.');
+              authEvents.emit(AUTH_UNAUTHORIZED_EVENT);
+              throw new ApiException({ code: 'UNAUTHORIZED', message: 'Session expired. Please sign in again.' }, 401);
+            }
+          }
+
           console.error(`[API Error] ${options.method || 'GET'} ${url} failed with status: ${response.status}`);
           await this.handleError(response);
         }
@@ -170,20 +197,17 @@ class ApiClient {
 }
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { identityService } from '../services/identity.service';
 
-// Singleton instances with token injection
+// Singleton instances — use proactive token refresh on every request
 export const searchApiClient = new ApiClient(
   process.env.EXPO_PUBLIC_SEARCH_API_URL!,
-  async () => await AsyncStorage.getItem('auth_token')
+  () => identityService.getAccessTokenWithRefresh()
 );
 
 export const productMgmtApiClient = new ApiClient(
   process.env.EXPO_PUBLIC_SEARCH_API_URL!,
-  async () => await AsyncStorage.getItem('auth_token')
-);
-
-export const competitorApiClient = new ApiClient(
-  process.env.EXPO_PUBLIC_COMPETITOR_API_URL || 'http://192.168.0.170:8006'
+  () => identityService.getAccessTokenWithRefresh()
 );
 
 export default ApiClient;

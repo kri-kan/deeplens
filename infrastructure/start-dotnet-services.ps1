@@ -49,15 +49,7 @@ Start-Process "dotnet" `
 Start-Sleep 5
 Write-Host "  [OK] Worker Service started" -ForegroundColor Green
 
-# Start Competitor Orchestrator
-Write-Host "[5/5] Starting Competitor Intel Orchestrator..." -ForegroundColor Yellow
-Start-Process "dotnet" `
-    -ArgumentList "run --project src/CompetitorIntel.Orchestrator/CompetitorIntel.Orchestrator.csproj --urls http://0.0.0.0:8006" `
-    -NoNewWindow `
-    -WorkingDirectory (Get-Location)
 
-Start-Sleep 5
-Write-Host "  [OK] Competitor Orchestrator started on http://0.0.0.0:8006" -ForegroundColor Green
 
 # Start Web UI
 Write-Host "[6/6] Starting Web UI..." -ForegroundColor Yellow
