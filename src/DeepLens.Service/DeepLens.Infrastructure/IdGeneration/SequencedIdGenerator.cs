@@ -28,6 +28,12 @@ public class SequencedIdGenerator : ISequencedIdGenerator
         return nextValue.ToString("X3");
     }
 
+    public async Task<long> GetNextCustomerDummyIdAsync()
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        return await connection.QuerySingleAsync<long>("SELECT nextval('customer_dummy_id_seq')");
+    }
+
     private static string ToBase36(long value, int minLength)
     {
         const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";

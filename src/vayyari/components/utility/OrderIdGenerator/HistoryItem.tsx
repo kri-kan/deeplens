@@ -98,10 +98,6 @@ export const HistoryItem = ({
     onEdit(null);
   };
 
-  const confirmSourceChange = () => {
-    performUpdate(newSourceHandle);
-    setIsConfirmVisible(false);
-  };
 
   return (
     <>

@@ -49,7 +49,8 @@
         {
           "photosPermission": "The app accesses your photos to let you share product images."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

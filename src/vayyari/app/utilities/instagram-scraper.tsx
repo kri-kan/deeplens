@@ -73,7 +73,7 @@ export default function InstagramScraper() {
     try {
       const maxPosts = depthMode === 'full' ? 0 : (parseInt(depthValue) || 50);
       const data = await instagramService.syncProfile(handle.replace('@', '').trim(), maxPosts);
-      setQueuedJobId(data.jobId);
+      setQueuedJobId(data.jobId ?? null);
       setResult(null); // Clear old results to show job progress
       loadActiveJobs();
     } catch (err: any) {

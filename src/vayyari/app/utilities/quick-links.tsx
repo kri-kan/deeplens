@@ -1,24 +1,73 @@
 import React, { useState } from 'react';
-import { StyleSheet, ScrollView, View, Linking } from 'react-native';
+import { StyleSheet, ScrollView, View, Linking, Image, TouchableOpacity, Dimensions } from 'react-native';
 import { Surface, Appbar, List, Text, useTheme, IconButton, Portal, Dialog, Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
+import { BentoCard } from '@/components/ui/BentoCard';
+
+const { width } = Dimensions.get('window');
+const COLUMN_COUNT = 4;
+const GAP = 0;
+const CONTAINER_PADDING = 0;
+const TILE_SIZE = width / COLUMN_COUNT;
 
 interface QuickLink {
   id: string;
   title: string;
-  description: string;
-  icon: string;
+  description?: string;
+  icon?: string;
   url: string;
   color: string;
   info?: string;
 }
+
+// Local assets mapping for courier logos
+const COURIER_LOGOS: { [key: string]: any } = {
+  'dtdc-tracking': require('@/assets/images/couriers/dtdc.png'),
+  'india-post-tracking': require('@/assets/images/couriers/india-post.png'),
+  'bluedart-tracking': require('@/assets/images/couriers/bluedart.png'),
+  'shree-maruti-tracking': require('@/assets/images/couriers/shree-maruti.png'),
+  'delhivery-tracking': require('@/assets/images/couriers/delhivery.png'),
+};
 
 export default function QuickLinksScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [selectedInfo, setSelectedInfo] = useState<QuickLink | null>(null);
 
-  const LINKS: QuickLink[] = [
+  const COURIER_LINKS: QuickLink[] = [
+    {
+      id: 'dtdc-tracking',
+      title: 'DTDC',
+      url: 'https://www.dtdc.com/track-your-shipment/',
+      color: '#004791'
+    },
+    {
+      id: 'india-post-tracking',
+      title: 'India Post',
+      url: 'https://www.indiapost.gov.in/',
+      color: '#DA251C'
+    },
+    {
+      id: 'bluedart-tracking',
+      title: 'Blue Dart',
+      url: 'https://bluedart.com/tracking',
+      color: '#004DAE'
+    },
+    {
+      id: 'shree-maruti-tracking',
+      title: 'Shree Maruti',
+      url: 'https://shreemaruti.com/track-shipment/',
+      color: '#F26522'
+    },
+    {
+      id: 'delhivery-tracking',
+      title: 'Delhivery',
+      url: 'https://www.delhivery.com/tracking',
+      color: '#1a1a1a'
+    }
+  ];
+
+  const UTILITY_LINKS: QuickLink[] = [
     {
       id: 'fb-graph-explorer',
       title: 'Facebook Graph API Explorer',
@@ -96,19 +145,50 @@ export default function QuickLinksScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.sectionHeader}>
-          <Text variant="bodyLarge" style={styles.helperText}>
-            Handy external resources and tools for application management.
-          </Text>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Courier Tracking</Text>
+          <Text variant="bodySmall" style={styles.helperText}>Quickly track your shipments across major couriers.</Text>
         </View>
 
-        <Surface style={styles.card} elevation={1}>
-          {LINKS.map((link, index) => (
+        <View style={styles.grid}>
+          {COURIER_LINKS.map((link) => (
+            <TouchableOpacity 
+              key={link.id} 
+              onPress={() => handleOpenLink(link.url)}
+              activeOpacity={0.7}
+              style={{ width: TILE_SIZE, height: TILE_SIZE }}
+            >
+              <BentoCard 
+                style={[styles.tile, { borderRadius: 0 }]}
+                surfaceLevel="surfaceContainerLow"
+              >
+                <View style={styles.tileContent}>
+                  <Image 
+                    source={COURIER_LOGOS[link.id]} 
+                    style={styles.logo} 
+                    resizeMode="contain" 
+                  />
+                  <Text variant="labelSmall" style={styles.tileTitle} numberOfLines={1}>
+                    {link.title}
+                  </Text>
+                </View>
+              </BentoCard>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={[styles.sectionHeader, { marginTop: 32 }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Utilities & Tools</Text>
+          <Text variant="bodySmall" style={styles.helperText}>External resources for application management.</Text>
+        </View>
+
+        <Surface style={styles.utilityCard} elevation={1}>
+          {UTILITY_LINKS.map((link, index) => (
             <React.Fragment key={link.id}>
               <List.Item
                 title={link.title}
                 description={link.description}
-                descriptionNumberOfLines={3}
-                left={props => <List.Icon {...props} icon={link.icon} color={link.color} />}
+                descriptionNumberOfLines={2}
+                left={props => <List.Icon {...props} icon={link.icon || 'link'} color={link.color} />}
                 right={props => (
                   <View style={styles.rightActions}>
                     {link.info && (
@@ -130,7 +210,7 @@ export default function QuickLinksScreen() {
                 onPress={() => handleOpenLink(link.url)}
                 style={styles.listItem}
               />
-              {index < LINKS.length - 1 && <View style={styles.divider} />}
+              {index < UTILITY_LINKS.length - 1 && <View style={styles.divider} />}
             </React.Fragment>
           ))}
         </Surface>
@@ -160,21 +240,50 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
+    padding: CONTAINER_PADDING,
   },
   sectionHeader: {
-    marginBottom: 24,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   helperText: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
-  card: {
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GAP,
+  },
+  tile: {
+    padding: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 0,
+  },
+  tileContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  logo: {
+    width: 58,
+    height: 58,
+  },
+  tileTitle: {
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  utilityCard: {
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#fff',
   },
   listItem: {
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   rightActions: {
     flexDirection: 'row',

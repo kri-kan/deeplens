@@ -52,7 +52,7 @@ export const CategoryIcon = ({ category, color, size = 32 }: CategoryIconProps) 
   return (
     <IconWrapper size={size}>
       <Image
-        source={asset}
+        source={asset as any}
         style={{ width: size, height: size }}
         contentFit="contain"
         tintColor={color}

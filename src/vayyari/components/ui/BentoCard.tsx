@@ -33,6 +33,5 @@ const styles = StyleSheet.create({
   bentoCard: {
     padding: 24,
     borderRadius: 24, // lg radius for bento cells
-    marginBottom: 16,
   },
 });

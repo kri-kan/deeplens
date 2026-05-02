@@ -31,19 +31,38 @@ public class InstaController : ControllerBase
     public async Task<ActionResult<IEnumerable<object>>> GetWatchlist()
     {
         using var conn = await _db.CreateConnectionAsync();
-        var watchlist = await conn.QueryAsync("SELECT * FROM competitor_watchlist WHERE platform = 'instagram' ORDER BY username ASC");
+        var watchlist = await conn.QueryAsync(@"
+            SELECT 
+                id, 
+                username, 
+                display_name AS Name, 
+                profile_pic_url AS ProfilePictureUrl, 
+                bio AS Biography, 
+                follower_count AS FollowersCount, 
+                post_count AS MediaCount, 
+                is_active AS is_active,
+                is_own_account AS isOwnAccount,
+                last_scraped_at AS LastSyncedAt
+            FROM competitor_watchlist 
+            WHERE platform = 'instagram' 
+            ORDER BY is_own_account DESC, username ASC");
         return Ok(watchlist);
     }
 
     [HttpGet("profile/{username}")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult> GetProfile(string username)
+    public async Task<ActionResult> GetProfile(
+        string username, 
+        [FromQuery] string sortBy = "date", 
+        [FromQuery] string sortOrder = "desc",
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
     {
         using var conn = await _db.CreateConnectionAsync();
         var profileInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             SELECT id, username, display_name, profile_pic_url, bio, 
                    follower_count, following_count, post_count, last_scraped_at, 
-                   external_id, is_active, is_data_deleted 
+                   external_id, is_active, is_data_deleted, is_own_account 
             FROM competitor_watchlist 
             WHERE username = @username AND platform = 'instagram'", 
             new { username });
@@ -55,8 +74,20 @@ public class InstaController : ControllerBase
         
         if (!isDeleted)
         {
+            // Dynamic Sort Logic
+            string orderBy = sortBy.ToLower() switch {
+                "likes" => "like_count",
+                "comments" => "comment_count",
+                _ => "posted_at"
+            };
+            string direction = sortOrder.ToLower() == "asc" ? "ASC" : "DESC";
+
+            var dateFilter = "";
+            if (fromDate.HasValue) dateFilter += " AND posted_at >= @fromDate";
+            if (toDate.HasValue) dateFilter += " AND posted_at <= @toDate";
+
             // 2. Get Recent Posts from Database to avoid API throttling
-            var sql = @"
+            var sql = $@"
                 SELECT 
                     platform_video_id AS Id, 
                     url AS Permalink, 
@@ -70,10 +101,11 @@ public class InstaController : ControllerBase
                     storage_path AS StoragePath
                 FROM competitor_videos 
                 WHERE watchlist_id = (SELECT id FROM competitor_watchlist WHERE username = @username AND platform = 'instagram')
-                ORDER BY posted_at DESC
-                LIMIT 50";
+                {dateFilter}
+                ORDER BY {orderBy} {direction}
+                LIMIT 1000";
 
-            videos = (await conn.QueryAsync<MetaPost>(sql, new { username })).ToList();
+            videos = (await conn.QueryAsync<MetaPost>(sql, new { username, fromDate, toDate })).ToList();
         }
 
         double postFrequency = 0;
@@ -81,15 +113,17 @@ public class InstaController : ControllerBase
         {
             try
             {
-                var latest = DateTime.Parse(videos.First().Timestamp!);
-                var oldest = DateTime.Parse(videos.Last().Timestamp!);
+                // Find latest and oldest by parsing timestamps since order may vary
+                var dates = videos.Select(v => DateTime.Parse(v.Timestamp!)).OrderByDescending(d => d).ToList();
+                var latest = dates.First();
+                var oldest = dates.Last();
                 var days = (latest - oldest).TotalDays;
                 if (days > 0)
                 {
-                    postFrequency = (videos.Count / days) * 7;
+                    postFrequency = (double)videos.Count / days * 7; // Posts per week
                 }
             }
-            catch { /* Parsing fallback */ }
+            catch { /* Ignore parsing errors */ }
         }
 
         var composite = new
@@ -404,6 +438,18 @@ public class InstaController : ControllerBase
                 WHERE username = @username AND platform = 'instagram'",
                 new { username, active });
             return Ok(new { username, is_active = active });
+        }
+
+    [HttpPost("profile/{username}/toggle-own")]
+    public async Task<IActionResult> ToggleOwnAccount(string username, [FromQuery] bool isOwn)
+    {
+            using var conn = await _db.CreateConnectionAsync();
+            await conn.ExecuteAsync(@"
+                UPDATE competitor_watchlist 
+                SET is_own_account = @isOwn 
+                WHERE username = @username AND platform = 'instagram'",
+                new { username, isOwn });
+            return Ok(new { username, is_own_account = isOwn });
         }
 
     [HttpDelete("profile/{username}/data")]

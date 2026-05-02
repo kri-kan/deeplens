@@ -127,11 +127,13 @@ namespace DeepLens.Infrastructure.Services
             new() { Key = "Meta:TokenLastRefreshed", Section = "Meta", Label = "Token Last Refreshed", Description = "The date the access token was last refreshed. Updated automatically.", IsSecret = false, DataType = "datetime", Value = "2025-01-01T00:00:00Z" },
             new() { Key = "Meta:SyncIntervalMinutes", Section = "Meta", Label = "Sync Interval (minutes)", Description = "How often the background worker runs a full sync cycle. Default: 720 (12h).", IsSecret = false, DataType = "integer", Value = "720" },
             new() { Key = "Meta:EngagementRefreshLimit", Section = "Meta", Label = "Engagement Refresh Limit", Description = "How many recent posts to refresh engagement stats on per sync. Default: 20.", IsSecret = false, DataType = "integer", Value = "20" },
+            new() { Key = "Meta:ThrottleIntervalMs", Section = "Meta", Label = "API Throttle Delay (ms)", Description = "Gap between subsequent Meta Graph calls to prevent rate limits. Default: 2000 (2s).", IsSecret = false, DataType = "integer", Value = "2000" },
             new() { Key = "Meta:ExchangeShortLivedToken", Section = "Meta", Label = "Short-Lived Token", Description = "Paste a short-lived user token here to automatically exchange it for a 60-day token.", IsSecret = true, DataType = "string", Value = "" },
             new() { Key = "Infrastructure:MinioEndpoint", Section = "Infrastructure", Label = "MinIO Endpoint", Description = "Host and port of the MinIO server e.g. 192.168.0.170:9000.", IsSecret = false, DataType = "string", Value = "192.168.0.170:9000" },
             new() { Key = "Infrastructure:MinioAccessKey", Section = "Infrastructure", Label = "MinIO Access Key", Description = "MinIO access key (username).", IsSecret = false, DataType = "string", Value = "" },
             new() { Key = "Infrastructure:MinioSecretKey", Section = "Infrastructure", Label = "MinIO Secret Key", Description = "MinIO secret key (password).", IsSecret = true, DataType = "string", Value = "" },
-            new() { Key = "Infrastructure:KafkaBootstrap", Section = "Infrastructure", Label = "Kafka Bootstrap Servers", Description = "Comma-separated Kafka broker addresses.", IsSecret = false, DataType = "string", Value = "192.168.0.170:9092" }
+            new() { Key = "Infrastructure:KafkaBootstrap", Section = "Infrastructure", Label = "Kafka Bootstrap Servers", Description = "Comma-separated Kafka broker addresses.", IsSecret = false, DataType = "string", Value = "192.168.0.170:9092" },
+            new() { Key = "Media:CacheExpiryHours", Section = "Media", Label = "Media Cache Expiry (hours)", Description = "Browser/App cache duration for images. Default: 6.", IsSecret = false, DataType = "integer", Value = "6" }
         };
     }
 }

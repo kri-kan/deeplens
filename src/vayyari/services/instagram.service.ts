@@ -104,8 +104,11 @@ export const instagramService = {
     return searchApiClient.get<InstagramProfile[]>('/api/v1/Insta');
   },
 
-  getProfileDetails: async (username: string): Promise<ProfileDetailsResponse> => {
-    return searchApiClient.get<ProfileDetailsResponse>(`/api/v1/Insta/profile/${username}`);
+  getProfileDetails: async (username: string, sortBy: string = 'date', sortOrder: string = 'desc', fromDate?: string, toDate?: string): Promise<any> => {
+    let url = `/api/v1/Insta/profile/${username}?sortBy=${sortBy}&sortOrder=${sortOrder}`;
+    if (fromDate) url += `&fromDate=${fromDate}`;
+    if (toDate) url += `&toDate=${toDate}`;
+    return searchApiClient.get(url);
   },
 
   addToWatchlist: async (username: string): Promise<{ message: string; profile: InstagramProfile }> => {
@@ -168,6 +171,10 @@ export const instagramService = {
 
   toggleWatchStatus: async (username: string, active: boolean): Promise<any> => {
     return searchApiClient.post(`/api/v1/Insta/watchlist/toggle?username=${username}&active=${active}`, {});
+  },
+
+  toggleOwnAccount: async (username: string, isOwn: boolean): Promise<any> => {
+    return searchApiClient.post(`/api/v1/Insta/profile/${username}/toggle-own?isOwn=${isOwn}`, {});
   },
 
   deleteJob: async (id: string): Promise<void> => {

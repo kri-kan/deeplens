@@ -5,9 +5,9 @@ import { useRouter } from 'expo-router';
 import { BentoCard } from '@/components/ui/BentoCard';
 
 const { width } = Dimensions.get('window');
-const COLUMN_COUNT = 3;
-const GAP = 12;
-const TILE_SIZE = (width - 32 - (GAP * (COLUMN_COUNT - 1))) / COLUMN_COUNT;
+const COLUMN_COUNT = 4;
+const GAP = 0;
+const TILE_SIZE = (width - 32) / COLUMN_COUNT;
 
 interface UtilityItem {
   id: string;
@@ -19,20 +19,26 @@ interface UtilityItem {
 
 const OPERATIONAL_UTILITIES: UtilityItem[] = [
   { id: 'gen-id', title: 'Generate ID', icon: 'identifier', route: '/utilities/order-id-generator', color: '#6200ee' },
+  { id: 'customers', title: 'Customers', icon: 'account-group', route: '/utilities/customer-management', color: '#3f51b5' },
   { id: 'stub3', title: 'Reserved', icon: 'clock-outline', route: '', color: '#999' },
 ];
 
 const PRODUCT_UTILITIES: UtilityItem[] = [
-  { id: 'view-catalog', title: 'Product Catalog', icon: 'format-list-bulleted', route: '/utilities/product-list', color: '#6200ee' },
-  { id: 'create-product', title: 'Create Product', icon: 'plus-box', route: '/utilities/create-product', color: '#00a86b' },
-  { id: 'merge-products', title: 'Merge Products', icon: 'call-merge', route: '', color: '#999' },
+  { id: 'view-catalog', title: 'Catalog', icon: 'format-list-bulleted', route: '/utilities/product-list', color: '#6200ee' },
+  { id: 'create-product', title: 'Create', icon: 'plus-box', route: '/utilities/create-product', color: '#00a86b' },
+  { id: 'merge-products', title: 'Merge', icon: 'call-merge', route: '', color: '#999' },
 ];
 
 const SYSTEM_UTILITIES: UtilityItem[] = [
-  { id: 'media-settings', title: 'Media Settings', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722' },
-  { id: 'insta-explorer', title: 'IG Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C' },
-  { id: 'competitor-scraper', title: 'Graph API Sync', icon: 'cloud-sync', route: '/utilities/instagram-scraper', color: '#6200ee' },
-  { id: 'quick-links', title: 'Quick Links', icon: 'link-variant', route: '/utilities/quick-links', color: '#2196F3' },
+  { id: 'media-settings', title: 'Media', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722' },
+  { id: 'insta-explorer', title: 'Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C' },
+  { id: 'competitor-scraper', title: 'Sync', icon: 'cloud-sync', route: '/utilities/instagram-scraper', color: '#6200ee' },
+  { id: 'quick-links', title: 'Links', icon: 'link-variant', route: '/utilities/quick-links', color: '#2196F3' },
+];
+
+const COMMUNICATION_UTILITIES: UtilityItem[] = [
+  { id: 'broadcast', title: 'Broadcast', icon: 'whatsapp', route: '/utilities/whatsapp-broadcast', color: '#25D366' },
+  { id: 'campaigns', title: 'Campaigns', icon: 'bullhorn-variant', route: '', color: '#FF9800' },
 ];
 
 export default function UtilityScreen() {
@@ -47,14 +53,15 @@ export default function UtilityScreen() {
             key={item.id} 
             onPress={() => item.route && router.push(item.route as any)}
             disabled={!item.route}
+            style={{ width: TILE_SIZE, height: TILE_SIZE }}
           >
             <BentoCard 
-              style={[styles.tile, { width: TILE_SIZE, height: TILE_SIZE }]}
+              style={[styles.tile, { height: TILE_SIZE, borderRadius: 0 }]}
               surfaceLevel="surfaceContainerLow"
             >
               <View style={styles.tileContent}>
-                <Icon source={item.icon} size={32} color={item.route ? item.color || theme.colors.primary : '#ccc'} />
-                <Text variant="labelSmall" style={[styles.tileTitle, { color: item.route ? theme.colors.onSurface : '#999' }]} numberOfLines={2}>
+                <Icon source={item.icon} size={42} color={item.route ? item.color || theme.colors.primary : '#ccc'} />
+                <Text variant="labelSmall" style={[styles.tileTitle, { color: item.route ? theme.colors.onSurface : '#999' }]} numberOfLines={1}>
                   {item.title}
                 </Text>
               </View>
@@ -73,25 +80,31 @@ export default function UtilityScreen() {
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.sectionHeader}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Operational Utilities</Text>
+        <View style={[styles.sectionHeader, {marginTop: 0}]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Business</Text>
         </View>
         
         {renderGrid(OPERATIONAL_UTILITIES)}
 
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Product Utilities</Text>
+        <View style={styles.sectionHeader}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Product</Text>
         </View>
         
         {renderGrid(PRODUCT_UTILITIES)}
 
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>System Utilities</Text>
+        <View style={styles.sectionHeader}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>System</Text>
         </View>
         
         {renderGrid(SYSTEM_UTILITIES)}
+        
+        <View style={styles.sectionHeader}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Communications</Text>
+        </View>
+        
+        {renderGrid(COMMUNICATION_UTILITIES)}
 
-        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+        <View style={styles.sectionHeader}>
           <Text variant="titleMedium" style={styles.sectionTitle}>Business Insights</Text>
         </View>
         {/* Placeholder for future rows */}
@@ -111,7 +124,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   sectionHeader: {
-    marginBottom: 16,
+    marginBottom: 4,
+    marginTop: 16,
   },
   sectionTitle: {
     fontWeight: 'bold',
@@ -123,7 +137,7 @@ const styles = StyleSheet.create({
     gap: GAP,
   },
   tile: {
-    padding: 12,
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 0, // Reset default bento margin
@@ -131,12 +145,13 @@ const styles = StyleSheet.create({
   tileContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 0,
   },
   tileTitle: {
     textAlign: 'center',
     fontWeight: '600',
-    fontSize: 11,
+    fontSize: 14,
+    paddingTop: 8,
   },
   emptyGridPlaceholder: {
     height: 100,

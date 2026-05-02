@@ -11,6 +11,8 @@ using Minio;
 using Confluent.Kafka;
 using DeepLens.Contracts.Catalog;
 
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -32,7 +34,8 @@ builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IIdGeneratorService, IdGeneratorService>();
 builder.Services.AddScoped<IAttachmentService, AttachmentService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
-builder.Services.AddHttpClient<IMetaGraphService, MetaGraphService>();
+builder.Services.AddScoped<IMetaGraphService, MetaGraphService>();
+builder.Services.AddScoped<DeepLens.Contracts.Customers.ICustomerService, DeepLens.Infrastructure.Services.CustomerService>();
 
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 
@@ -117,13 +120,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("SearchPolicy", policy => policy.RequireClaim("scope", "deeplens.search"));
-    options.AddPolicy("IngestPolicy", policy => policy.RequireClaim("scope", "deeplens.api"));
+        options.AddPolicy("SearchPolicy", policy => 
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireAssertion(context => 
+            {
+                var scopeClaims = context.User.FindAll("scope").Select(c => c.Value);
+                return scopeClaims.Any(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("deeplens.search"));
+            });
+        });
+    options.AddPolicy("IngestPolicy", policy => 
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireAssertion(context => 
+        {
+            var scopeClaims = context.User.FindAll("scope").Select(c => c.Value);
+            return scopeClaims.Any(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("deeplens.api"));
+        });
+    });
 });
 
 // CORS Configuration for Frontend - read from appsettings.json
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? new[] { "http://localhost:3000", "http://localhost:5001", "http://localhost:5173" };
+    ?? new[] { "http://localhost:3000", "http://localhost:5001", "http://localhost:5173", "http://localhost:8081" };
 
 builder.Services.AddCors(options =>
 {

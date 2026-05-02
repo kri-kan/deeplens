@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using DeepLens.SearchApi.Services;
 using DeepLens.Infrastructure.Services;
+using DeepLens.Application.Abstractions.Services;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -10,11 +11,13 @@ public class AttachmentController : ControllerBase
 {
     private readonly IAttachmentService _attachmentService;
     private readonly IStorageService _storageService;
+    private readonly IAppSettingsService _settings;
 
-    public AttachmentController(IAttachmentService attachmentService, IStorageService storageService)
+    public AttachmentController(IAttachmentService attachmentService, IStorageService storageService, IAppSettingsService settings)
     {
         _attachmentService = attachmentService;
         _storageService = storageService;
+        _settings = settings;
     }
 
     [HttpPost("upload")]
@@ -58,6 +61,14 @@ public class AttachmentController : ControllerBase
             // Rough mapping of content type based on extension
             string contentType = path.EndsWith(".webp") ? "image/webp" : 
                                 path.EndsWith(".png") ? "image/png" : "image/jpeg";
+            
+            // Add Cache-Control header for browser/app caching
+            var allSettings = await _settings.GetAllAsync();
+            var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
+            int expiryHours = int.TryParse(expirySetting, out var h) ? h : 6;
+            int maxAgeSeconds = expiryHours * 3600;
+
+            Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}");
             
             return File(stream, contentType);
         }

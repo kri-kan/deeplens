@@ -53,5 +53,32 @@ export const API_ROUTES = {
       `/api/v1/media/settings/lookup?category=${category}${subCategory ? `&subcategory=${subCategory}` : ''}`,
     RETENTION_OPTIONS: '/api/v1/media/settings/retention-options',
     SCHEMA: '/api/v1/media/settings/schema',
+  },
+
+  // Customer Management
+  CUSTOMERS: {
+    LIST: '/api/v1/customers',
+    DETAIL: (id: string) => `/api/v1/customers/${id}`,
+    UPSERT: '/api/v1/customers',
+    DELETE: (id: string) => `/api/v1/customers/${id}`,
+    ADDRESSES: (id: string) => `/api/v1/customers/${id}/addresses`,
+    UPDATE_ADDRESS: (id: string) => `/api/v1/customers/addresses/${id}`,
+    DELETE_ADDRESS: (id: string) => `/api/v1/customers/addresses/${id}`,
+    SET_DEFAULT_ADDRESS: (customerId: string, addressId: string) => `/api/v1/customers/${customerId}/addresses/${addressId}/default`,
+  },
+
+  // WhatsApp communication
+  WHATSAPP: {
+    CHANNELS: '/api/v1/whatsapp/channels',
+    DELETE_CHANNEL: (id: string) => `/api/v1/whatsapp/channels/${id}`,
+    SUBSCRIBERS: (id: string) => `/api/v1/whatsapp/channels/${id}/subscribers`,
+    MEMBERSHIPS: (customerId: string) => `/api/v1/whatsapp/customers/${customerId}/memberships`,
+    SUBSCRIBE: (customerId: string, channelId: string) => `/api/v1/whatsapp/customers/${customerId}/subscribe/${channelId}`,
+    UNSUBSCRIBE: (customerId: string, channelId: string) => `/api/v1/whatsapp/customers/${customerId}/unsubscribe/${channelId}`,
+  },
+
+  // Common / Master Data
+  COMMON: {
+    COUNTRY_CODES: '/api/v1/country/codes',
   }
 };

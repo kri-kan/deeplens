@@ -8,6 +8,7 @@ using Confluent.Kafka;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using System.Text.Json;
+using DeepLens.Application.Abstractions.Services;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -19,17 +20,20 @@ public class MediaController : ControllerBase
     private readonly IStorageService _storageService;
     private readonly IDistributedCache _cache;
     private readonly ILogger<MediaController> _logger;
+    private readonly IAppSettingsService _settings;
 
     public MediaController(
         IMetadataService metadataService, 
         IStorageService storageService,
         IDistributedCache cache,
-        ILogger<MediaController> logger)
+        ILogger<MediaController> logger,
+        IAppSettingsService settings)
     {
         _metadataService = metadataService;
         _storageService = storageService;
         _cache = cache;
         _logger = logger;
+        _settings = settings;
     }
 
     /// <summary>
@@ -114,6 +118,12 @@ public class MediaController : ControllerBase
                 _logger.LogWarning("Failed to update cache for {Path}: {Msg}", item.StoragePath, ex.Message);
             }
 
+            var allSettings = await _settings.GetAllAsync();
+            var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
+            int expiryHours = int.TryParse(expirySetting, out var h) ? h : 6;
+            int maxAgeSeconds = expiryHours * 3600;
+
+            Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for thumbnails
             return File(data, MediaConstants.Formats.WebP);
         }
         catch (Exception ex)
@@ -202,6 +212,12 @@ public class MediaController : ControllerBase
                 });
             } catch { }
 
+            var allSettings = await _settings.GetAllAsync();
+            var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
+            int expiryHours = int.TryParse(expirySetting, out var h) ? h : 6;
+            int maxAgeSeconds = expiryHours * 3600;
+
+            Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for previews
             return File(data, "image/gif");
         }
         catch (Exception ex)
@@ -225,6 +241,12 @@ public class MediaController : ControllerBase
             var stream = await _storageService.GetFileAsync(item.StoragePath);
             string contentType = item.MimeType ?? (item.MediaType == 1 ? "image/jpeg" : "video/mp4");
             
+            var allSettings = await _settings.GetAllAsync();
+            var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
+            int expiryHours = int.TryParse(expirySetting, out var h) ? h : 6;
+            int maxAgeSeconds = expiryHours * 3600;
+
+            Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for raw media
             return File(stream, contentType, enableRangeProcessing: true);
         }
         catch (Exception ex)

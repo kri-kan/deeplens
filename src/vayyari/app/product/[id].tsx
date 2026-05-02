@@ -218,7 +218,7 @@ export default function ProductDetailScreen() {
         <View style={styles.modalBg}>
             <IconButton 
                 icon="close" 
-                color="white" 
+                iconColor="white" 
                 size={30} 
                 onPress={() => setIsPreviewOpen(false)}
                 style={styles.closeBtn}

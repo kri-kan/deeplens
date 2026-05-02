@@ -14,6 +14,9 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
         services.AddScoped<ISequencedIdGenerator, SequencedIdGenerator>();
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<DeepLens.Contracts.Customers.ICustomerService, DeepLens.Infrastructure.Services.CustomerService>();
+        services.AddScoped<DeepLens.Contracts.Marketing.IWhatsAppService, DeepLens.Infrastructure.Services.WhatsAppService>();
         services.AddScoped<DeepLens.Application.Abstractions.Services.IAppSettingsService, DeepLens.Infrastructure.Services.AppSettingsService>();
 
         return services;

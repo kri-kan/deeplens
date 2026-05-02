@@ -16,6 +16,15 @@ namespace DeepLens.Application.Abstractions.Services
         int GetEngagementRefreshLimit();
         Task<MetaQuotaInfo> GetQuotaAsync();
         string? LastRawResponse { get; }
+        MetaCallDetails? LastCall { get; }
+    }
+
+    public class MetaCallDetails
+    {
+        public string? RequestUrl { get; set; }
+        public string? RequestPayload { get; set; }
+        public string? ResponseBody { get; set; }
+        public DateTime Timestamp { get; set; }
     }
 
     public class MetaQuotaInfo

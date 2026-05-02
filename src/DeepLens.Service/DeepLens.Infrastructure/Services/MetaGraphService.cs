@@ -22,6 +22,7 @@ namespace DeepLens.Infrastructure.Services
         public int TokenRefreshThresholdDays { get; set; } = 50;
         public int SyncIntervalMinutes { get; set; } = 720;
         public int EngagementRefreshLimit { get; set; } = 20;
+        public int ThrottleIntervalMs { get; set; } = 2000;
     }
 
     public class MetaGraphService : IMetaGraphService
@@ -35,6 +36,7 @@ namespace DeepLens.Infrastructure.Services
         private MetaOptions _opts;
 
         public string? LastRawResponse { get; private set; }
+        public MetaCallDetails? LastCall { get; private set; }
 
         public MetaGraphService(
             ILogger<MetaGraphService> logger,
@@ -78,6 +80,7 @@ namespace DeepLens.Infrastructure.Services
             Override("Meta:SyncIntervalMinutes",    v => { if (int.TryParse(v, out var i)) opts.SyncIntervalMinutes = i; });
             Override("Meta:EngagementRefreshLimit", v => { if (int.TryParse(v, out var i)) opts.EngagementRefreshLimit = i; });
             Override("Meta:TokenLastRefreshed",     v => { if (DateTime.TryParse(v, out var d)) opts.TokenLastRefreshed = d.ToUniversalTime(); });
+            Override("Meta:ThrottleIntervalMs",    v => { if (int.TryParse(v, out var i)) opts.ThrottleIntervalMs = i; });
 
             _opts = opts;
         }
@@ -96,6 +99,7 @@ namespace DeepLens.Infrastructure.Services
             if (int.TryParse(section["TokenRefreshThresholdDays"], out var thr)) opts.TokenRefreshThresholdDays = thr;
             if (int.TryParse(section["SyncIntervalMinutes"], out var sync)) opts.SyncIntervalMinutes = sync;
             if (int.TryParse(section["EngagementRefreshLimit"], out var eng)) opts.EngagementRefreshLimit = eng;
+            if (int.TryParse(section["ThrottleIntervalMs"], out var thrMs)) opts.ThrottleIntervalMs = thrMs;
             if (DateTime.TryParse(section["TokenLastRefreshed"], out var dt)) opts.TokenLastRefreshed = dt.ToUniversalTime();
 
             return opts;
@@ -395,6 +399,12 @@ namespace DeepLens.Infrastructure.Services
         {
             try
             {
+                if (_opts.ThrottleIntervalMs > 0)
+                {
+                    _logger.LogDebug("Throttling Meta Graph call by {Ms}ms", _opts.ThrottleIntervalMs);
+                    await Task.Delay(_opts.ThrottleIntervalMs);
+                }
+
                 await RecordRequestAsync();
 
                 var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
@@ -406,6 +416,14 @@ namespace DeepLens.Infrastructure.Services
                 }
                 
                 LastRawResponse = await response.Content.ReadAsStringAsync();
+                
+                LastCall = new MetaCallDetails
+                {
+                    RequestUrl = url.Replace(_opts.AccessToken, "REDACTED"),
+                    RequestPayload = null, // Business Discovery uses GET with query params
+                    ResponseBody = LastRawResponse,
+                    Timestamp = DateTime.UtcNow
+                };
 
                 var result = JsonSerializer.Deserialize<GraphProfileResponse>(LastRawResponse,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -413,6 +431,12 @@ namespace DeepLens.Infrastructure.Services
                 if (result?.Error != null)
                 {
                     _logger.LogError("Graph API error: [{Code}] {Msg}", result.Error.Code, result.Error.Message);
+                    
+                    if (result.Error.Code == 4 || result.Error.Code == 17 || result.Error.Message.Contains("limit reached"))
+                    {
+                        throw new Exception("INSTAGRAM_RATE_LIMIT_REACHED");
+                    }
+                    
                     return null;
                 }
 

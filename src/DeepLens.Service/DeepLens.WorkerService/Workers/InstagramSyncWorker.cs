@@ -34,6 +34,13 @@ namespace DeepLens.WorkerService.Workers
 
             _logger.LogInformation("InstagramSyncWorker started in Queue-Only mode.");
 
+            // Reset any jobs stuck in 'running' status from previous process crash
+            try {
+                await HealQueueAsync();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Failed to heal queue on startup.");
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 int delaySeconds = 5; 
@@ -76,6 +83,9 @@ namespace DeepLens.WorkerService.Workers
             _logger.LogInformation("Database connection opened for queue processing.");
 
             // Fetch highest priority pending job that is due
+            // Using a transaction with FOR UPDATE SKIP LOCKED to strictly ensure 
+            // only one worker can pick up a specific job at a time.
+            using var tx = await conn.BeginTransactionAsync(ct);
             var job = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username
                 FROM scraper_queue j
@@ -83,26 +93,24 @@ namespace DeepLens.WorkerService.Workers
                 WHERE j.status = 'pending' 
                   AND (j.next_run_at IS NULL OR j.next_run_at <= NOW())
                 ORDER BY j.priority DESC, j.created_at ASC
-                LIMIT 1");
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED", transaction: tx);
 
             if (job == null)
             {
-                _logger.LogInformation("No pending jobs found in scraper_queue.");
+                await tx.RollbackAsync(ct);
                 return false;
             }
 
-            _logger.LogInformation("Processing job {JobId} for @{Username}", (Guid)job.id, (string)job.username);
-
             Guid jobId = job.id;
+            // Update status to running inside the same transaction
+            await conn.ExecuteAsync("UPDATE scraper_queue SET status = 'running' WHERE id = @jobId", new { jobId }, transaction: tx);
+            await tx.CommitAsync(ct);
+
             Guid watchlistId = job.watchlist_id;
             string username = job.username;
             int targetCount = job.target_count;
             string jobType = job.job_type;
-
-            _logger.LogInformation("Picked up job {JobId} for @{Username} (Type: {Type}, Target: {Target})", jobId, username, jobType, targetCount);
-
-            // Update status to running
-            await conn.ExecuteAsync("UPDATE scraper_queue SET status = 'running' WHERE id = @jobId", new { jobId });
 
             var startTime = DateTime.UtcNow;
             int scrapedCount = 0;
@@ -124,7 +132,7 @@ namespace DeepLens.WorkerService.Workers
                 var graphProfile = await graph.GetProfileAsync(username);
                 if (graphProfile == null) throw new Exception($"Profile @{username} not found or not a business account.");
                 
-                await LogAsync(conn, jobId, "INFO", $"Found profile: {graphProfile.Name}. {graphProfile.FollowersCount} followers.", graph.LastRawResponse);
+                await LogAsync(conn, jobId, "INFO", $"Found profile: {graphProfile.Name}. {graphProfile.FollowersCount} followers.", graph.LastCall);
 
                 await UpdateProfileAsync(conn, watchlistId, graphProfile);
                 await LogAsync(conn, jobId, "INFO", "Profile metadata updated in database.");
@@ -135,13 +143,13 @@ namespace DeepLens.WorkerService.Workers
                 // If targetCount is 0, GetPostsAsync treats it as "All"
                 var posts = await graph.GetPostsAsync(username, targetCount);
                 
-                await LogAsync(conn, jobId, "INFO", $"Fetched {posts.Count} posts from Meta API.", graph.LastRawResponse);
+                await LogAsync(conn, jobId, "INFO", $"Fetched {posts.Count} posts from Meta API.", graph.LastCall);
                 
                 using var serviceScope = _serviceProvider.CreateScope();
                 var storage = serviceScope.ServiceProvider.GetRequiredService<IStorageService>();
                 var httpClient = serviceScope.ServiceProvider.GetRequiredService<HttpClient>();
 
-                int newCount = await IngestPostsAsync(conn, watchlistId, posts, graphProfile.ExternalId, storage, httpClient);
+                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient);
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
@@ -168,6 +176,18 @@ namespace DeepLens.WorkerService.Workers
                         new { watchlistId, nextRun, Target = graph.GetEngagementRefreshLimit() });
                     _logger.LogInformation("Rescheduled routine sync for @{Username} at {NextRun}", username, nextRun);
                 }
+            }
+            catch (Exception ex) when (ex.Message.Contains("INSTAGRAM_RATE_LIMIT_REACHED"))
+            {
+                _logger.LogWarning("Rate limit reached for @{Username}. Re-queueing for later.", username);
+                await LogAsync(conn, jobId, "WARNING", "Instagram Rate Limit Reached. Job will resume in 1 hour.");
+                
+                await conn.ExecuteAsync(@"
+                    UPDATE scraper_queue 
+                    SET status = 'pending', 
+                        next_run_at = @NextRun
+                    WHERE id = @JobId", 
+                    new { JobId = jobId, NextRun = DateTime.UtcNow.AddHours(1) });
             }
             catch (Exception ex)
             {
@@ -213,6 +233,17 @@ namespace DeepLens.WorkerService.Workers
                 });
         }
 
+        private async Task HealQueueAsync()
+        {
+            using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+            var count = await conn.ExecuteAsync("UPDATE scraper_queue SET status = 'pending' WHERE status = 'running'");
+            if (count > 0)
+            {
+                _logger.LogInformation("Healed queue: Reset {Count} stuck jobs to pending.", count);
+            }
+        }
+
         private async Task UpdateProfileAsync(NpgsqlConnection conn, Guid id, MetaProfile profile)
         {
             var sql = @"
@@ -233,11 +264,12 @@ namespace DeepLens.WorkerService.Workers
                 new { Id = id, Followers = (int)profile.FollowersCount, Following = (int)profile.FollowsCount, Now = DateTime.UtcNow });
         }
 
-        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http)
+        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http)
         {
             var existingPosts = (await conn.QueryAsync<dynamic>("SELECT platform_video_id, storage_path FROM competitor_videos WHERE watchlist_id = @Id", new { Id = watchlistId }))
                                 .ToDictionary(x => (string)x.platform_video_id, x => (string?)x.storage_path);
             int count = 0;
+            int total = posts.Count;
 
             var insertSql = @"
                 INSERT INTO competitor_videos (
@@ -248,41 +280,52 @@ namespace DeepLens.WorkerService.Workers
                     @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath)";
 
             var updateStorageSql = "UPDATE competitor_videos SET storage_path = @StoragePath WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId";
+            var updateProgressSql = "UPDATE scraper_queue SET scraped_count = @Count WHERE id = @JobId";
 
             foreach (var p in posts)
             {
-                if (string.IsNullOrEmpty(p.Id)) continue;
-                
-                bool exists = existingPosts.TryGetValue(p.Id, out var storagePath);
-                
-                // If it exists and already has a storage path, we skip thumbnail download
-                if (exists && !string.IsNullOrEmpty(storagePath)) continue;
+                try {
+                    if (string.IsNullOrEmpty(p.Id)) continue;
+                    
+                    bool exists = existingPosts.TryGetValue(p.Id, out var storagePath);
+                    
+                    // If it exists and already has a storage path, we skip thumbnail download
+                    if (exists && !string.IsNullOrEmpty(storagePath)) continue;
 
-                // Download thumbnail if missing
-                string? newStoragePath = null;
-                string? thumbUrl = p.ThumbnailUrl ?? p.MediaUrl;
-                if (!string.IsNullOrEmpty(thumbUrl))
-                {
-                    newStoragePath = await DownloadAndStoreThumbnailAsync(http, storage, externalId, p.Id, thumbUrl);
-                }
+                    // Download thumbnail if missing
+                    string? newStoragePath = null;
+                    string? thumbUrl = p.ThumbnailUrl ?? p.MediaUrl;
+                    if (!string.IsNullOrEmpty(thumbUrl))
+                    {
+                        newStoragePath = await DownloadAndStoreThumbnailAsync(http, storage, externalId, p.Id, thumbUrl);
+                    }
 
-                if (!exists)
-                {
-                    await conn.ExecuteAsync(insertSql, new {
-                        WatchlistId = watchlistId, Id = p.Id, Url = p.Permalink ?? "", Caption = p.Caption,
-                        MediaType = p.MediaType?.ToLower(), ThumbnailUrl = thumbUrl,
-                        MediaUrl = p.MediaUrl, LikeCount = p.LikeCount, CommentCount = p.CommentsCount,
-                        PostedAt = ParseTimestamp(p.Timestamp) ?? DateTime.UtcNow,
-                        IsReel = p.MediaProductType?.ToUpper() == "REELS",
-                        StoragePath = newStoragePath
-                    });
-                    count++;
-                }
-                else if (newStoragePath != null)
-                {
-                    // Update existing record with missing storage path
-                    await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
-                    count++;
+                    if (!exists)
+                    {
+                        await conn.ExecuteAsync(insertSql, new {
+                            WatchlistId = watchlistId, Id = p.Id, Url = p.Permalink ?? "", Caption = p.Caption,
+                            MediaType = p.MediaType?.ToLower(), ThumbnailUrl = thumbUrl,
+                            MediaUrl = p.MediaUrl, LikeCount = p.LikeCount, CommentCount = p.CommentsCount,
+                            PostedAt = ParseTimestamp(p.Timestamp) ?? DateTime.UtcNow,
+                            IsReel = p.MediaProductType?.ToUpper() == "REELS",
+                            StoragePath = newStoragePath
+                        });
+                        count++;
+                    }
+                    else if (newStoragePath != null)
+                    {
+                        // Update existing record with missing storage path
+                        await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
+                        count++;
+                    }
+
+                    // Periodic progress update in DB for long-running jobs
+                    if (count % 5 == 0 || count == total)
+                    {
+                        await conn.ExecuteAsync(updateProgressSql, new { Count = count, JobId = jobId });
+                    }
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "Failed to ingest individual post {PostId} for @{ExternalId}. Skipping to next.", p.Id, externalId);
                 }
             }
             return count;

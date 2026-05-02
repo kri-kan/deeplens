@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, FlatList, Image, Dimensions, Alert } from 'react-native';
-import { Surface, Text, Appbar, Avatar, Card, Button, List, Divider, useTheme, ActivityIndicator, IconButton, SegmentedButtons, Chip, ProgressBar, Switch } from 'react-native-paper';
-import { useRouter } from 'expo-router';
-import { instagramService, InstagramProfile, InstagramVideo, MetaQuotaInfo } from '../../services/instagram.service';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, ScrollView, FlatList, Dimensions, Alert, RefreshControl, Linking, BackHandler, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
+import * as Clipboard from 'expo-clipboard';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Text, Button, Card, Avatar, IconButton, Divider, Surface, Chip, SegmentedButtons, TextInput, useTheme, Switch, List, ActivityIndicator, Icon, Appbar, Menu } from 'react-native-paper';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { instagramService } from '../../services/instagram.service';
+import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -10,208 +14,151 @@ const ITEM_SIZE = width / COLUMN_COUNT;
 
 export default function InstagramExplorer() {
   const theme = useTheme();
-  const router = useRouter();
-  const [showWatchlist, setShowWatchlist] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [profiles, setProfiles] = useState<any[]>([]);
+  const { token } = useAuth();
+  const [watchlist, setWatchlist] = useState<any[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
-  const [profileData, setProfileData] = useState<any>(null);
+  const [profileData, setProfileData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [activeJob, setActiveJob] = useState<any>(null);
-  const [showQueue, setShowQueue] = useState(false);
   const [activeQueue, setActiveQueue] = useState<any[]>([]);
   const [jobHistory, setJobHistory] = useState<any[]>([]);
+  const [quota, setQuota] = useState<any | null>(null);
+  const [showQueue, setShowQueue] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [showQueueHistory, setShowQueueHistory] = useState(false);
   const [syncMode, setSyncMode] = useState<'recent' | 'full'>('recent');
-  const [targetPostCount, setTargetPostCount] = useState('50');
-  const [quota, setQuota] = useState<MetaQuotaInfo | null>(null);
+  const [targetPostCount, setTargetPostCount] = useState('12');
 
-  useEffect(() => {
-    loadWatchlist();
-    loadQuota();
-    
-    // Auto-refresh jobs if the queue is open
-    const interval = setInterval(() => {
-      if (showQueue) {
-        loadQueue();
-      }
-    }, 3000);
-    
-    return () => clearInterval(interval);
-  }, [showQueue]);
+  const [bioExpanded, setBioExpanded] = useState(false);
 
-  const loadQuota = async () => {
-    try {
-      const q = await instagramService.getQuota();
-      setQuota(q);
-    } catch (error) {
-      console.error('Failed to load quota', error);
-    }
-  };
+  const [sortBy, setSortBy] = useState<'date' | 'likes' | 'comments'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [fromDate, setFromDate] = useState<string | null>(null);
+  const [toDate, setToDate] = useState<string | null>(null);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
+  const [sortMenuVisible, setSortMenuVisible] = useState(false);
 
-  const loadWatchlist = async () => {
+  const fetchWatchlist = useCallback(async () => {
     try {
       const data = await instagramService.getWatchlist();
-      setProfiles(data);
-    } catch (error) {
-      console.error('Failed to load watchlist', error);
+      setWatchlist(data);
+    } catch (err) {
+      console.error('Failed to fetch watchlist', err);
     }
-  };
+  }, []);
 
-  const selectProfile = async (username: string, refresh: boolean = false) => {
+  const fetchQueue = useCallback(async () => {
+    try {
+      const [active, history] = await Promise.all([
+        instagramService.getActiveJobs(),
+        instagramService.getJobHistory()
+      ]);
+      setActiveQueue(active);
+      setJobHistory(history);
+    } catch (err) {
+      console.error('Failed to fetch queue', err);
+    }
+  }, []);
+
+  const fetchQuota = useCallback(async () => {
+    try {
+      const data = await instagramService.getQuota();
+      setQuota(data);
+    } catch (err) {
+      console.error('Failed to fetch quota', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWatchlist();
+    fetchQuota();
+  }, [fetchWatchlist, fetchQuota]);
+
+  useEffect(() => {
+    if (showQueue) {
+      fetchQueue();
+      const interval = setInterval(fetchQueue, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [showQueue, fetchQueue]);
+
+  const selectProfile = async (username: string, sBy?: string, sOrder?: string, fDate?: string | null, tDate?: string | null) => {
     setSelectedProfile(username);
-    if (!refresh) setShowWatchlist(false);
     setLoading(true);
     try {
-      const data = await instagramService.getProfileDetails(username);
+      const data = await instagramService.getProfileDetails(
+        username, 
+        sBy || sortBy, 
+        sOrder || sortOrder, 
+        fDate === undefined ? fromDate || undefined : fDate || undefined, 
+        tDate === undefined ? toDate || undefined : tDate || undefined
+      );
       setProfileData(data);
-      // Load jobs too
-      const allJobs = await instagramService.getActiveJobs();
-      setJobs(allJobs);
-      const myJob = allJobs.find(j => j.username === username);
-      setActiveJob(myJob);
-    } catch (error) {
-      console.error('Failed to load profile details', error);
+    } catch (err) {
+      console.error('Failed to fetch profile details', err);
+      Alert.alert("Error", "Could not load profile data.");
     } finally {
       setLoading(false);
     }
   };
 
-  const startDeepScrape = async () => {
-    if (!profileData) return;
-    try {
-      await instagramService.createJob({
-        watchlistId: profileData.profile.username,
-        target_count: 500,
-        priority: 3
-      });
-      Alert.alert("Deep Sync Queued", `A comprehensive scan for @${profileData.profile.username} has been added to the queue.`);
-      selectProfile(profileData.profile.username);
-    } catch (error) {
-      console.error("Failed to start job", error);
+  useEffect(() => {
+    if (selectedProfile) {
+      selectProfile(selectedProfile, sortBy, sortOrder, fromDate, toDate);
     }
-  };
+  }, [sortBy, sortOrder, fromDate, toDate]);
 
-  const toggleJob = async () => {
-    if (!activeJob) return;
-    try {
-      if (activeJob.status === 'paused') {
-          await instagramService.updateJob(activeJob.id, { status: 'pending' });
-      } else {
-          await instagramService.updateJob(activeJob.id, { status: 'paused' });
+  useEffect(() => {
+    const backAction = () => {
+      if (selectedProfile) {
+        setSelectedProfile(null);
+        setProfileData(null);
+        return true;
       }
-      selectProfile(selectedProfile!);
-    } catch (error) {
-       console.error("Failed to toggle job", error);
-    }
-  };
+      return false;
+    };
 
-  const saveConfig = async (oneTimeTarget: number) => {
-    if (!profileData) return;
-    try {
-      await instagramService.createJob({
-          watchlistId: profileData.profile.username,
-          target_count: oneTimeTarget,
-          job_type: 'manual',
-          priority: 5
-      });
-      Alert.alert("Backfill Queued", `A one-time sync for ${oneTimeTarget} posts has been added.`);
-      setShowConfig(false);
-      selectProfile(selectedProfile!);
-    } catch (error) {
-       console.error("Failed to queue backfill", error);
-    }
-  };
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [selectedProfile]);
 
   const manualSync = async () => {
-    if (!selectedProfile) {
-      Alert.alert("No Profile Selected", "Please select a profile from the watchlist first.");
-      return;
-    }
-    
+    if (!selectedProfile) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      const count = syncMode === 'full' ? 0 : parseInt(targetPostCount) || 50;
-      const result: any = await instagramService.syncProfile(selectedProfile, count);
-      
-      Alert.alert(
-        "Job Queued", 
-        `Deep sync for @${selectedProfile} has been added to the queue (Job ID: ${result.jobId.substring(0, 8)}). You can monitor progress in the Control Center.`
-      );
-      
-      // Refresh current view to show the job status if it's active
-      await selectProfile(selectedProfile);
-      await loadQuota();
-    } catch (error) {
-      console.error("Manual sync failed", error);
+      const count = syncMode === 'full' ? 0 : parseInt(targetPostCount, 10);
+      await instagramService.syncProfile(selectedProfile, count);
+      Alert.alert("Success", syncMode === 'full' ? "Full profile sync queued." : `Sync for ${count} posts queued.`);
+      setShowConfig(false);
+      fetchQueue();
+    } catch (err) {
       Alert.alert("Sync Failed", "Could not complete the scraping. Check rate limits.");
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteJob = async (id: string) => {
-      try {
-          await instagramService.deleteJob(id);
-          loadQueue();
-      } catch (error) {
-           console.error("Delete job failed", error);
-      }
-  };
-
-  const updatePriority = async (id: string, priority: number) => {
-    try {
-        await instagramService.updateJob(id, { priority });
-        loadQueue();
-    } catch (error) {
-         console.error("Update priority failed", error);
-    }
-  };
-
-  const loadQueue = async () => {
-    try {
-        const q = await instagramService.getActiveJobs();
-        setActiveQueue(q);
-        const h = await instagramService.getJobHistory();
-        setJobHistory(h);
-    } catch (error) {
-        console.error("Failed to load queue", error);
-    }
-  };
-
-  const healQueue = async () => {
-    try {
-        await instagramService.healQueue();
-        loadQueue();
-    } catch (error) {
-        console.error("Failed to heal queue", error);
-    }
-  };
-
   const deleteProfileData = async () => {
-    if (!profileData) return;
-    const username = profileData.profile.username;
-
+    if (!selectedProfile) return;
     Alert.alert(
-      "Delete Profile Data?",
-      "This will permanently delete all downloaded thumbnails and post history for this profile. The profile record itself will remain in your watchlist.",
+      "Confirm Delete",
+      "This will remove all downloaded media tiles for this profile. Database records will remain but media won't show until re-scraped.",
       [
         { text: "Cancel", style: "cancel" },
         { 
-          text: "Delete Everything", 
+          text: "Delete", 
           style: "destructive",
           onPress: async () => {
             try {
-              setLoading(true);
-              await instagramService.deleteProfileData(username);
-              Alert.alert("Data Deleted", "All media and posts have been removed.");
-              selectProfile(username, true);
-            } catch (error) {
-              console.error("Delete data failed", error);
-              Alert.alert("Error", "Failed to delete profile data.");
-            } finally {
-              setLoading(false);
+              await instagramService.deleteProfileData(selectedProfile);
+              Alert.alert("Success", "Media data removed.");
+              selectProfile(selectedProfile);
+            } catch (err) {
+              Alert.alert("Error", "Failed to delete data.");
             }
           }
         }
@@ -219,394 +166,480 @@ export default function InstagramExplorer() {
     );
   };
 
+  const toggleWatch = async (username: string, currentStatus: boolean) => {
+    try {
+      await instagramService.toggleWatchStatus(username, !currentStatus);
+      fetchWatchlist();
+      if (selectedProfile === username) {
+        selectProfile(username);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to update status.");
+    }
+  };
+
+  const toggleOwn = async (username: string, currentStatus: boolean) => {
+    try {
+      await instagramService.toggleOwnAccount(username, !currentStatus);
+      fetchWatchlist();
+      if (selectedProfile === username) {
+        selectProfile(username);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to update ownership status.");
+    }
+  };
+
+  const deleteJob = async (jobId: string) => {
+    try {
+      await instagramService.deleteJob(jobId);
+      fetchQueue();
+    } catch (err) {
+      Alert.alert("Error", "Failed to delete job.");
+    }
+  };
+
+  const updatePriority = async (jobId: string, priority: number) => {
+    try {
+      await instagramService.updateJob(jobId, { priority });
+      fetchQueue();
+    } catch (err) {
+      Alert.alert("Error", "Failed to update priority.");
+    }
+  };
+
+  const healQueue = async () => {
+    try {
+      await instagramService.healQueue();
+      fetchQueue();
+      Alert.alert("Success", "Queue self-healing triggered.");
+    } catch (err) {
+      Alert.alert("Error", "Failed to trigger recovery.");
+    }
+  };
+
+  const formatDateDisplay = (dateString: string | null) => {
+    if (!dateString) return 'Select';
+    const d = new Date(dateString);
+    const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const day = d.getDate();
+    const month = months[d.getMonth()];
+    const year = d.getFullYear().toString().slice(-2);
+    return `${day}-${month}-${year}`;
+  };
+
   const getMediaUri = (item: any) => {
-    if (item.storagePath) {
-      // Proxy through our backend to get MinIO image
-      // Assuming searchApiClient.defaults.baseURL is available or similar
-      return `http://10.0.2.2:5000/api/v1/Attachment/download?path=${encodeURIComponent(item.storagePath)}`;
+    // Check both camelCase and PascalCase just in case of serialization differences
+    const path = item.storagePath || item.StoragePath;
+    if (path) {
+      return `http://192.168.0.170:5000/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
     }
     return item.thumbnailUrl || item.mediaUrl;
   };
 
   const renderVideoItem = ({ item }: { item: any }) => (
     <View style={styles.videoItem}>
-      <Image source={{ uri: getMediaUri(item) }} style={styles.thumbnail} />
-      {item.mediaType === 'reel' && (
+      <Image 
+        source={{ uri: getMediaUri(item) }} 
+        style={styles.thumbnail}
+        contentFit="cover"
+        transition={200}
+      />
+      {item.permalink && (
+        <IconButton 
+          icon="open-in-new" 
+          iconColor="white" 
+          size={16} 
+          style={styles.openLinkIcon}
+          onPress={() => Linking.openURL(item.permalink)}
+        />
+      )}
+      {(item.mediaType === 'VIDEO' || item.mediaType === 'REEL') && (
         <View style={styles.reelBadge}>
-          <Text style={styles.badgeText}>REEL</Text>
+          <Icon source="play" size={10} color="white" />
+          <Text style={styles.badgeText}> REEL</Text>
         </View>
       )}
       <View style={styles.videoStats}>
-        <Text style={styles.statsText}>❤️ {(item.likeCount || 0).toLocaleString()}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+                <Text style={styles.statsText}>❤️ {(item.likeCount || 0).toLocaleString()}</Text>
+                <Text style={styles.statsText}>💬 {(item.commentsCount || 0).toLocaleString()}</Text>
+            </View>
+            <IconButton 
+              icon="link-variant" 
+              iconColor="white" 
+              size={14} 
+              style={{ margin: 0 }}
+              onPress={async () => {
+                if (item.permalink) {
+                  await Clipboard.setStringAsync(item.permalink);
+                }
+              }}
+            />
+        </View>
       </View>
     </View>
   );
 
-  const toggleWatch = async (username: string, currentStatus: boolean) => {
-    try {
-      const newStatus = !currentStatus;
-      await instagramService.toggleWatchStatus(username, newStatus);
-      // Update local state
-      setProfiles(prev => prev.map(p => p.username === username ? { ...p, is_active: newStatus } : p));
-      if (profileData?.profile?.username === username) {
-        setProfileData({ ...profileData, profile: { ...profileData.profile, is_active: newStatus } });
-      }
-    } catch (error) {
-      console.error("Toggle watch failed", error);
-    }
-  };
-
   return (
-    <Surface style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header elevated>
+    <Surface style={styles.container}>
+      <Appbar.Header style={{ backgroundColor: theme.colors.surface, height: 48 }}>
         {selectedProfile ? (
-          <Appbar.BackAction onPress={() => setSelectedProfile(null)} />
+          <Appbar.BackAction onPress={() => { setSelectedProfile(null); setProfileData(null); }} />
         ) : (
-          <Appbar.BackAction onPress={() => router.back()} />
+          <Appbar.Action icon="instagram" />
         )}
-        <Appbar.Content title={selectedProfile ? `@${selectedProfile}` : "Instagram Explorer"} />
-        <Appbar.Action icon="tray-full" onPress={() => { loadQueue(); setShowQueue(true); }} />
-        <Appbar.Action icon="refresh" onPress={loadWatchlist} />
+        <Appbar.Content title={selectedProfile ? `@${selectedProfile}` : "Instagram Explorer"} titleStyle={styles.bold} />
+        <Appbar.Action icon="clipboard-list-outline" onPress={() => setShowQueue(true)} />
       </Appbar.Header>
 
-      {!selectedProfile ? (
+      {selectedProfile && profileData ? (
         <View style={{ flex: 1 }}>
-          {/* Quota Dashboard (Moved to main list) */}
+          <FlatList
+            data={profileData.videos}
+            renderItem={renderVideoItem}
+            keyExtractor={(item) => item.id}
+            numColumns={COLUMN_COUNT}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View style={{ paddingVertical: 8 }}>
+                {/* Profile Header */}
+                <View style={styles.profileHeader}>
+                  <Image 
+                    source={{ uri: profileData.profile.profilePictureUrl }} 
+                    style={{ width: 80, height: 80, borderRadius: 40 }}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                  <View style={styles.profileMeta}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 4 }}>
+                        <Text variant="titleLarge" style={styles.bold}>{profileData.profile.name}</Text>
+                        {profileData.profile.is_own_account && <Icon source="check-decagram" size={20} color={theme.colors.primary} />}
+                      </View>
+                      <IconButton icon="cog" size={20} style={{ margin: 0 }} onPress={() => setShowConfig(true)} />
+                    </View>
+                    <Text 
+                      variant="bodySmall" 
+                      style={{ marginTop: 2 }} 
+                      numberOfLines={bioExpanded ? undefined : 3}
+                      onPress={() => setBioExpanded(!bioExpanded)}
+                    >
+                      {profileData.profile.biography}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.statsRow}>
+                  <View style={styles.statBox}>
+                    <Text variant="titleMedium" style={styles.bold}>{(profileData.profile.followersCount || 0).toLocaleString()}</Text>
+                    <Text variant="labelSmall">Followers</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text variant="titleMedium" style={styles.bold}>{profileData.profile.mediaCount}</Text>
+                    <Text variant="labelSmall">Posts</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text variant="titleMedium" style={styles.bold}>{(profileData.metrics.avgLikes || 0).toLocaleString()}</Text>
+                    <Text variant="labelSmall">Avg. Likes</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text variant="titleMedium" style={styles.bold}>{profileData.metrics.engagementRate?.toFixed(2)}%</Text>
+                    <Text variant="labelSmall">Eng. Rate</Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 0 }}>
+                  {/* Sort & Order Group */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ color: theme.colors.outline, fontSize: 13, fontWeight: 'bold' }}>Sort:</Text>
+                    <Menu
+                      visible={sortMenuVisible}
+                      onDismiss={() => setSortMenuVisible(false)}
+                      anchor={
+                        <Button 
+                          mode="text" 
+                          compact 
+                          onPress={() => setSortMenuVisible(true)}
+                          labelStyle={{ fontSize: 13, fontWeight: 'bold' }}
+                          style={{ marginLeft: -4 }}
+                        >
+                          {sortBy === 'date' ? 'Date' : sortBy === 'likes' ? 'Likes' : 'Comments'}
+                        </Button>
+                      }
+                    >
+                      <Menu.Item onPress={() => { setSortBy('date'); setSortMenuVisible(false); }} title="Date" titleStyle={{ fontSize: 14 }} />
+                      <Menu.Item onPress={() => { setSortBy('likes'); setSortMenuVisible(false); }} title="Likes" titleStyle={{ fontSize: 14 }} />
+                      <Menu.Item onPress={() => { setSortBy('comments'); setSortMenuVisible(false); }} title="Comments" titleStyle={{ fontSize: 14 }} />
+                    </Menu>
+
+                    <IconButton 
+                      icon={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} 
+                      size={20} 
+                      onPress={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                      style={{ margin: 0, marginLeft: -4 }}
+                    />
+                  </View>
+
+                  {/* Date Range Group */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ color: theme.colors.outline, fontSize: 13, fontWeight: 'bold' }}>From:</Text>
+                    <Button 
+                      mode="text" 
+                      compact 
+                      onPress={() => setShowFromPicker(true)}
+                      labelStyle={{ fontSize: 13, fontWeight: 'bold' }}
+                      style={{ marginLeft: -4 }}
+                    >
+                      {formatDateDisplay(fromDate)}
+                    </Button>
+                    
+                    <Text style={{ color: theme.colors.outline, fontSize: 13, fontWeight: 'bold', marginLeft: 4 }}>To:</Text>
+                    <Button 
+                      mode="text" 
+                      compact 
+                      onPress={() => setShowToPicker(true)}
+                      labelStyle={{ fontSize: 13, fontWeight: 'bold' }}
+                      style={{ marginLeft: -4 }}
+                    >
+                      {formatDateDisplay(toDate)}
+                    </Button>
+
+                    {(fromDate || toDate) && (
+                      <IconButton 
+                        icon="close-circle-outline" 
+                        size={16} 
+                        onPress={() => { setFromDate(null); setToDate(null); }} 
+                        style={{ margin: 0, marginLeft: -4 }}
+                      />
+                    )}
+                  </View>
+                </View>
+
+                {showFromPicker && (
+                  <DateTimePicker
+                    value={fromDate ? new Date(fromDate) : new Date()}
+                    mode="date"
+                    onChange={(event, date) => {
+                      setShowFromPicker(false);
+                      if (date) setFromDate(date.toISOString().split('T')[0]);
+                    }}
+                  />
+                )}
+
+                {showToPicker && (
+                  <DateTimePicker
+                    value={toDate ? new Date(toDate) : new Date()}
+                    mode="date"
+                    onChange={(event, date) => {
+                      setShowToPicker(false);
+                      if (date) setToDate(date.toISOString().split('T')[0]);
+                    }}
+                  />
+                )}
+
+
+
+                {profileData.profile.is_data_deleted && (
+                  <View style={styles.deletedPlaceholder}>
+                      <IconButton icon="image-off-outline" size={48} style={{ opacity: 0.3 }} />
+                      <Text variant="bodyMedium" style={{ opacity: 0.5 }}>Media data was removed</Text>
+                      <Button mode="text" compact onPress={() => manualSync()}>Sync now to restore</Button>
+                  </View>
+                )}
+              </View>
+            }
+            ListEmptyComponent={
+              !profileData.profile.is_data_deleted ? (
+                <View style={styles.empty}>
+                  <Text variant="bodyLarge">No posts found for this profile</Text>
+                </View>
+              ) : null
+            }
+          />
+        </View>
+      ) : !selectedProfile ? (
+        <ScrollView style={{ flex: 1 }}>
+          {/* Quota Dashboard */}
           {quota && (
             <Surface style={[styles.quotaCard, { backgroundColor: theme.colors.surfaceVariant, margin: 16 }]} elevation={1}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <IconButton icon="gauge" size={20} style={{ margin: 0 }} />
-                  <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Meta API Quota</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Icon source="gauge" size={20} color={theme.colors.primary} />
+                        <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>Quota Dashboard</Text>
+                    </View>
+                    <Text variant="labelSmall" style={{ opacity: 0.6 }}>Updated {new Date(quota.lastUpdated).toLocaleTimeString()}</Text>
                 </View>
-                <IconButton icon="refresh" size={18} style={{ margin: 0 }} onPress={loadQuota} />
-              </View>
-              
-              <View style={styles.quotaGrid}>
-                <View style={styles.quotaItem}>
-                  <Text variant="displaySmall" style={{ fontSize: 24, fontWeight: 'bold' }}>{quota.metrics.callCount}%</Text>
-                  <Text variant="labelSmall">Usage</Text>
+                
+                <View style={styles.quotaGrid}>
+                    <View style={styles.quotaItem}>
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
+                            {quota.requestsInLastHour}
+                        </Text>
+                        <Text variant="labelSmall">Last Hour</Text>
+                    </View>
+                    <View style={styles.quotaItem}>
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.secondary }}>
+                            {quota.metrics.callCount}%
+                        </Text>
+                        <Text variant="labelSmall">App Usage</Text>
+                    </View>
+                    <View style={styles.quotaItem}>
+                        <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: quota.estimatedRemainingRequests < 100 ? theme.colors.error : theme.colors.tertiary }}>
+                            {quota.estimatedRemainingRequests}
+                        </Text>
+                        <Text variant="labelSmall">Est. Left</Text>
+                    </View>
                 </View>
-                <View style={styles.quotaItem}>
-                  <Text variant="displaySmall" style={{ fontSize: 24, fontWeight: 'bold' }}>{quota.requestsInLastHour}</Text>
-                  <Text variant="labelSmall">Req/Hr</Text>
-                </View>
-                <View style={styles.quotaItem}>
-                  <Text variant="displaySmall" style={{ fontSize: 24, fontWeight: 'bold', color: quota.estimatedRemainingRequests < 20 ? theme.colors.error : theme.colors.primary }}>
-                    {quota.estimatedRemainingRequests}
-                  </Text>
-                  <Text variant="labelSmall">Remaining</Text>
-                </View>
-              </View>
-
-              <ProgressBar 
-                progress={quota.metrics.callCount / 100} 
-                color={quota.metrics.callCount > 90 ? theme.colors.error : theme.colors.primary} 
-                style={{ height: 6, borderRadius: 3, marginTop: 12 }} 
-              />
             </Surface>
           )}
 
-          {/* Add New Profile Search */}
-          <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-             <Card style={{ padding: 4 }} elevation={2}>
-               <List.Item
-                 title="Add New Profile"
-                 description="Enter Instagram handle to scrape"
-                 left={props => <List.Icon {...props} icon="plus-circle-outline" />}
-                 onPress={() => setShowConfig(true)}
-               />
-             </Card>
+          <View style={{ padding: 0 }}>
+             <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 12, paddingHorizontal: 16, marginTop: 16 }}>Active Profiles</Text>
+             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 0 }}>
+               {watchlist.map(item => {
+                 const GRID_COLUMN_COUNT = 4;
+                 const GRID_GAP = 0;
+                 const GRID_PADDING = 0;
+                 const GRID_TILE_SIZE = width / GRID_COLUMN_COUNT;
+
+                 return (
+                   <TouchableOpacity 
+                     key={item.id} 
+                     onPress={() => selectProfile(item.username)}
+                     activeOpacity={0.7}
+                     style={{ width: GRID_TILE_SIZE, height: GRID_TILE_SIZE + 20 }}
+                   >
+                     <BentoCard 
+                        surfaceLevel="surfaceContainerLow"
+                        style={{ padding: 0, alignItems: 'center', justifyContent: 'center', height: GRID_TILE_SIZE, borderRadius: 0 }}
+                     >
+                       <Avatar.Image 
+                         size={GRID_TILE_SIZE * 0.6} 
+                         source={{ uri: item.profilePictureUrl }} 
+                       />
+                       {item.isOwnAccount && (
+                         <View style={{ position: 'absolute', top: 4, right: 4 }}>
+                            <Icon source="check-decagram" size={14} color={theme.colors.primary} />
+                         </View>
+                       )}
+                     </BentoCard>
+                     <Text 
+                       variant="labelSmall" 
+                       style={{ textAlign: 'center', marginTop: 4, fontWeight: 'bold' }} 
+                       numberOfLines={1}
+                     >
+                       {item.username}
+                     </Text>
+                   </TouchableOpacity>
+                 );
+               })}
+             </View>
           </View>
-
-          <FlatList
-            data={profiles}
-            keyExtractor={(item) => item.id}
-            refreshing={loading}
-            onRefresh={loadWatchlist}
-            ListHeaderComponent={() => (
-              <Text variant="titleMedium" style={{ paddingHorizontal: 16, marginBottom: 8, fontWeight: 'bold' }}>
-                Watched Profiles ({profiles.length})
-              </Text>
-            )}
-            renderItem={({ item }) => (
-              <List.Item
-                title={`@${item.username}`}
-                description={item.display_name}
-                onPress={() => selectProfile(item.username)}
-                left={props => <Avatar.Image {...props} size={40} source={{ uri: item.profile_pic_url }} />}
-                right={props => (
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text variant="labelSmall" style={{ opacity: 0.6, marginRight: 4 }}>
-                      {item.is_data_deleted ? 'Deleted' : (item.is_active ? 'Watching' : 'Paused')}
-                    </Text>
-                    <Switch 
-                      value={item.is_active} 
-                      onValueChange={() => toggleWatch(item.username, item.is_active)} 
-                    />
-                  </View>
-                )}
-              />
-            )}
-            ItemSeparatorComponent={Divider}
-          />
-        </View>
-      ) : (
-        <ScrollView>
-          {loading ? (
-            <ActivityIndicator style={{ marginTop: 50 }} />
-          ) : profileData?.profile ? (
-            <View style={styles.content}>
-            {profileData.profile.is_data_deleted && (
-              <Surface style={styles.deletedBanner} elevation={1}>
-                <IconButton icon="delete-variant" iconColor={theme.colors.error} size={20} />
-                <Text variant="labelMedium" style={{ color: theme.colors.error, fontWeight: 'bold' }}>
-                  POST DATA DELETED
-                </Text>
-              </Surface>
-            )}
-            <View style={styles.profileHeader}>
-              <View style={{ position: 'relative' }}>
-                <Avatar.Image size={80} source={{ uri: profileData.profile.profilePictureUrl }} />
-                {profileData.profile.is_verified && (
-                  <IconButton 
-                    icon="check-decagram" 
-                    iconColor={theme.colors.primary} 
-                    size={20} 
-                    style={{ position: 'absolute', bottom: -10, right: -10, margin: 0, backgroundColor: theme.colors.surface }} 
-                  />
-                )}
-              </View>
-              <View style={styles.profileMeta}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text variant="headlineSmall" style={[styles.bold, { flex: 1 }]} numberOfLines={1}>
-                    {profileData.profile.name || profileData.profile.username}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text variant="labelSmall" style={{ opacity: 0.7 }}>Watching</Text>
-                    <Switch 
-                      value={profileData.profile.is_active} 
-                      onValueChange={() => toggleWatch(profileData.profile.username, profileData.profile.is_active)} 
-                    />
-                  </View>
-                </View>
-                {profileData.profile.category_name && (
-                  <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold', marginBottom: 4 }}>
-                    {profileData.profile.category_name}
-                  </Text>
-                )}
-                <Text variant="bodyMedium" numberOfLines={3}>{profileData.profile.biography}</Text>
-                {profileData.profile.website && (
-                  <Button compact mode="text" labelStyle={{ fontSize: 12 }} style={{ alignSelf: 'flex-start', marginLeft: -8 }}>
-                    {profileData.profile.website}
-                  </Button>
-                )}
-                
-                <View style={{ flexDirection: 'row', gap: 16, marginTop: 12 }}>
-                  <View>
-                    <Text variant="titleSmall" style={styles.bold}>{profileData.profile.followersCount?.toLocaleString()}</Text>
-                    <Text variant="labelSmall" style={{ opacity: 0.6 }}>Followers</Text>
-                  </View>
-                  <View>
-                    <Text variant="titleSmall" style={styles.bold}>{profileData.profile.followsCount?.toLocaleString()}</Text>
-                    <Text variant="labelSmall" style={{ opacity: 0.6 }}>Following</Text>
-                  </View>
-                  <View>
-                    <Text variant="titleSmall" style={styles.bold}>{profileData.profile.mediaCount?.toLocaleString()}</Text>
-                    <Text variant="labelSmall" style={{ opacity: 0.6 }}>Posts</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.statsRow}>
-              <View style={styles.statBox}>
-                <Text variant="titleMedium" style={styles.bold}>{(profileData.metrics.avgLikes || 0).toLocaleString()}</Text>
-                <Text variant="labelSmall">Avg Likes</Text>
-              </View>
-              <View style={styles.statBox}>
-                <Text variant="titleMedium" style={styles.bold}>{profileData.metrics.engagementRate?.toFixed(2)}%</Text>
-                <Text variant="labelSmall">Eng. Rate</Text>
-              </View>
-              {profileData.metrics.postFrequency && (
-                <View style={styles.statBox}>
-                  <Text variant="titleMedium" style={styles.bold}>{profileData.metrics.postFrequency.toFixed(1)}</Text>
-                  <Text variant="labelSmall">Posts/Wk</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.syncOptions}>
-              <Text variant="labelLarge" style={{ marginBottom: 8, fontWeight: 'bold' }}>Sync Scope</Text>
-              <SegmentedButtons
-                value={syncMode}
-                onValueChange={v => setSyncMode(v as any)}
-                buttons={[
-                  { value: 'recent', label: 'Recent' },
-                  { value: 'full', label: 'Full Profile' },
-                ]}
-                style={{ marginBottom: 12 }}
-              />
-              
-              {syncMode === 'recent' && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Text variant="bodyMedium">Last</Text>
-                  <SegmentedButtons
-                    value={targetPostCount}
-                    onValueChange={setTargetPostCount}
-                    density="medium"
-                    buttons={[
-                      { value: '25', label: '25' },
-                      { value: '50', label: '50' },
-                      { value: '100', label: '100' },
-                      { value: '200', label: '200' },
-                    ]}
-                    style={{ flex: 1 }}
-                  />
-                  <Text variant="bodyMedium">Posts</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.actionRow}>
-              <Button 
-                mode="contained" 
-                icon={syncMode === 'full' ? 'sync' : 'flash'} 
-                loading={loading}
-                onPress={manualSync}
-                style={{ flex: 1, marginRight: 8 }}
-              >
-                {syncMode === 'full' ? 'Full Sync' : 'Sync Recent'}
-              </Button>
-              <Button 
-                mode="outlined" 
-                icon="cog" 
-                onPress={() => setShowConfig(true)}
-                style={{ flex: 1 }}
-              >
-                Actions
-              </Button>
-            </View>
-
-            {activeJob ? (
-              <Surface style={styles.jobBar} elevation={1}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>
-                    {activeJob.status.toUpperCase()} Sync: {activeJob.scraped_count} Posts
-                  </Text>
-                  <Button compact mode="contained-tonal" onPress={toggleJob}>
-                    {activeJob.status === 'paused' ? 'Resume' : 'Pause'}
-                  </Button>
-                </View>
-                <ProgressBar progress={(activeJob.scraped_count || 0) / (activeJob.target_count || 1)} color={theme.colors.primary} />
-              </Surface>
-            ) : (
-                <Button 
-                    mode="text" 
-                    icon="auto-fix" 
-                    onPress={startDeepScrape}
-                    style={{ marginBottom: 16 }}
-                >
-                    Initiate Deep Scrape
-                </Button>
-            )}
-
-
-
-            <View style={styles.sectionHeader}>
-              <Text variant="titleMedium" style={styles.bold}>Latest Content</Text>
-              {!profileData.profile.is_data_deleted && (
-                <Button compact mode="text" onPress={() => setShowRaw(!showRaw)}>
-                  {showRaw ? "Hide Raw" : "View Raw"}
-                </Button>
-              )}
-            </View>
-
-            {profileData.profile.is_data_deleted ? (
-               <View style={styles.deletedPlaceholder}>
-                  <IconButton icon="image-off-outline" size={48} style={{ opacity: 0.3 }} />
-                  <Text variant="bodyMedium" style={{ opacity: 0.5 }}>Media data was removed</Text>
-                  <Button mode="text" compact onPress={() => manualSync()}>Sync now to restore</Button>
-               </View>
-            ) : showRaw ? (
-              <Surface style={styles.rawBox} elevation={1}>
-                <Text style={styles.rawText}>{JSON.stringify(profileData, null, 2)}</Text>
-              </Surface>
-            ) : (
-              <View style={styles.grid}>
-                {profileData.videos.map((item: any) => (
-                  <View key={item.id} style={styles.videoItem}>
-                    <Image source={{ uri: getMediaUri(item) }} style={styles.thumbnail} />
-                    <View style={styles.videoStats}>
-                      <Text style={styles.statsText}>❤️ {(item.likeCount || 0).toLocaleString()}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-          ) : (
-            <View style={styles.empty}>
-              <Text variant="bodyLarge">No profile data found</Text>
-            </View>
-          )}
         </ScrollView>
+      ) : (
+        <View style={styles.empty}>
+           <ActivityIndicator animating={true} color={theme.colors.primary} />
+           <Text style={{ marginTop: 16 }}>Loading profile data...</Text>
+        </View>
       )}
 
       {showConfig && profileData && (
         <Surface style={styles.configModal} elevation={4}>
-            <Text variant="titleMedium" style={{ marginBottom: 16, fontWeight: 'bold' }}>Scrape Actions</Text>
-            
-            <Text variant="labelSmall">ONE-TIME FULL BACKFILL</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                <Button 
-                    mode="contained-tonal" 
-                    onPress={() => saveConfig(500)}
-                    compact
-                    style={{ flex: 1 }}
-                >
-                    500 Posts
-                </Button>
-                <Button 
-                    mode="contained-tonal" 
-                    onPress={() => saveConfig(1000)}
-                    compact
-                    style={{ flex: 1 }}
-                >
-                    1000 Posts
-                </Button>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text variant="titleLarge" style={styles.bold}>Profile Settings</Text>
+                <IconButton icon="close" onPress={() => setShowConfig(false)} />
             </View>
 
-            <Divider style={{ marginVertical: 16 }} />
-            <Text variant="labelSmall" style={{ color: theme.colors.error }}>DESTRUCTIVE ACTIONS</Text>
+            {/* Watching Toggle */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, backgroundColor: theme.colors.surfaceVariant, paddingHorizontal: 16, borderRadius: 12, marginBottom: 12 }}>
+                <View>
+                    <Text variant="labelLarge" style={styles.bold}>Watchlist Status</Text>
+                    <Text variant="labelSmall" style={{ opacity: 0.7 }}>{profileData.profile.is_active ? 'Active (Syncing)' : 'Paused (Ignored)'}</Text>
+                </View>
+                <Switch 
+                    value={profileData.profile.is_active} 
+                    onValueChange={() => toggleWatch(profileData.profile.username, profileData.profile.is_active)} 
+                />
+            </View>
+
+            {/* My Account Toggle */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, backgroundColor: theme.colors.surfaceVariant, paddingHorizontal: 16, borderRadius: 12, marginBottom: 24 }}>
+                <View>
+                    <Text variant="labelLarge" style={styles.bold}>My Account</Text>
+                    <Text variant="labelSmall" style={{ opacity: 0.7 }}>{profileData.profile.is_own_account ? 'Flagged as Mine' : 'Competitor Account'}</Text>
+                </View>
+                <Switch 
+                    value={profileData.profile.is_own_account} 
+                    onValueChange={() => toggleOwn(profileData.profile.username, profileData.profile.is_own_account)} 
+                />
+            </View>
+
+            <Divider style={{ marginBottom: 24 }} />
+
+            {/* Manual Sync Section */}
+            <Text variant="labelLarge" style={[styles.bold, { marginBottom: 12 }]}>Trigger Manual Sync</Text>
+            <SegmentedButtons
+                value={syncMode}
+                onValueChange={v => setSyncMode(v as any)}
+                buttons={[
+                    { value: 'recent', label: 'Recent', icon: 'clock-outline' },
+                    { value: 'full', label: 'Full Profile', icon: 'all-inclusive' },
+                ]}
+                style={{ marginBottom: 16 }}
+            />
+
+            {syncMode === 'recent' && (
+                <TextInput
+                    label="Number of posts"
+                    value={targetPostCount}
+                    onChangeText={setTargetPostCount}
+                    keyboardType="numeric"
+                    mode="outlined"
+                    dense
+                    style={{ marginBottom: 16 }}
+                />
+            )}
+
+            <Button 
+                mode="contained" 
+                onPress={manualSync} 
+                loading={loading}
+                icon="sync"
+                style={{ marginBottom: 24, borderRadius: 8 }}
+            >
+                Run Scrape Now
+            </Button>
+
+            <Divider style={{ marginVertical: 8 }} />
+            <Text variant="labelSmall" style={{ color: theme.colors.error, marginBottom: 8, fontWeight: 'bold' }}>DANGER ZONE</Text>
             <Button 
                 mode="contained-tonal" 
                 buttonColor={theme.colors.errorContainer}
                 textColor={theme.colors.error}
                 icon="delete-forever"
                 onPress={() => { setShowConfig(false); deleteProfileData(); }}
-                style={{ marginTop: 8 }}
+                style={{ borderRadius: 8 }}
             >
                 Delete Profile Data
             </Button>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 24, gap: 8 }}>
-                <Button mode="outlined" onPress={() => setShowConfig(false)}>Cancel</Button>
-            </View>
         </Surface>
       )}
+
 
       {/* Queue Modal */}
       {showQueue && (
           <Surface style={[styles.configModal, { height: '80%' }]} elevation={5}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Scraper Control Center</Text>
-                <IconButton icon="refresh" onPress={healQueue} />
+                <IconButton icon="autorenew" onPress={healQueue} />
               </View>
 
               <SegmentedButtons
-                value={showRaw ? 'history' : 'active'}
-                onValueChange={(v) => setShowRaw(v === 'history')}
+                value={showQueueHistory ? 'history' : 'active'}
+                onValueChange={(v) => setShowQueueHistory(v === 'history')}
                 buttons={[
                   { value: 'active', label: `Active (${activeQueue.length})` },
                   { value: 'history', label: 'History' },
@@ -615,7 +648,7 @@ export default function InstagramExplorer() {
               />
               
               <ScrollView>
-                  {!showRaw ? (
+                  {!showQueueHistory ? (
                     activeQueue.map((item) => (
                       <View key={item.id} style={styles.queueItem}>
                           <View style={{ flex: 1 }}>
@@ -624,7 +657,7 @@ export default function InstagramExplorer() {
                                 {item.priority > 1 && <Chip compact textStyle={{ fontSize: 8 }}>HIGH</Chip>}
                             </View>
                             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                {item.origin} • {item.job_type.toUpperCase()} • {item.scraped_count || 0}/{item.target_count || 12} Posts
+                                {item.origin} • {item.job_type.toUpperCase()} • {item.scraped_count || 0}/{item.target_count === 0 ? 'All' : item.target_count} Posts
                             </Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -652,7 +685,7 @@ export default function InstagramExplorer() {
                         </View>
                     ))
                   )}
-                  {((!showRaw && activeQueue.length === 0) || (showRaw && jobHistory.length === 0)) && (
+                  {((!showQueueHistory && activeQueue.length === 0) || (showQueueHistory && jobHistory.length === 0)) && (
                       <Text style={{ textAlign: 'center', marginTop: 40 }}>Nothing to show</Text>
                   )}
               </ScrollView>
@@ -670,30 +703,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    // paddingVertical: 16,
-  },
-  deletedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffebee',
-    marginHorizontal: 16,
-    paddingRight: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  deletedPlaceholder: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    opacity: 0.8,
-  },
-  watchlistDropdown: {
-    position: 'absolute',
-    top: 60,
-    left: 16,
-    right: 16,
-    zIndex: 100,
-    borderRadius: 8,
+  bold: {
+    fontWeight: 'bold',
   },
   profileHeader: {
     flexDirection: 'row',
@@ -705,23 +716,10 @@ const styles = StyleSheet.create({
   profileMeta: {
     flex: 1,
   },
-  bold: {
-    fontWeight: 'bold',
-  },
-  syncOptions: {
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    padding: 12,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 4,
-    // paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: '#e0e0e0',
@@ -734,18 +732,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
     paddingHorizontal: 16,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    marginTop: 8,
   },
   videoItem: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderWidth: 0.5,
-    borderColor: 'white',
     overflow: 'hidden',
     position: 'relative',
   },
@@ -753,63 +745,54 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  videoStats: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statsText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   reelBadge: {
     position: 'absolute',
     top: 4,
     right: 4,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   badgeText: {
     color: 'white',
     fontSize: 8,
     fontWeight: 'bold',
   },
-  videoStats: {
+  openLinkIcon: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 4,
+    top: 4,
+    right: 4,
     backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  statsText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  rawBox: {
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#f5f5f5',
-  },
-  rawText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
+    margin: 0,
   },
   empty: {
     marginTop: 100,
     alignItems: 'center',
   },
-  jobBar: {
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#fff3e0',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ffe0b2',
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#f57c00',
+  deletedPlaceholder: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    opacity: 0.8,
   },
   configModal: {
     position: 'absolute',
@@ -831,7 +814,7 @@ const styles = StyleSheet.create({
   },
   quotaCard: {
     margin: 16,
-    padding: 12,
+    padding: 0,
     borderRadius: 16,
     marginTop: 0,
   },
@@ -842,5 +825,5 @@ const styles = StyleSheet.create({
   },
   quotaItem: {
     alignItems: 'center',
-  }
+  },
 });

@@ -14,6 +14,7 @@ export interface OrderIdEntry {
   transactionId?: string;
   attachments?: any[];
   items?: OrderItem[];
+  orderDetails?: string;
 }
 
 export interface OrderItem {
