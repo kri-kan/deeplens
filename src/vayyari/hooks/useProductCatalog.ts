@@ -10,7 +10,7 @@ export const useProductCatalog = (categoryId: string) => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async (isRefresh = false) => {
-    if (loading && !isRefresh) return;
+    if ((loading || refreshing) && !isRefresh) return;
     if (!hasMore && !isRefresh) return;
     if (error && !isRefresh) return;
     
@@ -32,7 +32,9 @@ export const useProductCatalog = (categoryId: string) => {
       const { products: newData, totalCount } = await productService.getCatalog(filter);
       
       setProducts(prev => {
-        const updated = isRefresh ? newData : [...prev, ...newData];
+        const updated = isRefresh 
+          ? newData 
+          : [...prev, ...newData.filter(n => !prev.some(p => p.id === n.id))];
         setHasMore(updated.length < totalCount && newData.length > 0);
         return updated;
       });
@@ -43,7 +45,7 @@ export const useProductCatalog = (categoryId: string) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [categoryId, products.length, loading, hasMore, error]);
+  }, [categoryId, products.length, loading, refreshing, hasMore, error]);
 
   useEffect(() => {
     fetchProducts(true);

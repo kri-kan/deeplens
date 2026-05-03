@@ -291,13 +291,14 @@ public class MetadataService : IMetadataService
         else
         {
             var nextVal = await db.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')", null, trans);
-            sku = nextVal.ToString("X3");
+            sku = $"VF{nextVal:X3}";
+            request.SequenceId = (int)nextVal;
         }
 
         var productId = Guid.NewGuid();
         const string sql = @"
-            INSERT INTO products (id, base_sku, title, tags)
-            VALUES (@Id, @Sku, @Title, @Tags)
+            INSERT INTO products (id, base_sku, title, tags, sequence_id)
+            VALUES (@Id, @Sku, @Title, @Tags, @SeqId)
             RETURNING id";
         
         var tags = request.Tags ?? new List<string>();
@@ -311,7 +312,8 @@ public class MetadataService : IMetadataService
             Id = productId,
             Sku = sku,
             Title = request.Description?.Substring(0, Math.Min(request.Description.Length, 100)) ?? "New Product",
-            Tags = tags.ToArray()
+            Tags = tags.ToArray(),
+            SeqId = request.SequenceId ?? 0
         }, trans);
     }
 
@@ -410,7 +412,8 @@ public class MetadataService : IMetadataService
         string sql = @$"
             SELECT i.id, i.storage_path as StoragePath, i.media_type as MediaType, i.status, 
                    i.width, i.height, i.duration_seconds as DurationSeconds,
-                   i.thumbnail_path as ThumbnailPath, i.preview_path as PreviewPath,
+                   i.thumbnail_s as ThumbnailS, i.thumbnail_m as ThumbnailM, i.thumbnail_l as ThumbnailL,
+                   i.blur_data as BlurData, i.preview_path as PreviewPath,
                    i.mime_type as MimeType,
                    i.uploaded_at as UploadedAt,
                    p.base_sku as Sku, p.title as ProductTitle
@@ -448,7 +451,8 @@ public class MetadataService : IMetadataService
         const string sql = @"
             SELECT i.id, i.storage_path as StoragePath, i.media_type as MediaType, i.status, 
                    i.width, i.height, i.duration_seconds as DurationSeconds,
-                   i.thumbnail_path as ThumbnailPath, i.preview_path as PreviewPath,
+                   i.thumbnail_s as ThumbnailS, i.thumbnail_m as ThumbnailM, i.thumbnail_l as ThumbnailL,
+                   i.blur_data as BlurData, i.preview_path as PreviewPath,
                    i.mime_type as MimeType,
                    i.uploaded_at as UploadedAt,
                    p.base_sku as Sku, p.title as ProductTitle
@@ -622,7 +626,10 @@ public class MediaDto
     public int? Width { get; set; }
     public int? Height { get; set; }
     public decimal? DurationSeconds { get; set; }
-    public string? ThumbnailPath { get; set; }
+    public string? ThumbnailS { get; set; }
+    public string? ThumbnailM { get; set; }
+    public string? ThumbnailL { get; set; }
+    public string? BlurData { get; set; }
     public string? PreviewPath { get; set; }
     public string? MimeType { get; set; }
     public DateTime UploadedAt { get; set; }

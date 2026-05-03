@@ -54,6 +54,7 @@ public class ProductIngestionDto
     public string SubCategory { get; set; } = "General";
     public string? Retention { get; set; }
     public List<string> Tags { get; set; } = new();
+    public int? SequenceId { get; set; }
 }
 
 public class MediaFileDto

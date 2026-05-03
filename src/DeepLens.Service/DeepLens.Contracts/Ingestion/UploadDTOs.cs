@@ -29,6 +29,7 @@ public record UploadImageRequest
     public List<string>? Patterns { get; init; } // line, checks, floral
     
     public Dictionary<string, string>? AdditionalMetadata { get; init; } // Catch-all for other flexible metadata
+    public int? SequenceId { get; set; } // Internally assigned sequence ID
 }
 
 public record BulkUploadImageRequest

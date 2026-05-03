@@ -44,13 +44,14 @@ public class ProductService : IProductService
         {
             // 0. Generate Hex ID (Product Code) from sequence
             var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')", null, transaction);
-            var hexId = nextVal.ToString("X3");
+            var hexId = $"VF{nextVal:X3}";
+            data.SequenceId = (int)nextVal;
 
             // 1. Create Product (Master)
             var masterId = Guid.NewGuid();
             const string masterSql = @"
-                INSERT INTO products (id, title, base_sku, tags, created_at)
-                VALUES (@Id, @Title, @Sku, @Tags, @CreatedAt)
+                INSERT INTO products (id, title, base_sku, tags, sequence_id, created_at)
+                VALUES (@Id, @Title, @Sku, @Tags, @SeqId, @CreatedAt)
                 RETURNING id";
             
             // Auto-tag with subcategory for catalog filtering
@@ -66,6 +67,7 @@ public class ProductService : IProductService
                 Title = data.MasterTitle ?? "New Product",
                 Sku = hexId,
                 Tags = tags.ToArray(),
+                SeqId = data.SequenceId ?? 0,
                 CreatedAt = DateTime.UtcNow
             }, transaction);
 
@@ -165,7 +167,7 @@ public class ProductService : IProductService
             FROM products p
             JOIN product_variants pv ON p.id = pv.product_id
             JOIN vendor_listings sl ON pv.id = sl.variant_id
-            WHERE 1=1";
+            WHERE p.is_deleted = FALSE";
 
         var parameters = new DynamicParameters();
         parameters.Add("Take", filter.Take);
@@ -226,7 +228,7 @@ public class ProductService : IProductService
             return vp;
         });
 
-        var countSql = "SELECT COUNT(*) FROM products p WHERE 1=1";
+        var countSql = "SELECT COUNT(*) FROM products p WHERE is_deleted = FALSE";
         var countParameters = new DynamicParameters();
         if (!string.IsNullOrEmpty(filter.Category))
         {
@@ -242,8 +244,50 @@ public class ProductService : IProductService
     public async Task<bool> DeleteProductAsync(Guid productId)
     {
         using var db = GetConnection();
-        // cascade delete should handle variants and listings
-        return await db.ExecuteAsync("DELETE FROM products WHERE id = @Id", new { Id = productId }) > 0;
+        db.Open();
+        using var transaction = db.BeginTransaction();
+        
+        try {
+            // 1. Get all media paths for this product
+            var media = await db.QueryAsync<(string storage_path, string thumbnail_s, string thumbnail_m, string thumbnail_l)>(@"
+                SELECT storage_path, thumbnail_s, thumbnail_m, thumbnail_l 
+                FROM media 
+                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Id)", 
+                new { Id = productId }, transaction);
+
+            // 2. Delete media from storage
+            foreach (var m in media)
+            {
+                if (!string.IsNullOrEmpty(m.storage_path)) {
+                    try { await _storageService.DeleteFileAsync(m.storage_path); } catch { }
+                }
+                if (!string.IsNullOrEmpty(m.thumbnail_s)) {
+                    try { await _storageService.DeleteFileAsync(m.thumbnail_s); } catch { }
+                }
+                if (!string.IsNullOrEmpty(m.thumbnail_m)) {
+                    try { await _storageService.DeleteFileAsync(m.thumbnail_m); } catch { }
+                }
+                if (!string.IsNullOrEmpty(m.thumbnail_l)) {
+                    try { await _storageService.DeleteFileAsync(m.thumbnail_l); } catch { }
+                }
+            }
+
+            // 3. Delete media records
+            await db.ExecuteAsync(@"
+                DELETE FROM media 
+                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Id)", 
+                new { Id = productId }, transaction);
+
+            // 4. Mark product as deleted (Soft Delete)
+            var result = await db.ExecuteAsync("UPDATE products SET is_deleted = TRUE WHERE id = @Id", new { Id = productId }, transaction) > 0;
+            
+            transaction.Commit();
+            return result;
+        } catch (Exception ex) {
+            transaction.Rollback();
+            _logger.LogError(ex, "Failed to delete product {Id}", productId);
+            return false;
+        }
     }
 
     public async Task<bool> StarMediaAsync(Guid productId, Guid mediaId)
@@ -294,7 +338,7 @@ public class ProductService : IProductService
             FROM products p
             JOIN product_variants pv ON p.id = pv.product_id
             JOIN vendor_listings sl ON pv.id = sl.variant_id
-            WHERE sl.id = @Id";
+            WHERE sl.id = @Id AND p.is_deleted = FALSE";
 
         var r = await db.QuerySingleOrDefaultAsync<dynamic>(sql, new { Id = id });
         if (r == null) return null;

@@ -8,18 +8,24 @@ interface ProductCategoryPickerProps {
   selectedCategory: ProductCategory;
   onSelect: (category: ProductCategory) => void;
   horizontal?: boolean;
+  showAll?: boolean;
 }
 
 export const ProductCategoryPicker: React.FC<ProductCategoryPickerProps> = ({
   selectedCategory,
   onSelect,
   horizontal = true,
+  showAll = false,
 }) => {
   const theme = useTheme();
 
+  const categories = showAll 
+    ? [{ id: 'all', label: 'All' }, ...CATEGORY_REGISTRY]
+    : CATEGORY_REGISTRY;
+
   const content = (
     <View style={[styles.container, !horizontal && styles.vertical]}>
-      {CATEGORY_REGISTRY.map((cat) => (
+      {categories.map((cat) => (
         <TouchableOpacity
           key={cat.id}
           style={[

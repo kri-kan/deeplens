@@ -53,6 +53,7 @@ export default function ProductCatalogScreen() {
     >
       <View style={styles.tabContainer}>
         <ProductCategoryPicker 
+          showAll
           selectedCategory={CATEGORIES[activeTab].id as any}
           onSelect={(catId) => {
             const index = CATEGORIES.findIndex(c => c.id === catId);

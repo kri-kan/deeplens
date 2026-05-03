@@ -1,4 +1,5 @@
 import React from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { View, StyleSheet } from 'react-native';
 import type { ProductCategory, CategoryDefinition } from '../types/products';
@@ -48,6 +49,14 @@ const CATEGORY_ASSET_MAP = Object.fromEntries(
  * <CategoryIcon category="saree" color={theme.colors.primary} size={32} />
  */
 export const CategoryIcon = ({ category, color, size = 32 }: CategoryIconProps) => {
+  if (category === 'all') {
+    return (
+      <IconWrapper size={size}>
+        <MaterialCommunityIcons name="apps" size={size} color={color} />
+      </IconWrapper>
+    );
+  }
+
   const asset = CATEGORY_ASSET_MAP[category] ?? CATEGORY_ASSET_MAP['general'];
   return (
     <IconWrapper size={size}>
