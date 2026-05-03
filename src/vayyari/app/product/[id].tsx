@@ -16,11 +16,11 @@ import {
   useTheme,
   ActivityIndicator,
   Button,
-  Chip,
   Portal,
   Dialog,
   Icon,
 } from 'react-native-paper';
+import { CompactChip } from '@/components/ui/CompactChip';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { productService } from '@/services/productService';
@@ -167,16 +167,15 @@ export default function ProductDetailScreen() {
         <View style={styles.detailsContent}>
           <View style={styles.row}>
             <Text variant="headlineMedium" style={styles.title}>{product.title || 'Product'}</Text>
-            <Chip style={styles.codeChip}>{product.productCode}</Chip>
+            <CompactChip outline color={theme.colors.outline}>{product.productCode || 'N/A'}</CompactChip>
           </View>
           
           <Text variant="headlineSmall" style={[styles.price, { color: theme.colors.primary }]}>₹{product.vendorPrice}</Text>
           
           <View style={styles.tagRow}>
             {product.category && (
-              <Chip icon="tag" style={styles.tag}>{product.category}</Chip>
+              <CompactChip icon="tag">{product.category}</CompactChip>
             )}
-            {/* Map more tags if any */}
           </View>
 
           <View style={styles.section}>
@@ -190,7 +189,7 @@ export default function ProductDetailScreen() {
              <Text variant="titleMedium" style={styles.sectionTitle}>Tags & Metadata</Text>
              <View style={styles.tagContainer}>
                 {['Recent', 'Premium', 'Fast Shipping'].map(t => (
-                    <Chip key={t} style={styles.smallTag} textStyle={{ fontSize: 10 }}>{t}</Chip>
+                    <CompactChip key={t}>{t}</CompactChip>
                 ))}
              </View>
           </View>

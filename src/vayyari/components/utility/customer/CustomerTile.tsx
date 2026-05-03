@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Avatar, Text, useTheme } from 'react-native-paper';
 import { BentoCard } from '@/components/ui/BentoCard';
 import { PlatformHandle } from '@/components/ui/PlatformHandle';
+import { CompactChip } from '@/components/ui/CompactChip';
 import { Customer } from '@/types/customers';
 
 interface CustomerTileProps {
@@ -72,9 +73,13 @@ export const CustomerTile: React.FC<CustomerTileProps> = ({ customer, onPress, t
            <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
              {customer.addresses?.length || 0} Addr.
            </Text>
-           <View style={styles.badge}>
-              <Text style={styles.badgeText}>#{customer.customerId}</Text>
-           </View>
+            <CompactChip 
+              outline 
+              color={theme.colors.outline}
+              textStyle={{ fontSize: 9 }}
+            >
+              {`#${customer.customerId}`}
+            </CompactChip>
         </View>
       </BentoCard>
     </TouchableOpacity>
