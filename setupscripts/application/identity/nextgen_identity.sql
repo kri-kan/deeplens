@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict SNQ8bgdI1jD78n7w9bc57lz7FpDNzGJwbbzhbcYDfwDdsHdcq9h9QF4X1ySOLnm
+\restrict zJjVMsKcXFqKTJaaJK2X44UXqd3dmkm00OvEfEUbe2sBF1QczaFFEOkkP0pHegI
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -69,7 +69,10 @@ CREATE FUNCTION public.calculate_engagement_rate(p_like_count bigint, p_comment_
     LANGUAGE plpgsql IMMUTABLE
     AS $$
 BEGIN
-    IF p_view_count = 0 THEN RETURN 0; END IF;
+    IF p_view_count = 0 THEN
+        RETURN 0;
+    END IF;
+    
     RETURN ROUND(
         ((p_like_count + p_comment_count)::DECIMAL / p_view_count::DECIMAL) * 100,
         2
@@ -92,6 +95,7 @@ DECLARE
 BEGIN
     DELETE FROM engagement_snapshots
     WHERE snapshot_at < NOW() - (retention_days || ' days')::INTERVAL;
+    
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
 END;
@@ -112,6 +116,7 @@ DECLARE
 BEGIN
     DELETE FROM follower_snapshots
     WHERE snapshot_at < NOW() - (retention_days || ' days')::INTERVAL;
+    
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
     RETURN deleted_count;
 END;
@@ -130,6 +135,7 @@ CREATE FUNCTION public.get_next_scraper_session(p_platform character varying) RE
 DECLARE
     v_session_id UUID;
 BEGIN
+    -- Get least-used healthy session not on cooldown
     SELECT id INTO v_session_id
     FROM scraper_sessions
     WHERE platform = p_platform
@@ -139,9 +145,11 @@ BEGIN
     ORDER BY usage_count ASC, last_used_at ASC NULLS FIRST
     LIMIT 1;
     
+    -- Update usage counter
     IF v_session_id IS NOT NULL THEN
         UPDATE scraper_sessions
-        SET usage_count = usage_count + 1, last_used_at = NOW()
+        SET usage_count = usage_count + 1,
+            last_used_at = NOW()
         WHERE id = v_session_id;
     END IF;
     
@@ -171,6 +179,18 @@ ALTER FUNCTION public.update_updated_at_column() OWNER TO postgres;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: __EFMigrationsHistory; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."__EFMigrationsHistory" (
+    migration_id character varying(150) NOT NULL,
+    product_version character varying(32) NOT NULL
+);
+
+
+ALTER TABLE public."__EFMigrationsHistory" OWNER TO postgres;
 
 --
 -- Name: __migrations; Type: TABLE; Schema: public; Owner: postgres
@@ -352,6 +372,14 @@ ALTER TABLE ONLY public.__migrations ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
+-- Data for Name: __EFMigrationsHistory; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."__EFMigrationsHistory" (migration_id, product_version) FROM stdin;
+\.
+
+
+--
 -- Data for Name: __migrations; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
@@ -394,7 +422,7 @@ cf123992-628d-4eb4-9721-aef8c59275a5	DeepLens Administration	\N	admin	nextgen_id
 
 COPY public.users (id, tenant_id, email, password_hash, first_name, last_name, email_confirmed, email_confirmation_token, email_confirmation_token_expiry, password_reset_token, password_reset_token_expiry, role, is_active, created_at, last_login_at, updated_at, deleted_at) FROM stdin;
 9d1645f7-c93d-4c31-97f2-aed8c56275a5	cf123992-628d-4eb4-9721-aef8c59275a5	admin@deeplens.local	$2a$11$PUxn0wRtROrboSbM3p2i.eGLYjSIy9bamoUD6gnhFfh/rSiwpu82.	System	Admin	f	\N	\N	\N	\N	2	t	2026-04-11 19:25:33.899669	2026-04-16 15:27:56.803203	\N	\N
-5f640573-2d80-4a9c-9a09-eece4fa1447f	2abbd721-873e-4bf0-9cb2-c93c6894c584	admin@deeplens.platform	$2a$11$PUxn0wRtROrboSbM3p2i.eGLYjSIy9bamoUD6gnhFfh/rSiwpu82.	Platform	Admin	t	\N	\N	\N	\N	3	t	2026-04-12 12:33:11.561214	2026-04-17 20:53:50.317965	\N	\N
+5f640573-2d80-4a9c-9a09-eece4fa1447f	2abbd721-873e-4bf0-9cb2-c93c6894c584	admin@deeplens.platform	$2a$11$PUxn0wRtROrboSbM3p2i.eGLYjSIy9bamoUD6gnhFfh/rSiwpu82.	Platform	Admin	t	\N	\N	\N	\N	3	t	2026-04-12 12:33:11.561214	2026-05-03 20:27:41.809481	\N	\N
 \.
 
 
@@ -419,6 +447,14 @@ ALTER TABLE ONLY public.__migrations
 
 ALTER TABLE ONLY public.__migrations
     ADD CONSTRAINT __migrations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: __EFMigrationsHistory pk___ef_migrations_history; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."__EFMigrationsHistory"
+    ADD CONSTRAINT pk___ef_migrations_history PRIMARY KEY (migration_id);
 
 
 --
@@ -575,5 +611,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict SNQ8bgdI1jD78n7w9bc57lz7FpDNzGJwbbzhbcYDfwDdsHdcq9h9QF4X1ySOLnm
+\unrestrict zJjVMsKcXFqKTJaaJK2X44UXqd3dmkm00OvEfEUbe2sBF1QczaFFEOkkP0pHegI
 

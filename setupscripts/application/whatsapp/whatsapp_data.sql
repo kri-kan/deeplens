@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict udSlowsxqem6c18CB2E0AmWrSUoAxSOzZ2zD5FpeQMnr7qOdfo4sdiKWkgYOD62
+\restrict kOygfIgo5oR6xBaTKW9xBaO9fNpgqmOmjlKbvz6LyB6TRbG6ZvOJhxDxZcJ2qoC
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -1193,5 +1193,5 @@ ALTER TABLE ONLY public.chat_tracking_state
 -- PostgreSQL database dump complete
 --
 
-\unrestrict udSlowsxqem6c18CB2E0AmWrSUoAxSOzZ2zD5FpeQMnr7qOdfo4sdiKWkgYOD62
+\unrestrict kOygfIgo5oR6xBaTKW9xBaO9fNpgqmOmjlKbvz6LyB6TRbG6ZvOJhxDxZcJ2qoC
 

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict KOidR68afDWs96CymOclAYefhFiTYZCGI1glgyVaLhAuG6yPjlcss0fWCkkiGmU
+\restrict kOygfIgo5oR6xBaTKW9xBaO9fNpgqmOmjlKbvz6LyB6TRbG6ZvOJhxDxZcJ2qoC
 
 -- Dumped from database version 18.3 (Debian 18.3-1.pgdg13+1)
 -- Dumped by pg_dump version 18.3 (Debian 18.3-1.pgdg13+1)
@@ -25,33 +25,33 @@ SET row_security = off;
 
 CREATE FUNCTION public.get_chats_whatsapp_style(p_include_archived boolean DEFAULT false, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0) RETURNS TABLE(jid character varying, name character varying, is_group boolean, is_announcement boolean, unread_count integer, last_message_text text, last_message_timestamp bigint, last_message_from_me boolean, is_pinned boolean, is_archived boolean, is_muted boolean)
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        c.jid,
-        c.name,
-        c.is_group,
-        c.is_announcement,
-        c.unread_count,
-        c.last_message_text,
-        c.last_message_timestamp,
-        c.last_message_from_me,
-        c.is_pinned,
-        c.is_archived,
-        c.is_muted
-    FROM chats c
-    WHERE 
-        (p_include_archived = TRUE OR c.is_archived = FALSE)
-    ORDER BY
-        -- Pinned chats first (by pin order)
-        c.is_pinned DESC,
-        c.pin_order DESC,
-        -- Then by last message timestamp
-        c.last_message_timestamp DESC NULLS LAST
-    LIMIT p_limit
-    OFFSET p_offset;
-END;
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        c.jid,
+        c.name,
+        c.is_group,
+        c.is_announcement,
+        c.unread_count,
+        c.last_message_text,
+        c.last_message_timestamp,
+        c.last_message_from_me,
+        c.is_pinned,
+        c.is_archived,
+        c.is_muted
+    FROM chats c
+    WHERE 
+        (p_include_archived = TRUE OR c.is_archived = FALSE)
+    ORDER BY
+        -- Pinned chats first (by pin order)
+        c.is_pinned DESC,
+        c.pin_order DESC,
+        -- Then by last message timestamp
+        c.last_message_timestamp DESC NULLS LAST
+    LIMIT p_limit
+    OFFSET p_offset;
+END;
 $$;
 
 
@@ -63,13 +63,13 @@ ALTER FUNCTION public.get_chats_whatsapp_style(p_include_archived boolean, p_lim
 
 CREATE FUNCTION public.increment_unread_count(p_jid character varying) RETURNS void
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    UPDATE chats
-    SET unread_count = unread_count + 1,
-        updated_at = NOW()
-    WHERE jid = p_jid;
-END;
+    AS $$
+BEGIN
+    UPDATE chats
+    SET unread_count = unread_count + 1,
+        updated_at = NOW()
+    WHERE jid = p_jid;
+END;
 $$;
 
 
@@ -81,13 +81,13 @@ ALTER FUNCTION public.increment_unread_count(p_jid character varying) OWNER TO p
 
 CREATE FUNCTION public.reset_unread_count(p_jid character varying) RETURNS void
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    UPDATE chats
-    SET unread_count = 0,
-        updated_at = NOW()
-    WHERE jid = p_jid;
-END;
+    AS $$
+BEGIN
+    UPDATE chats
+    SET unread_count = 0,
+        updated_at = NOW()
+    WHERE jid = p_jid;
+END;
 $$;
 
 
@@ -99,15 +99,15 @@ ALTER FUNCTION public.reset_unread_count(p_jid character varying) OWNER TO postg
 
 CREATE FUNCTION public.update_last_message(p_jid character varying, p_message_text text, p_timestamp bigint, p_from_me boolean) RETURNS void
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    UPDATE chats
-    SET last_message_text = p_message_text,
-        last_message_timestamp = p_timestamp,
-        last_message_from_me = p_from_me,
-        updated_at = NOW()
-    WHERE jid = p_jid;
-END;
+    AS $$
+BEGIN
+    UPDATE chats
+    SET last_message_text = p_message_text,
+        last_message_timestamp = p_timestamp,
+        last_message_from_me = p_from_me,
+        updated_at = NOW()
+    WHERE jid = p_jid;
+END;
 $$;
 
 
@@ -119,14 +119,14 @@ ALTER FUNCTION public.update_last_message(p_jid character varying, p_message_tex
 
 CREATE FUNCTION public.update_last_message_at() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF NEW.last_message_timestamp IS NOT NULL THEN
-        NEW.last_message_at = to_timestamp(NEW.last_message_timestamp);
-    END IF;
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
+    AS $$
+BEGIN
+    IF NEW.last_message_timestamp IS NOT NULL THEN
+        NEW.last_message_at = to_timestamp(NEW.last_message_timestamp);
+    END IF;
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
 $$;
 
 
@@ -1193,5 +1193,5 @@ ALTER TABLE ONLY public.chat_tracking_state
 -- PostgreSQL database dump complete
 --
 
-\unrestrict KOidR68afDWs96CymOclAYefhFiTYZCGI1glgyVaLhAuG6yPjlcss0fWCkkiGmU
+\unrestrict kOygfIgo5oR6xBaTKW9xBaO9fNpgqmOmjlKbvz6LyB6TRbG6ZvOJhxDxZcJ2qoC
 
