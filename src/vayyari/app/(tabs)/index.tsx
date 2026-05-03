@@ -1,13 +1,10 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Surface, Text, Appbar, Icon, useTheme } from 'react-native-paper';
+import { View, StyleSheet } from 'react-native';
+import { Text, Appbar, useTheme } from 'react-native-paper';
 import { useRouter } from 'expo-router';
-import { BentoCard } from '@/components/ui/BentoCard';
-
-const { width } = Dimensions.get('window');
-const COLUMN_COUNT = 4;
-const GAP = 0;
-const TILE_SIZE = (width - 32) / COLUMN_COUNT;
+import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import { Section } from '@/components/layout/Section';
+import { GridMenu } from '@/components/utility/GridMenu';
 
 interface UtilityItem {
   id: string;
@@ -42,116 +39,48 @@ const COMMUNICATION_UTILITIES: UtilityItem[] = [
 ];
 
 export default function UtilityScreen() {
-  const theme = useTheme();
   const router = useRouter();
 
-  const renderGrid = (items: UtilityItem[]) => {
-    return (
-      <View style={styles.grid}>
-        {items.map((item) => (
-          <TouchableOpacity 
-            key={item.id} 
-            onPress={() => item.route && router.push(item.route as any)}
-            disabled={!item.route}
-            style={{ width: TILE_SIZE, height: TILE_SIZE }}
-          >
-            <BentoCard 
-              style={[styles.tile, { height: TILE_SIZE, borderRadius: 0 }]}
-              surfaceLevel="surfaceContainerLow"
-            >
-              <View style={styles.tileContent}>
-                <Icon source={item.icon} size={42} color={item.route ? item.color || theme.colors.primary : '#ccc'} />
-                <Text variant="labelSmall" style={[styles.tileTitle, { color: item.route ? theme.colors.onSurface : '#999' }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-              </View>
-            </BentoCard>
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
-  };
-
   return (
-    <Surface style={[styles.container, { backgroundColor: theme.colors.background }]} elevation={0}>
-      <Appbar.Header style={{ backgroundColor: theme.colors.background }}>
-        <Appbar.Content title="Utilities" titleStyle={{ fontWeight: 'bold' }} />
+    <ScreenWrapper 
+      title="Utilities" 
+      actions={
         <Appbar.Action icon="cog" onPress={() => router.push('/modal')} />
-      </Appbar.Header>
+      }
+      contentContainerStyle={styles.content}
+    >
+      <Section title="Business" style={styles.section}>
+        <GridMenu items={OPERATIONAL_UTILITIES} />
+      </Section>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.sectionHeader, {marginTop: 0}]}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Business</Text>
-        </View>
-        
-        {renderGrid(OPERATIONAL_UTILITIES)}
+      <Section title="Product" style={styles.section}>
+        <GridMenu items={PRODUCT_UTILITIES} />
+      </Section>
 
-        <View style={styles.sectionHeader}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Product</Text>
-        </View>
-        
-        {renderGrid(PRODUCT_UTILITIES)}
+      <Section title="System" style={styles.section}>
+        <GridMenu items={SYSTEM_UTILITIES} />
+      </Section>
 
-        <View style={styles.sectionHeader}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>System</Text>
-        </View>
-        
-        {renderGrid(SYSTEM_UTILITIES)}
-        
-        <View style={styles.sectionHeader}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Communications</Text>
-        </View>
-        
-        {renderGrid(COMMUNICATION_UTILITIES)}
+      <Section title="Communications" style={styles.section}>
+        <GridMenu items={COMMUNICATION_UTILITIES} />
+      </Section>
 
-        <View style={styles.sectionHeader}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Business Insights</Text>
-        </View>
-        {/* Placeholder for future rows */}
+      <Section title="Business Insights" style={styles.section}>
         <View style={styles.emptyGridPlaceholder}>
            <Text variant="bodySmall" style={{ opacity: 0.3 }}>More utilities coming soon...</Text>
         </View>
-      </ScrollView>
-    </Surface>
+      </Section>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   content: {
-    padding: 16,
+    paddingBottom: 40,
   },
-  sectionHeader: {
-    marginBottom: 4,
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontWeight: 'bold',
-    opacity: 0.8,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: GAP,
-  },
-  tile: {
-    padding: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 0, // Reset default bento margin
-  },
-  tileContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 0,
-  },
-  tileTitle: {
-    textAlign: 'center',
-    fontWeight: '600',
-    fontSize: 14,
-    paddingTop: 8,
+  section: {
+    paddingHorizontal: 16,
+    marginVertical: 8,
   },
   emptyGridPlaceholder: {
     height: 100,
@@ -163,3 +92,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   }
 });
+

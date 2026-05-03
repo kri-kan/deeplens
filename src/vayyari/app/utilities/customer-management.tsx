@@ -21,6 +21,8 @@ const COLUMN_COUNT = 2;
 const GAP = 12;
 const TILE_SIZE = (width - (GAP * (COLUMN_COUNT + 1))) / COLUMN_COUNT;
 
+import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+
 export default function CustomerManagementScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -28,6 +30,7 @@ export default function CustomerManagementScreen() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -284,14 +287,13 @@ export default function CustomerManagementScreen() {
   };
 
   return (
-    <Surface style={[styles.container, { backgroundColor: theme.colors.background }]} elevation={0}>
-      <Appbar.Header elevated style={{ backgroundColor: theme.colors.background }}>
-        <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Customers" titleStyle={styles.headerTitle} />
-        <Appbar.Action icon="account-plus" onPress={() => setShowAddModal(true)} />
-      </Appbar.Header>
-
+    <ScreenWrapper 
+      title="Customers" 
+      actions={<Appbar.Action icon="account-plus" onPress={() => setShowAddModal(true)} />}
+      withScrollView={false} // Since we have a FlatList
+    >
       <View style={styles.content}>
+
         {/* Search and Header Section */}
         <View style={styles.searchSection}>
            <Searchbar
@@ -634,7 +636,7 @@ export default function CustomerManagementScreen() {
           <Button mode="text" onPress={() => setShowCountrySelector(false)} style={{ marginTop: 16 }}>Cancel</Button>
         </Modal>
       </Portal>
-    </Surface>
+    </ScreenWrapper>
   );
 }
 

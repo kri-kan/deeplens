@@ -1,0 +1,96 @@
+import React from 'react';
+import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { Text, Icon, useTheme } from 'react-native-paper';
+import { BentoCard } from '@/components/ui/BentoCard';
+import { useRouter } from 'expo-router';
+
+const { width } = Dimensions.get('window');
+
+interface GridMenuItem {
+  id: string;
+  title: string;
+  icon: string;
+  route?: string;
+  onPress?: () => void;
+  color?: string;
+  disabled?: boolean;
+}
+
+interface GridMenuProps {
+  items: GridMenuItem[];
+  columns?: number;
+  gap?: number;
+}
+
+export const GridMenu: React.FC<GridMenuProps> = ({
+  items,
+  columns = 4,
+  gap = 0,
+}) => {
+  const theme = useTheme();
+  const router = useRouter();
+  
+  const tileSize = (width - 32) / columns; // Assuming 16px horizontal padding on container
+
+  return (
+    <View style={[styles.grid, { gap }]}>
+      {items.map((item) => {
+        const isDisabled = item.disabled || (!item.route && !item.onPress);
+        
+        return (
+          <TouchableOpacity
+            key={item.id}
+            onPress={() => {
+              if (item.onPress) item.onPress();
+              else if (item.route) router.push(item.route as any);
+            }}
+            disabled={isDisabled}
+            style={{ width: tileSize, height: tileSize }}
+          >
+            <BentoCard
+              style={[styles.tile, { height: tileSize, borderRadius: 0 }]}
+              surfaceLevel="surfaceContainerLow"
+            >
+              <View style={styles.tileContent}>
+                <Icon
+                  source={item.icon}
+                  size={42}
+                  color={isDisabled ? '#ccc' : item.color || theme.colors.primary}
+                />
+                <Text
+                  variant="labelSmall"
+                  style={[styles.tileTitle, { color: isDisabled ? '#999' : theme.colors.onSurface }]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+              </View>
+            </BentoCard>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  tile: {
+    padding: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileTitle: {
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 12,
+    paddingTop: 8,
+  },
+});
