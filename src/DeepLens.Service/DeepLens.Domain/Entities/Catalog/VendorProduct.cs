@@ -9,7 +9,11 @@ public class VendorProduct
     public Guid MasterProductId { get; set; }
     public decimal VendorPrice { get; set; }
     public string? ExclusiveDescription { get; set; }
+    public string? Description { get; set; }
     public string? Category { get; set; }
+    public string? Fabric { get; set; }
+    public string? StitchType { get; set; }
+    public string? WorkHeaviness { get; set; }
     public string? Title { get; set; }
     public string? ProductCode { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -22,5 +26,6 @@ public class MediaEntry
 {
     public Guid Id { get; set; }
     public string? Path { get; set; }
+    public string? Color { get; set; }
     public bool IsDefault { get; set; }
 }

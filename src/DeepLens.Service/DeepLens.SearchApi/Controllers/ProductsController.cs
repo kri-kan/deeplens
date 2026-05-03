@@ -98,12 +98,30 @@ public class ProductsController : ControllerBase
             MasterTitle = request.Title,
             Retention = request.Retention,
             Tags = request.Tags,
+            Fabric = request.Fabric,
+            StitchType = request.StitchType,
+            WorkHeaviness = request.WorkHeaviness,
+            Color = request.Color,
             Category = Enum.TryParse<MediaCategory>(request.Category, true, out var cat) ? cat : MediaCategory.Product,
             SubCategory = request.SubCategory ?? "General"
         };
 
         var result = await _productService.CreateProductAsync(ingestionDto, mediaFiles);
         return Ok(result);
+    }
+
+    [HttpGet("merge/preview")]
+    public async Task<IActionResult> GetMergePreview([FromQuery] Guid sourceId, [FromQuery] Guid targetId)
+    {
+        try
+        {
+            var result = await _productService.GetMergePreviewAsync(sourceId, targetId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPost("merge")]
@@ -123,4 +141,39 @@ public class ProductsController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("instagram/link")]
+    public async Task<IActionResult> LinkInstagram([FromBody] InstaLinkRequest request)
+    {
+        var success = await _productService.LinkInstagramPostAsync(request.PostId, request.ProductId, request.LinkType);
+        return success ? Ok() : BadRequest();
+    }
+
+    [HttpGet("instagram/{postId}/links")]
+    public async Task<IActionResult> GetInstagramLinks(Guid postId)
+    {
+        var result = await _productService.GetInstagramLinksAsync(postId);
+        return Ok(result);
+    }
+
+    [HttpPost("instagram/{postId}/create-product")]
+    public async Task<IActionResult> CreateProductFromPost(Guid postId, [FromBody] ProductIngestionDto data)
+    {
+        var result = await _productService.CreateProductFromPostAsync(postId, data);
+        return Ok(result);
+    }
+
+    [HttpGet("categories")]
+    public async Task<IActionResult> GetCategories()
+    {
+        var result = await _productService.GetCategoriesAsync();
+        return Ok(result);
+    }
+
+}
+
+public class InstaLinkRequest
+{
+    public Guid PostId { get; set; }
+    public Guid ProductId { get; set; }
+    public string LinkType { get; set; } = "is";
 }

@@ -32,7 +32,7 @@ export const CATEGORY_REGISTRY: CategoryDefinition[] = [
   { id: 'saree',   label: 'Saree',   assetPath: require('../assets/images/saree.svg') },
   { id: 'dress',   label: 'Dress',   assetPath: require('../assets/images/dress.svg') },
   { id: 'lehanga', label: 'Lehanga', assetPath: require('../assets/images/lehanga.svg') },
-  { id: 'kids',    label: 'Kids',    assetPath: require('../assets/images/kids.svg') },
+  { id: 'suit',    label: 'Suit',    assetPath: require('../assets/images/dress.svg') },
   { id: 'general', label: 'Others',  assetPath: require('../assets/images/others.svg') },
 ];
 

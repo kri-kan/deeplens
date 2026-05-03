@@ -1,4 +1,4 @@
-import ApiClient from '../api/client';
+import ApiClient from '../api/base';
 import { TokenResponse, UserProfile } from '../types/auth';
 import { API_ROUTES } from '../constants/api-routes';
 import AsyncStorage from '@react-native-async-storage/async-storage';

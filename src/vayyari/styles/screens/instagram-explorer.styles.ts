@@ -45,6 +45,11 @@ export const styles = StyleSheet.create({
     height: GRID_TILE_SIZE,
     borderRadius: 0,
   },
+  profileAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
   ownAccountBadge: {
     position: 'absolute',
     top: 4,
@@ -85,5 +90,17 @@ export const styles = StyleSheet.create({
   closeFilterIcon: {
     margin: 0, 
     marginLeft: -4,
-  }
+  },
+  postModal: {
+    margin: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
+    backgroundColor: '#000',
+  },
+  modalContent: {
+    width: width,
+    height: '100%',
+    backgroundColor: '#000',
+  },
 });

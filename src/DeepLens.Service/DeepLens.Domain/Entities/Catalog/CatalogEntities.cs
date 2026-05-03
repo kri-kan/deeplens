@@ -25,6 +25,9 @@ public class Product
     public Guid? CategoryId { get; set; }
     public string? BaseSku { get; set; }
     public string? Title { get; set; }
+    public string? Fabric { get; set; }
+    public string? StitchType { get; set; }
+    public string? WorkHeaviness { get; set; }
     public List<string> Tags { get; set; } = new();
     public string? UnifiedAttributes { get; set; } // JSONB
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -32,6 +35,7 @@ public class Product
     // Navigation
     public Category? Category { get; set; }
     public List<ProductVariant> Variants { get; set; } = new();
+    public List<SellerListing> Listings { get; set; } = new();
 }
 
 public class ProductVariant
@@ -56,7 +60,9 @@ public class ProductVariant
 public class Image
 {
     public Guid Id { get; set; }
-    public Guid VariantId { get; set; }
+    public Guid? VariantId { get; set; }
+    public Guid? ProductId { get; set; }
+    public string? Color { get; set; }
     public required string StoragePath { get; set; }
     public string? OriginalFilename { get; set; }
     public long FileSizeBytes { get; set; }
@@ -78,7 +84,8 @@ public class Image
 public class SellerListing
 {
     public Guid Id { get; set; }
-    public Guid VariantId { get; set; }
+    public Guid? VariantId { get; set; }
+    public Guid ProductId { get; set; }
     public Guid SellerId { get; set; }
     public string? ExternalId { get; set; }
     public decimal? CurrentPrice { get; set; }
@@ -94,6 +101,7 @@ public class SellerListing
     
     // Navigation
     public ProductVariant? Variant { get; set; }
+    public Product? Product { get; set; }
     public Seller? Seller { get; set; }
     public List<PriceHistory> PriceHistory { get; set; } = new();
 }

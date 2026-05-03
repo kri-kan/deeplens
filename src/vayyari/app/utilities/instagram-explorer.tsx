@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, ScrollView, FlatList, TouchableOpacity } from 'react-native';
-import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, FlatList, TouchableOpacity, Modal, BackHandler } from 'react-native';
+import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, Portal, Dialog } from 'react-native-paper';
+import { Image } from 'expo-image';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -9,6 +10,7 @@ import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
 import { ControlCenter } from '@/components/utility/instagram/ControlCenter';
 import { SettingsModal } from '@/components/utility/instagram/SettingsModal';
+import { PostDetailView } from '@/components/utility/instagram/PostDetailView';
 import { BentoCard } from '@/components/ui/BentoCard';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
@@ -57,6 +59,20 @@ export default function InstagramExplorer() {
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+
+  useEffect(() => {
+    const backAction = () => {
+      if (selectedPost) {
+        setSelectedPost(null);
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [selectedPost]);
 
   const formatDateDisplay = (dateString: string | null) => {
     if (!dateString) return 'Select';
@@ -75,7 +91,7 @@ export default function InstagramExplorer() {
 
         <FlatList
           data={profileData.videos}
-          renderItem={({ item }) => <VideoItem item={item} />}
+          renderItem={({ item }) => <VideoItem item={item} onPress={() => setSelectedPost(item)} />}
           keyExtractor={(item) => item.id}
           numColumns={3}
           contentContainerStyle={{ paddingBottom: 20 }}
@@ -206,6 +222,23 @@ export default function InstagramExplorer() {
           onToggleHistory={setShowQueueHistory}
           onRefresh={fetchQueue}
         />
+
+        <Portal>
+          <Modal
+            visible={!!selectedPost}
+            animationType="slide"
+            onRequestClose={() => setSelectedPost(null)}
+          >
+            {selectedPost && (
+              <View style={styles.modalContent}>
+                <PostDetailView 
+                  item={selectedPost} 
+                  onClose={() => setSelectedPost(null)} 
+                />
+              </View>
+            )}
+          </Modal>
+        </Portal>
       </Surface>
     );
   }
@@ -227,20 +260,24 @@ export default function InstagramExplorer() {
               activeOpacity={0.7}
               style={styles.profileGridItem}
             >
-              <BentoCard 
-                surfaceLevel="surfaceContainerLow"
-                style={styles.profileCard}
-              >
-                <Avatar.Image 
-                  size={60} 
-                  source={{ uri: item.profilePictureUrl }} 
-                />
+              <View style={styles.profileCard}>
+                {item.profilePictureUrl ? (
+                  <Avatar.Image 
+                    size={60} 
+                    source={{ uri: item.profilePictureUrl }} 
+                  />
+                ) : (
+                  <Avatar.Text 
+                    size={60} 
+                    label={item.username?.substring(0, 2).toUpperCase() || '??'} 
+                  />
+                )}
                 {item.isOwnAccount && (
                   <View style={styles.ownAccountBadge}>
                     <Avatar.Icon size={16} icon="check-decagram" />
                   </View>
                 )}
-              </BentoCard>
+              </View>
               <Text 
                 variant="labelSmall" 
                 style={styles.profileUsername} 

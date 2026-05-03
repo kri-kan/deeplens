@@ -77,11 +77,9 @@ function InnerRootLayout() {
           {!token ? (
             <Stack.Screen name="login" options={{ title: 'Sign In' }} />
           ) : (
-            <>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
-            </>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           )}
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
         </Stack>
         <StatusBar style="auto" />
       </NavigationThemeProvider>

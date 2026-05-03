@@ -10,6 +10,9 @@ public class MasterProduct
     public decimal SellingPrice { get; set; }
     public decimal ResellerPrice { get; set; }
     public string? Category { get; set; }
+    public string? Fabric { get; set; }
+    public string? StitchType { get; set; }
+    public string? WorkHeaviness { get; set; }
     
     // Consolidated media IDs
     public List<Guid> MediaIds { get; set; } = new();

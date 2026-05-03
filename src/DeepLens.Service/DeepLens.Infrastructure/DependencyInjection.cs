@@ -17,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<DeepLens.Contracts.Customers.ICustomerService, DeepLens.Infrastructure.Services.CustomerService>();
         services.AddScoped<DeepLens.Contracts.Marketing.IWhatsAppService, DeepLens.Infrastructure.Services.WhatsAppService>();
+        services.AddScoped<DeepLens.Contracts.Marketing.ICommunicationBroadcastService, DeepLens.Infrastructure.Services.CommunicationBroadcastService>();
         services.AddScoped<DeepLens.Application.Abstractions.Services.IAppSettingsService, DeepLens.Infrastructure.Services.AppSettingsService>();
 
         return services;

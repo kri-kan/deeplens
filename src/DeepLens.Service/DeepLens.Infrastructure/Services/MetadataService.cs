@@ -32,6 +32,12 @@ public interface IMetadataService
     Task<bool> DeleteMediaPreferenceAsync(Guid id);
     IEnumerable<string> GetRetentionOptions();
     Task<MediaDto?> GetMediaByIdAsync(Guid id);
+    Task LinkMediaAsync(Guid mediaId, Guid entityId, string entityType, bool isPrimary = false);
+    Task UnlinkMediaAsync(Guid mediaId, Guid entityId, string entityType);
+    Task<int> GetOrphanedMediaCountAsync();
+    Task<IEnumerable<dynamic>> GetSystemJobsAsync();
+    Task UpdateJobStatusAsync(string jobName, string status, int progress = 0, string? metadata = null);
+    Task<int> TriggerMediaCleanupAsync();
 }
 
 public class MetadataService : IMetadataService
@@ -73,29 +79,32 @@ public class MetadataService : IMetadataService
         {
             var vendorId = await GetOrCreateVendor(connection, request.SellerId, transaction);
             var productId = await GetOrCreateProduct(connection, request, transaction);
-            var variantId = await GetOrCreateVariant(connection, productId, request, transaction);
 
             var mediaType = contentType.StartsWith("video/") ? 2 : 1;
             const string mediaSql = @"
-                INSERT INTO media (id, variant_id, storage_path, media_type, original_filename, file_size_bytes, mime_type, phash, quality_score, status, category, subcategory)
-                VALUES (@Id, @VariantId, @StoragePath, @MediaType, @OriginalFilename, @FileSize, @MimeType, @PHash, @Quality, 0, @Category, @SubCategory)";
+                INSERT INTO media (id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, category, subcategory, color)
+                VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, @FileSize, @MimeType, 0, @Category, @SubCategory, @Color)";
             
-            _logger.LogInformation("Saving ingestion media record {MediaId} for variant {VarId} at path {StoragePath}", id, variantId, storagePath);
+            _logger.LogInformation("Saving ingestion media record {MediaId} at path {StoragePath}", id, storagePath);
             await connection.ExecuteAsync(mediaSql, new {
                 Id = id,
-                VariantId = variantId,
                 StoragePath = storagePath,
                 MediaType = mediaType,
                 OriginalFilename = request.File.FileName,
                 FileSize = fileSize,
                 MimeType = contentType,
-                PHash = (string?)null,
-                Quality = (decimal?)null,
                 Category = request.Category.ToString().ToLowerInvariant() ?? "product",
-                SubCategory = request.SubCategory?.ToLowerInvariant()
+                SubCategory = request.SubCategory?.ToLowerInvariant(),
+                Color = request.Color
             }, transaction);
 
-            await UpsertVendorListing(connection, variantId, vendorId, request, transaction);
+            // Link to Product (The Design Gallery)
+            await LinkMediaAsync(id, productId, "product", true, connection, transaction);
+
+            var listingId = await UpsertVendorListing(connection, productId, vendorId, request, transaction);
+
+            // Link to Listing (The Vendor Proof)
+            await LinkMediaAsync(id, listingId, "vendor_listing", true, connection, transaction);
 
             transaction.Commit();
         }
@@ -144,32 +153,36 @@ public class MetadataService : IMetadataService
             await db.ExecuteAsync("UPDATE products SET tags = @Tags WHERE id = @Id", 
                 new { Tags = consolidatedTags, Id = target.Id }, trans);
 
-            var sourceVariants = await db.QueryAsync<(Guid Id, string Color, string Fabric, string Stitch, string Work)>(
-                "SELECT id, color, fabric, stitch_type, work_heaviness FROM product_variants WHERE product_id = @Id", 
-                new { Id = source.Id }, trans);
+            // Record the merge history for redirection/audit
+            await db.ExecuteAsync(@"
+                INSERT INTO product_merges (source_id, target_id, metadata)
+                VALUES (@SourceId, @TargetId, @Metadata)
+                ON CONFLICT (source_id) DO UPDATE SET target_id = EXCLUDED.target_id",
+                new { 
+                    SourceId = source.Id, 
+                    TargetId = target.Id, 
+                    Metadata = JsonSerializer.Serialize(new { 
+                        reason = "manual_merge", 
+                        source_sku = sourceSku, 
+                        target_sku = targetSku 
+                    }) 
+                }, trans);
 
-            foreach (var sVar in sourceVariants)
-            {
-                var targetVarId = await db.QuerySingleOrDefaultAsync<Guid?>(@"
-                    SELECT id FROM product_variants 
-                    WHERE product_id = @TargetId 
-                    AND (color = @Color OR (color IS NULL AND @Color IS NULL))
-                    AND (fabric = @Fabric OR (fabric IS NULL AND @Fabric IS NULL))", 
-                    new { TargetId = target.Id, Color = sVar.Color, Fabric = sVar.Fabric }, trans);
+            // Move all listings from source product to target product
+            await db.ExecuteAsync("UPDATE vendor_listings SET product_id = @TargetId WHERE product_id = @SourceId",
+                new { TargetId = target.Id, SourceId = source.Id }, trans);
 
-                if (targetVarId.HasValue)
-                {
-                    await MergeListings(db, sVar.Id, targetVarId.Value, trans);
-                    await db.ExecuteAsync("UPDATE media SET variant_id = @TargetVarId WHERE variant_id = @SourceVarId", 
-                        new { TargetVarId = targetVarId.Value, SourceVarId = sVar.Id }, trans);
-                    await db.ExecuteAsync("DELETE FROM product_variants WHERE id = @Id", new { Id = sVar.Id }, trans);
-                }
-                else
-                {
-                    await db.ExecuteAsync("UPDATE product_variants SET product_id = @TargetId WHERE id = @VarId", 
-                        new { TargetId = target.Id, VarId = sVar.Id }, trans);
-                }
-            }
+            // Move all Instagram posts (competitor_videos) linked to this product
+            await db.ExecuteAsync("UPDATE competitor_videos SET product_id = @TargetId WHERE product_id = @SourceId",
+                new { TargetId = target.Id, SourceId = source.Id }, trans);
+
+            // Move all media links from source product to target product
+            await db.ExecuteAsync("UPDATE media_links SET entity_id = @TargetId WHERE entity_id = @SourceId AND entity_type = 'product'",
+                new { TargetId = target.Id, SourceId = source.Id }, trans);
+
+            // Re-link individual media to the new product (Source of truth in media table if we added product_id there)
+            await db.ExecuteAsync("UPDATE media SET product_id = @TargetId WHERE product_id = @SourceId",
+                new { TargetId = target.Id, SourceId = source.Id }, trans);
 
             await DeduplicateImages(db, target.Id, trans);
 
@@ -297,8 +310,8 @@ public class MetadataService : IMetadataService
 
         var productId = Guid.NewGuid();
         const string sql = @"
-            INSERT INTO products (id, base_sku, title, tags, sequence_id)
-            VALUES (@Id, @Sku, @Title, @Tags, @SeqId)
+            INSERT INTO products (id, base_sku, title, tags, sequence_id, fabric, stitch_type, work_heaviness)
+            VALUES (@Id, @Sku, @Title, @Tags, @SeqId, @Fabric, @Stitch, @Work)
             RETURNING id";
         
         var tags = request.Tags ?? new List<string>();
@@ -313,7 +326,10 @@ public class MetadataService : IMetadataService
             Sku = sku,
             Title = request.Description?.Substring(0, Math.Min(request.Description.Length, 100)) ?? "New Product",
             Tags = tags.ToArray(),
-            SeqId = request.SequenceId ?? 0
+            SeqId = request.SequenceId ?? 0,
+            Fabric = request.Fabric,
+            Stitch = request.StitchType,
+            Work = request.WorkHeaviness
         }, trans);
     }
 
@@ -353,15 +369,16 @@ public class MetadataService : IMetadataService
         }, trans);
     }
 
-    private async Task UpsertVendorListing(IDbConnection db, Guid variantId, Guid vendorId, UploadImageRequest request, IDbTransaction trans)
+    private async Task<Guid> UpsertVendorListing(IDbConnection db, Guid productId, Guid vendorId, UploadImageRequest request, IDbTransaction trans)
     {
         var existing = await db.QuerySingleOrDefaultAsync<dynamic>(
-            "SELECT id, current_price, currency FROM vendor_listings WHERE variant_id = @VarId AND vendor_id = @VendorId", 
-            new { VarId = variantId, VendorId = vendorId }, trans);
+            "SELECT id, current_price, currency FROM vendor_listings WHERE product_id = @Pid AND vendor_id = @VendorId", 
+            new { Pid = productId, VendorId = vendorId }, trans);
 
         if (existing != null)
         {
-            await ArchivePriceIfChanged(db, (Guid)existing.id, (decimal?)request.Price ?? 0, request.Currency ?? "INR", trans);
+            var existingId = (Guid)existing.id;
+            await ArchivePriceIfChanged(db, existingId, (decimal?)request.Price ?? 0, request.Currency ?? "INR", trans);
 
             await db.ExecuteAsync(@"
                 UPDATE vendor_listings 
@@ -371,16 +388,19 @@ public class MetadataService : IMetadataService
                     Price = request.Price, 
                     Shipping = request.AdditionalMetadata?.GetValueOrDefault("shipping")?.ToString() ?? "plus shipping",
                     Desc = request.Description,
-                    Id = (Guid)existing.id 
+                    Id = existingId 
                 }, trans);
+            return existingId;
         }
         else
         {
+            var newId = Guid.NewGuid();
             await db.ExecuteAsync(@"
-                INSERT INTO vendor_listings (variant_id, vendor_id, external_id, current_price, currency, shipping_info, description)
-                VALUES (@VariantId, @VendorId, @ExtId, @Price, @Currency, @Shipping, @Description)",
+                INSERT INTO vendor_listings (id, product_id, vendor_id, external_id, current_price, currency, shipping_info, description)
+                VALUES (@Id, @ProductId, @VendorId, @ExtId, @Price, @Currency, @Shipping, @Description)",
                 new {
-                    VariantId = variantId,
+                    Id = newId,
+                    ProductId = productId,
                     VendorId = vendorId,
                     ExtId = request.ExternalId,
                     Price = request.Price,
@@ -388,6 +408,7 @@ public class MetadataService : IMetadataService
                     Shipping = request.AdditionalMetadata?.GetValueOrDefault("shipping")?.ToString() ?? "plus shipping",
                     Description = request.Description
                 }, trans);
+            return newId;
         }
     }
 
@@ -418,8 +439,8 @@ public class MetadataService : IMetadataService
                    i.uploaded_at as UploadedAt,
                    p.base_sku as Sku, p.title as ProductTitle
             FROM media i
-            LEFT JOIN product_variants v ON i.variant_id = v.id
-            LEFT JOIN products p ON v.product_id = p.id
+            LEFT JOIN media_links ml ON i.id = ml.media_id AND ml.entity_type = 'product'
+            LEFT JOIN products p ON ml.entity_id = p.id
             WHERE 1=1 {typeFilter}
             ORDER BY i.uploaded_at DESC
             LIMIT @PageSize OFFSET @Offset";
@@ -457,8 +478,8 @@ public class MetadataService : IMetadataService
                    i.uploaded_at as UploadedAt,
                    p.base_sku as Sku, p.title as ProductTitle
             FROM media i
-            LEFT JOIN product_variants v ON i.variant_id = v.id
-            LEFT JOIN products p ON v.product_id = p.id
+            LEFT JOIN media_links ml ON i.id = ml.media_id AND ml.entity_type = 'product'
+            LEFT JOIN products p ON ml.entity_id = p.id
             WHERE i.id = @Id";
 
         return await connection.QuerySingleOrDefaultAsync<MediaDto>(sql, new { Id = id });
@@ -609,6 +630,102 @@ public class MetadataService : IMetadataService
             return true;
         }
         return false;
+    }
+
+    public async Task LinkMediaAsync(Guid mediaId, Guid entityId, string entityType, bool isPrimary = false)
+    {
+        using var connection = GetConnection();
+        await LinkMediaAsync(mediaId, entityId, entityType, isPrimary, connection);
+    }
+
+    private async Task LinkMediaAsync(Guid mediaId, Guid entityId, string entityType, bool isPrimary, IDbConnection db, IDbTransaction? trans = null)
+    {
+        const string sql = @"
+            INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+            VALUES (@MediaId, @EntityId, @EntityType, @IsPrimary)
+            ON CONFLICT DO NOTHING";
+        
+        await db.ExecuteAsync(sql, new { MediaId = mediaId, EntityId = entityId, EntityType = entityType, IsPrimary = isPrimary }, trans);
+    }
+
+    public async Task UnlinkMediaAsync(Guid mediaId, Guid entityId, string entityType)
+    {
+        using var db = GetConnection();
+        await db.ExecuteAsync("DELETE FROM media_links WHERE media_id = @MediaId AND entity_id = @EntityId AND entity_type = @EntityType", 
+            new { MediaId = mediaId, EntityId = entityId, EntityType = entityType });
+    }
+
+    public async Task<int> GetOrphanedMediaCountAsync()
+    {
+        using var db = GetConnection();
+        return await db.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(*) FROM media i 
+            WHERE NOT EXISTS (SELECT 1 FROM media_links ml WHERE ml.media_id = i.id)");
+    }
+
+    public async Task<IEnumerable<dynamic>> GetSystemJobsAsync()
+    {
+        using var db = GetConnection();
+        return await db.QueryAsync("SELECT * FROM system_jobs ORDER BY job_name");
+    }
+
+    public async Task UpdateJobStatusAsync(string jobName, string status, int progress = 0, string? metadata = null)
+    {
+        using var db = GetConnection();
+        const string sql = @"
+            INSERT INTO system_jobs (job_name, status, last_run_at, progress_pct, metadata, updated_at)
+            VALUES (@Name, @Status, NOW(), @Progress, @Metadata::jsonb, NOW())
+            ON CONFLICT (job_name) -- Assuming we add a unique constraint on job_name
+            DO UPDATE SET 
+                status = EXCLUDED.status, 
+                last_run_at = EXCLUDED.last_run_at, 
+                progress_pct = EXCLUDED.progress_pct, 
+                metadata = EXCLUDED.metadata, 
+                updated_at = NOW()";
+        
+        await db.ExecuteAsync(sql, new { Name = jobName, Status = status, Progress = progress, Metadata = metadata ?? "{}" });
+    }
+
+    public async Task<int> TriggerMediaCleanupAsync()
+    {
+        using var db = GetConnection();
+        db.Open();
+        using var trans = db.BeginTransaction();
+
+        try {
+            // 1. Identify orphaned media
+            var orphaned = await db.QueryAsync<dynamic>(@"
+                SELECT i.id, i.storage_path, i.thumbnail_s, i.thumbnail_m, i.thumbnail_l
+                FROM media i 
+                WHERE NOT EXISTS (SELECT 1 FROM media_links ml WHERE ml.media_id = i.id)", 
+                null, trans);
+
+            int count = 0;
+            foreach (var m in orphaned)
+            {
+                // 2. Queue for deletion
+                await db.ExecuteAsync(@"
+                    INSERT INTO media_deletion_log (media_id, storage_path, thumbnail_s, thumbnail_m, thumbnail_l, queued_at, status)
+                    VALUES (@MediaId, @Path, @ThumbS, @ThumbM, @ThumbL, NOW(), 0)",
+                    new { 
+                        MediaId = (Guid)m.id, 
+                        Path = (string)m.storage_path,
+                        ThumbS = (string?)m.thumbnail_s,
+                        ThumbM = (string?)m.thumbnail_m,
+                        ThumbL = (string?)m.thumbnail_l
+                    }, trans);
+                
+                // 3. Remove from media table (Source of Truth)
+                await db.ExecuteAsync("DELETE FROM media WHERE id = @Id", new { Id = (Guid)m.id }, trans);
+                count++;
+            }
+
+            trans.Commit();
+            return count;
+        } catch {
+            trans.Rollback();
+            throw;
+        }
     }
 
     public IEnumerable<string> GetRetentionOptions()

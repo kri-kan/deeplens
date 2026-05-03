@@ -35,14 +35,14 @@ public class InstaController : ControllerBase
             SELECT 
                 id, 
                 username, 
-                display_name AS Name, 
-                profile_pic_url AS ProfilePictureUrl, 
-                bio AS Biography, 
-                follower_count AS FollowersCount, 
-                post_count AS MediaCount, 
+                display_name AS name, 
+                profile_pic_url AS profilePictureUrl, 
+                bio AS biography, 
+                follower_count AS followersCount, 
+                post_count AS mediaCount, 
                 is_active AS is_active,
                 is_own_account AS isOwnAccount,
-                last_scraped_at AS LastSyncedAt
+                last_scraped_at AS lastSyncedAt
             FROM competitor_watchlist 
             WHERE platform = 'instagram' 
             ORDER BY is_own_account DESC, username ASC");
@@ -89,7 +89,8 @@ public class InstaController : ControllerBase
             // 2. Get Recent Posts from Database to avoid API throttling
             var sql = $@"
                 SELECT 
-                    platform_video_id AS Id, 
+                    id::text AS Id, 
+                    platform_video_id AS PlatformId,
                     url AS Permalink, 
                     description AS Caption,
                     media_type AS MediaType, 

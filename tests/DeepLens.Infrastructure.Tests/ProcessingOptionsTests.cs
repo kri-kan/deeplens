@@ -33,14 +33,12 @@ public class ProcessingOptionsTests
         var processingOptions = new ProcessingOptions();
         var spec = tenantSettings.Specifications[0];
         
-        processingOptions.ThumbnailWidth = spec.MaxWidth;
-        processingOptions.ThumbnailHeight = spec.MaxHeight;
+        processingOptions.TargetThumbnailSizes = new[] { "medium" };
         processingOptions.ThumbnailFormat = spec.Format.ToString().ToLower();
         processingOptions.ThumbnailQuality = spec.Options!.WebP!.Quality;
 
         // Assert
-        processingOptions.ThumbnailWidth.Should().Be(800);
-        processingOptions.ThumbnailHeight.Should().Be(600);
+        processingOptions.TargetThumbnailSizes.Should().Contain("medium");
         processingOptions.ThumbnailFormat.Should().Be("webp");
         processingOptions.ThumbnailQuality.Should().Be(90);
     }
@@ -52,8 +50,7 @@ public class ProcessingOptionsTests
         var options = new ProcessingOptions();
 
         // Assert
-        options.ThumbnailWidth.Should().Be(512);
-        options.ThumbnailHeight.Should().Be(512);
+        options.TargetThumbnailSizes.Should().Contain("medium");
         options.ThumbnailFormat.Should().Be("webp");
         options.ThumbnailQuality.Should().Be(75);
     }

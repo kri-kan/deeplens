@@ -67,7 +67,7 @@ export const API_ROUTES = {
     SET_DEFAULT_ADDRESS: (customerId: string, addressId: string) => `/api/v1/customers/${customerId}/addresses/${addressId}/default`,
   },
 
-  // WhatsApp communication
+  // WhatsApp communication (Specific implementation)
   WHATSAPP: {
     CHANNELS: '/api/v1/whatsapp/channels',
     DELETE_CHANNEL: (id: string) => `/api/v1/whatsapp/channels/${id}`,
@@ -77,8 +77,31 @@ export const API_ROUTES = {
     UNSUBSCRIBE: (customerId: string, channelId: string) => `/api/v1/whatsapp/customers/${customerId}/unsubscribe/${channelId}`,
   },
 
+  // Generic Communication & Broadcast
+  COMMUNICATION: {
+    CHANNELS: '/api/v1/communication/broadcast/channels',
+    CHANNEL_DETAIL: (id: string) => `/api/v1/communication/broadcast/channels/${id}`,
+    CHANNEL_TYPES: '/api/v1/communication/broadcast/channel-types',
+    PURPOSES: '/api/v1/communication/broadcast/purposes',
+    PURPOSES_DETAILED: '/api/v1/communication/broadcast/purposes/detailed',
+    PURPOSE_CHANNELS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/channels`,
+    UNLINKED_CHANNELS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/unlinked-channels`,
+    ADD_TO_PURPOSE: (purposeKey: string, channelId: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/channels/${channelId}`,
+    REMOVE_FROM_PURPOSE: (purposeKey: string, channelId: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/channels/${channelId}`,
+    PURPOSE_CUSTOMERS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/customers`,
+    UNASSIGNED_CUSTOMERS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/unassigned-customers`,
+    DISTRIBUTE: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/distribute`,
+  },
+
   // Common / Master Data
   COMMON: {
     COUNTRY_CODES: '/api/v1/country/codes',
+  },
+
+  // System & Background Jobs
+  SYSTEM_JOBS: {
+    LIST: '/api/v1/system-jobs',
+    ORPHANED_COUNT: '/api/v1/system-jobs/orphaned-media/count',
+    CLEANUP: '/api/v1/system-jobs/cleanup-media',
   }
 };

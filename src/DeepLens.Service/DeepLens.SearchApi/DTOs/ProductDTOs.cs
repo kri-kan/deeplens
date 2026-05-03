@@ -17,6 +17,10 @@ public class ProductRequest
     public string? Category { get; set; }
     public string? SubCategory { get; set; }
     public string? Retention { get; set; }
+    public string? Fabric { get; set; }
+    public string? StitchType { get; set; }
+    public string? WorkHeaviness { get; set; }
+    public string? Color { get; set; }
     public List<string> Tags { get; set; } = new();
     public List<IFormFile>? Files { get; set; }
 }

@@ -50,7 +50,7 @@ export interface ProductFilePayload {
  * Supported product categories, mirroring the backend enum.
  * Add new values here and CategoryIcons.tsx will pick them up automatically.
  */
-export type ProductCategory = 'all' | 'saree' | 'dress' | 'lehanga' | 'kids' | 'general';
+export type ProductCategory = 'all' | 'saree' | 'dress' | 'lehanga' | 'suit' | 'general';
 
 /**
  * A registry entry describing a category for use in UI selectors.

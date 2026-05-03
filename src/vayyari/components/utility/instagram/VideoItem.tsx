@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Linking, Dimensions } from 'react-n
 import { Image } from 'expo-image';
 import { Text, IconButton, Icon } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -10,9 +11,12 @@ const ITEM_SIZE = width / COLUMN_COUNT;
 
 interface VideoItemProps {
   item: any;
+  onPress?: () => void;
 }
 
-export const VideoItem: React.FC<VideoItemProps> = ({ item }) => {
+export const VideoItem: React.FC<VideoItemProps> = ({ item, onPress }) => {
+  const router = useRouter();
+
   const getMediaUri = (item: any) => {
     const path = item.storagePath || item.StoragePath;
     if (path) {
@@ -22,7 +26,10 @@ export const VideoItem: React.FC<VideoItemProps> = ({ item }) => {
   };
 
   return (
-    <View style={styles.videoItem}>
+    <TouchableOpacity 
+      style={styles.videoItem}
+      onPress={onPress}
+    >
       <Image 
         source={{ uri: getMediaUri(item) }} 
         style={styles.thumbnail}
@@ -63,7 +70,7 @@ export const VideoItem: React.FC<VideoItemProps> = ({ item }) => {
           />
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 

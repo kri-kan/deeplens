@@ -43,15 +43,15 @@ public class ProductService : IProductService
         try
         {
             // 0. Generate Hex ID (Product Code) from sequence
-            var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('\"productId_id_seq\"')", null, transaction);
+            var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, transaction);
             var hexId = $"VF{nextVal:X3}";
             data.SequenceId = (int)nextVal;
 
             // 1. Create Product (Master)
             var masterId = Guid.NewGuid();
             const string masterSql = @"
-                INSERT INTO products (id, title, base_sku, tags, sequence_id, created_at)
-                VALUES (@Id, @Title, @Sku, @Tags, @SeqId, @CreatedAt)
+                INSERT INTO products (id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, description)
+                VALUES (@Id, @Title, @Sku, @Tags, @SeqId, @CreatedAt, @Fabric, @Stitch, @Work, @Description)
                 RETURNING id";
             
             // Auto-tag with subcategory for catalog filtering
@@ -68,13 +68,29 @@ public class ProductService : IProductService
                 Sku = hexId,
                 Tags = tags.ToArray(),
                 SeqId = data.SequenceId ?? 0,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                Fabric = data.Fabric,
+                Stitch = data.StitchType,
+                Work = data.WorkHeaviness,
+                Description = data.Description
             }, transaction);
 
-            // 2. Create Variant
-            var variantId = Guid.NewGuid();
-            await connection.ExecuteAsync("INSERT INTO product_variants (id, product_id) VALUES (@Id, @Pid)", 
-                new { Id = variantId, Pid = masterId }, transaction);
+            // 2. Create Listing (Vendor Product)
+            var vendorProductId = Guid.NewGuid();
+            var vendorId = await GetOrCreateDefaultVendor(connection, transaction);
+
+            const string vendorSql = @"
+                INSERT INTO vendor_listings (id, vendor_id, product_id, current_price, description, external_id)
+                VALUES (@Id, @VendorId, @Pid, @Price, @Desc, @ExtId)";
+
+            await connection.ExecuteAsync(vendorSql, new {
+                Id = vendorProductId,
+                VendorId = vendorId,
+                Pid = masterId,
+                Price = data.VendorPrice,
+                Desc = data.Description,
+                ExtId = vendorProductId.ToString()
+            }, transaction);
 
             // 3. Storage & Registry
             var mediaIds = new List<Guid>();
@@ -88,18 +104,30 @@ public class ProductService : IProductService
                 
                 var mediaId = Guid.NewGuid();
                 const string mediaSql = @"
-                    INSERT INTO media (id, variant_id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
-                    VALUES (@Id, @VarId, @Path, @Mime, 0, 1, 0, @Category, @SubCategory)";
+                    INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory, color)
+                    VALUES (@Id, @Path, @Mime, 0, 1, 0, @Category, @SubCategory, @Color)";
 
-                _logger.LogInformation("Creating media record {MediaId} for variant {VarId} at path {StoragePath}", mediaId, variantId, storagePath);
+                _logger.LogInformation("Creating media record {MediaId} at path {StoragePath}", mediaId, storagePath);
                 await connection.ExecuteAsync(mediaSql, new {
                     Id = mediaId,
-                    VarId = variantId,
                     Path = storagePath,
                     Mime = file.ContentType,
                     Category = context.Bucket,
-                    SubCategory = context.Folder
+                    SubCategory = context.Folder,
+                    Color = file.Color ?? data.Color
                 }, transaction);
+
+                // Link to Product (The Design Gallery)
+                await connection.ExecuteAsync(@"
+                    INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                    VALUES (@MediaId, @EntityId, 'product', TRUE)",
+                    new { MediaId = mediaId, EntityId = masterId }, transaction);
+
+                // Link to Listing (The Vendor Proof)
+                await connection.ExecuteAsync(@"
+                    INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                    VALUES (@MediaId, @EntityId, 'vendor_listing', TRUE)",
+                    new { MediaId = mediaId, EntityId = vendorProductId }, transaction);
 
                 mediaIds.Add(mediaId);
                 if (!string.IsNullOrEmpty(file.VendorMediaId))
@@ -107,23 +135,6 @@ public class ProductService : IProductService
                     mediaMap[file.VendorMediaId] = mediaId;
                 }
             }
-
-            // 4. Create Listing (Vendor Product)
-            var vendorProductId = Guid.NewGuid();
-            var vendorId = await GetOrCreateDefaultVendor(connection, transaction);
-
-            const string vendorSql = @"
-                INSERT INTO vendor_listings (id, vendor_id, variant_id, current_price, description, external_id)
-                VALUES (@Id, @VendorId, @VarId, @Price, @Desc, @ExtId)";
-
-            await connection.ExecuteAsync(vendorSql, new {
-                Id = vendorProductId,
-                VendorId = vendorId,
-                VarId = variantId,
-                Price = data.VendorPrice,
-                Desc = data.Description,
-                ExtId = vendorProductId.ToString()
-            }, transaction);
 
             transaction.Commit();
 
@@ -135,7 +146,10 @@ public class ProductService : IProductService
                 ExclusiveDescription = data.Description,
                 Category = data.Category.ToString(),
                 ProductCode = hexId,
-                MediaMap = mediaMap
+                MediaMap = mediaMap,
+                Fabric = data.Fabric,
+                StitchType = data.StitchType,
+                WorkHeaviness = data.WorkHeaviness
             };
         }
         catch (Exception ex)
@@ -151,31 +165,42 @@ public class ProductService : IProductService
         using var db = GetConnection();
         var sql = @"
             SELECT 
-                sl.id as id,
                 p.id as masterproductid,
                 p.title as title,
                 p.base_sku as productcode,
                 p.tags as tags,
-                sl.current_price as vendorprice,
-                sl.description as description,
+                p.fabric as fabric,
+                p.stitch_type as stitchtype,
+                p.work_heaviness as workheaviness,
                 p.created_at as CreatedAt,
+                p.description as description,
+                c.name as category,
+                (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendorprice,
+                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendordescription,
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'is_default', m.is_default))
+                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'color', m.color, 'is_default', ml.is_primary))
                     FROM media m 
-                    WHERE m.variant_id = pv.id
+                    JOIN media_links ml ON m.id = ml.media_id
+                    WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
                 ), '[]'::json) as media_json
             FROM products p
-            JOIN product_variants pv ON p.id = pv.product_id
-            JOIN vendor_listings sl ON pv.id = sl.variant_id
+            LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.is_deleted = FALSE";
 
         var parameters = new DynamicParameters();
         parameters.Add("Take", filter.Take);
         parameters.Add("Skip", filter.Skip);
 
+        if (!string.IsNullOrEmpty(filter.Query))
+        {
+            sql += " AND (p.title ILIKE @SearchQuery OR p.base_sku ILIKE @SearchQuery OR p.tags::text ILIKE @SearchQuery OR p.description ILIKE @SearchQuery)";
+            parameters.Add("SearchQuery", $"%{filter.Query}%");
+        }
+
         if (!string.IsNullOrEmpty(filter.Category))
         {
-            sql += " AND p.tags::text[] @> ARRAY[@Category]::text[]";
+            // Match against formal category slug OR tags
+            sql += " AND (c.slug = @Category OR c.name = @Category OR p.tags::text[] @> ARRAY[@Category]::text[])";
             parameters.Add("Category", filter.Category);
         }
 
@@ -193,8 +218,8 @@ public class ProductService : IProductService
 
         sql += filter.SortBy switch
         {
-            "price_low" => " ORDER BY sl.current_price ASC",
-            "price_high" => " ORDER BY sl.current_price DESC",
+            "price_low" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) ASC NULLS LAST",
+            "price_high" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) DESC NULLS LAST",
             _ => " ORDER BY p.created_at DESC"
         };
 
@@ -205,16 +230,21 @@ public class ProductService : IProductService
         var products = results.Select(r => {
             var vp = new VendorProduct
             {
-                Id = r.id ?? Guid.Empty,
+                Id = r.masterproductid ?? Guid.Empty,
                 MasterProductId = r.masterproductid ?? Guid.Empty,
                 Title = r.title,
                 ProductCode = r.productcode,
                 VendorPrice = r.vendorprice ?? 0m,
-                ExclusiveDescription = r.description,
-                CreatedAt = r.createdat
+                ExclusiveDescription = r.vendordescription,
+                Description = r.description,
+                CreatedAt = r.createdat,
+                Fabric = r.fabric,
+                StitchType = r.stitchtype,
+                WorkHeaviness = r.workheaviness,
+                Category = r.category
             };
 
-            if (r.tags != null)
+            if (r.tags != null && string.IsNullOrEmpty(vp.Category))
             {
                 vp.Category = ((string[])r.tags).FirstOrDefault();
             }
@@ -248,37 +278,14 @@ public class ProductService : IProductService
         using var transaction = db.BeginTransaction();
         
         try {
-            // 1. Get all media paths for this product
-            var media = await db.QueryAsync<(string storage_path, string thumbnail_s, string thumbnail_m, string thumbnail_l)>(@"
-                SELECT storage_path, thumbnail_s, thumbnail_m, thumbnail_l 
-                FROM media 
-                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Id)", 
-                new { Id = productId }, transaction);
-
-            // 2. Delete media from storage
-            foreach (var m in media)
-            {
-                if (!string.IsNullOrEmpty(m.storage_path)) {
-                    try { await _storageService.DeleteFileAsync(m.storage_path); } catch { }
-                }
-                if (!string.IsNullOrEmpty(m.thumbnail_s)) {
-                    try { await _storageService.DeleteFileAsync(m.thumbnail_s); } catch { }
-                }
-                if (!string.IsNullOrEmpty(m.thumbnail_m)) {
-                    try { await _storageService.DeleteFileAsync(m.thumbnail_m); } catch { }
-                }
-                if (!string.IsNullOrEmpty(m.thumbnail_l)) {
-                    try { await _storageService.DeleteFileAsync(m.thumbnail_l); } catch { }
-                }
-            }
-
-            // 3. Delete media records
+            // 1. Unlink media (don't delete files, as per manual review requirement)
             await db.ExecuteAsync(@"
-                DELETE FROM media 
-                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Id)", 
+                DELETE FROM media_links 
+                WHERE entity_id = @Id
+                AND entity_type = 'product'", 
                 new { Id = productId }, transaction);
 
-            // 4. Mark product as deleted (Soft Delete)
+            // 2. Mark product as deleted (Soft Delete)
             var result = await db.ExecuteAsync("UPDATE products SET is_deleted = TRUE WHERE id = @Id", new { Id = productId }, transaction) > 0;
             
             transaction.Commit();
@@ -295,14 +302,20 @@ public class ProductService : IProductService
         using var db = GetConnection();
         using var transaction = db.BeginTransaction();
         try {
-            // Unstar all media for this product's variants
+            // Unstar all media for this product
             await db.ExecuteAsync(@"
-                UPDATE media SET is_default = false 
-                WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = @Pid)", 
+                UPDATE media_links SET is_primary = false 
+                WHERE entity_type = 'product'
+                AND entity_id = @Pid", 
                 new { Pid = productId }, transaction);
             
             // Star the selected one
-            await db.ExecuteAsync("UPDATE media SET is_default = true WHERE id = @Id", new { Id = mediaId }, transaction);
+            await db.ExecuteAsync(@"
+                UPDATE media_links SET is_primary = true 
+                WHERE media_id = @Id 
+                AND entity_type = 'product'
+                AND entity_id = @Pid", 
+                new { Id = mediaId, Pid = productId }, transaction);
             transaction.Commit();
             return true;
         } catch {
@@ -320,41 +333,60 @@ public class ProductService : IProductService
     public async Task<VendorProduct?> GetProductByIdAsync(Guid id)
     {
         using var db = GetConnection();
+        
+        // 1. Resolve potential merge redirects
+        var targetId = await db.QuerySingleOrDefaultAsync<Guid?>(
+            "SELECT target_id FROM product_merges WHERE source_id = @Id", new { Id = id });
+        
+        if (targetId.HasValue)
+        {
+            return await GetProductByIdAsync(targetId.Value);
+        }
+
         const string sql = @"
             SELECT 
-                sl.id as id,
+                p.id as id,
                 p.id as masterproductid,
                 p.title as title,
                 p.base_sku as productcode,
                 p.tags as tags,
-                sl.current_price as vendorprice,
-                sl.description as description,
+                p.fabric as fabric,
+                p.stitch_type as stitchtype,
+                p.work_heaviness as workheaviness,
+                p.description as description,
+                c.name as category,
+                (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendorprice,
+                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendordescription,
                 p.created_at as CreatedAt,
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'is_default', m.is_default))
+                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'color', m.color, 'is_default', ml.is_primary))
                     FROM media m 
-                    WHERE m.variant_id = pv.id
+                    JOIN media_links ml ON m.id = ml.media_id
+                    WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
                 ), '[]'::json) as media_json
             FROM products p
-            JOIN product_variants pv ON p.id = pv.product_id
-            JOIN vendor_listings sl ON pv.id = sl.variant_id
-            WHERE sl.id = @Id AND p.is_deleted = FALSE";
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.id = @Id AND p.is_deleted = FALSE";
 
         var r = await db.QuerySingleOrDefaultAsync<dynamic>(sql, new { Id = id });
         if (r == null) return null;
 
-        var vp = new VendorProduct
-        {
-            Id = r.id ?? Guid.Empty,
+        var vp = new VendorProduct {
+            Id = r.id ?? r.masterproductid ?? Guid.Empty,
             MasterProductId = r.masterproductid ?? Guid.Empty,
             Title = r.title,
             ProductCode = r.productcode,
             VendorPrice = r.vendorprice ?? 0m,
-            ExclusiveDescription = r.description,
-            CreatedAt = r.createdat
+            ExclusiveDescription = r.vendordescription,
+            Description = r.description,
+            CreatedAt = r.createdat,
+            Fabric = r.fabric,
+            StitchType = r.stitchtype,
+            WorkHeaviness = r.workheaviness,
+            Category = r.category
         };
 
-        if (r.tags != null)
+        if (r.tags != null && string.IsNullOrEmpty(vp.Category))
         {
             vp.Category = ((string[])r.tags).FirstOrDefault();
         }
@@ -366,6 +398,145 @@ public class ProductService : IProductService
         }
 
         return vp;
+    }
+
+    public async Task<MergePreviewDto> GetMergePreviewAsync(Guid sourceId, Guid targetId)
+    {
+        var source = await GetProductByIdAsync(sourceId);
+        var target = await GetProductByIdAsync(targetId);
+
+        if (source == null || target == null)
+            throw new InvalidOperationException("Source or Target product not found");
+
+        return new MergePreviewDto
+        {
+            Source = source,
+            Target = target,
+            CombinedImageCount = source.Media.Count + target.Media.Count,
+            CombinedListingCount = 1 // Since they are merged into one design
+        };
+    }
+
+    public async Task<bool> LinkInstagramPostAsync(Guid postId, Guid productId, string linkType)
+    {
+        using var db = GetConnection();
+        // 1. Ensure only one 'is' link per post (by clearing others if this is an 'is' link)
+        if (linkType.ToLower() == "is")
+        {
+            await db.ExecuteAsync("UPDATE instagram_product_links SET link_type = 'contains' WHERE post_id = @PostId AND link_type = 'is'", new { PostId = postId });
+        }
+
+        const string sql = @"
+            INSERT INTO instagram_product_links (post_id, product_id, link_type)
+            VALUES (@PostId, @ProductId, @LinkType)
+            ON CONFLICT (post_id, product_id) 
+            DO UPDATE SET link_type = EXCLUDED.link_type, updated_at = NOW()";
+        
+        return await db.ExecuteAsync(sql, new { PostId = postId, ProductId = productId, LinkType = linkType.ToLower() }) > 0;
+    }
+
+    public async Task<IEnumerable<InstagramProductLinkDto>> GetInstagramLinksAsync(Guid postId)
+    {
+        using var db = GetConnection();
+        const string sql = @"
+            SELECT l.id, l.post_id as PostId, l.product_id as ProductId, l.link_type as LinkType, 
+                   p.title as ProductTitle, p.base_sku as ProductCode
+            FROM instagram_product_links l
+            JOIN products p ON l.product_id = p.id
+            WHERE l.post_id = @PostId";
+        
+        return await db.QueryAsync<InstagramProductLinkDto>(sql, new { PostId = postId });
+    }
+
+    public async Task<VendorProduct> CreateProductFromPostAsync(Guid postId, ProductIngestionDto data)
+    {
+        using var connection = GetConnection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+
+        try {
+            // 1. Fetch post metadata
+            var post = await connection.QuerySingleOrDefaultAsync<dynamic>(
+                "SELECT * FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
+            
+            if (post == null) throw new InvalidOperationException("Post not found");
+
+            // 2. Create Product
+            var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, transaction);
+            var hexId = $"VF{nextVal:X3}";
+            var masterId = Guid.NewGuid();
+
+            const string masterSql = @"
+                INSERT INTO products (id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, category_id, description)
+                VALUES (@Id, @Title, @Sku, @Tags, @SeqId, @CreatedAt, @Fabric, @Stitch, @Work, @CategoryId, @Description)";
+
+            var tags = data.Tags ?? new List<string>();
+            await connection.ExecuteAsync(masterSql, new {
+                Id = masterId,
+                Title = data.MasterTitle ?? post.title ?? "New Product from IG",
+                Sku = hexId,
+                Tags = tags.ToArray(),
+                SeqId = (int)nextVal,
+                CreatedAt = DateTime.UtcNow,
+                Fabric = data.Fabric,
+                Stitch = data.StitchType,
+                Work = data.WorkHeaviness,
+                CategoryId = data.CategoryId,
+                Description = data.Description ?? post.description
+            }, transaction);
+
+            // 3. Link existing media if storage_path exists
+            if (!string.IsNullOrEmpty(post.storage_path))
+            {
+                // Re-use existing media record if it exists
+                var mediaId = await connection.QueryFirstOrDefaultAsync<Guid?>(
+                    "SELECT id FROM media WHERE storage_path = @Path LIMIT 1", 
+                    new { Path = post.storage_path }, transaction) ?? Guid.NewGuid();
+
+                var exists = await connection.ExecuteScalarAsync<bool>(
+                    "SELECT EXISTS(SELECT 1 FROM media WHERE id = @Id)", 
+                    new { Id = mediaId }, transaction);
+
+                if (!exists)
+                {
+                    var ext = Path.GetExtension(post.storage_path).ToLower();
+                    var mimeType = ext switch {
+                        ".png" => "image/png",
+                        ".webp" => "image/webp",
+                        _ => "image/jpeg"
+                    };
+
+                    await connection.ExecuteAsync(@"
+                        INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory, color)
+                        VALUES (@Id, @Path, @Mime, 0, 1, 0, 'instagram', 'posts', @Color)",
+                        new { Id = mediaId, Path = post.storage_path, Mime = mimeType, Color = data.Color }, transaction);
+                }
+
+                await connection.ExecuteAsync(@"
+                    INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                    VALUES (@MediaId, @EntityId, 'product', TRUE)",
+                    new { MediaId = mediaId, EntityId = masterId }, transaction);
+            }
+
+            // 4. Create semantic link
+            await connection.ExecuteAsync(@"
+                INSERT INTO instagram_product_links (post_id, product_id, link_type)
+                VALUES (@PostId, @ProductId, 'is')",
+                new { PostId = postId, ProductId = masterId }, transaction);
+
+            transaction.Commit();
+
+            return new VendorProduct {
+                Id = masterId, // Since no vendor listing yet, we return the master ID
+                MasterProductId = masterId,
+                ProductCode = hexId,
+                Title = data.MasterTitle ?? post.title
+            };
+        } catch (Exception ex) {
+            transaction.Rollback();
+            _logger.LogError(ex, "Failed to create product from post {PostId}", postId);
+            throw;
+        }
     }
 
     public async Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20)
@@ -389,4 +560,9 @@ public class ProductService : IProductService
     public async Task<bool> MergeByVendorProductIdsAsync(Guid targetMasterId, List<Guid> vendorProductIds) => true;
     public async Task<int> MergeClustersAsync(List<ProductClusterDto> clusters) => clusters.Count;
     public async Task UpdateMasterPriceAsync(Guid masterProductId, decimal sellingPrice, decimal resellerPrice) { }
+    public async Task<IEnumerable<CategoryDto>> GetCategoriesAsync()
+    {
+        using var db = GetConnection();
+        return await db.QueryAsync<CategoryDto>("SELECT id, name, slug FROM categories ORDER BY name ASC");
+    }
 }
