@@ -12,31 +12,54 @@ const ITEM_SIZE = width / COLUMN_COUNT;
 interface VideoItemProps {
   item: any;
   onPress?: () => void;
+  onLongPress?: () => void;
+  isSelected?: boolean;
+  selectionMode?: boolean;
 }
 
-export const VideoItem: React.FC<VideoItemProps> = ({ item, onPress }) => {
+export const VideoItem: React.FC<VideoItemProps> = ({ 
+  item, 
+  onPress, 
+  onLongPress,
+  isSelected,
+  selectionMode 
+}) => {
   const router = useRouter();
 
   const getMediaUri = (item: any) => {
     const path = item.storagePath || item.StoragePath;
     if (path) {
-      return `http://192.168.0.170:5000/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
+      const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL;
+      return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
     }
     return item.thumbnailUrl || item.mediaUrl;
   };
 
   return (
     <TouchableOpacity 
-      style={styles.videoItem}
+      style={[styles.videoItem, isSelected && styles.selectedItem]}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
     >
       <Image 
         source={{ uri: getMediaUri(item) }} 
-        style={styles.thumbnail}
+        style={[styles.thumbnail, isSelected && { opacity: 0.7 }]}
         contentFit="cover"
         transition={200}
       />
-      {item.permalink && (
+      
+      {selectionMode && (
+        <View style={styles.selectionIndicator}>
+          <Icon 
+            source={isSelected ? "check-circle" : "circle-outline"} 
+            size={24} 
+            color={isSelected ? "#6200ee" : "white"} 
+          />
+        </View>
+      )}
+
+      {item.permalink && !selectionMode && (
         <IconButton 
           icon="open-in-new" 
           iconColor="white" 
@@ -51,25 +74,16 @@ export const VideoItem: React.FC<VideoItemProps> = ({ item, onPress }) => {
           <Text style={styles.badgeText}> REEL</Text>
         </View>
       )}
-      <View style={styles.videoStats}>
-        <View style={styles.statsContainer}>
-          <View style={styles.statsRow}>
-            <Text style={styles.statsText}>❤️ {(item.likeCount || 0).toLocaleString()}</Text>
-            <Text style={styles.statsText}>💬 {(item.commentsCount || 0).toLocaleString()}</Text>
+      {!selectionMode && (
+        <View style={styles.videoStats}>
+          <View style={styles.statsContainer}>
+            <View style={styles.statsRow}>
+              <Text style={styles.statsText}>❤️ {(item.likeCount || 0).toLocaleString()}</Text>
+              <Text style={styles.statsText}>💬 {(item.commentsCount || 0).toLocaleString()}</Text>
+            </View>
           </View>
-          <IconButton 
-            icon="link-variant" 
-            iconColor="white" 
-            size={14} 
-            style={styles.linkIcon}
-            onPress={async () => {
-              if (item.permalink) {
-                await Clipboard.setStringAsync(item.permalink);
-              }
-            }}
-          />
         </View>
-      </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -80,10 +94,25 @@ const styles = StyleSheet.create({
     height: ITEM_SIZE,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  selectedItem: {
+    borderColor: '#6200ee',
+    borderWidth: 2,
   },
   thumbnail: {
     width: '100%',
     height: '100%',
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 10,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   videoStats: {
     position: 'absolute',
@@ -134,8 +163,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     margin: 0,
     zIndex: 1,
-  },
-  linkIcon: {
-    margin: 0,
   },
 });

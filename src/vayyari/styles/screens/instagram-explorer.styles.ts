@@ -49,6 +49,7 @@ export const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
+    backgroundColor: '#f0f0f0',
   },
   ownAccountBadge: {
     position: 'absolute',
@@ -102,5 +103,15 @@ export const styles = StyleSheet.create({
     width: width,
     height: '100%',
     backgroundColor: '#000',
+  },
+  bulkModal: {
+    margin: 16,
+    justifyContent: 'center',
+  },
+  bulkContent: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    overflow: 'hidden',
+    maxHeight: '80%',
   },
 });

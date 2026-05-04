@@ -22,6 +22,7 @@ public class ProductRequest
     public string? WorkHeaviness { get; set; }
     public string? Color { get; set; }
     public List<string> Tags { get; set; } = new();
+    public Guid? SourcePostId { get; set; }
     public List<IFormFile>? Files { get; set; }
 }
 

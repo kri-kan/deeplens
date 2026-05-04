@@ -13,7 +13,17 @@ class ProductService {
     formData.append('VendorPrice', request.vendorPrice.toString());
 
     if (request.category) {
-      formData.append('Category', request.category);
+      formData.append('CategorySlug', request.category);
+    }
+
+    if (request.sourcePostId) {
+      formData.append('SourcePostId', request.sourcePostId);
+    }
+    
+    if (request.sourcePostIds && request.sourcePostIds.length > 0) {
+      request.sourcePostIds.forEach(id => {
+        formData.append('SourcePostIds', id);
+      });
     }
 
     if (request.files && request.files.length > 0) {

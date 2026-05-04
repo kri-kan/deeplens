@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, FlatList, TouchableOpacity, Modal, BackHandler } from 'react-native';
-import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, Portal, Dialog } from 'react-native-paper';
+import { View, ScrollView, FlatList, TouchableOpacity, BackHandler } from 'react-native';
+import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, Portal, Dialog, Modal as PaperModal } from 'react-native-paper';
 import { Image } from 'expo-image';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -11,9 +11,11 @@ import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
 import { ControlCenter } from '@/components/utility/instagram/ControlCenter';
 import { SettingsModal } from '@/components/utility/instagram/SettingsModal';
 import { PostDetailView } from '@/components/utility/instagram/PostDetailView';
+import { ProductCreationForm } from '@/components/utility/product/ProductCreationForm';
 import { BentoCard } from '@/components/ui/BentoCard';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
+import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
 import { useTheme } from 'react-native-paper';
 
@@ -60,6 +62,10 @@ export default function InstagramExplorer() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [selectedPosts, setSelectedPosts] = useState<Map<string, any>>(new Map());
+  const [showBulkCreate, setShowBulkCreate] = useState(false);
+
+  const selectionMode = selectedPosts.size > 0;
 
   useEffect(() => {
     const backAction = () => {
@@ -67,12 +73,28 @@ export default function InstagramExplorer() {
         setSelectedPost(null);
         return true;
       }
+      if (selectionMode) {
+        setSelectedPosts(new Map());
+        return true;
+      }
       return false;
     };
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [selectedPost]);
+  }, [selectedPost, selectionMode]);
+
+  const toggleSelection = (post: any) => {
+    setSelectedPosts(prev => {
+      const next = new Map(prev);
+      if (next.has(post.id)) {
+        next.delete(post.id);
+      } else {
+        next.set(post.id, post);
+      }
+      return next;
+    });
+  };
 
   const formatDateDisplay = (dateString: string | null) => {
     if (!dateString) return 'Select';
@@ -84,14 +106,32 @@ export default function InstagramExplorer() {
     return (
       <Surface style={styles.container}>
         <Appbar.Header style={{ backgroundColor: theme.colors.surface, height: 48 }}>
-          <Appbar.BackAction onPress={() => { setSelectedProfile(null); }} />
-          <Appbar.Content title={`@${selectedProfile}`} titleStyle={styles.bold} />
-          <Appbar.Action icon="clipboard-list-outline" onPress={() => setShowQueue(true)} />
+          {selectionMode ? (
+            <>
+              <Appbar.Action icon="close" onPress={() => setSelectedPosts(new Map())} />
+              <Appbar.Content title={`${selectedPosts.size} Selected`} titleStyle={styles.bold} />
+              <Appbar.Action icon="plus-box" onPress={() => setShowBulkCreate(true)} />
+            </>
+          ) : (
+            <>
+              <Appbar.BackAction onPress={() => { setSelectedProfile(null); }} />
+              <Appbar.Content title={`@${selectedProfile}`} titleStyle={styles.bold} />
+              <Appbar.Action icon="clipboard-list-outline" onPress={() => setShowQueue(true)} />
+            </>
+          )}
         </Appbar.Header>
 
         <FlatList
           data={profileData.videos}
-          renderItem={({ item }) => <VideoItem item={item} onPress={() => setSelectedPost(item)} />}
+          renderItem={({ item }) => (
+            <VideoItem 
+              item={item} 
+              onPress={() => selectionMode ? toggleSelection(item) : setSelectedPost(item)} 
+              onLongPress={() => toggleSelection(item)}
+              isSelected={selectedPosts.has(item.id)}
+              selectionMode={selectionMode}
+            />
+          )}
           keyExtractor={(item) => item.id}
           numColumns={3}
           contentContainerStyle={{ paddingBottom: 20 }}
@@ -105,58 +145,60 @@ export default function InstagramExplorer() {
                 onToggleBio={() => setBioExpanded(!bioExpanded)}
               />
 
-              <View style={styles.filterBar}>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.filterLabel}>Sort:</Text>
-                  <Menu
-                    visible={sortMenuVisible}
-                    onDismiss={() => setSortMenuVisible(false)}
-                    anchor={
-                      <Button 
-                        mode="text" 
-                        compact 
-                        onPress={() => setSortMenuVisible(true)}
-                        labelStyle={styles.filterButtonLabel}
-                        style={styles.filterButton}
-                      >
-                        {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
-                      </Button>
-                    }
-                  >
-                    <Menu.Item onPress={() => { setSortBy('date'); setSortMenuVisible(false); }} title="Date" />
-                    <Menu.Item onPress={() => { setSortBy('likes'); setSortMenuVisible(false); }} title="Likes" />
-                    <Menu.Item onPress={() => { setSortBy('comments'); setSortMenuVisible(false); }} title="Comments" />
-                  </Menu>
+              {!selectionMode && (
+                <View style={styles.filterBar}>
+                  <View style={styles.filterGroup}>
+                    <Text style={styles.filterLabel}>Sort:</Text>
+                    <Menu
+                      visible={sortMenuVisible}
+                      onDismiss={() => setSortMenuVisible(false)}
+                      anchor={
+                        <Button 
+                          mode="text" 
+                          compact 
+                          onPress={() => setSortMenuVisible(true)}
+                          labelStyle={styles.filterButtonLabel}
+                          style={styles.filterButton}
+                        >
+                          {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
+                        </Button>
+                      }
+                    >
+                      <Menu.Item onPress={() => { setSortBy('date'); setSortMenuVisible(false); }} title="Date" />
+                      <Menu.Item onPress={() => { setSortBy('likes'); setSortMenuVisible(false); }} title="Likes" />
+                      <Menu.Item onPress={() => { setSortBy('comments'); setSortMenuVisible(false); }} title="Comments" />
+                    </Menu>
 
-                  <IconButton 
-                    icon={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} 
-                    size={20} 
-                    onPress={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                    style={styles.sortIcon}
-                  />
-                </View>
-
-                <View style={styles.filterGroup}>
-                  <Text style={styles.filterLabel}>From:</Text>
-                  <Button mode="text" compact onPress={() => setShowFromPicker(true)} labelStyle={styles.filterButtonLabel} style={styles.filterButton}>
-                    {formatDateDisplay(fromDate)}
-                  </Button>
-                  
-                  <Text style={styles.filterLabel}>To:</Text>
-                  <Button mode="text" compact onPress={() => setShowToPicker(true)} labelStyle={styles.filterButtonLabel} style={styles.filterButton}>
-                    {formatDateDisplay(toDate)}
-                  </Button>
-
-                  {(fromDate || toDate) && (
                     <IconButton 
-                      icon="close-circle-outline" 
-                      size={16} 
-                      onPress={() => { setFromDate(null); setToDate(null); }} 
-                      style={styles.closeFilterIcon}
+                      icon={sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'} 
+                      size={20} 
+                      onPress={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                      style={styles.sortIcon}
                     />
-                  )}
+                  </View>
+
+                  <View style={styles.filterGroup}>
+                    <Text style={styles.filterLabel}>From:</Text>
+                    <Button mode="text" compact onPress={() => setShowFromPicker(true)} labelStyle={styles.filterButtonLabel} style={styles.filterButton}>
+                      {formatDateDisplay(fromDate)}
+                    </Button>
+                    
+                    <Text style={styles.filterLabel}>To:</Text>
+                    <Button mode="text" compact onPress={() => setShowToPicker(true)} labelStyle={styles.filterButtonLabel} style={styles.filterButton}>
+                      {formatDateDisplay(toDate)}
+                    </Button>
+
+                    {(fromDate || toDate) && (
+                      <IconButton 
+                        icon="close-circle-outline" 
+                        size={16} 
+                        onPress={() => { setFromDate(null); setToDate(null); }} 
+                        style={styles.closeFilterIcon}
+                      />
+                    )}
+                  </View>
                 </View>
-              </View>
+              )}
 
               {showFromPicker && (
                 <DateTimePicker
@@ -224,10 +266,10 @@ export default function InstagramExplorer() {
         />
 
         <Portal>
-          <Modal
+          <PaperModal
             visible={!!selectedPost}
-            animationType="slide"
-            onRequestClose={() => setSelectedPost(null)}
+            onDismiss={() => setSelectedPost(null)}
+            contentContainerStyle={{ flex: 1 }}
           >
             {selectedPost && (
               <View style={styles.modalContent}>
@@ -237,7 +279,34 @@ export default function InstagramExplorer() {
                 />
               </View>
             )}
-          </Modal>
+          </PaperModal>
+
+          <PaperModal
+            visible={showBulkCreate}
+            onDismiss={() => setShowBulkCreate(false)}
+            contentContainerStyle={styles.bulkModal}
+          >
+            <Surface style={styles.bulkContent} elevation={4}>
+              <Appbar.Header style={{ backgroundColor: 'white', elevation: 0 }}>
+                <Appbar.Content title="Bulk Create Product" titleStyle={styles.bold} />
+                <Appbar.Action icon="close" onPress={() => setShowBulkCreate(false)} />
+              </Appbar.Header>
+              <ProductCreationForm
+                initialData={{
+                  linkedPosts: Array.from(selectedPosts.values()).map(p => ({
+                    id: p.id,
+                    thumbnailUrl: p.thumbnailUrl || p.mediaUrl,
+                    storagePath: p.storagePath
+                  }))
+                }}
+                onSuccess={() => {
+                  setShowBulkCreate(false);
+                  setSelectedPosts(new Map());
+                }}
+                onCancel={() => setShowBulkCreate(false)}
+              />
+            </Surface>
+          </PaperModal>
         </Portal>
       </Surface>
     );
@@ -261,17 +330,7 @@ export default function InstagramExplorer() {
               style={styles.profileGridItem}
             >
               <View style={styles.profileCard}>
-                {item.profilePictureUrl ? (
-                  <Avatar.Image 
-                    size={60} 
-                    source={{ uri: item.profilePictureUrl }} 
-                  />
-                ) : (
-                  <Avatar.Text 
-                    size={60} 
-                    label={item.username?.substring(0, 2).toUpperCase() || '??'} 
-                  />
-                )}
+                <ProfileAvatar profile={item} size={60} />
                 {item.isOwnAccount && (
                   <View style={styles.ownAccountBadge}>
                     <Avatar.Icon size={16} icon="check-decagram" />

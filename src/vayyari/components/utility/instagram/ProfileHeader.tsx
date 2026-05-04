@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { Text, IconButton, Icon, useTheme, Avatar } from 'react-native-paper';
+import { Text, IconButton, Icon, useTheme } from 'react-native-paper';
+import { ProfileAvatar } from './ProfileAvatar';
 
 interface ProfileHeaderProps {
   profile: any;
@@ -19,24 +20,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onToggleBio,
 }) => {
   const theme = useTheme();
-
+  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        {profile.profilePictureUrl ? (
-          <Image 
-            source={{ uri: profile.profilePictureUrl }} 
-            style={styles.avatar}
-            contentFit="cover"
-            transition={200}
-          />
-        ) : (
-          <Avatar.Text 
-            size={80} 
-            label={profile.username?.substring(0, 2).toUpperCase() || '??'} 
-            style={styles.avatar}
-          />
-        )}
+        <ProfileAvatar profile={profile} size={80} style={styles.avatar} />
         <View style={styles.meta}>
           <View style={styles.titleRow}>
             <View style={styles.nameContainer}>

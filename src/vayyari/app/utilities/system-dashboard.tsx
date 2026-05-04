@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Text, Card, Button, ProgressBar, IconButton, useTheme, ActivityIndicator, Divider } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
 import { systemJobsService, SystemJob } from '@/services/system-jobs.service';
 
 export default function SystemDashboard() {
   const theme = useTheme();
+  const router = useRouter();
   const [jobs, setJobs] = useState<SystemJob[]>([]);
   const [orphanedCount, setOrphanedCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);

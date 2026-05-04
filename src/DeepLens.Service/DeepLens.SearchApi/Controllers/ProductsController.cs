@@ -103,7 +103,8 @@ public class ProductsController : ControllerBase
             WorkHeaviness = request.WorkHeaviness,
             Color = request.Color,
             Category = Enum.TryParse<MediaCategory>(request.Category, true, out var cat) ? cat : MediaCategory.Product,
-            SubCategory = request.SubCategory ?? "General"
+            SubCategory = request.SubCategory ?? "General",
+            SourcePostId = request.SourcePostId
         };
 
         var result = await _productService.CreateProductAsync(ingestionDto, mediaFiles);

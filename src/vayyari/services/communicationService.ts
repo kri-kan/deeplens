@@ -108,9 +108,7 @@ class CommunicationService {
   }
 
   async removeCustomersFromPurpose(purposeKey: string, customerIds: string[]): Promise<void> {
-    return productMgmtApiClient.delete(API_ROUTES.COMMUNICATION.PURPOSE_CUSTOMERS(purposeKey), {
-      data: customerIds
-    });
+    return productMgmtApiClient.delete(API_ROUTES.COMMUNICATION.PURPOSE_CUSTOMERS(purposeKey), customerIds);
   }
 
   async distributeToChannels(purposeKey: string): Promise<{ count: number }> {

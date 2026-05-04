@@ -184,6 +184,10 @@ export const instagramService = {
   healQueue: async (): Promise<void> => {
     return searchApiClient.post('/api/v1/Insta/jobs/heal');
   },
+  
+  lookupPost: async (url: string): Promise<any> => {
+    return searchApiClient.get(`/api/v1/Insta/video/lookup?url=${encodeURIComponent(url)}`);
+  },
 };
 
 export interface MetaQuotaInfo {

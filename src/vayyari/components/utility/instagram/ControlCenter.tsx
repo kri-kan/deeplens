@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Surface, Text, IconButton, Button, SegmentedButtons, Chip, useTheme } from 'react-native-paper';
+import { Surface, Text, IconButton, Button, SegmentedButtons, Chip, useTheme, Portal, Modal } from 'react-native-paper';
 import { instagramService } from '../../../services/instagram.service';
 
 interface ControlCenterProps {
@@ -23,8 +23,6 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   onRefresh,
 }) => {
   const theme = useTheme();
-
-  if (!visible) return null;
 
   const healQueue = async () => {
     try {
@@ -54,83 +52,88 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
   };
 
   return (
-    <Surface style={styles.modal} elevation={5}>
-      <View style={styles.header}>
-        <Text variant="titleLarge" style={styles.bold}>Scraper Control Center</Text>
-        <IconButton icon="autorenew" onPress={healQueue} />
-      </View>
+    <Portal>
+      <Modal 
+        visible={visible} 
+        onDismiss={onClose} 
+        contentContainerStyle={styles.modal}
+      >
+        <View style={styles.header}>
+          <Text variant="titleLarge" style={styles.bold}>Scraper Control Center</Text>
+          <IconButton icon="autorenew" onPress={healQueue} />
+        </View>
 
-      <SegmentedButtons
-        value={showHistory ? 'history' : 'active'}
-        onValueChange={(v) => onToggleHistory(v === 'history')}
-        buttons={[
-          { value: 'active', label: `Active (${activeQueue.length})` },
-          { value: 'history', label: 'History' },
-        ]}
-        style={styles.segmentedButtons}
-      />
-      
-      <ScrollView>
-        {!showHistory ? (
-          activeQueue.map((item) => (
-            <View key={item.id} style={styles.item}>
-              <View style={styles.itemMain}>
-                <View style={styles.itemTitleRow}>
-                  <Text variant="titleSmall" style={styles.bold}>@{item.username}</Text>
-                  {item.priority > 1 && <Chip compact textStyle={styles.chipText}>HIGH</Chip>}
-                </View>
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {item.origin} • {item.job_type.toUpperCase()} • {item.scraped_count || 0}/{item.target_count === 0 ? 'All' : item.target_count} Posts
-                </Text>
-              </View>
-              <View style={styles.itemActions}>
-                <View style={styles.nextRun}>
-                  <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
-                    Next: {item.next_run_at ? new Date(item.next_run_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'ASAP'}
+        <SegmentedButtons
+          value={showHistory ? 'history' : 'active'}
+          onValueChange={(v) => onToggleHistory(v === 'history')}
+          buttons={[
+            { value: 'active', label: `Active (${activeQueue.length})` },
+            { value: 'history', label: 'History' },
+          ]}
+          style={styles.segmentedButtons}
+        />
+        
+        <ScrollView style={styles.scroll}>
+          {!showHistory ? (
+            activeQueue.map((item) => (
+              <View key={item.id} style={styles.item}>
+                <View style={styles.itemMain}>
+                  <View style={styles.itemTitleRow}>
+                    <Text variant="titleSmall" style={styles.bold}>@{item.username}</Text>
+                    {item.priority > 1 && <Chip compact textStyle={styles.chipText}>HIGH</Chip>}
+                  </View>
+                  <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                    {item.origin} • {item.job_type.toUpperCase()} • {item.scraped_count || 0}/{item.target_count === 0 ? 'All' : item.target_count} Posts
                   </Text>
                 </View>
-                <IconButton icon="arrow-up-bold-outline" size={18} onPress={() => updatePriority(item.id, 10)} />
-                <IconButton icon="close" size={18} iconColor={theme.colors.error} onPress={() => deleteJob(item.id)} />
+                <View style={styles.itemActions}>
+                  <View style={styles.nextRun}>
+                    <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
+                      Next: {item.next_run_at ? new Date(item.next_run_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'ASAP'}
+                    </Text>
+                  </View>
+                  <IconButton icon="arrow-up-bold-outline" size={18} onPress={() => updatePriority(item.id, 10)} />
+                  <IconButton icon="close" size={18} iconColor={theme.colors.error} onPress={() => deleteJob(item.id)} />
+                </View>
               </View>
-            </View>
-          ))
-        ) : (
-          jobHistory.map((item) => (
-            <View key={item.id} style={[styles.item, { opacity: 0.8 }]}>
-              <View style={styles.itemMain}>
-                <Text variant="labelMedium" style={styles.bold}>@{item.username}</Text>
-                <Text variant="labelSmall">{item.job_type.toUpperCase()} • {item.status}</Text>
+            ))
+          ) : (
+            jobHistory.map((item) => (
+              <View key={item.id} style={[styles.item, { opacity: 0.8 }]}>
+                <View style={styles.itemMain}>
+                  <Text variant="labelMedium" style={styles.bold}>@{item.username}</Text>
+                  <Text variant="labelSmall">{item.job_type.toUpperCase()} • {item.status}</Text>
+                </View>
+                <View style={styles.historyMeta}>
+                  <Text variant="labelSmall">{new Date(item.completed_at).toLocaleDateString()}</Text>
+                  <Text variant="labelSmall" style={styles.bold}>{item.scraped_count} Posts</Text>
+                </View>
               </View>
-              <View style={styles.historyMeta}>
-                <Text variant="labelSmall">{new Date(item.completed_at).toLocaleDateString()}</Text>
-                <Text variant="labelSmall" style={styles.bold}>{item.scraped_count} Posts</Text>
-              </View>
-            </View>
-          ))
-        )}
-        {((!showHistory && activeQueue.length === 0) || (showHistory && jobHistory.length === 0)) && (
-          <Text style={styles.emptyText}>Nothing to show</Text>
-        )}
-      </ScrollView>
+            ))
+          )}
+          {((!showHistory && activeQueue.length === 0) || (showHistory && jobHistory.length === 0)) && (
+            <Text style={styles.emptyText}>Nothing to show</Text>
+          )}
+        </ScrollView>
 
-      <Button mode="contained" onPress={onClose} style={styles.closeButton}>
-        Close
-      </Button>
-    </Surface>
+        <Button mode="contained" onPress={onClose} style={styles.closeButton}>
+          Close
+        </Button>
+      </Modal>
+    </Portal>
   );
 };
 
 const styles = StyleSheet.create({
   modal: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '80%',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    backgroundColor: 'white',
+    margin: 20,
     padding: 24,
-    zIndex: 1000,
+    borderRadius: 32,
+    height: '80%',
+  },
+  scroll: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

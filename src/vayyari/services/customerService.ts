@@ -15,15 +15,15 @@ class CustomerService {
   }
 
   async getCustomerById(id: string): Promise<Customer> {
-    return productMgmtApiClient.get<Customer>(API_ROUTES.CUSTOMERS.GET_BY_ID(id));
+    return productMgmtApiClient.get<Customer>(API_ROUTES.CUSTOMERS.DETAIL(id));
   }
 
   async createCustomer(request: CreateCustomerRequest): Promise<Customer> {
-    return productMgmtApiClient.post<Customer>(API_ROUTES.CUSTOMERS.CREATE, request);
+    return productMgmtApiClient.post<Customer>(API_ROUTES.CUSTOMERS.UPSERT, request);
   }
 
   async updateCustomer(id: string, customer: Partial<Customer>): Promise<void> {
-    return productMgmtApiClient.put(API_ROUTES.CUSTOMERS.UPDATE(id), customer);
+    return productMgmtApiClient.put(API_ROUTES.CUSTOMERS.DETAIL(id), customer);
   }
 
   async deleteCustomer(id: string): Promise<void> {
@@ -36,7 +36,7 @@ class CustomerService {
   }
 
   async addAddress(customerId: string, address: CreateAddressRequest): Promise<{ id: string }> {
-    return productMgmtApiClient.post<{ id: string }>(API_ROUTES.CUSTOMERS.ADD_ADDRESS(customerId), address);
+    return productMgmtApiClient.post<{ id: string }>(API_ROUTES.CUSTOMERS.ADDRESSES(customerId), address);
   }
 
   async updateAddress(addressId: string, address: Partial<CustomerAddress>): Promise<void> {

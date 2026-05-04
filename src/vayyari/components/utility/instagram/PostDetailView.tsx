@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Linking } from 'react-native';
-import { Text, IconButton, Surface, useTheme, Menu, Button, Portal, Dialog, TextInput, List, ActivityIndicator, Chip } from 'react-native-paper';
+import { Text, IconButton, Surface, useTheme, Menu, Button, Portal, Dialog, TextInput, List, ActivityIndicator, Chip, Modal as PaperModal } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import { ProductCreationForm } from '../product/ProductCreationForm';
 
 const { width, height } = Dimensions.get('window');
 
@@ -26,19 +27,11 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [createDialog, setCreateDialog] = useState(false);
-    const [createData, setCreateData] = useState({
-        title: '',
-        description: '',
-        fabric: '',
-        stitchType: '',
-        workHeaviness: '',
-        color: '',
-        categoryId: ''
-    });
 
     const getMediaUri = (path: string) => {
         if (path) {
-            return `http://192.168.0.170:5000/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
+            const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL;
+            return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
         }
         return item.thumbnailUrl || item.mediaUrl;
     };
@@ -119,33 +112,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
         }
     };
 
-    const handleCreateProduct = async () => {
-        setLoading(true);
-        try {
-            const response = await fetch(`http://192.168.0.170:5000/api/v1/products/instagram/${item.id}/create-product`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    masterTitle: createData.title,
-                    description: createData.description,
-                    fabric: createData.fabric,
-                    stitchType: createData.stitchType,
-                    workHeaviness: createData.workHeaviness,
-                    color: createData.color,
-                    categoryId: createData.categoryId,
-                    tags: ['instagram', item.category].filter(Boolean)
-                })
-            });
-            if (response.ok) {
-                setCreateDialog(false);
-                fetchLinks();
-            }
-        } catch (error) {
-            console.error('Creation failed', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+
 
     return (
         <View style={styles.container}>
@@ -202,16 +169,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                             left={props => <List.Icon {...props} icon="plus-box" />}
                             onPress={() => { 
                                 setMenuVisible(false); 
-                                setCreateData({
-                                    title: item.title || '',
-                                    description: item.title || '', // Using item.title as caption/description
-                                    fabric: '',
-                                    stitchType: '',
-                                    workHeaviness: '',
-                                    color: '',
-                                    categoryId: ''
-                                });
-                                setCreateDialog(true); 
+                                setCreateDialog(true);
                             }}
                         />
                         <List.Item
@@ -258,8 +216,12 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                 </ScrollView>
             </View>
 
-            {linkingDialog && (
-                <View style={styles.linkingOverlay}>
+            <Portal>
+                <PaperModal
+                    visible={linkingDialog}
+                    onDismiss={() => setLinkingDialog(false)}
+                    contentContainerStyle={styles.linkingOverlay}
+                >
                     <Surface style={styles.linkingContent} elevation={4}>
                         <View style={styles.linkingHeader}>
                             <Text variant="titleLarge" style={styles.bold}>Link to Product</Text>
@@ -330,93 +292,38 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                             Done
                         </Button>
                     </Surface>
-                </View>
-            )}
+                </PaperModal>
 
-            {createDialog && (
-                <View style={styles.linkingOverlay}>
+                <PaperModal
+                    visible={createDialog}
+                    onDismiss={() => setCreateDialog(false)}
+                    contentContainerStyle={styles.linkingOverlay}
+                >
                     <Surface style={styles.linkingContent} elevation={4}>
                         <View style={styles.linkingHeader}>
                             <Text variant="titleLarge" style={styles.bold}>Create Product</Text>
                             <IconButton icon="close" onPress={() => setCreateDialog(false)} />
                         </View>
                         
-                        <ScrollView style={{ maxHeight: height * 0.5 }}>
-                            <TextInput
-                                label="Product Title *"
-                                value={createData.title}
-                                onChangeText={t => setCreateData(d => ({ ...d, title: t }))}
-                                mode="outlined"
-                                style={styles.searchInput}
-                            />
-                            <TextInput
-                                label="Description *"
-                                value={createData.description}
-                                onChangeText={t => setCreateData(d => ({ ...d, description: t }))}
-                                mode="outlined"
-                                multiline
-                                numberOfLines={4}
-                                style={[styles.searchInput, { height: 100 }]}
-                            />
-                            <TextInput
-                                label="Fabric"
-                                value={createData.fabric}
-                                onChangeText={t => setCreateData(d => ({ ...d, fabric: t }))}
-                                mode="outlined"
-                                style={styles.searchInput}
-                                placeholder="e.g. Silk, Georgette"
-                            />
-                            <TextInput
-                                label="Stitch Type"
-                                value={createData.stitchType}
-                                onChangeText={t => setCreateData(d => ({ ...d, stitchType: t }))}
-                                mode="outlined"
-                                style={styles.searchInput}
-                                placeholder="e.g. Unstitched, Ready-made"
-                            />
-                            <TextInput
-                                label="Work Heaviness"
-                                value={createData.workHeaviness}
-                                onChangeText={t => setCreateData(d => ({ ...d, workHeaviness: t }))}
-                                mode="outlined"
-                                style={styles.searchInput}
-                                placeholder="e.g. Light, Heavy"
-                            />
-                            <TextInput
-                                label="Color"
-                                value={createData.color}
-                                onChangeText={t => setCreateData(d => ({ ...d, color: t }))}
-                                mode="outlined"
-                                style={styles.searchInput}
-                            />
-
-                            <Text style={[styles.bold, { marginTop: 16, marginBottom: 8 }]}>Category *</Text>
-                            <View style={styles.categoryContainer}>
-                                {categories.map(cat => (
-                                    <Chip
-                                        key={cat.id}
-                                        selected={createData.categoryId === cat.id}
-                                        onPress={() => setCreateData(d => ({ ...d, categoryId: cat.id }))}
-                                        style={styles.chip}
-                                    >
-                                        {cat.name}
-                                    </Chip>
-                                ))}
-                            </View>
-                        </ScrollView>
-
-                        <Button 
-                            mode="contained" 
-                            onPress={handleCreateProduct} 
-                            style={styles.doneButton}
-                            loading={loading}
-                            disabled={!createData.title || !createData.description || !createData.categoryId || loading}
-                        >
-                            Finalize & Create
-                        </Button>
+                        <ProductCreationForm
+                            initialData={{
+                                title: item.title || '',
+                                description: item.description || item.title || '',
+                                linkedPosts: [{
+                                    id: item.id,
+                                    thumbnailUrl: item.thumbnailUrl || item.mediaUrl || '',
+                                    storagePath: item.storagePath || ''
+                                }]
+                            }}
+                            onSuccess={() => {
+                                setCreateDialog(false);
+                                fetchLinks();
+                            }}
+                            onCancel={() => setCreateDialog(false)}
+                        />
                     </Surface>
-                </View>
-            )}
+                </PaperModal>
+            </Portal>
 
             {loading && (
                 <Surface style={styles.loader} elevation={4}>
@@ -581,11 +488,8 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     linkingOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'center',
         padding: 20,
-        zIndex: 200,
+        justifyContent: 'center',
     },
     linkingContent: {
         backgroundColor: 'white',

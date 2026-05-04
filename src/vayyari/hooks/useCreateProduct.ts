@@ -4,13 +4,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { productService } from '@/services/productService';
 import { ProductCategory, ProductFilePayload } from '@/types/products';
 
-export const useCreateProduct = (onSuccess: () => void) => {
+export const useCreateProduct = (
+  onSuccess: () => void, 
+  initialSourcePostId?: string,
+  initialThumbnail?: string,
+  initialStoragePath?: string
+) => {
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState<ProductCategory>('saree');
+  const [category, setCategory] = useState<ProductCategory | ''>('');
   const [images, setImages] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [linkedPosts, setLinkedPosts] = useState<any[]>(
+    initialSourcePostId ? [{ 
+      id: initialSourcePostId, 
+      thumbnailUrl: initialThumbnail,
+      storagePath: initialStoragePath
+    }] : []
+  );
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -29,8 +41,13 @@ export const useCreateProduct = (onSuccess: () => void) => {
   };
 
   const handleCreate = async () => {
-    if (!title || !price) {
-      Alert.alert('Error', 'Please enter at least a title and price.');
+    if (!title || !category) {
+      Alert.alert('Validation Error', 'Title and Category are mandatory.');
+      return;
+    }
+
+    if (images.length === 0 && linkedPosts.length === 0) {
+      Alert.alert('Validation Error', 'Please upload at least one image or link an Instagram post.');
       return;
     }
 
@@ -45,9 +62,10 @@ export const useCreateProduct = (onSuccess: () => void) => {
       await productService.createProduct({
         title,
         description,
-        vendorPrice: parseFloat(price),
+        vendorPrice: parseFloat(price) || 0,
         category: category,
         files,
+        sourcePostIds: linkedPosts.map(p => p.id),
       });
 
       Alert.alert('Success', 'Product created successfully!', [
@@ -75,5 +93,7 @@ export const useCreateProduct = (onSuccess: () => void) => {
     pickImage,
     removeImage,
     handleCreate,
+    linkedPosts,
+    setLinkedPosts,
   };
 };

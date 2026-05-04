@@ -246,6 +246,7 @@ namespace DeepLens.WorkerService.Workers
 
         private async Task UpdateProfileAsync(NpgsqlConnection conn, Guid id, MetaProfile profile)
         {
+            // 1. Basic Metadata Update
             var sql = @"
                 UPDATE competitor_watchlist 
                 SET display_name = @Name, bio = @Bio, profile_pic_url = @Pic,
@@ -262,6 +263,74 @@ namespace DeepLens.WorkerService.Workers
                 INSERT INTO follower_snapshots (watchlist_id, follower_count, following_count, snapshot_at)
                 VALUES (@Id, @Followers, @Following, @Now)",
                 new { Id = id, Followers = (int)profile.FollowersCount, Following = (int)profile.FollowsCount, Now = DateTime.UtcNow });
+
+            // 2. Media Architecture Consistency: Download & Register in Media Tables
+            try 
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var storage = scope.ServiceProvider.GetRequiredService<IStorageService>();
+                var http = scope.ServiceProvider.GetRequiredService<HttpClient>();
+
+                // --- Singleton Profile Image Rule ---
+                // We want to ensure only one profile image exists at a time to prevent storage bloat.
+                var oldMedia = await conn.QueryAsync<dynamic>(@"
+                    SELECT m.id, m.storage_path 
+                    FROM media m
+                    JOIN media_links ml ON ml.media_id = m.id
+                    WHERE ml.entity_id = @id AND ml.entity_type = 'instagram_profile'", 
+                    new { id });
+
+                foreach (var m in oldMedia)
+                {
+                    try {
+                        string oldPath = (string)m.storage_path;
+                        Guid oldMediaId = (Guid)m.id;
+                        
+                        _logger.LogInformation("Deleting old profile picture: {Path}", oldPath);
+                        await storage.DeleteFileAsync(oldPath);
+                        // ON DELETE CASCADE on media_links will handle the relationship cleanup
+                        await conn.ExecuteAsync("DELETE FROM media WHERE id = @mediaId", new { mediaId = oldMediaId });
+                    } catch (Exception ex) {
+                        _logger.LogWarning(ex, "Failed to clean up old profile picture");
+                    }
+                }
+
+                _logger.LogInformation("Downloading fresh profile picture for @{Username}...", profile.Username);
+                var context = new InstagramContext(profile.ExternalId ?? "");
+                string identifier = $"profile_pic_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jpg";
+                string fullPath = StoragePathRegistry.GetPath(context, identifier);
+
+                var response = await http.GetAsync(profile.ProfilePictureUrl);
+                if (response.IsSuccessStatusCode)
+                {
+                    using var stream = await response.Content.ReadAsStreamAsync();
+                    await storage.UploadToPathAsync(fullPath, stream, "image/jpeg");
+
+                    // Register in central 'media' table
+                    var mediaId = Guid.NewGuid();
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO media (id, storage_path, media_type, category, subcategory)
+                        VALUES (@mediaId, @fullPath, 1, 'instagram', 'profile_pic')",
+                        new { mediaId, fullPath });
+
+                    // Link to 'competitor_watchlist' via 'media_links'
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                        VALUES (@mediaId, @id, 'instagram_profile', true)",
+                        new { mediaId, id });
+
+                    // Also update the shortcut column in watchlist
+                    await conn.ExecuteAsync(
+                        "UPDATE competitor_watchlist SET profile_pic_storage_path = @fullPath WHERE id = @id",
+                        new { fullPath, id });
+                    
+                    _logger.LogInformation("Profile picture successfully rotated for @{Username}: {Path}", profile.Username, fullPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to sync profile picture to local storage for @{Username}", profile.Username);
+            }
         }
 
         private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http)
@@ -310,12 +379,42 @@ namespace DeepLens.WorkerService.Workers
                             IsReel = p.MediaProductType?.ToUpper() == "REELS",
                             StoragePath = newStoragePath
                         });
+
+                        // Media Architecture Consistency: Register and Link
+                        if (!string.IsNullOrEmpty(newStoragePath))
+                        {
+                            var mediaId = Guid.NewGuid();
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO media (id, storage_path, media_type, category, subcategory)
+                                VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')",
+                                new { mediaId, newStoragePath });
+
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                                VALUES (@mediaId, (SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId), 'competitor_video', true)",
+                                new { mediaId, Id = p.Id, WatchlistId = watchlistId });
+                        }
                         count++;
                     }
                     else if (newStoragePath != null)
                     {
                         // Update existing record with missing storage path
                         await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
+                        
+                        // Also ensure it's registered in media if it was missing
+                        var mediaId = Guid.NewGuid();
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO media (id, storage_path, media_type, category, subcategory)
+                            VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')
+                            ON CONFLICT DO NOTHING", // Simplify: in a real system we'd check existence first
+                            new { mediaId, newStoragePath });
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                            VALUES (@mediaId, (SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId), 'competitor_video', true)
+                            ON CONFLICT DO NOTHING",
+                            new { mediaId, Id = p.Id, WatchlistId = watchlistId });
+
                         count++;
                     }
 

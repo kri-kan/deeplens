@@ -28,6 +28,7 @@ const PRODUCT_UTILITIES: UtilityItem[] = [
 
 const SYSTEM_UTILITIES: UtilityItem[] = [
   { id: 'system-dashboard', title: 'System', icon: 'monitor-dashboard', route: '/utilities/system-dashboard', color: '#607D8B' },
+  { id: 'master-data', title: 'Master Data', icon: 'database-settings', route: '/system/master-data', color: '#673AB7' },
   { id: 'media-settings', title: 'Media', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722' },
   { id: 'insta-explorer', title: 'Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C' },
   { id: 'competitor-scraper', title: 'Sync', icon: 'cloud-sync', route: '/utilities/instagram-scraper', color: '#6200ee' },

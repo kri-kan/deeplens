@@ -32,23 +32,34 @@ export const CATEGORY_REGISTRY: CategoryDefinition[] = [
   { id: 'saree',   label: 'Saree',   assetPath: require('../assets/images/saree.svg') },
   { id: 'dress',   label: 'Dress',   assetPath: require('../assets/images/dress.svg') },
   { id: 'lehanga', label: 'Lehanga', assetPath: require('../assets/images/lehanga.svg') },
-  { id: 'suit',    label: 'Suit',    assetPath: require('../assets/images/dress.svg') },
+  { id: 'kids',    label: 'Kids',    assetPath: require('../assets/images/kids.svg') },
   { id: 'general', label: 'Others',  assetPath: require('../assets/images/others.svg') },
 ];
+
+/** Quick lookup map: icon name → asset path */
+const ICON_ASSET_MAP: Record<string, any> = {
+  'saree.svg': require('../assets/images/saree.svg'),
+  'dress.svg': require('../assets/images/dress.svg'),
+  'lehanga.svg': require('../assets/images/lehanga.svg'),
+  'kids.svg': require('../assets/images/kids.svg'),
+  'others.svg': require('../assets/images/others.svg'),
+};
 
 /** Quick lookup map: category id → asset path */
 const CATEGORY_ASSET_MAP = Object.fromEntries(
   CATEGORY_REGISTRY.map((c) => [c.id, c.assetPath])
-) as Record<ProductCategory, ReturnType<typeof require>>;
+) as Record<string, any>;
 
 /**
- * Renders the appropriate category icon for a given category slug.
- * This replaces the five individually named icon components (SareeIcon, DressIcon, …).
- *
- * @example
- * <CategoryIcon category="saree" color={theme.colors.primary} size={32} />
+ * Renders the appropriate category icon.
+ * Supports both static category IDs and dynamic icon names from the DB.
  */
-export const CategoryIcon = ({ category, color, size = 32 }: CategoryIconProps) => {
+export const CategoryIcon = ({ 
+  category, 
+  iconName,
+  color, 
+  size = 32 
+}: CategoryIconProps & { iconName?: string }) => {
   if (category === 'all') {
     return (
       <IconWrapper size={size}>
@@ -57,7 +68,11 @@ export const CategoryIcon = ({ category, color, size = 32 }: CategoryIconProps) 
     );
   }
 
-  const asset = CATEGORY_ASSET_MAP[category] ?? CATEGORY_ASSET_MAP['general'];
+  // Priority: 1. Explicit iconName, 2. Category slug match, 3. Default
+  const asset = (iconName && ICON_ASSET_MAP[iconName]) || 
+                CATEGORY_ASSET_MAP[category] || 
+                ICON_ASSET_MAP['others.svg'];
+
   return (
     <IconWrapper size={size}>
       <Image

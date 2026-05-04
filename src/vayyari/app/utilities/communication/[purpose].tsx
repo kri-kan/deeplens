@@ -180,7 +180,7 @@ export default function PurposeDetailScreen() {
           <Text variant="titleMedium" style={{ marginBottom: 8 }}>Campaign Health</Text>
           <View style={styles.healthRow}>
             <Text variant="bodyMedium">Reachability</Text>
-            <Text variant="titleSmall" color={theme.colors.primary}>
+            <Text variant="titleSmall" style={{ color: theme.colors.primary }}>
               {purposeCustomers.length > 0 
                 ? Math.round((purposeCustomers.filter(c => c.assignedChannelId).length / purposeCustomers.length) * 100) 
                 : 0}%

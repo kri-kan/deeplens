@@ -79,6 +79,7 @@ public class ProductClusterDto
 public class ProductIngestionDto
 {
     public Guid? CategoryId { get; set; }
+    public string? CategorySlug { get; set; }
     public decimal VendorPrice { get; set; }
     public string? Description { get; set; }
     public string? MasterTitle { get; set; }
@@ -91,6 +92,7 @@ public class ProductIngestionDto
     public string? Color { get; set; }
     public List<string> Tags { get; set; } = new();
     public int? SequenceId { get; set; }
+    public Guid? SourcePostId { get; set; }
 }
 
 public class MediaFileDto

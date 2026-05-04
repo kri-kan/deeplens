@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Linking, Image, ScrollView } from 'react-native';
 import { Surface, List, Text, useTheme, IconButton, Portal, Dialog, Button } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
 import { GridMenu } from '@/components/utility/GridMenu';
@@ -25,6 +26,7 @@ const COURIER_LOGOS: { [key: string]: any } = {
 
 export default function QuickLinksScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const [selectedInfo, setSelectedInfo] = useState<QuickLink | null>(null);
 
   const handleOpenLink = async (url: string) => {
@@ -51,6 +53,14 @@ export default function QuickLinksScreen() {
   }));
 
   const UTILITY_LINKS: QuickLink[] = [
+    {
+      id: 'category-master-data',
+      title: 'Category Master Data',
+      description: 'Manage product categories and assigned icons.',
+      icon: 'database-settings',
+      url: '/system/categories',
+      color: '#6200ee'
+    },
     {
       id: 'fb-graph-explorer',
       title: 'Facebook Graph API Explorer',
@@ -103,7 +113,13 @@ export default function QuickLinksScreen() {
                     />
                   </View>
                 )}
-                onPress={() => handleOpenLink(link.url)}
+                onPress={() => {
+                  if (link.url.startsWith('/')) {
+                    router.push(link.url as any);
+                  } else {
+                    handleOpenLink(link.url);
+                  }
+                }}
                 style={styles.listItem}
               />
               {index < UTILITY_LINKS.length - 1 && <View style={styles.divider} />}

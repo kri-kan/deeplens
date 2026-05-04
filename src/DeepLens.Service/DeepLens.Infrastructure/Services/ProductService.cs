@@ -47,11 +47,25 @@ public class ProductService : IProductService
             var hexId = $"VF{nextVal:X3}";
             data.SequenceId = (int)nextVal;
 
+            // 0. Resolve Category from Master List
+            var categoryId = data.CategoryId;
+            string categorySlug = data.CategorySlug ?? "general";
+
+            if (!categoryId.HasValue || string.IsNullOrEmpty(data.CategorySlug))
+            {
+                var categoryRecord = await connection.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT id, slug FROM categories WHERE slug = @slug OR name = @slug", 
+                    new { slug = data.CategorySlug ?? "general" }, transaction);
+                
+                categoryId = categoryRecord?.id ?? Guid.Parse("44a3aeed-7a91-43f2-aa4e-69e76cc29146");
+                categorySlug = categoryRecord?.slug ?? "general";
+            }
+
             // 1. Create Product (Master)
             var masterId = Guid.NewGuid();
             const string masterSql = @"
-                INSERT INTO products (id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, description)
-                VALUES (@Id, @Title, @Sku, @Tags, @SeqId, @CreatedAt, @Fabric, @Stitch, @Work, @Description)
+                INSERT INTO products (id, category_id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, description)
+                VALUES (@Id, @CategoryId, @Title, @Sku, @Tags, @SeqId, @CreatedAt, @Fabric, @Stitch, @Work, @Description)
                 RETURNING id";
             
             // Auto-tag with subcategory for catalog filtering
@@ -64,6 +78,7 @@ public class ProductService : IProductService
 
             await connection.ExecuteAsync(masterSql, new {
                 Id = masterId,
+                CategoryId = categoryId,
                 Title = data.MasterTitle ?? "New Product",
                 Sku = hexId,
                 Tags = tags.ToArray(),
@@ -98,7 +113,7 @@ public class ProductService : IProductService
 
             foreach (var file in mediaFiles)
             {
-                var context = StorageContext.Create(data.Category, data.SubCategory);
+                var context = new GenericContext(MediaCategory.Product, categorySlug);
                 var storageTags = string.IsNullOrEmpty(data.Retention) ? null : new Dictionary<string, string> { { MediaConstants.Retention.TagKey, data.Retention } };
                 var storagePath = await _storageService.UploadFileAsync(file.FileName, file.Content, file.ContentType, context, storageTags);
                 
@@ -112,8 +127,8 @@ public class ProductService : IProductService
                     Id = mediaId,
                     Path = storagePath,
                     Mime = file.ContentType,
-                    Category = context.Bucket,
-                    SubCategory = context.Folder,
+                    Category = categorySlug,
+                    SubCategory = data.SubCategory,
                     Color = file.Color ?? data.Color
                 }, transaction);
 
@@ -133,6 +148,50 @@ public class ProductService : IProductService
                 if (!string.IsNullOrEmpty(file.VendorMediaId))
                 {
                     mediaMap[file.VendorMediaId] = mediaId;
+                }
+            }
+
+            // 4. Handle Instagram Linking if SourcePostId is provided
+            if (data.SourcePostId.HasValue)
+            {
+                var postId = data.SourcePostId.Value;
+                var post = await connection.QuerySingleOrDefaultAsync<dynamic>(
+                    "SELECT storage_path, title FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
+
+                if (post != null)
+                {
+                    // Link the Instagram media if it has a storage path
+                    if (!string.IsNullOrEmpty(post.storage_path))
+                    {
+                        var mediaId = await connection.QueryFirstOrDefaultAsync<Guid?>(
+                            "SELECT id FROM media WHERE storage_path = @Path LIMIT 1", 
+                            new { Path = post.storage_path }, transaction) ?? Guid.NewGuid();
+
+                        var exists = await connection.ExecuteScalarAsync<bool>(
+                            "SELECT EXISTS(SELECT 1 FROM media WHERE id = @Id)", 
+                            new { Id = mediaId }, transaction);
+
+                        if (!exists)
+                        {
+                            await connection.ExecuteAsync(@"
+                                INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
+                                VALUES (@Id, @Path, 'image/jpeg', 0, 1, 0, 'instagram', 'posts')",
+                                new { Id = mediaId, Path = post.storage_path }, transaction);
+                        }
+
+                        await connection.ExecuteAsync(@"
+                            INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                            VALUES (@MediaId, @EntityId, 'product', FALSE)
+                            ON CONFLICT DO NOTHING",
+                            new { MediaId = mediaId, EntityId = masterId }, transaction);
+                    }
+
+                    // Create semantic link
+                    await connection.ExecuteAsync(@"
+                        INSERT INTO instagram_product_links (post_id, product_id, link_type)
+                        VALUES (@PostId, @ProductId, 'is')
+                        ON CONFLICT (post_id, product_id) DO UPDATE SET link_type = 'is'",
+                        new { PostId = postId, ProductId = masterId }, transaction);
                 }
             }
 

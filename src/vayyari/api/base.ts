@@ -84,8 +84,16 @@ export class ApiClient {
   /**
    * Performs a typed DELETE request.
    */
-  async delete<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>(path, { ...options, method: 'DELETE' });
+  async delete<T>(path: string, body?: any, options?: RequestOptions): Promise<T> {
+    return this.request<T>(path, {
+      ...options,
+      method: 'DELETE',
+      body: body ? JSON.stringify(body) : undefined,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
   }
 
   /**

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
 using DeepLens.Infrastructure.Services;
+using System.Linq;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -26,26 +27,43 @@ public class InstaController : ControllerBase
         _storage = storage;
     }
 
+    public class WatchlistItem
+    {
+        public Guid id { get; set; }
+        public string username { get; set; } = string.Empty;
+        public string? name { get; set; }
+        public string? profilePictureUrl { get; set; }
+        public string? storagePath { get; set; }
+        public string? biography { get; set; }
+        public int followersCount { get; set; }
+        public int mediaCount { get; set; }
+        public bool is_active { get; set; }
+        public bool isOwnAccount { get; set; }
+        public DateTime? lastSyncedAt { get; set; }
+    }
+
     [HttpGet]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult<IEnumerable<object>>> GetWatchlist()
+    public async Task<ActionResult> GetWatchlist()
     {
         using var conn = await _db.CreateConnectionAsync();
-        var watchlist = await conn.QueryAsync(@"
+        var watchlist = await conn.QueryAsync<WatchlistItem>(@"
             SELECT 
                 id, 
                 username, 
                 display_name AS name, 
                 profile_pic_url AS profilePictureUrl, 
+                profile_pic_storage_path AS storagePath,
                 bio AS biography, 
                 follower_count AS followersCount, 
                 post_count AS mediaCount, 
-                is_active AS is_active,
-                is_own_account AS isOwnAccount,
+                is_active, 
+                is_own_account AS isOwnAccount, 
                 last_scraped_at AS lastSyncedAt
             FROM competitor_watchlist 
             WHERE platform = 'instagram' 
             ORDER BY is_own_account DESC, username ASC");
+
         return Ok(watchlist);
     }
 
@@ -60,7 +78,7 @@ public class InstaController : ControllerBase
     {
         using var conn = await _db.CreateConnectionAsync();
         var profileInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-            SELECT id, username, display_name, profile_pic_url, bio, 
+            SELECT id, username, display_name, profile_pic_url, profile_pic_storage_path, bio, 
                    follower_count, following_count, post_count, last_scraped_at, 
                    external_id, is_active, is_data_deleted, is_own_account 
             FROM competitor_watchlist 
@@ -138,6 +156,7 @@ public class InstaController : ControllerBase
                 followsCount = profileInfo.following_count ?? 0,
                 mediaCount = profileInfo.post_count ?? 0,
                 profilePictureUrl = profileInfo.profile_pic_url,
+                storagePath = profileInfo.profile_pic_storage_path,
                 website = "", 
                 is_verified = false, 
                 is_business = true, 
@@ -504,6 +523,47 @@ public class InstaController : ControllerBase
             new { watchlistId });
 
         return Ok(new { message = "Profile data deleted successfully" });
+    }
+
+    [HttpGet("video/lookup")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> LookupVideo([FromQuery] string url)
+    {
+        if (string.IsNullOrEmpty(url)) return BadRequest();
+
+        // 1. Extract shortcode from URL if needed
+        // Pattern: instagram.com/p/SHORTCODE/ or instagram.com/reel/SHORTCODE/
+        var shortcode = url;
+        if (url.Contains("/p/") || url.Contains("/reel/"))
+        {
+            var parts = url.Split('/');
+            var index = Array.FindIndex(parts, p => p == "p" || p == "reel");
+            if (index >= 0 && index + 1 < parts.Length)
+            {
+                shortcode = parts[index + 1];
+            }
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+        
+        // 2. Try to match by exact URL or by shortcode in the URL string
+        var video = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT 
+                id::text AS Id, 
+                url AS Permalink, 
+                description AS Caption,
+                thumbnail_url AS ThumbnailUrl, 
+                storage_path AS StoragePath
+            FROM competitor_videos 
+            WHERE url = @Url OR url LIKE @Pattern", 
+            new { 
+                Url = url.Split('?')[0], // Remove query params
+                Pattern = $"%/p/{shortcode}/%"
+            });
+
+        if (video == null) return NotFound(new { message = "Post not found in local database" });
+
+        return Ok(video);
     }
 }
 

@@ -35,6 +35,8 @@ export interface ProductIngestionRequest {
   vendorPrice: number;
   category?: string;
   files?: ProductFilePayload[];
+  sourcePostId?: string;
+  sourcePostIds?: string[];
 }
 
 /**
@@ -50,7 +52,7 @@ export interface ProductFilePayload {
  * Supported product categories, mirroring the backend enum.
  * Add new values here and CategoryIcons.tsx will pick them up automatically.
  */
-export type ProductCategory = 'all' | 'saree' | 'dress' | 'lehanga' | 'suit' | 'general';
+export type ProductCategory = 'all' | 'saree' | 'dress' | 'lehanga' | 'kids' | 'suit' | 'general';
 
 /**
  * A registry entry describing a category for use in UI selectors.
