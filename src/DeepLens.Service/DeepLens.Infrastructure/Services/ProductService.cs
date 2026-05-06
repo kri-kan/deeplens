@@ -155,6 +155,16 @@ public class ProductService : IProductService
             if (data.SourcePostId.HasValue)
             {
                 var postId = data.SourcePostId.Value;
+
+                var existingIsProduct = await connection.QueryFirstOrDefaultAsync<Guid?>(
+                    "SELECT product_id FROM instagram_product_links WHERE post_id = @PostId AND link_type = 'is'", 
+                    new { PostId = postId }, transaction);
+                
+                if (existingIsProduct.HasValue)
+                {
+                    throw new InvalidOperationException("This post is already linked to another product as 'is'.");
+                }
+
                 var post = await connection.QuerySingleOrDefaultAsync<dynamic>(
                     "SELECT storage_path, title FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
 
@@ -479,10 +489,17 @@ public class ProductService : IProductService
     public async Task<bool> LinkInstagramPostAsync(Guid postId, Guid productId, string linkType)
     {
         using var db = GetConnection();
-        // 1. Ensure only one 'is' link per post (by clearing others if this is an 'is' link)
+        // 1. Ensure only one 'is' link per post
         if (linkType.ToLower() == "is")
         {
-            await db.ExecuteAsync("UPDATE instagram_product_links SET link_type = 'contains' WHERE post_id = @PostId AND link_type = 'is'", new { PostId = postId });
+            var existingIsProduct = await db.QueryFirstOrDefaultAsync<Guid?>(
+                "SELECT product_id FROM instagram_product_links WHERE post_id = @PostId AND link_type = 'is'", 
+                new { PostId = postId });
+            
+            if (existingIsProduct.HasValue && existingIsProduct.Value != productId)
+            {
+                throw new InvalidOperationException("This post is already linked to another product as 'is'. A post can only have one 'is' link.");
+            }
         }
 
         const string sql = @"
@@ -491,7 +508,48 @@ public class ProductService : IProductService
             ON CONFLICT (post_id, product_id) 
             DO UPDATE SET link_type = EXCLUDED.link_type, updated_at = NOW()";
         
-        return await db.ExecuteAsync(sql, new { PostId = postId, ProductId = productId, LinkType = linkType.ToLower() }) > 0;
+        var success = await db.ExecuteAsync(sql, new { PostId = postId, ProductId = productId, LinkType = linkType.ToLower() }) > 0;
+
+        if (success && linkType.ToLower() == "is")
+        {
+            // Link media to the product
+            var post = await db.QuerySingleOrDefaultAsync<dynamic>(
+                "SELECT storage_path FROM competitor_videos WHERE id = @Id", new { Id = postId });
+
+            if (post != null && !string.IsNullOrEmpty(post.storage_path))
+            {
+                var mediaId = await db.QueryFirstOrDefaultAsync<Guid?>(
+                    "SELECT id FROM media WHERE storage_path = @Path LIMIT 1", 
+                    new { Path = post.storage_path }) ?? Guid.NewGuid();
+
+                var exists = await db.ExecuteScalarAsync<bool>(
+                    "SELECT EXISTS(SELECT 1 FROM media WHERE id = @Id)", 
+                    new { Id = mediaId });
+
+                if (!exists)
+                {
+                    var ext = Path.GetExtension((string)post.storage_path).ToLower();
+                    var mimeType = ext switch {
+                        ".png" => "image/png",
+                        ".webp" => "image/webp",
+                        _ => "image/jpeg"
+                    };
+
+                    await db.ExecuteAsync(@"
+                        INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
+                        VALUES (@Id, @Path, @Mime, 0, 1, 0, 'instagram', 'posts')",
+                        new { Id = mediaId, Path = post.storage_path, Mime = mimeType });
+                }
+
+                await db.ExecuteAsync(@"
+                    INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                    VALUES (@MediaId, @EntityId, 'product', FALSE)
+                    ON CONFLICT DO NOTHING",
+                    new { MediaId = mediaId, EntityId = productId });
+            }
+        }
+
+        return success;
     }
 
     public async Task<IEnumerable<InstagramProductLinkDto>> GetInstagramLinksAsync(Guid postId)
@@ -519,6 +577,16 @@ public class ProductService : IProductService
                 "SELECT * FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
             
             if (post == null) throw new InvalidOperationException("Post not found");
+
+            // 1.5. Ensure post doesn't already have an 'is' link
+            var existingIsProduct = await connection.QueryFirstOrDefaultAsync<Guid?>(
+                "SELECT product_id FROM instagram_product_links WHERE post_id = @PostId AND link_type = 'is'", 
+                new { PostId = postId }, transaction);
+            
+            if (existingIsProduct.HasValue)
+            {
+                throw new InvalidOperationException("This post is already linked to another product as 'is'.");
+            }
 
             // 2. Create Product
             var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, transaction);

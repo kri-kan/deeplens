@@ -79,5 +79,6 @@ namespace DeepLens.Application.Abstractions.Services
         public string? MediaType { get; set; }
         public string? MediaProductType { get; set; }
         public string? StoragePath { get; set; }
+        public string? ProductCode { get; set; }
     }
 }

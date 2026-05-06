@@ -8,34 +8,24 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { VideoItem } from '@/components/utility/instagram/VideoItem';
 import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
-import { ControlCenter } from '@/components/utility/instagram/ControlCenter';
-import { SettingsModal } from '@/components/utility/instagram/SettingsModal';
-import { PostDetailView } from '@/components/utility/instagram/PostDetailView';
-import { ProductCreationForm } from '@/components/utility/product/ProductCreationForm';
 import { BentoCard } from '@/components/ui/BentoCard';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
 import { useTheme } from 'react-native-paper';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 export default function InstagramExplorer() {
   const theme = useTheme();
+  const router = useRouter();
   const {
     watchlist,
     selectedProfile,
     setSelectedProfile,
     profileData,
     loading,
-    activeQueue,
-    jobHistory,
     quota,
-    showQueue,
-    setShowQueue,
-    showConfig,
-    setShowConfig,
-    showQueueHistory,
-    setShowQueueHistory,
     syncMode,
     setSyncMode,
     targetPostCount,
@@ -54,35 +44,34 @@ export default function InstagramExplorer() {
     deleteProfileData,
     toggleWatch,
     toggleOwn,
-    fetchQueue,
     selectProfile,
   } = useInstagramExplorer();
 
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [selectedPosts, setSelectedPosts] = useState<Map<string, any>>(new Map());
-  const [showBulkCreate, setShowBulkCreate] = useState(false);
 
   const selectionMode = selectedPosts.size > 0;
 
-  useEffect(() => {
-    const backAction = () => {
-      if (selectedPost) {
-        setSelectedPost(null);
-        return true;
-      }
-      if (selectionMode) {
-        setSelectedPosts(new Map());
-        return true;
-      }
-      return false;
-    };
+  useFocusEffect(
+    React.useCallback(() => {
+      const backAction = () => {
+        if (selectionMode) {
+          setSelectedPosts(new Map());
+          return true;
+        }
+        if (selectedProfile) {
+          setSelectedProfile(null);
+          return true;
+        }
+        return false;
+      };
 
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-    return () => backHandler.remove();
-  }, [selectedPost, selectionMode]);
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+      return () => backHandler.remove();
+    }, [selectionMode, selectedProfile])
+  );
 
   const toggleSelection = (post: any) => {
     setSelectedPosts(prev => {
@@ -110,13 +99,16 @@ export default function InstagramExplorer() {
             <>
               <Appbar.Action icon="close" onPress={() => setSelectedPosts(new Map())} />
               <Appbar.Content title={`${selectedPosts.size} Selected`} titleStyle={styles.bold} />
-              <Appbar.Action icon="plus-box" onPress={() => setShowBulkCreate(true)} />
+              <Appbar.Action icon="plus-box" onPress={() => router.push({
+                pathname: '/utilities/instagram/bulk-create',
+                params: { posts: JSON.stringify(Array.from(selectedPosts.values())) }
+              } as any)} />
             </>
           ) : (
             <>
               <Appbar.BackAction onPress={() => { setSelectedProfile(null); }} />
               <Appbar.Content title={`@${selectedProfile}`} titleStyle={styles.bold} />
-              <Appbar.Action icon="clipboard-list-outline" onPress={() => setShowQueue(true)} />
+              <Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/queue')} />
             </>
           )}
         </Appbar.Header>
@@ -126,7 +118,10 @@ export default function InstagramExplorer() {
           renderItem={({ item }) => (
             <VideoItem 
               item={item} 
-              onPress={() => selectionMode ? toggleSelection(item) : setSelectedPost(item)} 
+              onPress={() => selectionMode ? toggleSelection(item) : router.push({
+                pathname: '/utilities/instagram/post-detail',
+                params: { id: item.id, data: JSON.stringify(item) }
+              } as any)} 
               onLongPress={() => toggleSelection(item)}
               isSelected={selectedPosts.has(item.id)}
               selectionMode={selectionMode}
@@ -140,7 +135,10 @@ export default function InstagramExplorer() {
               <ProfileHeader 
                 profile={profileData.profile}
                 metrics={profileData.metrics}
-                onShowSettings={() => setShowConfig(true)}
+                onShowSettings={() => router.push({
+                    pathname: '/utilities/instagram/settings',
+                    params: { username: profileData.profile.username }
+                } as any)}
                 bioExpanded={bioExpanded}
                 onToggleBio={() => setBioExpanded(!bioExpanded)}
               />
@@ -240,74 +238,7 @@ export default function InstagramExplorer() {
           }
         />
 
-        <SettingsModal 
-          visible={showConfig}
-          onClose={() => setShowConfig(false)}
-          profile={profileData.profile}
-          syncMode={syncMode}
-          onSyncModeChange={setSyncMode}
-          targetPostCount={targetPostCount}
-          onTargetPostCountChange={setTargetPostCount}
-          onSync={manualSync}
-          onDeleteData={deleteProfileData}
-          onToggleWatch={() => toggleWatch(profileData.profile.username, profileData.profile.is_active)}
-          onToggleOwn={() => toggleOwn(profileData.profile.username, profileData.profile.is_own_account)}
-          loading={loading}
-        />
-
-        <ControlCenter 
-          visible={showQueue}
-          onClose={() => setShowQueue(false)}
-          activeQueue={activeQueue}
-          jobHistory={jobHistory}
-          showHistory={showQueueHistory}
-          onToggleHistory={setShowQueueHistory}
-          onRefresh={fetchQueue}
-        />
-
-        <Portal>
-          <PaperModal
-            visible={!!selectedPost}
-            onDismiss={() => setSelectedPost(null)}
-            contentContainerStyle={{ flex: 1 }}
-          >
-            {selectedPost && (
-              <View style={styles.modalContent}>
-                <PostDetailView 
-                  item={selectedPost} 
-                  onClose={() => setSelectedPost(null)} 
-                />
-              </View>
-            )}
-          </PaperModal>
-
-          <PaperModal
-            visible={showBulkCreate}
-            onDismiss={() => setShowBulkCreate(false)}
-            contentContainerStyle={styles.bulkModal}
-          >
-            <Surface style={styles.bulkContent} elevation={4}>
-              <Appbar.Header style={{ backgroundColor: 'white', elevation: 0 }}>
-                <Appbar.Content title="Bulk Create Product" titleStyle={styles.bold} />
-                <Appbar.Action icon="close" onPress={() => setShowBulkCreate(false)} />
-              </Appbar.Header>
-              <ProductCreationForm
-                initialData={{
-                  linkedPosts: Array.from(selectedPosts.values()).map(p => ({
-                    id: p.id,
-                    thumbnailUrl: p.thumbnailUrl || p.mediaUrl,
-                    storagePath: p.storagePath
-                  }))
-                }}
-                onSuccess={() => {
-                  setShowBulkCreate(false);
-                  setSelectedPosts(new Map());
-                }}
-                onCancel={() => setShowBulkCreate(false)}
-              />
-            </Surface>
-          </PaperModal>
-        </Portal>
+        {/* Modals removed and replaced with navigable screens */}
       </Surface>
     );
   }
@@ -315,7 +246,7 @@ export default function InstagramExplorer() {
   return (
     <ScreenWrapper 
       title="Instagram Explorer"
-      actions={<Appbar.Action icon="clipboard-list-outline" onPress={() => setShowQueue(true)} />}
+      actions={<Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/queue')} />}
     >
       <QuotaDashboard quota={quota} />
 
@@ -349,15 +280,7 @@ export default function InstagramExplorer() {
         </View>
       </View>
 
-      <ControlCenter 
-        visible={showQueue}
-        onClose={() => setShowQueue(false)}
-        activeQueue={activeQueue}
-        jobHistory={jobHistory}
-        showHistory={showQueueHistory}
-        onToggleHistory={setShowQueueHistory}
-        onRefresh={fetchQueue}
-      />
+      {/* ControlCenter removed and replaced with navigable screen */}
 
       {loading && (
         <View style={styles.empty}>

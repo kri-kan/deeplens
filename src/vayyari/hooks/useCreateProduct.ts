@@ -90,6 +90,7 @@ export const useCreateProduct = (
     category,
     setCategory,
     images,
+    setImages,
     pickImage,
     removeImage,
     handleCreate,

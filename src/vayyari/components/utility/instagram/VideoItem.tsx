@@ -59,6 +59,12 @@ export const VideoItem: React.FC<VideoItemProps> = ({
         </View>
       )}
 
+      {(item.productCode || item.ProductCode) && !selectionMode && (
+        <View style={styles.productCodeContainer}>
+          <Text style={styles.productCodeText}>{item.productCode || item.ProductCode}</Text>
+        </View>
+      )}
+
       {item.permalink && !selectionMode && (
         <IconButton 
           icon="open-in-new" 
@@ -163,5 +169,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     margin: 0,
     zIndex: 1,
+  },
+  productCodeContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 10,
+  },
+  productCodeText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0, 0, 0, 1)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 3,
+    elevation: 2, // Helps on Android for shadow rendering
   },
 });

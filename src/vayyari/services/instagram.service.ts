@@ -188,6 +188,10 @@ export const instagramService = {
   lookupPost: async (url: string): Promise<any> => {
     return searchApiClient.get(`/api/v1/Insta/video/lookup?url=${encodeURIComponent(url)}`);
   },
+
+  getVideoDetails: async (id: string): Promise<any> => {
+    return searchApiClient.get(`/api/v1/Insta/video/${id}`);
+  },
 };
 
 export interface MetaQuotaInfo {

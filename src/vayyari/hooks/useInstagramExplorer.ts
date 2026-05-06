@@ -14,9 +14,6 @@ export const useInstagramExplorer = () => {
   const [quota, setQuota] = useState<any | null>(null);
   
   // UI State
-  const [showQueue, setShowQueue] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [showQueueHistory, setShowQueueHistory] = useState(false);
   const [syncMode, setSyncMode] = useState<'recent' | 'full'>('recent');
   const [targetPostCount, setTargetPostCount] = useState('12');
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -63,13 +60,7 @@ export const useInstagramExplorer = () => {
     fetchQuota();
   }, [fetchWatchlist, fetchQuota]);
 
-  useEffect(() => {
-    if (showQueue) {
-      fetchQueue();
-      const interval = setInterval(fetchQueue, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [showQueue, fetchQueue]);
+  // fetchQueue is now handled by the queue screen
 
   const selectProfile = async (username: string, sBy?: string, sOrder?: string, fDate?: string | null, tDate?: string | null) => {
     setSelectedProfile(username);
@@ -97,19 +88,7 @@ export const useInstagramExplorer = () => {
     }
   }, [sortBy, sortOrder, fromDate, toDate]);
 
-  useEffect(() => {
-    const backAction = () => {
-      if (selectedProfile) {
-        setSelectedProfile(null);
-        setProfileData(null);
-        return true;
-      }
-      return false;
-    };
-
-    const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
-    return () => backHandler.remove();
-  }, [selectedProfile]);
+  // Back handler removed to avoid intercepting navigation from sub-screens
 
   const manualSync = async () => {
     if (!selectedProfile) return;
@@ -118,7 +97,6 @@ export const useInstagramExplorer = () => {
       const count = syncMode === 'full' ? 0 : parseInt(targetPostCount, 10);
       await instagramService.syncProfile(selectedProfile, count);
       Alert.alert("Success", syncMode === 'full' ? "Full profile sync queued." : `Sync for ${count} posts queued.`);
-      setShowConfig(false);
       fetchQueue();
     } catch (err) {
       Alert.alert("Sync Failed", "Could not complete the scraping. Check rate limits.");
@@ -185,12 +163,6 @@ export const useInstagramExplorer = () => {
     activeQueue,
     jobHistory,
     quota,
-    showQueue,
-    setShowQueue,
-    showConfig,
-    setShowConfig,
-    showQueueHistory,
-    setShowQueueHistory,
     syncMode,
     setSyncMode,
     targetPostCount,

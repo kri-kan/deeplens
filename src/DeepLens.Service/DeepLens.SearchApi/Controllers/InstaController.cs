@@ -107,19 +107,20 @@ public class InstaController : ControllerBase
             // 2. Get Recent Posts from Database to avoid API throttling
             var sql = $@"
                 SELECT 
-                    id::text AS Id, 
-                    platform_video_id AS PlatformId,
-                    url AS Permalink, 
-                    description AS Caption,
-                    media_type AS MediaType, 
-                    thumbnail_url AS ThumbnailUrl, 
-                    media_url AS MediaUrl,
-                    like_count AS LikeCount, 
-                    comment_count AS CommentsCount, 
-                    posted_at::text AS Timestamp,
-                    storage_path AS StoragePath
-                FROM competitor_videos 
-                WHERE watchlist_id = (SELECT id FROM competitor_watchlist WHERE username = @username AND platform = 'instagram')
+                    cv.id::text AS Id, 
+                    cv.platform_video_id AS PlatformId,
+                    cv.url AS Permalink, 
+                    cv.description AS Caption,
+                    cv.media_type AS MediaType, 
+                    cv.thumbnail_url AS ThumbnailUrl, 
+                    cv.media_url AS MediaUrl,
+                    cv.like_count AS LikeCount, 
+                    cv.comment_count AS CommentsCount, 
+                    cv.posted_at::text AS Timestamp,
+                    cv.storage_path AS StoragePath,
+                    (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+                FROM competitor_videos cv
+                WHERE cv.watchlist_id = (SELECT id FROM competitor_watchlist WHERE username = @username AND platform = 'instagram')
                 {dateFilter}
                 ORDER BY {orderBy} {direction}
                 LIMIT 1000";
@@ -523,6 +524,33 @@ public class InstaController : ControllerBase
             new { watchlistId });
 
         return Ok(new { message = "Profile data deleted successfully" });
+    }
+
+    [HttpGet("video/{id}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetVideo(Guid id)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var video = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT 
+                id::text AS Id, 
+                platform_video_id AS PlatformId,
+                url AS Permalink, 
+                description AS Caption,
+                media_type AS MediaType, 
+                thumbnail_url AS ThumbnailUrl, 
+                media_url AS MediaUrl,
+                like_count AS LikeCount, 
+                comment_count AS CommentsCount, 
+                posted_at::text AS Timestamp,
+                storage_path AS StoragePath
+            FROM competitor_videos 
+            WHERE id = @id", 
+            new { id });
+
+        if (video == null) return NotFound();
+
+        return Ok(video);
     }
 
     [HttpGet("video/lookup")]

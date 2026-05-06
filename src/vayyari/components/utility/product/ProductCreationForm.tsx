@@ -126,7 +126,7 @@ export const ProductCreationForm: React.FC<ProductCreationFormProps> = ({
             onPress={handleCreate} 
             style={[styles.btn, { flex: 1 }]} 
             loading={loading}
-            disabled={loading}
+            disabled={loading || linkedPosts.some(p => p.productCode)}
           >
             {submitLabel}
           </Button>

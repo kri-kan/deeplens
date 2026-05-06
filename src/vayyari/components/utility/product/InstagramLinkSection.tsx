@@ -48,12 +48,19 @@ export const InstagramLinkSection: React.FC<InstagramLinkSectionProps> = ({
       
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll}>
         {/* Linked Posts Cards */}
-        {linkedPosts.map((post) => (
-          <View key={post.id} style={styles.wrapper}>
+        {linkedPosts.map((post) => {
+          const isInvalid = !!post.productCode;
+          return (
+          <View key={post.id} style={[styles.wrapper, isInvalid && styles.wrapperInvalid]}>
             <Image 
               source={{ uri: post.storagePath ? getMediaUri(post.storagePath) : post.thumbnailUrl }} 
               style={styles.thumbnail}
             />
+            {isInvalid && (
+              <View style={styles.errorOverlay}>
+                <Text style={styles.errorText}>Linked: {post.productCode}</Text>
+              </View>
+            )}
             <IconButton 
               icon="close-circle" 
               iconColor={theme.colors.error} 
@@ -62,7 +69,7 @@ export const InstagramLinkSection: React.FC<InstagramLinkSectionProps> = ({
               style={styles.remove}
             />
           </View>
-        ))}
+        )})}
 
         {/* Add Link Card */}
         <TouchableOpacity 
@@ -121,6 +128,27 @@ const styles = StyleSheet.create({
     right: -10,
     backgroundColor: 'white',
     margin: 0,
+  },
+  wrapperInvalid: {
+    borderWidth: 2,
+    borderColor: 'red',
+    borderRadius: 14,
+  },
+  errorOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,0,0,0.8)',
+    padding: 4,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+  },
+  errorText: {
+    color: 'white',
+    fontSize: 10,
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
   add: {
     width: 100,

@@ -61,6 +61,8 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
         fetchCategories();
     }, [item.id]);
 
+    const hasIsLink = existingLinks.some(l => l.linkType === 'is');
+
     const fetchAllProducts = async () => {
         try {
             setLoading(true);
@@ -164,19 +166,22 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                 >
                     <Surface style={styles.actionSheet} elevation={4}>
                         <Text variant="titleMedium" style={styles.actionSheetTitle}>Post Actions</Text>
-                        <List.Item
-                            title="Create as Product"
-                            left={props => <List.Icon {...props} icon="plus-box" />}
-                            onPress={() => { 
-                                setMenuVisible(false); 
-                                setCreateDialog(true);
-                            }}
-                        />
+                        {!hasIsLink && (
+                            <List.Item
+                                title="Create as Product"
+                                left={props => <List.Icon {...props} icon="plus-box" />}
+                                onPress={() => { 
+                                    setMenuVisible(false); 
+                                    setCreateDialog(true);
+                                }}
+                            />
+                        )}
                         <List.Item
                             title="Link to Product"
                             left={props => <List.Icon {...props} icon="link-variant" />}
                             onPress={() => { 
-                                setMenuVisible(false); 
+                                setMenuVisible(false);
+                                setLinkType(hasIsLink ? 'like' : 'is');
                                 setLinkingDialog(true); 
                                 fetchAllProducts();
                             }}
@@ -229,7 +234,9 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                         </View>
 
                         <View style={styles.typeSelector}>
-                            {(['is', 'contains', 'like'] as const).map(type => (
+                            {(['is', 'contains', 'like'] as const).map(type => {
+                                const isDisabled = type === 'is' && hasIsLink;
+                                return (
                                 <Button 
                                     key={type}
                                     mode={linkType === type ? 'contained' : 'outlined'}
@@ -237,10 +244,11 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                                     style={styles.typeButton}
                                     labelStyle={{ fontSize: 12 }}
                                     compact
+                                    disabled={isDisabled}
                                 >
                                     {type.toUpperCase()}
                                 </Button>
-                            ))}
+                            )})}
                         </View>
                         
                         <TextInput
