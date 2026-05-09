@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, FlatList, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
 import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, Portal, Dialog, Modal as PaperModal } from 'react-native-paper';
 import { Image } from 'expo-image';
@@ -54,6 +54,7 @@ export default function InstagramExplorer() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<Map<string, any>>(new Map());
+  const isNavigating = useRef(false);
 
   const selectionMode = selectedPosts.size > 0;
 
@@ -125,6 +126,8 @@ export default function InstagramExplorer() {
                 if (selectionMode) {
                   toggleSelection(item);
                 } else {
+                  if (isNavigating.current) return;
+                  isNavigating.current = true;
                   instagramService.setLastFetchedPosts(profileData.videos);
                   router.push({
                     pathname: '/utilities/instagram/post-detail',
@@ -136,6 +139,8 @@ export default function InstagramExplorer() {
                         data: JSON.stringify(item) 
                     }
                   } as any);
+                  // Reset after a short delay to allow navigation to complete
+                  setTimeout(() => { isNavigating.current = false; }, 1000);
                 }
               }} 
               onLongPress={() => toggleSelection(item)}
