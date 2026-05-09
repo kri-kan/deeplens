@@ -110,7 +110,7 @@ export default function SystemDashboard() {
               <Card.Content>
                 <View style={styles.row}>
                   <View style={styles.jobHeader}>
-                    <Text variant="titleMedium">{job.job_name}</Text>
+                    <Text variant="titleMedium">{job.jobName}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(job.status) }]}>
                       <Text style={styles.statusText}>{job.status}</Text>
                     </View>
@@ -120,14 +120,14 @@ export default function SystemDashboard() {
 
                 {job.status === 'Running' && (
                   <View style={styles.progressContainer}>
-                    <ProgressBar progress={job.progress_pct / 100} color={theme.colors.primary} style={styles.progressBar} />
-                    <Text variant="bodySmall" style={styles.progressText}>{job.progress_pct}%</Text>
+                    <ProgressBar progress={job.progressPct / 100} color={theme.colors.primary} style={styles.progressBar} />
+                    <Text variant="bodySmall" style={styles.progressText}>{job.progressPct}%</Text>
                   </View>
                 )}
 
                 <View style={styles.jobFooter}>
                   <Text variant="bodySmall" style={styles.footerText}>
-                    Last Run: {new Date(job.last_run_at).toLocaleString()}
+                    Last Run: {new Date(job.lastRunAt).toLocaleString()}
                   </Text>
                   {job.metadata && job.metadata.deletedCount !== undefined && (
                     <Text variant="bodySmall" style={styles.successText}>

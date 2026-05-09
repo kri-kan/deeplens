@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using DeepLens.SearchApi.Services;
 using DeepLens.SearchApi.DTOs;
+using DeepLens.Contracts.Orders;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -26,7 +27,7 @@ public class OrderIdController : ControllerBase
     /// Gets the most recent order IDs from the database.
     /// </summary>
     [HttpGet("{orderId}")]
-    public async Task<ActionResult<object>> GetOrder(string orderId)
+    public async Task<ActionResult<OrderDetailDto>> GetOrder(string orderId)
     {
         var order = await _idGenerator.GetOrderDetailsAsync(orderId);
         if (order == null) return NotFound(new { message = $"Order ID {orderId} not found" });

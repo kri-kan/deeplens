@@ -90,14 +90,19 @@ export default function QueueScreen() {
                                         {item.priority > 1 && <Chip compact textStyle={styles.chipText} style={{ height: 20 }}>HIGH</Chip>}
                                     </View>
                                     <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                        {item.origin} • {item.job_type.toUpperCase()} • {item.scraped_count || 0}/{item.target_count === 0 ? 'All' : item.target_count} Posts
+                                        {item.origin} • {item.jobType.toUpperCase()} • {item.scrapedCount || 0}/{item.targetCount === 0 ? 'All' : item.targetCount} Posts
                                     </Text>
                                 </View>
                                 <View style={styles.itemActions}>
                                     <View style={styles.nextRun}>
                                         <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
-                                            Next: {item.next_run_at ? new Date(item.next_run_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'ASAP'}
+                                            {item.status === 'running' ? 'RUNNING' : `Next: ${item.nextRunAt ? new Date(item.nextRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'ASAP'}`}
                                         </Text>
+                                        {item.status === 'running' && item.startedAt && (
+                                            <Text variant="labelSmall" style={{ color: theme.colors.secondary }}>
+                                                Started: {new Date(item.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                            </Text>
+                                        )}
                                     </View>
                                     <IconButton icon="arrow-up-bold-outline" size={18} onPress={() => updatePriority(item.id, 10)} />
                                     <IconButton icon="close" size={18} iconColor={theme.colors.error} onPress={() => deleteJob(item.id)} />
@@ -109,11 +114,17 @@ export default function QueueScreen() {
                             <View key={item.id} style={[styles.item, { opacity: 0.8 }]}>
                                 <View style={styles.itemMain}>
                                     <Text variant="labelMedium" style={styles.bold}>@{item.username}</Text>
-                                    <Text variant="labelSmall">{item.job_type.toUpperCase()} • {item.status}</Text>
+                                    <Text variant="labelSmall">{item.jobType.toUpperCase()} • {item.status}</Text>
                                 </View>
                                 <View style={styles.historyMeta}>
-                                    <Text variant="labelSmall">{new Date(item.completed_at).toLocaleDateString()}</Text>
-                                    <Text variant="labelSmall" style={styles.bold}>{item.scraped_count} Posts</Text>
+                                    <Text variant="labelSmall" style={styles.bold}>
+                                        {item.startedAt ? new Date(item.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '??'} - {new Date(item.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                    <Text variant="labelSmall" style={{ opacity: 0.7 }}>
+                                        {new Date(item.completedAt).toLocaleDateString()}
+                                        {item.startedAt && ` • ${Math.round((new Date(item.completedAt).getTime() - new Date(item.startedAt).getTime()) / 60000)}m`}
+                                    </Text>
+                                    <Text variant="labelSmall" style={styles.bold}>{item.scrapedCount} Posts</Text>
                                 </View>
                             </View>
                         ))

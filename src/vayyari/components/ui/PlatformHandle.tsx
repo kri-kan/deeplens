@@ -1,6 +1,7 @@
 import React from 'react';
-import { TouchableOpacity, Linking, View, StyleSheet } from 'react-native';
+import { TouchableOpacity, Linking, View, StyleSheet, Alert } from 'react-native';
 import { Text, Icon, useTheme } from 'react-native-paper';
+import * as Clipboard from 'expo-clipboard';
 
 interface PlatformHandleProps {
     source: 'whatsapp' | 'instagram' | string;
@@ -12,8 +13,6 @@ interface PlatformHandleProps {
     color?: string;
 }
 
-import * as Clipboard from 'expo-clipboard';
-import { Alert } from 'react-native';
 
 export const PlatformHandle = ({ 
     source, 

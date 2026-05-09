@@ -1,35 +1,43 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { Text, IconButton, Icon, useTheme } from 'react-native-paper';
+import { Text, IconButton, useTheme } from 'react-native-paper';
 import { ProfileAvatar } from './ProfileAvatar';
 
+import { normalizeProfile } from '@/utils/instagram-helpers';
+import type { InstagramProfile, ProfileMetrics } from '@/services/instagram.service';
+
 interface ProfileHeaderProps {
-  profile: any;
-  metrics: any;
+  profile: InstagramProfile | any; // accepts raw API shape, normalized internally
+  metrics: ProfileMetrics | null;
   onShowSettings: () => void;
   bioExpanded: boolean;
   onToggleBio: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
-  profile,
+  profile: rawProfile,
   metrics,
   onShowSettings,
   bioExpanded,
   onToggleBio,
 }) => {
   const theme = useTheme();
+  const profile = normalizeProfile(rawProfile);
   
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <ProfileAvatar profile={profile} size={80} style={styles.avatar} />
+        <ProfileAvatar 
+          profile={{ ...profile, isInWatchlist: true }} 
+          size={80} 
+          showBadge={true} 
+          style={styles.avatar} 
+        />
         <View style={styles.meta}>
           <View style={styles.titleRow}>
             <View style={styles.nameContainer}>
               <Text variant="titleLarge" style={styles.bold}>{profile.name}</Text>
-              {profile.is_own_account && <Icon source="check-decagram" size={20} color={theme.colors.primary} />}
             </View>
             <IconButton icon="cog" size={20} style={styles.settingsIcon} onPress={onShowSettings} />
           </View>
@@ -45,10 +53,10 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       </View>
 
       <View style={styles.statsRow}>
-        <StatBox label="Followers" value={(profile.followersCount || 0).toLocaleString()} />
-        <StatBox label="Posts" value={profile.mediaCount} />
-        <StatBox label="Avg. Likes" value={(metrics.avgLikes || 0).toLocaleString()} />
-        <StatBox label="Eng. Rate" value={`${metrics.engagementRate?.toFixed(2)}%`} />
+        <StatBox label="Followers" value={(profile?.followersCount || 0).toLocaleString()} />
+        <StatBox label="Posts" value={profile?.mediaCount || 0} />
+        <StatBox label="Avg. Likes" value={(metrics?.avgLikes || 0).toLocaleString()} />
+        <StatBox label="Eng. Rate" value={metrics?.engagementRate !== undefined ? `${metrics.engagementRate.toFixed(2)}%` : '0.00%'} />
       </View>
     </View>
   );

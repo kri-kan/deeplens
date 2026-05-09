@@ -1,53 +1,53 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace DeepLens.Contracts.Marketing;
 
 public record BroadcastChannelDto(
-    Guid Id,
-    string Name,
-    string? Description,
-    string ChannelType,
-    string? Metadata,
-    DateTime CreatedAt
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("description")] string? Description,
+    [property: JsonPropertyName("channelType")] string ChannelType,
+    [property: JsonPropertyName("metadata")] string? Metadata,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt
 );
 
 public record ChannelTypeDto(
-    string TypeKey,
-    string Name,
-    int MemberLimit,
-    string? Description
+    [property: JsonPropertyName("typeKey")] string TypeKey,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("memberLimit")] int MemberLimit,
+    [property: JsonPropertyName("description")] string? Description
 );
 
 public record CreateBroadcastChannelRequest(
-    string Name,
-    string? Description,
-    string ChannelType,
-    string? Metadata
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("description")] string? Description,
+    [property: JsonPropertyName("channelType")] string ChannelType,
+    [property: JsonPropertyName("metadata")] string? Metadata
 );
 
 public record PurposeMappingDto(
-    Guid Id,
-    string PurposeKey,
-    Guid ChannelId,
-    string ChannelName,
-    DateTime CreatedAt
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("purposeKey")] string PurposeKey,
+    [property: JsonPropertyName("channelId")] Guid ChannelId,
+    [property: JsonPropertyName("channelName")] string ChannelName,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt
 );
 
 public record PurposeWithChannelsDto(
-    string PurposeKey,
-    IEnumerable<PurposeMappingDto> Channels
+    [property: JsonPropertyName("purposeKey")] string PurposeKey,
+    [property: JsonPropertyName("channels")] IEnumerable<PurposeMappingDto> Channels
 );
 
-
 public record PurposeCustomerDto(
-    Guid CustomerId,
-    string CustomerName,
-    string PhoneNumber,
-    DateTime CreatedAt,
-    Guid? AssignedChannelId,
-    string? AssignedChannelName
+    [property: JsonPropertyName("customerId")] Guid CustomerId,
+    [property: JsonPropertyName("customerName")] string CustomerName,
+    [property: JsonPropertyName("phoneNumber")] string PhoneNumber,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
+    [property: JsonPropertyName("assignedChannelId")] Guid? AssignedChannelId,
+    [property: JsonPropertyName("assignedChannelName")] string? AssignedChannelName
 );
 
 public interface ICommunicationBroadcastService

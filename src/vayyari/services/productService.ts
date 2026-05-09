@@ -5,31 +5,31 @@ import type { VendorProduct, ProductIngestionRequest } from '../types/products';
 class ProductService {
   async createProduct(request: ProductIngestionRequest): Promise<VendorProduct> {
     const formData = new FormData();
-    formData.append('Title', request.title);
+    formData.append('title', request.title);
 
     if (request.description) {
-      formData.append('Description', request.description);
+      formData.append('description', request.description);
     }
-    formData.append('VendorPrice', request.vendorPrice.toString());
+    formData.append('vendorPrice', request.vendorPrice.toString());
 
     if (request.category) {
-      formData.append('CategorySlug', request.category);
+      formData.append('category', request.category);
     }
 
     if (request.sourcePostId) {
-      formData.append('SourcePostId', request.sourcePostId);
+      formData.append('sourcePostId', request.sourcePostId);
     }
     
     if (request.sourcePostIds && request.sourcePostIds.length > 0) {
       request.sourcePostIds.forEach(id => {
-        formData.append('SourcePostIds', id);
+        formData.append('sourcePostIds', id);
       });
     }
 
     if (request.files && request.files.length > 0) {
       request.files.forEach((file) => {
         // In React Native, FormData.append(name, { uri, type, name }) is the standard for files.
-        formData.append('Files', file as any);
+        formData.append('files', file as any);
       });
     }
 
@@ -95,6 +95,14 @@ class ProductService {
     const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
     if (!baseUrl) return `https://via.placeholder.com/150`;
     return `${baseUrl}/api/v1/catalog/media/serve?path=${encodeURIComponent(path)}`;
+  }
+
+  async getInstagramLinks(postId: string): Promise<any[]> {
+    return productMgmtApiClient.get<any[]>(API_ROUTES.INSTAGRAM.LINKS(postId));
+  }
+
+  async unlinkInstagramPost(postId: string, productId: string): Promise<void> {
+    return productMgmtApiClient.delete(API_ROUTES.INSTAGRAM.UNLINK(postId, productId));
   }
 }
 

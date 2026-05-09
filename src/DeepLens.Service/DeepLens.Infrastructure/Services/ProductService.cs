@@ -202,6 +202,9 @@ public class ProductService : IProductService
                         VALUES (@PostId, @ProductId, 'is')
                         ON CONFLICT (post_id, product_id) DO UPDATE SET link_type = 'is'",
                         new { PostId = postId, ProductId = masterId }, transaction);
+
+                    // Propagate all media (including carousels/videos)
+                    await PropagateMediaLinksAsync(connection, postId, masterId, transaction);
                 }
             }
 
@@ -234,24 +237,24 @@ public class ProductService : IProductService
         using var db = GetConnection();
         var sql = @"
             SELECT 
-                p.id as masterproductid,
-                p.title as title,
-                p.base_sku as productcode,
-                p.tags as tags,
-                p.fabric as fabric,
-                p.stitch_type as stitchtype,
-                p.work_heaviness as workheaviness,
-                p.created_at as CreatedAt,
-                p.description as description,
-                c.name as category,
-                (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendorprice,
-                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendordescription,
+                p.id as ""MasterProductId"",
+                p.title as ""Title"",
+                p.base_sku as ""ProductCode"",
+                p.tags as ""Tags"",
+                p.fabric as ""Fabric"",
+                p.stitch_type as ""StitchType"",
+                p.work_heaviness as ""WorkHeaviness"",
+                p.created_at as ""CreatedAt"",
+                p.description as ""Description"",
+                c.name as ""Category"",
+                (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
+                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorDescription"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'color', m.color, 'is_default', ml.is_primary))
+                    SELECT json_agg(json_build_object('Id', m.id, 'StoragePath', m.storage_path, 'Color', m.color, 'IsDefault', ml.is_primary))
                     FROM media m 
                     JOIN media_links ml ON m.id = ml.media_id
                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
-                ), '[]'::json) as media_json
+                ), '[]'::json)::text as ""MediaJson""
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.is_deleted = FALSE";
@@ -299,28 +302,29 @@ public class ProductService : IProductService
         var products = results.Select(r => {
             var vp = new VendorProduct
             {
-                Id = r.masterproductid ?? Guid.Empty,
-                MasterProductId = r.masterproductid ?? Guid.Empty,
-                Title = r.title,
-                ProductCode = r.productcode,
-                VendorPrice = r.vendorprice ?? 0m,
-                ExclusiveDescription = r.vendordescription,
-                Description = r.description,
-                CreatedAt = r.createdat,
-                Fabric = r.fabric,
-                StitchType = r.stitchtype,
-                WorkHeaviness = r.workheaviness,
-                Category = r.category
+                Id = r.MasterProductId ?? Guid.Empty,
+                MasterProductId = r.MasterProductId ?? Guid.Empty,
+                Title = r.Title ?? "Untitled Product",
+                ProductCode = r.ProductCode,
+                VendorPrice = r.VendorPrice ?? 0m,
+                ExclusiveDescription = r.VendorDescription,
+                Description = r.Description,
+                CreatedAt = r.CreatedAt ?? DateTime.UtcNow,
+                Fabric = r.Fabric,
+                StitchType = r.StitchType,
+                WorkHeaviness = r.WorkHeaviness,
+                Category = r.Category
             };
 
-            if (r.tags != null && string.IsNullOrEmpty(vp.Category))
+            if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
             {
-                vp.Category = ((string[])r.tags).FirstOrDefault();
+                vp.Category = ((string[])r.Tags).FirstOrDefault();
             }
 
-            if (r.media_json != null)
+            if (r.MediaJson != null)
             {
-                var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(r.media_json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var json = r.MediaJson.ToString();
+                var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (mediaList != null) vp.Media = mediaList;
             }
 
@@ -414,25 +418,25 @@ public class ProductService : IProductService
 
         const string sql = @"
             SELECT 
-                p.id as id,
-                p.id as masterproductid,
-                p.title as title,
-                p.base_sku as productcode,
-                p.tags as tags,
-                p.fabric as fabric,
-                p.stitch_type as stitchtype,
-                p.work_heaviness as workheaviness,
-                p.description as description,
-                c.name as category,
-                (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendorprice,
-                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as vendordescription,
-                p.created_at as CreatedAt,
+                p.id as ""Id"",
+                p.id as ""MasterProductId"",
+                p.title as ""Title"",
+                p.base_sku as ""ProductCode"",
+                p.tags as ""Tags"",
+                p.fabric as ""Fabric"",
+                p.stitch_type as ""StitchType"",
+                p.work_heaviness as ""WorkHeaviness"",
+                p.description as ""Description"",
+                c.name as ""Category"",
+                (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
+                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorDescription"",
+                p.created_at as ""CreatedAt"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'path', m.storage_path, 'color', m.color, 'is_default', ml.is_primary))
+                    SELECT json_agg(json_build_object('Id', m.id, 'StoragePath', m.storage_path, 'Color', m.color, 'IsDefault', ml.is_primary))
                     FROM media m 
                     JOIN media_links ml ON m.id = ml.media_id
                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
-                ), '[]'::json) as media_json
+                ), '[]'::json)::text as ""MediaJson""
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.id = @Id AND p.is_deleted = FALSE";
@@ -441,28 +445,29 @@ public class ProductService : IProductService
         if (r == null) return null;
 
         var vp = new VendorProduct {
-            Id = r.id ?? r.masterproductid ?? Guid.Empty,
-            MasterProductId = r.masterproductid ?? Guid.Empty,
-            Title = r.title,
-            ProductCode = r.productcode,
-            VendorPrice = r.vendorprice ?? 0m,
-            ExclusiveDescription = r.vendordescription,
-            Description = r.description,
-            CreatedAt = r.createdat,
-            Fabric = r.fabric,
-            StitchType = r.stitchtype,
-            WorkHeaviness = r.workheaviness,
-            Category = r.category
+            Id = r.Id ?? r.MasterProductId ?? Guid.Empty,
+            MasterProductId = r.MasterProductId ?? Guid.Empty,
+            Title = r.Title ?? "Untitled Product",
+            ProductCode = r.ProductCode,
+            VendorPrice = r.VendorPrice ?? 0m,
+            ExclusiveDescription = r.VendorDescription,
+            Description = r.Description,
+            CreatedAt = r.CreatedAt ?? DateTime.UtcNow,
+            Fabric = r.Fabric,
+            StitchType = r.StitchType,
+            WorkHeaviness = r.WorkHeaviness,
+            Category = r.Category
         };
 
-        if (r.tags != null && string.IsNullOrEmpty(vp.Category))
+        if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
         {
-            vp.Category = ((string[])r.tags).FirstOrDefault();
+            vp.Category = ((string[])r.Tags).FirstOrDefault();
         }
 
-        if (r.media_json != null)
+        if (r.MediaJson != null)
         {
-            var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(r.media_json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var json = r.MediaJson.ToString();
+            var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (mediaList != null) vp.Media = mediaList;
         }
 
@@ -518,34 +523,8 @@ public class ProductService : IProductService
 
             if (post != null && !string.IsNullOrEmpty(post.storage_path))
             {
-                var mediaId = await db.QueryFirstOrDefaultAsync<Guid?>(
-                    "SELECT id FROM media WHERE storage_path = @Path LIMIT 1", 
-                    new { Path = post.storage_path }) ?? Guid.NewGuid();
-
-                var exists = await db.ExecuteScalarAsync<bool>(
-                    "SELECT EXISTS(SELECT 1 FROM media WHERE id = @Id)", 
-                    new { Id = mediaId });
-
-                if (!exists)
-                {
-                    var ext = Path.GetExtension((string)post.storage_path).ToLower();
-                    var mimeType = ext switch {
-                        ".png" => "image/png",
-                        ".webp" => "image/webp",
-                        _ => "image/jpeg"
-                    };
-
-                    await db.ExecuteAsync(@"
-                        INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
-                        VALUES (@Id, @Path, @Mime, 0, 1, 0, 'instagram', 'posts')",
-                        new { Id = mediaId, Path = post.storage_path, Mime = mimeType });
-                }
-
-                await db.ExecuteAsync(@"
-                    INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                    VALUES (@MediaId, @EntityId, 'product', FALSE)
-                    ON CONFLICT DO NOTHING",
-                    new { MediaId = mediaId, EntityId = productId });
+                // Propagate all media (including carousels/videos)
+                await PropagateMediaLinksAsync(db, postId, productId);
             }
         }
 
@@ -556,13 +535,90 @@ public class ProductService : IProductService
     {
         using var db = GetConnection();
         const string sql = @"
-            SELECT l.id, l.post_id as PostId, l.product_id as ProductId, l.link_type as LinkType, 
-                   p.title as ProductTitle, p.base_sku as ProductCode
+            SELECT l.id as ""Id"", l.post_id as ""PostId"", l.product_id as ""ProductId"", l.link_type as ""LinkType"", 
+                   p.title as ""ProductTitle"", p.base_sku as ""ProductCode"",
+                   (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""Price"",
+                   COALESCE((
+                       SELECT json_agg(json_build_object('Id', m.id, 'StoragePath', m.storage_path, 'Color', m.color, 'IsDefault', ml.is_primary))
+                       FROM media m 
+                       JOIN media_links ml ON m.id = ml.media_id
+                       WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
+                   ), '[]'::json)::text as ""MediaJson""
             FROM instagram_product_links l
             JOIN products p ON l.product_id = p.id
             WHERE l.post_id = @PostId";
         
-        return await db.QueryAsync<InstagramProductLinkDto>(sql, new { PostId = postId });
+        var results = await db.QueryAsync<InstagramProductLinkDto>(sql, new { PostId = postId });
+        
+        foreach (var res in results)
+        {
+            if (!string.IsNullOrEmpty(res.MediaJson))
+            {
+                res.Media = System.Text.Json.JsonSerializer.Deserialize<List<MediaEntry>>(res.MediaJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            }
+        }
+
+        return results;
+    }
+
+    public async Task<bool> UnlinkInstagramPostAsync(Guid postId, Guid productId)
+    {
+        using var db = GetConnection();
+        db.Open();
+        using var transaction = db.BeginTransaction();
+        
+        try
+        {
+            // 1. Verify link exists
+            var link = await db.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT link_type FROM instagram_product_links WHERE post_id = @PostId AND product_id = @ProductId",
+                new { PostId = postId, ProductId = productId }, transaction);
+                
+            if (link == null) return false;
+
+            // 2. Validate if it's the sole source of existence
+            if (link.link_type == "is")
+            {
+                var otherIsLinksCount = await db.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM instagram_product_links WHERE product_id = @ProductId AND link_type = 'is' AND post_id != @PostId",
+                    new { ProductId = productId, PostId = postId }, transaction);
+
+                var vendorListingsCount = await db.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM vendor_listings WHERE product_id = @ProductId",
+                    new { ProductId = productId }, transaction);
+
+                if (otherIsLinksCount == 0 && vendorListingsCount == 0)
+                {
+                    throw new InvalidOperationException("Cannot unlink: This Instagram post is the sole source of the product's existence. Please delete the product from the catalog instead.");
+                }
+            }
+
+            // 3. Delete the semantic link
+            await db.ExecuteAsync(
+                "DELETE FROM instagram_product_links WHERE post_id = @PostId AND product_id = @ProductId",
+                new { PostId = postId, ProductId = productId }, transaction);
+
+            // 4. Remove the media link if applicable
+            var post = await db.QuerySingleOrDefaultAsync<dynamic>(
+                "SELECT storage_path FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
+
+            if (post != null && !string.IsNullOrEmpty(post.storage_path))
+            {
+                await db.ExecuteAsync(@"
+                    DELETE FROM media_links 
+                    WHERE entity_id = @ProductId AND entity_type = 'product'
+                    AND media_id = (SELECT id FROM media WHERE storage_path = @Path LIMIT 1)",
+                    new { ProductId = productId, Path = post.storage_path }, transaction);
+            }
+
+            transaction.Commit();
+            return true;
+        }
+        catch (Exception)
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 
     public async Task<VendorProduct> CreateProductFromPostAsync(Guid postId, ProductIngestionDto data)
@@ -612,38 +668,8 @@ public class ProductService : IProductService
                 Description = data.Description ?? post.description
             }, transaction);
 
-            // 3. Link existing media if storage_path exists
-            if (!string.IsNullOrEmpty(post.storage_path))
-            {
-                // Re-use existing media record if it exists
-                var mediaId = await connection.QueryFirstOrDefaultAsync<Guid?>(
-                    "SELECT id FROM media WHERE storage_path = @Path LIMIT 1", 
-                    new { Path = post.storage_path }, transaction) ?? Guid.NewGuid();
-
-                var exists = await connection.ExecuteScalarAsync<bool>(
-                    "SELECT EXISTS(SELECT 1 FROM media WHERE id = @Id)", 
-                    new { Id = mediaId }, transaction);
-
-                if (!exists)
-                {
-                    var ext = Path.GetExtension(post.storage_path).ToLower();
-                    var mimeType = ext switch {
-                        ".png" => "image/png",
-                        ".webp" => "image/webp",
-                        _ => "image/jpeg"
-                    };
-
-                    await connection.ExecuteAsync(@"
-                        INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory, color)
-                        VALUES (@Id, @Path, @Mime, 0, 1, 0, 'instagram', 'posts', @Color)",
-                        new { Id = mediaId, Path = post.storage_path, Mime = mimeType, Color = data.Color }, transaction);
-                }
-
-                await connection.ExecuteAsync(@"
-                    INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                    VALUES (@MediaId, @EntityId, 'product', TRUE)",
-                    new { MediaId = mediaId, EntityId = masterId }, transaction);
-            }
+            // 3. Propagate all media (including carousels/videos)
+            await PropagateMediaLinksAsync(connection, postId, masterId, transaction);
 
             // 4. Create semantic link
             await connection.ExecuteAsync(@"
@@ -681,6 +707,18 @@ public class ProductService : IProductService
         await db.ExecuteAsync("INSERT INTO vendors (id, vendor_name) VALUES (@Id, 'Default Vendor')", 
             new { Id = newId }, trans);
         return newId;
+    }
+
+    private async Task PropagateMediaLinksAsync(IDbConnection conn, Guid postId, Guid productId, IDbTransaction? transaction = null)
+    {
+        const string sql = @"
+            INSERT INTO media_links (media_id, entity_id, entity_type, is_primary, display_order)
+            SELECT ml.media_id, @ProductId, 'product', ml.is_primary, ml.display_order
+            FROM media_links ml
+            WHERE ml.entity_id = @PostId AND ml.entity_type = 'competitor_video'
+            ON CONFLICT DO NOTHING";
+        
+        await conn.ExecuteAsync(sql, new { PostId = postId, ProductId = productId }, transaction);
     }
 
     public async Task<bool> MergeVendorProductsAsync(Guid targetMasterId, List<Guid> sourceMasterProductIds) => true;

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { PaperProvider } from 'react-native-paper';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { VayyariEmeraldTheme, VayyariEmeraldNocturneTheme } from '../constants/theme';
 import { ThemeProvider, useAppTheme } from '../context/ThemeContext';
@@ -66,23 +67,27 @@ function InnerRootLayout() {
     }, Number(process.env.EXPO_PUBLIC_OTEL_LAZY_LOAD_DELAY_MS || 1000));
   }, []);
 
+
+
   return (
-    <PaperProvider theme={paperTheme}>
-      <NavigationThemeProvider value={navTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          {!token ? (
-            <Stack.Screen name="login" options={{ title: 'Sign In' }} />
-          ) : (
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          )}
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </NavigationThemeProvider>
-    </PaperProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PaperProvider theme={paperTheme}>
+        <NavigationThemeProvider value={navTheme}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          >
+            {!token ? (
+              <Stack.Screen name="login" options={{ title: 'Sign In' }} />
+            ) : (
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            )}
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </NavigationThemeProvider>
+      </PaperProvider>
+    </GestureHandlerRootView>
   );
 }

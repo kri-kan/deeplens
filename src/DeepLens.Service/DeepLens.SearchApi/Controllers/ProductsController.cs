@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 using DeepLens.Contracts.Catalog;
 using DeepLens.Contracts.Media;
 using DeepLens.Domain.Entities.Catalog;
@@ -163,6 +164,20 @@ public class ProductsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpDelete("instagram/{postId}/links/{productId}")]
+    public async Task<IActionResult> UnlinkInstagramPost(Guid postId, Guid productId)
+    {
+        try
+        {
+            var success = await _productService.UnlinkInstagramPostAsync(postId, productId);
+            return Ok(); // Idempotent: return success even if already deleted
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("categories")]
     public async Task<IActionResult> GetCategories()
     {
@@ -172,9 +187,8 @@ public class ProductsController : ControllerBase
 
 }
 
-public class InstaLinkRequest
-{
-    public Guid PostId { get; set; }
-    public Guid ProductId { get; set; }
-    public string LinkType { get; set; } = "is";
-}
+public record InstaLinkRequest(
+    [property: JsonPropertyName("postId")] Guid PostId,
+    [property: JsonPropertyName("productId")] Guid ProductId,
+    [property: JsonPropertyName("linkType")] string LinkType = "is"
+);

@@ -3,12 +3,12 @@ import { API_ROUTES } from '../constants/api-routes';
 
 export interface SystemJob {
   id: string;
-  job_name: string;
+  jobName: string;
   status: 'Idle' | 'Running' | 'Paused' | 'Failed';
-  last_run_at: string;
-  progress_pct: number;
+  lastRunAt: string;
+  progressPct: number;
   metadata: any;
-  updated_at: string;
+  updatedAt: string;
 }
 
 export const systemJobsService = {

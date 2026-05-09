@@ -2,6 +2,7 @@ using DeepLens.Application.Abstractions.Services;
 using DeepLens.Contracts.Instagram;
 using DeepLens.Application.Abstractions.Data;
 using Microsoft.AspNetCore.Authorization;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
 using DeepLens.Infrastructure.Services;
@@ -16,30 +17,47 @@ public class InstaController : ControllerBase
     private readonly IMetaGraphService _metaGraph;
     private readonly IDbConnectionFactory _db;
     private readonly IStorageService _storage;
+    private readonly IInstagramMediaService _instaMedia;
+    private readonly ILogger<InstaController> _logger;
 
     public InstaController(
         IMetaGraphService metaGraph,
         IDbConnectionFactory db,
-        IStorageService storage)
+        IStorageService storage,
+        IInstagramMediaService instaMedia,
+        ILogger<InstaController> logger)
     {
         _metaGraph = metaGraph;
         _db = db;
         _storage = storage;
+        _instaMedia = instaMedia;
+        _logger = logger;
     }
 
     public class WatchlistItem
     {
-        public Guid id { get; set; }
-        public string username { get; set; } = string.Empty;
-        public string? name { get; set; }
-        public string? profilePictureUrl { get; set; }
-        public string? storagePath { get; set; }
-        public string? biography { get; set; }
-        public int followersCount { get; set; }
-        public int mediaCount { get; set; }
-        public bool is_active { get; set; }
-        public bool isOwnAccount { get; set; }
-        public DateTime? lastSyncedAt { get; set; }
+        [JsonPropertyName("id")]
+        public Guid Id { get; set; }
+        [JsonPropertyName("username")]
+        public string Username { get; set; } = string.Empty;
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+        [JsonPropertyName("profilePictureUrl")]
+        public string? ProfilePictureUrl { get; set; }
+        [JsonPropertyName("storagePath")]
+        public string? StoragePath { get; set; }
+        [JsonPropertyName("biography")]
+        public string? Biography { get; set; }
+        [JsonPropertyName("followersCount")]
+        public int FollowersCount { get; set; }
+        [JsonPropertyName("mediaCount")]
+        public int MediaCount { get; set; }
+        [JsonPropertyName("isActive")]
+        public bool IsActive { get; set; }
+        [JsonPropertyName("isOwnAccount")]
+        public bool IsOwnAccount { get; set; }
+        [JsonPropertyName("lastSyncedAt")]
+        public DateTime? LastSyncedAt { get; set; }
     }
 
     [HttpGet]
@@ -49,17 +67,17 @@ public class InstaController : ControllerBase
         using var conn = await _db.CreateConnectionAsync();
         var watchlist = await conn.QueryAsync<WatchlistItem>(@"
             SELECT 
-                id, 
-                username, 
-                display_name AS name, 
-                profile_pic_url AS profilePictureUrl, 
-                profile_pic_storage_path AS storagePath,
-                bio AS biography, 
-                follower_count AS followersCount, 
-                post_count AS mediaCount, 
-                is_active, 
-                is_own_account AS isOwnAccount, 
-                last_scraped_at AS lastSyncedAt
+                id AS Id, 
+                username AS Username, 
+                display_name AS Name, 
+                profile_pic_url AS ProfilePictureUrl, 
+                profile_pic_storage_path AS StoragePath,
+                bio AS Biography, 
+                follower_count AS FollowersCount, 
+                post_count AS MediaCount, 
+                is_active AS IsActive, 
+                is_own_account AS IsOwnAccount, 
+                last_scraped_at AS LastSyncedAt
             FROM competitor_watchlist 
             WHERE platform = 'instagram' 
             ORDER BY is_own_account DESC, username ASC");
@@ -82,7 +100,7 @@ public class InstaController : ControllerBase
                    follower_count, following_count, post_count, last_scraped_at, 
                    external_id, is_active, is_data_deleted, is_own_account 
             FROM competitor_watchlist 
-            WHERE username = @username AND platform = 'instagram'", 
+            WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'", 
             new { username });
 
         if (profileInfo == null) return NotFound();
@@ -115,12 +133,12 @@ public class InstaController : ControllerBase
                     cv.thumbnail_url AS ThumbnailUrl, 
                     cv.media_url AS MediaUrl,
                     cv.like_count AS LikeCount, 
-                    cv.comment_count AS CommentsCount, 
+                    cv.comment_count AS CommentCount, 
                     cv.posted_at::text AS Timestamp,
                     cv.storage_path AS StoragePath,
                     (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
                 FROM competitor_videos cv
-                WHERE cv.watchlist_id = (SELECT id FROM competitor_watchlist WHERE username = @username AND platform = 'instagram')
+                WHERE cv.watchlist_id = (SELECT id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram')
                 {dateFilter}
                 ORDER BY {orderBy} {direction}
                 LIMIT 1000";
@@ -146,32 +164,32 @@ public class InstaController : ControllerBase
             catch { /* Ignore parsing errors */ }
         }
 
-        var composite = new
+        var composite = new InstagramProfileDetailsDto
         {
-            profile = new
+            Profile = new InstagramProfileDto
             {
-                username = profileInfo.username,
-                name = profileInfo.display_name,
-                biography = profileInfo.bio,
-                followersCount = profileInfo.follower_count ?? 0,
-                followsCount = profileInfo.following_count ?? 0,
-                mediaCount = profileInfo.post_count ?? 0,
-                profilePictureUrl = profileInfo.profile_pic_url,
-                storagePath = profileInfo.profile_pic_storage_path,
-                website = "", 
-                is_verified = false, 
-                is_business = true, 
-                externalId = profileInfo.external_id,
-                is_active = profileInfo.is_active ?? true,
-                last_synced_at = profileInfo.last_scraped_at,
-                is_data_deleted = isDeleted
+                UserId = (string?)profileInfo.external_id ?? string.Empty,
+                Username = (string?)profileInfo.username ?? string.Empty,
+                Name = (string?)profileInfo.display_name ?? string.Empty,
+                Biography = (string?)profileInfo.bio ?? string.Empty,
+                FollowersCount = profileInfo.follower_count ?? 0,
+                FollowingCount = profileInfo.following_count ?? 0,
+                MediaCount = profileInfo.post_count ?? 0,
+                ProfilePictureUrl = (string?)profileInfo.profile_pic_url ?? string.Empty,
+                StoragePath = (string?)profileInfo.profile_pic_storage_path,
+                IsPrivate = false,
+                IsVerified = false,
+                IsActive = profileInfo.is_active ?? true,
+                IsOwnAccount = profileInfo.is_own_account ?? false,
+                IsDataDeleted = isDeleted,
+                LastSyncedAt = (DateTime?)profileInfo.last_scraped_at
             },
-            videos,
-            metrics = new
+            Videos = videos,
+            Metrics = new InstagramMetricsDto
             {
-                avgLikes = videos.Count > 0 ? videos.Average(v => v.LikeCount) : 0,
-                engagementRate = (videos.Count > 0 && (profileInfo.follower_count ?? 0) > 0) ? (videos.Average(v => v.LikeCount) / (double)profileInfo.follower_count) * 100 : 0,
-                postFrequency = postFrequency
+                AvgLikes = videos.Count > 0 ? videos.Average(v => v.LikeCount) : 0,
+                EngagementRate = (videos.Count > 0 && (profileInfo.follower_count ?? 0) > 0) ? (videos.Average(v => v.LikeCount) / (double)profileInfo.follower_count) * 100 : 0,
+                PostFrequency = postFrequency
             }
         };
 
@@ -184,7 +202,7 @@ public class InstaController : ControllerBase
     {
         using var conn = await _db.CreateConnectionAsync();
         var exists = await conn.ExecuteScalarAsync<bool>(
-            "SELECT EXISTS(SELECT 1 FROM competitor_watchlist WHERE username = @Username AND platform = 'instagram')", 
+            "SELECT EXISTS(SELECT 1 FROM competitor_watchlist WHERE LOWER(username) = LOWER(@Username) AND platform = 'instagram')", 
             new { Username = username });
 
         if (exists) return BadRequest(new { message = "Profile already in watchlist" });
@@ -206,7 +224,7 @@ public class InstaController : ControllerBase
                 ProfilePictureUrl = profile.ProfilePictureUrl, 
                 Bio = profile.Biography,
                 FollowersCount = (int)profile.FollowersCount, 
-                FollowsCount = (int)profile.FollowsCount,
+                FollowingCount = (int)profile.FollowingCount,
                 MediaCount = profile.MediaCount,
                 ExternalId = profile.ExternalId
             });
@@ -220,7 +238,7 @@ public class InstaController : ControllerBase
     {
         using var conn = await _db.CreateConnectionAsync();
         var rows = await conn.ExecuteAsync(
-            "DELETE FROM competitor_watchlist WHERE username = @Username AND platform = 'instagram'", 
+            "DELETE FROM competitor_watchlist WHERE LOWER(username) = LOWER(@Username) AND platform = 'instagram'", 
             new { Username = username });
 
         if (rows == 0) return NotFound();
@@ -291,7 +309,7 @@ public class InstaController : ControllerBase
         
         // 1. Ensure in watchlist
         var watchlistId = await conn.QueryFirstOrDefaultAsync<Guid?>(
-            "SELECT id FROM competitor_watchlist WHERE username = @username AND platform = 'instagram'", 
+            "SELECT id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'", 
             new { username });
 
         if (watchlistId == null)
@@ -314,7 +332,7 @@ public class InstaController : ControllerBase
                     ProfilePictureUrl = profile.ProfilePictureUrl, 
                     Bio = profile.Biography,
                     FollowersCount = (int)profile.FollowersCount, 
-                    FollowsCount = (int)profile.FollowsCount,
+                    FollowingCount = (int)profile.FollowingCount,
                     MediaCount = profile.MediaCount,
                     ExternalId = profile.ExternalId
                 });
@@ -341,14 +359,14 @@ public class InstaController : ControllerBase
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult> GetActiveJobs()
     {
-        using var conn = _db.CreateConnection();
-        var jobs = await conn.QueryAsync<dynamic>(@"
-            SELECT j.id, w.username, j.job_type, j.status, j.priority,
-                   j.target_count, j.scraped_count,
-                   j.created_at as next_run_at, 'mobile_app' as origin
+        using var conn = await _db.CreateConnectionAsync();
+        var jobs = await conn.QueryAsync<ScraperJobDto>(@"
+            SELECT j.id, w.username, j.job_type as JobType, j.status, j.priority, 
+                   j.target_count as TargetCount, j.scraped_count as ScrapedCount, 
+                   j.next_run_at as NextRunAt, j.started_at as StartedAt,
+                   'Instagram' as Origin
             FROM scraper_queue j
-            LEFT JOIN competitor_watchlist w ON j.watchlist_id = w.id
-            WHERE j.status IN ('pending', 'running', 'paused')
+            JOIN competitor_watchlist w ON j.watchlist_id = w.id
             ORDER BY j.priority DESC, j.created_at ASC");
         return Ok(jobs);
     }
@@ -357,13 +375,13 @@ public class InstaController : ControllerBase
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult> GetJobHistory()
     {
-        using var conn = _db.CreateConnection();
-        var jobs = await conn.QueryAsync<dynamic>(@"
-            SELECT j.id, w.username, j.job_type, j.status, 
-                   j.items_processed as scraped_count,
-                   j.completed_at, j.triggered_by as origin
+        using var conn = await _db.CreateConnectionAsync();
+        var jobs = await conn.QueryAsync<ScraperJobDto>(@"
+            SELECT j.id, w.username, j.job_type as JobType, j.status, 
+                   j.items_processed as ScrapedCount, j.started_at as StartedAt, j.completed_at as CompletedAt,
+                   'Instagram' as Origin
             FROM scraper_history j
-            LEFT JOIN competitor_watchlist w ON j.watchlist_id = w.id
+            JOIN competitor_watchlist w ON j.watchlist_id = w.id
             ORDER BY j.completed_at DESC
             LIMIT 50");
         return Ok(jobs);
@@ -383,7 +401,7 @@ public class InstaController : ControllerBase
 
         using var conn = _db.CreateConnection();
         var watchlistId = await conn.QueryFirstOrDefaultAsync<Guid?>(
-            "SELECT id FROM competitor_watchlist WHERE username = @username", new { username });
+            "SELECT id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username)", new { username });
 
         if (watchlistId == null) return NotFound(new { message = "Profile not in watchlist" });
 
@@ -456,9 +474,9 @@ public class InstaController : ControllerBase
             await conn.ExecuteAsync(@"
                 UPDATE competitor_watchlist 
                 SET is_active = @active 
-                WHERE username = @username AND platform = 'instagram'",
+                WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
                 new { username, active });
-            return Ok(new { username, is_active = active });
+            return Ok(new { username, isActive = active });
         }
 
     [HttpPost("profile/{username}/toggle-own")]
@@ -468,9 +486,9 @@ public class InstaController : ControllerBase
             await conn.ExecuteAsync(@"
                 UPDATE competitor_watchlist 
                 SET is_own_account = @isOwn 
-                WHERE username = @username AND platform = 'instagram'",
+                WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
                 new { username, isOwn });
-            return Ok(new { username, is_own_account = isOwn });
+            return Ok(new { username, isOwnAccount = isOwn });
         }
 
     [HttpDelete("profile/{username}/data")]
@@ -479,7 +497,7 @@ public class InstaController : ControllerBase
     {
         using var conn = await _db.CreateConnectionAsync();
         var profile = await conn.QueryFirstOrDefaultAsync<dynamic>(
-            "SELECT id, external_id FROM competitor_watchlist WHERE username = @username AND platform = 'instagram'",
+            "SELECT id, external_id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
             new { username });
 
         if (profile == null) return NotFound();
@@ -487,31 +505,43 @@ public class InstaController : ControllerBase
         Guid watchlistId = profile.id;
         string? externalId = profile.external_id;
 
-        // 1. Delete media from MinIO
-        if (!string.IsNullOrEmpty(externalId))
+        // 1. Delete media files from MinIO (both legacy and backfilled)
+        try
         {
-            try
-            {
-                // MinIO doesn't have a direct "delete directory" command, we usually have to list and delete
-                // But we can just use the bucket/prefix logic in our storage service if it supported it.
-                // For now, we will delete all videos from DB first, then delete MinIO files if we can.
-                // Assuming StorageService has a way to delete by path prefix or we just delete individual files.
-                
-                var storagePaths = await conn.QueryAsync<string>(
-                    "SELECT storage_path FROM competitor_videos WHERE watchlist_id = @watchlistId AND storage_path IS NOT NULL",
-                    new { watchlistId });
+            // Get legacy paths from competitor_videos
+            var legacyPaths = await conn.QueryAsync<string>(
+                "SELECT storage_path FROM competitor_videos WHERE watchlist_id = @watchlistId AND storage_path IS NOT NULL",
+                new { watchlistId });
 
-                foreach (var path in storagePaths)
-                {
-                    await _storage.DeleteFileAsync(path);
-                }
-            }
-            catch (Exception ex)
+            // Get modern paths from media table
+            var modernPaths = await conn.QueryAsync<string>(@"
+                SELECT m.storage_path 
+                FROM media m 
+                JOIN media_links ml ON m.id = ml.media_id 
+                JOIN competitor_videos cv ON ml.entity_id = cv.id 
+                WHERE cv.watchlist_id = @watchlistId AND ml.entity_type = 'competitor_video'",
+                new { watchlistId });
+
+            var allPaths = legacyPaths.Concat(modernPaths).Distinct();
+
+            foreach (var path in allPaths)
             {
-                // Log but continue
-                Console.WriteLine($"Error deleting files from MinIO: {ex.Message}");
+                await _storage.DeleteFileAsync(path);
             }
         }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error deleting files from MinIO during profile data deletion");
+        }
+
+        // 2. Delete media records (this will cascade to media_links)
+        await conn.ExecuteAsync(@"
+            DELETE FROM media WHERE id IN (
+                SELECT ml.media_id 
+                FROM media_links ml 
+                JOIN competitor_videos cv ON ml.entity_id = cv.id 
+                WHERE cv.watchlist_id = @watchlistId AND ml.entity_type = 'competitor_video'
+            )", new { watchlistId });
 
         // 2. Delete posts from DB
         await conn.ExecuteAsync("DELETE FROM competitor_videos WHERE watchlist_id = @watchlistId", new { watchlistId });
@@ -528,29 +558,61 @@ public class InstaController : ControllerBase
 
     [HttpGet("video/{id}")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult> GetVideo(Guid id)
+    public async Task<ActionResult<MetaPost>> GetVideo([FromRoute] Guid id)
     {
         using var conn = await _db.CreateConnectionAsync();
-        var video = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+        var video = await conn.QueryFirstOrDefaultAsync<MetaPost>(@"
             SELECT 
-                id::text AS Id, 
-                platform_video_id AS PlatformId,
-                url AS Permalink, 
-                description AS Caption,
-                media_type AS MediaType, 
-                thumbnail_url AS ThumbnailUrl, 
-                media_url AS MediaUrl,
-                like_count AS LikeCount, 
-                comment_count AS CommentsCount, 
-                posted_at::text AS Timestamp,
-                storage_path AS StoragePath
-            FROM competitor_videos 
-            WHERE id = @id", 
+                cv.id::text AS Id, 
+                cv.platform_video_id AS PlatformId,
+                cv.url AS Permalink, 
+                cv.description AS Caption,
+                cv.media_type AS MediaType, 
+                cv.thumbnail_url AS ThumbnailUrl, 
+                cv.media_url AS MediaUrl,
+                cv.like_count AS LikeCount, 
+                cv.comment_count AS CommentCount, 
+                cv.posted_at::text AS Timestamp,
+                cv.storage_path AS StoragePath,
+                (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+            FROM competitor_videos cv
+            WHERE cv.id = @id", 
             new { id });
 
         if (video == null) return NotFound();
 
         return Ok(video);
+    }
+
+    [HttpGet("video/{id}/media")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<InstagramMediaDto>>> GetMediaLinks([FromRoute] Guid id)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var allMedia = await conn.QueryAsync<InstagramMediaDto>(@"
+            SELECT m.id AS Id, m.storage_path AS StoragePath, m.media_type AS MediaType, 
+                   m.subcategory AS Subcategory, ml.is_primary AS IsPrimary, ml.display_order AS DisplayOrder
+            FROM media m
+            JOIN media_links ml ON m.id = ml.media_id
+            WHERE ml.entity_id = @id AND ml.entity_type = 'competitor_video'
+            ORDER BY ml.display_order ASC, m.media_type DESC", 
+            new { id });
+
+        var list = allMedia.ToList();
+
+        // 1. If we have any video (MediaType 2), hide static thumbnails (Subcategory 'thumbnail')
+        if (list.Any(m => m.MediaType == 2))
+        {
+            list = list.Where(m => m.MediaType != 1 || m.Subcategory == "carousel_item").ToList();
+        }
+
+        // 2. If we have 'full_media', hide 'thumbnail' to avoid double images
+        if (list.Any(m => m.Subcategory == "full_media"))
+        {
+            list = list.Where(m => m.Subcategory != "thumbnail").ToList();
+        }
+
+        return Ok(list);
     }
 
     [HttpGet("video/lookup")]
@@ -559,8 +621,6 @@ public class InstaController : ControllerBase
     {
         if (string.IsNullOrEmpty(url)) return BadRequest();
 
-        // 1. Extract shortcode from URL if needed
-        // Pattern: instagram.com/p/SHORTCODE/ or instagram.com/reel/SHORTCODE/
         var shortcode = url;
         if (url.Contains("/p/") || url.Contains("/reel/"))
         {
@@ -574,24 +634,36 @@ public class InstaController : ControllerBase
 
         using var conn = await _db.CreateConnectionAsync();
         
-        // 2. Try to match by exact URL or by shortcode in the URL string
-        var video = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+        var video = await conn.QueryFirstOrDefaultAsync<MetaPost>(@"
             SELECT 
-                id::text AS Id, 
-                url AS Permalink, 
-                description AS Caption,
-                thumbnail_url AS ThumbnailUrl, 
-                storage_path AS StoragePath
-            FROM competitor_videos 
-            WHERE url = @Url OR url LIKE @Pattern", 
+                cv.id::text AS Id, 
+                cv.url AS Permalink, 
+                cv.description AS Caption,
+                cv.thumbnail_url AS ThumbnailUrl, 
+                cv.storage_path AS StoragePath,
+                (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+            FROM competitor_videos cv
+            WHERE cv.url = @Url OR cv.url LIKE @Pattern", 
             new { 
-                Url = url.Split('?')[0], // Remove query params
+                Url = url.Split('?')[0], 
                 Pattern = $"%/p/{shortcode}/%"
             });
 
         if (video == null) return NotFound(new { message = "Post not found in local database" });
 
         return Ok(video);
+    }
+
+    [HttpPost("video/{id}/refresh")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult> RefreshMedia(Guid id)
+    {
+        var success = await _instaMedia.RefreshPostMediaAsync(id);
+        if (!success)
+        {
+            return BadRequest(new { message = "Failed to refresh media from Instagram." });
+        }
+        return Ok(new { message = "Media refreshed successfully." });
     }
 }
 

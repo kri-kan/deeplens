@@ -1,333 +1,164 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Linking } from 'react-native';
-import { Text, IconButton, Surface, useTheme, Menu, Button, Portal, Dialog, TextInput, List, ActivityIndicator, Chip, Appbar } from 'react-native-paper';
-import { Image } from 'expo-image';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Dimensions, ActivityIndicator, FlatList } from 'react-native';
+import { IconButton, useTheme } from 'react-native-paper';
+import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { instagramService } from '@/services/instagram.service';
-import * as Clipboard from 'expo-clipboard';
-import { ToastAndroid, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { instagramService, InstagramPost } from '@/services/instagram.service';
+import { InstagramPostDetailItem } from '@/components/utility/instagram/InstagramPostDetailItem';
+import { useVideoSettings } from '@/hooks/useVideoSettings';
+import { normalizeData } from '@/utils/instagram-helpers';
 
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 export default function PostDetailScreen() {
-    const { id, data: initialData } = useLocalSearchParams();
-    const theme = useTheme();
+    const { id, username, sortBy, sortOrder, data: initialData } = useLocalSearchParams();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     
-    const [item, setItem] = useState<any>(initialData ? JSON.parse(initialData as string) : null);
-    const [loading, setLoading] = useState(!item);
-    const [existingLinks, setExistingLinks] = useState<any[]>([]);
-    const [isExpanded, setIsExpanded] = useState(false);
+    const initialItem = initialData ? normalizeData(JSON.parse(initialData as string)) : null;
+    const [posts, setPosts] = useState<any[]>(() => {
+        const cached = instagramService.getLastFetchedPosts();
+        if (cached && cached.length > 0) {
+            return cached.map(normalizeData);
+        }
+        return initialItem ? [initialItem] : [];
+    });
     
-    const hasIsLink = !!item?.productCode || !!item?.ProductCode || existingLinks.some(link => link.linkType === 'is');
-    const productCodeToDisplay = item?.productCode || item?.ProductCode || existingLinks.find(l => l.linkType === 'is')?.productCode;
-
-    const copyToClipboard = async (text: string) => {
-        if (!text) return;
-        await Clipboard.setStringAsync(text);
-        if (Platform.OS === 'android') {
-            ToastAndroid.show('Product ID copied!', ToastAndroid.SHORT);
+    const [activeIndex, setActiveIndex] = useState(() => {
+        if (posts.length > 0) {
+            const targetId = (id || initialItem?.id)?.toString();
+            const idx = posts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
+            return idx !== -1 ? idx : 0;
         }
-    };
+        return 0;
+    });
 
-    const getMediaUri = (path: string) => {
-        if (path) {
-            const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL;
-            return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
-        }
-        return item?.thumbnailUrl || item?.mediaUrl;
-    };
-
-    const fetchPostDetails = async () => {
-        if (!id) return;
-        try {
-            setLoading(true);
-            const data = await instagramService.getVideoDetails(id as string);
-            setItem(data);
-        } catch (error) {
-            console.error('Failed to fetch post details', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const fetchLinks = async () => {
-        if (!item?.id) return;
-        try {
-            // Using the hardcoded IP from PostDetailView.tsx for consistency, but should ideally be from config
-            const response = await fetch(`http://192.168.0.170:5000/api/v1/products/instagram/${item.id}/links`);
-            const data = await response.json();
-            setExistingLinks(data);
-        } catch (error) {
-            console.error('Failed to fetch links', error);
-        }
-    };
+    const { isMuted, setIsMuted, volume, setVolume } = useVideoSettings();
+    const [isPlaying, setIsPlaying] = useState(true);
+    const [loading, setLoading] = useState(posts.length <= 1);
+    const [isDragging, setIsDragging] = useState(false);
+    const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
-        if (!item && id) {
-            fetchPostDetails();
+        if (!loading && posts.length > 1) {
+            const targetId = (id || initialItem?.id)?.toString();
+            const idx = posts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
+            
+            if (idx !== -1) {
+                setActiveIndex(idx);
+                // Use a small timeout to ensure FlatList has rendered the new list
+                setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({ 
+                        index: idx, 
+                        animated: false 
+                    });
+                }, 100);
+            }
         }
-    }, [id]);
+    }, [loading, posts.length]);
 
     useEffect(() => {
-        if (item?.id) {
-            fetchLinks();
-        }
-    }, [item?.id]);
+        const loadAllPosts = async () => {
+            if (!username) {
+                setLoading(false);
+                return;
+            }
 
-    if (loading || !item) {
-        return (
-            <View style={styles.loaderContainer}>
-                <ActivityIndicator size="large" />
-                <Text style={{ marginTop: 16 }}>Loading post details...</Text>
-            </View>
-        );
-    }
+            try {
+                const response = await instagramService.getProfileDetails(
+                    username as string, 
+                    (sortBy as string) || 'date', 
+                    (sortOrder as string) || 'desc'
+                );
+                const allPosts = (response.videos || []).map(normalizeData);
+                setPosts(allPosts);
+                
+                const targetId = (id || initialItem?.id)?.toString();
+                const idx = allPosts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
+                if (idx !== -1) setActiveIndex(idx);
+            } catch (e) {
+                console.error("Error loading profile posts", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadAllPosts();
+    }, [username, id, sortBy, sortOrder]);
+
+    const theme = useTheme();
 
     return (
-        <View style={styles.container}>
-            <Stack.Screen options={{ headerShown: false }} />
-            
-            <Image 
-                source={{ uri: getMediaUri(item.storagePath) }} 
-                style={styles.fullImage}
-                contentFit="cover"
-            />
-
-            <IconButton 
-                icon="arrow-left" 
-                iconColor="white" 
-                size={28} 
-                style={styles.closeButton} 
-                onPress={() => router.back()} 
-            />
-
-            <View style={styles.actionColumn}>
-                <View style={styles.statItem}>
-                    <IconButton icon="heart" iconColor="white" size={24} style={styles.statIcon} />
-                    <Text style={styles.statText}>{(item.likeCount || 0).toLocaleString()}</Text>
-                </View>
-
-                <View style={styles.statItem}>
-                    <IconButton icon="comment" iconColor="white" size={24} style={styles.statIcon} />
-                    <Text style={styles.statText}>{(item.commentsCount || 0).toLocaleString()}</Text>
-                </View>
+            <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <StatusBar style="dark" />
+                
+                {!loading || initialItem ? (
+                    <FlatList
+                        ref={flatListRef}
+                        data={posts}
+                        pagingEnabled
+                        scrollEnabled={!isDragging}
+                        initialScrollIndex={activeIndex}
+                        getItemLayout={(data, index) => ({
+                            length: height,
+                            offset: height * index,
+                            index,
+                        })}
+                        onMomentumScrollEnd={(e) => {
+                            const index = Math.round(e.nativeEvent.contentOffset.y / height);
+                            setActiveIndex(index);
+                        }}
+                        renderItem={({ item, index }) => (
+                            <InstagramPostDetailItem 
+                                item={item}
+                                isMuted={isMuted}
+                                setIsMuted={setIsMuted}
+                                volume={volume}
+                                setVolume={setVolume}
+                                isPlaying={isPlaying}
+                                setIsPlaying={setIsPlaying}
+                                isActive={index === activeIndex}
+                                insets={insets}
+                                onDraggingStateChange={setIsDragging}
+                                onPostUpdated={(updatedPost) => {
+                                    setPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
+                                }}
+                            />
+                        )}
+                        keyExtractor={(p) => p.id}
+                        showsVerticalScrollIndicator={false}
+                        windowSize={3}
+                        maxToRenderPerBatch={3}
+                        removeClippedSubviews={true}
+                    />
+                ) : (
+                    <View style={styles.loaderContainer}>
+                        <ActivityIndicator color="white" />
+                    </View>
+                )}
 
                 <IconButton 
-                    icon="open-in-new" 
-                    iconColor="white" 
-                    size={24} 
-                    onPress={() => item.permalink && Linking.openURL(item.permalink)} 
-                />
-
-                <IconButton 
-                    icon="plus" 
-                    iconColor="white" 
+                    icon="arrow-left" 
+                    iconColor="black" 
                     size={28} 
-                    onPress={() => {
-                        // Navigate to a dedicated action screen or show a menu
-                        router.push({
-                            pathname: '/utilities/instagram/post-actions',
-                            params: { id: item.id, data: JSON.stringify(item) }
-                        } as any);
-                    }} 
+                    style={[styles.backButton, { top: insets.top + 4 }]}
+                    onPress={() => router.back()}
                 />
             </View>
-
-            <View style={styles.detailsContainer}>
-                <ScrollView>
-                    <TouchableOpacity 
-                        onPress={() => setIsExpanded(!isExpanded)} 
-                        style={styles.captionContainer}
-                        activeOpacity={0.7}
-                    >
-                        <Text 
-                            variant="bodyMedium" 
-                            style={styles.caption}
-                            numberOfLines={isExpanded ? undefined : 1}
-                        >
-                            {item.caption || item.description || item.title}
-                        </Text>
-                        <IconButton 
-                            icon={isExpanded ? "chevron-up" : "chevron-down"} 
-                            size={20} 
-                            style={styles.expandIcon}
-                        />
-                    </TouchableOpacity>
-
-                    <View style={styles.headerRow}>
-                        {productCodeToDisplay ? (
-                            <TouchableOpacity onPress={() => copyToClipboard(productCodeToDisplay)}>
-                                <Text variant="titleMedium" style={styles.sectionTitle}>
-                                    ProductId: {productCodeToDisplay}
-                                </Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <Button 
-                                mode="contained" 
-                                compact
-                                icon="plus"
-                                style={{ borderRadius: 6 }}
-                                onPress={() => router.push({
-                                    pathname: '/utilities/instagram/link-product',
-                                    params: { id: item.id, data: JSON.stringify(item), allowedTypes: 'is' }
-                                } as any)}
-                            >
-                                Add or Link Product
-                            </Button>
-                        )}
-                        <Button 
-                            mode="text" 
-                            compact 
-                            onPress={() => router.push({
-                                pathname: '/utilities/instagram/link-product',
-                                params: { id: item.id, data: JSON.stringify(item), allowedTypes: 'contains,like' }
-                            } as any)}
-                        >
-                            Manage Associations
-                        </Button>
-                    </View>
-
-                    {existingLinks && Array.isArray(existingLinks) && existingLinks.map(link => (
-                        <List.Item
-                            key={link.id}
-                            title={link.productTitle}
-                            description={`Relation: ${link.linkType.toUpperCase()} | SKU: ${link.productCode}`}
-                            left={props => <List.Icon {...props} icon="link" />}
-                            right={props => (
-                                <View style={[styles.typeBadge, { backgroundColor: link.linkType === 'is' ? theme.colors.primary : theme.colors.secondary }]}>
-                                    <Text style={styles.typeBadgeText}>{link.linkType}</Text>
-                                </View>
-                            )}
-                        />
-                    ))}
-                    {existingLinks.length === 0 && (
-                        <Text style={styles.emptyText}>No products linked yet</Text>
-                    )}
-                    
-                    <View style={styles.bottomActions}>
-                        {!hasIsLink && (
-                            <Button 
-                                mode="contained" 
-                                icon="plus-box" 
-                                onPress={() => router.push({
-                                    pathname: '/utilities/instagram/create-product',
-                                    params: { id: item.id, data: JSON.stringify(item) }
-                                } as any)}
-                                style={styles.createBtn}
-                            >
-                                Create as Product
-                            </Button>
-                        )}
-                    </View>
-                </ScrollView>
-            </View>
-        </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#000',
-    },
     loaderContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'white',
     },
-    fullImage: {
-        width: width,
-        height: height * 0.6,
-    },
-    closeButton: {
+    backButton: {
         position: 'absolute',
-        top: 40,
-        left: 10,
-        zIndex: 10,
+        left: 4,
+        zIndex: 100,
         backgroundColor: 'rgba(0,0,0,0.3)',
     },
-    actionColumn: {
-        position: 'absolute',
-        top: height * 0.15,
-        right: 12,
-        alignItems: 'center',
-        gap: 20,
-    },
-    statItem: {
-        alignItems: 'center',
-    },
-    statIcon: {
-        margin: 0,
-    },
-    statText: {
-        color: 'white',
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginTop: -10,
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
-        textShadowOffset: {width: -1, height: 1},
-        textShadowRadius: 10
-    },
-    detailsContainer: {
-        flex: 1,
-        backgroundColor: 'white',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 20,
-        marginTop: -30,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    sectionTitle: {
-        fontWeight: 'bold',
-    },
-    emptyText: {
-        opacity: 0.4,
-        fontStyle: 'italic',
-        marginBottom: 16,
-    },
-    typeBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 4,
-        justifyContent: 'center',
-        height: 24,
-        alignSelf: 'center',
-    },
-    typeBadgeText: {
-        color: 'white',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    captionContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        paddingBottom: 16,
-        paddingTop: 16,
-    },
-    caption: {
-        flex: 1,
-        color: '#666',
-        lineHeight: 20,
-    },
-    expandIcon: {
-        margin: 0,
-        padding: 0,
-        width: 24,
-        height: 24,
-        marginTop: -2,
-    },
-    bottomActions: {
-        marginTop: 24,
-        marginBottom: 40,
-    },
-    createBtn: {
-        borderRadius: 12,
-    }
 });

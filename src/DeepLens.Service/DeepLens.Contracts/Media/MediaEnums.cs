@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace DeepLens.Contracts.Media;
 
 /// <summary>
@@ -69,8 +71,11 @@ public static class MediaHierarchy
 /// <summary>
 /// Base record for OO-based storage path resolution.
 /// </summary>
-public abstract record StorageContext(MediaCategory Category, string Folder)
+public abstract record StorageContext(
+    [property: JsonPropertyName("category")] MediaCategory Category, 
+    [property: JsonPropertyName("folder")] string Folder)
 {
+    [JsonPropertyName("bucket")]
     public string Bucket => Category.ToString().ToLowerInvariant();
 
     public static StorageContext Create(MediaCategory category, string subCategory)
@@ -95,19 +100,20 @@ public abstract record StorageContext(MediaCategory Category, string Folder)
 /// <summary>
 /// Context for Product media.
 /// </summary>
-public record ProductContext(ProductSubCategory Type) 
+public record ProductContext([property: JsonPropertyName("type")] ProductSubCategory Type) 
     : StorageContext(MediaCategory.Product, Type.ToString().ToLowerInvariant());
 
 /// <summary>
 /// Context for Order media.
 /// </summary>
-public record OrderContext(OrderSubCategory Type) 
+public record OrderContext([property: JsonPropertyName("type")] OrderSubCategory Type) 
     : StorageContext(MediaCategory.Order, Type.ToString().ToLowerInvariant());
 
 /// <summary>
 /// Context for Instagram media. Folder is usually the Instagram User ID (external_id).
 /// </summary>
-public record InstagramContext(string UserId) : StorageContext(MediaCategory.Instagram, UserId);
+public record InstagramContext([property: JsonPropertyName("userId")] string UserId) 
+    : StorageContext(MediaCategory.Instagram, UserId);
 
 /// <summary>
 /// Simple context for any other storage needs.

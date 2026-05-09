@@ -54,7 +54,7 @@ public class IdGeneratorService : IIdGeneratorService
         return await _orderRepository.GetRecentHistoryAsync(limit);
     }
 
-    public async Task<object?> GetOrderDetailsAsync(string orderId)
+    public async Task<OrderDetailDto?> GetOrderDetailsAsync(string orderId)
     {
         return await _orderRepository.GetDetailsAsync(orderId);
     }

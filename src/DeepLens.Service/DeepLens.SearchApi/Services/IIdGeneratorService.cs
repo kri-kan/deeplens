@@ -13,6 +13,6 @@ public interface IIdGeneratorService
     string GenerateOrderItemId(string orderId, int itemIndex);
     Task<string> GenerateProductIdAsync();
     Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20);
-    Task<object?> GetOrderDetailsAsync(string orderId);
+    Task<OrderDetailDto?> GetOrderDetailsAsync(string orderId);
     Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null);
 }

@@ -31,21 +31,21 @@ export const RecentJobsList: React.FC<RecentJobsListProps> = ({ jobs, queuedJobI
               <View>
                 <Text variant="labelLarge" style={styles.bold}>@{job.username}</Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {job.status.toUpperCase()} · {job.target_count === 0 ? 'Full Profile' : `${job.target_count} Posts`}
+                  {job.status.toUpperCase()} · {job.targetCount === 0 ? 'Full Profile' : `${job.targetCount} Posts`}
                 </Text>
               </View>
               {job.status === 'running' && <ActivityIndicator size="small" />}
             </View>
             
             <View style={styles.progressRow}>
-              <Text variant="labelSmall">{job.scraped_count} Scraped</Text>
+              <Text variant="labelSmall">{job.scrapedCount} Scraped</Text>
               <Text variant="labelSmall">
-                {job.target_count > 0 ? `${Math.round((job.scraped_count / job.target_count) * 100)}%` : ''}
+                {job.targetCount > 0 ? `${Math.round((job.scrapedCount / job.targetCount) * 100)}%` : ''}
               </Text>
             </View>
             <ProgressBar 
-              progress={job.target_count > 0 ? (job.scraped_count / job.target_count) : (job.status === 'running' ? 0.5 : 0)} 
-              indeterminate={job.target_count === 0 && job.status === 'running'}
+              progress={job.targetCount > 0 ? (job.scrapedCount / job.targetCount) : (job.status === 'running' ? 0.5 : 0)} 
+              indeterminate={job.targetCount === 0 && job.status === 'running'}
               color={theme.colors.primary} 
               style={styles.progressBar}
             />

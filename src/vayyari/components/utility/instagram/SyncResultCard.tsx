@@ -22,8 +22,8 @@ export const SyncResultCard: React.FC<SyncResultCardProps> = ({ result, onOpenEx
         <View style={styles.statsRow}>
           <StatBox label="Followers" value={(result.profile?.follower_count ?? 0).toLocaleString()} />
           <StatBox label="Posts" value={result.profile?.post_count ?? 0} />
-          <StatBox label="New Posts" value={`+${result.new_posts ?? 0}`} color="#66BB6A" />
-          <StatBox label="Refreshed" value={result.engagement_updated ?? 0} />
+          <StatBox label="New Posts" value={`+${result.newPosts ?? 0}`} color="#66BB6A" />
+          <StatBox label="Refreshed" value={result.engagementUpdated ?? 0} />
         </View>
 
         <Divider style={styles.divider} />

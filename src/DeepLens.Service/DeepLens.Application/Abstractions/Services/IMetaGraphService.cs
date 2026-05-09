@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Text.Json.Serialization;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.Application.Abstractions.Services
 {
@@ -9,6 +11,7 @@ namespace DeepLens.Application.Abstractions.Services
         TokenHealthInfo GetTokenHealth();
         Task<bool> RefreshTokenAsync();
         Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken);
+        Task<MetaPost?> GetPostByIdAsync(string postId);
         Task<MetaProfile?> GetProfileAsync(string targetUsername);
         Task<List<MetaPost>> GetPostsAsync(string targetUsername, int maxPosts = 50);
         Task<List<MetaPost>> GetPostEngagementAsync(string targetUsername, int limit = 20);
@@ -21,64 +24,114 @@ namespace DeepLens.Application.Abstractions.Services
 
     public class MetaCallDetails
     {
+        [JsonPropertyName("requestUrl")]
         public string? RequestUrl { get; set; }
+        [JsonPropertyName("requestPayload")]
         public string? RequestPayload { get; set; }
+        [JsonPropertyName("responseBody")]
         public string? ResponseBody { get; set; }
+        [JsonPropertyName("timestamp")]
         public DateTime Timestamp { get; set; }
     }
 
     public class MetaQuotaInfo
     {
+        [JsonPropertyName("requestsInLastHour")]
         public int RequestsInLastHour { get; set; }
+        [JsonPropertyName("estimatedRemainingRequests")]
         public int EstimatedRemainingRequests { get; set; }
+        [JsonPropertyName("metrics")]
         public AppUsageMetrics Metrics { get; set; } = new();
+        [JsonPropertyName("lastUpdated")]
         public DateTime LastUpdated { get; set; }
     }
 
     public class AppUsageMetrics
     {
+        [JsonPropertyName("callCount")]
         public int CallCount { get; set; }
+        [JsonPropertyName("totalCpuTime")]
         public int TotalCpuTime { get; set; }
+        [JsonPropertyName("totalTime")]
         public int TotalTime { get; set; }
     }
 
     public class TokenHealthInfo
     {
+        [JsonPropertyName("lastRefreshed")]
         public DateTime LastRefreshed { get; set; }
+        [JsonPropertyName("expiresAt")]
         public DateTime ExpiresAt { get; set; }
+        [JsonPropertyName("daysRemaining")]
         public int DaysRemaining { get; set; }
+        [JsonPropertyName("needsRefresh")]
         public bool NeedsRefresh { get; set; }
+        [JsonPropertyName("isExpired")]
         public bool IsExpired { get; set; }
     }
 
     public class MetaProfile
     {
+        [JsonPropertyName("username")]
         public string? Username { get; set; }
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
+        [JsonPropertyName("biography")]
         public string? Biography { get; set; }
+        [JsonPropertyName("followersCount")]
         public long FollowersCount { get; set; }
-        public long FollowsCount { get; set; }
+        [JsonPropertyName("followingCount")]
+        public long FollowingCount { get; set; }
+        [JsonPropertyName("mediaCount")]
         public int MediaCount { get; set; }
+        [JsonPropertyName("profilePictureUrl")]
         public string? ProfilePictureUrl { get; set; }
+        [JsonPropertyName("website")]
         public string? Website { get; set; }
+        [JsonPropertyName("isVerified")]
         public bool IsVerified { get; set; }
+        [JsonPropertyName("isBusiness")]
         public bool IsBusiness { get; set; }
+        [JsonPropertyName("externalId")]
         public string? ExternalId { get; set; }
+        [JsonPropertyName("isActive")]
+        public bool IsActive { get; set; }
+        [JsonPropertyName("isOwnAccount")]
+        public bool IsOwnAccount { get; set; }
+        [JsonPropertyName("isDataDeleted")]
+        public bool IsDataDeleted { get; set; }
+        [JsonPropertyName("lastSyncedAt")]
+        public DateTime? LastSyncedAt { get; set; }
     }
 
     public class MetaPost
     {
+        [JsonPropertyName("id")]
         public string? Id { get; set; }
+        [JsonPropertyName("caption")]
         public string? Caption { get; set; }
+        [JsonPropertyName("mediaUrl")]
         public string? MediaUrl { get; set; }
+        [JsonPropertyName("thumbnailUrl")]
         public string? ThumbnailUrl { get; set; }
+        [JsonPropertyName("permalink")]
         public string? Permalink { get; set; }
+        [JsonPropertyName("likeCount")]
         public long LikeCount { get; set; }
-        public long CommentsCount { get; set; }
+        [JsonPropertyName("commentCount")]
+        public long CommentCount { get; set; }
+        [JsonPropertyName("timestamp")]
         public string? Timestamp { get; set; }
-        public string? MediaType { get; set; }
+        [JsonPropertyName("mediaType")]
+        public InstagramMediaType MediaType { get; set; }
+        [JsonPropertyName("mediaProductType")]
         public string? MediaProductType { get; set; }
+        [JsonPropertyName("storagePath")]
         public string? StoragePath { get; set; }
+        [JsonPropertyName("productCode")]
         public string? ProductCode { get; set; }
+
+        [JsonPropertyName("children")]
+        public List<MetaPost>? Children { get; set; }
     }
 }

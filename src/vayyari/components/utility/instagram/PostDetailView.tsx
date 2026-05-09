@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Linking } from 'react-native';
-import { Text, IconButton, Surface, useTheme, Menu, Button, Portal, Dialog, TextInput, List, ActivityIndicator, Chip, Modal as PaperModal } from 'react-native-paper';
+import { Text, IconButton, Surface, useTheme, Menu, Button, Portal, Dialog, TextInput, List, ActivityIndicator, Modal as PaperModal } from 'react-native-paper';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { ProductCreationForm } from '../product/ProductCreationForm';
+import { searchApiClient } from '@/api/client';
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,9 +39,8 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
 
     const fetchLinks = async () => {
         try {
-            const response = await fetch(`http://192.168.0.170:5000/api/v1/products/instagram/${item.id}/links`);
-            const data = await response.json();
-            setExistingLinks(data);
+            const data = await searchApiClient.get<any[]>(`/api/v1/products/instagram/${item.id}/links`);
+            setExistingLinks(data || []);
         } catch (error) {
             console.error('Failed to fetch links', error);
         }
@@ -48,8 +48,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
 
     const fetchCategories = async () => {
         try {
-            const response = await fetch('http://192.168.0.170:5000/api/v1/products/categories');
-            const data = await response.json();
+            const data = await searchApiClient.get<any[]>('/api/v1/products/categories');
             setCategories(data || []);
         } catch (error) {
             console.error('Failed to fetch categories', error);
@@ -66,8 +65,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
     const fetchAllProducts = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`http://192.168.0.170:5000/api/v1/products/catalog?take=100`);
-            const data = await response.json();
+            const data = await searchApiClient.get<{ products: any[] }>('/api/v1/products/catalog?take=100');
             setAllProducts(data.products || []);
             setSearchResults(data.products || []);
         } catch (error) {
@@ -94,19 +92,13 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
     const handleLinkProduct = async (productId: string) => {
         setLoading(true);
         try {
-            const response = await fetch('http://192.168.0.170:5000/api/v1/products/instagram/link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    postId: item.id,
-                    productId: productId,
-                    linkType: linkType
-                })
+            await searchApiClient.post('/api/v1/products/instagram/link', {
+                postId: item.id,
+                productId,
+                linkType,
             });
-            if (response.ok) {
-                setLinkingDialog(false);
-                fetchLinks();
-            }
+            setLinkingDialog(false);
+            fetchLinks();
         } catch (error) {
             console.error('Linking failed', error);
         } finally {
@@ -140,7 +132,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
 
                 <View style={styles.statItem}>
                     <IconButton icon="comment" iconColor="white" size={24} style={styles.statIcon} />
-                    <Text style={styles.statText}>{(item.commentsCount || 0).toLocaleString()}</Text>
+                    <Text style={styles.statText}>{(item.commentCount || 0).toLocaleString()}</Text>
                 </View>
 
                 <IconButton 
@@ -262,7 +254,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                         <ScrollView style={styles.searchResults}>
                             {searchResults.map(p => {
                                 const existingLink = existingLinks.find(l => l.productId === p.masterProductId);
-                                const primaryMedia = p.media?.find((m: any) => m.is_default) || p.media?.[0];
+                                const primaryMedia = p.media?.find((m: any) => m.isDefault) || p.media?.[0];
                                 const mediaUri = primaryMedia ? `http://192.168.0.170:5000/api/v1/Attachment/download?path=${encodeURIComponent(primaryMedia.path)}` : null;
 
                                 return (

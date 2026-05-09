@@ -1,28 +1,33 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace DeepLens.Contracts.Marketing;
 
-public record WhatsAppChannelDto(Guid Id, string Name, string? Description);
+public record WhatsAppChannelDto(
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("description")] string? Description
+);
 
 public record CustomerChannelMembershipDto(
-    Guid Id,
-    Guid CustomerId,
-    Guid ChannelId,
-    string ChannelName,
-    string Status,
-    DateTime OptedInAt,
-    DateTime? OptedOutAt
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("customerId")] Guid CustomerId,
+    [property: JsonPropertyName("channelId")] Guid ChannelId,
+    [property: JsonPropertyName("channelName")] string ChannelName,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("optedInAt")] DateTime OptedInAt,
+    [property: JsonPropertyName("optedOutAt")] DateTime? OptedOutAt
 );
 
 public record ChannelSubscriberDto(
-    Guid CustomerId,
-    string? FirstName,
-    string? LastName,
-    string? PhoneNumber,
-    string Status,
-    DateTime OptedInAt
+    [property: JsonPropertyName("customerId")] Guid CustomerId,
+    [property: JsonPropertyName("firstName")] string? FirstName,
+    [property: JsonPropertyName("lastName")] string? LastName,
+    [property: JsonPropertyName("phoneNumber")] string? PhoneNumber,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("optedInAt")] DateTime OptedInAt
 );
 
 public interface IWhatsAppService

@@ -46,20 +46,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <View>
           <Text variant="labelLarge" style={styles.bold}>Watchlist Status</Text>
           <Text variant="labelSmall" style={styles.helperText}>
-            {profile.is_active ? 'Active (Syncing)' : 'Paused (Ignored)'}
+            {profile.isActive ? 'Active (Syncing)' : 'Paused (Ignored)'}
           </Text>
         </View>
-        <Switch value={profile.is_active} onValueChange={onToggleWatch} />
+        <Switch value={profile.isActive} onValueChange={onToggleWatch} />
       </View>
 
       <View style={styles.toggleRow}>
         <View>
           <Text variant="labelLarge" style={styles.bold}>My Account</Text>
           <Text variant="labelSmall" style={styles.helperText}>
-            {profile.is_own_account ? 'Flagged as Mine' : 'Competitor Account'}
+            {profile.isOwnAccount ? 'Flagged as Mine' : 'Competitor Account'}
           </Text>
         </View>
-        <Switch value={profile.is_own_account} onValueChange={onToggleOwn} />
+        <Switch value={profile.isOwnAccount} onValueChange={onToggleOwn} />
       </View>
 
       <Divider style={styles.divider} />

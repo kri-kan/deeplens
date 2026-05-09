@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace DeepLens.SearchApi.DTOs;
 
 // ────────────────────────────────────────────────
@@ -9,9 +11,16 @@ namespace DeepLens.SearchApi.DTOs;
 /// </summary>
 public class CommentCreateDto
 {
+    [JsonPropertyName("entityType")]
     public string EntityType { get; set; } = string.Empty;
+
+    [JsonPropertyName("entityId")]
     public string EntityId { get; set; } = string.Empty;
+
+    [JsonPropertyName("content")]
     public string Content { get; set; } = string.Empty;
+
+    [JsonPropertyName("attachmentIds")]
     public string[]? AttachmentIds { get; set; }
 }
 
@@ -20,6 +29,9 @@ public class CommentCreateDto
 /// </summary>
 public class CommentUpdateDto
 {
+    [JsonPropertyName("content")]
     public string Content { get; set; } = string.Empty;
+
+    [JsonPropertyName("attachmentIds")]
     public Guid[]? AttachmentIds { get; set; }
 }

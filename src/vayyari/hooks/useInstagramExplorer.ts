@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Alert, BackHandler } from 'react-native';
-import { instagramService } from '../services/instagram.service';
+import { instagramService, InstagramProfile, ScraperJob, MetaQuotaInfo, ProfileDetailsResponse } from '../services/instagram.service';
 import { useAuth } from '../context/AuthContext';
 
 export const useInstagramExplorer = () => {
   const { token } = useAuth();
-  const [watchlist, setWatchlist] = useState<any[]>([]);
+  const [watchlist, setWatchlist] = useState<InstagramProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
-  const [profileData, setProfileData] = useState<any | null>(null);
+  const [profileData, setProfileData] = useState<ProfileDetailsResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeQueue, setActiveQueue] = useState<any[]>([]);
-  const [jobHistory, setJobHistory] = useState<any[]>([]);
-  const [quota, setQuota] = useState<any | null>(null);
+  const [activeQueue, setActiveQueue] = useState<ScraperJob[]>([]);
+  const [jobHistory, setJobHistory] = useState<ScraperJob[]>([]);
+  const [quota, setQuota] = useState<MetaQuotaInfo | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   
   // UI State
   const [syncMode, setSyncMode] = useState<'recent' | 'full'>('recent');
@@ -82,6 +83,30 @@ export const useInstagramExplorer = () => {
     }
   };
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (selectedProfile) {
+        const data = await instagramService.getProfileDetails(
+          selectedProfile, 
+          sortBy, 
+          sortOrder, 
+          fromDate || undefined, 
+          toDate || undefined
+        );
+        setProfileData(data);
+      } else {
+        await Promise.all([fetchWatchlist(), fetchQuota()]);
+      }
+    } catch (err) {
+      console.error('Refresh failed', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedProfile, sortBy, sortOrder, fromDate, toDate, fetchWatchlist, fetchQuota]);
+
+  // Re-fetch when sort/filter params change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedProfile) {
       selectProfile(selectedProfile, sortBy, sortOrder, fromDate, toDate);
@@ -132,9 +157,9 @@ export const useInstagramExplorer = () => {
   const toggleWatch = async (username: string, currentStatus: boolean) => {
     try {
       await instagramService.toggleWatchStatus(username, !currentStatus);
-      fetchWatchlist();
+      await fetchWatchlist();
       if (selectedProfile === username) {
-        selectProfile(username);
+        await selectProfile(username);
       }
     } catch (err) {
       Alert.alert("Error", "Failed to update status.");
@@ -142,13 +167,30 @@ export const useInstagramExplorer = () => {
   };
 
   const toggleOwn = async (username: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    
+    // Optimistic Update for profileData if it matches the current user
+    if (profileData?.profile.username === username) {
+      setProfileData({
+        ...profileData,
+        profile: {
+          ...profileData.profile,
+          isOwnAccount: newStatus
+        }
+      });
+    }
+
     try {
-      await instagramService.toggleOwnAccount(username, !currentStatus);
-      fetchWatchlist();
+      await instagramService.toggleOwnAccount(username, newStatus);
+      await fetchWatchlist();
       if (selectedProfile === username) {
-        selectProfile(username);
+        await selectProfile(username);
       }
     } catch (err) {
+      // Revert optimistic update on error
+      if (selectedProfile === username) {
+        await selectProfile(username);
+      }
       Alert.alert("Error", "Failed to update ownership status.");
     }
   };
@@ -177,6 +219,8 @@ export const useInstagramExplorer = () => {
     setFromDate,
     toDate,
     setToDate,
+    refreshing,
+    handleRefresh,
     manualSync,
     deleteProfileData,
     toggleWatch,

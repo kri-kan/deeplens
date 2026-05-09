@@ -136,7 +136,7 @@ export default function ProductDetailScreen() {
                     source={{ 
                       uri: m.id && m.id !== '00000000-0000-0000-0000-000000000000' 
                         ? productService.getThumbnailUrl(m.id, 'large') 
-                        : (m.path ? productService.getThumbnailUrlByPath(m.path, 'large') : 'https://via.placeholder.com/400')
+                        : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/400')
                     }}
                     style={styles.carouselImage}
                     contentFit="cover"
@@ -227,7 +227,7 @@ export default function ProductDetailScreen() {
                     source={{ 
                       uri: mediaList[activeMediaIndex].id && mediaList[activeMediaIndex].id !== '00000000-0000-0000-0000-000000000000' 
                         ? productService.getThumbnailUrl(mediaList[activeMediaIndex].id, 'large') 
-                        : (mediaList[activeMediaIndex].path ? productService.getThumbnailUrlByPath(mediaList[activeMediaIndex].path, 'large') : 'https://via.placeholder.com/800')
+                        : (mediaList[activeMediaIndex].storagePath ? productService.getThumbnailUrlByPath(mediaList[activeMediaIndex].storagePath, 'large') : 'https://via.placeholder.com/800')
                     }}
                     style={styles.previewImage}
                     contentFit="contain"

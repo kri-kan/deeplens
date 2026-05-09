@@ -93,6 +93,14 @@ export const API_ROUTES = {
     DISTRIBUTE: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/distribute`,
   },
 
+  // Instagram Product Links
+  INSTAGRAM: {
+    LINKS: (postId: string) => `/api/v1/products/instagram/${postId}/links`,
+    UNLINK: (postId: string, productId: string) => `/api/v1/products/instagram/${postId}/links/${productId}`,
+    LINK: '/api/v1/products/instagram/link',
+    CREATE_PRODUCT: (postId: string) => `/api/v1/products/instagram/${postId}/create-product`,
+  },
+
   // Common / Master Data
   COMMON: {
     COUNTRY_CODES: '/api/v1/country/codes',

@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using DeepLens.Contracts.Media;
 using DeepLens.Shared.Common;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.WorkerService.Workers
 {
@@ -87,7 +88,7 @@ namespace DeepLens.WorkerService.Workers
             // only one worker can pick up a specific job at a time.
             using var tx = await conn.BeginTransactionAsync(ct);
             var job = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username
+                SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username, w.is_own_account
                 FROM scraper_queue j
                 JOIN competitor_watchlist w ON j.watchlist_id = w.id
                 WHERE j.status = 'pending' 
@@ -104,7 +105,7 @@ namespace DeepLens.WorkerService.Workers
 
             Guid jobId = job.id;
             // Update status to running inside the same transaction
-            await conn.ExecuteAsync("UPDATE scraper_queue SET status = 'running' WHERE id = @jobId", new { jobId }, transaction: tx);
+            await conn.ExecuteAsync("UPDATE scraper_queue SET status = 'running', started_at = NOW() WHERE id = @jobId", new { jobId }, transaction: tx);
             await tx.CommitAsync(ct);
 
             Guid watchlistId = job.watchlist_id;
@@ -148,8 +149,9 @@ namespace DeepLens.WorkerService.Workers
                 using var serviceScope = _serviceProvider.CreateScope();
                 var storage = serviceScope.ServiceProvider.GetRequiredService<IStorageService>();
                 var httpClient = serviceScope.ServiceProvider.GetRequiredService<HttpClient>();
+                var instaMedia = serviceScope.ServiceProvider.GetRequiredService<IInstagramMediaService>();
 
-                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient);
+                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, job.is_own_account ?? false);
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
@@ -255,14 +257,14 @@ namespace DeepLens.WorkerService.Workers
                 WHERE id = @Id";
             await conn.ExecuteAsync(sql, new {
                 Name = profile.Name, Bio = profile.Biography, Pic = profile.ProfilePictureUrl,
-                Followers = (int)profile.FollowersCount, Following = (int)profile.FollowsCount,
+                Followers = (int)profile.FollowersCount, Following = (int)profile.FollowingCount,
                 Posts = profile.MediaCount, Now = DateTime.UtcNow, Id = id
             });
             
             await conn.ExecuteAsync(@"
                 INSERT INTO follower_snapshots (watchlist_id, follower_count, following_count, snapshot_at)
                 VALUES (@Id, @Followers, @Following, @Now)",
-                new { Id = id, Followers = (int)profile.FollowersCount, Following = (int)profile.FollowsCount, Now = DateTime.UtcNow });
+                new { Id = id, Followers = (int)profile.FollowersCount, Following = (int)profile.FollowingCount, Now = DateTime.UtcNow });
 
             // 2. Media Architecture Consistency: Download & Register in Media Tables
             try 
@@ -333,7 +335,7 @@ namespace DeepLens.WorkerService.Workers
             }
         }
 
-        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http)
+        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, bool isOwnAccount)
         {
             var existingPosts = (await conn.QueryAsync<dynamic>("SELECT platform_video_id, storage_path FROM competitor_videos WHERE watchlist_id = @Id", new { Id = watchlistId }))
                                 .ToDictionary(x => (string)x.platform_video_id, x => (string?)x.storage_path);
@@ -359,7 +361,15 @@ namespace DeepLens.WorkerService.Workers
                     bool exists = existingPosts.TryGetValue(p.Id, out var storagePath);
                     
                     // If it exists and already has a storage path, we skip thumbnail download
-                    if (exists && !string.IsNullOrEmpty(storagePath)) continue;
+                    if (exists && !string.IsNullOrEmpty(storagePath)) 
+                    {
+                        if (isOwnAccount)
+                        {
+                            var dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
+                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId);
+                        }
+                        continue;
+                    }
 
                     // Download thumbnail if missing
                     string? newStoragePath = null;
@@ -371,14 +381,18 @@ namespace DeepLens.WorkerService.Workers
 
                     if (!exists)
                     {
+                        var videoId = Guid.NewGuid();
                         await conn.ExecuteAsync(insertSql, new {
                             WatchlistId = watchlistId, Id = p.Id, Url = p.Permalink ?? "", Caption = p.Caption,
-                            MediaType = p.MediaType?.ToLower(), ThumbnailUrl = thumbUrl,
-                            MediaUrl = p.MediaUrl, LikeCount = p.LikeCount, CommentCount = p.CommentsCount,
+                            MediaType = p.MediaType.ToString().ToUpper(), ThumbnailUrl = thumbUrl,
+                            MediaUrl = p.MediaUrl, LikeCount = p.LikeCount, CommentCount = p.CommentCount,
                             PostedAt = ParseTimestamp(p.Timestamp) ?? DateTime.UtcNow,
                             IsReel = p.MediaProductType?.ToUpper() == "REELS",
                             StoragePath = newStoragePath
                         });
+
+                        // Fetch the auto-generated ID if we need to link media
+                        var dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
 
                         // Media Architecture Consistency: Register and Link
                         if (!string.IsNullOrEmpty(newStoragePath))
@@ -391,29 +405,47 @@ namespace DeepLens.WorkerService.Workers
 
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                                VALUES (@mediaId, (SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId), 'competitor_video', true)",
-                                new { mediaId, Id = p.Id, WatchlistId = watchlistId });
+                                VALUES (@mediaId, @dbPostId, 'competitor_video', true)",
+                                new { mediaId, dbPostId });
                         }
+
+                        // Full Media Download for Own Accounts
+                        if (isOwnAccount)
+                        {
+                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId);
+                        }
+
                         count++;
                     }
-                    else if (newStoragePath != null)
+                    else 
                     {
-                        // Update existing record with missing storage path
-                        await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
-                        
-                        // Also ensure it's registered in media if it was missing
-                        var mediaId = Guid.NewGuid();
-                        await conn.ExecuteAsync(@"
-                            INSERT INTO media (id, storage_path, media_type, category, subcategory)
-                            VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')
-                            ON CONFLICT DO NOTHING", // Simplify: in a real system we'd check existence first
-                            new { mediaId, newStoragePath });
+                        var dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
 
-                        await conn.ExecuteAsync(@"
-                            INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                            VALUES (@mediaId, (SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId), 'competitor_video', true)
-                            ON CONFLICT DO NOTHING",
-                            new { mediaId, Id = p.Id, WatchlistId = watchlistId });
+                        if (newStoragePath != null)
+                        {
+                            // Update existing record with missing storage path
+                            await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
+                            
+                            // Also ensure it's registered in media if it was missing
+                            var mediaId = Guid.NewGuid();
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO media (id, storage_path, media_type, category, subcategory)
+                                VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')
+                                ON CONFLICT DO NOTHING", 
+                                new { mediaId, newStoragePath });
+
+                            await conn.ExecuteAsync(@"
+                                INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
+                                VALUES (@mediaId, @dbPostId, 'competitor_video', true)
+                                ON CONFLICT DO NOTHING",
+                                new { mediaId, dbPostId });
+                        }
+
+                        // Full Media Download for Own Accounts
+                        if (isOwnAccount)
+                        {
+                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId);
+                        }
 
                         count++;
                     }
@@ -425,6 +457,7 @@ namespace DeepLens.WorkerService.Workers
                     }
                 } catch (Exception ex) {
                     _logger.LogWarning(ex, "Failed to ingest individual post {PostId} for @{ExternalId}. Skipping to next.", p.Id, externalId);
+                    await LogAsync(conn, jobId, "WARNING", $"Failed to ingest individual post {p.Id}: {ex.Message}");
                 }
             }
             return count;
@@ -466,7 +499,7 @@ namespace DeepLens.WorkerService.Workers
             foreach (var e in engagement)
             {
                 if (string.IsNullOrEmpty(e.Id)) continue;
-                await conn.ExecuteAsync(sql, new { Likes = e.LikeCount, Comments = e.CommentsCount, Id = e.Id });
+                await conn.ExecuteAsync(sql, new { Likes = e.LikeCount, Comments = e.CommentCount, Id = e.Id });
             }
         }
 

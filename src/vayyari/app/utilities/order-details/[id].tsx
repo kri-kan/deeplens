@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
-import { OrderIdEntry, OrderItem, OrderComment } from '@/types/orders';
+import { OrderIdEntry, OrderItem, OrderComment, OrderUpdateRequest, Attachment } from '@/types/orders';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
 import { PlatformHandle } from '@/components/ui/PlatformHandle';
 
@@ -187,15 +187,15 @@ export default function OrderFormScreen() {
             const isEditing = !!editingCommentId;
             if (isEditing) {
                 await searchApiClient.put(`/api/v1/Comment/${editingCommentId}`, {
-                    Content: newComment,
-                    AttachmentIds: attachmentIds
+                    content: newComment,
+                    attachmentIds: attachmentIds
                 });
             } else {
                 await searchApiClient.post(`/api/v1/Comment`, {
-                    EntityType: 'order',
-                    EntityId: id,
-                    Content: newComment,
-                    AttachmentIds: attachmentIds
+                    entityType: 'order',
+                    entityId: id,
+                    content: newComment,
+                    attachmentIds: attachmentIds
                 });
             }
 
@@ -239,11 +239,11 @@ export default function OrderFormScreen() {
         
         // Map existing attachments to our attachment format
         if (comment.attachments) {
-            const existing = comment.attachments.map(att => ({
+            const existing = comment.attachments.map((att: any) => ({
                 id: att.id,
                 name: att.name,
                 uri: `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`,
-                mimeType: att.contentType,
+                mimeType: att.mimeType || att.contentType,
                 isExisting: true,
                 key: att.key
             }));
@@ -347,14 +347,14 @@ export default function OrderFormScreen() {
         try {
             setSaving(true);
             await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(id), {
-                phone: orderData?.customerPhone,
-                address: orderData?.customerAddress,
+                customerPhone: orderData?.customerPhone,
+                customerAddress: orderData?.customerAddress,
                 source: orderData?.source,
                 sourceHandle: orderData?.instagramHandle || orderData?.customerPhone,
                 paymentMode: orderData?.paymentMethod,
                 items: items,
                 transactionId: transactionId,
-            });
+            } as OrderUpdateRequest);
             Alert.alert('Success', 'Order form saved successfully.');
             router.back();
         } catch (error) {

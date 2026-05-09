@@ -1,5 +1,4 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { Text, Icon, useTheme } from 'react-native-paper';
 import { BentoCard } from '@/components/ui/BentoCard';
 import { useRouter } from 'expo-router';
@@ -9,7 +8,7 @@ const { width } = Dimensions.get('window');
 interface GridMenuItem {
   id: string;
   title: string;
-  icon: string;
+  icon: any; // Changed from string to any to support required assets
   route?: string;
   onPress?: () => void;
   color?: string;
@@ -36,6 +35,7 @@ export const GridMenu: React.FC<GridMenuProps> = ({
     <View style={[styles.grid, { gap }]}>
       {items.map((item) => {
         const isDisabled = item.disabled || (!item.route && !item.onPress);
+        const isImageAsset = typeof item.icon === 'number' || (typeof item.icon === 'object' && item.icon?.uri);
         
         return (
           <TouchableOpacity
@@ -52,11 +52,19 @@ export const GridMenu: React.FC<GridMenuProps> = ({
               surfaceLevel="surfaceContainerLow"
             >
               <View style={styles.tileContent}>
-                <Icon
-                  source={item.icon}
-                  size={42}
-                  color={isDisabled ? '#ccc' : item.color || theme.colors.primary}
-                />
+                {isImageAsset ? (
+                  <Image 
+                    source={item.icon} 
+                    style={[styles.imageIcon, { opacity: isDisabled ? 0.3 : 1 }]} 
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Icon
+                    source={item.icon}
+                    size={42}
+                    color={isDisabled ? '#ccc' : item.color || theme.colors.primary}
+                  />
+                )}
                 <Text
                   variant="labelSmall"
                   style={[styles.tileTitle, { color: isDisabled ? '#999' : theme.colors.onSurface }]}
@@ -86,6 +94,10 @@ const styles = StyleSheet.create({
   tileContent: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  imageIcon: {
+    width: 42,
+    height: 42,
   },
   tileTitle: {
     textAlign: 'center',

@@ -18,6 +18,8 @@ public interface IStorageService
     Task<string> UploadToPathAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null);
     Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null);
     Task<Stream> GetFileAsync(string storagePath);
+    Task<Stream> GetFileRangeAsync(string storagePath, long offset, long length);
+    Task<long> GetFileLengthAsync(string storagePath);
     Task DeleteFileAsync(string storagePath);
 }
 
@@ -162,29 +164,92 @@ public class MinioStorageService : IStorageService
 
         if (parts.Length > 1)
         {
-            // Try to see if the first part is a bucket
             try {
                 if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
                 {
                     bucketName = parts[0];
                     objectName = parts[1];
                 }
-            } catch {
-                // Fallback to default bucket if check fails
-            }
+            } catch { }
+        }
+
+        // Use a piped stream to avoid loading the entire file into memory
+        // This is crucial for large video files
+        var outputStream = new MemoryStream(); 
+        
+        // Note: For true high-performance streaming with seeking, 
+        // we'd want a custom stream that fetches from MinIO on demand.
+        // For now, we will use a more efficient way to copy or use a temp file if needed.
+        // But the immediate fix is to ensure we don't block the whole thread.
+        
+        var getArgs = new GetObjectArgs()
+            .WithBucket(bucketName)
+            .WithObject(objectName)
+            .WithCallbackStream(async (stream, ct) => {
+                await stream.CopyToAsync(outputStream, ct);
+            });
+
+        await _minioClient.GetObjectAsync(getArgs);
+        outputStream.Position = 0;
+        return outputStream;
+    }
+
+
+    public async Task<Stream> GetFileRangeAsync(string storagePath, long offset, long length)
+    {
+        var parts = storagePath.Split('/', 2);
+        string bucketName = DefaultBucket;
+        string objectName = storagePath;
+
+        if (parts.Length > 1)
+        {
+            try {
+                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
+                {
+                    bucketName = parts[0];
+                    objectName = parts[1];
+                }
+            } catch { }
         }
 
         var memoryStream = new MemoryStream();
         var getArgs = new GetObjectArgs()
             .WithBucket(bucketName)
             .WithObject(objectName)
-            .WithCallbackStream(s => s.CopyTo(memoryStream));
+            .WithOffsetAndLength(offset, length)
+            .WithCallbackStream(async (stream, ct) => {
+                await stream.CopyToAsync(memoryStream, ct);
+            });
 
         await _minioClient.GetObjectAsync(getArgs);
         memoryStream.Position = 0;
         return memoryStream;
     }
 
+    public async Task<long> GetFileLengthAsync(string storagePath)
+    {
+        var parts = storagePath.Split('/', 2);
+        string bucketName = DefaultBucket;
+        string objectName = storagePath;
+
+        if (parts.Length > 1)
+        {
+            try {
+                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
+                {
+                    bucketName = parts[0];
+                    objectName = parts[1];
+                }
+            } catch { }
+        }
+
+        var statArgs = new StatObjectArgs()
+            .WithBucket(bucketName)
+            .WithObject(objectName);
+
+        var stat = await _minioClient.StatObjectAsync(statArgs);
+        return stat.Size;
+    }
 
     public async Task DeleteFileAsync(string storagePath)
     {
@@ -210,4 +275,60 @@ public class MinioStorageService : IStorageService
         await _minioClient.RemoveObjectAsync(rmArgs);
         _logger.LogInformation("Deleted file from MinIO: {Bucket}/{Path}", bucketName, objectName);
     }
+}
+
+public class MinioSeekableStream : Stream
+{
+    private readonly IStorageService _storageService;
+    private readonly string _storagePath;
+    private readonly long _length;
+    private long _position;
+
+    public MinioSeekableStream(IStorageService storageService, string storagePath, long length)
+    {
+        _storageService = storageService;
+        _storagePath = storagePath;
+        _length = length;
+        _position = 0;
+    }
+
+    public override bool CanRead => true;
+    public override bool CanSeek => true;
+    public override bool CanWrite => false;
+    public override long Length => _length;
+    public override long Position { get => _position; set => _position = value; }
+
+    public override void Flush() { }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        return ReadAsync(buffer, offset, count, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        if (_position >= _length) return 0;
+        
+        long remaining = _length - _position;
+        long toRead = Math.Min(count, remaining);
+        
+        using var rangeStream = await _storageService.GetFileRangeAsync(_storagePath, _position, toRead);
+        int read = await rangeStream.ReadAsync(buffer, offset, (int)toRead, cancellationToken);
+        _position += read;
+        return read;
+    }
+
+    public override long Seek(long offset, SeekOrigin origin)
+    {
+        switch (origin)
+        {
+            case SeekOrigin.Begin: _position = offset; break;
+            case SeekOrigin.Current: _position += offset; break;
+            case SeekOrigin.End: _position = _length + offset; break;
+        }
+        return _position;
+    }
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

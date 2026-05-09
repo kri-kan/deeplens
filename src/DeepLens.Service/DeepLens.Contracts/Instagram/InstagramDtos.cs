@@ -1,20 +1,173 @@
+using System.Text.Json.Serialization;
+
 namespace DeepLens.Contracts.Instagram;
+
+using DeepLens.Domain.Enums;
+using DeepLens.Application.Abstractions.Services;
 
 public class InstagramProfileDto
 {
+    [JsonPropertyName("userId")]
     public string UserId { get; set; } = string.Empty;
+
+    [JsonPropertyName("username")]
     public string Username { get; set; } = string.Empty;
-    public string FullName { get; set; } = string.Empty;
-    public string ProfilePicUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("biography")]
     public string? Biography { get; set; }
+
+    [JsonPropertyName("followersCount")]
     public int FollowersCount { get; set; }
+
+    [JsonPropertyName("followingCount")]
+    public int FollowingCount { get; set; }
+
+    [JsonPropertyName("mediaCount")]
+    public int MediaCount { get; set; }
+
+    [JsonPropertyName("profilePictureUrl")]
+    public string ProfilePictureUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath { get; set; }
+
+    [JsonPropertyName("isPrivate")]
+    public bool IsPrivate { get; set; }
+
+    [JsonPropertyName("isVerified")]
+    public bool IsVerified { get; set; }
+
+    [JsonPropertyName("isActive")]
+    public bool IsActive { get; set; }
+
+    [JsonPropertyName("isOwnAccount")]
+    public bool IsOwnAccount { get; set; }
+
+    [JsonPropertyName("isDataDeleted")]
+    public bool IsDataDeleted { get; set; }
+
+    [JsonPropertyName("lastSyncedAt")]
+    public DateTime? LastSyncedAt { get; set; }
 }
 
 public class InstagramPostDto
 {
+    [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("shortcode")]
     public string Shortcode { get; set; } = string.Empty;
-    public string Caption { get; set; } = string.Empty;
-    public string DisplayUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("caption")]
+    public string? Caption { get; set; }
+
+    [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; set; }
+
+    [JsonPropertyName("mediaUrl")]
+    public string MediaUrl { get; set; } = string.Empty;
+
+    [JsonPropertyName("thumbnailUrl")]
+    public string? ThumbnailUrl { get; set; }
+
+    [JsonPropertyName("permalink")]
+    public string? Permalink { get; set; }
+
+    [JsonPropertyName("mediaType")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public InstagramMediaType MediaType { get; set; }
+
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath { get; set; }
+
+    [JsonPropertyName("likeCount")]
+    public int LikeCount { get; set; }
+
+    [JsonPropertyName("commentCount")]
+    public int CommentCount { get; set; }
+}
+
+public class InstagramMediaDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath { get; set; }
+
+    [JsonPropertyName("mediaType")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public InstagramMediaType MediaType { get; set; }
+
+    [JsonPropertyName("subcategory")]
+    public string? Subcategory { get; set; }
+
+    [JsonPropertyName("isPrimary")]
+    public bool IsPrimary { get; set; }
+
+    [JsonPropertyName("displayOrder")]
+    public int DisplayOrder { get; set; }
+}
+
+public class InstagramProfileDetailsDto
+{
+    [JsonPropertyName("profile")]
+    public InstagramProfileDto Profile { get; set; } = new();
+
+    [JsonPropertyName("videos")]
+    public List<MetaPost> Videos { get; set; } = new();
+
+    [JsonPropertyName("metrics")]
+    public InstagramMetricsDto Metrics { get; set; } = new();
+}
+
+public class InstagramMetricsDto
+{
+    [JsonPropertyName("avgLikes")]
+    public double AvgLikes { get; set; }
+
+    [JsonPropertyName("engagementRate")]
+    public double EngagementRate { get; set; }
+
+    [JsonPropertyName("postFrequency")]
+    public double PostFrequency { get; set; }
+}
+
+public class ScraperJobDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("username")]
+    public string? Username { get; set; }
+
+    [JsonPropertyName("jobType")]
+    public string JobType { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("targetCount")]
+    public int TargetCount { get; set; }
+
+    [JsonPropertyName("scrapedCount")]
+    public int ScrapedCount { get; set; }
+
+    [JsonPropertyName("priority")]
+    public int Priority { get; set; }
+
+    [JsonPropertyName("nextRunAt")]
+    public DateTime? NextRunAt { get; set; }
+
+    [JsonPropertyName("completedAt")]
+    public DateTime? CompletedAt { get; set; }
+
+    [JsonPropertyName("startedAt")]
+    public DateTime? StartedAt { get; set; }
+
+    [JsonPropertyName("origin")]
+    public string? Origin { get; set; }
 }

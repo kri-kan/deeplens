@@ -57,10 +57,21 @@ public class AttachmentController : ControllerBase
 
         try
         {
-            var stream = await _storageService.GetFileAsync(path);
-            // Rough mapping of content type based on extension
             string contentType = path.EndsWith(".webp") ? "image/webp" : 
-                                path.EndsWith(".png") ? "image/png" : "image/jpeg";
+                                path.EndsWith(".png") ? "image/png" : 
+                                path.EndsWith(".mp4") ? "video/mp4" :
+                                path.EndsWith(".mov") ? "video/quicktime" : "image/jpeg";
+
+            Stream stream;
+            if (contentType.StartsWith("video/"))
+            {
+                long length = await _storageService.GetFileLengthAsync(path);
+                stream = new MinioSeekableStream(_storageService, path, length);
+            }
+            else
+            {
+                stream = await _storageService.GetFileAsync(path);
+            }
             
             // Add Cache-Control header for browser/app caching
             var allSettings = await _settings.GetAllAsync();
@@ -70,7 +81,7 @@ public class AttachmentController : ControllerBase
 
             Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}");
             
-            return File(stream, contentType);
+            return File(stream, contentType, enableRangeProcessing: true);
         }
         catch (Exception)
         {

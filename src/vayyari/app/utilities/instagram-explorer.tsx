@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, FlatList, TouchableOpacity, BackHandler } from 'react-native';
+import { View, ScrollView, FlatList, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
 import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, Portal, Dialog, Modal as PaperModal } from 'react-native-paper';
 import { Image } from 'expo-image';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -11,6 +11,7 @@ import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
 import { BentoCard } from '@/components/ui/BentoCard';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
+import { instagramService } from '@/services/instagram.service';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
 import { useTheme } from 'react-native-paper';
@@ -40,6 +41,8 @@ export default function InstagramExplorer() {
     setFromDate,
     toDate,
     setToDate,
+    refreshing,
+    handleRefresh,
     manualSync,
     deleteProfileData,
     toggleWatch,
@@ -118,10 +121,23 @@ export default function InstagramExplorer() {
           renderItem={({ item }) => (
             <VideoItem 
               item={item} 
-              onPress={() => selectionMode ? toggleSelection(item) : router.push({
-                pathname: '/utilities/instagram/post-detail',
-                params: { id: item.id, data: JSON.stringify(item) }
-              } as any)} 
+              onPress={() => {
+                if (selectionMode) {
+                  toggleSelection(item);
+                } else {
+                  instagramService.setLastFetchedPosts(profileData.videos);
+                  router.push({
+                    pathname: '/utilities/instagram/post-detail',
+                    params: { 
+                        id: item.id, 
+                        username: selectedProfile,
+                        sortBy,
+                        sortOrder,
+                        data: JSON.stringify(item) 
+                    }
+                  } as any);
+                }
+              }} 
               onLongPress={() => toggleSelection(item)}
               isSelected={selectedPosts.has(item.id)}
               selectionMode={selectionMode}
@@ -129,7 +145,11 @@ export default function InstagramExplorer() {
           )}
           keyExtractor={(item) => item.id}
           numColumns={3}
+          style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 20 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
           ListHeaderComponent={
             <View>
               <ProfileHeader 
@@ -137,7 +157,7 @@ export default function InstagramExplorer() {
                 metrics={profileData.metrics}
                 onShowSettings={() => router.push({
                     pathname: '/utilities/instagram/settings',
-                    params: { username: profileData.profile.username }
+                    params: { username: profileData.profile?.username }
                 } as any)}
                 bioExpanded={bioExpanded}
                 onToggleBio={() => setBioExpanded(!bioExpanded)}
@@ -220,7 +240,7 @@ export default function InstagramExplorer() {
                 />
               )}
 
-              {profileData.profile.is_data_deleted && (
+              {profileData.profile?.isDataDeleted && (
                 <View style={styles.deletedPlaceholder}>
                     <IconButton icon="image-off-outline" size={48} style={{ opacity: 0.3 }} />
                     <Text variant="bodyMedium" style={{ opacity: 0.5 }}>Media data was removed</Text>
@@ -230,7 +250,7 @@ export default function InstagramExplorer() {
             </View>
           }
           ListEmptyComponent={
-            !profileData.profile.is_data_deleted ? (
+            !profileData.profile?.isDataDeleted ? (
               <View style={styles.empty}>
                 <Text variant="bodyLarge">No posts found</Text>
               </View>
@@ -247,26 +267,27 @@ export default function InstagramExplorer() {
     <ScreenWrapper 
       title="Instagram Explorer"
       actions={<Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/queue')} />}
+      refreshing={refreshing}
+      onRefresh={handleRefresh}
     >
       <QuotaDashboard quota={quota} />
 
       <View style={styles.profileList}>
         <Text variant="titleMedium" style={styles.sectionTitle}>Active Profiles</Text>
         <View style={styles.profileGrid}>
-          {watchlist.map(item => (
+          {watchlist.filter(Boolean).map(item => (
             <TouchableOpacity 
-              key={item.id} 
+              key={item.id || item.username} 
               onPress={() => selectProfile(item.username)}
               activeOpacity={0.7}
               style={styles.profileGridItem}
             >
               <View style={styles.profileCard}>
-                <ProfileAvatar profile={item} size={60} />
-                {item.isOwnAccount && (
-                  <View style={styles.ownAccountBadge}>
-                    <Avatar.Icon size={16} icon="check-decagram" />
-                  </View>
-                )}
+                <ProfileAvatar 
+                  profile={{ ...item, isInWatchlist: true }} 
+                  size={60} 
+                  showBadge={true}
+                />
               </View>
               <Text 
                 variant="labelSmall" 

@@ -58,8 +58,8 @@ export const OrderIdGenerator = () => {
 
     try {
       setIsLookupLoading(true);
-      const response = await searchApiClient.get<{ userId: string }>(`/api/v1/insta/profile/${username}`);
-      setDetectedInstaId(response.userId);
+      const response = await searchApiClient.get<{ profile: { userId: string } }>(`/api/v1/insta/profile/${username}`);
+      setDetectedInstaId(response.profile.userId);
     } catch (e) {
       console.warn('[OrderIdGenerator] Failed to fetch insta id', e);
       setDetectedInstaId(null);
@@ -156,11 +156,10 @@ export const OrderIdGenerator = () => {
     try {
       setLoading(true);
       await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(id), {
-        phone: updatedEntry.customerPhone,
-        address: updatedEntry.customerAddress,
-        orderDetails: updatedEntry.orderDetails,
+        customerPhone: updatedEntry.customerPhone,
+        customerAddress: updatedEntry.customerAddress,
         source: updatedEntry.source,
-        sourceHandle: updatedEntry.instagramHandle,
+        sourceHandle: updatedEntry.instagramHandle || updatedEntry.customerPhone,
         paymentMode: updatedEntry.paymentMethod
       });
 

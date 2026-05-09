@@ -6,8 +6,14 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 export default function PostActionsScreen() {
     const { id, data: initialDataStr } = useLocalSearchParams();
     const router = useRouter();
-    const item = initialDataStr ? JSON.parse(initialDataStr as string) : null;
-    const hasIsLink = !!item?.productCode || !!item?.ProductCode;
+    let item = null;
+    try {
+        item = initialDataStr ? JSON.parse(initialDataStr as string) : null;
+    } catch (e) {
+        console.error('Failed to parse post data', e);
+    }
+    const hasIsLink = !!item?.productCode;
+
 
     return (
         <View style={styles.container}>
@@ -41,6 +47,18 @@ export default function PostActionsScreen() {
                         router.replace({
                             pathname: '/utilities/instagram/link-product',
                             params: { id, data: initialDataStr }
+                        });
+                    }}
+                />
+
+                <List.Item
+                    title="Manage Associations"
+                    description="View or remove existing product links"
+                    left={props => <List.Icon {...props} icon="link-box-variant" />}
+                    onPress={() => {
+                        router.replace({
+                            pathname: '/utilities/instagram/manage-associations',
+                            params: { id }
                         });
                     }}
                 />

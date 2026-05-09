@@ -1,3 +1,7 @@
+/**
+ * Represents a customer.
+ * Mirrors CustomerDto from backend.
+ */
 export interface Customer {
   id: string;
   customerId: number;
@@ -8,13 +12,16 @@ export interface Customer {
   email?: string;
   notes?: string;
   createdAt: string;
-  updatedAt: string;
   addresses?: CustomerAddress[];
   
   // Virtual field for UI
   fullName?: string; 
 }
 
+/**
+ * Represents a customer address.
+ * Mirrors CustomerAddressDto from backend.
+ */
 export interface CustomerAddress {
   id: string;
   customerId: string;
@@ -26,10 +33,12 @@ export interface CustomerAddress {
   city?: string;
   state?: string;
   isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
+/**
+ * Payload for creating/updating a customer.
+ * Mirrors CreateCustomerRequest from backend.
+ */
 export interface CreateCustomerRequest {
   firstName?: string;
   lastName?: string;
@@ -39,6 +48,10 @@ export interface CreateCustomerRequest {
   notes?: string;
 }
 
+/**
+ * Payload for creating/updating an address.
+ * Mirrors CreateAddressRequest from backend.
+ */
 export interface CreateAddressRequest {
   name: string;
   phone: string;

@@ -61,12 +61,12 @@ export default function ProfileSettingsScreen() {
                     <View>
                         <Text variant="labelLarge" style={styles.bold}>Watchlist Status</Text>
                         <Text variant="labelSmall" style={styles.helperText}>
-                            {profile.is_active ? 'Active (Syncing)' : 'Paused (Ignored)'}
+                            {profile.isActive ? 'Active (Syncing)' : 'Paused (Ignored)'}
                         </Text>
                     </View>
                     <Switch 
-                        value={profile.is_active} 
-                        onValueChange={() => toggleWatch(profile.username, profile.is_active)} 
+                        value={profile.isActive} 
+                        onValueChange={() => toggleWatch(profile.username, profile.isActive)} 
                     />
                 </View>
 
@@ -74,12 +74,12 @@ export default function ProfileSettingsScreen() {
                     <View>
                         <Text variant="labelLarge" style={styles.bold}>My Account</Text>
                         <Text variant="labelSmall" style={styles.helperText}>
-                            {profile.is_own_account ? 'Flagged as Mine' : 'Competitor Account'}
+                            {profile.isOwnAccount ? 'Flagged as Mine' : 'Competitor Account'}
                         </Text>
                     </View>
                     <Switch 
-                        value={profile.is_own_account} 
-                        onValueChange={() => toggleOwn(profile.username, profile.is_own_account)} 
+                        value={profile.isOwnAccount} 
+                        onValueChange={() => toggleOwn(profile.username, profile.isOwnAccount)} 
                     />
                 </View>
 

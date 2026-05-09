@@ -53,11 +53,11 @@ public class OrderRepository : IOrderRepository
             new { Limit = limit });
     }
 
-    public async Task<object?> GetDetailsAsync(string orderId)
+    public async Task<OrderDetailDto?> GetDetailsAsync(string orderId)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         
-        var order = await connection.QueryFirstOrDefaultAsync(@"
+        var order = await connection.QueryFirstOrDefaultAsync<dynamic>(@"
             SELECT 
                 o.order_id as id, 
                 s.name as source, 
@@ -74,9 +74,9 @@ public class OrderRepository : IOrderRepository
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
             WHERE o.order_id = @OrderId",
             new { OrderId = orderId });
-
+ 
         if (order == null) return null;
-
+ 
         var items = await connection.QueryAsync<dynamic>(@"
             SELECT 
                 i.id,
@@ -86,42 +86,48 @@ public class OrderRepository : IOrderRepository
             WHERE i.order_id_ref = (SELECT id FROM ""orderId"" WHERE order_id = @OrderId)
             ORDER BY i.item_index",
             new { OrderId = orderId });
-
-        var orderWithAttachments = (IDictionary<string, object>)order;
-        orderWithAttachments["attachments"] = await connection.QueryAsync(@"
+ 
+        var attachments = await connection.QueryAsync<AttachmentDto>(@"
             SELECT a.id, a.bucket_name as bucket, a.object_key as key, a.original_filename as name, ea.tag
             FROM attachments a
             JOIN entity_attachments ea ON a.id = ea.attachment_id
             WHERE ea.entity_type = 'order' AND ea.entity_id = @OrderId",
             new { OrderId = orderId });
-
-        var itemsList = new List<object>();
+ 
+        var itemsList = new List<OrderItemDetailDto>();
         foreach (var item in items) {
             var itemDict = (IDictionary<string, object>)item;
             var itemId = (int)itemDict["id"];
-            itemDict["attachments"] = await connection.QueryAsync(@"
+            var itemAttachments = await connection.QueryAsync<AttachmentDto>(@"
                 SELECT a.id, a.bucket_name as bucket, a.object_key as key, a.original_filename as name
                 FROM attachments a
                 JOIN entity_attachments ea ON a.id = ea.attachment_id
                 WHERE ea.entity_type = 'order_item' AND ea.entity_id = @ItemId",
                 new { ItemId = itemId.ToString() });
-            itemsList.Add(itemDict);
+            
+            itemsList.Add(new OrderItemDetailDto
+            {
+                Id = itemId,
+                ProductId = (string)itemDict["product_id"],
+                Comments = (string?)itemDict["comments"],
+                Attachments = itemAttachments.ToList()
+            });
         }
-
-        return new
+ 
+        return new OrderDetailDto
         {
-            id = order.id,
-            source = order.source,
-            paymentMethod = order.paymentmethod, 
-            customerPhone = order.customerphone,
-            sourceHandle = order.sourcehandle,
-            instagramHandle = order.instagramhandle,
-            instagramUserId = order.instagramuserid,
-            customerAddress = order.customeraddress,
-            transactionId = order.transactionid,
-            timestamp = order.timestamp,
-            attachments = orderWithAttachments["attachments"],
-            items = itemsList
+            Id = order.id,
+            Source = order.source,
+            PaymentMethod = order.paymentmethod, 
+            CustomerPhone = order.customerphone,
+            SourceHandle = order.sourcehandle,
+            InstagramHandle = order.instagramhandle,
+            InstagramUserId = order.instagramuserid,
+            CustomerAddress = order.customeraddress,
+            TransactionId = order.transactionid,
+            Timestamp = order.timestamp,
+            Attachments = attachments.ToList(),
+            Items = itemsList
         };
     }
 

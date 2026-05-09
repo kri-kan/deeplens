@@ -21,7 +21,7 @@ echo -e "${CYAN}Kafka Manager: $ACTION topic '$TOPIC_NAME'...${NC}"
 
 run_kafka_cmd() {
     local ARGS=$1
-    docker exec $CONTAINER_NAME kafka-topics --bootstrap-server $BOOTSTRAP_SERVER $ARGS
+    docker exec $CONTAINER_NAME /opt/kafka/bin/kafka-topics.sh --bootstrap-server $BOOTSTRAP_SERVER $ARGS
 }
 
 topic_exists() {
@@ -29,13 +29,37 @@ topic_exists() {
     run_kafka_cmd "--list" | grep -qx "$TOPIC"
 }
 
+MANDATORY_TOPICS=(
+    "WhatsApp.newproduct.received"
+    "deeplens.videos.uploaded"
+    "deeplens.features.extraction"
+    "deeplens.vectors.indexing"
+    "deeplens.processing.completed"
+    "deeplens.processing.failed"
+    "deeplens.images.maintenance"
+)
+
 case $ACTION in
     List)
         echo -e "${YELLOW}Topics found:${NC}"
         run_kafka_cmd "--list"
         ;;
 
+    Init)
+        echo -e "${YELLOW}Initializing mandatory topics...${NC}"
+        for topic in "${MANDATORY_TOPICS[@]}"; do
+            if topic_exists "$topic"; then
+                echo -e "${GREEN}  [OK] $topic already exists.${NC}"
+            else
+                echo -e "${YELLOW}  Creating topic '$topic'...${NC}"
+                run_kafka_cmd "--create --topic $topic --partitions $PARTITIONS --replication-factor $REPLICATION_FACTOR"
+                echo -e "${GREEN}  [OK] $topic created.${NC}"
+            fi
+        done
+        ;;
+
     Create)
+        if [ -z "$TOPIC_NAME" ]; then echo -e "${RED}Error: Topic name required for Create${NC}"; exit 1; fi
         if topic_exists "$TOPIC_NAME"; then
             echo -e "${GREEN}  [OK] Topic already exists.${NC}"
         else
@@ -46,6 +70,7 @@ case $ACTION in
         ;;
 
     Recreate)
+        if [ -z "$TOPIC_NAME" ]; then echo -e "${RED}Error: Topic name required for Recreate${NC}"; exit 1; fi
         if topic_exists "$TOPIC_NAME"; then
             echo -e "${YELLOW}  Deleting topic '$TOPIC_NAME'...${NC}"
             run_kafka_cmd "--delete --topic $TOPIC_NAME"
@@ -57,7 +82,7 @@ case $ACTION in
         ;;
 
     *)
-        echo "Usage: $0 {List|Create|Recreate} [topic_name] [bootstrap_server]"
+        echo "Usage: $0 {List|Init|Create|Recreate} [topic_name] [bootstrap_server]"
         exit 1
         ;;
 esac

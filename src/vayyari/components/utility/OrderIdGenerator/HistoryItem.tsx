@@ -70,8 +70,8 @@ export const HistoryItem = ({
 
     try {
       setIsLookupLoading(true);
-      const response = await searchApiClient.get<{ userId: string }>(`/api/v1/insta/profile/${username}`);
-      setDetectedInstaId(response.userId);
+      const response = await searchApiClient.get<{ profile: { userId: string } }>(`/api/v1/insta/profile/${username}`);
+      setDetectedInstaId(response.profile.userId);
     } catch (e) {
       console.warn('[HistoryItem] Failed to fetch insta id', e);
       // Keep existing ID if lookup fails

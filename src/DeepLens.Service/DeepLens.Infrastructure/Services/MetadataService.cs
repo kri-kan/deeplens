@@ -1,5 +1,6 @@
 using Dapper;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Npgsql;
 using DeepLens.Contracts.Ingestion;
 using DeepLens.Contracts.Events;
@@ -35,7 +36,7 @@ public interface IMetadataService
     Task LinkMediaAsync(Guid mediaId, Guid entityId, string entityType, bool isPrimary = false);
     Task UnlinkMediaAsync(Guid mediaId, Guid entityId, string entityType);
     Task<int> GetOrphanedMediaCountAsync();
-    Task<IEnumerable<dynamic>> GetSystemJobsAsync();
+    Task<IEnumerable<SystemJobDto>> GetSystemJobsAsync();
     Task UpdateJobStatusAsync(string jobName, string status, int progress = 0, string? metadata = null);
     Task<int> TriggerMediaCleanupAsync();
 }
@@ -663,10 +664,10 @@ public class MetadataService : IMetadataService
             WHERE NOT EXISTS (SELECT 1 FROM media_links ml WHERE ml.media_id = i.id)");
     }
 
-    public async Task<IEnumerable<dynamic>> GetSystemJobsAsync()
+    public async Task<IEnumerable<SystemJobDto>> GetSystemJobsAsync()
     {
         using var db = GetConnection();
-        return await db.QueryAsync("SELECT * FROM system_jobs ORDER BY job_name");
+        return await db.QueryAsync<SystemJobDto>("SELECT id, job_name as JobName, status, last_run_at as LastRunAt, progress_pct as ProgressPct, updated_at as UpdatedAt FROM system_jobs ORDER BY job_name");
     }
 
     public async Task UpdateJobStatusAsync(string jobName, string status, int progress = 0, string? metadata = null)
@@ -736,20 +737,72 @@ public class MetadataService : IMetadataService
 
 public class MediaDto
 {
+    [JsonPropertyName("id")]
     public Guid Id { get; set; }
+
+    [JsonPropertyName("storagePath")]
     public required string StoragePath { get; set; }
+
+    [JsonPropertyName("mediaType")]
     public int MediaType { get; set; }
+
+    [JsonPropertyName("status")]
     public int Status { get; set; }
+
+    [JsonPropertyName("width")]
     public int? Width { get; set; }
+
+    [JsonPropertyName("height")]
     public int? Height { get; set; }
+
+    [JsonPropertyName("durationSeconds")]
     public decimal? DurationSeconds { get; set; }
+
+    [JsonPropertyName("thumbnailS")]
     public string? ThumbnailS { get; set; }
+
+    [JsonPropertyName("thumbnailM")]
     public string? ThumbnailM { get; set; }
+
+    [JsonPropertyName("thumbnailL")]
     public string? ThumbnailL { get; set; }
+
+    [JsonPropertyName("blurData")]
     public string? BlurData { get; set; }
+
+    [JsonPropertyName("previewPath")]
     public string? PreviewPath { get; set; }
+
+    [JsonPropertyName("mimeType")]
     public string? MimeType { get; set; }
+
+    [JsonPropertyName("uploadedAt")]
     public DateTime UploadedAt { get; set; }
+
+    [JsonPropertyName("sku")]
     public string? Sku { get; set; }
+
+    [JsonPropertyName("productTitle")]
     public string? ProductTitle { get; set; }
+}
+
+public class SystemJobDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("jobName")]
+    public string JobName { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("lastRunAt")]
+    public DateTime? LastRunAt { get; set; }
+
+    [JsonPropertyName("progressPct")]
+    public int ProgressPct { get; set; }
+
+    [JsonPropertyName("updatedAt")]
+    public DateTime UpdatedAt { get; set; }
 }

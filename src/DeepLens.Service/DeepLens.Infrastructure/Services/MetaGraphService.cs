@@ -2,6 +2,7 @@ using System.Data;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeepLens.Application.Abstractions.Services;
+using DeepLens.Domain.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Distributed;
@@ -204,6 +205,53 @@ namespace DeepLens.Infrastructure.Services
             }
         }
 
+        public async Task<MetaPost?> GetPostByIdAsync(string postId)
+        {
+            var fields = "id,caption,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp,media_type,media_product_type,children{id,media_url,thumbnail_url,media_type}";
+            var url = BuildUrl($"/{postId}", fields);
+
+            try
+            {
+                await RecordRequestAsync();
+                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
+                
+                if (response.Headers.TryGetValues("x-app-usage", out var values))
+                {
+                    await UpdateUsageMetricsAsync(values.FirstOrDefault());
+                }
+
+                var body = await response.Content.ReadAsStringAsync();
+                var m = JsonSerializer.Deserialize<GraphMediaItem>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (m == null || string.IsNullOrEmpty(m.Id)) return null;
+
+                return new MetaPost
+                {
+                    Id = m.Id,
+                    Caption = m.Caption,
+                    MediaUrl = m.MediaUrl,
+                    ThumbnailUrl = m.ThumbnailUrl,
+                    Permalink = m.Permalink,
+                    LikeCount = m.LikeCount,
+                    CommentCount = m.CommentsCount,
+                    Timestamp = m.Timestamp,
+                    MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
+                    MediaProductType = m.MediaProductType,
+                    Children = m.Children?.Data?.Select(c => new MetaPost {
+                        Id = c.Id,
+                        MediaUrl = c.MediaUrl,
+                        ThumbnailUrl = c.ThumbnailUrl,
+                        MediaType = InstagramMediaStandardizer.MapToMediaType(c.MediaType)
+                    }).ToList()
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to fetch single post {PostId} from Graph API", postId);
+                return null;
+            }
+        }
+
         public async Task<MetaProfile?> GetProfileAsync(string targetUsername)
         {
             string cacheKey = $"meta:profile:{targetUsername}";
@@ -222,13 +270,14 @@ namespace DeepLens.Infrastructure.Services
                 Name = discovery.Name,
                 Biography = discovery.Biography,
                 FollowersCount = discovery.FollowersCount,
-                FollowsCount = discovery.FollowsCount,
+                FollowingCount = discovery.FollowsCount,
                 MediaCount = discovery.MediaCount,
                 ProfilePictureUrl = discovery.ProfilePictureUrl,
                 Website = discovery.Website,
                 IsVerified = false, // Not available in business_discovery
                 IsBusiness = true, // discovery only works for business accounts
-                ExternalId = discovery.IgId.ToString()
+                ExternalId = discovery.IgId.ToString(),
+                IsOwnAccount = false
             };
 
             await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(profile), new DistributedCacheEntryOptions {
@@ -240,7 +289,7 @@ namespace DeepLens.Infrastructure.Services
 
         public async Task<List<MetaPost>> GetPostsAsync(string targetUsername, int maxPosts = 50)
         {
-            var mediaFields = "id,caption,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp,media_type,media_product_type";
+            var mediaFields = "id,caption,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp,media_type,media_product_type,children{id,media_url,thumbnail_url,media_type}";
             var allPosts = new List<MetaPost>();
             string? afterCursor = null;
             bool hasMore = true;
@@ -272,10 +321,16 @@ namespace DeepLens.Infrastructure.Services
                     ThumbnailUrl = m.ThumbnailUrl,
                     Permalink = m.Permalink,
                     LikeCount = m.LikeCount,
-                    CommentsCount = m.CommentsCount,
+                    CommentCount = m.CommentsCount,
                     Timestamp = m.Timestamp,
-                    MediaType = m.MediaType,
-                    MediaProductType = m.MediaProductType
+                    MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
+                    MediaProductType = m.MediaProductType,
+                    Children = m.Children?.Data?.Select(c => new MetaPost {
+                        Id = c.Id,
+                        MediaUrl = c.MediaUrl,
+                        ThumbnailUrl = c.ThumbnailUrl,
+                        MediaType = InstagramMediaStandardizer.MapToMediaType(c.MediaType)
+                    }).ToList()
                 }).ToList();
 
                 allPosts.AddRange(newPosts);
@@ -311,7 +366,7 @@ namespace DeepLens.Infrastructure.Services
             return discovery?.Media?.Data?.Select(m => new MetaPost {
                 Id = m.Id,
                 LikeCount = m.LikeCount,
-                CommentsCount = m.CommentsCount
+                CommentCount = m.CommentsCount
             }).ToList() ?? new List<MetaPost>();
         }
 
@@ -325,7 +380,7 @@ namespace DeepLens.Infrastructure.Services
 
         public async Task<MetaQuotaInfo> GetQuotaAsync()
         {
-            var metricsJson = await _cache.GetStringAsync("meta:usage_metrics");
+            var metricsJson = await _cache.GetStringAsync("meta:usage_metrics_v2");
             var metrics = metricsJson != null 
                 ? JsonSerializer.Deserialize<AppUsageMetrics>(metricsJson) 
                 : new AppUsageMetrics();
@@ -384,7 +439,7 @@ namespace DeepLens.Infrastructure.Services
                 var metrics = JsonSerializer.Deserialize<AppUsageMetrics>(usageHeader, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (metrics != null)
                 {
-                    await _cache.SetStringAsync("meta:usage_metrics", JsonSerializer.Serialize(metrics), new DistributedCacheEntryOptions {
+                    await _cache.SetStringAsync("meta:usage_metrics_v2", JsonSerializer.Serialize(metrics), new DistributedCacheEntryOptions {
                         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
                     });
                 }
@@ -492,6 +547,7 @@ namespace DeepLens.Infrastructure.Services
             [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
             [JsonPropertyName("media_type")] public string? MediaType { get; set; }
             [JsonPropertyName("media_product_type")] public string? MediaProductType { get; set; }
+            [JsonPropertyName("children")] public GraphMediaPage? Children { get; set; }
         }
 
         private class GraphPaging

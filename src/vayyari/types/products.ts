@@ -13,30 +13,43 @@ export interface VendorProduct {
   title: string;
   vendorPrice: number;
   category?: string;
+  description?: string;
   exclusiveDescription?: string;
+  fabric?: string;
+  stitchType?: string;
+  workHeaviness?: string;
   productCode: string;
   media: MediaEntry[];
+  mediaMap?: Record<string, string>;
   createdAt?: string;
 }
 
 export interface MediaEntry {
   id: string;
-  path: string;
+  storagePath: string;
+  color?: string;
   isDefault: boolean;
 }
 
 /**
  * Payload for creating a new vendor product (POST /api/products).
- * The `files` field carries native React Native file objects.
+ * Mirrors the backend ProductIngestionDto / ProductRequest.
  */
 export interface ProductIngestionRequest {
   title: string;
   description?: string;
   vendorPrice: number;
   category?: string;
-  files?: ProductFilePayload[];
+  subCategory?: string;
+  retention?: string;
+  fabric?: string;
+  stitchType?: string;
+  workHeaviness?: string;
+  color?: string;
+  tags?: string[];
   sourcePostId?: string;
   sourcePostIds?: string[];
+  files?: ProductFilePayload[]; // Used for FormData upload
 }
 
 /**

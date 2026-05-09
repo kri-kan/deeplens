@@ -8,7 +8,7 @@ export interface ApiResponse<T> {
 export interface ApiError {
   code: string;
   message: string;
-  details?: any;
+  details?: Record<string, string[] | string | number | boolean | null>;
 }
 
 export class ApiException extends Error {

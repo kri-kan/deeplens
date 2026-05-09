@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
-import { Text, IconButton, Surface, useTheme, Button, TextInput, List, ActivityIndicator } from 'react-native-paper';
+import { Text, IconButton, useTheme, Button, TextInput, List, ActivityIndicator } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { productService } from '@/services/productService';
+import { searchApiClient, productMgmtApiClient } from '@/api/client';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LinkProductScreen() {
-    const { id, data: initialData, allowedTypes } = useLocalSearchParams();
+    const params = useLocalSearchParams();
+    const id = typeof params.id === 'string' ? params.id : params.id?.[0];
+    const initialData = typeof params.data === 'string' ? params.data : params.data?.[0];
+    const allowedTypes = typeof params.allowedTypes === 'string' ? params.allowedTypes : params.allowedTypes?.[0];
+
     const theme = useTheme();
     const router = useRouter();
-    
-    const [item, setItem] = useState<any>(initialData ? JSON.parse(initialData as string) : null);
+    const insets = useSafeAreaInsets();
     
     const typesArray = allowedTypes 
-        ? (allowedTypes as string).split(',') 
+        ? allowedTypes.split(',') 
         : ['contains', 'like'];
 
     const [linkType, setLinkType] = useState<string>(typesArray[0]);
@@ -23,23 +29,40 @@ export default function LinkProductScreen() {
     const [loading, setLoading] = useState(false);
     const [allProducts, setAllProducts] = useState<any[]>([]);
 
-    const fetchAllProducts = async () => {
+    const fetchAllProducts = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await fetch(`http://192.168.0.170:5000/api/v1/products/catalog?take=100`);
-            const data = await response.json();
-            setAllProducts(data.products || []);
-            setSearchResults(data.products || []);
+
+            let linkedIds = new Set<string>();
+            if (id) {
+                try {
+                    const linksData = await searchApiClient.get<any[]>(`/api/v1/products/instagram/${id}/links`);
+                    if (Array.isArray(linksData)) {
+                        linksData.forEach((link: any) => {
+                            if (link.productId) linkedIds.add(link.productId);
+                        });
+                    }
+                } catch (linkErr) {
+                    console.error('Failed to fetch existing links', linkErr);
+                }
+            }
+
+            const data = await productMgmtApiClient.get<{ products: any[]; totalCount: number }>('/api/v1/products/catalog?take=100');
+            const all: any[] = data.products || [];
+            const filtered = all.filter((p: any) => !linkedIds.has(p.masterProductId));
+
+            setAllProducts(filtered);
+            setSearchResults(filtered);
         } catch (error) {
             console.error('Failed to fetch initial products', error);
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useEffect(() => {
         fetchAllProducts();
-    }, []);
+    }, [fetchAllProducts]);
 
     const handleSearch = (query: string) => {
         setSearchQuery(query);
@@ -58,18 +81,12 @@ export default function LinkProductScreen() {
     const handleLinkProduct = async (productId: string) => {
         setLoading(true);
         try {
-            const response = await fetch('http://192.168.0.170:5000/api/v1/products/instagram/link', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    postId: id,
-                    productId: productId,
-                    linkType: linkType
-                })
+            await searchApiClient.post('/api/v1/products/instagram/link', {
+                postId: id,
+                productId,
+                linkType,
             });
-            if (response.ok) {
-                router.back();
-            }
+            router.back();
         } catch (error) {
             console.error('Linking failed', error);
         } finally {
@@ -78,8 +95,9 @@ export default function LinkProductScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingBottom: insets.bottom }]}>
             <Stack.Screen options={{ 
+                headerShown: true,
                 headerTitle: 'Link to Product',
                 headerLeft: () => <IconButton icon="close" onPress={() => router.back()} />
             }} />
@@ -130,15 +148,53 @@ export default function LinkProductScreen() {
                 ) : (
                     <ScrollView style={styles.resultsList}>
                         {searchResults.map(p => {
-                            const primaryMedia = p.media?.find((m: any) => m.is_default) || p.media?.[0];
-                            const mediaUri = primaryMedia ? `http://192.168.0.170:5000/api/v1/Attachment/download?path=${encodeURIComponent(primaryMedia.path)}` : null;
+                            let mediaList: any[] = [];
+                            const rawMedia = p.media || (p as any).Media || (p as any).mediaJson || (p as any).MediaJson;
+                            
+                            if (Array.isArray(rawMedia)) {
+                                mediaList = rawMedia;
+                            } else if (typeof rawMedia === 'string' && rawMedia.trim().startsWith('[')) {
+                                try {
+                                    mediaList = JSON.parse(rawMedia);
+                                } catch {
+                                    mediaList = [];
+                                }
+                            }
+
+                            const primaryMedia = mediaList.find((m: any) => 
+                                m.isDefault || m.IsDefault || m.is_primary || m.isPrimary || m.is_default
+                            ) || mediaList[0];
+                            
+                            let mediaUri: string | null = null;
+                            if (primaryMedia) {
+                                if (typeof primaryMedia === 'string') {
+                                    if (primaryMedia.includes('/') || primaryMedia.includes('\\')) {
+                                        mediaUri = productService.getThumbnailUrlByPath(primaryMedia, 'medium');
+                                    } else if (primaryMedia.length > 10) {
+                                        mediaUri = productService.getThumbnailUrl(primaryMedia, 'medium');
+                                    }
+                                } else {
+                                    const m = primaryMedia as any;
+                                    const resolvedId = m.id || m.Id || m.mediaId || m.MediaId || m.MediaID;
+                                    const resolvedPath = m.storagePath || m.StoragePath || m.path || m.Path || m.filePath || m.FilePath;
+                                    const isNullId = !resolvedId || resolvedId === '00000000-0000-0000-0000-000000000000';
+                                    
+                                    if (!isNullId) {
+                                        mediaUri = productService.getThumbnailUrl(resolvedId, 'medium');
+                                    } else if (resolvedPath) {
+                                        mediaUri = productService.getThumbnailUrlByPath(resolvedPath, 'medium');
+                                    }
+                                }
+                            }
+
+                            const productId = p.masterProductId || p.MasterProductId || p.id || p.Id;
 
                             return (
                                 <List.Item
-                                    key={p.id}
-                                    title={p.title}
-                                    description={p.productCode}
-                                    onPress={() => handleLinkProduct(p.masterProductId)}
+                                    key={p.id || p.Id}
+                                    title={p.title || p.Title}
+                                    description={p.productCode || p.ProductCode}
+                                    onPress={() => handleLinkProduct(productId)}
                                     left={props => (
                                         <View style={styles.searchItemLeft}>
                                             {mediaUri ? (

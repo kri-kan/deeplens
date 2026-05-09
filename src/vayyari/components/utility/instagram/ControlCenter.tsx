@@ -83,13 +83,13 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
                     {item.priority > 1 && <Chip compact textStyle={styles.chipText}>HIGH</Chip>}
                   </View>
                   <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {item.origin} • {item.job_type.toUpperCase()} • {item.scraped_count || 0}/{item.target_count === 0 ? 'All' : item.target_count} Posts
+                    {item.origin} • {item.jobType.toUpperCase()} • {item.scrapedCount || 0}/{item.targetCount === 0 ? 'All' : item.targetCount} Posts
                   </Text>
                 </View>
                 <View style={styles.itemActions}>
                   <View style={styles.nextRun}>
                     <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
-                      Next: {item.next_run_at ? new Date(item.next_run_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'ASAP'}
+                      Next: {item.nextRunAt ? new Date(item.nextRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'ASAP'}
                     </Text>
                   </View>
                   <IconButton icon="arrow-up-bold-outline" size={18} onPress={() => updatePriority(item.id, 10)} />
@@ -102,11 +102,11 @@ export const ControlCenter: React.FC<ControlCenterProps> = ({
               <View key={item.id} style={[styles.item, { opacity: 0.8 }]}>
                 <View style={styles.itemMain}>
                   <Text variant="labelMedium" style={styles.bold}>@{item.username}</Text>
-                  <Text variant="labelSmall">{item.job_type.toUpperCase()} • {item.status}</Text>
+                  <Text variant="labelSmall">{item.jobType.toUpperCase()} • {item.status}</Text>
                 </View>
                 <View style={styles.historyMeta}>
-                  <Text variant="labelSmall">{new Date(item.completed_at).toLocaleDateString()}</Text>
-                  <Text variant="labelSmall" style={styles.bold}>{item.scraped_count} Posts</Text>
+                  <Text variant="labelSmall">{new Date(item.completedAt).toLocaleDateString()}</Text>
+                  <Text variant="labelSmall" style={styles.bold}>{item.scrapedCount} Posts</Text>
                 </View>
               </View>
             ))

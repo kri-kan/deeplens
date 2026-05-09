@@ -19,7 +19,7 @@ export const QuotaDashboard: React.FC<QuotaDashboardProps> = ({ quota }) => {
           <Text variant="titleSmall" style={styles.bold}>Quota Dashboard</Text>
         </View>
         <Text variant="labelSmall" style={styles.updatedText}>
-          Updated {new Date(quota.lastUpdated).toLocaleTimeString()}
+          Updated {quota.lastUpdated ? new Date(quota.lastUpdated).toLocaleTimeString() : 'N/A'}
         </Text>
       </View>
       
@@ -30,7 +30,7 @@ export const QuotaDashboard: React.FC<QuotaDashboardProps> = ({ quota }) => {
           color={theme.colors.primary} 
         />
         <QuotaItem 
-          value={`${quota.metrics.callCount}%`} 
+          value={`${quota.metrics?.call_count || 0}%`} 
           label="App Usage" 
           color={theme.colors.secondary} 
         />
