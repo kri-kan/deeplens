@@ -1,0 +1,298 @@
+using System.Data;
+using System.Text.Json;
+using Dapper;
+using DeepLens.Application.Abstractions.Data;
+using DeepLens.Application.Abstractions.Services;
+using DeepLens.Contracts.Youtube;
+using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Requests;
+using Google.Apis.Auth.OAuth2.Responses;
+using Google.Apis.Services;
+using Google.Apis.YouTube.v3;
+using Google.Apis.YouTube.v3.Data;
+using Google.Apis.Upload;
+using Microsoft.Extensions.Logging;
+
+namespace DeepLens.Infrastructure.Services
+{
+    public class YoutubeService : IYoutubeService
+    {
+        private readonly IDbConnectionFactory _db;
+        private readonly IAppSettingsService _appSettings;
+        private readonly IStorageService _storage;
+        private readonly ILogger<YoutubeService> _logger;
+        
+        private string? _clientId;
+        private string? _clientSecret;
+        private string? _accessToken;
+        private string? _refreshToken;
+        private string? _redirectUri;
+        private DateTime _tokenLastRefreshed;
+        private int _dailyQuotaLimit = 10000;
+        private int _currentQuotaUsage = 0;
+
+        public YoutubeService(
+            IDbConnectionFactory db,
+            IAppSettingsService appSettings,
+            IStorageService storage,
+            ILogger<YoutubeService> logger)
+        {
+            _db = db;
+            _appSettings = appSettings;
+            _storage = storage;
+            _logger = logger;
+        }
+
+        public async Task ReloadFromDbAsync()
+        {
+            var settings = await _appSettings.GetSectionInternalAsync("YouTube");
+            var dict = settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.OrdinalIgnoreCase);
+
+            _clientId = settings.FirstOrDefault(s => s.Key == "Youtube:ClientId")?.Value ?? "";
+            _clientSecret = settings.FirstOrDefault(s => s.Key == "Youtube:ClientSecret")?.Value ?? "";
+            _redirectUri = settings.FirstOrDefault(s => s.Key == "Youtube:RedirectUri")?.Value ?? "http://localhost:5002/oauth2callback";
+
+            _accessToken = dict.GetValueOrDefault("Youtube:AccessToken");
+            _refreshToken = dict.GetValueOrDefault("Youtube:RefreshToken");
+            
+            if (DateTime.TryParse(dict.GetValueOrDefault("Youtube:TokenLastRefreshed"), out var dt))
+                _tokenLastRefreshed = dt;
+                
+            if (int.TryParse(dict.GetValueOrDefault("Youtube:DailyQuotaLimit"), out var limit))
+                _dailyQuotaLimit = limit;
+                
+            if (int.TryParse(dict.GetValueOrDefault("Youtube:CurrentQuotaUsage"), out var usage))
+                _currentQuotaUsage = usage;
+        }
+
+        public async Task<YoutubeTokenHealth> GetTokenHealthAsync()
+        {
+            await ReloadFromDbAsync();
+            var isAuth = !string.IsNullOrEmpty(_refreshToken);
+                
+            return new YoutubeTokenHealth
+            {
+                LastRefreshed = _tokenLastRefreshed,
+                NeedsRefresh = (DateTime.UtcNow - _tokenLastRefreshed).TotalHours > 1,
+                IsAuthorized = isAuth
+            };
+        }
+
+        public async Task<YoutubeQuotaInfo> GetQuotaAsync()
+        {
+            await ReloadFromDbAsync();
+            return new YoutubeQuotaInfo
+            {
+                DailyLimit = _dailyQuotaLimit,
+                CurrentUsage = _currentQuotaUsage,
+                RemainingUnits = Math.Max(0, _dailyQuotaLimit - _currentQuotaUsage),
+                LastUpdated = DateTime.UtcNow
+            };
+        }
+
+        public async Task<bool> AuthenticateAsync(string authCode, string redirectUri)
+        {
+            await ReloadFromDbAsync();
+            
+            if (string.IsNullOrEmpty(_clientId) || string.IsNullOrEmpty(_clientSecret))
+            {
+                _logger.LogError("YouTube ClientId or ClientSecret is missing in settings.");
+                return false;
+            }
+
+            var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+            {
+                ClientSecrets = new ClientSecrets { ClientId = _clientId, ClientSecret = _clientSecret },
+                Scopes = new[] { YouTubeService.Scope.YoutubeUpload, YouTubeService.Scope.YoutubeReadonly }
+            });
+
+            var token = await flow.ExchangeCodeForTokenAsync("user", authCode, redirectUri, CancellationToken.None);
+            
+            await PersistTokenAsync(token);
+            return true;
+        }
+
+        public async Task<bool> RefreshTokenAsync()
+        {
+            await ReloadFromDbAsync();
+            
+            if (string.IsNullOrEmpty(_refreshToken)) return false;
+
+            var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+            {
+                ClientSecrets = new ClientSecrets { ClientId = _clientId, ClientSecret = _clientSecret }
+            });
+
+            var token = await flow.RefreshTokenAsync("user", _refreshToken, CancellationToken.None);
+            
+            await PersistTokenAsync(token);
+            return true;
+        }
+
+        public async Task<string> GetAuthUrlAsync(string redirectUri)
+        {
+            await ReloadFromDbAsync();
+            
+            var effectiveRedirectUri = !string.IsNullOrEmpty(redirectUri) ? redirectUri : _redirectUri;
+            
+            if (string.IsNullOrEmpty(_clientId)) throw new Exception("YouTube Client ID is not configured in settings.");
+            if (string.IsNullOrEmpty(effectiveRedirectUri)) throw new Exception("Redirect URI is required but not provided.");
+
+            var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
+            {
+                ClientSecrets = new ClientSecrets { ClientId = _clientId, ClientSecret = _clientSecret },
+                Scopes = new[] { YouTubeService.Scope.YoutubeUpload, YouTubeService.Scope.YoutubeReadonly }
+            });
+
+            var request = new GoogleAuthorizationCodeRequestUrl(new Uri(flow.AuthorizationServerUrl))
+            {
+                ClientId = _clientId,
+                RedirectUri = effectiveRedirectUri,
+                Scope = string.Join(" ", new[] { YouTubeService.Scope.YoutubeUpload, YouTubeService.Scope.YoutubeReadonly }),
+                AccessType = "offline",
+                Prompt = "consent"
+            };
+            
+            return request.Build().ToString();
+        }
+
+        private async Task PersistTokenAsync(TokenResponse token)
+        {
+            _accessToken = token.AccessToken;
+            if (!string.IsNullOrEmpty(token.RefreshToken)) _refreshToken = token.RefreshToken;
+            _tokenLastRefreshed = DateTime.UtcNow;
+
+            await _appSettings.UpsertAsync("Youtube:AccessToken", _accessToken);
+            if (!string.IsNullOrEmpty(_refreshToken))
+                await _appSettings.UpsertAsync("Youtube:RefreshToken", _refreshToken);
+            await _appSettings.UpsertAsync("Youtube:TokenLastRefreshed", _tokenLastRefreshed.ToString("O"));
+            
+            _logger.LogInformation("YouTube token persisted.");
+        }
+
+        public async Task<YoutubeUploadResponse> UploadVideoAsync(YoutubeUploadRequest request)
+        {
+            await ReloadFromDbAsync();
+            
+            // Check quota (1600 units for upload)
+            if (_currentQuotaUsage + 1600 > _dailyQuotaLimit)
+            {
+                throw new InvalidOperationException("YouTube API quota exceeded for today.");
+            }
+
+            // 1. Get Video Stream from MinIO
+            using var conn = await _db.CreateConnectionAsync();
+            var storagePath = await conn.QueryFirstOrDefaultAsync<string>(@"
+                SELECT storage_path FROM competitor_videos WHERE id = @InstagramPostId", 
+                new { request.InstagramPostId });
+
+            if (string.IsNullOrEmpty(storagePath)) throw new Exception("Video not found in storage registry.");
+
+            var fileLength = await _storage.GetFileLengthAsync(storagePath);
+            using var videoStream = await _storage.GetFileAsync(storagePath);
+
+            // 2. Prepare YouTube Service
+            var youtubeService = await CreateServiceAsync();
+
+            var video = new Video
+            {
+                Snippet = new VideoSnippet
+                {
+                    Title = request.IsShort ? $"{request.Title} #Shorts" : request.Title,
+                    Description = request.IsShort ? $"{request.Description}\n\n#Shorts" : request.Description,
+                    Tags = request.Tags,
+                    CategoryId = "22", // Default to People & Blogs
+                },
+                Status = new VideoStatus
+                {
+                    PrivacyStatus = "private", // Always private for scheduling
+                    SelfDeclaredMadeForKids = false
+                }
+            };
+
+            if (request.ScheduleTime.HasValue)
+            {
+                video.Status.PublishAt = request.ScheduleTime.Value.ToUniversalTime();
+            }
+
+            // 3. Execute Upload
+            var videosInsertRequest = youtubeService.Videos.Insert(video, "snippet,status", videoStream, "video/*");
+            videosInsertRequest.ChunkSize = ResumableUpload.MinimumChunkSize;
+            
+            var progress = await videosInsertRequest.UploadAsync();
+            
+            if (progress.Status == Google.Apis.Upload.UploadStatus.Failed)
+            {
+                _logger.LogError("YouTube upload failed: {Msg}", progress.Exception.Message);
+                throw progress.Exception;
+            }
+
+            var uploadedVideo = videosInsertRequest.ResponseBody;
+            
+            // 4. Update Database
+            var videoUrl = $"https://www.youtube.com/watch?v={uploadedVideo.Id}";
+            await conn.ExecuteAsync(@"
+                UPDATE competitor_videos 
+                SET youtube_video_id = @VideoId,
+                    youtube_url = @VideoUrl,
+                    youtube_sync_status = @Status,
+                    scheduled_publish_time = @ScheduledTime
+                WHERE id = @InstagramPostId", 
+                new { 
+                    VideoId = uploadedVideo.Id, 
+                    VideoUrl = videoUrl,
+                    Status = request.ScheduleTime.HasValue ? "Scheduled" : "Uploaded",
+                    ScheduledTime = request.ScheduleTime,
+                    request.InstagramPostId 
+                });
+
+            // 5. Track Quota
+            await TrackQuotaAsync(1600);
+
+            return new YoutubeUploadResponse
+            {
+                VideoId = uploadedVideo.Id,
+                VideoUrl = videoUrl,
+                Status = video.Status.PrivacyStatus,
+                ScheduledTime = request.ScheduleTime
+            };
+        }
+
+        public async Task<DateTime> GetNextScheduleSlotAsync()
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var lastScheduled = await conn.QueryFirstOrDefaultAsync<DateTime?>(@"
+                SELECT MAX(scheduled_publish_time) FROM competitor_videos 
+                WHERE scheduled_publish_time > NOW()");
+
+            var intervalHours = int.Parse((await _appSettings.GetSectionAsync("YouTube"))
+                .FirstOrDefault(s => s.Key == "Youtube:SchedulingIntervalHours")?.Value ?? "6");
+
+            var nextSlot = lastScheduled?.AddHours(intervalHours) ?? DateTime.UtcNow.AddHours(1);
+            
+            // Round to nearest 30 mins for cleanliness
+            return new DateTime(nextSlot.Year, nextSlot.Month, nextSlot.Day, nextSlot.Hour, (nextSlot.Minute / 30) * 30, 0, DateTimeKind.Utc);
+        }
+
+        private async Task<YouTubeService> CreateServiceAsync()
+        {
+            if ((await GetTokenHealthAsync()).NeedsRefresh)
+            {
+                await RefreshTokenAsync();
+            }
+
+            return new YouTubeService(new BaseClientService.Initializer
+            {
+                HttpClientInitializer = GoogleCredential.FromAccessToken(_accessToken),
+                ApplicationName = "DeepLens"
+            });
+        }
+
+        private async Task TrackQuotaAsync(int units)
+        {
+            _currentQuotaUsage += units;
+            await _appSettings.UpsertAsync("Youtube:CurrentQuotaUsage", _currentQuotaUsage.ToString());
+        }
+    }
+}

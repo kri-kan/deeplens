@@ -15,6 +15,8 @@ import type { VendorProduct } from '@/types/products';
 import { InstagramVideoPlayer } from './InstagramVideoPlayer';
 import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
+import { youtubeService } from '@/services/youtube.service';
+import { TextInput } from 'react-native-paper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -64,6 +66,13 @@ export const InstagramPostDetailItem = ({
     const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
     const [shareProgress, setShareProgress] = useState<number | null>(null);
     const [localItem, setLocalItem] = useState(item);
+
+    // YouTube Upload State
+    const [isYoutubeDialogVisible, setIsYoutubeDialogVisible] = useState(false);
+    const [isUploadingToYoutube, setIsUploadingToYoutube] = useState(false);
+    const [youtubeTitle, setYoutubeTitle] = useState('');
+    const [youtubeDesc, setYoutubeDesc] = useState('');
+    const [nextSlot, setNextSlot] = useState<string | null>(null);
 
     // Sync local item and reset state when item changes (for component reuse)
     useEffect(() => {
@@ -658,6 +667,37 @@ export const InstagramPostDetailItem = ({
                                     </TouchableOpacity>
 
                                     <TouchableOpacity 
+                                        style={styles.menuItem}
+                                        disabled={!isVideo(localItem) || isUploadingToYoutube}
+                                        onPress={async () => {
+                                            try {
+                                                setIsMenuVisible(false);
+                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
+                                                
+                                                // Prepare defaults
+                                                setYoutubeTitle(localItem.productCode || '');
+                                                setYoutubeDesc(localItem.caption || '');
+                                                
+                                                const slotResp = await youtubeService.getNextSlot();
+                                                setNextSlot(slotResp.nextSlot);
+                                                
+                                                setIsYoutubeDialogVisible(true);
+                                            } catch (err) {
+                                                Alert.alert('Error', 'Could not prepare YouTube upload.');
+                                            }
+                                        }}
+                                    >
+                                        <IconButton 
+                                            icon="youtube" 
+                                            size={24} 
+                                            iconColor={isVideo(localItem) ? '#FF0000' : '#ccc'} 
+                                        />
+                                        <Text variant="bodyLarge" style={{ color: isVideo(localItem) ? '#FF0000' : '#ccc', flex: 1 }}>
+                                            Post to YouTube Shorts
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
                                         style={[styles.menuItem, { marginTop: 10 }]}
                                         onPress={() => {
                                             menuSheetTop.value = withSpring(MENU_HIDDEN);
@@ -672,6 +712,73 @@ export const InstagramPostDetailItem = ({
                         </GestureDetector>
                     </View>
                 )}
+
+                <Dialog visible={isYoutubeDialogVisible} onDismiss={() => !isUploadingToYoutube && setIsYoutubeDialogVisible(false)}>
+                    <Dialog.Title>Schedule YouTube Short</Dialog.Title>
+                    <Dialog.Content>
+                        <ScrollView style={{ maxHeight: 300 }}>
+                            <TextInput
+                                label="Title"
+                                value={youtubeTitle}
+                                onChangeText={setYoutubeTitle}
+                                mode="outlined"
+                                style={{ marginBottom: 12 }}
+                                placeholder="Video title..."
+                            />
+                            <TextInput
+                                label="Description"
+                                value={youtubeDesc}
+                                onChangeText={setYoutubeDesc}
+                                mode="outlined"
+                                multiline
+                                numberOfLines={4}
+                                style={{ marginBottom: 12 }}
+                            />
+                            <View style={{ backgroundColor: '#f0f0f0', padding: 12, borderRadius: 8 }}>
+                                <Text variant="labelMedium">Scheduled For (Auto-calculated):</Text>
+                                <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                                    {nextSlot ? new Date(nextSlot).toLocaleString() : 'Loading...'}
+                                </Text>
+                                <Text variant="bodySmall" style={{ opacity: 0.6, marginTop: 4 }}>
+                                    Default interval is 6 hours between posts.
+                                </Text>
+                            </View>
+                        </ScrollView>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setIsYoutubeDialogVisible(false)} disabled={isUploadingToYoutube}>Cancel</Button>
+                        <Button 
+                            mode="contained"
+                            loading={isUploadingToYoutube}
+                            disabled={isUploadingToYoutube || !nextSlot}
+                            onPress={async () => {
+                                try {
+                                    setIsUploadingToYoutube(true);
+                                    const resp = await youtubeService.uploadVideo({
+                                        instagramPostId: localItem.id,
+                                        title: youtubeTitle,
+                                        description: youtubeDesc,
+                                        tags: ['shorts', 'reels'],
+                                        isShort: true,
+                                        scheduleTime: nextSlot || undefined
+                                    });
+                                    
+                                    Alert.alert('Success', `Scheduled on YouTube!\nVideo ID: ${resp.videoId}`);
+                                    setIsYoutubeDialogVisible(false);
+                                    
+                                    // Refresh post to show new status if we add that to UI later
+                                    handleFullRefresh();
+                                } catch (err: any) {
+                                    Alert.alert('Upload Failed', err.message || 'An error occurred.');
+                                } finally {
+                                    setIsUploadingToYoutube(false);
+                                }
+                            }}
+                        >
+                            Schedule Post
+                        </Button>
+                    </Dialog.Actions>
+                </Dialog>
             </Portal>
         </View>
     );

@@ -31,6 +31,7 @@ const SYSTEM_UTILITIES: UtilityItem[] = [
   { id: 'master-data', title: 'Master Data', icon: 'database-settings', route: '/system/master-data', color: '#673AB7' },
   { id: 'media-settings', title: 'Media', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722' },
   { id: 'insta-explorer', title: 'Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C' },
+  { id: 'youtube-dashboard', title: 'YouTube', icon: 'youtube', route: '/utilities/youtube-dashboard', color: '#FF0000' },
   { id: 'competitor-scraper', title: 'Sync', icon: 'cloud-sync', route: '/utilities/instagram-scraper', color: '#6200ee' },
   { id: 'quick-links', title: 'Links', icon: 'link-variant', route: '/utilities/quick-links', color: '#2196F3' },
 ];

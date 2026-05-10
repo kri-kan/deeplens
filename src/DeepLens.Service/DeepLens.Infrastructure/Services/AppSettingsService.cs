@@ -42,16 +42,47 @@ namespace DeepLens.Infrastructure.Services
 
         public async Task<List<AppSetting>> GetSectionAsync(string section)
         {
-            var all = await GetAllAsync();
-            return all.Where(s => s.Section.Equals(section, StringComparison.OrdinalIgnoreCase)).ToList();
+            return await GetSectionInternalAsync(section, mask: true);
         }
 
+        public async Task<List<AppSetting>> GetSectionInternalAsync(string section)
+        {
+            return await GetSectionInternalAsync(section, mask: false);
+        }
+
+        private async Task<List<AppSetting>> GetSectionInternalAsync(string section, bool mask)
+        {
+            if (!_cache.TryGetValue(CACHE_KEY, out List<AppSetting>? settings))
+            {
+                using var conn = await _connectionFactory.CreateConnectionAsync();
+                var dbSettings = await conn.QueryAsync<AppSetting>("SELECT * FROM app_settings");
+                settings = dbSettings.ToList();
+                _cache.Set(CACHE_KEY, settings, TimeSpan.FromHours(1));
+            }
+
+            var filtered = settings!.Where(s => s.Section.Equals(section, StringComparison.OrdinalIgnoreCase)).ToList();
+            
+            if (mask)
+            {
+                return filtered.Select(Mask).ToList();
+            }
+
+            return filtered;
+        }
+        
         public async Task<AppSetting?> UpsertAsync(string key, string? value)
         {
             using var conn = await _connectionFactory.CreateConnectionAsync();
             var existing = await conn.QueryFirstOrDefaultAsync<AppSetting>("SELECT * FROM app_settings WHERE key = @Key", new { Key = key });
             
             if (existing == null) return null;
+            
+            // Prevent overwriting secrets with masked display value
+            if (existing.IsSecret && value == MASKED)
+            {
+                _logger.LogInformation("Skipping update for secret key {Key} because value is MASKED", key);
+                return Mask(existing);
+            }
 
             existing.Value = value;
             existing.UpdatedAt = DateTime.UtcNow;
@@ -133,7 +164,19 @@ namespace DeepLens.Infrastructure.Services
             new() { Key = "Infrastructure:MinioAccessKey", Section = "Infrastructure", Label = "MinIO Access Key", Description = "MinIO access key (username).", IsSecret = false, DataType = "string", Value = "" },
             new() { Key = "Infrastructure:MinioSecretKey", Section = "Infrastructure", Label = "MinIO Secret Key", Description = "MinIO secret key (password).", IsSecret = true, DataType = "string", Value = "" },
             new() { Key = "Infrastructure:KafkaBootstrap", Section = "Infrastructure", Label = "Kafka Bootstrap Servers", Description = "Comma-separated Kafka broker addresses.", IsSecret = false, DataType = "string", Value = "192.168.0.170:9092" },
-            new() { Key = "Media:CacheExpiryHours", Section = "Media", Label = "Media Cache Expiry (hours)", Description = "Browser/App cache duration for images. Default: 6.", IsSecret = false, DataType = "integer", Value = "6" }
+            new() { Key = "Media:CacheExpiryHours", Section = "Media", Label = "Media Cache Expiry (hours)", Description = "Browser/App cache duration for images. Default: 6.", IsSecret = false, DataType = "integer", Value = "6" },
+            
+            // YouTube Settings
+            new() { Key = "Youtube:ClientId", Section = "YouTube", Label = "Client ID", Description = "Google OAuth 2.0 Client ID.", IsSecret = false, DataType = "string", Value = "" },
+            new() { Key = "Youtube:ClientSecret", Section = "YouTube", Label = "Client Secret", Description = "Google OAuth 2.0 Client Secret.", IsSecret = true, DataType = "string", Value = "" },
+            new() { Key = "Youtube:AccessToken", Section = "YouTube", Label = "Access Token", Description = "Persisted OAuth access token.", IsSecret = true, DataType = "string", Value = "" },
+            new() { Key = "Youtube:RefreshToken", Section = "YouTube", Label = "Refresh Token", Description = "OAuth refresh token for automated renewal.", IsSecret = true, DataType = "string", Value = "" },
+            new() { Key = "Youtube:TokenLastRefreshed", Section = "YouTube", Label = "Token Last Refreshed", Description = "Date the token was last updated.", IsSecret = false, DataType = "datetime", Value = "2025-01-01T00:00:00Z" },
+            new() { Key = "Youtube:DailyQuotaLimit", Section = "YouTube", Label = "Daily Quota Limit", Description = "Max units per day (default 10,000).", IsSecret = false, DataType = "integer", Value = "10000" },
+            new() { Key = "Youtube:CurrentQuotaUsage", Section = "YouTube", Label = "Current Quota Usage", Description = "Units consumed today.", IsSecret = false, DataType = "integer", Value = "0" },
+            new() { Key = "Youtube:DefaultCategoryId", Section = "YouTube", Label = "Default Category ID", Description = "22 is People & Blogs.", IsSecret = false, DataType = "string", Value = "22" },
+            new() { Key = "Youtube:SchedulingIntervalHours", Section = "YouTube", Label = "Scheduling Interval (hours)", Description = "Hours between scheduled posts.", IsSecret = false, DataType = "integer", Value = "6" },
+            new() { Key = "Youtube:RedirectUri", Section = "YouTube", Label = "Redirect URI", Description = "OAuth 2.0 redirect URI (must match Google Console).", IsSecret = false, DataType = "string", Value = "http://localhost:5002/oauth2callback" }
         };
     }
 }

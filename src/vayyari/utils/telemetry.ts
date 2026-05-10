@@ -4,19 +4,24 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-base';
+import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 
 let isInitialized = false;
 
 export const initOtel = () => {
   if (isInitialized) return;
 
+  // Set internal OTel logger (INFO level for production stability)
+  diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
+
+  const otelEndpoint = process.env.EXPO_PUBLIC_OTEL_ENDPOINT || "http://192.168.0.170:4318/v1/traces";
+  
   const exporter = new OTLPTraceExporter({
-    url: process.env.EXPO_PUBLIC_OTEL_ENDPOINT!,
-    headers: {},
+    url: otelEndpoint,
   });
 
   const provider = new WebTracerProvider({
-    sampler: new TraceIdRatioBasedSampler(Number(process.env.EXPO_PUBLIC_OTEL_SAMPLING_RATIO || 0.1)),
+    sampler: new TraceIdRatioBasedSampler(0.1), // 10% sampling for performance
     spanProcessors: [new BatchSpanProcessor(exporter)],
   });
 
