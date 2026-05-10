@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace DeepLens.Domain.Enums;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum OrderSource
 {
     None = 0,
@@ -7,6 +10,7 @@ public enum OrderSource
     Instagram = 2
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum PaymentMode
 {
     None = 0,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DeepLens.Contracts.Instagram;
 
 namespace DeepLens.Application.Abstractions.Services
 {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.Contracts.Orders;
 
@@ -10,10 +11,10 @@ public class OrderDetailDto
     public string Id { get; set; } = string.Empty;
 
     [JsonPropertyName("source")]
-    public string? Source { get; set; }
+    public OrderSource? Source { get; set; }
 
-    [JsonPropertyName("paymentMethod")]
-    public string? PaymentMethod { get; set; }
+    [JsonPropertyName("paymentMode")]
+    public PaymentMode? PaymentMode { get; set; }
 
     [JsonPropertyName("customerPhone")]
     public string? CustomerPhone { get; set; }

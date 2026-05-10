@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
 using DeepLens.Infrastructure.Services;
+using DeepLens.Domain.Enums;
 using System.Linq;
 
 namespace DeepLens.SearchApi.Controllers;
@@ -134,7 +135,7 @@ public class InstaController : ControllerBase
                     cv.media_url AS MediaUrl,
                     cv.like_count AS LikeCount, 
                     cv.comment_count AS CommentCount, 
-                    cv.posted_at::text AS Timestamp,
+                    cv.posted_at AS Timestamp,
                     cv.storage_path AS StoragePath,
                     (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
                 FROM competitor_videos cv
@@ -151,8 +152,10 @@ public class InstaController : ControllerBase
         {
             try
             {
-                // Find latest and oldest by parsing timestamps since order may vary
-                var dates = videos.Select(v => DateTime.Parse(v.Timestamp!)).OrderByDescending(d => d).ToList();
+                // Find latest and oldest since order may vary
+                var dates = videos.Where(v => v.Timestamp.HasValue)
+                                  .Select(v => v.Timestamp!.Value)
+                                  .OrderByDescending(d => d).ToList();
                 var latest = dates.First();
                 var oldest = dates.Last();
                 var days = (latest - oldest).TotalDays;
@@ -572,7 +575,7 @@ public class InstaController : ControllerBase
                 cv.media_url AS MediaUrl,
                 cv.like_count AS LikeCount, 
                 cv.comment_count AS CommentCount, 
-                cv.posted_at::text AS Timestamp,
+                cv.posted_at AS Timestamp,
                 cv.storage_path AS StoragePath,
                 (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
             FROM competitor_videos cv
@@ -600,10 +603,10 @@ public class InstaController : ControllerBase
 
         var list = allMedia.ToList();
 
-        // 1. If we have any video (MediaType 2), hide static thumbnails (Subcategory 'thumbnail')
-        if (list.Any(m => m.MediaType == 2))
+        // 1. If we have any video, hide static thumbnails (Subcategory 'thumbnail')
+        if (list.Any(m => m.MediaType == InstagramMediaType.VIDEO))
         {
-            list = list.Where(m => m.MediaType != 1 || m.Subcategory == "carousel_item").ToList();
+            list = list.Where(m => m.MediaType != InstagramMediaType.IMAGE || m.Subcategory == "carousel_item").ToList();
         }
 
         // 2. If we have 'full_media', hide 'thumbnail' to avoid double images

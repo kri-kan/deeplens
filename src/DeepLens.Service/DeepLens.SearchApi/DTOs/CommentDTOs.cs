@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.SearchApi.DTOs;
 
@@ -12,7 +13,7 @@ namespace DeepLens.SearchApi.DTOs;
 public class CommentCreateDto
 {
     [JsonPropertyName("entityType")]
-    public string EntityType { get; set; } = string.Empty;
+    public CommentEntityType EntityType { get; set; }
 
     [JsonPropertyName("entityId")]
     public string EntityId { get; set; } = string.Empty;
@@ -21,7 +22,7 @@ public class CommentCreateDto
     public string Content { get; set; } = string.Empty;
 
     [JsonPropertyName("attachmentIds")]
-    public string[]? AttachmentIds { get; set; }
+    public Guid[]? AttachmentIds { get; set; }
 }
 
 /// <summary>

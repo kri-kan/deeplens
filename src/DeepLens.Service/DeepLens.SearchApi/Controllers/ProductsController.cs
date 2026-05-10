@@ -96,14 +96,14 @@ public class ProductsController : ControllerBase
         {
             VendorPrice = request.VendorPrice,
             Description = request.Description,
-            MasterTitle = request.Title,
+            Title = request.Title,
             Retention = request.Retention,
             Tags = request.Tags,
             Fabric = request.Fabric,
             StitchType = request.StitchType,
             WorkHeaviness = request.WorkHeaviness,
             Color = request.Color,
-            Category = Enum.TryParse<MediaCategory>(request.Category, true, out var cat) ? cat : MediaCategory.Product,
+            Category = request.Category ?? MediaCategory.Product,
             SubCategory = request.SubCategory ?? "General",
             SourcePostId = request.SourcePostId
         };
@@ -186,9 +186,3 @@ public class ProductsController : ControllerBase
     }
 
 }
-
-public record InstaLinkRequest(
-    [property: JsonPropertyName("postId")] Guid PostId,
-    [property: JsonPropertyName("productId")] Guid ProductId,
-    [property: JsonPropertyName("linkType")] string LinkType = "is"
-);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Alert, TouchableOpacity } from 'react-native';
 import { Text, Button, IconButton, Surface, TextInput, Portal, Modal, Chip } from 'react-native-paper';
+import { searchApiClient } from '@/api/client';
+import { API_ROUTES } from '@/constants/api-routes';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { systemService, AppCategory, AppIcon } from '@/services/system.service';
 import { CategoryIcon } from '@/components/CategoryIcons';
@@ -113,10 +115,10 @@ export default function CategoryManagement() {
               {icons.map((icon) => (
                 <Chip
                   key={icon.id}
-                  selected={editingCategory.iconName === icon.id}
-                  onPress={() => setEditingCategory({ ...editingCategory, iconName: icon.id })}
+                  selected={editingCategory?.iconName === icon.id}
+                  onPress={() => setEditingCategory({ ...editingCategory!, iconName: icon.id })}
                   style={styles.chip}
-                  avatar={<CategoryIcon category="general" iconName={icon.id} color="#000" size={16} />}
+                  avatar={<CategoryIcon category="General" iconName={icon.id} color="#000" size={16} />}
                 >
                   {icon.name}
                 </Chip>

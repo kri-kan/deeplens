@@ -11,7 +11,7 @@ import * as Clipboard from 'expo-clipboard';
 import { ProfileCopyIcon } from '../../icons/ProfileCopyIcon';
 import { GeneratedIdCard } from './GeneratedIdCard';
 
-import { OrderIdEntry } from '@/types/orders';
+import { OrderIdEntry, PaymentMode } from '@/types/orders';
 
 const STORAGE_KEY = 'last_generated_order_ids';
 
@@ -19,8 +19,8 @@ export const OrderIdGenerator = () => {
   const theme = useTheme();
   const styles = getStyles(theme);
   const router = useRouter();
-  const [selectedSource, setSelectedSource] = useState<'whatsapp' | 'instagram' | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'Prepaid' | null>(null);
+  const [selectedSource, setSelectedSource] = useState<'WhatsApp' | 'Instagram' | null>(null);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [loading, setLoading] = useState(false);
   const [recentIds, setRecentIds] = useState<OrderIdEntry[]>([]);
   const [displayId, setDisplayId] = useState<OrderIdEntry | null>(null);
@@ -36,7 +36,7 @@ export const OrderIdGenerator = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedSource === 'instagram' && sourceHandle.trim().length > 3) {
+    if (selectedSource === 'Instagram' && sourceHandle.trim().length > 3) {
       const handler = setTimeout(() => {
         fetchInstagramId(sourceHandle.trim());
       }, 400); // Faster trigger after paste
@@ -120,7 +120,7 @@ export const OrderIdGenerator = () => {
       const response = await searchApiClient.post<{ orderId: string }>(API_ROUTES.ORDERS.GENERATE, null, {
         params: { 
           source: selectedSource, 
-          paymentMode: paymentMethod || '' ,
+          paymentMode: paymentMode || '' ,
           sourceHandle: sourceHandle || '',
           instagramUserId: detectedInstaId || ''
         }
@@ -128,11 +128,11 @@ export const OrderIdGenerator = () => {
       const newEntry: OrderIdEntry = {
         id: response.orderId,
         source: selectedSource,
-        paymentMethod: paymentMethod,
+        paymentMode: paymentMode,
         timestamp: new Date().toISOString(),
-        customerPhone: selectedSource === 'whatsapp' ? sourceHandle : undefined,
-        instagramHandle: selectedSource === 'instagram' ? sourceHandle : undefined,
-        instagramUserId: selectedSource === 'instagram' ? (detectedInstaId || undefined) : undefined,
+        customerPhone: selectedSource === 'WhatsApp' ? sourceHandle : undefined,
+        instagramHandle: selectedSource === 'Instagram' ? sourceHandle : undefined,
+        instagramUserId: selectedSource === 'Instagram' ? (detectedInstaId || undefined) : undefined,
       };
       
       const updated = [newEntry, ...recentIds].slice(0, 10);
@@ -142,7 +142,7 @@ export const OrderIdGenerator = () => {
       setIsNewId(true);
       
       setSelectedSource(null);
-      setPaymentMethod(null);
+      setPaymentMode(null);
       setSourceHandle('');
     } catch (error) {
       console.error('Failed to generate Order ID:', error);
@@ -160,7 +160,7 @@ export const OrderIdGenerator = () => {
         customerAddress: updatedEntry.customerAddress,
         source: updatedEntry.source,
         sourceHandle: updatedEntry.instagramHandle || updatedEntry.customerPhone,
-        paymentMode: updatedEntry.paymentMethod
+        paymentMode: updatedEntry.paymentMode
       });
 
       const updated = recentIds.map(item => item.id === id ? updatedEntry : item);
@@ -221,7 +221,6 @@ export const OrderIdGenerator = () => {
   return (
     <Surface style={styles.container} elevation={0}>
       <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.BackAction onPress={() => router.back()} size={20} />
         <Appbar.Content title="Order ID Generator" titleStyle={styles.headerTitle} />
         <Appbar.Action icon="cog" onPress={() => router.push('/modal')} size={20} />
       </Appbar.Header>
@@ -231,45 +230,45 @@ export const OrderIdGenerator = () => {
           <TouchableOpacity 
             style={styles.pureIconContainer}
             onPress={() => {
-              setSelectedSource('whatsapp');
+              setSelectedSource('WhatsApp');
               setIsNewId(false);
             }}
           >
             <Icon 
               source="whatsapp" 
               size={55} 
-              color={selectedSource === 'whatsapp' ? '#25D366' : theme.colors.outline} 
+              color={selectedSource === 'WhatsApp' ? '#25D366' : theme.colors.outline} 
             />
           </TouchableOpacity>
 
           <TouchableOpacity 
             style={styles.pureIconContainer}
             onPress={() => {
-              setSelectedSource('instagram');
+              setSelectedSource('Instagram');
               setIsNewId(false);
             }}
           >
             <Icon 
               source="instagram" 
               size={55} 
-              color={selectedSource === 'instagram' ? '#E4405F' : theme.colors.outline} 
+              color={selectedSource === 'Instagram' ? '#E4405F' : theme.colors.outline} 
             />
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.paymentButton, paymentMethod === 'COD' && styles.paymentButtonSelected]}
-            onPress={() => setPaymentMethod('COD')}
+            style={[styles.paymentButton, paymentMode === 'COD' && styles.paymentButtonSelected]}
+            onPress={() => setPaymentMode('COD')}
           >
-            <Text style={[styles.paymentText, paymentMethod === 'COD' && styles.paymentTextSelected]}>
+            <Text style={[styles.paymentText, paymentMode === 'COD' && styles.paymentTextSelected]}>
               COD
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.paymentButton, paymentMethod === 'Prepaid' && styles.paymentButtonSelected]}
-            onPress={() => setPaymentMethod('Prepaid')}
+            style={[styles.paymentButton, paymentMode === 'Prepaid' && styles.paymentButtonSelected]}
+            onPress={() => setPaymentMode('Prepaid')}
           >
-            <Text style={[styles.paymentText, paymentMethod === 'Prepaid' && styles.paymentTextSelected]}>
+            <Text style={[styles.paymentText, paymentMode === 'Prepaid' && styles.paymentTextSelected]}>
               Prepaid
             </Text>
           </TouchableOpacity>
@@ -278,17 +277,17 @@ export const OrderIdGenerator = () => {
         {selectedSource && (
           <View>
             <TextInput
-              label={selectedSource === 'whatsapp' ? 'Phone Number (Optional)' : 'Instagram URL (Optional)'}
+              label={selectedSource === 'WhatsApp' ? 'Phone Number (Optional)' : 'Instagram URL (Optional)'}
               value={sourceHandle}
               onChangeText={setSourceHandle}
               mode="outlined"
               style={styles.sourceHandleInput}
-              keyboardType={selectedSource === 'whatsapp' ? 'phone-pad' : 'default'}
-              left={<TextInput.Icon icon={selectedSource === 'whatsapp' ? 'phone' : 'instagram'} />}
+              keyboardType={selectedSource === 'WhatsApp' ? 'phone-pad' : 'default'}
+              left={<TextInput.Icon icon={selectedSource === 'WhatsApp' ? 'phone' : 'instagram'} />}
               right={isLookupLoading ? <TextInput.Icon icon={() => <ActivityIndicator size="small" color={theme.colors.primary} />} /> : null}
-              placeholder={selectedSource === 'whatsapp' ? '+91 99999 00000' : 'instagram.com/username'}
+              placeholder={selectedSource === 'WhatsApp' ? '+91 99999 00000' : 'instagram.com/username'}
             />
-            {selectedSource === 'instagram' && detectedInstaId && (
+            {selectedSource === 'Instagram' && detectedInstaId && (
               <Text style={{ fontSize: 11, color: theme.colors.outline, marginTop: 4, marginLeft: 12 }}>
                 Permanent ID: <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>{detectedInstaId}</Text>
               </Text>

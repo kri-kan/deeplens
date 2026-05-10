@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using Dapper;
 using DeepLens.Application.Abstractions.Data;
 using DeepLens.Application.Abstractions.Services;
+using DeepLens.Contracts.Instagram;
+using DeepLens.Contracts.Media;
 using DeepLens.Domain.Enums;
 using DeepLens.Shared.Common;
 using Microsoft.Extensions.Logging;

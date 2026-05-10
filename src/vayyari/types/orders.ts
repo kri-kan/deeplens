@@ -9,14 +9,17 @@ export interface Attachment {
   uploadedAt?: string;
 }
 
+export type OrderSource = 'None' | 'WhatsApp' | 'Instagram';
+export type PaymentMode = 'None' | 'COD' | 'Prepaid';
+
 /**
  * Shared types for Order ID management.
  * Mirrors OrderHistoryDto from backend.
  */
 export interface OrderIdEntry {
   id: string;
-  source: 'whatsapp' | 'instagram' | string;
-  paymentMethod: 'COD' | 'Prepaid' | string | null;
+  source: OrderSource;
+  paymentMode: PaymentMode | null;
   timestamp: string;
   customerPhone?: string;
   sourceHandle?: string;
@@ -36,9 +39,9 @@ export interface OrderIdEntry {
 export interface OrderUpdateRequest {
   customerPhone?: string;
   customerAddress?: string;
-  source?: string;
+  source?: OrderSource;
   sourceHandle?: string;
-  paymentMode?: string;
+  paymentMode?: PaymentMode;
   transactionId?: string;
   items?: OrderItem[];
 }

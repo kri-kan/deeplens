@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using DeepLens.Domain.Entities.Catalog;
 using DeepLens.Contracts.Media;
+using DeepLens.Domain.Enums;
 using System.Text.Json.Serialization;
 
 namespace DeepLens.Contracts.Catalog;
@@ -22,7 +23,7 @@ public interface IProductService
     Task<bool> ReorderMediaAsync(Guid productId, List<Guid> mediaIds);
     Task<VendorProduct?> GetProductByIdAsync(Guid id);
     Task<MergePreviewDto> GetMergePreviewAsync(Guid sourceId, Guid targetId);
-    Task<bool> LinkInstagramPostAsync(Guid postId, Guid productId, string linkType);
+    Task<bool> LinkInstagramPostAsync(Guid postId, Guid productId, InstagramLinkType linkType);
     Task<IEnumerable<InstagramProductLinkDto>> GetInstagramLinksAsync(Guid postId);
     Task<bool> UnlinkInstagramPostAsync(Guid postId, Guid productId);
     Task<VendorProduct> CreateProductFromPostAsync(Guid postId, ProductIngestionDto data);
@@ -53,7 +54,7 @@ public class InstagramProductLinkDto
     public Guid ProductId { get; set; }
 
     [JsonPropertyName("linkType")]
-    public string LinkType { get; set; } = string.Empty;
+    public InstagramLinkType LinkType { get; set; }
 
     [JsonPropertyName("productTitle")]
     public string? ProductTitle { get; set; }
@@ -145,8 +146,8 @@ public class ProductIngestionDto
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 
-    [JsonPropertyName("masterTitle")]
-    public string? MasterTitle { get; set; }
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
 
     [JsonPropertyName("category")]
     public MediaCategory Category { get; set; } = MediaCategory.Product;

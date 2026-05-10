@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Http;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
+using DeepLens.Contracts.Media;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.SearchApi.DTOs;
 
@@ -27,7 +29,7 @@ public class ProductRequest
 
     [JsonPropertyName("category")]
     [FromForm(Name = "category")]
-    public string? Category { get; set; }
+    public MediaCategory? Category { get; set; }
 
     [JsonPropertyName("subCategory")]
     [FromForm(Name = "subCategory")]
@@ -80,3 +82,12 @@ public class MergeRequest
     [JsonPropertyName("isVendorProductIds")]
     public bool IsVendorProductIds { get; set; }
 }
+
+/// <summary>
+/// Request body for linking an Instagram post to a product.
+/// </summary>
+public record InstaLinkRequest(
+    [property: JsonPropertyName("postId")] Guid PostId,
+    [property: JsonPropertyName("productId")] Guid ProductId,
+    [property: JsonPropertyName("linkType")] InstagramLinkType LinkType = InstagramLinkType.Is
+);

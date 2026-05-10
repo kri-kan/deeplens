@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { ProductCreationForm } from '../product/ProductCreationForm';
 import { searchApiClient } from '@/api/client';
+import { API_ROUTES } from '@/constants/api-routes';
 
 const { width, height } = Dimensions.get('window');
 
@@ -255,7 +256,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                             {searchResults.map(p => {
                                 const existingLink = existingLinks.find(l => l.productId === p.masterProductId);
                                 const primaryMedia = p.media?.find((m: any) => m.isDefault) || p.media?.[0];
-                                const mediaUri = primaryMedia ? `http://192.168.0.170:5000/api/v1/Attachment/download?path=${encodeURIComponent(primaryMedia.path)}` : null;
+                                const mediaUri = primaryMedia ? `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(primaryMedia.path)}` : null;
 
                                 return (
                                     <List.Item

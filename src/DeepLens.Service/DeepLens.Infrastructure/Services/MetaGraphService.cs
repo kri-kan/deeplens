@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeepLens.Application.Abstractions.Services;
 using DeepLens.Domain.Enums;
+using DeepLens.Contracts.Instagram;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Distributed;
@@ -234,7 +235,7 @@ namespace DeepLens.Infrastructure.Services
                     Permalink = m.Permalink,
                     LikeCount = m.LikeCount,
                     CommentCount = m.CommentsCount,
-                    Timestamp = m.Timestamp,
+                    Timestamp = DateTime.TryParse(m.Timestamp, out var dt) ? dt.ToUniversalTime() : null,
                     MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
                     MediaProductType = m.MediaProductType,
                     Children = m.Children?.Data?.Select(c => new MetaPost {
@@ -322,7 +323,7 @@ namespace DeepLens.Infrastructure.Services
                     Permalink = m.Permalink,
                     LikeCount = m.LikeCount,
                     CommentCount = m.CommentsCount,
-                    Timestamp = m.Timestamp,
+                    Timestamp = DateTime.TryParse(m.Timestamp, out var dt) ? dt.ToUniversalTime() : null,
                     MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
                     MediaProductType = m.MediaProductType,
                     Children = m.Children?.Data?.Select(c => new MetaPost {

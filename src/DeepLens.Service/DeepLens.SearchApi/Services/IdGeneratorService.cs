@@ -2,6 +2,7 @@ using DeepLens.Application.Abstractions.Data;
 using DeepLens.Application.Abstractions.IdGeneration;
 using DeepLens.Application.Abstractions.Services;
 using DeepLens.Contracts.Orders;
+using DeepLens.Domain.Enums;
 using DeepLens.SearchApi.DTOs;
 using DeepLens.SearchApi.Services;
 using Microsoft.Extensions.Logging;
@@ -27,12 +28,12 @@ public class IdGeneratorService : IIdGeneratorService
         _logger = logger;
     }
 
-    public async Task<string> GenerateOrderIdAsync(string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
+    public async Task<string> GenerateOrderIdAsync(OrderSource? source = null, PaymentMode? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
     {
         return await _sequencedIdGenerator.GetNextOrderIdAsync();
     }
 
-    public async Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, string? source = null, string? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
+    public async Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, OrderSource? source = null, PaymentMode? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null)
     {
         var orderId = await GenerateOrderIdAsync(source, paymentMode, sourceHandle, instagramUserId);
         var itemIds = Enumerable.Range(1, itemCount).Select(i => GenerateOrderItemId(orderId, i));
@@ -59,17 +60,12 @@ public class IdGeneratorService : IIdGeneratorService
         return await _orderRepository.GetDetailsAsync(orderId);
     }
 
-    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? phone = null, string? address = null, string? source = null, string? sourceHandle = null, string? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null)
+    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? customerPhone = null, string? customerAddress = null, OrderSource? source = null, string? sourceHandle = null, PaymentMode? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null)
     {
-        int? sourceId = null;
-        if (!string.IsNullOrEmpty(source) && Enum.TryParse<DeepLens.Domain.Enums.OrderSource>(source, true, out var srcEnum))
-            sourceId = (int)srcEnum;
+        int? sourceId = source.HasValue ? (int)source.Value : null;
+        int? paymentModeId = paymentMode.HasValue ? (int)paymentMode.Value : null;
 
-        int? paymentModeId = null;
-        if (!string.IsNullOrEmpty(paymentMode) && Enum.TryParse<DeepLens.Domain.Enums.PaymentMode>(paymentMode, true, out var payEnum))
-            paymentModeId = (int)payEnum;
-
-        var result = await _orderRepository.UpdateDetailsAsync(orderId, phone, address, sourceId, sourceHandle, paymentModeId, transactionId);
+        var result = await _orderRepository.UpdateDetailsAsync(orderId, customerPhone, customerAddress, sourceId, sourceHandle, paymentModeId, transactionId);
 
         if (items != null)
         {

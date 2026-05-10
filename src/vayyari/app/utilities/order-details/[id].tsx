@@ -351,7 +351,7 @@ export default function OrderFormScreen() {
                 customerAddress: orderData?.customerAddress,
                 source: orderData?.source,
                 sourceHandle: orderData?.instagramHandle || orderData?.customerPhone,
-                paymentMode: orderData?.paymentMethod,
+                paymentMode: orderData?.paymentMode,
                 items: items,
                 transactionId: transactionId,
             } as OrderUpdateRequest);
@@ -408,16 +408,16 @@ export default function OrderFormScreen() {
                             <Text variant="labelLarge" style={{ opacity: 0.6, marginRight: 4 }}>Source:</Text>
                             <PlatformHandle 
                                 source={orderData?.source || ''} 
-                                handle={orderData?.source === 'whatsapp' ? (orderData?.customerPhone || '') : (orderData?.instagramHandle || orderData?.sourceHandle || '')}
+                                handle={orderData?.source === 'WhatsApp' ? (orderData?.customerPhone || '') : (orderData?.instagramHandle || orderData?.sourceHandle || '')}
                                 fontSize={15}
                             />
                         </View>
                         <Chip 
                             mode="flat" 
-                            selectedColor={orderData?.paymentMethod === 'Prepaid' ? '#4CAF50' : '#FF9800'}
-                            style={{ backgroundColor: orderData?.paymentMethod === 'Prepaid' ? '#E8F5E9' : '#FFF3E0' }}
+                            selectedColor={orderData?.paymentMode === 'Prepaid' ? '#4CAF50' : '#FF9800'}
+                            style={{ backgroundColor: orderData?.paymentMode === 'Prepaid' ? '#E8F5E9' : '#FFF3E0' }}
                         >
-                            {orderData?.paymentMethod || 'COD'}
+                            {orderData?.paymentMode || 'COD'}
                         </Chip>
                     </View>
 

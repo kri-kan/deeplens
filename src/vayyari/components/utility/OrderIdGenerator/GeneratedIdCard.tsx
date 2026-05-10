@@ -27,9 +27,9 @@ export const GeneratedIdCard = ({
     <Surface style={[styles.idCard, !isNew && styles.idCardInactive]} elevation={1}>
       <View style={styles.idCardLeft}>
         <Icon 
-          source={entry.source === 'whatsapp' ? 'whatsapp' : 'instagram'} 
+          source={entry.source === 'WhatsApp' ? 'whatsapp' : 'instagram'} 
           size={24} 
-          color={entry.source === 'whatsapp' ? '#25D366' : '#E4405F'} 
+          color={entry.source === 'WhatsApp' ? '#25D366' : '#E4405F'} 
         />
         <View>
           <Text style={styles.idCardText}>{entry.id}</Text>

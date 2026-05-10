@@ -63,7 +63,8 @@ export const useCreateProduct = (
         title,
         description,
         vendorPrice: parseFloat(price) || 0,
-        category: category,
+        category: 'Product', // MediaCategory
+        subCategory: category as ProductCategory,
         files,
         sourcePostIds: linkedPosts.map(p => p.id),
       });

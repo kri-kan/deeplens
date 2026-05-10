@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using DeepLens.SearchApi.Services;
 using DeepLens.SearchApi.DTOs;
 using DeepLens.Contracts.Orders;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -45,7 +46,7 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID.
     /// </summary>
     [HttpPost("order")]
-    public async Task<IActionResult> GenerateOrderId([FromQuery] string? source, [FromQuery] string? paymentMode, [FromQuery] string? sourceHandle, [FromQuery] string? instagramUserId)
+    public async Task<IActionResult> GenerateOrderId([FromQuery] OrderSource? source, [FromQuery] PaymentMode? paymentMode, [FromQuery] string? sourceHandle, [FromQuery] string? instagramUserId)
     {
         var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode, sourceHandle, instagramUserId);
         return Ok(new { orderId });
@@ -55,7 +56,7 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID and a set of item sub-IDs.
     /// </summary>
     [HttpPost("orderwithitems")]
-    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] string? source = null, [FromQuery] string? paymentMode = null, [FromQuery] string? sourceHandle = null, [FromQuery] string? instagramUserId = null)
+    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] OrderSource? source = null, [FromQuery] PaymentMode? paymentMode = null, [FromQuery] string? sourceHandle = null, [FromQuery] string? instagramUserId = null)
     {
         if (itemCount < 1 || itemCount > 100)
             return BadRequest(new { message = "Item count must be between 1 and 100" });
@@ -96,8 +97,8 @@ public class OrderIdController : ControllerBase
     {
         var success = await _idGenerator.UpdateOrderDetailsAsync(
             orderId, 
-            details.Phone, 
-            details.Address, 
+            details.CustomerPhone, 
+            details.CustomerAddress, 
             details.Source,
             details.SourceHandle,
             details.PaymentMode,

@@ -29,11 +29,11 @@ const IconWrapper = ({ children, size }: { children: React.ReactNode; size: numb
  * Add a new entry here to support a new category — no new component needed.
  */
 export const CATEGORY_REGISTRY: CategoryDefinition[] = [
-  { id: 'saree',   label: 'Saree',   assetPath: require('../assets/images/saree.svg') },
-  { id: 'dress',   label: 'Dress',   assetPath: require('../assets/images/dress.svg') },
-  { id: 'lehanga', label: 'Lehanga', assetPath: require('../assets/images/lehanga.svg') },
-  { id: 'kids',    label: 'Kids',    assetPath: require('../assets/images/kids.svg') },
-  { id: 'general', label: 'Others',  assetPath: require('../assets/images/others.svg') },
+  { id: 'Saree',   label: 'Saree',   assetPath: require('../assets/images/saree.svg') },
+  { id: 'Dress',   label: 'Dress',   assetPath: require('../assets/images/dress.svg') },
+  { id: 'Lehanga', label: 'Lehanga', assetPath: require('../assets/images/lehanga.svg') },
+  { id: 'Kids',    label: 'Kids',    assetPath: require('../assets/images/kids.svg') },
+  { id: 'General', label: 'Others',  assetPath: require('../assets/images/others.svg') },
 ];
 
 /** Quick lookup map: icon name → asset path */

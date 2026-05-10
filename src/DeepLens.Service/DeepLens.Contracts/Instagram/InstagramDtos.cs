@@ -1,9 +1,7 @@
 using System.Text.Json.Serialization;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.Contracts.Instagram;
-
-using DeepLens.Domain.Enums;
-using DeepLens.Application.Abstractions.Services;
 
 public class InstagramProfileDto
 {
@@ -84,10 +82,10 @@ public class InstagramPostDto
     public string? StoragePath { get; set; }
 
     [JsonPropertyName("likeCount")]
-    public int LikeCount { get; set; }
+    public long LikeCount { get; set; }
 
     [JsonPropertyName("commentCount")]
-    public int CommentCount { get; set; }
+    public long CommentCount { get; set; }
 }
 
 public class InstagramMediaDto
@@ -110,6 +108,38 @@ public class InstagramMediaDto
 
     [JsonPropertyName("displayOrder")]
     public int DisplayOrder { get; set; }
+}
+
+public class MetaPost
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+    [JsonPropertyName("caption")]
+    public string? Caption { get; set; }
+    [JsonPropertyName("mediaUrl")]
+    public string? MediaUrl { get; set; }
+    [JsonPropertyName("thumbnailUrl")]
+    public string? ThumbnailUrl { get; set; }
+    [JsonPropertyName("permalink")]
+    public string? Permalink { get; set; }
+    [JsonPropertyName("likeCount")]
+    public long LikeCount { get; set; }
+    [JsonPropertyName("commentCount")]
+    public long CommentCount { get; set; }
+    [JsonPropertyName("timestamp")]
+    public DateTime? Timestamp { get; set; }
+    [JsonPropertyName("mediaType")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public InstagramMediaType MediaType { get; set; }
+    [JsonPropertyName("mediaProductType")]
+    public string? MediaProductType { get; set; }
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath { get; set; }
+    [JsonPropertyName("productCode")]
+    public string? ProductCode { get; set; }
+
+    [JsonPropertyName("children")]
+    public List<MetaPost>? Children { get; set; }
 }
 
 public class InstagramProfileDetailsDto
@@ -145,10 +175,10 @@ public class ScraperJobDto
     public string? Username { get; set; }
 
     [JsonPropertyName("jobType")]
-    public string JobType { get; set; } = string.Empty;
+    public InstagramJobType JobType { get; set; }
 
     [JsonPropertyName("status")]
-    public string Status { get; set; } = string.Empty;
+    public InstagramJobStatus Status { get; set; }
 
     [JsonPropertyName("targetCount")]
     public int TargetCount { get; set; }

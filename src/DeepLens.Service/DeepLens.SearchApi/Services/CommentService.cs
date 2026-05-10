@@ -1,13 +1,14 @@
 using System.Data;
 using Dapper;
 using Npgsql;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.SearchApi.Services;
 
 public interface ICommentService
 {
-    Task<IEnumerable<object>> GetCommentsAsync(string entityType, string entityId);
-    Task<Guid> AddCommentAsync(string entityType, string entityId, string content, Guid[]? attachmentIds = null, Guid? authorId = null);
+    Task<IEnumerable<object>> GetCommentsAsync(CommentEntityType entityType, string entityId);
+    Task<Guid> AddCommentAsync(CommentEntityType entityType, string entityId, string content, Guid[]? attachmentIds = null, Guid? authorId = null);
     Task<bool> UpdateCommentAsync(Guid commentId, string content, Guid[]? attachmentIds = null);
     Task<bool> DeleteCommentAsync(Guid commentId);
 }
@@ -28,7 +29,7 @@ public class CommentService : ICommentService
         return conn;
     }
 
-    public async Task<IEnumerable<object>> GetCommentsAsync(string entityType, string entityId)
+    public async Task<IEnumerable<object>> GetCommentsAsync(CommentEntityType entityType, string entityId)
     {
         using var conn = await GetConnectionAsync();
         return await conn.QueryAsync(@"
@@ -46,10 +47,10 @@ public class CommentService : ICommentService
             FROM comments c
             WHERE c.entity_type = @Type AND c.entity_id = @Id
             ORDER BY c.created_at ASC",
-            new { Type = entityType, Id = entityId });
+            new { Type = entityType.ToString().ToLower(), Id = entityId });
     }
 
-    public async Task<Guid> AddCommentAsync(string entityType, string entityId, string content, Guid[]? attachmentIds = null, Guid? authorId = null)
+    public async Task<Guid> AddCommentAsync(CommentEntityType entityType, string entityId, string content, Guid[]? attachmentIds = null, Guid? authorId = null)
     {
         using var conn = await GetConnectionAsync();
         var commentId = Guid.NewGuid();
@@ -59,7 +60,7 @@ public class CommentService : ICommentService
             VALUES (@Id, @Type, @EntityId, @Content, @AttachmentIds, @AuthorId)",
             new { 
                 Id = commentId, 
-                Type = entityType, 
+                Type = entityType.ToString().ToLower(), 
                 EntityId = entityId, 
                 Content = content, 
                 AttachmentIds = attachmentIds ?? new Guid[0],

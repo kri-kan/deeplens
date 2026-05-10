@@ -5,6 +5,7 @@ namespace DeepLens.Contracts.Media;
 /// <summary>
 /// Major media buckets (top-level categories).
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MediaCategory
 {
     Unknown = 0,
@@ -19,6 +20,7 @@ public enum MediaCategory
 /// <summary>
 /// Specific types for Product media.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProductSubCategory
 {
     General = 0,
@@ -31,6 +33,7 @@ public enum ProductSubCategory
 /// <summary>
 /// Specific types for Order-related media.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum OrderSubCategory
 {
     General = 0,

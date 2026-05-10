@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.SearchApi.DTOs;
 
@@ -12,19 +13,19 @@ namespace DeepLens.SearchApi.DTOs;
 public class OrderUpdateDto
 {
     [JsonPropertyName("customerPhone")]
-    public string? Phone { get; set; }
+    public string? CustomerPhone { get; set; }
 
     [JsonPropertyName("customerAddress")]
-    public string? Address { get; set; }
+    public string? CustomerAddress { get; set; }
 
     [JsonPropertyName("source")]
-    public string? Source { get; set; }
+    public OrderSource? Source { get; set; }
 
     [JsonPropertyName("sourceHandle")]
     public string? SourceHandle { get; set; }
 
     [JsonPropertyName("paymentMode")]
-    public string? PaymentMode { get; set; }
+    public PaymentMode? PaymentMode { get; set; }
 
     [JsonPropertyName("transactionId")]
     public string? TransactionId { get; set; }

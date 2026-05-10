@@ -3,7 +3,7 @@ import { View, TouchableOpacity } from 'react-native';
 import { Surface, Text, Icon, IconButton, useTheme, Portal, Dialog, Button, TextInput, ActivityIndicator } from 'react-native-paper';
 import { searchApiClient } from '@/api/client';
 import { useRouter } from 'expo-router';
-import { OrderIdEntry } from '@/types/orders';
+import { OrderIdEntry, PaymentMode } from '@/types/orders';
 import { ProfileCopyIcon } from '../../icons/ProfileCopyIcon';
 import { PlatformHandle } from '../../ui/PlatformHandle';
 
@@ -29,30 +29,30 @@ export const HistoryItem = ({
   const theme = useTheme();
   const router = useRouter();
   const [editSource, setEditSource] = useState(item.source);
-  const [editPayment, setEditPayment] = useState(item.paymentMethod);
-  const [editHandle, setEditHandle] = useState(item.source === 'whatsapp' ? item.customerPhone || '' : item.instagramHandle || '');
+  const [editPaymentMode, setEditPaymentMode] = useState<PaymentMode | null>(item.paymentMode);
+  const [editHandle, setEditHandle] = useState(item.source === 'WhatsApp' ? item.customerPhone || '' : item.instagramHandle || '');
   const [detectedInstaId, setDetectedInstaId] = useState<string | null>(item.instagramUserId || null);
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   
   const hasChanged = editSource !== item.source || 
-                    editPayment !== item.paymentMethod || 
-                    editHandle !== (item.source === 'whatsapp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
+                    editPaymentMode !== item.paymentMode || 
+                    editHandle !== (item.source === 'WhatsApp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
 
   // Sync handle when platform is switched in the edit form
   React.useEffect(() => {
-    setEditHandle(editSource === 'whatsapp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
+    setEditHandle(editSource === 'WhatsApp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
   }, [editSource, item.customerPhone, item.instagramHandle]);
 
   const handleReset = () => {
     setEditSource(item.source);
-    setEditPayment(item.paymentMethod);
-    setEditHandle(item.source === 'whatsapp' ? item.customerPhone || '' : item.instagramHandle || '');
+    setEditPaymentMode(item.paymentMode);
+    setEditHandle(item.source === 'WhatsApp' ? item.customerPhone || '' : item.instagramHandle || '');
     setDetectedInstaId(item.instagramUserId || null);
   };
 
   // Debounced Instagram ID Lookup
   React.useEffect(() => {
-    if (isEditing && editSource === 'instagram' && editHandle.trim().length > 3) {
+    if (isEditing && editSource === 'Instagram' && editHandle.trim().length > 3) {
       const handler = setTimeout(() => {
         fetchInstagramId(editHandle.trim());
       }, 400); 
@@ -90,10 +90,10 @@ export const HistoryItem = ({
     onUpdate(item.id, { 
       ...item, 
       source: editSource, 
-      paymentMethod: editPayment,
-      customerPhone: editSource === 'whatsapp' ? handleValue : '',
-      instagramHandle: editSource === 'instagram' ? handleValue : '',
-      instagramUserId: editSource === 'instagram' ? (detectedInstaId || item.instagramUserId) : undefined,
+      paymentMode: editPaymentMode,
+      customerPhone: editSource === 'WhatsApp' ? handleValue : '',
+      instagramHandle: editSource === 'Instagram' ? handleValue : '',
+      instagramUserId: editSource === 'Instagram' ? (detectedInstaId || item.instagramUserId) : undefined,
     });
     onEdit(null);
   };
@@ -105,7 +105,7 @@ export const HistoryItem = ({
       <View style={styles.historyLeft}>
         <PlatformHandle 
           source={item.source} 
-          handle={item.source === 'whatsapp' ? (item.customerPhone || '') : (item.instagramHandle || item.sourceHandle || '')}
+          handle={item.source === 'WhatsApp' ? (item.customerPhone || '') : (item.instagramHandle || item.sourceHandle || '')}
           size={32}
           showText={false}
         />
@@ -116,7 +116,7 @@ export const HistoryItem = ({
             </Text>
           </TouchableOpacity>
           <Text style={styles.historySubtitle}>
-            {item.paymentMethod ? `${item.paymentMethod} • ` : ''}{formatTimeAgo(item.timestamp)}
+            {item.paymentMode && item.paymentMode !== 'None' ? `${item.paymentMode} • ` : ''}{formatTimeAgo(item.timestamp)}
           </Text>
         </View>
       </View>
@@ -156,39 +156,39 @@ export const HistoryItem = ({
           <View style={[styles.selectionRow, { justifyContent: 'center' }]}>
             <TouchableOpacity 
               style={styles.pureIconContainer}
-              onPress={() => setEditSource('whatsapp')}
+              onPress={() => setEditSource('WhatsApp')}
             >
               <Icon 
                 source="whatsapp" 
                 size={48} 
-                color={editSource === 'whatsapp' ? '#25D366' : theme.colors.outline} 
+                color={editSource === 'WhatsApp' ? '#25D366' : theme.colors.outline} 
               />
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={styles.pureIconContainer}
-              onPress={() => setEditSource('instagram')}
+              onPress={() => setEditSource('Instagram')}
             >
               <Icon 
                 source="instagram" 
                 size={48} 
-                color={editSource === 'instagram' ? '#E4405F' : theme.colors.outline} 
+                color={editSource === 'Instagram' ? '#E4405F' : theme.colors.outline} 
               />
             </TouchableOpacity>
           </View>
 
           <View>
             <TextInput
-              label={editSource === 'whatsapp' ? 'Phone Number' : 'Instagram URL'}
+              label={editSource === 'WhatsApp' ? 'Phone Number' : 'Instagram URL'}
               value={editHandle}
               onChangeText={setEditHandle}
               mode="outlined"
               dense
-              keyboardType={editSource === 'whatsapp' ? 'phone-pad' : 'default'}
-              left={<TextInput.Icon icon={editSource === 'whatsapp' ? 'phone' : 'instagram'} />}
+              keyboardType={editSource === 'WhatsApp' ? 'phone-pad' : 'default'}
+              left={<TextInput.Icon icon={editSource === 'WhatsApp' ? 'phone' : 'instagram'} />}
               right={isLookupLoading ? <TextInput.Icon icon={() => <ActivityIndicator size="small" color={theme.colors.primary} />} /> : null}
             />
-            {editSource === 'instagram' && detectedInstaId && (
+            {editSource === 'Instagram' && detectedInstaId && (
               <Text style={{ fontSize: 11, color: theme.colors.outline, marginTop: 4, marginLeft: 12 }}>
                 Permanent ID: <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>{detectedInstaId}</Text>
               </Text>
@@ -197,17 +197,17 @@ export const HistoryItem = ({
 
           <View style={styles.selectionRow}>
             <TouchableOpacity 
-              style={[styles.paymentButton, editPayment === 'COD' && styles.paymentButtonSelected]}
-              onPress={() => setEditPayment('COD')}
+              style={[styles.paymentButton, editPaymentMode === 'COD' && styles.paymentButtonSelected]}
+              onPress={() => setEditPaymentMode('COD')}
             >
-              <Text style={[styles.paymentText, editPayment === 'COD' && styles.paymentTextSelected]}>COD</Text>
+              <Text style={[styles.paymentText, editPaymentMode === 'COD' && styles.paymentTextSelected]}>COD</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.paymentButton, editPayment === 'Prepaid' && styles.paymentButtonSelected]}
-              onPress={() => setEditPayment('Prepaid')}
+              style={[styles.paymentButton, editPaymentMode === 'Prepaid' && styles.paymentButtonSelected]}
+              onPress={() => setEditPaymentMode('Prepaid')}
             >
-              <Text style={[styles.paymentText, editPayment === 'Prepaid' && styles.paymentTextSelected]}>Prepaid</Text>
+              <Text style={[styles.paymentText, editPaymentMode === 'Prepaid' && styles.paymentTextSelected]}>Prepaid</Text>
             </TouchableOpacity>
           </View>
         </Dialog.Content>

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Text.Json.Serialization;
 using DeepLens.Domain.Enums;
+using DeepLens.Contracts.Instagram;
 
 namespace DeepLens.Application.Abstractions.Services
 {
@@ -102,36 +103,5 @@ namespace DeepLens.Application.Abstractions.Services
         public bool IsDataDeleted { get; set; }
         [JsonPropertyName("lastSyncedAt")]
         public DateTime? LastSyncedAt { get; set; }
-    }
-
-    public class MetaPost
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-        [JsonPropertyName("caption")]
-        public string? Caption { get; set; }
-        [JsonPropertyName("mediaUrl")]
-        public string? MediaUrl { get; set; }
-        [JsonPropertyName("thumbnailUrl")]
-        public string? ThumbnailUrl { get; set; }
-        [JsonPropertyName("permalink")]
-        public string? Permalink { get; set; }
-        [JsonPropertyName("likeCount")]
-        public long LikeCount { get; set; }
-        [JsonPropertyName("commentCount")]
-        public long CommentCount { get; set; }
-        [JsonPropertyName("timestamp")]
-        public string? Timestamp { get; set; }
-        [JsonPropertyName("mediaType")]
-        public InstagramMediaType MediaType { get; set; }
-        [JsonPropertyName("mediaProductType")]
-        public string? MediaProductType { get; set; }
-        [JsonPropertyName("storagePath")]
-        public string? StoragePath { get; set; }
-        [JsonPropertyName("productCode")]
-        public string? ProductCode { get; set; }
-
-        [JsonPropertyName("children")]
-        public List<MetaPost>? Children { get; set; }
     }
 }

@@ -12,7 +12,7 @@ namespace DeepLens.CLI;
 /// </summary>
 public class Program
 {
-    private static string _host = "192.168.0.170";
+    private static string _host = Environment.GetEnvironmentVariable("DEEPLENS_INFRA_HOST") ?? "localhost";
     private static int _port = 5432;
     private static string _user = "postgres";
     private static string _pass = "Krikank1$";

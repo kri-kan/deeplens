@@ -10,6 +10,7 @@ using System.Text.Json;
 using DeepLens.Contracts.Media;
 using DeepLens.Shared.Common;
 using Minio.DataModel.Tags;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.Infrastructure.Services;
 
@@ -53,12 +54,12 @@ public class ProductService : IProductService
 
             if (!categoryId.HasValue || string.IsNullOrEmpty(data.CategorySlug))
             {
-                var categoryRecord = await connection.QueryFirstOrDefaultAsync<dynamic>(
+                var categoryRecord = await connection.QueryFirstOrDefaultAsync<CategoryDto>(
                     "SELECT id, slug FROM categories WHERE slug = @slug OR name = @slug", 
                     new { slug = data.CategorySlug ?? "general" }, transaction);
                 
-                categoryId = categoryRecord?.id ?? Guid.Parse("44a3aeed-7a91-43f2-aa4e-69e76cc29146");
-                categorySlug = categoryRecord?.slug ?? "general";
+                categoryId = categoryRecord?.Id ?? Guid.Parse("44a3aeed-7a91-43f2-aa4e-69e76cc29146");
+                categorySlug = categoryRecord?.Slug ?? "general";
             }
 
             // 1. Create Product (Master)
@@ -79,7 +80,7 @@ public class ProductService : IProductService
             await connection.ExecuteAsync(masterSql, new {
                 Id = masterId,
                 CategoryId = categoryId,
-                Title = data.MasterTitle ?? "New Product",
+                Title = data.Title ?? "New Product",
                 Sku = hexId,
                 Tags = tags.ToArray(),
                 SeqId = data.SequenceId ?? 0,
@@ -165,17 +166,17 @@ public class ProductService : IProductService
                     throw new InvalidOperationException("This post is already linked to another product as 'is'.");
                 }
 
-                var post = await connection.QuerySingleOrDefaultAsync<dynamic>(
-                    "SELECT storage_path, title FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
+                var post = await connection.QuerySingleOrDefaultAsync<InstagramPostMetadata>(
+                    "SELECT storage_path as StoragePath, title as Title FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
 
                 if (post != null)
                 {
                     // Link the Instagram media if it has a storage path
-                    if (!string.IsNullOrEmpty(post.storage_path))
+                    if (!string.IsNullOrEmpty(post.StoragePath))
                     {
                         var mediaId = await connection.QueryFirstOrDefaultAsync<Guid?>(
                             "SELECT id FROM media WHERE storage_path = @Path LIMIT 1", 
-                            new { Path = post.storage_path }, transaction) ?? Guid.NewGuid();
+                            new { Path = post.StoragePath }, transaction) ?? Guid.NewGuid();
 
                         var exists = await connection.ExecuteScalarAsync<bool>(
                             "SELECT EXISTS(SELECT 1 FROM media WHERE id = @Id)", 
@@ -186,7 +187,7 @@ public class ProductService : IProductService
                             await connection.ExecuteAsync(@"
                                 INSERT INTO media (id, storage_path, mime_type, file_size_bytes, media_type, status, category, subcategory)
                                 VALUES (@Id, @Path, 'image/jpeg', 0, 1, 0, 'instagram', 'posts')",
-                                new { Id = mediaId, Path = post.storage_path }, transaction);
+                                new { Id = mediaId, Path = post.StoragePath }, transaction);
                         }
 
                         await connection.ExecuteAsync(@"
@@ -297,19 +298,19 @@ public class ProductService : IProductService
 
         sql += " LIMIT @Take OFFSET @Skip";
 
-        var results = await db.QueryAsync<dynamic>(sql, parameters);
+        var results = await db.QueryAsync<ProductCatalogQueryResult>(sql, parameters);
         
         var products = results.Select(r => {
             var vp = new VendorProduct
             {
-                Id = r.MasterProductId ?? Guid.Empty,
-                MasterProductId = r.MasterProductId ?? Guid.Empty,
+                Id = r.MasterProductId,
+                MasterProductId = r.MasterProductId,
                 Title = r.Title ?? "Untitled Product",
                 ProductCode = r.ProductCode,
-                VendorPrice = r.VendorPrice ?? 0m,
+                VendorPrice = r.VendorPrice,
                 ExclusiveDescription = r.VendorDescription,
                 Description = r.Description,
-                CreatedAt = r.CreatedAt ?? DateTime.UtcNow,
+                CreatedAt = r.CreatedAt,
                 Fabric = r.Fabric,
                 StitchType = r.StitchType,
                 WorkHeaviness = r.WorkHeaviness,
@@ -441,18 +442,18 @@ public class ProductService : IProductService
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.id = @Id AND p.is_deleted = FALSE";
 
-        var r = await db.QuerySingleOrDefaultAsync<dynamic>(sql, new { Id = id });
+        var r = await db.QuerySingleOrDefaultAsync<ProductCatalogQueryResult>(sql, new { Id = id });
         if (r == null) return null;
 
         var vp = new VendorProduct {
-            Id = r.Id ?? r.MasterProductId ?? Guid.Empty,
-            MasterProductId = r.MasterProductId ?? Guid.Empty,
+            Id = r.MasterProductId,
+            MasterProductId = r.MasterProductId,
             Title = r.Title ?? "Untitled Product",
             ProductCode = r.ProductCode,
-            VendorPrice = r.VendorPrice ?? 0m,
+            VendorPrice = r.VendorPrice,
             ExclusiveDescription = r.VendorDescription,
             Description = r.Description,
-            CreatedAt = r.CreatedAt ?? DateTime.UtcNow,
+            CreatedAt = r.CreatedAt,
             Fabric = r.Fabric,
             StitchType = r.StitchType,
             WorkHeaviness = r.WorkHeaviness,
@@ -491,11 +492,11 @@ public class ProductService : IProductService
         };
     }
 
-    public async Task<bool> LinkInstagramPostAsync(Guid postId, Guid productId, string linkType)
+    public async Task<bool> LinkInstagramPostAsync(Guid postId, Guid productId, InstagramLinkType linkType)
     {
         using var db = GetConnection();
         // 1. Ensure only one 'is' link per post
-        if (linkType.ToLower() == "is")
+        if (linkType == InstagramLinkType.Is)
         {
             var existingIsProduct = await db.QueryFirstOrDefaultAsync<Guid?>(
                 "SELECT product_id FROM instagram_product_links WHERE post_id = @PostId AND link_type = 'is'", 
@@ -513,15 +514,15 @@ public class ProductService : IProductService
             ON CONFLICT (post_id, product_id) 
             DO UPDATE SET link_type = EXCLUDED.link_type, updated_at = NOW()";
         
-        var success = await db.ExecuteAsync(sql, new { PostId = postId, ProductId = productId, LinkType = linkType.ToLower() }) > 0;
+        var success = await db.ExecuteAsync(sql, new { PostId = postId, ProductId = productId, LinkType = linkType.ToString().ToLower() }) > 0;
 
-        if (success && linkType.ToLower() == "is")
+        if (success && linkType == InstagramLinkType.Is)
         {
             // Link media to the product
-            var post = await db.QuerySingleOrDefaultAsync<dynamic>(
-                "SELECT storage_path FROM competitor_videos WHERE id = @Id", new { Id = postId });
+            var post = await db.QuerySingleOrDefaultAsync<InstagramPostMetadata>(
+                "SELECT storage_path as StoragePath FROM competitor_videos WHERE id = @Id", new { Id = postId });
 
-            if (post != null && !string.IsNullOrEmpty(post.storage_path))
+            if (post != null && !string.IsNullOrEmpty(post.StoragePath))
             {
                 // Propagate all media (including carousels/videos)
                 await PropagateMediaLinksAsync(db, postId, productId);
@@ -570,14 +571,14 @@ public class ProductService : IProductService
         try
         {
             // 1. Verify link exists
-            var link = await db.QueryFirstOrDefaultAsync<dynamic>(
-                "SELECT link_type FROM instagram_product_links WHERE post_id = @PostId AND product_id = @ProductId",
+            var link = await db.QueryFirstOrDefaultAsync<InstagramProductLinkInfo>(
+                "SELECT link_type as LinkType FROM instagram_product_links WHERE post_id = @PostId AND product_id = @ProductId",
                 new { PostId = postId, ProductId = productId }, transaction);
                 
             if (link == null) return false;
 
             // 2. Validate if it's the sole source of existence
-            if (link.link_type == "is")
+            if (link.LinkType == "is")
             {
                 var otherIsLinksCount = await db.ExecuteScalarAsync<int>(
                     "SELECT COUNT(*) FROM instagram_product_links WHERE product_id = @ProductId AND link_type = 'is' AND post_id != @PostId",
@@ -599,16 +600,16 @@ public class ProductService : IProductService
                 new { PostId = postId, ProductId = productId }, transaction);
 
             // 4. Remove the media link if applicable
-            var post = await db.QuerySingleOrDefaultAsync<dynamic>(
-                "SELECT storage_path FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
+            var post = await db.QuerySingleOrDefaultAsync<InstagramPostMetadata>(
+                "SELECT storage_path as StoragePath FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
 
-            if (post != null && !string.IsNullOrEmpty(post.storage_path))
+            if (post != null && !string.IsNullOrEmpty(post.StoragePath))
             {
                 await db.ExecuteAsync(@"
                     DELETE FROM media_links 
                     WHERE entity_id = @ProductId AND entity_type = 'product'
                     AND media_id = (SELECT id FROM media WHERE storage_path = @Path LIMIT 1)",
-                    new { ProductId = productId, Path = post.storage_path }, transaction);
+                    new { ProductId = productId, Path = post.StoragePath }, transaction);
             }
 
             transaction.Commit();
@@ -629,8 +630,8 @@ public class ProductService : IProductService
 
         try {
             // 1. Fetch post metadata
-            var post = await connection.QuerySingleOrDefaultAsync<dynamic>(
-                "SELECT * FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
+            var post = await connection.QuerySingleOrDefaultAsync<InstagramPostMetadata>(
+                "SELECT storage_path as StoragePath, title as Title, description as Description FROM competitor_videos WHERE id = @Id", new { Id = postId }, transaction);
             
             if (post == null) throw new InvalidOperationException("Post not found");
 
@@ -656,7 +657,7 @@ public class ProductService : IProductService
             var tags = data.Tags ?? new List<string>();
             await connection.ExecuteAsync(masterSql, new {
                 Id = masterId,
-                Title = data.MasterTitle ?? post.title ?? "New Product from IG",
+                Title = data.Title ?? post.Title ?? "New Product from IG",
                 Sku = hexId,
                 Tags = tags.ToArray(),
                 SeqId = (int)nextVal,
@@ -665,7 +666,7 @@ public class ProductService : IProductService
                 Stitch = data.StitchType,
                 Work = data.WorkHeaviness,
                 CategoryId = data.CategoryId,
-                Description = data.Description ?? post.description
+                Description = data.Description ?? post.Description
             }, transaction);
 
             // 3. Propagate all media (including carousels/videos)
@@ -683,7 +684,7 @@ public class ProductService : IProductService
                 Id = masterId, // Since no vendor listing yet, we return the master ID
                 MasterProductId = masterId,
                 ProductCode = hexId,
-                Title = data.MasterTitle ?? post.title
+                Title = data.Title ?? post.Title
             };
         } catch (Exception ex) {
             transaction.Rollback();
@@ -730,4 +731,21 @@ public class ProductService : IProductService
         using var db = GetConnection();
         return await db.QueryAsync<CategoryDto>("SELECT id, name, slug FROM categories ORDER BY name ASC");
     }
+
+    private record InstagramPostMetadata(string? StoragePath, string? Title, string? Description);
+    private record InstagramProductLinkInfo(string LinkType);
+    private record ProductCatalogQueryResult(
+        Guid MasterProductId, 
+        string? Title, 
+        string? ProductCode, 
+        string[]? Tags, 
+        string? Fabric, 
+        string? StitchType, 
+        string? WorkHeaviness, 
+        DateTime CreatedAt, 
+        string? Description, 
+        string? Category, 
+        decimal VendorPrice, 
+        string? VendorDescription, 
+        string? MediaJson);
 }
