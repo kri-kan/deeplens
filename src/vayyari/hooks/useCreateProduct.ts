@@ -53,11 +53,19 @@ export const useCreateProduct = (
 
     setLoading(true);
     try {
-      const files: ProductFilePayload[] = images.map(img => ({
-        uri: img.uri,
-        type: img.mimeType || 'image/jpeg',
-        name: img.fileName || `image_${Date.now()}.jpg`,
-      }));
+      const files: ProductFilePayload[] = images.map(img => {
+        const extension = img.uri.split('.').pop()?.toLowerCase() || 'jpg';
+        const inferredType = extension === 'png' ? 'image/png' : 
+                             extension === 'webp' ? 'image/webp' : 
+                             extension === 'gif' ? 'image/gif' : 
+                             'image/jpeg';
+                             
+        return {
+          uri: img.uri,
+          type: img.mimeType || inferredType,
+          name: img.fileName || `image_${Date.now()}.${extension}`,
+        };
+      });
 
       await productService.createProduct({
         title,

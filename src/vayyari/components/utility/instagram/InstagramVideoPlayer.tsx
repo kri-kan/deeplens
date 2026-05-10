@@ -18,7 +18,7 @@ interface CustomVideoPlayerProps {
     isActive: boolean;
 }
 
-export const InstagramVideoPlayer = ({ 
+export const InstagramVideoPlayer = React.memo(({ 
     media,
     width, 
     getMediaHeight, 
@@ -71,7 +71,6 @@ export const InstagramVideoPlayer = ({
                 setIsReady(true);
             }
             if (event.error && isActive) {
-                // Ignore extractor errors for jpg files that might slip through initially
                 if (uri?.toLowerCase().endsWith('.jpg') || uri?.toLowerCase().endsWith('.jpeg')) return;
                 console.error(`[Video] Error: ${event.error.message} | URI: ${uri}`);
             }
@@ -119,11 +118,8 @@ export const InstagramVideoPlayer = ({
         if (isActive && player && uri) {
             try {
                 if (currentUriRef.current !== uri) {
-                    console.log(`[VideoPlayer] Source changed to: ${uri}`);
                     player.replaceAsync(uri);
                     currentUriRef.current = uri;
-                    
-                    // Reset isReady for new source
                     setIsReady(player.status === 'readyToPlay');
                 }
                 if (isPlaying) {
@@ -181,7 +177,7 @@ export const InstagramVideoPlayer = ({
             </View>
         </View>
     );
-};
+});
 
 const styles = StyleSheet.create({
     rightVolumeOverlay: {

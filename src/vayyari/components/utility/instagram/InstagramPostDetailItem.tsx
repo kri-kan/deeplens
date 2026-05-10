@@ -14,6 +14,7 @@ import { ProductTile } from '@/components/utility/product/ProductTile';
 import type { VendorProduct } from '@/types/products';
 import { InstagramVideoPlayer } from './InstagramVideoPlayer';
 import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
+import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 
 const { width, height } = Dimensions.get('window');
 
@@ -60,6 +61,8 @@ export const InstagramPostDetailItem = ({
     const [existingLinks, setExistingLinks] = useState<InstagramLink[]>([]);
     const [isMenuVisible, setIsMenuVisible] = useState(false);
     const [isRefreshingMedia, setIsRefreshingMedia] = useState(false);
+    const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+    const [shareProgress, setShareProgress] = useState<number | null>(null);
     const [localItem, setLocalItem] = useState(item);
 
     // Sync local item and reset state when item changes (for component reuse)
@@ -296,14 +299,6 @@ export const InstagramPostDetailItem = ({
                             const mHeight = getMediaHeight();
                             const isPlayerActive = isActive && mediaIdx === activeMediaIndex;
                             
-                            if (isPlayerActive && isVideo(media)) {
-                                console.log(`[VideoPlayer] Rendering for ${media.id}`, {
-                                    isPlaying,
-                                    isPlayerActive,
-                                    uri: getMediaUri(media)
-                                });
-                            }
-
                             return (
                                 <View key={media.id || mediaIdx} style={{ width, height: START_TOP - insets.top, justifyContent: 'center' }}>
                                     {isVideo(media) ? (
@@ -587,6 +582,79 @@ export const InstagramPostDetailItem = ({
                                     >
                                         <IconButton icon="sync" size={24} iconColor={theme.colors.primary} />
                                         <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Refresh Data</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
+                                        style={styles.menuItem}
+                                        disabled={downloadProgress !== null}
+                                        onPress={async () => {
+                                            try {
+                                                const activeMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                                const url = getMediaUri(activeMedia);
+                                                const path = activeMedia.storagePath || '';
+                                                const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
+                                                
+                                                setDownloadProgress(0);
+                                                await downloadMedia(url, `ig_${activeMedia.id || Date.now()}.${extension}`, (p) => {
+                                                    setDownloadProgress(p);
+                                                });
+                                                
+                                                setDownloadProgress(null);
+                                                Alert.alert('Success', 'Media saved to gallery!');
+                                                setIsMenuVisible(false);
+                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
+                                            } catch (err) {
+                                                setDownloadProgress(null);
+                                                Alert.alert('Download Failed', 'Could not download media.');
+                                            }
+                                        }}
+                                    >
+                                        <IconButton 
+                                            icon={downloadProgress !== null ? "loading" : "download"} 
+                                            size={24} 
+                                            iconColor={theme.colors.primary} 
+                                        />
+                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary, flex: 1 }}>
+                                            {downloadProgress !== null 
+                                                ? `Downloading (${Math.round(downloadProgress * 100)}%)` 
+                                                : `Download ${isVideo(mediaLinks[activeMediaIndex] || localItem) ? 'Video' : 'Photo'}`}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
+                                        style={styles.menuItem}
+                                        disabled={shareProgress !== null || downloadProgress !== null}
+                                        onPress={async () => {
+                                            try {
+                                                const activeMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                                const url = getMediaUri(activeMedia);
+                                                const path = activeMedia.storagePath || '';
+                                                const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
+                                                
+                                                setShareProgress(0);
+                                                await shareMedia(url, extension, (p) => {
+                                                    setShareProgress(p);
+                                                });
+                                                
+                                                setShareProgress(null);
+                                                setIsMenuVisible(false);
+                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
+                                            } catch (err) {
+                                                setShareProgress(null);
+                                                Alert.alert('Sharing Failed', 'Could not prepare media for sharing.');
+                                            }
+                                        }}
+                                    >
+                                        <IconButton 
+                                            icon={shareProgress !== null ? "loading" : "share-variant"} 
+                                            size={24} 
+                                            iconColor={theme.colors.primary} 
+                                        />
+                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary, flex: 1 }}>
+                                            {shareProgress !== null 
+                                                ? `Preparing (${Math.round(shareProgress * 100)}%)` 
+                                                : `Share ${isVideo(mediaLinks[activeMediaIndex] || localItem) ? 'Video' : 'Photo'}`}
+                                        </Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity 

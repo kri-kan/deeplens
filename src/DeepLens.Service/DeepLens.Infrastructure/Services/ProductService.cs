@@ -251,7 +251,7 @@ public class ProductService : IProductService
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
                 (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorDescription"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('Id', m.id, 'StoragePath', m.storage_path, 'Color', m.color, 'IsDefault', ml.is_primary))
+                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary))
                     FROM media m 
                     JOIN media_links ml ON m.id = ml.media_id
                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
@@ -433,7 +433,7 @@ public class ProductService : IProductService
                 (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorDescription"",
                 p.created_at as ""CreatedAt"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('Id', m.id, 'StoragePath', m.storage_path, 'Color', m.color, 'IsDefault', ml.is_primary))
+                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary))
                     FROM media m 
                     JOIN media_links ml ON m.id = ml.media_id
                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
@@ -540,7 +540,7 @@ public class ProductService : IProductService
                    p.title as ""ProductTitle"", p.base_sku as ""ProductCode"",
                    (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""Price"",
                    COALESCE((
-                       SELECT json_agg(json_build_object('Id', m.id, 'StoragePath', m.storage_path, 'Color', m.color, 'IsDefault', ml.is_primary))
+                       SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary))
                        FROM media m 
                        JOIN media_links ml ON m.id = ml.media_id
                        WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
@@ -555,7 +555,12 @@ public class ProductService : IProductService
         {
             if (!string.IsNullOrEmpty(res.MediaJson))
             {
-                res.Media = System.Text.Json.JsonSerializer.Deserialize<List<MediaEntry>>(res.MediaJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                try {
+                    res.Media = JsonSerializer.Deserialize<List<MediaEntry>>(res.MediaJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "Failed to deserialize media JSON for product {ProductId}", res.ProductId);
+                    res.Media = new();
+                }
             }
         }
 

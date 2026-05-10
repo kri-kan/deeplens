@@ -9,7 +9,8 @@ public enum InstagramJobType
     Media = 1,
     Followers = 2,
     Following = 3,
-    Backfill = 4
+    Backfill = 4,
+    Manual = 5
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

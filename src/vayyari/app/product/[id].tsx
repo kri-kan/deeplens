@@ -25,6 +25,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { productService } from '@/services/productService';
 import type { VendorProduct } from '@/types/products';
+import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +40,8 @@ export default function ProductDetailScreen() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [shareProgress, setShareProgress] = useState<number | null>(null);
 
   const fetchProductDetails = useCallback(async () => {
     setLoading(true);
@@ -223,15 +226,76 @@ export default function ProductDetailScreen() {
                 style={styles.closeBtn}
             />
             {mediaList[activeMediaIndex] && (
-                <Image
-                    source={{ 
-                      uri: mediaList[activeMediaIndex].id && mediaList[activeMediaIndex].id !== '00000000-0000-0000-0000-000000000000' 
-                        ? productService.getThumbnailUrl(mediaList[activeMediaIndex].id, 'large') 
-                        : (mediaList[activeMediaIndex].storagePath ? productService.getThumbnailUrlByPath(mediaList[activeMediaIndex].storagePath, 'large') : 'https://via.placeholder.com/800')
-                    }}
-                    style={styles.previewImage}
-                    contentFit="contain"
-                />
+                <>
+                    <Image
+                        source={{ 
+                        uri: mediaList[activeMediaIndex].id && mediaList[activeMediaIndex].id !== '00000000-0000-0000-0000-000000000000' 
+                            ? productService.getThumbnailUrl(mediaList[activeMediaIndex].id, 'large') 
+                            : (mediaList[activeMediaIndex].storagePath ? productService.getThumbnailUrlByPath(mediaList[activeMediaIndex].storagePath, 'large') : 'https://via.placeholder.com/800')
+                        }}
+                        style={styles.previewImage}
+                        contentFit="contain"
+                    />
+                    <View style={styles.modalActions}>
+                        <Button 
+                            mode="contained" 
+                            icon={downloadProgress !== null ? "loading" : "download"} 
+                            loading={downloadProgress !== null}
+                            disabled={downloadProgress !== null}
+                            onPress={async () => {
+                                try {
+                                    const m = mediaList[activeMediaIndex];
+                                    const url = m.storagePath 
+                                        ? productService.getMediaUrlByPath(m.storagePath)
+                                        : productService.getThumbnailUrl(m.id, 'large');
+                                    const path = m.storagePath || '';
+                                    const extension = path.split('.').pop()?.toLowerCase() || 'jpg';
+                                    
+                                    setDownloadProgress(0);
+                                    await downloadMedia(url, `product_${product.productCode}_${m.id || Date.now()}.${extension}`, (p) => {
+                                        setDownloadProgress(p);
+                                    });
+                                    setDownloadProgress(null);
+                                    Alert.alert('Success', 'Media saved to gallery!');
+                                } catch (err) {
+                                    setDownloadProgress(null);
+                                    Alert.alert('Error', 'Failed to download media');
+                                }
+                            }}
+                            style={styles.modalActionBtn}
+                        >
+                            {downloadProgress !== null ? `${Math.round(downloadProgress * 100)}%` : 'Download'}
+                        </Button>
+                        <Button 
+                            mode="contained" 
+                            icon={shareProgress !== null ? "loading" : "share-variant"} 
+                            loading={shareProgress !== null}
+                            disabled={shareProgress !== null || downloadProgress !== null}
+                            onPress={async () => {
+                                try {
+                                    const m = mediaList[activeMediaIndex];
+                                    const url = m.storagePath 
+                                        ? productService.getMediaUrlByPath(m.storagePath)
+                                        : productService.getThumbnailUrl(m.id, 'large');
+                                    const path = m.storagePath || '';
+                                    const extension = path.split('.').pop()?.toLowerCase() || 'jpg';
+                                    
+                                    setShareProgress(0);
+                                    await shareMedia(url, extension, (p) => {
+                                        setShareProgress(p);
+                                    });
+                                    setShareProgress(null);
+                                } catch (err) {
+                                    setShareProgress(null);
+                                    Alert.alert('Error', 'Failed to share media');
+                                }
+                            }}
+                            style={styles.modalActionBtn}
+                        >
+                            {shareProgress !== null ? `Preparing (${Math.round(shareProgress * 100)}%)` : 'Share'}
+                        </Button>
+                    </View>
+                </>
             )}
         </View>
       </Modal>
@@ -339,5 +403,14 @@ const styles = StyleSheet.create({
     top: 40,
     right: 20,
     zIndex: 10,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    position: 'absolute',
+    bottom: 40,
+    gap: 16,
+  },
+  modalActionBtn: {
+    minWidth: 120,
   },
 });
