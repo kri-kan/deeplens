@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-05-09 20:05:16
+**Auto-generated on:** 2026-05-11 16:38:58
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -144,6 +144,7 @@ Last Updated: December 20, 2025
 | **Identity Admin** | `admin@deeplens.local` | `Krikank1$` | Initial Admin       |
 | **MinIO**          | `krikan`               | `Krikank1$`          | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
+| **Ollama WebUI**   | `kriishnakanth@GMAIL.COM` | `krikank1$`     | `192.168.0.170:11435` |
 | **Kafka UI**       | -                      | -                    | `192.168.0.170:8080`|
 
 ---
