@@ -43,6 +43,7 @@ builder.Services.AddScoped<IMetaGraphService, MetaGraphService>();
 builder.Services.AddHttpClient<IInstagramMediaService, InstagramMediaService>();
 builder.Services.AddScoped<DeepLens.Contracts.Customers.ICustomerService, DeepLens.Infrastructure.Services.CustomerService>();
 builder.Services.AddScoped<IYoutubeService, YoutubeService>();
+builder.Services.AddHttpClient<IAiService, AiService>();
 
 // MinIO Setup
 builder.Services.AddSingleton<Minio.IMinioClient>(sp => 

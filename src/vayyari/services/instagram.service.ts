@@ -40,6 +40,8 @@ export interface InstagramPost {
   mediaProductType?: string;
   storagePath?: string;
   productCode?: string;
+  youtubeVideoId?: string;
+  youtubeUrl?: string;
 }
 
 export interface ProfileMetrics {
@@ -169,6 +171,8 @@ export const normalizeData = (data: any): InstagramPost => {
       commentCount: data.commentCount || data.CommentCount || 0,
       caption: data.caption || data.Caption || data.description || data.title,
       productCode: data.productCode || data.ProductCode,
+      youtubeVideoId: data.youtubeVideoId || data.YoutubeVideoId,
+      youtubeUrl: data.youtubeUrl || data.YoutubeUrl,
   };
 };
 

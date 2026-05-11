@@ -13,6 +13,7 @@ namespace DeepLens.Application.Abstractions.Services
         Task<bool> RefreshTokenAsync();
         Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken);
         Task<MetaPost?> GetPostByIdAsync(string postId);
+        Task<MetaPost?> GetPostByDiscoveryAsync(string targetUsername, string postId);
         Task<MetaProfile?> GetProfileAsync(string targetUsername);
         Task<List<MetaPost>> GetPostsAsync(string targetUsername, int maxPosts = 50);
         Task<List<MetaPost>> GetPostEngagementAsync(string targetUsername, int limit = 20);

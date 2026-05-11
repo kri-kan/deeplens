@@ -10,6 +10,7 @@ using Npgsql;
 using DeepLens.Contracts.Media;
 using DeepLens.Shared.Common;
 using DeepLens.Domain.Enums;
+using DeepLens.Contracts.Instagram;
 
 namespace DeepLens.WorkerService.Workers
 {
@@ -386,7 +387,7 @@ namespace DeepLens.WorkerService.Workers
                             WatchlistId = watchlistId, Id = p.Id, Url = p.Permalink ?? "", Caption = p.Caption,
                             MediaType = p.MediaType.ToString().ToUpper(), ThumbnailUrl = thumbUrl,
                             MediaUrl = p.MediaUrl, LikeCount = p.LikeCount, CommentCount = p.CommentCount,
-                            PostedAt = ParseTimestamp(p.Timestamp) ?? DateTime.UtcNow,
+                            PostedAt = p.Timestamp ?? DateTime.UtcNow,
                             IsReel = p.MediaProductType?.ToUpper() == "REELS",
                             StoragePath = newStoragePath
                         });
@@ -528,11 +529,5 @@ namespace DeepLens.WorkerService.Workers
             }
         }
 
-        private static DateTime? ParseTimestamp(string? ts)
-        {
-            if (string.IsNullOrEmpty(ts)) return null;
-            if (DateTime.TryParse(ts, out var dt)) return dt.ToUniversalTime();
-            return null;
-        }
     }
 }

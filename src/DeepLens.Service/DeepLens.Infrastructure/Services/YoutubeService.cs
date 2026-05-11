@@ -13,6 +13,7 @@ using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using Google.Apis.Upload;
 using Microsoft.Extensions.Logging;
+using DeepLens.Domain.Enums;
 
 namespace DeepLens.Infrastructure.Services
 {
@@ -181,13 +182,23 @@ namespace DeepLens.Infrastructure.Services
                 throw new InvalidOperationException("YouTube API quota exceeded for today.");
             }
 
-            // 1. Get Video Stream from MinIO
+            // 1. Get Actual Video Path from Media Table (Ensuring we don't upload the thumbnail)
             using var conn = await _db.CreateConnectionAsync();
             var storagePath = await conn.QueryFirstOrDefaultAsync<string>(@"
-                SELECT storage_path FROM competitor_videos WHERE id = @InstagramPostId", 
-                new { request.InstagramPostId });
+                SELECT m.storage_path 
+                FROM media m
+                JOIN media_links ml ON m.id = ml.media_id
+                WHERE ml.entity_id = @InstagramPostId 
+                  AND ml.entity_type = 'competitor_video'
+                  AND m.media_type = @VideoType -- VIDEO
+                ORDER BY ml.is_primary DESC
+                LIMIT 1", 
+                new { 
+                    request.InstagramPostId, 
+                    VideoType = (int)InstagramMediaType.VIDEO 
+                });
 
-            if (string.IsNullOrEmpty(storagePath)) throw new Exception("Video not found in storage registry.");
+            if (string.IsNullOrEmpty(storagePath)) throw new Exception("Video file not found in storage registry. Ensure media is synchronized.");
 
             var fileLength = await _storage.GetFileLengthAsync(storagePath);
             using var videoStream = await _storage.GetFileAsync(storagePath);

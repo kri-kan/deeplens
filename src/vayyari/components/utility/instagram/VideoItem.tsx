@@ -55,31 +55,44 @@ export const VideoItem: React.FC<VideoItemProps> = ({
         </View>
       )}
 
+      {!selectionMode && (
+        <View style={styles.leftActionsContainer}>
+          {item.permalink && (
+            <>
+              <IconButton 
+                icon="open-in-new" 
+                iconColor="white" 
+                size={16} 
+                style={styles.actionIcon}
+                onPress={() => Linking.openURL(item.permalink || '')}
+              />
+              <IconButton 
+                icon="link-variant" 
+                iconColor="white" 
+                size={16} 
+                style={styles.actionIcon}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(item.permalink || '');
+                }}
+              />
+            </>
+          )}
+          {item.youtubeUrl && (
+            <IconButton 
+              icon="youtube" 
+              iconColor="#FF0000" 
+              size={20} 
+              style={styles.youtubeActionIcon}
+              onPress={() => Linking.openURL(item.youtubeUrl || '')}
+            />
+          )}
+        </View>
+      )}
+
       {item.productCode && !selectionMode && (
         <View style={styles.productCodeContainer}>
           <Text style={styles.productCodeText}>{item.productCode}</Text>
         </View>
-      )}
-
-      {item.permalink && !selectionMode && (
-        <>
-          <IconButton 
-            icon="open-in-new" 
-            iconColor="white" 
-            size={16} 
-            style={styles.openLinkIcon}
-            onPress={() => Linking.openURL(item.permalink || '')}
-          />
-          <IconButton 
-            icon="link-variant" 
-            iconColor="white" 
-            size={16} 
-            style={[styles.openLinkIcon, { top: 32, backgroundColor: 'transparent' }]}
-            onPress={async () => {
-              await Clipboard.setStringAsync(item.permalink || '');
-            }}
-          />
-        </>
       )}
 
       {item.mediaType === InstagramMediaType.VIDEO && (
@@ -167,13 +180,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 2,
   },
-  openLinkIcon: {
+  leftActionsContainer: {
     position: 'absolute',
     top: 4,
     left: 4,
+    bottom: 32, // End just above the bottom stats tray
+    zIndex: 10,
+    gap: 4,
+  },
+  actionIcon: {
     backgroundColor: 'rgba(0,0,0,0.3)',
     margin: 0,
-    zIndex: 1,
+    width: 24,
+    height: 24,
+  },
+  youtubeActionIcon: {
+    backgroundColor: 'transparent',
+    margin: 0,
+    width: 24,
+    height: 24,
+    marginTop: -4, // Adjust for larger icon visual alignment
   },
   productCodeContainer: {
     position: 'absolute',

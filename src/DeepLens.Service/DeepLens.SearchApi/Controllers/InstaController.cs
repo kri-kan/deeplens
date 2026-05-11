@@ -21,6 +21,24 @@ public class InstaController : ControllerBase
     private readonly IInstagramMediaService _instaMedia;
     private readonly ILogger<InstaController> _logger;
 
+    private const string MetaPostSelectSql = @"
+        SELECT 
+            cv.id::text AS Id, 
+            cv.platform_video_id AS PlatformId,
+            cv.url AS Permalink, 
+            cv.description AS Caption,
+            cv.media_type AS MediaType, 
+            cv.thumbnail_url AS ThumbnailUrl, 
+            cv.media_url AS MediaUrl,
+            cv.like_count AS LikeCount, 
+            cv.comment_count AS CommentCount, 
+            cv.posted_at AS Timestamp,
+            cv.storage_path AS StoragePath,
+            cv.youtube_video_id AS YoutubeVideoId,
+            cv.youtube_url AS YoutubeUrl,
+            (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+        FROM competitor_videos cv";
+
     public InstaController(
         IMetaGraphService metaGraph,
         IDbConnectionFactory db,
@@ -124,21 +142,7 @@ public class InstaController : ControllerBase
             if (toDate.HasValue) dateFilter += " AND posted_at <= @toDate";
 
             // 2. Get Recent Posts from Database to avoid API throttling
-            var sql = $@"
-                SELECT 
-                    cv.id::text AS Id, 
-                    cv.platform_video_id AS PlatformId,
-                    cv.url AS Permalink, 
-                    cv.description AS Caption,
-                    cv.media_type AS MediaType, 
-                    cv.thumbnail_url AS ThumbnailUrl, 
-                    cv.media_url AS MediaUrl,
-                    cv.like_count AS LikeCount, 
-                    cv.comment_count AS CommentCount, 
-                    cv.posted_at AS Timestamp,
-                    cv.storage_path AS StoragePath,
-                    (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
-                FROM competitor_videos cv
+            var sql = $@"{MetaPostSelectSql}
                 WHERE cv.watchlist_id = (SELECT id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram')
                 {dateFilter}
                 ORDER BY {orderBy} {direction}
@@ -564,21 +568,8 @@ public class InstaController : ControllerBase
     public async Task<ActionResult<MetaPost>> GetVideo([FromRoute] Guid id)
     {
         using var conn = await _db.CreateConnectionAsync();
-        var video = await conn.QueryFirstOrDefaultAsync<MetaPost>(@"
-            SELECT 
-                cv.id::text AS Id, 
-                cv.platform_video_id AS PlatformId,
-                cv.url AS Permalink, 
-                cv.description AS Caption,
-                cv.media_type AS MediaType, 
-                cv.thumbnail_url AS ThumbnailUrl, 
-                cv.media_url AS MediaUrl,
-                cv.like_count AS LikeCount, 
-                cv.comment_count AS CommentCount, 
-                cv.posted_at AS Timestamp,
-                cv.storage_path AS StoragePath,
-                (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
-            FROM competitor_videos cv
+        var video = await conn.QueryFirstOrDefaultAsync<MetaPost>($@"
+            {MetaPostSelectSql}
             WHERE cv.id = @id", 
             new { id });
 
@@ -637,15 +628,8 @@ public class InstaController : ControllerBase
 
         using var conn = await _db.CreateConnectionAsync();
         
-        var video = await conn.QueryFirstOrDefaultAsync<MetaPost>(@"
-            SELECT 
-                cv.id::text AS Id, 
-                cv.url AS Permalink, 
-                cv.description AS Caption,
-                cv.thumbnail_url AS ThumbnailUrl, 
-                cv.storage_path AS StoragePath,
-                (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
-            FROM competitor_videos cv
+        var video = await conn.QueryFirstOrDefaultAsync<MetaPost>($@"
+            {MetaPostSelectSql}
             WHERE cv.url = @Url OR cv.url LIKE @Pattern", 
             new { 
                 Url = url.Split('?')[0], 

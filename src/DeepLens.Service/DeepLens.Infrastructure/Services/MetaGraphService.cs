@@ -66,8 +66,8 @@ namespace DeepLens.Infrastructure.Services
         public async Task ReloadFromDbAsync()
         {
             var opts = LoadOptionsFromConfig();
-            var allSettings = await _appSettings.GetAllAsync();
-            var metaSettings = allSettings.Where(s => s.Key.StartsWith("Meta:")).ToDictionary(s => s.Key, s => s.Value);
+            var metaSettingsList = await _appSettings.GetSectionInternalAsync("Meta");
+            var metaSettings = metaSettingsList.ToDictionary(s => s.Key, s => s.Value);
 
             void Override(string key, Action<string> apply)
             {
@@ -222,35 +222,70 @@ namespace DeepLens.Infrastructure.Services
                 }
 
                 var body = await response.Content.ReadAsStringAsync();
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Graph API returned {StatusCode} for post {PostId}. Body: {Body}", response.StatusCode, postId, body);
+                    return null;
+                }
+
                 var m = JsonSerializer.Deserialize<GraphMediaItem>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (m == null || string.IsNullOrEmpty(m.Id)) return null;
 
-                return new MetaPost
-                {
-                    Id = m.Id,
-                    Caption = m.Caption,
-                    MediaUrl = m.MediaUrl,
-                    ThumbnailUrl = m.ThumbnailUrl,
-                    Permalink = m.Permalink,
-                    LikeCount = m.LikeCount,
-                    CommentCount = m.CommentsCount,
-                    Timestamp = DateTime.TryParse(m.Timestamp, out var dt) ? dt.ToUniversalTime() : null,
-                    MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
-                    MediaProductType = m.MediaProductType,
-                    Children = m.Children?.Data?.Select(c => new MetaPost {
-                        Id = c.Id,
-                        MediaUrl = c.MediaUrl,
-                        ThumbnailUrl = c.ThumbnailUrl,
-                        MediaType = InstagramMediaStandardizer.MapToMediaType(c.MediaType)
-                    }).ToList()
-                };
+                return MapToMetaPost(m);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to fetch single post {PostId} from Graph API", postId);
                 return null;
             }
+        }
+
+        public async Task<MetaPost?> GetPostByDiscoveryAsync(string targetUsername, string postId)
+        {
+            _logger.LogInformation("Attempting to find post {PostId} via business discovery for @{Username}", postId, targetUsername);
+            
+            // Business discovery doesn't allow direct filtering by ID, so we fetch the recent media
+            // Since refresh is usually for recent posts, 20 should be enough.
+            var mediaFields = "id,caption,media_url,thumbnail_url,permalink,like_count,comments_count,timestamp,media_type,media_product_type,children{id,media_url,thumbnail_url,media_type}";
+            var fields = $"business_discovery.username({targetUsername}){{media.limit(25){{{mediaFields}}}}}";
+            var url = BuildUrl($"/{_opts.IgBizId}", fields);
+
+            var discovery = await ExecuteBusinessDiscoveryAsync(url);
+            if (discovery?.Media?.Data == null) return null;
+
+            var match = discovery.Media.Data.FirstOrDefault(m => m.Id == postId);
+            if (match != null)
+            {
+                return MapToMetaPost(match);
+            }
+
+            _logger.LogWarning("Post {PostId} not found in the first 25 media items of @{Username}", postId, targetUsername);
+            return null;
+        }
+
+        private MetaPost MapToMetaPost(GraphMediaItem m)
+        {
+            return new MetaPost
+            {
+                Id = m.Id,
+                Caption = m.Caption,
+                MediaUrl = m.MediaUrl,
+                ThumbnailUrl = m.ThumbnailUrl,
+                Permalink = m.Permalink,
+                LikeCount = m.LikeCount,
+                CommentCount = m.CommentsCount,
+                Timestamp = DateTime.TryParse(m.Timestamp, out var dt) ? dt.ToUniversalTime() : null,
+                MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
+                MediaProductType = m.MediaProductType,
+                Children = m.Children?.Data?.Select(c => new MetaPost {
+                    Id = c.Id,
+                    MediaUrl = c.MediaUrl,
+                    ThumbnailUrl = c.ThumbnailUrl,
+                    MediaType = InstagramMediaStandardizer.MapToMediaType(c.MediaType)
+                }).ToList()
+            };
         }
 
         public async Task<MetaProfile?> GetProfileAsync(string targetUsername)
@@ -315,24 +350,7 @@ namespace DeepLens.Infrastructure.Services
                 var discovery = await ExecuteBusinessDiscoveryAsync(url);
                 if (discovery?.Media?.Data == null || !discovery.Media.Data.Any()) break;
 
-                var newPosts = discovery.Media.Data.Select(m => new MetaPost {
-                    Id = m.Id,
-                    Caption = m.Caption,
-                    MediaUrl = m.MediaUrl,
-                    ThumbnailUrl = m.ThumbnailUrl,
-                    Permalink = m.Permalink,
-                    LikeCount = m.LikeCount,
-                    CommentCount = m.CommentsCount,
-                    Timestamp = DateTime.TryParse(m.Timestamp, out var dt) ? dt.ToUniversalTime() : null,
-                    MediaType = InstagramMediaStandardizer.MapToMediaType(m.MediaType),
-                    MediaProductType = m.MediaProductType,
-                    Children = m.Children?.Data?.Select(c => new MetaPost {
-                        Id = c.Id,
-                        MediaUrl = c.MediaUrl,
-                        ThumbnailUrl = c.ThumbnailUrl,
-                        MediaType = InstagramMediaStandardizer.MapToMediaType(c.MediaType)
-                    }).ToList()
-                }).ToList();
+                var newPosts = discovery.Media.Data.Select(MapToMetaPost).ToList();
 
                 allPosts.AddRange(newPosts);
 

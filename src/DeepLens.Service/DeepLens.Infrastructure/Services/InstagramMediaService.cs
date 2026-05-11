@@ -45,7 +45,7 @@ namespace DeepLens.Infrastructure.Services
             
             // 1. Get current post info
             var postInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                SELECT cv.platform_video_id, w.external_id 
+                SELECT cv.platform_video_id, w.external_id, w.username 
                 FROM competitor_videos cv
                 JOIN competitor_watchlist w ON cv.watchlist_id = w.id
                 WHERE cv.id = @dbPostId", new { dbPostId });
@@ -57,21 +57,29 @@ namespace DeepLens.Infrastructure.Services
             }
 
             string platformId = postInfo.platform_video_id;
-            string externalId = postInfo.external_id;
+            string externalId = postInfo.external_id; // IG ID
+            string username = postInfo.username;
 
             // 2. Fetch fresh metadata from Graph API
             await _metaGraph.ReloadFromDbAsync();
             var freshPost = await _metaGraph.GetPostByIdAsync(platformId);
+            
             if (freshPost == null)
             {
-                _logger.LogWarning("Post {PlatformId} not found on Instagram via Graph API.", platformId);
+                _logger.LogInformation("Direct fetch failed for post {PlatformId}. Attempting fallback to Business Discovery for @{Username}.", platformId, username);
+                freshPost = await _metaGraph.GetPostByDiscoveryAsync(username, platformId);
+            }
+
+            if (freshPost == null)
+            {
+                _logger.LogWarning("Post {PlatformId} not found on Instagram via direct Graph API or Business Discovery.", platformId);
                 return false;
             }
 
             // Update core metadata in DB
             await conn.ExecuteAsync(@"
                 UPDATE competitor_videos 
-                SET caption = @Caption, 
+                SET description = @Caption, 
                     like_count = @LikeCount, 
                     comments_count = @CommentCount,
                     last_synced_at = NOW()

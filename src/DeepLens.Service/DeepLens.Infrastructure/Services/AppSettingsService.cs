@@ -176,7 +176,11 @@ namespace DeepLens.Infrastructure.Services
             new() { Key = "Youtube:CurrentQuotaUsage", Section = "YouTube", Label = "Current Quota Usage", Description = "Units consumed today.", IsSecret = false, DataType = "integer", Value = "0" },
             new() { Key = "Youtube:DefaultCategoryId", Section = "YouTube", Label = "Default Category ID", Description = "22 is People & Blogs.", IsSecret = false, DataType = "string", Value = "22" },
             new() { Key = "Youtube:SchedulingIntervalHours", Section = "YouTube", Label = "Scheduling Interval (hours)", Description = "Hours between scheduled posts.", IsSecret = false, DataType = "integer", Value = "6" },
-            new() { Key = "Youtube:RedirectUri", Section = "YouTube", Label = "Redirect URI", Description = "OAuth 2.0 redirect URI (must match Google Console).", IsSecret = false, DataType = "string", Value = "http://localhost:5002/oauth2callback" }
+            new() { Key = "Youtube:RedirectUri", Section = "YouTube", Label = "Redirect URI", Description = "OAuth 2.0 redirect URI (must match Google Console).", IsSecret = false, DataType = "string", Value = "http://localhost:5002/oauth2callback" },
+            
+            // AI Settings
+            new() { Key = "Ai:OllamaBaseUrl", Section = "AI", Label = "Ollama Base URL", Description = "The API endpoint for the Ollama instance.", IsSecret = false, DataType = "string", Value = "http://localhost:11434" },
+            new() { Key = "Ai:OllamaModel", Section = "AI", Label = "Ollama Model", Description = "The model name to use for generation (e.g. llama3).", IsSecret = false, DataType = "string", Value = "llama3" }
         };
     }
 }

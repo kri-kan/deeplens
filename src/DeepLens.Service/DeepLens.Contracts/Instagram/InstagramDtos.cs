@@ -137,6 +137,11 @@ public class MetaPost
     public string? StoragePath { get; set; }
     [JsonPropertyName("productCode")]
     public string? ProductCode { get; set; }
+    
+    [JsonPropertyName("youtubeVideoId")]
+    public string? YoutubeVideoId { get; set; }
+    [JsonPropertyName("youtubeUrl")]
+    public string? YoutubeUrl { get; set; }
 
     [JsonPropertyName("children")]
     public List<MetaPost>? Children { get; set; }

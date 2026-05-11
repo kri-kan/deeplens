@@ -16,6 +16,8 @@ import { InstagramVideoPlayer } from './InstagramVideoPlayer';
 import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 import { youtubeService } from '@/services/youtube.service';
+import { aiService } from '@/services/ai.service';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { TextInput } from 'react-native-paper';
 
 const { width, height } = Dimensions.get('window');
@@ -73,6 +75,9 @@ export const InstagramPostDetailItem = ({
     const [youtubeTitle, setYoutubeTitle] = useState('');
     const [youtubeDesc, setYoutubeDesc] = useState('');
     const [nextSlot, setNextSlot] = useState<string | null>(null);
+    const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+    const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
+    const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
 
     // Sync local item and reset state when item changes (for component reuse)
     useEffect(() => {
@@ -200,6 +205,21 @@ export const InstagramPostDetailItem = ({
         }
     };
 
+    const handleGenerateAiTitle = async () => {
+        if (!youtubeDesc || isGeneratingTitle) return;
+        
+        try {
+            setIsGeneratingTitle(true);
+            const response = await aiService.generateTitle(youtubeDesc);
+            setYoutubeTitle(response.title);
+        } catch (error) {
+            console.error('Failed to generate title', error);
+            Alert.alert('AI Error', 'Could not generate title. Please try again.');
+        } finally {
+            setIsGeneratingTitle(false);
+        }
+    };
+
     const getMediaHeight = () => {
         const activeMedia = mediaLinks[activeMediaIndex] || localItem;
         const ratio = mediaAspectRatios[activeMedia?.id || 'initial'] || (isVideo(localItem) ? 9/16 : 1);
@@ -272,22 +292,33 @@ export const InstagramPostDetailItem = ({
     return (
         <View style={{ width, height, backgroundColor: theme.colors.background }}>
             <View style={{ flex: 1 }}>
-                {/* Top Menu Icon - Only visible for active post */}
+                {/* Top Menu Icons - Only visible for active post */}
                 {isActive && (
-                    <View style={[styles.topMenuContainer, { top: insets.top + 10 }]}>
-                        <TouchableOpacity 
-                            onPress={() => {
-                                setIsMenuVisible(true);
-                                menuSheetTop.value = withSpring(MENU_VISIBLE);
-                            }}
-                            style={styles.customMenuButton}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.verticalDot} />
-                            <View style={styles.verticalDot} />
-                            <View style={styles.verticalDot} />
-                        </TouchableOpacity>
-                    </View>
+                    <>
+                        {localItem.youtubeUrl && (
+                            <View style={[styles.topLeftIconContainer, { top: insets.top + 60 }]}>
+                                <IconButton 
+                                    icon="youtube" 
+                                    iconColor="#FF0000" 
+                                    size={24} 
+                                    style={styles.youtubeFloatingBtn}
+                                    onPress={() => Linking.openURL(localItem.youtubeUrl!)}
+                                />
+                            </View>
+                        )}
+                        <View style={[styles.topMenuContainer, { top: insets.top + 10 }]}>
+                            <IconButton 
+                                icon="dots-vertical" 
+                                iconColor="white" 
+                                size={24} 
+                                style={styles.menuTrigger}
+                                onPress={() => {
+                                    setIsMenuVisible(true);
+                                    menuSheetTop.value = withSpring(MENU_VISIBLE);
+                                }}
+                            />
+                        </View>
+                    </>
                 )}
 
                 <View style={[styles.mediaContainer, { 
@@ -693,9 +724,29 @@ export const InstagramPostDetailItem = ({
                                             iconColor={isVideo(localItem) ? '#FF0000' : '#ccc'} 
                                         />
                                         <Text variant="bodyLarge" style={{ color: isVideo(localItem) ? '#FF0000' : '#ccc', flex: 1 }}>
-                                            Post to YouTube Shorts
+                                            {localItem.youtubeUrl ? 'Repost to YouTube' : 'Post to YouTube Shorts'}
                                         </Text>
                                     </TouchableOpacity>
+
+                                    {localItem.youtubeUrl && (
+                                        <TouchableOpacity 
+                                            style={styles.menuItem}
+                                            onPress={() => {
+                                                setIsMenuVisible(false);
+                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
+                                                Linking.openURL(localItem.youtubeUrl!);
+                                            }}
+                                        >
+                                            <IconButton 
+                                                icon="open-in-new" 
+                                                size={24} 
+                                                iconColor="#007AFF" 
+                                            />
+                                            <Text variant="bodyLarge" style={{ color: '#007AFF', flex: 1 }}>
+                                                View on YouTube
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
 
                                     <TouchableOpacity 
                                         style={[styles.menuItem, { marginTop: 10 }]}
@@ -724,6 +775,14 @@ export const InstagramPostDetailItem = ({
                                 mode="outlined"
                                 style={{ marginBottom: 12 }}
                                 placeholder="Video title..."
+                                right={
+                                    <TextInput.Icon 
+                                        icon={isGeneratingTitle ? "loading" : "auto-fix"} 
+                                        onPress={handleGenerateAiTitle}
+                                        disabled={isGeneratingTitle || !youtubeDesc}
+                                        color={isGeneratingTitle ? theme.colors.primary : "#6200ee"}
+                                    />
+                                }
                             />
                             <TextInput
                                 label="Description"
@@ -734,15 +793,72 @@ export const InstagramPostDetailItem = ({
                                 numberOfLines={4}
                                 style={{ marginBottom: 12 }}
                             />
-                            <View style={{ backgroundColor: '#f0f0f0', padding: 12, borderRadius: 8 }}>
-                                <Text variant="labelMedium">Scheduled For (Auto-calculated):</Text>
-                                <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                                    {nextSlot ? new Date(nextSlot).toLocaleString() : 'Loading...'}
-                                </Text>
-                                <Text variant="bodySmall" style={{ opacity: 0.6, marginTop: 4 }}>
-                                    Default interval is 6 hours between posts.
-                                </Text>
+                            <View style={styles.scheduleRow}>
+                                <View style={styles.dateInput}>
+                                    <TextInput
+                                        label="Date"
+                                        value={nextSlot ? new Date(nextSlot).toLocaleDateString([], { dateStyle: 'medium' }) : ''}
+                                        mode="outlined"
+                                        editable={false}
+                                        style={styles.scheduleInputText}
+                                        contentStyle={styles.scheduleInputContent}
+                                        right={<TextInput.Icon icon="calendar" size={18} onPress={() => setShowScheduleDatePicker(true)} style={styles.scheduleIcon} />}
+                                    />
+                                    <TouchableOpacity 
+                                        style={StyleSheet.absoluteFill} 
+                                        onPress={() => setShowScheduleDatePicker(true)} 
+                                    />
+                                </View>
+                                <View style={styles.timeInput}>
+                                    <TextInput
+                                        label="Time"
+                                        value={nextSlot ? new Date(nextSlot).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
+                                        mode="outlined"
+                                        editable={false}
+                                        style={styles.scheduleInputText}
+                                        contentStyle={styles.scheduleInputContent}
+                                        right={<TextInput.Icon icon="clock-outline" size={18} onPress={() => setShowScheduleTimePicker(true)} style={styles.scheduleIcon} />}
+                                    />
+                                    <TouchableOpacity 
+                                        style={StyleSheet.absoluteFill} 
+                                        onPress={() => setShowScheduleTimePicker(true)} 
+                                    />
+                                </View>
                             </View>
+
+                            <Text variant="bodySmall" style={styles.helperText}>
+                                Default interval is 6 hours between posts.
+                            </Text>
+
+                            {showScheduleDatePicker && (
+                                <DateTimePicker
+                                    value={nextSlot ? new Date(nextSlot) : new Date()}
+                                    mode="date"
+                                    onChange={(event, date) => {
+                                        setShowScheduleDatePicker(false);
+                                        if (date && nextSlot) {
+                                            const current = new Date(nextSlot);
+                                            current.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                                            setNextSlot(current.toISOString());
+                                        }
+                                    }}
+                                />
+                            )}
+
+                            {showScheduleTimePicker && (
+                                <DateTimePicker
+                                    value={nextSlot ? new Date(nextSlot) : new Date()}
+                                    mode="time"
+                                    onChange={(event, date) => {
+                                        setShowScheduleTimePicker(false);
+                                        if (date && nextSlot) {
+                                            const current = new Date(nextSlot);
+                                            current.setHours(date.getHours(), date.getMinutes());
+                                            setNextSlot(current.toISOString());
+                                        }
+                                    }}
+                                />
+                            )}
                         </ScrollView>
                     </Dialog.Content>
                     <Dialog.Actions>
@@ -863,20 +979,22 @@ const styles = StyleSheet.create({
         right: 10,
         zIndex: 200,
     },
-    customMenuButton: {
-        width: 40,
-        height: 40,
+    menuTrigger: {
+        width: 44,
+        height: 44,
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 3,
     },
-    verticalDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: 'white',
-        borderWidth: 1,
-        borderColor: 'black',
+    topLeftIconContainer: {
+        position: 'absolute',
+        left: 10,
+        zIndex: 200,
+    },
+    youtubeFloatingBtn: {
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     menuBackdrop: {
         ...StyleSheet.absoluteFillObject,
@@ -1034,5 +1152,30 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 10,
         fontWeight: 'bold',
+    },
+    scheduleRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    dateInput: {
+        flex: 1.2,
+    },
+    timeInput: {
+        flex: 1,
+    },
+    scheduleInputText: {
+        fontSize: 15,
+    },
+    scheduleInputContent: {
+        paddingHorizontal: 8,
+    },
+    scheduleIcon: {
+        marginRight: -8,
+    },
+    helperText: {
+        opacity: 0.6,
+        marginBottom: 12,
+        marginLeft: 4,
     },
 });
