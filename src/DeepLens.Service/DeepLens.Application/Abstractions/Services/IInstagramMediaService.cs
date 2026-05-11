@@ -17,5 +17,10 @@ namespace DeepLens.Application.Abstractions.Services
         /// Orchestrates the download and linking of all media for a post based on Meta Graph data.
         /// </summary>
         Task ProcessFullMediaDownloadAsync(Guid dbPostId, MetaPost post, string externalId);
+
+        /// <summary>
+        /// Deletes all media and metadata associated with a profile.
+        /// </summary>
+        Task<bool> DeleteProfileDataAsync(string username);
     }
 }

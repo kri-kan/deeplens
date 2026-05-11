@@ -13,12 +13,9 @@ import { productService } from '@/services/productService';
 import { ProductTile } from '@/components/utility/product/ProductTile';
 import type { VendorProduct } from '@/types/products';
 import { InstagramVideoPlayer } from './InstagramVideoPlayer';
+import { YoutubeShortsScheduleForm } from '../youtube/YoutubeShortsScheduleForm';
 import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
-import { youtubeService } from '@/services/youtube.service';
-import { aiService } from '@/services/ai.service';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { TextInput } from 'react-native-paper';
 
 const { width, height } = Dimensions.get('window');
 
@@ -71,13 +68,7 @@ export const InstagramPostDetailItem = ({
 
     // YouTube Upload State
     const [isYoutubeDialogVisible, setIsYoutubeDialogVisible] = useState(false);
-    const [isUploadingToYoutube, setIsUploadingToYoutube] = useState(false);
-    const [youtubeTitle, setYoutubeTitle] = useState('');
-    const [youtubeDesc, setYoutubeDesc] = useState('');
-    const [nextSlot, setNextSlot] = useState<string | null>(null);
-    const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
-    const [showScheduleDatePicker, setShowScheduleDatePicker] = useState(false);
-    const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
+    const [isYoutubeBusy, setIsYoutubeBusy] = useState(false);
 
     // Sync local item and reset state when item changes (for component reuse)
     useEffect(() => {
@@ -111,6 +102,72 @@ export const InstagramPostDetailItem = ({
     const MENU_HIDDEN = 500;
     const MENU_VISIBLE = 0;
     const menuSheetTop = useSharedValue(MENU_HIDDEN);
+    
+    // YouTube Sheet Logic
+    const YOUTUBE_SHEET_HIDDEN = height;
+    const YOUTUBE_SHEET_VISIBLE = 0;
+    const youtubeSheetTop = useSharedValue(YOUTUBE_SHEET_HIDDEN);
+
+    const handleYoutubeSuccess = async (resp: any) => {
+        const videoEntry = mediaLinks.find(m => isVideo(m) && (m.storagePath || '').toLowerCase().endsWith('.mp4')) 
+            || mediaLinks.find(m => isVideo(m))
+            || (isVideo(localItem) ? localItem : null);
+        
+        try {
+            // Persist the YouTube info against the Instagram post
+            await instagramService.updateYoutubeStatus(localItem.id, {
+                videoId: resp.videoId,
+                videoUrl: resp.videoUrl,
+                status: resp.scheduledTime ? 'Scheduled' : 'Uploaded',
+                scheduledTime: resp.scheduledTime
+            });
+            
+            youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_HIDDEN);
+            setTimeout(() => setIsYoutubeDialogVisible(false), 300);
+            handleFullRefresh(true);
+        } catch (err) {
+            console.error('Failed to persist YouTube status', err);
+            Alert.alert('Persistence Error', 'Video scheduled but local status failed to update.');
+        } finally {
+            setIsYoutubeBusy(false);
+        }
+    };
+
+    const handleYoutubeCancel = () => {
+        if (!isYoutubeBusy) {
+            youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_HIDDEN);
+            setTimeout(() => setIsYoutubeDialogVisible(false), 300);
+        }
+    };
+
+    const resolveYoutubeMediaId = () => {
+        // 1. Current viewed item in carousel
+        const currentMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+        if (isVideo(currentMedia) && !(currentMedia.storagePath || '').toLowerCase().endsWith('.jpg')) {
+            return currentMedia.id;
+        }
+
+        // 2. Search for the first valid video in children/links
+        const videoEntry = mediaLinks.find(m => isVideo(m) && (m.storagePath || '').toLowerCase().endsWith('.mp4')) 
+            || mediaLinks.find(m => isVideo(m) && !(m.storagePath || '').toLowerCase().endsWith('.jpg'));
+        
+        if (videoEntry) return videoEntry.id;
+
+        // 3. Last fallback: localItem if it's a video (though it might be a JPG path, the backend now handles this)
+        return isVideo(localItem) ? localItem.id : undefined;
+    };
+
+    const resolveYoutubeVideoUri = () => {
+        const currentMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+        if (isVideo(currentMedia) && !(currentMedia.storagePath || '').toLowerCase().endsWith('.jpg')) {
+            return getMediaUri(currentMedia);
+        }
+
+        const videoEntry = mediaLinks.find(m => isVideo(m) && (m.storagePath || '').toLowerCase().endsWith('.mp4')) 
+            || mediaLinks.find(m => isVideo(m) && !(m.storagePath || '').toLowerCase().endsWith('.jpg'));
+        
+        return videoEntry ? getMediaUri(videoEntry) : getMediaUri(localItem);
+    };
 
     const fetchLinks = useCallback(async (force = false) => {
         if (hasFetchedLinks && !force) return;
@@ -177,13 +234,15 @@ export const InstagramPostDetailItem = ({
         }
     }, [isActive, fetchMedia, fetchLinks]);
 
-    const handleFullRefresh = async () => {
+    const handleFullRefresh = async (skipApiRefresh: boolean = false) => {
         try {
             setIsRefreshingMedia(true);
             setIsMenuVisible(false);
             menuSheetTop.value = withSpring(MENU_HIDDEN);
             
-            await instagramService.refreshPostMedia(localItem.id);
+            if (!skipApiRefresh) {
+                await instagramService.refreshPostMedia(localItem.id);
+            }
             
             // Get updated post metadata from DB
             const updated = await instagramService.getVideoDetails(localItem.id);
@@ -202,21 +261,6 @@ export const InstagramPostDetailItem = ({
             console.error('Refresh failed', error);
         } finally {
             setIsRefreshingMedia(false);
-        }
-    };
-
-    const handleGenerateAiTitle = async () => {
-        if (!youtubeDesc || isGeneratingTitle) return;
-        
-        try {
-            setIsGeneratingTitle(true);
-            const response = await aiService.generateTitle(youtubeDesc);
-            setYoutubeTitle(response.title);
-        } catch (error) {
-            console.error('Failed to generate title', error);
-            Alert.alert('AI Error', 'Could not generate title. Please try again.');
-        } finally {
-            setIsGeneratingTitle(false);
         }
     };
 
@@ -277,6 +321,24 @@ export const InstagramPostDetailItem = ({
             }
         });
 
+    const youtubePanGesture = Gesture.Pan()
+        .onUpdate((e) => {
+            if (isYoutubeBusy) return;
+            youtubeSheetTop.value = Math.max(YOUTUBE_SHEET_VISIBLE, YOUTUBE_SHEET_VISIBLE + e.translationY);
+        })
+        .onEnd((e) => {
+            if (isYoutubeBusy) {
+                youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_VISIBLE);
+                return;
+            }
+            if (e.translationY > 100 || e.velocityY > 500) {
+                youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_HIDDEN);
+                runOnJS(setIsYoutubeDialogVisible)(false);
+            } else {
+                youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_VISIBLE);
+            }
+        });
+
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: sheetTop.value }],
         height: height - END_TOP,
@@ -284,6 +346,10 @@ export const InstagramPostDetailItem = ({
 
     const menuAnimatedStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: menuSheetTop.value }],
+    }));
+
+    const youtubeAnimatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: youtubeSheetTop.value }],
     }));
 
     // Prioritize fetched linked details, but fall back to localItem.productCode only if we haven't confirmed it's gone
@@ -592,7 +658,7 @@ export const InstagramPostDetailItem = ({
                     <Dialog.Content>
                         <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}>
                             <ActivityIndicator color={theme.colors.primary} style={{ marginRight: 15 }} />
-                            <Text style={{ flex: 1 }}>Syncing high-resolution media from Instagram Graph API...</Text>
+                            <Text style={{ flex: 1 }}>Updating media status...</Text>
                         </View>
                     </Dialog.Content>
                 </Dialog>
@@ -697,36 +763,39 @@ export const InstagramPostDetailItem = ({
                                         </Text>
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        disabled={!isVideo(localItem) || isUploadingToYoutube}
-                                        onPress={async () => {
-                                            try {
-                                                setIsMenuVisible(false);
-                                                menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                                
-                                                // Prepare defaults
-                                                setYoutubeTitle(localItem.productCode || '');
-                                                setYoutubeDesc(localItem.caption || '');
-                                                
-                                                const slotResp = await youtubeService.getNextSlot();
-                                                setNextSlot(slotResp.nextSlot);
-                                                
-                                                setIsYoutubeDialogVisible(true);
-                                            } catch (err) {
-                                                Alert.alert('Error', 'Could not prepare YouTube upload.');
-                                            }
-                                        }}
-                                    >
-                                        <IconButton 
-                                            icon="youtube" 
-                                            size={24} 
-                                            iconColor={isVideo(localItem) ? '#FF0000' : '#ccc'} 
-                                        />
-                                        <Text variant="bodyLarge" style={{ color: isVideo(localItem) ? '#FF0000' : '#ccc', flex: 1 }}>
-                                            {localItem.youtubeUrl ? 'Repost to YouTube' : 'Post to YouTube Shorts'}
-                                        </Text>
-                                    </TouchableOpacity>
+                                    {(() => {
+                                        const currentMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                        const isCurrentVideo = isVideo(currentMedia);
+                                        
+                                        if (!isCurrentVideo) return null;
+
+                                        return (
+                                            <TouchableOpacity 
+                                                style={styles.menuItem}
+                                                onPress={async () => {
+                                                    try {
+                                                        setIsMenuVisible(false);
+                                                        menuSheetTop.value = withSpring(MENU_HIDDEN);
+                                                        
+                                                        // Prepare defaults
+                                                        setIsYoutubeDialogVisible(true);
+                                                        youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_VISIBLE);
+                                                    } catch (err) {
+                                                        Alert.alert('Error', 'Could not prepare YouTube upload.');
+                                                    }
+                                                }}
+                                            >
+                                                <IconButton 
+                                                    icon="youtube" 
+                                                    size={24} 
+                                                    iconColor='#FF0000' 
+                                                />
+                                                <Text variant="bodyLarge" style={{ color: '#FF0000', flex: 1 }}>
+                                                    {localItem.youtubeUrl ? 'Repost to YouTube' : 'Post to YouTube Shorts'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })()}
 
                                     {localItem.youtubeUrl && (
                                         <TouchableOpacity 
@@ -764,137 +833,33 @@ export const InstagramPostDetailItem = ({
                     </View>
                 )}
 
-                <Dialog visible={isYoutubeDialogVisible} onDismiss={() => !isUploadingToYoutube && setIsYoutubeDialogVisible(false)}>
-                    <Dialog.Title>Schedule YouTube Short</Dialog.Title>
-                    <Dialog.Content>
-                        <ScrollView style={{ maxHeight: 300 }}>
-                            <TextInput
-                                label="Title"
-                                value={youtubeTitle}
-                                onChangeText={setYoutubeTitle}
-                                mode="outlined"
-                                style={{ marginBottom: 12 }}
-                                placeholder="Video title..."
-                                right={
-                                    <TextInput.Icon 
-                                        icon={isGeneratingTitle ? "loading" : "auto-fix"} 
-                                        onPress={handleGenerateAiTitle}
-                                        disabled={isGeneratingTitle || !youtubeDesc}
-                                        color={isGeneratingTitle ? theme.colors.primary : "#6200ee"}
-                                    />
-                                }
-                            />
-                            <TextInput
-                                label="Description"
-                                value={youtubeDesc}
-                                onChangeText={setYoutubeDesc}
-                                mode="outlined"
-                                multiline
-                                numberOfLines={4}
-                                style={{ marginBottom: 12 }}
-                            />
-                            <View style={styles.scheduleRow}>
-                                <View style={styles.dateInput}>
-                                    <TextInput
-                                        label="Date"
-                                        value={nextSlot ? new Date(nextSlot).toLocaleDateString([], { dateStyle: 'medium' }) : ''}
-                                        mode="outlined"
-                                        editable={false}
-                                        style={styles.scheduleInputText}
-                                        contentStyle={styles.scheduleInputContent}
-                                        right={<TextInput.Icon icon="calendar" size={18} onPress={() => setShowScheduleDatePicker(true)} style={styles.scheduleIcon} />}
-                                    />
-                                    <TouchableOpacity 
-                                        style={StyleSheet.absoluteFill} 
-                                        onPress={() => setShowScheduleDatePicker(true)} 
+                {isYoutubeDialogVisible && (
+                    <View style={StyleSheet.absoluteFill}>
+                        <TouchableOpacity 
+                            style={[styles.menuBackdrop, { zIndex: 350 }]} 
+                            activeOpacity={1} 
+                            onPress={handleYoutubeCancel}
+                        />
+                        <GestureDetector gesture={youtubePanGesture}>
+                            <Animated.View style={[styles.youtubeSheet, youtubeAnimatedStyle]}>
+                                <View style={styles.dragHandleContainer}>
+                                    <View style={styles.dragHandle} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <YoutubeShortsScheduleForm 
+                                        mediaId={resolveYoutubeMediaId()}
+                                        initialTitle={localItem.productCode || ''}
+                                        initialDescription={localItem.caption || ''}
+                                        videoUri={resolveYoutubeVideoUri()}
+                                        onSuccess={handleYoutubeSuccess}
+                                        onBusyChange={setIsYoutubeBusy}
+                                        onCancel={handleYoutubeCancel}
                                     />
                                 </View>
-                                <View style={styles.timeInput}>
-                                    <TextInput
-                                        label="Time"
-                                        value={nextSlot ? new Date(nextSlot).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}
-                                        mode="outlined"
-                                        editable={false}
-                                        style={styles.scheduleInputText}
-                                        contentStyle={styles.scheduleInputContent}
-                                        right={<TextInput.Icon icon="clock-outline" size={18} onPress={() => setShowScheduleTimePicker(true)} style={styles.scheduleIcon} />}
-                                    />
-                                    <TouchableOpacity 
-                                        style={StyleSheet.absoluteFill} 
-                                        onPress={() => setShowScheduleTimePicker(true)} 
-                                    />
-                                </View>
-                            </View>
-
-                            <Text variant="bodySmall" style={styles.helperText}>
-                                Default interval is 6 hours between posts.
-                            </Text>
-
-                            {showScheduleDatePicker && (
-                                <DateTimePicker
-                                    value={nextSlot ? new Date(nextSlot) : new Date()}
-                                    mode="date"
-                                    onChange={(event, date) => {
-                                        setShowScheduleDatePicker(false);
-                                        if (date && nextSlot) {
-                                            const current = new Date(nextSlot);
-                                            current.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-                                            setNextSlot(current.toISOString());
-                                        }
-                                    }}
-                                />
-                            )}
-
-                            {showScheduleTimePicker && (
-                                <DateTimePicker
-                                    value={nextSlot ? new Date(nextSlot) : new Date()}
-                                    mode="time"
-                                    onChange={(event, date) => {
-                                        setShowScheduleTimePicker(false);
-                                        if (date && nextSlot) {
-                                            const current = new Date(nextSlot);
-                                            current.setHours(date.getHours(), date.getMinutes());
-                                            setNextSlot(current.toISOString());
-                                        }
-                                    }}
-                                />
-                            )}
-                        </ScrollView>
-                    </Dialog.Content>
-                    <Dialog.Actions>
-                        <Button onPress={() => setIsYoutubeDialogVisible(false)} disabled={isUploadingToYoutube}>Cancel</Button>
-                        <Button 
-                            mode="contained"
-                            loading={isUploadingToYoutube}
-                            disabled={isUploadingToYoutube || !nextSlot}
-                            onPress={async () => {
-                                try {
-                                    setIsUploadingToYoutube(true);
-                                    const resp = await youtubeService.uploadVideo({
-                                        instagramPostId: localItem.id,
-                                        title: youtubeTitle,
-                                        description: youtubeDesc,
-                                        tags: ['shorts', 'reels'],
-                                        isShort: true,
-                                        scheduleTime: nextSlot || undefined
-                                    });
-                                    
-                                    Alert.alert('Success', `Scheduled on YouTube!\nVideo ID: ${resp.videoId}`);
-                                    setIsYoutubeDialogVisible(false);
-                                    
-                                    // Refresh post to show new status if we add that to UI later
-                                    handleFullRefresh();
-                                } catch (err: any) {
-                                    Alert.alert('Upload Failed', err.message || 'An error occurred.');
-                                } finally {
-                                    setIsUploadingToYoutube(false);
-                                }
-                            }}
-                        >
-                            Schedule Post
-                        </Button>
-                    </Dialog.Actions>
-                </Dialog>
+                            </Animated.View>
+                        </GestureDetector>
+                    </View>
+                )}
             </Portal>
         </View>
     );
@@ -1011,6 +976,21 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
         zIndex: 300,
         minHeight: height * 0.4,
+    },
+    youtubeSheet: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        top: height * 0.1,
+        backgroundColor: 'white',
+        borderTopLeftRadius: 25,
+        borderTopRightRadius: 25,
+        zIndex: 400,
+    },
+    youtubeSheetContent: {
+        padding: 20,
+        flex: 1,
     },
     menuContent: {
         padding: 20,

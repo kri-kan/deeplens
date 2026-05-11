@@ -14,7 +14,7 @@ export interface YoutubeQuotaInfo {
 }
 
 export interface YoutubeUploadRequest {
-  instagramPostId: string;
+  mediaId: string;
   title: string;
   description: string;
   tags: string[];

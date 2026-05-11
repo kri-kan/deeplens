@@ -186,6 +186,7 @@ export class ApiClient {
     try {
       const text = await response.text();
       const result: any = text ? JSON.parse(text) : {};
+      console.error('[API Error Detail]', { status: response.status, result });
       error = result.error || {
         code: `HTTP_${response.status}`,
         message: result.message || response.statusText || 'Unknown error',

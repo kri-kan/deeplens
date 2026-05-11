@@ -30,8 +30,11 @@ namespace DeepLens.Infrastructure.Services
         private string? _refreshToken;
         private string? _redirectUri;
         private DateTime _tokenLastRefreshed;
+        private DateTime _quotaLastUpdated;
         private int _dailyQuotaLimit = 10000;
         private int _currentQuotaUsage = 0;
+        private string _defaultCategoryId = "22";
+        private string _defaultPrivacyStatus = "private";
 
         public YoutubeService(
             IDbConnectionFactory db,
@@ -50,21 +53,37 @@ namespace DeepLens.Infrastructure.Services
             var settings = await _appSettings.GetSectionInternalAsync("YouTube");
             var dict = settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.OrdinalIgnoreCase);
 
-            _clientId = settings.FirstOrDefault(s => s.Key == "Youtube:ClientId")?.Value ?? "";
-            _clientSecret = settings.FirstOrDefault(s => s.Key == "Youtube:ClientSecret")?.Value ?? "";
-            _redirectUri = settings.FirstOrDefault(s => s.Key == "Youtube:RedirectUri")?.Value ?? "http://localhost:5002/oauth2callback";
+            _clientId = dict.GetValueOrDefault("Youtube:ClientId", "");
+            _clientSecret = dict.GetValueOrDefault("Youtube:ClientSecret", "");
+            _redirectUri = dict.GetValueOrDefault("Youtube:RedirectUri", "http://localhost:5002/oauth2callback");
 
             _accessToken = dict.GetValueOrDefault("Youtube:AccessToken");
             _refreshToken = dict.GetValueOrDefault("Youtube:RefreshToken");
             
             if (DateTime.TryParse(dict.GetValueOrDefault("Youtube:TokenLastRefreshed"), out var dt))
                 _tokenLastRefreshed = dt;
+
+            if (DateTime.TryParse(dict.GetValueOrDefault("Youtube:QuotaLastUpdated"), out var qdt))
+                _quotaLastUpdated = qdt;
                 
             if (int.TryParse(dict.GetValueOrDefault("Youtube:DailyQuotaLimit"), out var limit))
                 _dailyQuotaLimit = limit;
                 
             if (int.TryParse(dict.GetValueOrDefault("Youtube:CurrentQuotaUsage"), out var usage))
                 _currentQuotaUsage = usage;
+
+            _defaultCategoryId = dict.GetValueOrDefault("Youtube:DefaultCategoryId", "22");
+            _defaultPrivacyStatus = dict.GetValueOrDefault("Youtube:DefaultPrivacyStatus", "private");
+
+            // Reset quota if day has changed (YouTube resets at midnight Pacific, but daily check is safer than none)
+            if (_quotaLastUpdated.Date != DateTime.UtcNow.Date)
+            {
+                _logger.LogInformation("YouTube quota date changed from {Last} to {Current}. Resetting usage.", _quotaLastUpdated.Date, DateTime.UtcNow.Date);
+                _currentQuotaUsage = 0;
+                _quotaLastUpdated = DateTime.UtcNow;
+                await _appSettings.UpsertAsync("Youtube:CurrentQuotaUsage", "0");
+                await _appSettings.UpsertAsync("Youtube:QuotaLastUpdated", _quotaLastUpdated.ToString("O"));
+            }
         }
 
         public async Task<YoutubeTokenHealth> GetTokenHealthAsync()
@@ -174,6 +193,7 @@ namespace DeepLens.Infrastructure.Services
 
         public async Task<YoutubeUploadResponse> UploadVideoAsync(YoutubeUploadRequest request)
         {
+            _logger.LogInformation("YouTube Upload Request: {Request}", JsonSerializer.Serialize(request));
             await ReloadFromDbAsync();
             
             // Check quota (1600 units for upload)
@@ -182,24 +202,39 @@ namespace DeepLens.Infrastructure.Services
                 throw new InvalidOperationException("YouTube API quota exceeded for today.");
             }
 
-            // 1. Get Actual Video Path from Media Table (Ensuring we don't upload the thumbnail)
+            // 1. Get Actual Video Path from Media Table
             using var conn = await _db.CreateConnectionAsync();
-            var storagePath = await conn.QueryFirstOrDefaultAsync<string>(@"
-                SELECT m.storage_path 
-                FROM media m
-                JOIN media_links ml ON m.id = ml.media_id
-                WHERE ml.entity_id = @InstagramPostId 
-                  AND ml.entity_type = 'competitor_video'
-                  AND m.media_type = @VideoType -- VIDEO
-                ORDER BY ml.is_primary DESC
-                LIMIT 1", 
-                new { 
-                    request.InstagramPostId, 
-                    VideoType = (int)InstagramMediaType.VIDEO 
-                });
+            string? storagePath = null;
 
-            if (string.IsNullOrEmpty(storagePath)) throw new Exception("Video file not found in storage registry. Ensure media is synchronized.");
+            if (request.MediaId.HasValue)
+            {
+                // Try direct media lookup
+                storagePath = await conn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT storage_path FROM media 
+                    WHERE id = @MediaId AND media_type IN (2, 10)", 
+                    new { MediaId = request.MediaId.Value });
 
+                // Fallback: If not found, check if it's a competitor_video ID that has a linked video
+                if (string.IsNullOrEmpty(storagePath))
+                {
+                    storagePath = await conn.QueryFirstOrDefaultAsync<string>(@"
+                        SELECT m.storage_path 
+                        FROM media m
+                        JOIN media_links ml ON m.id = ml.media_id
+                        WHERE ml.entity_id = @MediaId AND ml.entity_type = 'competitor_video'
+                        AND m.media_type IN (2, 10)
+                        ORDER BY ml.is_primary DESC, ml.display_order ASC
+                        LIMIT 1", new { MediaId = request.MediaId.Value });
+                }
+            }
+
+            if (string.IsNullOrEmpty(storagePath)) 
+            {
+                _logger.LogWarning("Video file not found for mediaId {MediaId}. Registry lookup returned null.", request.MediaId);
+                throw new Exception("Video file not found in media registry. Ensure the ID points to a valid video or a post with a linked video.");
+            }
+
+            _logger.LogInformation("Found video path: {Path}. Retrieving from storage...", storagePath);
             var fileLength = await _storage.GetFileLengthAsync(storagePath);
             using var videoStream = await _storage.GetFileAsync(storagePath);
 
@@ -213,18 +248,18 @@ namespace DeepLens.Infrastructure.Services
                     Title = request.IsShort ? $"{request.Title} #Shorts" : request.Title,
                     Description = request.IsShort ? $"{request.Description}\n\n#Shorts" : request.Description,
                     Tags = request.Tags,
-                    CategoryId = "22", // Default to People & Blogs
+                    CategoryId = _defaultCategoryId,
                 },
                 Status = new VideoStatus
                 {
-                    PrivacyStatus = "private", // Always private for scheduling
+                    PrivacyStatus = _defaultPrivacyStatus,
                     SelfDeclaredMadeForKids = false
                 }
             };
 
             if (request.ScheduleTime.HasValue)
             {
-                video.Status.PublishAt = request.ScheduleTime.Value.ToUniversalTime();
+                video.Status.PublishAtDateTimeOffset = request.ScheduleTime.Value.ToUniversalTime();
             }
 
             // 3. Execute Upload
@@ -241,26 +276,10 @@ namespace DeepLens.Infrastructure.Services
 
             var uploadedVideo = videosInsertRequest.ResponseBody;
             
-            // 4. Update Database
-            var videoUrl = $"https://www.youtube.com/watch?v={uploadedVideo.Id}";
-            await conn.ExecuteAsync(@"
-                UPDATE competitor_videos 
-                SET youtube_video_id = @VideoId,
-                    youtube_url = @VideoUrl,
-                    youtube_sync_status = @Status,
-                    scheduled_publish_time = @ScheduledTime
-                WHERE id = @InstagramPostId", 
-                new { 
-                    VideoId = uploadedVideo.Id, 
-                    VideoUrl = videoUrl,
-                    Status = request.ScheduleTime.HasValue ? "Scheduled" : "Uploaded",
-                    ScheduledTime = request.ScheduleTime,
-                    request.InstagramPostId 
-                });
-
-            // 5. Track Quota
+            // 4. Track Quota
             await TrackQuotaAsync(1600);
 
+            var videoUrl = $"https://www.youtube.com/watch?v={uploadedVideo.Id}";
             return new YoutubeUploadResponse
             {
                 VideoId = uploadedVideo.Id,
@@ -303,7 +322,9 @@ namespace DeepLens.Infrastructure.Services
         private async Task TrackQuotaAsync(int units)
         {
             _currentQuotaUsage += units;
+            _quotaLastUpdated = DateTime.UtcNow;
             await _appSettings.UpsertAsync("Youtube:CurrentQuotaUsage", _currentQuotaUsage.ToString());
+            await _appSettings.UpsertAsync("Youtube:QuotaLastUpdated", _quotaLastUpdated.ToString("O"));
         }
     }
 }

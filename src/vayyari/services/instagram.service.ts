@@ -299,6 +299,10 @@ class InstagramService {
   refreshPostMedia = async (id: string): Promise<{ message: string }> => {
     return searchApiClient.post(`/api/v1/Insta/video/${id}/refresh`);
   };
+
+  updateYoutubeStatus = async (id: string, data: any): Promise<void> => {
+    return searchApiClient.post(`/api/v1/Insta/video/${id}/youtube`, data);
+  };
 }
 
 export const instagramService = new InstagramService();

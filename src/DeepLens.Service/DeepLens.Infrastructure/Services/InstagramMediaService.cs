@@ -81,8 +81,8 @@ namespace DeepLens.Infrastructure.Services
                 UPDATE competitor_videos 
                 SET description = @Caption, 
                     like_count = @LikeCount, 
-                    comments_count = @CommentCount,
-                    last_synced_at = NOW()
+                    comment_count = @CommentCount,
+                    updated_at = NOW()
                 WHERE id = @dbPostId", 
                 new { 
                     Caption = freshPost.Caption, 
@@ -219,6 +219,82 @@ namespace DeepLens.Infrastructure.Services
                 VALUES (@finalMediaId, @entityId, 'competitor_video', @isPrimary, @displayOrder)
                 ON CONFLICT DO NOTHING",
                 new { finalMediaId, entityId, isPrimary, displayOrder });
+        }
+
+        public async Task<bool> DeleteProfileDataAsync(string username)
+        {
+            _logger.LogInformation("Deleting all media and metadata for profile {Username}", username);
+
+            using var conn = await _db.CreateConnectionAsync();
+            var profile = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT id, external_id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
+                new { username });
+
+            if (profile == null)
+            {
+                _logger.LogWarning("Profile {Username} not found during data deletion.", username);
+                return false;
+            }
+
+            Guid watchlistId = profile.id;
+
+            // 1. Delete media files from Storage (MinIO)
+            try
+            {
+                // Get legacy paths from competitor_videos
+                var legacyPaths = await conn.QueryAsync<string>(
+                    "SELECT storage_path FROM competitor_videos WHERE watchlist_id = @watchlistId AND storage_path IS NOT NULL",
+                    new { watchlistId });
+
+                // Get modern paths from media table
+                var modernPaths = await conn.QueryAsync<string>(@"
+                    SELECT m.storage_path 
+                    FROM media m 
+                    JOIN media_links ml ON m.id = ml.media_id 
+                    JOIN competitor_videos cv ON ml.entity_id = cv.id 
+                    WHERE cv.watchlist_id = @watchlistId AND ml.entity_type = 'competitor_video'",
+                    new { watchlistId });
+
+                var allPaths = legacyPaths.Concat(modernPaths).Distinct();
+
+                foreach (var path in allPaths)
+                {
+                    try
+                    {
+                        await _storage.DeleteFileAsync(path);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete file {Path} from storage during profile cleanup.", path);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error orchestrating file deletion for profile {Username}", username);
+            }
+
+            // 2. Delete media records (cascades to media_links)
+            await conn.ExecuteAsync(@"
+                DELETE FROM media WHERE id IN (
+                    SELECT ml.media_id 
+                    FROM media_links ml 
+                    JOIN competitor_videos cv ON ml.entity_id = cv.id 
+                    WHERE cv.watchlist_id = @watchlistId AND ml.entity_type = 'competitor_video'
+                )", new { watchlistId });
+
+            // 3. Delete posts from DB
+            await conn.ExecuteAsync("DELETE FROM competitor_videos WHERE watchlist_id = @watchlistId", new { watchlistId });
+
+            // 4. Mark as deleted and inactive in watchlist
+            await conn.ExecuteAsync(@"
+                UPDATE competitor_watchlist 
+                SET is_active = false, is_data_deleted = true, last_scraped_at = NULL
+                WHERE id = @watchlistId",
+                new { watchlistId });
+
+            _logger.LogInformation("Profile data deletion complete for {Username}", username);
+            return true;
         }
     }
 }

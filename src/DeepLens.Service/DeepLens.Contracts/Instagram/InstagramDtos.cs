@@ -88,6 +88,21 @@ public class InstagramPostDto
     public long CommentCount { get; set; }
 }
 
+public class YoutubeSyncUpdateDto
+{
+    [JsonPropertyName("videoId")]
+    public string VideoId { get; set; } = string.Empty;
+    
+    [JsonPropertyName("videoUrl")]
+    public string VideoUrl { get; set; } = string.Empty;
+    
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+    
+    [JsonPropertyName("scheduledTime")]
+    public DateTime? ScheduledTime { get; set; }
+}
+
 public class InstagramMediaDto
 {
     [JsonPropertyName("id")]

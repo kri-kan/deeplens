@@ -502,64 +502,9 @@ public class InstaController : ControllerBase
     [Authorize(Policy = "IngestPolicy")]
     public async Task<ActionResult> DeleteProfileData(string username)
     {
-        using var conn = await _db.CreateConnectionAsync();
-        var profile = await conn.QueryFirstOrDefaultAsync<dynamic>(
-            "SELECT id, external_id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
-            new { username });
-
-        if (profile == null) return NotFound();
-
-        Guid watchlistId = profile.id;
-        string? externalId = profile.external_id;
-
-        // 1. Delete media files from MinIO (both legacy and backfilled)
-        try
-        {
-            // Get legacy paths from competitor_videos
-            var legacyPaths = await conn.QueryAsync<string>(
-                "SELECT storage_path FROM competitor_videos WHERE watchlist_id = @watchlistId AND storage_path IS NOT NULL",
-                new { watchlistId });
-
-            // Get modern paths from media table
-            var modernPaths = await conn.QueryAsync<string>(@"
-                SELECT m.storage_path 
-                FROM media m 
-                JOIN media_links ml ON m.id = ml.media_id 
-                JOIN competitor_videos cv ON ml.entity_id = cv.id 
-                WHERE cv.watchlist_id = @watchlistId AND ml.entity_type = 'competitor_video'",
-                new { watchlistId });
-
-            var allPaths = legacyPaths.Concat(modernPaths).Distinct();
-
-            foreach (var path in allPaths)
-            {
-                await _storage.DeleteFileAsync(path);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error deleting files from MinIO during profile data deletion");
-        }
-
-        // 2. Delete media records (this will cascade to media_links)
-        await conn.ExecuteAsync(@"
-            DELETE FROM media WHERE id IN (
-                SELECT ml.media_id 
-                FROM media_links ml 
-                JOIN competitor_videos cv ON ml.entity_id = cv.id 
-                WHERE cv.watchlist_id = @watchlistId AND ml.entity_type = 'competitor_video'
-            )", new { watchlistId });
-
-        // 2. Delete posts from DB
-        await conn.ExecuteAsync("DELETE FROM competitor_videos WHERE watchlist_id = @watchlistId", new { watchlistId });
-
-        // 3. Mark as deleted and inactive
-        await conn.ExecuteAsync(@"
-            UPDATE competitor_watchlist 
-            SET is_active = false, is_data_deleted = true, last_scraped_at = NULL
-            WHERE id = @watchlistId",
-            new { watchlistId });
-
+        var success = await _instaMedia.DeleteProfileDataAsync(username);
+        if (!success) return NotFound();
+        
         return Ok(new { message = "Profile data deleted successfully" });
     }
 
@@ -639,6 +584,28 @@ public class InstaController : ControllerBase
         if (video == null) return NotFound(new { message = "Post not found in local database" });
 
         return Ok(video);
+    }
+
+    [HttpPost("video/{id}/youtube")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult> UpdateYoutubeSyncStatus(Guid id, [FromBody] YoutubeSyncUpdateDto update)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        await conn.ExecuteAsync(@"
+            UPDATE competitor_videos 
+            SET youtube_video_id = @VideoId,
+                youtube_url = @VideoUrl,
+                youtube_sync_status = @Status,
+                scheduled_publish_time = @ScheduledTime
+            WHERE id = @Id", 
+            new { 
+                Id = id,
+                update.VideoId,
+                update.VideoUrl,
+                update.Status,
+                update.ScheduledTime
+            });
+        return Ok();
     }
 
     [HttpPost("video/{id}/refresh")]

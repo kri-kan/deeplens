@@ -31,8 +31,8 @@ public class YoutubeQuotaInfo
 
 public class YoutubeUploadRequest
 {
-    [JsonPropertyName("instagramPostId")]
-    public Guid InstagramPostId { get; set; }
+    [JsonPropertyName("mediaId")]
+    public Guid? MediaId { get; set; }
     
     [JsonPropertyName("title")]
     public string Title { get; set; } = string.Empty;
