@@ -49,6 +49,7 @@ Last Updated: December 20, 2025
 | **Identity Admin** | `admin@deeplens.local` | `Krikank1$` | Initial Admin       |
 | **MinIO**          | `krikan`               | `Krikank1$`          | Port 9001 (Console) |
 | **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
+| **Ollama WebUI**   | `kriishnakanth@GMAIL.COM` | `krikank1$`     | `192.168.0.170:11435` |
 | **Kafka UI**       | -                      | -                    | `192.168.0.170:8080`|
 
 ---

@@ -15,7 +15,7 @@ From this folder, use:
 docker compose up -d
 ```
  
-The Open WebUI will be available at `http://localhost:11435`.
+The Open WebUI will be available at `http://192.168.0.170:11435`.
  
 ## Model Configuration
  
@@ -29,3 +29,9 @@ OLLAMA_MODELS="llama3,mistral" docker compose up -d
  
 - **GPU Support**: Configured for RX 580 (Vulkan).
 - **Shared Network**: Attaches to the `deeplens-network`.
+
+## Credentials
+
+- **URL**: [http://192.168.0.170:11435](http://192.168.0.170:11435)
+- **Email**: `kriishnakanth@GMAIL.COM`
+- **Password**: `krikank1$`
