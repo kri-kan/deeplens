@@ -223,6 +223,7 @@ docker-compose.override.yml
 # Configuration & Environment
 # =============================================================================
 # Environment variables
+.env
 !.env.example
 !.env.template
 
