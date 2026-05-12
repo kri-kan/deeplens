@@ -124,7 +124,7 @@ export const InstagramPostDetailItem = ({
             
             youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_HIDDEN);
             setTimeout(() => setIsYoutubeDialogVisible(false), 300);
-            handleFullRefresh(true);
+            postDetailsRefresh();
         } catch (err) {
             console.error('Failed to persist YouTube status', err);
             Alert.alert('Persistence Error', 'Video scheduled but local status failed to update.');
@@ -234,12 +234,13 @@ export const InstagramPostDetailItem = ({
         }
     }, [isActive, fetchMedia, fetchLinks]);
 
-    const handleFullRefresh = async (skipApiRefresh: boolean = false) => {
+    const postDetailsRefresh = async (skipApiRefresh: boolean = false) => {
         try {
             setIsRefreshingMedia(true);
             setIsMenuVisible(false);
             menuSheetTop.value = withSpring(MENU_HIDDEN);
             
+            //we never want to ususally do this
             if (!skipApiRefresh) {
                 await instagramService.refreshPostMedia(localItem.id);
             }
@@ -684,7 +685,7 @@ export const InstagramPostDetailItem = ({
                                     
                                     <TouchableOpacity 
                                         style={styles.menuItem}
-                                        onPress={handleFullRefresh}
+                                        onPress={() => postDetailsRefresh()}
                                     >
                                         <IconButton icon="sync" size={24} iconColor={theme.colors.primary} />
                                         <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Refresh Data</Text>
