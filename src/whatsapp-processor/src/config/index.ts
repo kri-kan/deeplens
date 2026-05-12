@@ -41,13 +41,7 @@ export const REDIS_CONFIG = {
 
 
 // --- Database Configuration ---
-// DeepLens Core Database (for tenant metadata, feature extraction, etc.)
-export const DEEPLENS_VAYYARI_CONNECTION_STRING = getEnvVar(
-    'deeplens_vayyari_connection_string',
-    'DEEPLENS_VAYYARI_CONNECTION_STRING'
-);
-
-// WhatsApp Data Database (for messages, chats, media metadata)
+// Unified Database Connection String (for both WhatsApp and DeepLens data)
 export const VAYYARI_WA_DB_CONNECTION_STRING = getEnvVar(
     'vayyari_wa_db_connection_string',
     'VAYYARI_WA_DB_CONNECTION_STRING'

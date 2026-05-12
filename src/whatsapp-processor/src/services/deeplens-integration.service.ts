@@ -12,9 +12,11 @@
  */
 
 import { Kafka, Producer } from 'kafkajs';
+import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
-import { getWhatsAppDbClient } from '../clients/db.client';
-import { KAFKA_CONFIG } from '../config';
+import { getWhatsAppDbClient, getDeepLensDbClient } from '../clients/db.client';
+import { KAFKA_CONFIG, MINIO_CONFIG } from '../config';
+import { ImageUploadedEvent } from '../types/events';
 
 interface WhatsAppMessage {
     message_id: string;
@@ -27,25 +29,6 @@ interface WhatsAppMessage {
     sender: string | null;
     group_id: string | null;
 }
-
-interface DeepLensImageEvent {
-    imageId: string;
-    tenantId: string;
-    fileName: string;
-    storagePath: string;
-    mimeType: string;
-    sizeBytes: number;
-    uploadedAt: string;
-    metadata: {
-        source: 'whatsapp';
-        chatJid: string;
-        messageId: string;
-        sender: string | null;
-        timestamp: number;
-        groupId: string | null;
-    };
-}
-
 export class DeepLensIntegrationService {
     private kafka: Kafka;
     private producer: Producer;
@@ -150,7 +133,7 @@ export class DeepLensIntegrationService {
             // Find messages without group_id
             const ungroupedMessages = await client.query<WhatsAppMessage>(
                 `SELECT message_id, jid, timestamp, sender, is_from_me
-                 FROM messages
+                 FROM wa.messages
                  WHERE group_id IS NULL
                  ORDER BY jid, timestamp ASC
                  LIMIT $1`,
@@ -192,7 +175,7 @@ export class DeepLensIntegrationService {
             // Get the most recent group for this chat
             const recentGroup = await client.query(
                 `SELECT group_id, MAX(timestamp) as last_timestamp
-                 FROM messages
+                 FROM wa.messages
                  WHERE jid = $1 AND group_id IS NOT NULL
                  GROUP BY group_id
                  ORDER BY last_timestamp DESC
@@ -221,7 +204,7 @@ export class DeepLensIntegrationService {
 
                 // Assign group ID to message
                 await client.query(
-                    `UPDATE messages 
+                    `UPDATE wa.messages 
                      SET group_id = $1, updated_at = NOW()
                      WHERE message_id = $2`,
                     [currentGroupId, msg.message_id]
@@ -245,7 +228,7 @@ export class DeepLensIntegrationService {
             // Find messages with images that haven't been sent to DeepLens
             const imageMessages = await client.query<WhatsAppMessage>(
                 `SELECT message_id, jid, media_type, media_url, timestamp, sender, is_from_me, group_id
-                 FROM messages
+                 FROM wa.messages
                  WHERE media_type IN ('image', 'sticker')
                    AND media_url IS NOT NULL
                    AND deeplens_processed = false
@@ -269,6 +252,47 @@ export class DeepLensIntegrationService {
     }
 
     /**
+     * Save media metadata to DeepLens core database
+     */
+    private async saveMediaToDeepLens(imageId: string, storagePath: string, fileName: string, mimeType: string, message: WhatsAppMessage) {
+        const client = getDeepLensDbClient();
+        if (!client) {
+            logger.warn('DeepLens DB client not available, skipping metadata persistence');
+            return;
+        }
+
+        try {
+            const mediaType = mimeType.startsWith('video/') ? 2 : 1;
+            const category = 'whatsapp';
+            const subCategory = 'general';
+
+            const sql = `
+                INSERT INTO media (
+                    id, storage_path, media_type, original_filename, 
+                    file_size_bytes, mime_type, status, category, subcategory
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (id) DO NOTHING`;
+
+            await client.query(sql, [
+                imageId,
+                storagePath,
+                mediaType,
+                fileName,
+                0, // fileSize (will be updated by worker)
+                mimeType,
+                0, // status: Uploaded
+                category,
+                subCategory
+            ]);
+
+            logger.debug({ imageId, storagePath }, 'Saved media metadata to DeepLens core DB');
+        } catch (err) {
+            logger.error({ err, imageId }, 'Failed to save media metadata to DeepLens core DB');
+            throw err; // Re-throw to prevent sending Kafka event if DB fails
+        }
+    }
+
+    /**
      * Send a single image to DeepLens via Kafka
      */
     private async sendImageToDeepLens(message: WhatsAppMessage) {
@@ -276,25 +300,51 @@ export class DeepLensIntegrationService {
         if (!client) return;
 
         try {
+            // Generate a valid GUID for the image
+            const imageId = randomUUID();
+            
             // Extract file name from URL
             const fileName = message.media_url!.split('/').pop() || `${message.message_id}.jpg`;
+            const mimeType = message.media_type === 'sticker' ? 'image/webp' : 'image/jpeg';
+            
+            // Format storage path to include bucket name as expected by DeepLens
+            const fullStoragePath = `${MINIO_CONFIG.bucket}/${message.media_url}`;
 
-            // Create DeepLens image event
-            const imageEvent: DeepLensImageEvent = {
-                imageId: `wa_${message.message_id}`,
+            // Step 1: Persist metadata in DeepLens core DB
+            await this.saveMediaToDeepLens(imageId, fullStoragePath, fileName, mimeType, message);
+
+            // Step 2: Create DeepLens image event (matching ImageUploadedEvent structure)
+            const uploadEvent: ImageUploadedEvent = {
+                eventId: randomUUID(),
+                eventType: 'image.uploaded',
+                eventVersion: '1.0',
+                timestamp: new Date().toISOString(),
                 tenantId: this.TENANT_ID,
-                fileName: fileName,
-                storagePath: message.media_url!,
-                mimeType: message.media_type === 'sticker' ? 'image/webp' : 'image/jpeg',
-                sizeBytes: 0, // Will be determined by DeepLens
-                uploadedAt: new Date(message.timestamp).toISOString(),
-                metadata: {
-                    source: 'whatsapp',
-                    chatJid: message.jid,
-                    messageId: message.message_id,
-                    sender: message.sender,
-                    timestamp: message.timestamp,
-                    groupId: message.group_id
+                data: {
+                    imageId: imageId,
+                    fileName: fileName,
+                    filePath: fullStoragePath,
+                    fileSize: 0,
+                    contentType: mimeType,
+                    category: 'whatsapp',
+                    subCategory: 'general',
+                    uploadedBy: 'whatsapp-processor',
+                    metadata: {
+                        originalFileName: fileName,
+                        format: mimeType,
+                        source: 'whatsapp',
+                        chatJid: message.jid,
+                        messageId: message.message_id,
+                        sender: message.sender,
+                        timestamp: message.timestamp,
+                        groupId: message.group_id
+                    }
+                },
+                processingOptions: {
+                    targetThumbnailSizes: ['icon', 'medium', 'large'],
+                    thumbnailFormat: 'webp',
+                    thumbnailQuality: 80,
+                    retention: 'days180'
                 }
             };
 
@@ -303,13 +353,13 @@ export class DeepLensIntegrationService {
                 topic: this.DEEPLENS_TOPIC,
                 messages: [{
                     key: message.jid, // Partition by chat for ordering
-                    value: JSON.stringify(imageEvent)
+                    value: JSON.stringify(uploadEvent)
                 }]
             });
 
             // Mark as processed
             await client.query(
-                `UPDATE messages 
+                `UPDATE wa.messages 
                  SET deeplens_processed = true, deeplens_sent_at = NOW()
                  WHERE message_id = $1`,
                 [message.message_id]
@@ -317,7 +367,7 @@ export class DeepLensIntegrationService {
 
             logger.debug({
                 messageId: message.message_id,
-                imageId: imageEvent.imageId,
+                imageId: uploadEvent.data.imageId,
                 jid: message.jid
             }, 'Sent image to DeepLens');
         } catch (err) {
@@ -334,7 +384,7 @@ export class DeepLensIntegrationService {
 
         const messages = await client.query<WhatsAppMessage>(
             `SELECT message_id, jid, timestamp, sender, is_from_me
-             FROM messages
+             FROM wa.messages
              WHERE jid = $1 AND group_id IS NULL
              ORDER BY timestamp ASC`,
             [jid]
@@ -354,7 +404,7 @@ export class DeepLensIntegrationService {
         if (!client) return;
 
         const result = await client.query<WhatsAppMessage>(
-            `SELECT * FROM messages WHERE message_id = $1`,
+            `SELECT * FROM wa.messages WHERE message_id = $1`,
             [messageId]
         );
 

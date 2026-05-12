@@ -68,7 +68,7 @@ async function initializeServices() {
     // Verify DB Sync
     const client = getWhatsAppDbClient();
     if (client) {
-        const res = await client.query('SELECT COUNT(*) FROM chats');
+        const res = await client.query('SELECT COUNT(*) FROM wa.chats');
         logger.info(`Database Sync: ${res.rows[0].count} chats in 'chats' table.`);
     }
 
@@ -105,31 +105,25 @@ initializeServices().catch(err => {
     process.exit(1);
 });
 
+async function shutdown(signal: string) {
+    logger.info(`${signal} received, shutting down gracefully...`);
+
+    try {
+        // Shutdown services
+        const { deepLensIntegration } = await import('./services/deeplens-integration.service');
+        await deepLensIntegration.stop();
+        await shutdownMessageQueue();
+
+        server.close(() => {
+            logger.info('Server closed');
+            process.exit(0);
+        });
+    } catch (err) {
+        logger.error({ err }, 'Error during shutdown');
+        process.exit(1);
+    }
+}
+
 // --- Graceful Shutdown ---
-process.on('SIGTERM', async () => {
-    logger.info('SIGTERM received, shutting down gracefully...');
-
-    // Shutdown services
-    const { deepLensIntegration } = await import('./services/deeplens-integration.service');
-    await deepLensIntegration.stop();
-    await shutdownMessageQueue();
-
-    server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', async () => {
-    logger.info('SIGINT received, shutting down gracefully...');
-
-    // Shutdown services
-    const { deepLensIntegration } = await import('./services/deeplens-integration.service');
-    await deepLensIntegration.stop();
-    await shutdownMessageQueue();
-
-    server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-    });
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

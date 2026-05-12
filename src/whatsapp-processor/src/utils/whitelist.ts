@@ -42,7 +42,7 @@ export async function upsertChat(
         const safeTimestamp = (lastMessageTimestamp && !isNaN(lastMessageTimestamp)) ? lastMessageTimestamp : 0;
 
         await client.query(
-            `INSERT INTO chats (
+            `INSERT INTO wa.chats (
                 jid, name, is_group, is_announcement, is_contact, 
                 canonical_jid, metadata, 
                 last_message_text, last_message_timestamp, last_message_from_me,
@@ -55,44 +55,44 @@ export async function upsertChat(
                     WHEN EXCLUDED.is_contact = TRUE THEN EXCLUDED.name
                     
                     -- 2. If we already have an address book name, keep it
-                    WHEN chats.is_contact = TRUE AND chats.name NOT LIKE '%@%' AND chats.name !~ '^[0-9+\\-@.]+$' THEN chats.name
+                    WHEN wa.chats.is_contact = TRUE AND wa.chats.name NOT LIKE '%@%' AND wa.chats.name !~ '^[0-9+\\-@.]+$' THEN wa.chats.name
                     
                     -- 3. If current name is generic (JID, number, or literal 'Group'), and new name is descriptive
-                WHEN (chats.name LIKE '%@%' OR chats.name ~ '^[0-9+\\-@.]+$' OR chats.name = '' OR chats.name IS NULL OR chats.name = 'Group' OR chats.name = 'group')
+                WHEN (wa.chats.name LIKE '%@%' OR wa.chats.name ~ '^[0-9+\\-@.]+$' OR wa.chats.name = '' OR wa.chats.name IS NULL OR wa.chats.name = 'Group' OR wa.chats.name = 'group')
                      AND EXCLUDED.name IS NOT NULL AND EXCLUDED.name != '' 
                      AND EXCLUDED.name NOT LIKE '%@%' AND EXCLUDED.name !~ '^[0-9+\\-@.]+$'
                      AND EXCLUDED.name != 'Group' AND EXCLUDED.name != 'group'
                 THEN EXCLUDED.name
                 
                 -- 4. Keep existing descriptive name
-                WHEN chats.name IS NOT NULL AND chats.name != '' AND chats.name NOT LIKE '%@%' AND chats.name !~ '^[0-9+\\-@.]+$'
-                THEN chats.name
+                WHEN wa.chats.name IS NOT NULL AND wa.chats.name != '' AND wa.chats.name NOT LIKE '%@%' AND wa.chats.name !~ '^[0-9+\\-@.]+$'
+                THEN wa.chats.name
                     
                     -- 5. Final fallback to whatever is newest
                     ELSE EXCLUDED.name 
                  END,
                  is_group = EXCLUDED.is_group,
-                 is_announcement = COALESCE(NULLIF(EXCLUDED.is_announcement, false), chats.is_announcement),
-                 is_contact = chats.is_contact OR EXCLUDED.is_contact,
+                 is_announcement = COALESCE(NULLIF(EXCLUDED.is_announcement, false), wa.chats.is_announcement),
+                 is_contact = wa.chats.is_contact OR EXCLUDED.is_contact,
                  canonical_jid = EXCLUDED.canonical_jid,
-                 metadata = chats.metadata || EXCLUDED.metadata,
+                 metadata = wa.chats.metadata || EXCLUDED.metadata,
                  
                  -- Only update last message info if the NEW timestamp is >= existing
                  last_message_text = CASE 
                     WHEN EXCLUDED.last_message_timestamp IS NOT NULL 
-                         AND EXCLUDED.last_message_timestamp >= COALESCE(chats.last_message_timestamp, 0) 
+                         AND EXCLUDED.last_message_timestamp >= COALESCE(wa.chats.last_message_timestamp, 0) 
                     THEN EXCLUDED.last_message_text
-                    ELSE chats.last_message_text
+                    ELSE wa.chats.last_message_text
                  END,
                  last_message_timestamp = CASE 
-                    WHEN EXCLUDED.last_message_timestamp IS NULL THEN chats.last_message_timestamp
-                    ELSE GREATEST(COALESCE(chats.last_message_timestamp, 0), EXCLUDED.last_message_timestamp)
+                    WHEN EXCLUDED.last_message_timestamp IS NULL THEN wa.chats.last_message_timestamp
+                    ELSE GREATEST(COALESCE(wa.chats.last_message_timestamp, 0), EXCLUDED.last_message_timestamp)
                  END,
                  last_message_from_me = CASE 
                     WHEN EXCLUDED.last_message_timestamp IS NOT NULL 
-                         AND EXCLUDED.last_message_timestamp >= COALESCE(chats.last_message_timestamp, 0) 
+                         AND EXCLUDED.last_message_timestamp >= COALESCE(wa.chats.last_message_timestamp, 0) 
                     THEN EXCLUDED.last_message_from_me
-                    ELSE chats.last_message_from_me
+                    ELSE wa.chats.last_message_from_me
                  END,
                  
                  updated_at = NOW()`,
@@ -116,7 +116,7 @@ export async function getExclusionList(): Promise<string[]> {
 
     try {
         const res = await client.query(
-            'SELECT jid FROM chat_tracking_state WHERE is_excluded = TRUE'
+            'SELECT jid FROM wa.chat_tracking_state WHERE is_excluded = TRUE'
         );
         return res.rows.map(row => row.jid);
     } catch (err) {
@@ -141,7 +141,7 @@ export async function isExcluded(jid: string): Promise<boolean> {
     try {
         // 1. Check explicit state
         const res = await client.query(
-            'SELECT is_excluded FROM chat_tracking_state WHERE jid = $1',
+            'SELECT is_excluded FROM wa.chat_tracking_state WHERE jid = $1',
             [jid]
         );
 
@@ -150,7 +150,7 @@ export async function isExcluded(jid: string): Promise<boolean> {
         }
 
         // 2. Check Global Sync Settings
-        const stateRes = await client.query('SELECT track_chats, track_groups, track_announcements FROM processing_state WHERE id = 1');
+        const stateRes = await client.query('SELECT track_chats, track_groups, track_announcements FROM wa.processing_state WHERE id = 1');
         const globalState = stateRes.rows[0] || { track_chats: true, track_groups: true, track_announcements: true };
 
         const isGroup = jid.endsWith('@g.us');
@@ -202,7 +202,7 @@ export async function bulkExcludeChats(jids: string[]): Promise<void> {
         await client.query('BEGIN');
         for (const jid of jids) {
             await client.query(
-                `INSERT INTO chat_tracking_state (jid, is_excluded, excluded_at, updated_at)
+                `INSERT INTO wa.chat_tracking_state (jid, is_excluded, excluded_at, updated_at)
                  VALUES ($1, TRUE, NOW(), NOW())
                  ON CONFLICT (jid) DO UPDATE 
                  SET is_excluded = TRUE, 
@@ -231,7 +231,7 @@ export async function bulkIncludeChats(jids: string[], resumeMode: 'from_last' |
         await client.query('BEGIN');
         for (const jid of jids) {
             await client.query(
-                `INSERT INTO chat_tracking_state (jid, is_excluded, resume_mode, excluded_at, updated_at)
+                `INSERT INTO wa.chat_tracking_state (jid, is_excluded, resume_mode, excluded_at, updated_at)
                  VALUES ($1, FALSE, $2, NULL, NOW())
                  ON CONFLICT (jid) DO UPDATE 
                  SET is_excluded = FALSE, 
@@ -266,7 +266,7 @@ export async function getChatTrackingState(jid: string): Promise<ChatTrackingSta
 
     try {
         const res = await client.query(
-            'SELECT * FROM chat_tracking_state WHERE jid = $1',
+            'SELECT * FROM wa.chat_tracking_state WHERE jid = $1',
             [jid]
         );
 
@@ -311,7 +311,7 @@ export async function getAllTrackingStates(): Promise<Record<string, ChatTrackin
     if (!client) return {};
 
     try {
-        const res = await client.query('SELECT * FROM chat_tracking_state');
+        const res = await client.query('SELECT * FROM wa.chat_tracking_state');
         const states: Record<string, ChatTrackingState> = {};
 
         for (const row of res.rows) {
@@ -341,7 +341,7 @@ export async function updateLastProcessedMessage(jid: string, messageId: string,
 
     try {
         await client.query(
-            `INSERT INTO chat_tracking_state (jid, last_processed_message_id, last_processed_timestamp, updated_at)
+            `INSERT INTO wa.chat_tracking_state (jid, last_processed_message_id, last_processed_timestamp, updated_at)
              VALUES ($1, $2, $3, NOW())
              ON CONFLICT (jid) DO UPDATE 
              SET last_processed_message_id = EXCLUDED.last_processed_message_id,

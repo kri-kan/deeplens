@@ -11,7 +11,6 @@ export async function resetDatabase(): Promise<{
     deletedCounts: {
         chats: number;
         messages: number;
-        syncState: number;
     };
 }> {
     const client = getWhatsAppDbClient();
@@ -19,7 +18,7 @@ export async function resetDatabase(): Promise<{
         return {
             success: false,
             message: 'Database client not available',
-            deletedCounts: { chats: 0, messages: 0, syncState: 0 }
+            deletedCounts: { chats: 0, messages: 0 }
         };
     }
 
@@ -27,33 +26,27 @@ export async function resetDatabase(): Promise<{
         logger.warn('🗑️  Starting database reset...');
 
         // Count before deletion
-        const chatsCount = await client.query('SELECT COUNT(*) as count FROM chats');
-        const messagesCount = await client.query('SELECT COUNT(*) as count FROM messages');
-        const syncCount = await client.query('SELECT COUNT(*) as count FROM conversation_sync_state');
-
+        const chatsCount = await client.query('SELECT COUNT(*) as count FROM wa.chats');
+        const messagesCount = await client.query('SELECT COUNT(*) as count FROM wa.messages');
         const counts = {
             chats: parseInt(chatsCount.rows[0]?.count || '0'),
-            messages: parseInt(messagesCount.rows[0]?.count || '0'),
-            syncState: parseInt(syncCount.rows[0]?.count || '0')
+            messages: parseInt(messagesCount.rows[0]?.count || '0')
         };
 
         logger.warn({ counts }, 'Current database state before reset');
 
         // Delete in correct order (respect foreign keys)
-        await client.query('DELETE FROM conversation_sync_state');
-        logger.info('✅ Deleted conversation_sync_state');
-
-        await client.query('DELETE FROM messages');
+        await client.query('DELETE FROM wa.messages');
         logger.info('✅ Deleted messages');
 
-        await client.query('DELETE FROM chats');
+        await client.query('DELETE FROM wa.chats');
         logger.info('✅ Deleted chats');
 
         logger.warn({ deletedCounts: counts }, '🗑️  Database reset complete');
 
         return {
             success: true,
-            message: `Database reset successful. Deleted ${counts.chats} chats, ${counts.messages} messages, ${counts.syncState} sync states.`,
+            message: `Database reset successful. Deleted ${counts.chats} chats, ${counts.messages} messages.`,
             deletedCounts: counts
         };
     } catch (err: any) {
@@ -61,7 +54,7 @@ export async function resetDatabase(): Promise<{
         return {
             success: false,
             message: `Database reset failed: ${err.message}`,
-            deletedCounts: { chats: 0, messages: 0, syncState: 0 }
+            deletedCounts: { chats: 0, messages: 0 }
         };
     }
 }
@@ -84,11 +77,6 @@ export async function getDatabaseStats(): Promise<{
         edited: number;
         deleted: number;
     };
-    syncState: {
-        total: number;
-        fullySynced: number;
-        inProgress: number;
-    };
 }> {
     const client = getWhatsAppDbClient();
     if (!client) {
@@ -104,7 +92,7 @@ export async function getDatabaseStats(): Promise<{
                 COUNT(*) FILTER (WHERE is_group = false AND is_announcement = false) as individual,
                 COUNT(*) FILTER (WHERE is_announcement = true) as announcements,
                 COUNT(*) FILTER (WHERE unread_count > 0) as with_unread
-            FROM chats
+            FROM wa.chats
         `);
 
         // Message stats
@@ -115,16 +103,7 @@ export async function getDatabaseStats(): Promise<{
                 COUNT(*) FILTER (WHERE is_from_me = false) as from_others,
                 COUNT(*) FILTER (WHERE metadata->>'edited' = 'true') as edited,
                 COUNT(*) FILTER (WHERE metadata->>'deleted' = 'true') as deleted
-            FROM messages
-        `);
-
-        // Sync state stats
-        const syncStats = await client.query(`
-            SELECT 
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE is_fully_synced = true) as fully_synced,
-                COUNT(*) FILTER (WHERE sync_in_progress = true) as in_progress
-            FROM conversation_sync_state
+            FROM wa.messages
         `);
 
         const stats = {
@@ -141,11 +120,6 @@ export async function getDatabaseStats(): Promise<{
                 fromOthers: parseInt(messageStats.rows[0]?.from_others || '0'),
                 edited: parseInt(messageStats.rows[0]?.edited || '0'),
                 deleted: parseInt(messageStats.rows[0]?.deleted || '0'),
-            },
-            syncState: {
-                total: parseInt(syncStats.rows[0]?.total || '0'),
-                fullySynced: parseInt(syncStats.rows[0]?.fully_synced || '0'),
-                inProgress: parseInt(syncStats.rows[0]?.in_progress || '0'),
             }
         };
 
@@ -173,7 +147,7 @@ export async function getSampleData(): Promise<{
         const chats = await client.query(`
             SELECT jid, name, is_group, is_announcement, unread_count, 
                    last_message_text, last_message_timestamp
-            FROM chats
+            FROM wa.chats
             ORDER BY last_message_timestamp DESC NULLS LAST
             LIMIT 10
         `);
@@ -182,7 +156,7 @@ export async function getSampleData(): Promise<{
             SELECT message_id, jid, content, timestamp, is_from_me,
                    metadata->>'edited' as is_edited,
                    metadata->>'deleted' as is_deleted
-            FROM messages
+            FROM wa.messages
             ORDER BY timestamp DESC
             LIMIT 10
         `);

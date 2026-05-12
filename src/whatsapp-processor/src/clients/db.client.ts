@@ -1,66 +1,42 @@
 import { Client } from 'pg';
-import { DEEPLENS_VAYYARI_CONNECTION_STRING, VAYYARI_WA_DB_CONNECTION_STRING } from '../config';
+import { VAYYARI_WA_DB_CONNECTION_STRING } from '../config';
 import { logger } from '../utils/logger';
 
-// DeepLens Core Database Client (for tenant metadata, feature extraction, etc.)
-export let deeplensDbClient: Client | null = null;
-
-// WhatsApp Data Database Client (for messages, chats, media metadata)
-export let whatsappDbClient: Client | null = null;
+// Shared Database Client for both DeepLens and WhatsApp
+export let dbClient: Client | null = null;
 
 /**
- * Initializes the DeepLens core database client connection
+ * Initializes the database client connection
  */
-export async function initializeDeepLensDbClient(): Promise<void> {
-    if (!DEEPLENS_VAYYARI_CONNECTION_STRING) {
-        logger.info('No DEEPLENS_VAYYARI_CONNECTION_STRING provided, skipping DeepLens DB connection');
-        return;
-    }
-
-    deeplensDbClient = new Client({ connectionString: DEEPLENS_VAYYARI_CONNECTION_STRING });
-
-    try {
-        await deeplensDbClient.connect();
-        logger.info(`Connected to DeepLens DB: ${DEEPLENS_VAYYARI_CONNECTION_STRING.split('/').pop()}`);
-    } catch (err) {
-        logger.error({ err }, 'Failed to connect to DeepLens DB');
-        deeplensDbClient = null;
-    }
-}
-
-/**
- * Initializes the WhatsApp database client connection
- */
-export async function initializeWhatsAppDbClient(): Promise<void> {
+export async function initializeDbClient(): Promise<void> {
     if (!VAYYARI_WA_DB_CONNECTION_STRING) {
-        logger.warn('No VAYYARI_WA_DB_CONNECTION_STRING provided, WhatsApp data will not be persisted to database');
+        logger.error('No database connection string provided');
         return;
     }
 
-    whatsappDbClient = new Client({ connectionString: VAYYARI_WA_DB_CONNECTION_STRING });
+    dbClient = new Client({ connectionString: VAYYARI_WA_DB_CONNECTION_STRING });
 
     try {
-        await whatsappDbClient.connect();
-        logger.info(`Connected to WhatsApp DB: ${VAYYARI_WA_DB_CONNECTION_STRING.split('/').pop()}`);
+        await dbClient.connect();
+        logger.info(`Connected to Database: ${VAYYARI_WA_DB_CONNECTION_STRING.split('/').pop()}`);
     } catch (err) {
-        logger.error({ err }, 'Failed to connect to WhatsApp DB');
-        whatsappDbClient = null;
+        logger.error({ err }, 'Failed to connect to Database');
+        dbClient = null;
     }
 }
 
 /**
- * Gets the DeepLens database client instance
+ * Gets the database client instance
+ * Historically separated, now sharing the same instance
  */
 export function getDeepLensDbClient(): Client | null {
-    return deeplensDbClient;
+    return dbClient;
 }
 
-/**
- * Gets the WhatsApp database client instance
- */
 export function getWhatsAppDbClient(): Client | null {
-    if (!whatsappDbClient) {
-        // console.log('DEBUG: whatsappDbClient is null');
-    }
-    return whatsappDbClient;
+    return dbClient;
 }
+
+// Keeping these for initialization compatibility in index.ts
+export const initializeDeepLensDbClient = initializeDbClient;
+export const initializeWhatsAppDbClient = async () => {}; // No-op as it's already initialized

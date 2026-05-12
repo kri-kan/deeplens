@@ -26,7 +26,7 @@ export async function initializeMessageQueue() {
 
         // 1. Get Chat Config
         const chatRes = await client.query(
-            'SELECT enable_message_grouping, grouping_config FROM chats WHERE jid = $1',
+            'SELECT enable_message_grouping, grouping_config FROM wa.chats WHERE jid = $1',
             [message.jid]
         );
         const { enable_message_grouping, grouping_config } = chatRes.rows[0] || {};
@@ -39,7 +39,7 @@ export async function initializeMessageQueue() {
         // 2. Get Previous Message
         const prevRes = await client.query(
             `SELECT group_id, timestamp, media_type, message_type 
-             FROM messages 
+             FROM wa.messages 
              WHERE jid = $1 AND timestamp < $2 
              ORDER BY timestamp DESC LIMIT 1`,
             [message.jid, message.timestamp]
@@ -103,7 +103,7 @@ export async function initializeMessageQueue() {
 
         // 4. Save Group ID
         await client.query(
-            'UPDATE messages SET group_id = $1 WHERE message_id = $2',
+            'UPDATE wa.messages SET group_id = $1 WHERE message_id = $2',
             [groupId, message.message_id]
         );
 

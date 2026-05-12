@@ -1,12 +1,16 @@
 import {
+    proto,
+} from '@whiskeysockets/baileys/WAProto/index.js';
+import {
+    initAuthCreds,
+    BufferJSON,
+} from '@whiskeysockets/baileys/lib/Utils/index.js';
+import type {
     AuthenticationCreds,
     AuthenticationState,
-    BufferJSON,
-    initAuthCreds,
-    proto,
     SignalDataSet,
     SignalDataTypeMap,
-} from '@whiskeysockets/baileys';
+} from '@whiskeysockets/baileys/lib/Types/index.js';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { getRedisClient } from '../clients/redis.client';
 import { logger } from './logger';
@@ -34,7 +38,7 @@ export const usePostgresAuthState = async (sessionId: string): Promise<{ state: 
 
             // Hit Database
             const res = await client.query(
-                'SELECT data FROM wa_auth_sessions WHERE session_id = $1 AND key_id = $2',
+                'SELECT data FROM wa.wa_auth_sessions WHERE session_id = $1 AND key_id = $2',
                 [sessionId, keyId]
             );
 
@@ -57,10 +61,10 @@ export const usePostgresAuthState = async (sessionId: string): Promise<{ state: 
 
             // Update Database
             await client.query(
-                `INSERT INTO wa_auth_sessions (session_id, key_id, data) 
+                `INSERT INTO wa.wa_auth_sessions (session_id, key_id, data) 
                  VALUES ($1, $2, $3) 
                  ON CONFLICT (session_id, key_id) 
-                 DO UPDATE SET data = EXCLUDED.data, created_at = EXTRACT(EPOCH FROM NOW()) * 1000`,
+                 DO UPDATE SET data = EXCLUDED.data, created_at = (EXTRACT(EPOCH FROM NOW()) * 1000)::bigint`,
                 [sessionId, keyId, jsonStr]
             );
 
@@ -75,7 +79,7 @@ export const usePostgresAuthState = async (sessionId: string): Promise<{ state: 
         try {
             // Remove from Database
             await client.query(
-                'DELETE FROM wa_auth_sessions WHERE session_id = $1 AND key_id = $2',
+                'DELETE FROM wa.wa_auth_sessions WHERE session_id = $1 AND key_id = $2',
                 [sessionId, keyId]
             );
             // Remove from Redis
@@ -101,7 +105,9 @@ export const usePostgresAuthState = async (sessionId: string): Promise<{ state: 
                             if (type === 'app-state-sync-key' && value) {
                                 value = proto.Message.AppStateSyncKeyData.fromObject(value);
                             }
-                            data[id] = value as SignalDataTypeMap[T];
+                            if (value) {
+                                data[id] = value as SignalDataTypeMap[T];
+                            }
                         })
                     );
                     return data;

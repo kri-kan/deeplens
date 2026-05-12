@@ -103,8 +103,8 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
             const totalResult = await client.query(`
                 SELECT COUNT(DISTINCT COALESCE(c.canonical_jid, c.jid)) 
-                FROM chats c 
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
+                FROM wa.chats c 
+                LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid 
                 ${whereClause}
             `, params);
 
@@ -117,8 +117,8 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                         COALESCE(t.is_excluded, FALSE) as "isExcluded",
                         c.deep_sync_enabled as "deep_sync_enabled",
                         c.canonical_jid
-                    FROM chats c
-                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    FROM wa.chats c
+                    LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
                     ${whereClause}
                     ORDER BY 
                         COALESCE(c.canonical_jid, c.jid),
@@ -196,8 +196,8 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
             const totalResult = await client.query(`
                 SELECT COUNT(DISTINCT COALESCE(c.canonical_jid, c.jid)) 
-                FROM chats c 
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
+                FROM wa.chats c 
+                LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid 
                 ${whereClause}
             `, params);
 
@@ -210,8 +210,8 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                         COALESCE(t.is_excluded, FALSE) as "isExcluded",
                         c.deep_sync_enabled as "deep_sync_enabled",
                         c.canonical_jid
-                    FROM chats c
-                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    FROM wa.chats c
+                    LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
                     ${whereClause}
                     ORDER BY 
                         COALESCE(c.canonical_jid, c.jid),
@@ -289,8 +289,8 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
             const totalResult = await client.query(`
                 SELECT COUNT(DISTINCT COALESCE(c.canonical_jid, c.jid)) 
-                FROM chats c 
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid 
+                FROM wa.chats c 
+                LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid 
                 ${whereClause}
             `, params);
 
@@ -303,8 +303,8 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                         COALESCE(t.is_excluded, FALSE) as "isExcluded",
                         c.deep_sync_enabled as "deep_sync_enabled",
                         c.canonical_jid
-                    FROM chats c
-                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    FROM wa.chats c
+                    LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
                     ${whereClause}
                     ORDER BY 
                         COALESCE(c.canonical_jid, c.jid),
@@ -581,10 +581,10 @@ export function createApiRoutes(waService: WhatsAppService): Router {
         if (!client) return res.status(503).json({ error: 'DB client not available' });
 
         try {
-            const chats = await client.query('SELECT COUNT(*) FROM chats');
-            const messages = await client.query('SELECT COUNT(*) FROM messages');
-            const tracking = await client.query('SELECT COUNT(*) FROM chat_tracking_state');
-            const paused = await client.query('SELECT * FROM processing_state');
+            const chats = await client.query('SELECT COUNT(*) FROM wa.chats');
+            const messages = await client.query('SELECT COUNT(*) FROM wa.messages');
+            const tracking = await client.query('SELECT COUNT(*) FROM wa.chat_tracking_state');
+            const paused = await client.query('SELECT * FROM wa.processing_state');
 
             res.json({
                 chats_count: chats.rows[0].count,
@@ -632,7 +632,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
             const db = getWhatsAppDbClient();
             if (!db) return res.status(503).json({ error: 'DB not available' });
 
-            const result = await db.query('SELECT media_url FROM messages WHERE message_id = $1', [messageId]);
+            const result = await db.query('SELECT media_url FROM wa.messages WHERE message_id = $1', [messageId]);
             if (result.rows.length === 0 || !result.rows[0].media_url) {
                 return res.status(404).json({ error: 'Media not found' });
             }
@@ -726,7 +726,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
         try {
             await client.query(
-                `UPDATE chats 
+                `UPDATE wa.chats 
                  SET vendor_id = $1, 
                      vendor_name = $2, 
                      vendor_assigned_at = NOW(),
@@ -773,7 +773,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
         try {
             const result = await client.query(
                 `SELECT vendor_id, vendor_name, vendor_assigned_at, vendor_assigned_by
-                 FROM chats
+                 FROM wa.chats
                  WHERE jid = $1`,
                 [jid]
             );
@@ -827,7 +827,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
 
         try {
             await client.query(
-                `UPDATE chats 
+                `UPDATE wa.chats 
                  SET vendor_id = NULL, 
                      vendor_name = NULL, 
                      vendor_assigned_at = NULL,
@@ -871,7 +871,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
             const result = await client.query(
                 `SELECT jid, name, is_group, is_announcement, vendor_name, 
                         vendor_assigned_at, vendor_assigned_by, last_message_timestamp
-                 FROM chats
+                 FROM wa.chats
                  WHERE vendor_id = $1
                  ORDER BY last_message_timestamp DESC NULLS LAST`,
                 [vendorId]
@@ -911,12 +911,12 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                     COUNT(*) FILTER (WHERE vendor_id IS NULL) as unassigned_chats,
                     COUNT(DISTINCT vendor_id) as unique_vendors,
                     COUNT(*) as total_chats
-                 FROM chats`
+                 FROM wa.chats`
             );
 
             const vendorList = await client.query(
                 `SELECT vendor_id, vendor_name, COUNT(*) as chat_count
-                 FROM chats
+                 FROM wa.chats
                  WHERE vendor_id IS NOT NULL
                  GROUP BY vendor_id, vendor_name
                  ORDER BY chat_count DESC`

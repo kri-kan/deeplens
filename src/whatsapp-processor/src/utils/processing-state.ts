@@ -27,7 +27,7 @@ export async function getProcessingState(): Promise<ProcessingState> {
     }
 
     try {
-        const res = await client.query('SELECT * FROM processing_state WHERE id = 1');
+        const res = await client.query('SELECT * FROM wa.processing_state WHERE id = 1');
         if (res.rows.length === 0) {
             return {
                 isPaused: false,
@@ -93,7 +93,7 @@ export async function updateSyncSettings(settings: {
         if (fields.length === 0) return;
 
         await client.query(
-            `UPDATE processing_state SET ${fields.join(', ')}, updated_at = NOW() WHERE id = 1`,
+            `UPDATE wa.processing_state SET ${fields.join(', ')}, updated_at = NOW() WHERE id = 1`,
             values
         );
     } catch (err) {
@@ -110,7 +110,7 @@ export async function pauseProcessing(): Promise<void> {
 
     try {
         await client.query(
-            `UPDATE processing_state 
+            `UPDATE wa.processing_state 
              SET is_paused = TRUE, 
                  paused_at = NOW(), 
                  updated_at = NOW() 
@@ -130,7 +130,7 @@ export async function resumeProcessing(): Promise<void> {
 
     try {
         await client.query(
-            `UPDATE processing_state 
+            `UPDATE wa.processing_state 
              SET is_paused = FALSE, 
                  resumed_at = NOW(), 
                  updated_at = NOW() 

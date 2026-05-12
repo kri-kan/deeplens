@@ -29,7 +29,7 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
 
     try {
         const result = await client.query(
-            `INSERT INTO messages (
+            `INSERT INTO wa.messages (
                 message_id, 
                 jid, 
                 content, 
@@ -47,9 +47,9 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
             DO UPDATE SET 
                 content = EXCLUDED.content,
                 metadata = EXCLUDED.metadata,
-                media_url = COALESCE(EXCLUDED.media_url, messages.media_url),
-                media_type = COALESCE(EXCLUDED.media_type, messages.media_type)
-            WHERE messages.content = '' OR messages.content IS NULL OR messages.content = EXCLUDED.content`,
+                media_url = COALESCE(EXCLUDED.media_url, wa.messages.media_url),
+                media_type = COALESCE(EXCLUDED.media_type, wa.messages.media_type)
+            WHERE wa.messages.content = '' OR wa.messages.content IS NULL OR wa.messages.content = EXCLUDED.content`,
             [
                 msg.messageId,
                 msg.jid,

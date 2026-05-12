@@ -28,7 +28,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                         jid, name, is_group, is_announcement, unread_count,
                         last_message_text, last_message_timestamp, last_message_from_me,
                         is_pinned, is_archived, is_muted, canonical_jid, pin_order
-                    FROM chats
+                    FROM wa.chats
                     ORDER BY 
                         canonical_jid,
                         (name !~ '^[0-9]+$') DESC,
@@ -66,8 +66,8 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                         c.jid, c.name, c.is_group, c.is_announcement, c.unread_count,
                         c.last_message_text, c.last_message_timestamp, c.last_message_from_me,
                         c.is_pinned, c.is_archived, c.is_muted, c.canonical_jid, c.pin_order
-                    FROM chats c
-                    LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                    FROM wa.chats c
+                    LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
                     WHERE c.is_group = false AND c.is_announcement = false
                       AND (t.is_excluded = false OR t.is_excluded IS NULL)
                     ORDER BY 
@@ -113,8 +113,8 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     c.is_pinned,
                     c.is_archived,
                     c.is_muted
-                FROM chats c
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                FROM wa.chats c
+                LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
                 WHERE c.is_group = true AND c.is_announcement = false
                   AND (t.is_excluded = false OR t.is_excluded IS NULL)
                 ORDER BY 
@@ -154,8 +154,8 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     c.is_pinned,
                     c.is_archived,
                     c.is_muted
-                FROM chats c
-                LEFT JOIN chat_tracking_state t ON c.jid = t.jid
+                FROM wa.chats c
+                LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
                 WHERE c.is_announcement = true
                   AND (t.is_excluded = false OR t.is_excluded IS NULL)
                 ORDER BY 
@@ -184,7 +184,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             }
 
             const result = await client.query(
-                'SELECT * FROM chats WHERE jid = $1',
+                'SELECT * FROM wa.chats WHERE jid = $1',
                 [jid]
             );
 
@@ -216,7 +216,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             const result = await client.query(`
                 WITH chat_info AS (
                     SELECT COALESCE(canonical_jid, jid) as base_jid 
-                    FROM chats 
+                    FROM wa.chats 
                     WHERE jid = $1 
                     LIMIT 1
                 )
@@ -232,10 +232,10 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     is_from_me,
                     metadata,
                     group_id
-                FROM messages
+                FROM wa.messages
                 WHERE jid = $1 
                    OR jid = (SELECT base_jid FROM chat_info)
-                   OR jid IN (SELECT jid FROM chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
+                   OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
                 ORDER BY timestamp DESC
                 LIMIT $2 OFFSET $3
             `, [jid, limit, offset]);
@@ -256,14 +256,14 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             const totalResult = await client.query(`
                 WITH chat_info AS (
                     SELECT COALESCE(canonical_jid, jid) as base_jid 
-                    FROM chats 
+                    FROM wa.chats 
                     WHERE jid = $1 
                     LIMIT 1
                 )
-                SELECT COUNT(*) FROM messages 
+                SELECT COUNT(*) FROM wa.messages 
                 WHERE jid = $1 
                    OR jid = (SELECT base_jid FROM chat_info)
-                   OR jid IN (SELECT jid FROM chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
+                   OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
             `, [jid]);
 
             res.json({
@@ -300,12 +300,12 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
             // Get current message count and deep sync status
             const chatResult = await client.query(
-                'SELECT deep_sync_enabled FROM chats WHERE jid = $1',
+                'SELECT deep_sync_enabled FROM wa.chats WHERE jid = $1',
                 [jid]
             );
 
             const countResult = await client.query(
-                'SELECT COUNT(*) as count FROM messages WHERE jid = $1',
+                'SELECT COUNT(*) as count FROM wa.messages WHERE jid = $1',
                 [jid]
             );
 
@@ -317,7 +317,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 `SELECT 
                     MIN(timestamp) as oldest,
                     MAX(timestamp) as newest
-                FROM messages WHERE jid = $1`,
+                FROM wa.messages WHERE jid = $1`,
                 [jid]
             );
 
@@ -356,7 +356,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             }
 
             await client.query(
-                'UPDATE chats SET deep_sync_enabled = $2 WHERE jid = $1',
+                'UPDATE wa.chats SET deep_sync_enabled = $2 WHERE jid = $1',
                 [jid, enabled === true]
             );
 
@@ -382,7 +382,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 return res.status(503).json({ error: 'Database not available' });
             }
 
-            let query = 'UPDATE chats SET enable_message_grouping = $2';
+            let query = 'UPDATE wa.chats SET enable_message_grouping = $2';
             const params: any[] = [jid, enabled === true];
 
             if (config && enabled === true) {
@@ -412,7 +412,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             if (!client) return res.status(503).json({ error: 'Database not available' });
 
             // 1. Get current message
-            const msgRes = await client.query('SELECT group_id, timestamp, media_type FROM messages WHERE message_id = $1', [messageId]);
+            const msgRes = await client.query('SELECT group_id, timestamp, media_type FROM wa.messages WHERE message_id = $1', [messageId]);
             if (msgRes.rows.length === 0) return res.status(404).json({ error: 'Message not found' });
 
             const msg = msgRes.rows[0];
@@ -431,7 +431,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             // 3. Update this and subsequent messages in SAME group
             // We verify jid to be safe
             await client.query(`
-                UPDATE messages 
+                UPDATE wa.messages 
                 SET group_id = $1 
                 WHERE jid = $2 
                   AND group_id = $3 
@@ -457,7 +457,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             const client = getWhatsAppDbClient();
             if (!client) return res.status(503).json({ error: 'Database not available' });
 
-            const msgRes = await client.query('SELECT timestamp, group_id FROM messages WHERE message_id = $1', [messageId]);
+            const msgRes = await client.query('SELECT timestamp, group_id FROM wa.messages WHERE message_id = $1', [messageId]);
             if (msgRes.rows.length === 0) return res.status(404).json({ error: 'Message not found' });
             const currentMsg = msgRes.rows[0];
 
@@ -465,10 +465,10 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             let targetParams: any[] = [];
 
             if (direction === 'prev') {
-                targetQuery = `SELECT group_id FROM messages WHERE jid = $1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1`;
+                targetQuery = `SELECT group_id FROM wa.messages FROM wa.messages WHERE jid = $1 AND timestamp < $2 ORDER BY timestamp DESC LIMIT 1`;
                 targetParams = [decodeURIComponent(jid), currentMsg.timestamp];
             } else {
-                targetQuery = `SELECT group_id FROM messages WHERE jid = $1 AND timestamp > $2 ORDER BY timestamp ASC LIMIT 1`;
+                targetQuery = `SELECT group_id FROM wa.messages FROM wa.messages WHERE jid = $1 AND timestamp > $2 ORDER BY timestamp ASC LIMIT 1`;
                 targetParams = [decodeURIComponent(jid), currentMsg.timestamp];
             }
 
@@ -478,7 +478,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             const targetGroupId = targetRes.rows[0].group_id;
             if (!targetGroupId) return res.status(400).json({ error: 'Target message is not in a group' });
 
-            await client.query('UPDATE messages SET group_id = $1 WHERE message_id = $2', [targetGroupId, messageId]);
+            await client.query('UPDATE wa.messages SET group_id = $1 WHERE message_id = $2', [targetGroupId, messageId]);
 
             res.json({ success: true, newGroupId: targetGroupId });
         } catch (err: any) {
@@ -507,27 +507,27 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             try {
                 // Get count of messages to be deleted
                 const countResult = await client.query(
-                    'SELECT COUNT(*) as count FROM messages WHERE jid = $1',
+                    'SELECT COUNT(*) as count FROM wa.messages WHERE jid = $1',
                     [jid]
                 );
                 const messageCount = parseInt(countResult.rows[0]?.count || '0');
 
                 // Get all media URLs that need to be cleaned up (for logging/future cleanup)
                 const mediaResult = await client.query(
-                    'SELECT media_url FROM messages WHERE jid = $1 AND media_url IS NOT NULL',
+                    'SELECT media_url FROM wa.messages WHERE jid = $1 AND media_url IS NOT NULL',
                     [jid]
                 );
                 const mediaUrls = mediaResult.rows.map(row => row.media_url);
 
                 // Delete all messages for this chat
                 await client.query(
-                    'DELETE FROM messages WHERE jid = $1',
+                    'DELETE FROM wa.messages WHERE jid = $1',
                     [jid]
                 );
 
                 // Reset chat's last message fields but keep the chat record
                 await client.query(`
-                    UPDATE chats 
+                    UPDATE wa.chats 
                     SET last_message_text = NULL,
                         last_message_timestamp = NULL,
                         last_message_from_me = NULL,
@@ -595,27 +595,27 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 for (const jid of jids) {
                     // Get count of messages to be deleted
                     const countResult = await client.query(
-                        'SELECT COUNT(*) as count FROM messages WHERE jid = $1',
+                        'SELECT COUNT(*) as count FROM wa.messages WHERE jid = $1',
                         [jid]
                     );
                     const messageCount = parseInt(countResult.rows[0]?.count || '0');
 
                     // Get all media URLs
                     const mediaResult = await client.query(
-                        'SELECT media_url FROM messages WHERE jid = $1 AND media_url IS NOT NULL',
+                        'SELECT media_url FROM wa.messages WHERE jid = $1 AND media_url IS NOT NULL',
                         [jid]
                     );
                     const mediaCount = mediaResult.rows.length;
 
                     // Delete all messages for this chat
                     await client.query(
-                        'DELETE FROM messages WHERE jid = $1',
+                        'DELETE FROM wa.messages WHERE jid = $1',
                         [jid]
                     );
 
                     // Reset chat's last message fields
                     await client.query(`
-                        UPDATE chats 
+                        UPDATE wa.chats 
                         SET last_message_text = NULL,
                             last_message_timestamp = NULL,
                             last_message_from_me = NULL,
@@ -675,7 +675,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
             // Get chat metadata
             const chatResult = await client.query(
-                'SELECT * FROM chats WHERE jid = $1',
+                'SELECT * FROM wa.chats WHERE jid = $1',
                 [jid]
             );
 
@@ -693,7 +693,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     COUNT(CASE WHEN is_from_me = false THEN 1 END) as received_messages,
                     MIN(timestamp) as oldest_message_timestamp,
                     MAX(timestamp) as newest_message_timestamp
-                FROM messages
+                FROM wa.messages
                 WHERE jid = $1
             `, [jid]);
 
@@ -706,7 +706,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     COUNT(CASE WHEN media_type = 'document' THEN 1 END) as documents,
                     COUNT(CASE WHEN media_type = 'sticker' THEN 1 END) as stickers,
                     COUNT(CASE WHEN media_url IS NOT NULL THEN 1 END) as total_media
-                FROM messages
+                FROM wa.messages
                 WHERE jid = $1
             `, [jid]);
 

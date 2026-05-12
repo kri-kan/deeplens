@@ -146,7 +146,7 @@ class MessageProcessingQueue {
         try {
             // Mark as processing
             await client.query(
-                `UPDATE messages 
+                `UPDATE wa.messages 
                  SET processing_status = 'processing',
                      processing_last_attempt = NOW()
                  WHERE message_id = $1`,
@@ -158,7 +158,7 @@ class MessageProcessingQueue {
 
             // Mark as processed
             await client.query(
-                `UPDATE messages 
+                `UPDATE wa.messages 
                  SET processing_status = 'processed',
                      processing_completed_at = NOW()
                  WHERE message_id = $1`,
@@ -172,7 +172,7 @@ class MessageProcessingQueue {
 
             // Mark failed
             await client.query(
-                `UPDATE messages 
+                `UPDATE wa.messages 
                  SET processing_status = 'failed',
                      processing_retry_count = COALESCE(processing_retry_count, 0) + 1,
                      processing_error = $2
@@ -198,7 +198,7 @@ class MessageProcessingQueue {
 
             try {
                 const result = await client.query<ProcessableMessage>(
-                    `SELECT * FROM messages 
+                    `SELECT * FROM wa.messages 
                      WHERE processing_status = 'ready' 
                      ORDER BY timestamp ASC
                      LIMIT $1`,
@@ -243,7 +243,7 @@ class MessageProcessingQueue {
 
             // Update DB
             await client.query(
-                `UPDATE messages SET processing_status = 'queued' WHERE message_id = $1`,
+                `UPDATE wa.messages SET processing_status = 'queued' WHERE message_id = $1`,
                 [message.message_id]
             );
         } catch (err) {
@@ -257,7 +257,7 @@ class MessageProcessingQueue {
         if (!client) return;
         try {
             await client.query(
-                `UPDATE messages SET processing_status = 'pending', processing_retry_count = 0, processing_last_attempt = NULL WHERE message_id = $1`,
+                `UPDATE wa.messages SET processing_status = 'pending', processing_retry_count = 0, processing_last_attempt = NULL WHERE message_id = $1`,
                 [messageId]
             );
         } catch (err) { logger.error({ err }, 'Error marking pending'); }
@@ -268,7 +268,7 @@ class MessageProcessingQueue {
         if (!client) return;
         try {
             await client.query(
-                `UPDATE messages SET processing_status = 'ready' WHERE message_id = $1`,
+                `UPDATE wa.messages SET processing_status = 'ready' WHERE message_id = $1`,
                 [messageId]
             );
             // Poller will pick it up next tick

@@ -138,7 +138,7 @@ export class WhatsAppService {
                 const client = getWhatsAppDbClient();
                 if (client) {
                     await client.query(`
-                        UPDATE chats 
+                        UPDATE wa.chats 
                         SET unread_count = COALESCE($2, unread_count),
                             last_message_text = COALESCE($3, last_message_text),
                             last_message_timestamp = COALESCE($4, last_message_timestamp),
@@ -179,7 +179,7 @@ export class WhatsAppService {
                 if (client) {
                     const jids = [...new Set(messages.map((m: any) => m.key?.remoteJid).filter(Boolean))];
                     const res = await client.query(
-                        'SELECT jid FROM chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
+                        'SELECT jid FROM wa.chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
                         [jids]
                     );
                     const enabledJids = new Set(res.rows.map((r: any) => r.jid));
@@ -222,7 +222,7 @@ export class WhatsAppService {
                         // Check which chats have deep sync enabled
                         const jids = [...new Set(msgList.map(m => m.key?.remoteJid).filter(Boolean))];
                         const res = await client.query(
-                            'SELECT jid FROM chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
+                            'SELECT jid FROM wa.chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
                             [jids]
                         );
                         const enabledJids = new Set(res.rows.map(r => r.jid));
@@ -259,7 +259,7 @@ export class WhatsAppService {
                     // Update any existing LID record to have the PN as canonical_jid
                     // PN (phone number) always ends in @s.whatsapp.net
                     await client.query(`
-                        UPDATE chats 
+                        UPDATE wa.chats 
                         SET canonical_jid = $2,
                             metadata = metadata || jsonb_build_object('pn_jid', $2)
                         WHERE jid = $1 OR (canonical_jid = $1 AND jid NOT LIKE '%@s.whatsapp.net')
@@ -360,7 +360,7 @@ export class WhatsAppService {
             logger.info('🧠 Running Deep Name Reconciliation from message history...');
             try {
                 const reconcileResult = await client.query(`
-                    UPDATE chats c
+                    UPDATE wa.chats c
                     SET name = sub.push_name,
                         is_contact = true,
                         updated_at = NOW()
@@ -368,7 +368,7 @@ export class WhatsAppService {
                         SELECT DISTINCT ON (jid) 
                             jid, 
                             metadata->>'pushName' as push_name
-                        FROM messages
+                        FROM wa.messages
                         WHERE metadata->>'pushName' IS NOT NULL 
                           AND metadata->>'pushName' !~ '^[0-9+\\-@.]+$'
                           AND jid NOT LIKE '%@g.us'
@@ -386,7 +386,7 @@ export class WhatsAppService {
             // 5. Deep Group Subject Recovery: Try to fetch metadata for JID-named groups
             try {
                 const mysteryGroups = await client.query(`
-                    SELECT jid FROM chats 
+                    SELECT jid FROM wa.chats 
                     WHERE jid LIKE '%@g.us' 
                       AND (name ~ '^[0-9+\\-@.]+$' OR name = 'Group' OR name = 'group')
                     LIMIT 20
@@ -526,7 +526,7 @@ export class WhatsAppService {
                 logger.info('🧠 Running Deep Name Reconciliation from message history...');
                 try {
                     const reconcileResult = await client.query(`
-                        UPDATE chats c
+                        UPDATE wa.chats c
                         SET name = sub.push_name,
                             is_contact = true,
                             updated_at = NOW()
@@ -534,7 +534,7 @@ export class WhatsAppService {
                             SELECT DISTINCT ON (jid) 
                                 jid, 
                                 metadata->>'pushName' as push_name
-                            FROM messages
+                            FROM wa.messages
                             WHERE metadata->>'pushName' IS NOT NULL 
                               AND metadata->>'pushName' !~ '^[0-9]+$'
                             ORDER BY jid, timestamp DESC
@@ -560,7 +560,7 @@ export class WhatsAppService {
         try {
             const client = getWhatsAppDbClient();
             if (client) {
-                await client.query('DELETE FROM wa_auth_sessions WHERE session_id = $1', [SESSION_ID]);
+                await client.query('DELETE FROM wa.wa_auth_sessions WHERE session_id = $1', [SESSION_ID]);
                 logger.info('Session cleared from database');
             }
 
@@ -664,7 +664,7 @@ export class WhatsAppService {
             if (client) {
                 try {
                     const existing = await client.query(
-                        'SELECT media_url FROM messages WHERE message_id = $1 AND media_url IS NOT NULL',
+                        'SELECT media_url FROM wa.messages WHERE message_id = $1 AND media_url IS NOT NULL',
                         [messageId]
                     );
                     if (existing.rows.length > 0) {
@@ -1165,7 +1165,7 @@ export class WhatsAppService {
 
                         // Update UI categorization fields that are NOT in upsertChat yet
                         await client.query(`
-                            UPDATE chats
+                            UPDATE wa.chats
                             SET unread_count = $2,
                                 is_archived = $3,
                                 is_pinned = $4,
@@ -1257,7 +1257,7 @@ export class WhatsAppService {
                     updateFields.push('updated_at = NOW()');
 
                     await client.query(`
-                        UPDATE chats
+                        UPDATE wa.chats
                         SET ${updateFields.join(', ')}
                         WHERE jid = $1
                     `, values);
@@ -1330,7 +1330,7 @@ export class WhatsAppService {
                     const newContent = this.extractMessageContent({ message: update.update.message } as WAMessage);
 
                     await client.query(`
-                        UPDATE messages
+                        UPDATE wa.messages
                         SET content = $2,
                             metadata = jsonb_set(
                                 COALESCE(metadata, '{}'::jsonb),
@@ -1351,7 +1351,7 @@ export class WhatsAppService {
                 // Handle message delete
                 if (update.update?.messageStubType === 'REVOKE' || update.update?.messageStubType === 68) {
                     await client.query(`
-                        UPDATE messages
+                        UPDATE wa.messages
                         SET content = '[Message deleted]',
                             metadata = jsonb_set(
                                 COALESCE(metadata, '{}'::jsonb),
@@ -1384,7 +1384,7 @@ export class WhatsAppService {
             // Load individual chats
             const chatsRes = await client.query(`
                 SELECT jid as id, name, last_message_timestamp as "conversationTimestamp", is_group, is_announcement, metadata
-                FROM chats
+                FROM wa.chats
                 ORDER BY last_message_timestamp DESC NULLS LAST
             `);
 
