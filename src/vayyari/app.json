@@ -62,7 +62,8 @@
           "savePhotosPermission": "Allow Vayyari to save photos to your gallery.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
