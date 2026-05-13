@@ -224,7 +224,7 @@ public class InstaController : ControllerBase
                 follower_count, following_count, post_count, last_scraped_at, external_id)
             VALUES (
                 @Username, 'instagram', @Name, @ProfilePictureUrl, @Bio, 
-                @FollowersCount, @FollowsCount, @MediaCount, NULL, @ExternalId)",
+                @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId)",
             new { 
                 Username = username, 
                 Name = profile.Name, 
@@ -331,7 +331,7 @@ public class InstaController : ControllerBase
                     follower_count, following_count, post_count, last_scraped_at, external_id)
                 VALUES (
                     @Id, @Username, 'instagram', @Name, @ProfilePictureUrl, @Bio, 
-                    @FollowersCount, @FollowsCount, @MediaCount, NULL, @ExternalId)",
+                    @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId)",
                 new { 
                     Id = watchlistId,
                     Username = username, 

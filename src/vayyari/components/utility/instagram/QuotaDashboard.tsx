@@ -30,7 +30,7 @@ export const QuotaDashboard: React.FC<QuotaDashboardProps> = ({ quota }) => {
           color={theme.colors.primary} 
         />
         <QuotaItem 
-          value={`${quota.metrics?.call_count || 0}%`} 
+          value={`${quota.metrics?.callCount || 0}%`} 
           label="App Usage" 
           color={theme.colors.secondary} 
         />

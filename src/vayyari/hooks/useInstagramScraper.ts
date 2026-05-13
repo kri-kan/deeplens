@@ -17,7 +17,7 @@ export const useInstagramScraper = () => {
   const loadActiveJobs = useCallback(async () => {
     try {
       const data = await instagramService.getActiveJobs();
-      setActiveJobs(data.filter((j: any) => j.job_type === 'manual'));
+      setActiveJobs(data.filter((j: any) => j.jobType === 'manual'));
     } catch (error) {
       console.error("Failed to load active jobs", error);
     }
