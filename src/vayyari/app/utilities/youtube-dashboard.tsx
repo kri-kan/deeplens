@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Linking, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, Linking, Alert, RefreshControl } from 'react-native';
 import { Surface, Text, Button, Divider, ActivityIndicator, useTheme, ProgressBar, Card, List, TextInput, Portal, Dialog } from 'react-native-paper';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { youtubeService, YoutubeTokenHealth, YoutubeQuotaInfo } from '@/services/youtube.service';
@@ -37,6 +37,12 @@ export default function YoutubeDashboard() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const onPullToRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -105,7 +111,10 @@ export default function YoutubeDashboard() {
 
   return (
     <ScreenWrapper title="YouTube Dashboard" subtitle="v3 Data API Integration">
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullToRefresh} />}
+      >
         
         {/* Token Health Card */}
         <Card style={styles.card}>
@@ -134,7 +143,18 @@ export default function YoutubeDashboard() {
 
         {/* Quota Card */}
         <Card style={styles.card}>
-          <Card.Title title="API Quota" left={(props) => <List.Icon {...props} icon="chart-donut" />} />
+          <Card.Title 
+            title="API Quota" 
+            left={(props) => <List.Icon {...props} icon="chart-donut" />} 
+            right={(props) => {
+              const resetTime = quota?.nextResetTime || (quota as any)?.NextResetTime;
+              return (
+                <Text variant="labelSmall" style={{ marginRight: 16, color: resetTime ? theme.colors.primary : 'gray', fontWeight: 'bold' }}>
+                  Resets: {resetTime ? new Date(resetTime).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Updating...'}
+                </Text>
+              );
+            }}
+          />
           <Card.Content>
             <View style={styles.quotaInfo}>
               <Text variant="titleMedium">{quota?.currentUsage.toLocaleString()} / {quota?.dailyLimit.toLocaleString()} Units</Text>

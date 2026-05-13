@@ -27,6 +27,12 @@ public class YoutubeQuotaInfo
     
     [JsonPropertyName("lastUpdated")]
     public DateTime LastUpdated { get; set; }
+
+    [JsonPropertyName("hoursUntilReset")]
+    public double HoursUntilReset { get; set; }
+
+    [JsonPropertyName("nextResetTime")]
+    public DateTime NextResetTime { get; set; }
 }
 
 public class YoutubeUploadRequest

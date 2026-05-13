@@ -75,10 +75,22 @@ namespace DeepLens.Infrastructure.Services
             _defaultCategoryId = dict.GetValueOrDefault("Youtube:DefaultCategoryId", "22");
             _defaultPrivacyStatus = dict.GetValueOrDefault("Youtube:DefaultPrivacyStatus", "private");
 
-            // Reset quota if day has changed (YouTube resets at midnight Pacific, but daily check is safer than none)
-            if (_quotaLastUpdated.Date != DateTime.UtcNow.Date)
+            // TimeZoneInfo for Pacific Time (YouTube official timezone)
+            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+            
+            // Convert to PT, ensuring UTC input
+            var nowUtc = DateTime.UtcNow;
+            var lastUpdatedUtc = _quotaLastUpdated;
+            if (lastUpdatedUtc.Kind != DateTimeKind.Utc) lastUpdatedUtc = DateTime.SpecifyKind(lastUpdatedUtc, DateTimeKind.Utc);
+            if (lastUpdatedUtc.Year < 1900) lastUpdatedUtc = nowUtc.AddDays(-1);
+
+            var nowPt = TimeZoneInfo.ConvertTimeFromUtc(nowUtc, pacificZone);
+            var lastUpdatedPt = TimeZoneInfo.ConvertTimeFromUtc(lastUpdatedUtc, pacificZone);
+
+            // Reset quota if day has changed in Pacific Time
+            if (lastUpdatedPt.Date != nowPt.Date)
             {
-                _logger.LogInformation("YouTube quota date changed from {Last} to {Current}. Resetting usage.", _quotaLastUpdated.Date, DateTime.UtcNow.Date);
+                _logger.LogInformation("YouTube quota date changed (PT) from {Last} to {Current}. Resetting usage.", lastUpdatedPt.Date, nowPt.Date);
                 _currentQuotaUsage = 0;
                 _quotaLastUpdated = DateTime.UtcNow;
                 await _appSettings.UpsertAsync("Youtube:CurrentQuotaUsage", "0");
@@ -102,12 +114,21 @@ namespace DeepLens.Infrastructure.Services
         public async Task<YoutubeQuotaInfo> GetQuotaAsync()
         {
             await ReloadFromDbAsync();
+            var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+            var nowPt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, pacificZone);
+            var nextMidnightPt = nowPt.Date.AddDays(1);
+            var hoursUntilReset = (nextMidnightPt - nowPt).TotalHours;
+
+            var nextResetUtc = TimeZoneInfo.ConvertTimeToUtc(nextMidnightPt, pacificZone);
+
             return new YoutubeQuotaInfo
             {
                 DailyLimit = _dailyQuotaLimit,
                 CurrentUsage = _currentQuotaUsage,
                 RemainingUnits = Math.Max(0, _dailyQuotaLimit - _currentQuotaUsage),
-                LastUpdated = DateTime.UtcNow
+                LastUpdated = DateTime.UtcNow,
+                HoursUntilReset = Math.Round(hoursUntilReset, 1),
+                NextResetTime = nextResetUtc
             };
         }
 

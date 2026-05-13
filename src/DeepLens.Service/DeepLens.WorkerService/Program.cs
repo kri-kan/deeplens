@@ -53,6 +53,7 @@ builder.Services.AddInfrastructure();
 builder.Services.AddScoped<IStorageService, MinioStorageService>();
 builder.Services.AddScoped<IVectorStoreService, VectorStoreService>();
 builder.Services.AddScoped<IMetadataService, MetadataService>();
+builder.Services.AddScoped<IInstagramMediaService, InstagramMediaService>();
 
 
 // Background Workers

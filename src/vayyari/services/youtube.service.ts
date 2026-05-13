@@ -11,6 +11,8 @@ export interface YoutubeQuotaInfo {
   currentUsage: number;
   remainingUnits: number;
   lastUpdated: string;
+  hoursUntilReset: number;
+  nextResetTime: string;
 }
 
 export interface YoutubeUploadRequest {

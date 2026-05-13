@@ -93,6 +93,7 @@ namespace DeepLens.WorkerService.Workers
                 FROM scraper_queue j
                 JOIN competitor_watchlist w ON j.watchlist_id = w.id
                 WHERE j.status = 'pending' 
+                  AND w.is_active = true
                   AND (j.next_run_at IS NULL OR j.next_run_at <= NOW())
                 ORDER BY j.priority DESC, j.created_at ASC
                 LIMIT 1
@@ -514,7 +515,7 @@ namespace DeepLens.WorkerService.Workers
                 SELECT w.id 
                 FROM competitor_watchlist w
                 LEFT JOIN scraper_queue q ON w.id = q.watchlist_id 
-                WHERE w.enabled = true AND w.platform = 'instagram'
+                WHERE w.is_active = true AND w.platform = 'instagram'
                   AND q.id IS NULL");
 
             foreach (var id in missing)

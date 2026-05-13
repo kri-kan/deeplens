@@ -183,8 +183,9 @@ export class ApiClient {
 
   private async handleError(response: Response): Promise<never> {
     let error: ApiError;
+    const text = await response.text();
+    
     try {
-      const text = await response.text();
       const result: any = text ? JSON.parse(text) : {};
       console.error('[API Error Detail]', { status: response.status, result });
       error = result.error || {
@@ -192,9 +193,10 @@ export class ApiClient {
         message: result.message || response.statusText || 'Unknown error',
       };
     } catch {
+      console.error('[API Error Detail] Raw response (non-JSON):', text);
       error = {
         code: `HTTP_${response.status}`,
-        message: response.statusText || 'Failed to parse error response',
+        message: text.slice(0, 100) || response.statusText || 'Failed to parse error response',
       };
     }
     throw new ApiException(error, response.status);
