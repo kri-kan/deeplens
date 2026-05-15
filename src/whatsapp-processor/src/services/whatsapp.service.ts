@@ -285,6 +285,7 @@ export class WhatsAppService {
             this.connectionStatus = 'scanning';
             logger.info('👾 New QR Code received. Waiting for scan...');
             this.io.emit('status', { status: 'scanning', qr });
+            this.updateAccountStatus('scanning');
         }
 
         if (connection === 'close') {
@@ -312,11 +313,13 @@ export class WhatsAppService {
                 }, 2000);
             }
             this.io.emit('status', { status: 'disconnected' });
+            this.updateAccountStatus('disconnected');
         } else if (connection === 'open') {
             this.connectionStatus = 'connected';
             this.qrCode = null;
             logger.info('Connected!');
             this.io.emit('status', { status: 'connected' });
+            this.updateAccountStatus('connected');
 
             // Sync missed messages (delta sync)
             // TODO: Re-enable after fixing sync service
@@ -329,6 +332,42 @@ export class WhatsAppService {
             // Refresh caches
             this.refreshGroups();
             this.refreshChats();
+        }
+    }
+
+    private async updateAccountStatus(status: 'connected' | 'disconnected' | 'scanning'): Promise<void> {
+        const client = getWhatsAppDbClient();
+        if (!client) return;
+
+        try {
+            if (status === 'connected' && this.sock?.user) {
+                // The user ID usually looks like '1234567890:1@s.whatsapp.net'
+                const phoneNumber = this.sock.user.id.split(':')[0].split('@')[0];
+                const accountName = this.sock.user.name || phoneNumber;
+
+                await client.query(`
+                    INSERT INTO wa.accounts (session_id, phone_number, account_name, status, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW())
+                    ON CONFLICT (session_id) 
+                    DO UPDATE SET 
+                        phone_number = EXCLUDED.phone_number,
+                        account_name = EXCLUDED.account_name,
+                        status = EXCLUDED.status,
+                        updated_at = NOW()
+                `, [SESSION_ID, phoneNumber, accountName, status]);
+            } else {
+                // Just update status for existing session, inserting disconnected/scanning if not present
+                await client.query(`
+                    INSERT INTO wa.accounts (session_id, status, updated_at)
+                    VALUES ($1, $2, NOW())
+                    ON CONFLICT (session_id) 
+                    DO UPDATE SET 
+                        status = EXCLUDED.status,
+                        updated_at = NOW()
+                `, [SESSION_ID, status]);
+            }
+        } catch (err) {
+            logger.error({ err, status, sessionId: SESSION_ID }, 'Failed to update account status');
         }
     }
 
@@ -570,6 +609,11 @@ export class WhatsAppService {
             if (keys.length > 0) {
                 await redis.del(...keys);
                 logger.info('Session cache cleared from Redis');
+            }
+
+            // Also delete the account record
+            if (client) {
+                await client.query('DELETE FROM wa.accounts WHERE session_id = $1', [SESSION_ID]);
             }
         } catch (err) {
             logger.error({ err }, 'Failed to clear session');

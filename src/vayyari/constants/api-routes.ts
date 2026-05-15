@@ -69,6 +69,8 @@ export const API_ROUTES = {
 
   // WhatsApp communication (Specific implementation)
   WHATSAPP: {
+    ACCOUNTS: '/api/v1/whatsapp/accounts',
+    DELETE_ACCOUNT: (id: string) => `/api/v1/whatsapp/accounts/${id}`,
     CHANNELS: '/api/v1/whatsapp/channels',
     DELETE_CHANNEL: (id: string) => `/api/v1/whatsapp/channels/${id}`,
     SUBSCRIBERS: (id: string) => `/api/v1/whatsapp/channels/${id}/subscribers`,
@@ -111,5 +113,11 @@ export const API_ROUTES = {
     LIST: '/api/v1/system-jobs',
     ORPHANED_COUNT: '/api/v1/system-jobs/orphaned-media/count',
     CLEANUP: '/api/v1/system-jobs/cleanup-media',
+  },
+
+  // Vendors
+  VENDORS: {
+    LIST: '/api/v1/Vendors',
+    DETAIL: (id: string) => `/api/v1/Vendors/${id}`,
   }
 };

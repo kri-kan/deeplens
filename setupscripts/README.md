@@ -45,6 +45,18 @@ Application services are hosted in the `application/` folder. These can be manag
     - **`services/`**: Core AI reasoning, feature extraction, and competitor workers.
     - **`whatsapp/`**: Multi-tenant WhatsApp processing instances.
 
+### Building and Deploying
+
+You can build and deploy the application layer (including .NET APIs and the Node.js WhatsApp Processor) using the centralized deploy scripts:
+
+```bash
+# Build and deploy all services
+./application/services/build-and-deploy.sh
+
+# Selectively build and deploy specific services
+./application/services/build-and-deploy.sh whatsapp-processor search-api
+```
+
 ---
 
 ## 🧪 Testing & Validation

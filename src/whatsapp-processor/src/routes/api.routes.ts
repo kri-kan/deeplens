@@ -46,6 +46,31 @@ export function createApiRoutes(waService: WhatsAppService): Router {
     });
 
     /**
+     * GET /api/accounts
+     * Returns the list of registered WhatsApp accounts
+     */
+    /**
+     * @openapi
+     * /api/accounts:
+     *   get:
+     *     summary: Get registered WhatsApp accounts
+     *     responses:
+     *       200:
+     *         description: List of accounts
+     */
+    router.get('/accounts', async (req: Request, res: Response) => {
+        const client = getWhatsAppDbClient();
+        if (!client) return res.status(503).json({ error: 'DB client not available' });
+
+        try {
+            const result = await client.query('SELECT * FROM wa.accounts ORDER BY created_at DESC');
+            res.json({ accounts: result.rows });
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    /**
      * GET /api/groups
      * Returns standalone groups (not part of communities) with pagination and exclusion status
      */
@@ -112,10 +137,10 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                 SELECT * FROM (
                     SELECT DISTINCT ON (COALESCE(c.canonical_jid, c.jid))
                         c.jid as id, 
-                        c.name as subject, 
+                        c.name as name, 
                         c.last_message_timestamp as "lastMessageTime",
                         COALESCE(t.is_excluded, FALSE) as "isExcluded",
-                        c.deep_sync_enabled as "deep_sync_enabled",
+                        c.deep_sync_enabled as "deepSyncEnabled",
                         c.canonical_jid
                     FROM wa.chats c
                     LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
@@ -208,7 +233,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                         c.name as name, 
                         c.last_message_timestamp as "lastMessageTime",
                         COALESCE(t.is_excluded, FALSE) as "isExcluded",
-                        c.deep_sync_enabled as "deep_sync_enabled",
+                        c.deep_sync_enabled as "deepSyncEnabled",
                         c.canonical_jid
                     FROM wa.chats c
                     LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
@@ -301,7 +326,7 @@ export function createApiRoutes(waService: WhatsAppService): Router {
                         c.name as name, 
                         c.last_message_timestamp as "lastMessageTime",
                         COALESCE(t.is_excluded, FALSE) as "isExcluded",
-                        c.deep_sync_enabled as "deep_sync_enabled",
+                        c.deep_sync_enabled as "deepSyncEnabled",
                         c.canonical_jid
                     FROM wa.chats c
                     LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid

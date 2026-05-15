@@ -31,6 +31,25 @@ cd setupscripts/application && docker compose up -d
 | Reasoning API        | `8002` | Phi-3 Metadata Extraction    |
 | Feature Extraction   | `8001` | Image/Video Vectorization    |
 | Instagram Worker     | -      | Competitor Data Ingestion    |
+| WhatsApp Processor   | `3000` | Multi-tenant Messaging Service|
+
+### Build and Deploy Scripts
+
+The `deploy.sh` script automates building and deploying local containerized application code (like the .NET APIs and the Node.js WhatsApp Processor) directly to their respective `/data/hosting` volumes, then restarting their Docker compose services.
+
+```bash
+# Single-service deploy
+./deploy.sh whatsapp-processor
+
+# Deploy the search API
+./deploy.sh search-api
+```
+
+For parameterized multi-service deployment, you can use the suite build scripts located in `setupscripts/application/services/`:
+```bash
+# Selectively build and deploy multiple services at once
+./setupscripts/application/services/build-and-deploy.sh whatsapp-processor search-api worker-service
+```
 
 ## 🏢 Tenant Management
 

@@ -247,6 +247,20 @@ See `docker-compose.whatsapp.yml` in the DeepLens root for containerized deploym
 - Persistent volumes for session data
 - Environment-based configuration
 
+### Building and Deploying with DeepLens Scripts
+
+The WhatsApp Processor is fully integrated into the DeepLens unified build and deployment pipeline. The deployment process automatically builds the frontend/backend and handles dependency installation on the hosting directory.
+
+- **Single Service Deploy:** Use the `deploy.sh` script to build and deploy just this service.
+  ```bash
+  ./infrastructure/deploy.sh whatsapp-processor
+  ```
+- **Full Suite Deploy:** Use the `build-and-deploy.sh` (Linux) or `build-and-deploy.ps1` (Windows) scripts. You can deploy it alongside other services selectively.
+  ```bash
+  # Deploy WhatsApp Processor and Search API only
+  ./setupscripts/application/services/build-and-deploy.sh whatsapp-processor search-api
+  ```
+
 ## 🎨 Features
 
 ✅ **WhatsApp Authentication** - QR code scanning for multi-device login  

@@ -34,10 +34,19 @@ const io = new SocketServer(server);
 // --- Initialize Services ---
 async function initializeServices() {
 
-    // --- Middlewares ---
+    // --- CORS ---
     const cors = require('cors');
-    app.use(cors());
+    const corsOptions = {
+        origin: true,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization']
+    };
+    app.use(cors(corsOptions));
     app.use(express.json());
+
+    // --- Health Check ---
+    app.get('/health', (req, res) => res.json({ status: 'ok', tenant: TENANT_NAME }));
 
     // --- Swagger Docs ---
     setupSwagger(app);
@@ -45,7 +54,6 @@ async function initializeServices() {
     // --- Services Initialization ---
     await initializeDeepLensDbClient();
     await initializeWhatsAppDbClient();
-    // await initializeDatabaseSchema(); // Handled externally by setupscripts
 
     // Initialize message processing queue
     await initializeMessageQueue();
@@ -70,27 +78,6 @@ async function initializeServices() {
     if (client) {
         const res = await client.query('SELECT COUNT(*) FROM wa.chats');
         logger.info(`Database Sync: ${res.rows[0].count} chats in 'chats' table.`);
-    }
-
-    // --- Static Files & SPA Fallback ---
-    const reactBuildPath = path.join(__dirname, '../public/dist');
-    if (fs.existsSync(reactBuildPath)) {
-        logger.info('Serving React application from public/dist');
-        app.use(express.static(reactBuildPath));
-        app.get('*', (req, res, next) => {
-            if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
-                return next();
-            }
-            res.sendFile(path.join(reactBuildPath, 'index.html'));
-        });
-    } else {
-        logger.warn('React build not found!');
-        app.get('*', (req, res, next) => {
-            if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
-                return next();
-            }
-            res.status(503).send('UI not built. Please run: cd client && npm run build');
-        });
     }
 
     // --- Start Server ---

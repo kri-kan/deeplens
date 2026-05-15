@@ -221,17 +221,17 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                     LIMIT 1
                 )
                 SELECT 
-                    message_id,
-                    jid as chat_jid,
-                    sender as sender_jid,
-                    content as message_text,
-                    message_type,
-                    media_type,
-                    media_url,
+                    message_id as "messageId",
+                    jid as "chatJid",
+                    sender as "senderJid",
+                    content as "messageText",
+                    message_type as "messageType",
+                    media_type as "mediaType",
+                    media_url as "mediaUrl",
                     timestamp,
-                    is_from_me,
+                    is_from_me as "isFromMe",
                     metadata,
-                    group_id
+                    group_id as "groupId"
                 FROM wa.messages
                 WHERE jid = $1 
                    OR jid = (SELECT base_jid FROM chat_info)
@@ -242,12 +242,12 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
             // Resolve media URLs
             const messages = await Promise.all(result.rows.map(async (msg) => {
-                if (msg.media_url && msg.media_url.startsWith('minio://')) {
+                if (msg.mediaUrl && msg.mediaUrl.startsWith('minio://')) {
                     try {
-                        const objectName = msg.media_url.replace(/^minio:\/\/[^\/]+\//, '');
-                        msg.media_url = await getPresignedUrl(objectName);
+                        const objectName = msg.mediaUrl.replace(/^minio:\/\/[^\/]+\//, '');
+                        msg.mediaUrl = await getPresignedUrl(objectName);
                     } catch (err) {
-                        logger.error({ err, id: msg.message_id }, 'Failed to get presigned URL');
+                        logger.error({ err, id: msg.messageId }, 'Failed to get presigned URL');
                     }
                 }
                 return msg;
@@ -360,7 +360,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
                 [jid, enabled === true]
             );
 
-            res.json({ success: true, jid, deep_sync_enabled: enabled === true });
+            res.json({ success: true, jid, deepSyncEnabled: enabled === true });
         } catch (err: any) {
             logger.error({ err, jid }, 'Failed to toggle deep sync');
             res.status(500).json({ error: err.message });
@@ -394,7 +394,7 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
 
             await client.query(query, params);
 
-            res.json({ success: true, jid, enable_message_grouping: enabled === true, grouping_config: config });
+            res.json({ success: true, jid, enableMessageGrouping: enabled === true, groupingConfig: config });
         } catch (err: any) {
             logger.error({ err, jid }, 'Failed to toggle message grouping');
             res.status(500).json({ error: err.message });
@@ -716,20 +716,20 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
             res.json({
                 jid: chat.jid,
                 name: chat.name,
-                is_group: chat.is_group,
-                is_announcement: chat.is_announcement,
-                is_excluded: chat.is_excluded,
-                deep_sync_enabled: chat.deep_sync_enabled,
-                enable_message_grouping: chat.enable_message_grouping,
-                created_at: chat.created_at,
-                updated_at: chat.updated_at,
-                last_message_timestamp: chat.last_message_timestamp,
+                isGroup: chat.is_group,
+                isAnnouncement: chat.is_announcement,
+                isExcluded: chat.is_excluded,
+                deepSyncEnabled: chat.deep_sync_enabled,
+                enableMessageGrouping: chat.enable_message_grouping,
+                createdAt: chat.created_at,
+                updatedAt: chat.updated_at,
+                lastMessageTimestamp: chat.last_message_timestamp,
                 messages: {
                     total: parseInt(stats.total_messages || '0'),
                     sent: parseInt(stats.sent_messages || '0'),
                     received: parseInt(stats.received_messages || '0'),
-                    oldest_timestamp: stats.oldest_message_timestamp,
-                    newest_timestamp: stats.newest_message_timestamp
+                    oldestTimestamp: stats.oldest_message_timestamp,
+                    newestTimestamp: stats.newest_message_timestamp
                 },
                 media: {
                     total: parseInt(media.total_media || '0'),

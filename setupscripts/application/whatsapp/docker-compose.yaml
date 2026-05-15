@@ -9,20 +9,29 @@ services:
     image: deeplens-whatsapp-processor:latest
     container_name: deeplens-whatsapp-${SESSION_ID:-default}-${TENANT_NAME}
     restart: unless-stopped
+    command: node dist/index.js
     environment:
       # Identity & Session
       SESSION_ID: ${SESSION_ID:-default}
       TENANT_NAME: ${TENANT_NAME}
       
-      # Database Connection (Targets tenant-specific metadata DB)
-      DB_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD:-Krikank1%24}@${INFRA_HOST:-192.168.0.170}:${POSTGRES_PORT:-5432}/tenant_${TENANT_NAME}_metadata
+      # Database Connection (Unified Vayyari Metadata DB)
+      VAYYARI_WA_DB_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD:-Krikank1%24}@${INFRA_HOST:-192.168.0.170}:${POSTGRES_PORT:-5432}/deeplens_platform
       
+      # Kafka Configuration
+      KAFKA_BROKERS: ${INFRA_HOST:-192.168.0.170}:9092
+
+      # Redis Configuration
+      REDIS_HOST: ${INFRA_HOST:-192.168.0.170}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: 1
+
       # MinIO Connection (Targets shared instance with tenant bucket)
       MINIO_ENDPOINT: ${INFRA_HOST:-192.168.0.170}
       MINIO_PORT: ${MINIO_PORT:-9000}
-      MINIO_BUCKET: ${MINIO_BUCKET:-tenant-${TENANT_NAME}-data}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-whatsapp-data}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-krikan}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-Krikank1$}
 
       # Application Configuration
       DATA_DIR: /usr/src/app/data
@@ -30,6 +39,8 @@ services:
       LOG_LEVEL: info
     
     volumes:
+      # Application Code mapped from host (build cycle)
+      - ${WHATSAPP_HOSTING_PATH}:/usr/src/app
       # Persist Session Authentication & Configuration
       - ../../../data/whatsapp/${TENANT_NAME}/${SESSION_ID:-default}:/usr/src/app/data
     
@@ -38,7 +49,7 @@ services:
     
     ports:
       # Managed dynamic port mapping
-      - "${RequestPort:-3000}:3000"
+      - "${WHATSAPP_PROCESSOR_PORT:-3001}:3000"
 
 networks:
   deeplens-network:

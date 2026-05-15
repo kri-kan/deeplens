@@ -33,6 +33,7 @@ const SYSTEM_UTILITIES: UtilityItem[] = [
   { id: 'insta-explorer', title: 'Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C' },
   { id: 'youtube-dashboard', title: 'YouTube', icon: 'youtube', route: '/utilities/youtube-dashboard', color: '#FF0000' },
   { id: 'quick-links', title: 'Links', icon: 'link-variant', route: '/utilities/quick-links', color: '#2196F3' },
+  { id: 'whatsapp-mgmt', title: 'WhatsApp', icon: 'whatsapp', route: '/utilities/whatsapp', color: '#25D366' },
 ];
 
 const COMMUNICATION_UTILITIES: UtilityItem[] = [

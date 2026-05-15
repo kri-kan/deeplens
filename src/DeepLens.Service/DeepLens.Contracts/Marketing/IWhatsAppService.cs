@@ -30,8 +30,29 @@ public record ChannelSubscriberDto(
     [property: JsonPropertyName("optedInAt")] DateTime OptedInAt
 );
 
+public record WhatsAppAccountDto(
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("sessionId")] string SessionId,
+    [property: JsonPropertyName("phoneNumber")] string? PhoneNumber,
+    [property: JsonPropertyName("accountName")] string? AccountName,
+    [property: JsonPropertyName("label")] string? Label,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
+    [property: JsonPropertyName("updatedAt")] DateTime UpdatedAt
+);
+
+public record CreateWhatsAppAccountRequest(
+    [property: JsonPropertyName("sessionId")] string SessionId,
+    [property: JsonPropertyName("label")] string Label,
+    [property: JsonPropertyName("phoneNumber")] string? PhoneNumber = null
+);
+
 public interface IWhatsAppService
 {
+    Task<IEnumerable<WhatsAppAccountDto>> GetActiveAccountsAsync();
+    Task<WhatsAppAccountDto> CreateAccountAsync(CreateWhatsAppAccountRequest request);
+    Task<bool> DeleteAccountAsync(Guid id);
+
     Task<IEnumerable<WhatsAppChannelDto>> GetAllChannelsAsync();
     Task<WhatsAppChannelDto> CreateChannelAsync(string name, string? description);
     Task<bool> DeleteChannelAsync(Guid id);

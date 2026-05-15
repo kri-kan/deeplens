@@ -17,6 +17,27 @@ public class WhatsAppController : ControllerBase
         _whatsAppService = whatsAppService;
     }
 
+    [HttpGet("accounts")]
+    public async Task<IActionResult> GetAccounts()
+    {
+        var accounts = await _whatsAppService.GetActiveAccountsAsync();
+        return Ok(accounts);
+    }
+
+    [HttpPost("accounts")]
+    public async Task<IActionResult> CreateAccount([FromBody] CreateWhatsAppAccountRequest request)
+    {
+        var account = await _whatsAppService.CreateAccountAsync(request);
+        return Ok(account);
+    }
+
+    [HttpDelete("accounts/{id}")]
+    public async Task<IActionResult> DeleteAccount(Guid id)
+    {
+        var result = await _whatsAppService.DeleteAccountAsync(id);
+        return result ? Ok() : NotFound();
+    }
+
     [HttpGet("channels")]
     public async Task<IActionResult> GetChannels()
     {

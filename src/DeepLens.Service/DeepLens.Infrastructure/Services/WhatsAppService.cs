@@ -16,6 +16,49 @@ public class WhatsAppService : IWhatsAppService
         _dbConnectionFactory = dbConnectionFactory;
     }
 
+    public async Task<IEnumerable<WhatsAppAccountDto>> GetActiveAccountsAsync()
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        return await connection.QueryAsync<WhatsAppAccountDto>(
+            "SELECT id as Id, session_id as SessionId, phone_number as PhoneNumber, account_name as AccountName, label as Label, status as Status, created_at as CreatedAt, updated_at as UpdatedAt FROM wa.accounts ORDER BY created_at DESC");
+    }
+
+    public async Task<WhatsAppAccountDto> CreateAccountAsync(CreateWhatsAppAccountRequest request)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            INSERT INTO wa.accounts (session_id, label, phone_number, status)
+            VALUES (@SessionId, @Label, @PhoneNumber, 'disconnected')
+            ON CONFLICT (session_id) DO UPDATE
+                SET label = EXCLUDED.label, updated_at = NOW()
+            RETURNING id, session_id, phone_number, account_name, label, status, created_at, updated_at;";
+
+        var row = await connection.QuerySingleAsync(sql, new
+        {
+            request.SessionId,
+            request.Label,
+            request.PhoneNumber
+        });
+
+        return new WhatsAppAccountDto(
+            Id: row.id,
+            SessionId: row.session_id,
+            PhoneNumber: row.phone_number,
+            AccountName: row.account_name,
+            Label: row.label,
+            Status: row.status,
+            CreatedAt: row.created_at,
+            UpdatedAt: row.updated_at
+        );
+    }
+
+    public async Task<bool> DeleteAccountAsync(Guid id)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var rows = await connection.ExecuteAsync("DELETE FROM wa.accounts WHERE id = @Id", new { Id = id });
+        return rows > 0;
+    }
+
     public async Task<IEnumerable<WhatsAppChannelDto>> GetAllChannelsAsync()
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
