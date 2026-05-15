@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-05-11 16:38:58
+**Auto-generated on:** 2026-05-15 18:40:20
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -333,6 +333,20 @@ While the core infrastructure is external, the specialized DeepLens application 
 | Reasoning API        | `8002` | Phi-3 Metadata Extraction    |
 | Feature Extraction   | `8001` | Image/Video Vectorization    |
 | Instagram Worker     | -      | Competitor Data Ingestion    |
+| WhatsApp Processor   | `3000` | Multi-tenant Messaging Service|
+
+### Build and Deploy Scripts
+
+The `deploy.sh` script automates building and deploying local containerized application code (like the .NET APIs and the Node.js WhatsApp Processor) directly to their respective `/data/hosting` volumes, then restarting their Docker compose services.
+
+
+*(Code block omitted for brevity)*
+
+
+For parameterized multi-service deployment, you can use the suite build scripts located in `setupscripts/application/services/`:
+
+*(Code block omitted for brevity)*
+
 
 ## 🏢 Tenant Management
 
@@ -709,6 +723,19 @@ See `docker-compose.whatsapp.yml` in the DeepLens root for containerized deploym
 - Network isolation via `deeplens-network`
 - Persistent volumes for session data
 - Environment-based configuration
+
+### Building and Deploying with DeepLens Scripts
+
+The WhatsApp Processor is fully integrated into the DeepLens unified build and deployment pipeline. The deployment process automatically builds the frontend/backend and handles dependency installation on the hosting directory.
+
+- **Single Service Deploy:** Use the `deploy.sh` script to build and deploy just this service.
+  
+*(Code block omitted for brevity)*
+
+- **Full Suite Deploy:** Use the `build-and-deploy.sh` (Linux) or `build-and-deploy.ps1` (Windows) scripts. You can deploy it alongside other services selectively.
+  
+*(Code block omitted for brevity)*
+
 
 ## 🎨 Features
 
