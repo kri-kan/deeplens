@@ -309,11 +309,15 @@ export const useCustomerManagement = () => {
 
   const filteredCustomers = customers.filter(c => {
     const query = searchQuery.toLowerCase();
+    const matchesInstagramAccounts = c.instagramAccounts?.some(acc => 
+      acc.username?.toLowerCase().includes(query)
+    );
     return (
       (c.firstName?.toLowerCase().includes(query)) ||
       (c.lastName?.toLowerCase().includes(query)) ||
       (c.phoneNumber?.includes(query)) ||
-      (c.instagramId?.toLowerCase().includes(query))
+      (c.instagramId?.toLowerCase().includes(query)) ||
+      matchesInstagramAccounts
     );
   });
 
