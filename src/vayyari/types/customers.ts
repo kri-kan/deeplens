@@ -1,3 +1,17 @@
+export interface CustomerInstagramAccount {
+  id: string;
+  username: string;
+  fullName?: string;
+  profilePictureUrl?: string;
+  isPrimary: boolean;
+}
+
+export interface Language {
+  code: string;
+  name: string;
+  isDefault: boolean;
+}
+
 /**
  * Represents a customer.
  * Mirrors CustomerDto from backend.
@@ -11,8 +25,11 @@ export interface Customer {
   instagramId?: string;
   email?: string;
   notes?: string;
+  referralCode?: string;
   createdAt: string;
   addresses?: CustomerAddress[];
+  instagramAccounts?: CustomerInstagramAccount[];
+  preferredLanguages?: string[];
   
   // Virtual field for UI
   fullName?: string; 
@@ -46,6 +63,8 @@ export interface CreateCustomerRequest {
   instagramId?: string;
   email?: string;
   notes?: string;
+  instagramAccounts?: CustomerInstagramAccount[];
+  preferredLanguages?: string[];
 }
 
 /**

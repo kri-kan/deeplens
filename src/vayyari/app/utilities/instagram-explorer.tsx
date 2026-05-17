@@ -9,6 +9,7 @@ import { VideoItem } from '@/components/utility/instagram/VideoItem';
 import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
 import { BentoCard } from '@/components/ui/BentoCard';
+import { MetaConfigurationsTable } from '@/components/utility/instagram/MetaConfigurationsTable';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';

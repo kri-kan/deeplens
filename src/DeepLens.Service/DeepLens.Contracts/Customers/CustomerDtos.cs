@@ -13,8 +13,25 @@ public record CustomerDto(
     [property: JsonPropertyName("instagramId")] string? InstagramId,
     [property: JsonPropertyName("email")] string? Email,
     [property: JsonPropertyName("notes")] string? Notes,
+    [property: JsonPropertyName("referralCode")] string ReferralCode,
     [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
-    [property: JsonPropertyName("addresses")] List<CustomerAddressDto> Addresses
+    [property: JsonPropertyName("addresses")] List<CustomerAddressDto> Addresses,
+    [property: JsonPropertyName("instagramAccounts")] List<CustomerInstagramAccountDto> InstagramAccounts,
+    [property: JsonPropertyName("preferredLanguages")] List<string> PreferredLanguages
+);
+
+public record CustomerInstagramAccountDto(
+    [property: JsonPropertyName("id")] Guid Id,
+    [property: JsonPropertyName("username")] string Username,
+    [property: JsonPropertyName("fullName")] string? FullName,
+    [property: JsonPropertyName("profilePictureUrl")] string? ProfilePictureUrl,
+    [property: JsonPropertyName("isPrimary")] bool IsPrimary
+);
+
+public record LanguageDto(
+    [property: JsonPropertyName("code")] string Code,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("isDefault")] bool IsDefault
 );
 
 public record CustomerAddressDto(
@@ -36,7 +53,9 @@ public record CreateCustomerRequest(
     [property: JsonPropertyName("phoneNumber")] string? PhoneNumber,
     [property: JsonPropertyName("instagramId")] string? InstagramId,
     [property: JsonPropertyName("email")] string? Email,
-    [property: JsonPropertyName("notes")] string? Notes
+    [property: JsonPropertyName("notes")] string? Notes,
+    [property: JsonPropertyName("instagramAccounts")] List<CustomerInstagramAccountDto>? InstagramAccounts,
+    [property: JsonPropertyName("preferredLanguages")] List<string>? PreferredLanguages
 );
 
 public record CreateAddressRequest(

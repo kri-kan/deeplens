@@ -1,34 +1,44 @@
-import React, { useState, useEffect, useCallback, Fragment } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
 import {
   Text,
-  Card,
   Button,
   useTheme,
   ActivityIndicator,
-  Surface,
+  Searchbar,
+  Avatar,
   IconButton,
-  List,
   Divider,
+  Surface,
+  Chip,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
-import { waProcessorService, WaProcessorStatus } from '@/services/wa-processor.service';
+import { waProcessorService, WaProcessorStatus, Conversation } from '@/services/wa-processor.service';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { Section } from '@/components/layout/Section';
+import { formatDistanceToNow } from 'date-fns';
 
-export default function WhatsAppDashboardScreen() {
+export default function WhatsAppChatListScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState('announcements');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [status, setStatus] = useState<WaProcessorStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const s = await waProcessorService.getStatus();
+      const [s, convs] = await Promise.all([
+        waProcessorService.getStatus(),
+        waProcessorService.fetchConversations()
+      ]);
       setStatus(s);
+      setConversations(convs);
     } catch (err: any) {
-      console.error('Failed to fetch status:', err);
+      console.error('Failed to fetch WhatsApp data:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -36,129 +46,296 @@ export default function WhatsAppDashboardScreen() {
   }, []);
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 10000);
+    fetchData();
+    const interval = setInterval(fetchData, 30000); // Slower interval for list
     return () => clearInterval(interval);
-  }, [fetchStatus]);
+  }, [fetchData]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchStatus();
+    fetchData();
   };
 
-  const menuItems = [
-    { title: 'Session Status', subtitle: 'Connection & QR Pairing', icon: 'qrcode-scan', route: '/utilities/whatsapp/session' },
-    { title: 'Accounts Registry', subtitle: 'Manage multiple WhatsApp sessions', icon: 'card-account-details-outline', route: '/utilities/whatsapp-accounts' },
-    { title: 'Chats Admin', subtitle: 'Manage individual chat tracking', icon: 'chat-processing-outline', route: '/utilities/whatsapp/chats' },
-    { title: 'Groups Admin', subtitle: 'Control group processing', icon: 'account-group-outline', route: '/utilities/whatsapp/groups' },
-    { title: 'Announcements Admin', subtitle: 'Manage community channels', icon: 'bullhorn-outline', route: '/utilities/whatsapp/announcements' },
-    { title: 'Processing Settings', subtitle: 'Sync & Performance controls', icon: 'cog-outline', route: '/utilities/whatsapp/settings' },
-  ];
+  const filteredConversations = useMemo(() => {
+    return conversations.filter(c => {
+      // Search filter
+      const matchesSearch = !search || 
+        (c.name && c.name.toLowerCase().includes(search.toLowerCase())) || 
+        (c.jid && c.jid.toLowerCase().includes(search.toLowerCase()));
+      
+      if (!matchesSearch) return false;
 
-  return (
-    <ScreenWrapper title="WhatsApp Management">
-      <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={styles.container}
+      // Tab filter
+      if (activeTab === 'chats') return !c.isGroup && !c.isAnnouncement;
+      if (activeTab === 'groups') return c.isGroup && !c.isAnnouncement;
+      if (activeTab === 'announcements') return c.isAnnouncement;
+      
+      return true;
+    });
+  }, [conversations, search, activeTab]);
+
+  const renderItem = ({ item }: { item: Conversation }) => {
+    const timestamp = (item.lastMessageTimestamp && item.lastMessageTimestamp > 0) 
+      ? new Date(item.lastMessageTimestamp * 1000) 
+      : null;
+    
+    return (
+      <TouchableOpacity 
+        onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(item.jid)}`)}
+        activeOpacity={0.7}
       >
-        <Section title="System Overview">
-          <Card style={styles.statusCard}>
-            <Card.Content>
-              <View style={styles.statusRow}>
-                <View style={[
-                  styles.statusDot, 
-                  { backgroundColor: status?.status === 'connected' ? '#25D366' : status?.status === 'scanning' ? '#FFA726' : '#EF5350' }
-                ]} />
-                <View style={{ flex: 1 }}>
-                  <Text variant="titleMedium" style={{ fontWeight: '700' }}>
-                    {status?.status === 'connected' ? 'Service Connected' : status?.status === 'scanning' ? 'Awaiting Login' : 'Service Offline'}
-                  </Text>
-                  <Text variant="bodySmall" style={{ opacity: 0.5 }}>
-                    Tenant: {status?.tenant || 'Unknown'}
+        <View style={styles.chatItem}>
+          <View style={[
+            styles.avatarContainer,
+            item.deepSyncEnabled && { borderColor: '#25D366', borderWidth: 2, borderRadius: 25 }
+          ]}>
+            {item.profilePicUrl ? (
+              <Avatar.Image 
+                source={{ uri: item.profilePicUrl }} 
+                size={item.deepSyncEnabled ? 46 : 50} 
+                style={{ backgroundColor: '#eee' }} 
+              />
+            ) : (
+              <Avatar.Text 
+                label={item.name?.substring(0, 2).toUpperCase() || '?'} 
+                size={item.deepSyncEnabled ? 46 : 50} 
+                style={{ backgroundColor: '#eee' }} 
+              />
+            )}
+          </View>
+          <View style={styles.chatContent}>
+            <View style={styles.chatHeader}>
+              <Text variant="titleMedium" style={styles.chatName} numberOfLines={1}>
+                {item.name || 'Unnamed Chat'}
+              </Text>
+              {item.isAnnouncement && item.communityName && (
+                <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: '700' }} numberOfLines={1}>
+                  {item.communityName.toUpperCase()}
+                </Text>
+              )}
+              {timestamp && (
+                <Text variant="bodySmall" style={styles.chatTime}>
+                  {formatDistanceToNow(timestamp, { addSuffix: false })}
+                </Text>
+              )}
+            </View>
+            <View style={styles.chatFooter}>
+              <Text variant="bodyMedium" style={styles.chatMessage} numberOfLines={1}>
+                {item.lastMessageText || (item.isGroup ? 'Group chat' : 'No messages')}
+              </Text>
+              {item.unreadCount > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>
+                    {item.unreadCount > 99 ? '99+' : item.unreadCount}
                   </Text>
                 </View>
-                <IconButton 
-                  icon="chevron-right" 
-                  onPress={() => router.push('/utilities/whatsapp/session')} 
-                />
-              </View>
-            </Card.Content>
-          </Card>
-        </Section>
-
-        <Section title="Administration">
-          <Card style={styles.menuCard}>
-            {menuItems.map((item, i) => (
-              <View key={item.route}>
-                <List.Item
-                  title={item.title}
-                  description={item.subtitle}
-                  left={props => <List.Icon {...props} icon={item.icon} />}
-                  onPress={() => router.push(item.route as any)}
-                />
-                {i < menuItems.length - 1 && <Divider />}
-              </View>
-            ))}
-          </Card>
-        </Section>
-
-        <Section title="History & Sync">
-          <View style={styles.statsRow}>
-            <StatBox label="Tracked Chats" value="—" color={theme.colors.primary} />
-            <StatBox label="Active Groups" value="—" color={theme.colors.secondary} />
+              )}
+            </View>
           </View>
-        </Section>
-      </ScrollView>
-    </ScreenWrapper>
-  );
-}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <Surface style={styles.statBox} elevation={1}>
-      <Text variant="displaySmall" style={{ color, fontWeight: 'bold' }}>{value}</Text>
-      <Text variant="labelSmall" style={{ opacity: 0.5 }}>{label}</Text>
-    </Surface>
+    <ScreenWrapper 
+      title="WhatsApp" 
+      actions={
+        <IconButton 
+          icon="menu" 
+          onPress={() => router.push('/utilities/whatsapp/admin')} 
+        />
+      }
+      withScrollView={false}
+    >
+      <View style={styles.container}>
+        <Surface style={styles.searchHeader} elevation={1}>
+          {showSearch ? (
+            <Searchbar
+              placeholder="Search chats..."
+              value={search}
+              onChangeText={setSearch}
+              onIconPress={() => {
+                setShowSearch(false);
+                setSearch('');
+              }}
+              icon="arrow-left"
+              style={styles.searchBar}
+              inputStyle={styles.searchBarInput}
+              elevation={0}
+              autoFocus
+            />
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipScroll}
+            >
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'chats', label: 'Chats' },
+                { value: 'groups', label: 'Groups' },
+                { value: 'announcements', label: 'Announcements' },
+              ].map((tab) => (
+                <Chip
+                  key={tab.value}
+                  onPress={() => setActiveTab(tab.value)}
+                  style={[
+                    styles.filterChip,
+                    activeTab === tab.value && { 
+                      backgroundColor: theme.colors.primary + '15',
+                      borderColor: theme.colors.primary,
+                      borderWidth: 1
+                    }
+                  ]}
+                  textStyle={{ 
+                    color: activeTab === tab.value ? theme.colors.primary : theme.colors.onSurfaceVariant,
+                    fontWeight: activeTab === tab.value ? '700' : '500'
+                  }}
+                  compact
+                  mode="flat"
+                >
+                  {tab.label}
+                </Chip>
+              ))}
+              <Chip
+                icon="magnify"
+                onPress={() => setShowSearch(true)}
+                style={[
+                  styles.filterChip,
+                  search.length > 0 && { 
+                    backgroundColor: theme.colors.primary + '10',
+                    borderColor: theme.colors.primary + '40',
+                    borderWidth: 1
+                  }
+                ]}
+                compact
+                mode="flat"
+              >
+                {search.length > 0 ? search : ''}
+              </Chip>
+            </ScrollView>
+          )}
+        </Surface>
+
+        {loading && !refreshing ? (
+          <ActivityIndicator style={{ marginTop: 40 }} />
+        ) : (
+          <FlatList
+            data={filteredConversations}
+            renderItem={renderItem}
+            keyExtractor={item => item.jid}
+            ItemSeparatorComponent={() => <Divider horizontalInset />}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text variant="bodyLarge" style={{ opacity: 0.5 }}>No conversations found</Text>
+                <Button mode="outlined" onPress={onRefresh} style={{ marginTop: 16 }}>
+                  Refresh
+                </Button>
+              </View>
+            }
+          />
+        )}
+      </View>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: 40,
-    paddingHorizontal: 16,
-  },
-  statusCard: {
-    borderRadius: 16,
+    flex: 1,
     backgroundColor: '#fff',
-    elevation: 2,
-    marginBottom: 8,
   },
-  statusRow: {
+  searchHeader: {
+    padding: 8,
+    backgroundColor: '#fff',
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  searchBar: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    height: 40,
+    justifyContent: 'center',
+  },
+  searchBarInput: {
+    fontSize: 14,
+    minHeight: 0,
+    paddingVertical: 0,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
+  chipScroll: {
+    paddingVertical: 4,
+    gap: 8,
+  },
+  filterChip: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    borderWidth: 0,
+  },
+  list: {
+    paddingBottom: 20,
+  },
+  chatItem: {
     flexDirection: 'row',
+    padding: 16,
     alignItems: 'center',
     gap: 12,
   },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  avatarContainer: {
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  menuCard: {
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    elevation: 1,
-    overflow: 'hidden',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statBox: {
+  chatContent: {
     flex: 1,
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: '#fff',
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  chatName: {
+    fontWeight: 'bold',
+    flex: 1,
+    marginRight: 8,
+  },
+  chatTime: {
+    opacity: 0.5,
+    fontSize: 11,
+  },
+  chatFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chatMessage: {
+    opacity: 0.6,
+    flex: 1,
+    fontSize: 14,
+  },
+  unreadBadge: {
+    backgroundColor: '#25D366',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 6,
+    marginLeft: 8,
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 100,
   }
 });

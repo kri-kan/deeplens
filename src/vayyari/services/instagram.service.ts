@@ -1,5 +1,6 @@
 import { searchApiClient } from '../api/client';
 import type { InstagramLink } from '../utils/instagram-helpers';
+import { waProcessorService } from './wa-processor.service';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -230,14 +231,36 @@ class InstagramService {
     return searchApiClient.post('/api/v1/Insta/token/refresh');
   };
 
-  exchangeToken = async (shortLivedToken: string): Promise<{ message: string }> => {
-    return searchApiClient.post('/api/v1/Insta/token/exchange', shortLivedToken);
+  exchangeToken = async (shortLivedToken: string, appId?: string, appSecret?: string): Promise<{ message: string; token: string }> => {
+    return searchApiClient.post('/api/v1/Insta/token/exchange', { shortLivedToken, appId, appSecret });
   };
 
   getQuota = async (): Promise<MetaQuotaInfo> => {
     return searchApiClient.get<MetaQuotaInfo>('/api/v1/Insta/quota');
   };
 
+
+  // ── Configuration Management ────────────────────────────────────────────────
+
+  getConfigurations = async (): Promise<any[]> => {
+    return searchApiClient.get<any[]>("/api/v1/Insta/config");
+  };
+
+  createConfiguration = async (config: any): Promise<any> => {
+    return searchApiClient.post("/api/v1/Insta/config", config);
+  };
+
+  updateConfiguration = async (id: string, config: any): Promise<void> => {
+    return searchApiClient.put(`/api/v1/Insta/config/${id}`, config);
+  };
+
+  deleteConfiguration = async (id: string): Promise<void> => {
+    return searchApiClient.delete(`/api/v1/Insta/config/${id}`);
+  };
+
+  setDefaultConfiguration = async (id: string): Promise<void> => {
+    return searchApiClient.post(`/api/v1/Insta/config/${id}/default`, {});
+  };
   // ── Job & Queue Management ──────────────────────────────────────────────────
 
   getActiveJobs = async (): Promise<ScraperJob[]> => {
@@ -303,6 +326,30 @@ class InstagramService {
   updateYoutubeStatus = async (id: string, data: any): Promise<void> => {
     return searchApiClient.post(`/api/v1/Insta/video/${id}/youtube`, data);
   };
+
+  /**
+   * Syncs top-level comments for a specific post via the DeepLens SearchApi.
+   */
+  syncPostComments = async (competitorVideoId: string, accessToken: string): Promise<void> => {
+    return searchApiClient.post(`/api/v1/Insta/video/${competitorVideoId}/comments/sync`, { accessToken });
+  };
+
+  /**
+   * Gets list of synchronized comments for a specific post.
+   */
+  getPostComments = async (competitorVideoId: string): Promise<InstagramComment[]> => {
+    return searchApiClient.get<InstagramComment[]>(`/api/v1/Insta/video/${competitorVideoId}/comments`);
+  };
+}
+
+export interface InstagramComment {
+  id: string;
+  commentText: string;
+  postedAt: string;
+  likeCount: number;
+  isHidden: boolean;
+  username?: string;
+  fullName?: string;
 }
 
 export const instagramService = new InstagramService();

@@ -15,6 +15,7 @@ import {
   Modal,
   RadioButton,
   Surface,
+  Tooltip,
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { waProcessorService, Chat, Group, PaginatedResponse, ProcessingState } from '@/services/wa-processor.service';
@@ -25,15 +26,20 @@ interface WhatsAppAdminProps {
   title: string;
 }
 
+const PAGE_SIZE = 50;
+
 export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
   const theme = useTheme();
   const [items, setItems] = useState<(Chat | Group)[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterExcluded, setFilterExcluded] = useState<boolean | undefined>(undefined);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [syncingJids, setSyncingJids] = useState<Set<string>>(new Set());
   
   const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
@@ -53,30 +59,52 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
     }
   }, []);
 
-  const fetchItems = useCallback(async () => {
+  // Fetches a specific page and optionally appends to existing items
+  const fetchPage = useCallback(async (pageIndex: number, append: boolean) => {
     try {
+      const offset = pageIndex * PAGE_SIZE;
       let res: PaginatedResponse<Chat | Group>;
       if (type === 'chats') {
-        res = await waProcessorService.fetchChats(100, 0, search, filterExcluded);
+        res = await waProcessorService.fetchChats(PAGE_SIZE, offset, search, filterExcluded);
       } else if (type === 'groups') {
-        res = await waProcessorService.fetchGroups(100, 0, search, filterExcluded);
+        res = await waProcessorService.fetchGroups(PAGE_SIZE, offset, search, filterExcluded);
       } else {
-        res = await waProcessorService.fetchAnnouncements(100, 0, search, filterExcluded);
+        res = await waProcessorService.fetchAnnouncements(PAGE_SIZE, offset, search, filterExcluded);
       }
-      setItems(res.items);
+      const newItems = res.items || [];
+      setItems(prev => append ? [...prev, ...newItems] : newItems);
       setTotal(res.total);
+      setHasMore(offset + newItems.length < res.total);
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to fetch items');
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   }, [type, search, filterExcluded]);
 
+  // Reset and load page 0 when filters change
+  const fetchItems = useCallback(async () => {
+    setPage(0);
+    setHasMore(true);
+    await fetchPage(0, false);
+  }, [fetchPage]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchPage(nextPage, true);
+  }, [loadingMore, hasMore, page, fetchPage]);
+
   useEffect(() => {
+    setLoading(true);
     fetchItems();
     fetchState();
   }, [fetchItems, fetchState]);
+
 
   const handleGlobalSyncToggle = async (val: boolean) => {
     if (!processingState) return;
@@ -97,14 +125,22 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
     }
   };
 
-  const handleToggleSelection = (id: string) => {
+  const handleToggleSelection = (jid: string) => {
     const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
+    if (newSelected.has(jid)) {
+      newSelected.delete(jid);
     } else {
-      newSelected.add(id);
+      newSelected.add(jid);
     }
     setSelectedIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === items.length && items.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map(i => i.jid)));
+    }
   };
 
   const handleExclude = async (jid: string) => {
@@ -192,44 +228,50 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
     return (
       <Card 
         style={styles.card} 
-        onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(item.id)}`)}
-        onLongPress={() => handleToggleSelection(item.id)}
+        onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(item.jid)}`)}
+        onLongPress={() => handleToggleSelection(item.jid)}
       >
         <Card.Content style={styles.cardContent}>
           <Checkbox
-            status={selectedIds.has(item.id) ? 'checked' : 'unchecked'}
-            onPress={() => handleToggleSelection(item.id)}
+            status={selectedIds.has(item.jid) ? 'checked' : 'unchecked'}
+            onPress={() => handleToggleSelection(item.jid)}
           />
           <View style={styles.itemInfo}>
             <Text variant="titleMedium" style={isExcluded ? styles.excludedText : undefined}>
               {name || 'Unnamed'}
             </Text>
-            <Text variant="bodySmall" style={styles.jidText}>{item.id}</Text>
+            <Text variant="bodySmall" style={styles.jidText}>{item.jid}</Text>
           </View>
           <View style={styles.itemActions}>
             {isExcluded ? (
-              <IconButton
-                icon="plus-circle-outline"
-                iconColor={theme.colors.primary}
-                onPress={() => handleInclude(item.id)}
-              />
+              <Tooltip title="Resume tracking this conversation">
+                <IconButton
+                  icon="plus-circle-outline"
+                  iconColor={theme.colors.primary}
+                  onPress={() => handleInclude(item.jid)}
+                />
+              </Tooltip>
             ) : (
-              <IconButton
-                icon="minus-circle-outline"
-                iconColor={theme.colors.error}
-                onPress={() => handleExclude(item.id)}
-              />
+              <Tooltip title="Stop tracking this conversation (Exclude)">
+                <IconButton
+                  icon="minus-circle-outline"
+                  iconColor={theme.colors.error}
+                  onPress={() => handleExclude(item.jid)}
+                />
+              </Tooltip>
             )}
             <View style={{ width: 40, alignItems: 'center' }}>
-              {syncingJids.has(item.id) ? (
+              {syncingJids.has(item.jid) ? (
                 <ActivityIndicator size={16} />
               ) : (
-                <IconButton
-                  icon={item.deepSyncEnabled ? "sync-circle" : "sync-off"}
-                  iconColor={item.deepSyncEnabled ? theme.colors.primary : theme.colors.disabled}
-                  size={20}
-                  onPress={() => handleToggleDeepSync(item.id, item.deepSyncEnabled)}
-                />
+                <Tooltip title={item.deepSyncEnabled ? "Deep Sync active (Full history & media)" : "Deep Sync off (Metadata only)"}>
+                  <IconButton
+                    icon={item.deepSyncEnabled ? "sync-circle" : "sync-off"}
+                    iconColor={item.deepSyncEnabled ? theme.colors.primary : theme.colors.onSurfaceDisabled}
+                    size={20}
+                    onPress={() => handleToggleDeepSync(item.jid, item.deepSyncEnabled)}
+                  />
+                </Tooltip>
               )}
             </View>
           </View>
@@ -255,24 +297,30 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
             {updatingState ? (
               <ActivityIndicator size={16} style={{ marginLeft: 8 }} />
             ) : (
-              <IconButton
-                icon={
-                  (type === 'chats' ? processingState?.trackChats :
-                   type === 'groups' ? processingState?.trackGroups :
-                   processingState?.trackAnnouncements) ? "play-circle" : "pause-circle-outline"
-                }
-                iconColor={
-                  (type === 'chats' ? processingState?.trackChats :
-                   type === 'groups' ? processingState?.trackGroups :
-                   processingState?.trackAnnouncements) ? theme.colors.primary : theme.colors.error
-                }
-                onPress={() => {
-                  const current = (type === 'chats' ? processingState?.trackChats :
-                                   type === 'groups' ? processingState?.trackGroups :
-                                   processingState?.trackAnnouncements);
-                  handleGlobalSyncToggle(!current);
-                }}
-              />
+              <Tooltip title={
+                (type === 'chats' ? processingState?.trackChats :
+                 type === 'groups' ? processingState?.trackGroups :
+                 processingState?.trackAnnouncements) ? "Syncing active" : "Syncing paused"
+              }>
+                <IconButton
+                  icon={
+                    (type === 'chats' ? processingState?.trackChats :
+                     type === 'groups' ? processingState?.trackGroups :
+                     processingState?.trackAnnouncements) ? "play-circle" : "pause-circle-outline"
+                  }
+                  iconColor={
+                    (type === 'chats' ? processingState?.trackChats :
+                     type === 'groups' ? processingState?.trackGroups :
+                     processingState?.trackAnnouncements) ? theme.colors.primary : theme.colors.error
+                  }
+                  onPress={() => {
+                    const current = (type === 'chats' ? processingState?.trackChats :
+                                     type === 'groups' ? processingState?.trackGroups :
+                                     processingState?.trackAnnouncements);
+                    handleGlobalSyncToggle(!current);
+                  }}
+                />
+              </Tooltip>
             )}
           </View>
         </View>
@@ -308,12 +356,16 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
         <Surface style={styles.bulkActions} elevation={2}>
           <Text variant="labelLarge">{selectedIds.size} selected</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button mode="outlined" textColor={theme.colors.error} onPress={handleBulkPurge} compact>
-              Purge
-            </Button>
-            <Button mode="contained" buttonColor={theme.colors.error} onPress={handleBulkExclude} compact>
-              Exclude
-            </Button>
+            <Tooltip title="Delete all messages in selected conversations">
+              <Button mode="outlined" textColor={theme.colors.error} onPress={handleBulkPurge} compact>
+                Purge
+              </Button>
+            </Tooltip>
+            <Tooltip title="Exclude all selected conversations from tracking">
+              <Button mode="contained" buttonColor={theme.colors.error} onPress={handleBulkExclude} compact>
+                Exclude
+              </Button>
+            </Tooltip>
           </View>
         </Surface>
       )}
@@ -324,14 +376,28 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
         <FlatList
           data={items}
           renderItem={renderItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.jid}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchItems(); }} />}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <Divider />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
           ListHeaderComponent={
-            <Text style={styles.countText}>
-              Showing {items.length} of {total} items
-            </Text>
+            <View style={styles.listHeader}>
+              <View style={styles.selectAllRow}>
+                <Checkbox
+                  status={selectedIds.size === (items || []).length && (items || []).length > 0 ? 'checked' : selectedIds.size > 0 ? 'indeterminate' : 'unchecked'}
+                  onPress={handleSelectAll}
+                />
+                <Text variant="labelSmall">SELECT ALL</Text>
+              </View>
+              <Text style={styles.countText}>
+                Showing {(items || []).length} of {total} items
+              </Text>
+            </View>
+          }
+          ListFooterComponent={
+            loadingMore ? <ActivityIndicator style={{ paddingVertical: 16 }} /> : null
           }
           ListEmptyComponent={<Text style={styles.emptyText}>No items found</Text>}
         />
@@ -391,7 +457,13 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  selectAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
   },
   filterBtn: {
     flex: 1,
@@ -407,14 +479,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   countText: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     opacity: 0.5,
     fontSize: 12,
-    textAlign: 'right',
   },
   list: {
     paddingBottom: 24,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   card: {
     marginHorizontal: 16,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Linking, FlatList, ScrollView, ActivityIndicator, Alert } from 'react-native';
-import { Text, IconButton, useTheme, Button, Portal, Dialog } from 'react-native-paper';
+import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider } from 'react-native-paper';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -16,6 +16,7 @@ import { InstagramVideoPlayer } from './InstagramVideoPlayer';
 import { YoutubeShortsScheduleForm } from '../youtube/YoutubeShortsScheduleForm';
 import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
+import { InstagramCommentsModal } from './InstagramCommentsModal';
 
 const { width, height } = Dimensions.get('window');
 
@@ -66,9 +67,20 @@ export const InstagramPostDetailItem = ({
     const [shareProgress, setShareProgress] = useState<number | null>(null);
     const [localItem, setLocalItem] = useState(item);
 
+    // Syncing State
+    const [isSyncingComments, setIsSyncingComments] = useState(false);
+
     // YouTube Upload State
     const [isYoutubeDialogVisible, setIsYoutubeDialogVisible] = useState(false);
     const [isYoutubeBusy, setIsYoutubeBusy] = useState(false);
+
+    // Meta Config & Token Selection State
+    const [isTokenSelectionVisible, setIsTokenSelectionVisible] = useState(false);
+    const [availableConfigs, setAvailableConfigs] = useState<any[]>([]);
+    const [isLoadingConfigs, setIsLoadingConfigs] = useState(false);
+
+    // Comments Modal Preview State
+    const [isCommentsModalVisible, setIsCommentsModalVisible] = useState(false);
 
     // Sync local item and reset state when item changes (for component reuse)
     useEffect(() => {
@@ -262,6 +274,49 @@ export const InstagramPostDetailItem = ({
             console.error('Refresh failed', error);
         } finally {
             setIsRefreshingMedia(false);
+        }
+    };
+
+    const handleSyncComments = async () => {
+        try {
+            setIsMenuVisible(false);
+            menuSheetTop.value = withSpring(MENU_HIDDEN);
+            setIsLoadingConfigs(true);
+            
+            // Fetch configurations to get the access tokens
+            const configs = await instagramService.getConfigurations();
+            setIsLoadingConfigs(false);
+            
+            if (!configs || configs.length === 0) {
+                Alert.alert('Configuration Required', 'Please set up a Meta Graph API configuration with a valid Access Token first.');
+                return;
+            }
+
+            // Store configurations and show selection dialog
+            setAvailableConfigs(configs);
+            setIsTokenSelectionVisible(true);
+        } catch (err: any) {
+            setIsLoadingConfigs(false);
+            console.error('Comment sync init failed', err);
+            Alert.alert('Error', err.message || 'Failed to fetch Meta configurations.');
+        }
+    };
+
+    const executeSyncComments = async (accessToken: string) => {
+        try {
+            setIsTokenSelectionVisible(false);
+            setIsSyncingComments(true);
+
+            await instagramService.syncPostComments(localItem.id, accessToken);
+            Alert.alert('Success', 'Comments synchronization completed successfully.');
+            
+            // Refresh to update comment count if possible
+            await postDetailsRefresh(true);
+        } catch (err: any) {
+            console.error('Comment sync failed', err);
+            Alert.alert('Sync Failed', err.message || 'An unexpected error occurred.');
+        } finally {
+            setIsSyncingComments(false);
         }
     };
 
@@ -464,8 +519,16 @@ export const InstagramPostDetailItem = ({
                         <Text style={styles.statText}>{((localItem?.likeCount) || 0).toLocaleString()}</Text>
                     </View>
                     <View style={styles.statItem}>
-                        <IconButton icon="comment" iconColor="white" size={24} style={styles.statIcon} />
-                        <Text style={styles.statText}>{((localItem?.commentCount) || 0).toLocaleString()}</Text>
+                        <IconButton 
+                            icon="comment" 
+                            iconColor="white" 
+                            size={24} 
+                            style={styles.statIcon} 
+                            onPress={() => setIsCommentsModalVisible(true)}
+                        />
+                        <TouchableOpacity onPress={() => setIsCommentsModalVisible(true)}>
+                            <Text style={styles.statText}>{((localItem?.commentCount) || 0).toLocaleString()}</Text>
+                        </TouchableOpacity>
                     </View>
                     <IconButton icon="open-in-new" iconColor="white" size={24} onPress={() => localItem?.permalink && Linking.openURL(localItem.permalink)} />
                     <IconButton icon="link-variant" iconColor="white" size={24} onPress={async () => localItem?.permalink && await Clipboard.setStringAsync(localItem.permalink)} />
@@ -664,6 +727,50 @@ export const InstagramPostDetailItem = ({
                     </Dialog.Content>
                 </Dialog>
 
+                <Dialog visible={isSyncingComments} dismissable={false}>
+                    <Dialog.Title>Syncing Comments</Dialog.Title>
+                    <Dialog.Content>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}>
+                            <ActivityIndicator color={theme.colors.primary} style={{ marginRight: 15 }} />
+                            <Text style={{ flex: 1 }}>Fetching comments from Meta Graph API...</Text>
+                        </View>
+                    </Dialog.Content>
+                </Dialog>
+
+                <Dialog visible={isLoadingConfigs} dismissable={false}>
+                    <Dialog.Title>Loading Accounts</Dialog.Title>
+                    <Dialog.Content>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}>
+                            <ActivityIndicator color={theme.colors.primary} style={{ marginRight: 15 }} />
+                            <Text style={{ flex: 1 }}>Retrieving available Meta credentials...</Text>
+                        </View>
+                    </Dialog.Content>
+                </Dialog>
+
+                <Dialog visible={isTokenSelectionVisible} onDismiss={() => setIsTokenSelectionVisible(false)}>
+                    <Dialog.Title>Select Meta Account</Dialog.Title>
+                    <Dialog.Content>
+                        <ScrollView style={{ maxHeight: 250 }}>
+                            {availableConfigs.map((config, idx) => (
+                                <React.Fragment key={config.id || idx}>
+                                    <List.Item
+                                        title={config.name || 'Unnamed Account'}
+                                        description={`App ID: ${config.appId ? config.appId.substring(0, 8) + '...' : 'N/A'}${config.isDefault ? ' (Default)' : ''}`}
+                                        left={props => <List.Icon {...props} icon="account" />}
+                                        right={props => config.isDefault ? <List.Icon {...props} icon="star" color="#FFD700" /> : null}
+                                        onPress={() => executeSyncComments(config.longAccessToken)}
+                                        style={styles.configListItem}
+                                    />
+                                    {idx < availableConfigs.length - 1 && <Divider />}
+                                </React.Fragment>
+                            ))}
+                        </ScrollView>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setIsTokenSelectionVisible(false)}>Cancel</Button>
+                    </Dialog.Actions>
+                </Dialog>
+
                 {/* Menu Sheet inside the same Portal */}
                 {isMenuVisible && (
                     <View style={StyleSheet.absoluteFill}>
@@ -689,6 +796,14 @@ export const InstagramPostDetailItem = ({
                                     >
                                         <IconButton icon="sync" size={24} iconColor={theme.colors.primary} />
                                         <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Refresh Data</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
+                                        style={styles.menuItem}
+                                        onPress={handleSyncComments}
+                                    >
+                                        <IconButton icon="comment-sync-outline" size={24} iconColor={theme.colors.primary} />
+                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Sync Comments</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity 
@@ -861,6 +976,17 @@ export const InstagramPostDetailItem = ({
                         </GestureDetector>
                     </View>
                 )}
+
+                <InstagramCommentsModal
+                    visible={isCommentsModalVisible}
+                    onDismiss={() => setIsCommentsModalVisible(false)}
+                    postId={localItem.id}
+                    commentCount={localItem.commentCount || 0}
+                    onSyncPress={() => {
+                        setIsCommentsModalVisible(false);
+                        handleSyncComments();
+                    }}
+                />
             </Portal>
         </View>
     );
@@ -1158,5 +1284,10 @@ const styles = StyleSheet.create({
         opacity: 0.6,
         marginBottom: 12,
         marginLeft: 4,
+    },
+    configListItem: {
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginVertical: 2,
     },
 });

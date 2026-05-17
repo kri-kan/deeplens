@@ -18,13 +18,21 @@ public class CustomerRepository : ICustomerRepository
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         const string sql = @"
             SELECT * FROM customers WHERE id = @Id;
-            SELECT * FROM customer_addresses WHERE customer_id = @Id;";
+            SELECT * FROM customer_addresses WHERE customer_id = @Id;
+            SELECT id, customer_id as CustomerId, username, full_name as FullName, profile_picture_url as ProfilePictureUrl, is_primary as IsPrimary 
+            FROM instagram_accounts 
+            WHERE customer_id = @Id;
+            SELECT language_code 
+            FROM customer_languages 
+            WHERE customer_id = @Id;";
 
         using var multi = await connection.QueryMultipleAsync(sql, new { Id = id });
         var customer = await multi.ReadFirstOrDefaultAsync<Customer>();
         if (customer != null)
         {
             customer.Addresses = (await multi.ReadAsync<CustomerAddress>()).AsList();
+            customer.InstagramAccounts = (await multi.ReadAsync<CustomerInstagramAccount>()).AsList();
+            customer.PreferredLanguages = (await multi.ReadAsync<string>()).AsList();
         }
         return customer;
     }
@@ -45,7 +53,36 @@ public class CustomerRepository : ICustomerRepository
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         const string sql = "SELECT * FROM customers ORDER BY created_at DESC LIMIT @Limit OFFSET @Offset";
-        return await connection.QueryAsync<Customer>(sql, new { Limit = limit, Offset = offset });
+        var customers = (await connection.QueryAsync<Customer>(sql, new { Limit = limit, Offset = offset })).AsList();
+
+        if (customers.Any())
+        {
+            var customerIds = customers.Select(c => c.Id).ToList();
+
+            const string detailSql = @"
+                SELECT * FROM customer_addresses WHERE customer_id = ANY(@Ids);
+                SELECT id, customer_id as CustomerId, username, full_name as FullName, profile_picture_url as ProfilePictureUrl, is_primary as IsPrimary 
+                FROM instagram_accounts 
+                WHERE customer_id = ANY(@Ids);
+                SELECT customer_id, language_code 
+                FROM customer_languages 
+                WHERE customer_id = ANY(@Ids);";
+
+            using var multi = await connection.QueryMultipleAsync(detailSql, new { Ids = customerIds });
+            var addresses = (await multi.ReadAsync<CustomerAddress>()).GroupBy(a => a.CustomerId).ToDictionary(g => g.Key, g => g.ToList());
+            var instagrams = (await multi.ReadAsync<CustomerInstagramAccount>()).GroupBy(i => i.CustomerId).ToDictionary(g => g.Key, g => g.ToList());
+            var languages = (await multi.ReadAsync<dynamic>())
+                .GroupBy(l => (Guid)l.customer_id)
+                .ToDictionary(g => g.Key, g => g.Select(x => (string)x.language_code).ToList());
+
+            foreach (var customer in customers)
+            {
+                customer.Addresses = addresses.TryGetValue(customer.Id, out var addrs) ? addrs : new List<CustomerAddress>();
+                customer.InstagramAccounts = instagrams.TryGetValue(customer.Id, out var instas) ? instas : new List<CustomerInstagramAccount>();
+                customer.PreferredLanguages = languages.TryGetValue(customer.Id, out var langs) ? langs : new List<string>();
+            }
+        }
+        return customers;
     }
 
     public async Task<Guid> CreateAsync(Customer customer)
@@ -153,5 +190,69 @@ public class CustomerRepository : ICustomerRepository
         await connection.ExecuteAsync("UPDATE customer_addresses SET is_default = false WHERE customer_id = @CustomerId", new { CustomerId = customerId });
         var rows = await connection.ExecuteAsync("UPDATE customer_addresses SET is_default = true WHERE id = @Id AND customer_id = @CustomerId", new { Id = addressId, CustomerId = customerId });
         return rows > 0;
+    }
+
+    public async Task<Guid?> GetCustomerIdByInstagramUsernameAsync(string username)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = "SELECT customer_id FROM instagram_accounts WHERE LOWER(username) = LOWER(@Username) LIMIT 1";
+        return await connection.QueryFirstOrDefaultAsync<Guid?>(sql, new { Username = username });
+    }
+
+    public async Task<IEnumerable<DeepLens.Contracts.Customers.LanguageDto>> GetPreferredLanguagesMasterAsync()
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = "SELECT code as Code, name as Name, is_default as IsDefault FROM customer_languages_master ORDER BY name ASC";
+        return await connection.QueryAsync<DeepLens.Contracts.Customers.LanguageDto>(sql);
+    }
+
+    public async Task SaveInstagramAccountsAsync(Guid customerId, List<DeepLens.Contracts.Customers.CustomerInstagramAccountDto> accounts)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        
+        // Unmap existing accounts for this customer to handle deletions/updates cleanly
+        await connection.ExecuteAsync("UPDATE instagram_accounts SET customer_id = NULL, is_primary = false WHERE customer_id = @CustomerId", new { CustomerId = customerId });
+        
+        if (accounts == null || !accounts.Any()) return;
+        
+        foreach (var acc in accounts)
+        {
+            // Upsert the handle: Update if exists, insert if new
+            const string sql = @"
+                INSERT INTO instagram_accounts (id, platform, username, customer_id, is_primary)
+                VALUES (gen_random_uuid(), 'INSTAGRAM', @Username, @CustomerId, @IsPrimary)
+                ON CONFLICT (platform, platform_account_id) DO UPDATE 
+                SET customer_id = @CustomerId, is_primary = @IsPrimary;";
+                
+            // We use a fallback if the constraint on platform_account_id causes issues for nulls:
+            // For purely manual accounts where platform_account_id is null, the conflict clause won't trigger (nulls aren't equal).
+            // So we check existence by username first to be safe and update it.
+            var existingId = await connection.ExecuteScalarAsync<Guid?>("SELECT id FROM instagram_accounts WHERE LOWER(username) = LOWER(@Username) LIMIT 1", new { Username = acc.Username });
+            
+            if (existingId.HasValue)
+            {
+                await connection.ExecuteAsync("UPDATE instagram_accounts SET customer_id = @CustomerId, is_primary = @IsPrimary WHERE id = @Id", 
+                    new { CustomerId = customerId, IsPrimary = acc.IsPrimary, Id = existingId.Value });
+            }
+            else
+            {
+                await connection.ExecuteAsync("INSERT INTO instagram_accounts (id, platform, username, customer_id, is_primary) VALUES (gen_random_uuid(), 'INSTAGRAM', @Username, @CustomerId, @IsPrimary)", 
+                    new { Username = acc.Username, CustomerId = customerId, IsPrimary = acc.IsPrimary });
+            }
+        }
+    }
+
+    public async Task SavePreferredLanguagesAsync(Guid customerId, List<string> languages)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        
+        await connection.ExecuteAsync("DELETE FROM customer_languages WHERE customer_id = @CustomerId", new { CustomerId = customerId });
+        
+        if (languages == null || !languages.Any()) return;
+        
+        var sql = "INSERT INTO customer_languages (customer_id, language_code) VALUES (@CustomerId, @LanguageCode) ON CONFLICT DO NOTHING";
+        var parameters = languages.Select(lang => new { CustomerId = customerId, LanguageCode = lang }).ToList();
+        
+        await connection.ExecuteAsync(sql, parameters);
     }
 }

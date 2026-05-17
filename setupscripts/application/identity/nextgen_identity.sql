@@ -422,7 +422,7 @@ cf123992-628d-4eb4-9721-aef8c59275a5	DeepLens Administration	\N	admin	nextgen_id
 
 COPY public.users (id, tenant_id, email, password_hash, first_name, last_name, email_confirmed, email_confirmation_token, email_confirmation_token_expiry, password_reset_token, password_reset_token_expiry, role, is_active, created_at, last_login_at, updated_at, deleted_at) FROM stdin;
 9d1645f7-c93d-4c31-97f2-aed8c56275a5	cf123992-628d-4eb4-9721-aef8c59275a5	admin@deeplens.local	$2a$11$PUxn0wRtROrboSbM3p2i.eGLYjSIy9bamoUD6gnhFfh/rSiwpu82.	System	Admin	f	\N	\N	\N	\N	2	t	2026-04-11 19:25:33.899669	2026-04-16 15:27:56.803203	\N	\N
-5f640573-2d80-4a9c-9a09-eece4fa1447f	2abbd721-873e-4bf0-9cb2-c93c6894c584	admin@deeplens.platform	$2a$11$PUxn0wRtROrboSbM3p2i.eGLYjSIy9bamoUD6gnhFfh/rSiwpu82.	Platform	Admin	t	\N	\N	\N	\N	3	t	2026-04-12 12:33:11.561214	2026-05-03 20:27:41.809481	\N	\N
+5f640573-2d80-4a9c-9a09-eece4fa1447f	2abbd721-873e-4bf0-9cb2-c93c6894c584	admin@deeplens.platform	$2a$11$PUxn0wRtROrboSbM3p2i.eGLYjSIy9bamoUD6gnhFfh/rSiwpu82.	Platform	Admin	t	\N	\N	\N	\N	3	t	2026-04-12 12:33:11.561214	2026-05-17 15:54:43.784301	\N	\N
 \.
 
 

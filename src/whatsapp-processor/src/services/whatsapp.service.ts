@@ -25,6 +25,7 @@ import { getRedisClient } from '../clients/redis.client';
 import { saveMessage } from '../utils/messages';
 import { getRateLimiter } from '../utils/rate-limiter';
 import { Server as SocketServer } from 'socket.io';
+import { mediaService } from './media.service';
 import fs from 'fs';
 import path from 'path';
 
@@ -117,163 +118,163 @@ export class WhatsAppService {
         this.sock = sock;
         this.store.bind(sock.ev);
 
-        sock.ev.on('connection.update', (update: Partial<ConnectionState>) => {
-            this.handleConnectionUpdate(update);
-        });
+        sock.ev.process(async (events: any) => {
+            // Credentials update
+            if (events['creds.update']) {
+                await saveCreds();
+            }
 
-        sock.ev.on('creds.update', saveCreds);
-
-        sock.ev.on('messages.upsert', async ({ messages, type }: { messages: WAMessage[], type: string }) => {
-            await this.handleMessages(messages, type);
-        });
-
-        // Handle chat updates (unread count, last message, etc.)
-        sock.ev.on('chats.upsert', async (chats) => {
-            await this.handleChatsSet(chats);
-        });
-
-        sock.ev.on('chats.update', async (updates) => {
-            for (const update of updates) {
-                const jid = update.id!;
-                const client = getWhatsAppDbClient();
-                if (client) {
-                    await client.query(`
-                        UPDATE wa.chats 
-                        SET unread_count = COALESCE($2, unread_count),
-                            last_message_text = COALESCE($3, last_message_text),
-                            last_message_timestamp = COALESCE($4, last_message_timestamp),
-                            updated_at = NOW()
-                        WHERE jid = $1
-                    `, [jid, update.unreadCount, update.lastMessageRecvTimestamp, update.conversationTimestamp]);
+            // Connection update
+            if (events['connection.update']) {
+                const update = events['connection.update'];
+                const { connection, lastDisconnect, qr } = update;
+                
+                if (qr) {
+                    this.qrCode = qr;
+                    this.connectionStatus = 'scanning';
+                    this.io.emit('connection_status', { status: 'scanning', qr });
                 }
-            }
-        });
 
-        // Handle message updates (edits, deletes)
-        sock.ev.on('messages.update', async (updates: any[]) => {
-            await this.handleMessageUpdates(updates);
-        });
-
-        // Handle full history sync from WhatsApp (fires on connection with ALL data)
-        sock.ev.on('messaging-history.set', async (data: any) => {
-            let { chats, messages, contacts } = data;
-
-            if (!SYNC_NEWSLETTERS) {
-                if (chats) chats = chats.filter((c: any) => !c.id?.endsWith('@newsletter'));
-                if (contacts) contacts = contacts.filter((c: any) => !c.id?.endsWith('@newsletter'));
-                if (messages) messages = messages.filter((m: any) => !m.key?.remoteJid?.endsWith('@newsletter'));
-            }
-
-            const chatCount = chats?.length || 0;
-            const msgCount = messages?.length || 0;
-            const contactCount = contacts?.length || 0;
-
-            logger.info(`Received messaging history: ${chatCount} chats, ${msgCount} messages (SKIPPED - deep sync disabled), ${contactCount} contacts (${SYNC_NEWSLETTERS ? 'newsletters enabled' : 'newsletters ignored'})`);
-
-            if (chats) await this.handleChatsSet(chats);
-            if (contacts) await this.handleContactsSet(contacts);
-
-            // Process messages for chats with deep sync enabled
-            if (messages && messages.length > 0) {
-                const client = getWhatsAppDbClient();
-                if (client) {
-                    const jids = [...new Set(messages.map((m: any) => m.key?.remoteJid).filter(Boolean))];
-                    const res = await client.query(
-                        'SELECT jid FROM wa.chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
-                        [jids]
-                    );
-                    const enabledJids = new Set(res.rows.map((r: any) => r.jid));
-                    const filtered = messages.filter((m: any) => enabledJids.has(m.key?.remoteJid));
-
-                    if (filtered.length > 0) {
-                        logger.info({ count: filtered.length }, 'Processing deep sync messages from initial history set (including media)');
-                        await this.handleMessages(filtered, 'history', false);
+                if (connection === 'close') {
+                    const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+                    logger.info('connection closed due to ', lastDisconnect?.error, ', reconnecting ', shouldReconnect);
+                    this.connectionStatus = 'disconnected';
+                    this.systemHealth.whatsappConnected = false;
+                    this.io.emit('connection_status', { status: 'disconnected' });
+                    
+                    if (shouldReconnect) {
+                        this.start();
                     }
+                } else if (connection === 'open') {
+                    logger.info('opened connection to WA');
+                    this.connectionStatus = 'connected';
+                    this.systemHealth.whatsappConnected = true;
+                    this.io.emit('connection_status', { status: 'connected' });
+                    
+                    // Trigger initial syncs
+                    this.performManualInitialSync().catch(err => {
+                        logger.error({ err }, 'Initial sync failed');
+                    });
                 }
             }
-        });
 
-        // Handle incremental history updates (WhatsApp sends history in batches)
-        (sock.ev as any).on('history-sync.update', async (update: any) => {
-            const { chats, messages, contacts, progress } = update;
-            logger.info({
-                chats: chats?.length || 0,
-                messages: messages?.length || 0,
-                contacts: contacts?.length || 0,
-                progress
-            }, `Received incremental history update (Progress: ${progress}%)`);
+            // Full History Set
+            if (events['messaging-history.set']) {
+                const data = events['messaging-history.set'];
+                let { chats, messages, contacts, isLatest } = data;
+                logger.info({ 
+                    chats: chats?.length || 0, 
+                    messages: messages?.length || 0,
+                    contacts: contacts?.length || 0,
+                    isLatest
+                }, '🔔 Received messaging-history.set');
 
-            // Emit sync progress to UI always
-            this.io.emit('sync_progress', {
-                progress,
-                chatsCount: chats?.length || 0,
-                messagesCount: messages?.length || 0,
-                contactsCount: contacts?.length || 0
-            });
+                if (!SYNC_NEWSLETTERS) {
+                    if (chats) chats = chats.filter((c: any) => !c.id?.endsWith('@newsletter'));
+                    if (contacts) contacts = contacts.filter((c: any) => !c.id?.endsWith('@newsletter'));
+                    if (messages) messages = messages.filter((m: any) => !m.key?.remoteJid?.endsWith('@newsletter'));
+                }
 
-            if (chats) await this.handleChatsSet(chats);
-            if (contacts) await this.handleContactsSet(contacts);
-
-            if (messages) {
-                const msgList = Array.isArray(messages) ? messages : [];
-                if (msgList.length > 0) {
+                if (chats) await this.handleChatsSet(chats);
+                if (contacts) await this.handleContactsSet(contacts);
+                
+                if (messages && messages.length > 0) {
                     const client = getWhatsAppDbClient();
                     if (client) {
-                        // Check which chats have deep sync enabled
-                        const jids = [...new Set(msgList.map(m => m.key?.remoteJid).filter(Boolean))];
+                        const jids = [...new Set(messages.map((m: any) => m.key?.remoteJid).filter(Boolean))];
                         const res = await client.query(
                             'SELECT jid FROM wa.chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
                             [jids]
                         );
-                        const enabledJids = new Set(res.rows.map(r => r.jid));
-
-                        const filteredMessages = msgList.filter(m => m.key?.remoteJid && enabledJids.has(m.key.remoteJid));
-                        if (filteredMessages.length > 0) {
-                            logger.info({ count: filteredMessages.length }, 'Processing history messages with media for deep-sync enabled chats');
-                            await this.handleMessages(filteredMessages, 'notify', false);
+                        const enabledJids = new Set(res.rows.map((r: any) => r.jid));
+                        const filtered = messages.filter((m: any) => enabledJids.has(m.key?.remoteJid));
+                        
+                        if (filtered.length > 0) {
+                            logger.info({ count: filtered.length, total: messages.length }, 'Processing history messages for deep-synced chats');
+                            await this.handleMessages(filtered, 'history', false);
                         }
                     }
                 }
             }
-        });
 
-        sock.ev.on('contacts.upsert', async (contacts) => {
-            logger.info(`Received contacts.upsert: ${contacts.length} contacts`);
-            await this.handleContactsSet(contacts);
-        });
+            // Incremental History Update
+            if (events['history-sync.update']) {
+                const update = events['history-sync.update'];
+                const { chats, messages, contacts, progress } = update;
+                logger.info({ progress, msgCount: messages?.length || 0 }, '🔔 Received history-sync.update');
 
-        sock.ev.on('contacts.update', async (updates) => {
-            logger.info(`Received contacts.update: ${updates.length} updates`);
-            await this.handleContactsSet(updates);
-        });
+                this.io.emit('sync_progress', { progress, chatsCount: chats?.length || 0, messagesCount: messages?.length || 0 });
 
-        // LID Mapping (Baileys v7 - LID is first-class citizen)
-        sock.ev.on('lid-mapping.update', async (mapping) => {
-            logger.info({ mappingCount: Object.keys(mapping).length }, 'Received LID mapping update');
+                if (chats) await this.handleChatsSet(chats);
+                if (contacts) await this.handleContactsSet(contacts);
 
-            const client = getWhatsAppDbClient();
-            if (!client) return;
+                if (messages && messages.length > 0) {
+                    const client = getWhatsAppDbClient();
+                    if (client) {
+                        const jids = [...new Set(messages.map((m: any) => m.key?.remoteJid).filter(Boolean))];
+                        const res = await client.query(
+                            'SELECT jid FROM wa.chats WHERE jid = ANY($1) AND deep_sync_enabled = TRUE',
+                            [jids]
+                        );
+                        const enabledJids = new Set(res.rows.map((r: any) => r.jid));
+                        const filtered = messages.filter((m: any) => enabledJids.has(m.key?.remoteJid));
 
-            for (const [lid, jid] of Object.entries(mapping)) {
-                try {
-                    // Update any existing LID record to have the PN as canonical_jid
-                    // PN (phone number) always ends in @s.whatsapp.net
-                    await client.query(`
-                        UPDATE wa.chats 
-                        SET canonical_jid = $2,
-                            metadata = metadata || jsonb_build_object('pn_jid', $2)
-                        WHERE jid = $1 OR (canonical_jid = $1 AND jid NOT LIKE '%@s.whatsapp.net')
-                    `, [lid, jid]);
-                } catch (err) {
-                    logger.error({ err, lid, jid }, 'Failed to update LID mapping in DB');
+                        if (filtered.length > 0) {
+                            logger.info({ count: filtered.length }, 'Processing incremental history messages for deep-sync chats');
+                            await this.handleMessages(filtered, 'notify', false);
+                        }
+                    }
                 }
             }
-        });
 
-        // Try 'contacts.set' anyway, sometimes it fires despite not being in types
-        (sock.ev as any).on('contacts.set', async ({ contacts }: any) => {
-            logger.info(`Received contacts.set: ${contacts?.length || 0} contacts`);
-            if (contacts) await this.handleContactsSet(contacts);
+            // New Messages
+            if (events['messages.upsert']) {
+                const { messages, type } = events['messages.upsert'];
+                await this.handleMessages(messages, type);
+            }
+
+            // Message Updates (Edits/Deletes)
+            if (events['messages.update']) {
+                await this.handleMessageUpdates(events['messages.update']);
+            }
+
+            // Chat Updates
+            if (events['chats.upsert']) await this.handleChatsSet(events['chats.upsert']);
+            if (events['chats.update']) {
+                const updates = events['chats.update'];
+                for (const update of updates) {
+                    const jid = update.id!;
+                    if ((update as any).imgUrl) mediaService.syncProfilePicture(this.sock, jid).catch(() => {});
+                    const client = getWhatsAppDbClient();
+                    if (client) {
+                        await client.query(`
+                            UPDATE wa.chats 
+                            SET unread_count = COALESCE($2, unread_count),
+                                last_message_text = COALESCE($3, last_message_text),
+                                last_message_timestamp = COALESCE($4, last_message_timestamp),
+                                updated_at = NOW()
+                            WHERE jid = $1
+                        `, [jid, update.unreadCount, update.lastMessageRecvTimestamp, update.conversationTimestamp]);
+                    }
+                }
+                await this.handleChatsSet(updates);
+            }
+
+            // Contact Updates
+            if (events['contacts.upsert']) await this.handleContactsSet(events['contacts.upsert']);
+            if (events['contacts.update']) await this.handleContactsSet(events['contacts.update']);
+            if (events['contacts.set']) await this.handleContactsSet(events['contacts.set'].contacts || []);
+
+            // LID Mapping
+            if (events['lid-mapping.update']) {
+                const mapping = events['lid-mapping.update'];
+                const client = getWhatsAppDbClient();
+                if (client) {
+                    for (const [lid, jid] of Object.entries(mapping)) {
+                        await client.query('UPDATE wa.chats SET canonical_jid = $2 WHERE jid = $1', [lid, jid]);
+                    }
+                }
+            }
         });
     }
 
@@ -459,6 +460,82 @@ export class WhatsAppService {
         }
 
         logger.info('✅ Manual sync completed');
+    }
+
+    /**
+     * Trigger a history sync for a specific chat
+     */
+    async syncChatHistory(jid: string, count: number = 50): Promise<void> {
+        if (!this.sock) {
+            throw new Error('WhatsApp not connected');
+        }
+
+        logger.info({ jid, count }, 'Triggering manual history sync for chat');
+
+        try {
+            // Get last message info for this JID to use as anchor
+            const client = getWhatsAppDbClient();
+            let oldestMsgKey: any = { 
+                remoteJid: jid,
+                id: '',
+                fromMe: false
+            };
+            let oldestMsgTimestamp: number = 0;
+
+            if (client) {
+                // Check store first for the absolute latest message
+                const storeChat = this.store?.chats?.get(jid);
+                if (storeChat && storeChat.lastMessage) {
+                    logger.info({ jid, lastMsgId: storeChat.lastMessage.key?.id }, 'Found last message in store for history anchor');
+                    oldestMsgKey = storeChat.lastMessage.key;
+                    oldestMsgTimestamp = Number(storeChat.lastMessage.messageTimestamp);
+                }
+
+                if (!oldestMsgKey.id) {
+                    const res = await client.query(
+                        'SELECT message_id, timestamp FROM wa.messages WHERE jid = $1 ORDER BY timestamp ASC LIMIT 1',
+                        [jid]
+                    );
+
+                    if (res.rowCount && res.rowCount > 0) {
+                        oldestMsgKey = { 
+                            remoteJid: jid, 
+                            id: res.rows[0].message_id, 
+                            fromMe: false 
+                        };
+                        oldestMsgTimestamp = Number(res.rows[0].timestamp);
+                    } else {
+                    // Fallback to last_message_id from wa.chats
+                    const chatRes = await client.query(
+                        'SELECT last_message_id, last_message_timestamp FROM wa.chats WHERE jid = $1',
+                        [jid]
+                    );
+                    if (chatRes.rows.length > 0 && chatRes.rows[0].last_message_id) {
+                        oldestMsgKey = {
+                            remoteJid: jid,
+                            id: chatRes.rows[0].last_message_id,
+                            fromMe: false
+                        };
+                        oldestMsgTimestamp = Number(chatRes.rows[0].last_message_timestamp);
+                        logger.info({ jid, lastMsgId: oldestMsgKey.id }, 'Using last_message_id from chats table as history anchor');
+                    } else {
+                        logger.warn({ jid }, 'No message anchor found for history sync, using initial fetch (0 anchor)');
+                        oldestMsgKey = { remoteJid: jid, fromMe: false, id: '' };
+                        oldestMsgTimestamp = 0;
+                    }
+                }
+            }
+        }
+
+            logger.debug({ jid, oldestMsgKey, oldestMsgTimestamp }, 'Calling Baileys fetchMessageHistory');
+
+            // fetchMessageHistory will request messages older than the provided key/timestamp
+            const queryId = await this.sock.fetchMessageHistory(count, oldestMsgKey, oldestMsgTimestamp);
+            logger.info({ jid, queryId }, 'History sync request successfully sent to WhatsApp');
+        } catch (err) {
+            logger.error({ err, jid }, 'Failed to trigger history sync');
+            throw err;
+        }
     }
 
     /**
@@ -1121,10 +1198,12 @@ export class WhatsAppService {
             this.individualChatsCache = chatsToProcess.filter(c => !c.id!.endsWith('@g.us'));
 
             // Define what counts as an announcement (merged with communities)
-            const isAnnounce = (c: any) => !!c.readOnly || !!c.announce || !!c.isCommunityAnnounce || !!c.isCommunity;
+            // We EXCLUDE parent community chats as they are just containers
+            const isAnnounce = (c: any) => !!c.readOnly || !!c.announce || !!c.isCommunityAnnounce;
+            const isParentCommunity = (c: any) => !!c.isCommunity && !c.isCommunityAnnounce;
 
             this.announcementsCache = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && isAnnounce(c));
-            const newGroups = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && !isAnnounce(c));
+            const newGroups = chatsToProcess.filter(c => c.id!.endsWith('@g.us') && !isAnnounce(c) && !isParentCommunity(c));
 
             // Merge groups cache
             const groupIds = new Set(this.groupsCache.map(g => g.id));
@@ -1140,6 +1219,9 @@ export class WhatsAppService {
                 try {
                     const jid = chat.id!;
                     const isGroup = jid.endsWith('@g.us');
+                    
+                    // Trigger profile picture sync (asynchronous)
+                    mediaService.syncProfilePicture(this.sock, jid).catch(() => {});
                     // Treat any broadcast, read-only, or community-wide channel as an announcement
                     const isAnnouncement = isGroup && (
                         !!(chat as any).readOnly ||
@@ -1157,6 +1239,7 @@ export class WhatsAppService {
                     let lastMessageText: string | null = null;
                     let lastMessageTimestamp: number | null = chat.conversationTimestamp ? Number(chat.conversationTimestamp) : null;
                     let lastMessageFromMe: boolean = false;
+                    let lastMessageId: string | null = null;
                     let lastMsg: WAMessage | null = null;
 
                     if ((chat as any).messages && (chat as any).messages.length > 0) {
@@ -1167,6 +1250,7 @@ export class WhatsAppService {
                             lastMessageText = this.extractMessageContent(lastMsg);
                             lastMessageTimestamp = Number(lastMsg.messageTimestamp);
                             lastMessageFromMe = lastMsg.key?.fromMe || false;
+                            lastMessageId = lastMsg.key?.id || null;
                         }
                     }
 
@@ -1183,7 +1267,8 @@ export class WhatsAppService {
                             false, // isContact
                             lastMessageText,
                             lastMessageTimestamp,
-                            lastMessageFromMe
+                            lastMessageFromMe,
+                            lastMessageId
                         );
 
                         // If we have a physical message record, save it to the messages table

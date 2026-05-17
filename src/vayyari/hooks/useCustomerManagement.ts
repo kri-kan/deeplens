@@ -3,7 +3,13 @@ import { customerService } from '@/services/customerService';
 import { productMgmtApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import { whatsappService, WhatsAppChannel, CustomerChannelMembership } from '@/services/whatsappService';
-import { Customer, CreateCustomerRequest, CreateAddressRequest } from '@/types/customers';
+import { Customer, CreateCustomerRequest, CreateAddressRequest, Language } from '@/types/customers';
+
+export interface FormInstagramAccount {
+  id?: string;
+  username: string;
+  isPrimary: boolean;
+}
 
 export interface CountryCode {
   code: string;
@@ -34,6 +40,14 @@ export const useCustomerManagement = () => {
   const [phone, setPhone] = useState('');
   const [instagramId, setInstagramId] = useState('');
   const [email, setEmail] = useState('');
+
+  // Multi-handle Instagram & languages state
+  const [instagramAccounts, setInstagramAccounts] = useState<FormInstagramAccount[]>([
+    { username: '', isPrimary: true }
+  ]);
+  const [instagramErrors, setInstagramErrors] = useState<Record<number, string>>({});
+  const [availableLanguages, setAvailableLanguages] = useState<Language[]>([]);
+  const [preferredLanguages, setPreferredLanguages] = useState<string[]>(['en-in']);
 
   // New Address Form State
   const [addrName, setAddrName] = useState('');
@@ -78,6 +92,15 @@ export const useCustomerManagement = () => {
     }
   }, []);
 
+  const loadLanguages = useCallback(async () => {
+    try {
+      const data = await customerService.getLanguages();
+      setAvailableLanguages(data);
+    } catch (error) {
+      console.error('Failed to load languages:', error);
+    }
+  }, []);
+
   const loadCustomerMemberships = useCallback(async (customerId: string) => {
     try {
       setChannelLoading(true);
@@ -90,11 +113,90 @@ export const useCustomerManagement = () => {
     }
   }, []);
 
+  const validateInstagramHandle = useCallback(async (index: number, username: string, customerId?: string) => {
+    if (!username.trim()) {
+      setInstagramErrors(prev => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+      return;
+    }
+
+    try {
+      const res = await customerService.validateInstagram(username.trim(), customerId);
+      if (!res.isValid) {
+        setInstagramErrors(prev => ({
+          ...prev,
+          [index]: 'Instagram user exists with another customer'
+        }));
+      } else {
+        setInstagramErrors(prev => {
+          const next = { ...prev };
+          delete next[index];
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to validate instagram handle:', err);
+    }
+  }, []);
+
+  const addInstagramAccountField = () => {
+    setInstagramAccounts(prev => [
+      ...prev,
+      { username: '', isPrimary: prev.length === 0 }
+    ]);
+  };
+
+  const removeInstagramAccountField = (index: number) => {
+    setInstagramAccounts(prev => {
+      const updated = prev.filter((_, idx) => idx !== index);
+      if (prev[index]?.isPrimary && updated.length > 0) {
+        updated[0].isPrimary = true;
+      }
+      return updated;
+    });
+    setInstagramErrors(prev => {
+      const next = { ...prev };
+      delete next[index];
+      const shifted: Record<number, string> = {};
+      Object.entries(next).forEach(([key, val]) => {
+        const k = parseInt(key, 10);
+        if (k > index) {
+          shifted[k - 1] = val;
+        } else {
+          shifted[k] = val;
+        }
+      });
+      return shifted;
+    });
+  };
+
+  const updateInstagramAccountUsername = (index: number, username: string, customerId?: string) => {
+    setInstagramAccounts(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], username };
+      return updated;
+    });
+    validateInstagramHandle(index, username, customerId);
+  };
+
+  const setInstagramAccountPrimary = (index: number) => {
+    setInstagramAccounts(prev =>
+      prev.map((acc, idx) => ({
+        ...acc,
+        isPrimary: idx === index
+      }))
+    );
+  };
+
   useEffect(() => {
     loadCustomers();
     loadCountryCodes();
     loadChannels();
-  }, [loadCustomers, loadCountryCodes, loadChannels]);
+    loadLanguages();
+  }, [loadCustomers, loadCountryCodes, loadChannels, loadLanguages]);
 
   useEffect(() => {
     if (selectedCustomer) {
@@ -111,15 +213,29 @@ export const useCustomerManagement = () => {
   };
 
   const handleAddCustomer = async () => {
-    if (!phone && !instagramId) return;
+    const hasIg = instagramAccounts.some(acc => acc.username.trim() !== '');
+    if (!phone && !hasIg) return;
+    
+    if (Object.keys(instagramErrors).length > 0) {
+      console.warn('Cannot add customer due to validation errors.');
+      return;
+    }
     
     try {
       const request: CreateCustomerRequest = {
         firstName: firstName || undefined,
         lastName: lastName || undefined,
         phoneNumber: phone ? `${selectedCountry?.dialCode}${phone}` : undefined,
-        instagramId: instagramId || undefined,
+        instagramId: instagramAccounts.find(a => a.isPrimary)?.username || undefined,
         email: email || undefined,
+        instagramAccounts: instagramAccounts
+          .filter(a => a.username.trim() !== '')
+          .map(a => ({
+            id: '',
+            username: a.username.trim(),
+            isPrimary: a.isPrimary
+          })),
+        preferredLanguages: preferredLanguages
       };
       
       const newCust = await customerService.createCustomer(request);
@@ -129,7 +245,9 @@ export const useCustomerManagement = () => {
       setFirstName('');
       setLastName('');
       setPhone('');
-      setInstagramId('');
+      setInstagramAccounts([{ username: '', isPrimary: true }]);
+      setInstagramErrors({});
+      setPreferredLanguages(['en-in']);
       setEmail('');
       setShowAddModal(false);
     } catch (error) {
@@ -229,6 +347,17 @@ export const useCustomerManagement = () => {
     setPhone,
     instagramId,
     setInstagramId,
+    instagramAccounts,
+    setInstagramAccounts,
+    instagramErrors,
+    setInstagramErrors,
+    availableLanguages,
+    preferredLanguages,
+    setPreferredLanguages,
+    addInstagramAccountField,
+    removeInstagramAccountField,
+    updateInstagramAccountUsername,
+    setInstagramAccountPrimary,
     email,
     setEmail,
     addrName,

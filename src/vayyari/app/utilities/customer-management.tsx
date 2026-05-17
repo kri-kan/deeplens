@@ -43,6 +43,15 @@ export default function CustomerManagementScreen() {
     setPhone,
     instagramId,
     setInstagramId,
+    instagramAccounts,
+    instagramErrors,
+    availableLanguages,
+    preferredLanguages,
+    setPreferredLanguages,
+    addInstagramAccountField,
+    removeInstagramAccountField,
+    updateInstagramAccountUsername,
+    setInstagramAccountPrimary,
     email,
     setEmail,
     addrName,
@@ -129,13 +138,20 @@ export default function CustomerManagementScreen() {
           setLastName={setLastName}
           phone={phone}
           setPhone={setPhone}
-          instagramId={instagramId}
-          setInstagramId={setInstagramId}
           email={email}
           setEmail={setEmail}
           selectedCountry={selectedCountry}
           onShowCountrySelector={() => setShowCountrySelector(true)}
           onSubmit={handleAddCustomer}
+          instagramAccounts={instagramAccounts}
+          instagramErrors={instagramErrors}
+          availableLanguages={availableLanguages}
+          preferredLanguages={preferredLanguages}
+          setPreferredLanguages={setPreferredLanguages}
+          onAddInstagramField={addInstagramAccountField}
+          onRemoveInstagramField={removeInstagramAccountField}
+          onUpdateInstagramUsername={updateInstagramAccountUsername}
+          onSetInstagramPrimary={setInstagramAccountPrimary}
         />
 
         <CustomerDetailModal 

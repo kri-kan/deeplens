@@ -23,7 +23,8 @@ export async function upsertChat(
     isContact: boolean = false,
     lastMessageText: string | null = null,
     lastMessageTimestamp: number | null = null,
-    lastMessageFromMe: boolean | null = null
+    lastMessageFromMe: boolean | null = null,
+    lastMessageId: string | null = null
 ): Promise<void> {
     const client = getWhatsAppDbClient();
     if (!client) return;
@@ -32,7 +33,7 @@ export async function upsertChat(
         // Determine flags from metadata
         const isNewsletter = jid.endsWith('@newsletter');
         // Merge communities into announcements
-        const isAnnouncement = isNewsletter || !!metadata.readOnly || !!metadata.announce || !!metadata.isCommunityAnnounce || !!metadata.isCommunity;
+        const isAnnouncement = isNewsletter || !!metadata.readOnly || !!metadata.announce || !!metadata.isCommunityAnnounce;
 
         // Determine canonical JID (prefer PN for display/grouping)
         const altJid = metadata.alt_jid || metadata.display_jid;
@@ -46,9 +47,9 @@ export async function upsertChat(
                 jid, name, is_group, is_announcement, is_contact, 
                 canonical_jid, metadata, 
                 last_message_text, last_message_timestamp, last_message_from_me,
-                updated_at
+                last_message_id, updated_at
             )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
              ON CONFLICT (jid) DO UPDATE 
              SET name = CASE 
                     -- 1. Priority: New name is from address book sync
@@ -94,12 +95,19 @@ export async function upsertChat(
                     THEN EXCLUDED.last_message_from_me
                     ELSE wa.chats.last_message_from_me
                  END,
+                 last_message_id = CASE 
+                    WHEN EXCLUDED.last_message_timestamp IS NOT NULL 
+                         AND EXCLUDED.last_message_timestamp >= COALESCE(wa.chats.last_message_timestamp, 0) 
+                    THEN EXCLUDED.last_message_id
+                    ELSE wa.chats.last_message_id
+                 END,
                  
                  updated_at = NOW()`,
             [
                 jid, name, isGroup, isAnnouncement, isContact,
                 canonicalJid, JSON.stringify(metadata),
-                lastMessageText, safeTimestamp, lastMessageFromMe
+                lastMessageText, safeTimestamp, lastMessageFromMe,
+                lastMessageId
             ]
         );
     } catch (err: any) {

@@ -9,17 +9,19 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Caching.Distributed;
 using Polly;
 using Polly.Retry;
+using Dapper;
+using DeepLens.Application.Abstractions.Data;
 
 namespace DeepLens.Infrastructure.Services
 {
     public class MetaOptions
     {
-        public string ApiVersion { get; set; } = "v25.0";
+        public string ApiVersion { get; set; } = "v20.0";
         public string BaseUrl { get; set; } = "https://graph.facebook.com";
         public string AppId { get; set; } = string.Empty;
         public string AppSecret { get; set; } = string.Empty;
         public string IgBizId { get; set; } = string.Empty;
-        public string AccessToken { get; set; } = string.Empty;
+        public string LongAccessToken { get; set; } = string.Empty;
         public DateTime TokenLastRefreshed { get; set; } = DateTime.MinValue;
         public int TokenRefreshThresholdDays { get; set; } = 50;
         public int SyncIntervalMinutes { get; set; } = 720;
@@ -34,24 +36,28 @@ namespace DeepLens.Infrastructure.Services
         private readonly HttpClient _httpClient;
         private readonly IAppSettingsService _appSettings;
         private readonly IDistributedCache _cache;
+        private readonly IDbConnectionFactory _db;
         private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
         private MetaOptions _opts;
 
         public string? LastRawResponse { get; private set; }
         public MetaCallDetails? LastCall { get; private set; }
+        private Guid? _currentConfigId;
 
         public MetaGraphService(
             ILogger<MetaGraphService> logger,
             IConfiguration configuration,
             HttpClient httpClient,
             IAppSettingsService appSettings,
-            IDistributedCache cache)
+            IDistributedCache cache,
+            IDbConnectionFactory db)
         {
             _logger = logger;
             _configuration = configuration;
             _httpClient = httpClient;
             _appSettings = appSettings;
             _cache = cache;
+            _db = db;
             _opts = LoadOptionsFromConfig();
 
             _retryPolicy = Policy
@@ -66,23 +72,95 @@ namespace DeepLens.Infrastructure.Services
         public async Task ReloadFromDbAsync()
         {
             var opts = LoadOptionsFromConfig();
-            var metaSettingsList = await _appSettings.GetSectionInternalAsync("Meta");
-            var metaSettings = metaSettingsList.ToDictionary(s => s.Key, s => s.Value);
 
-            void Override(string key, Action<string> apply)
+            using var conn = await _db.CreateConnectionAsync();
+            
+            // 1. Ensure table exists (in case SeedDefaults hasn't run or we want to be safe)
+            await conn.ExecuteAsync(@"
+                CREATE TABLE IF NOT EXISTS meta_configurations (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name TEXT NOT NULL,
+                    app_id TEXT NOT NULL,
+                    app_secret TEXT NOT NULL,
+                    ig_biz_id TEXT NOT NULL,
+                    long_access_token TEXT NOT NULL,
+                    is_default BOOLEAN DEFAULT FALSE,
+                    call_count INTEGER DEFAULT 0,
+                    total_time INTEGER DEFAULT 0,
+                    total_cpu INTEGER DEFAULT 0,
+                    last_refreshed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )");
+
+            // Schema Migration: long_access_token
+            try {
+                await conn.ExecuteAsync("ALTER TABLE meta_configurations ADD COLUMN IF NOT EXISTS long_access_token TEXT");
+                await conn.ExecuteAsync("UPDATE meta_configurations SET long_access_token = access_token WHERE long_access_token IS NULL AND access_token IS NOT NULL");
+            } catch { /* Ignore if it fails or already modified */ }
+
+            // Schema Migration: Add quota columns if they don't exist
+            try {
+                await conn.ExecuteAsync("ALTER TABLE meta_configurations ADD COLUMN IF NOT EXISTS call_count INTEGER DEFAULT 0");
+                await conn.ExecuteAsync("ALTER TABLE meta_configurations ADD COLUMN IF NOT EXISTS total_time INTEGER DEFAULT 0");
+                await conn.ExecuteAsync("ALTER TABLE meta_configurations ADD COLUMN IF NOT EXISTS total_cpu INTEGER DEFAULT 0");
+            } catch { /* Ignore if already exists */ }
+
+            // 2. Migration: If table is empty, try to migrate from app_settings
+            var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM meta_configurations");
+            if (count == 0)
             {
-                if (metaSettings.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v))
+                _logger.LogInformation("Migrating Meta settings from app_settings to meta_configurations...");
+                var metaSettingsList = await _appSettings.GetSectionInternalAsync("Meta");
+                var metaSettings = metaSettingsList.ToDictionary(s => s.Key, s => s.Value);
+
+                if (metaSettings.TryGetValue("Meta:AppId", out var appId) && !string.IsNullOrWhiteSpace(appId))
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO meta_configurations (name, app_id, app_secret, ig_biz_id, long_access_token, is_default, last_refreshed_at)
+                        VALUES (@Name, @AppId, @AppSecret, @IgBizId, @LongAccessToken, TRUE, @LastRefreshed)",
+                        new {
+                            Name = "Default Account",
+                            AppId = appId,
+                            AppSecret = metaSettings.GetValueOrDefault("Meta:AppSecret") ?? "",
+                            IgBizId = metaSettings.GetValueOrDefault("Meta:IgBizId") ?? "",
+                            LongAccessToken = metaSettings.GetValueOrDefault("Meta:AccessToken") ?? "",
+                            LastRefreshed = DateTime.TryParse(metaSettings.GetValueOrDefault("Meta:TokenLastRefreshed"), out var d) ? d.ToUniversalTime() : DateTime.UtcNow
+                        });
+                }
+            }
+
+            // 3. Load Default Configuration
+            var defaultConfig = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT * FROM meta_configurations WHERE is_default = TRUE LIMIT 1");
+            
+            if (defaultConfig != null)
+            {
+                opts.AppId = defaultConfig.app_id;
+                opts.AppSecret = defaultConfig.app_secret;
+                opts.IgBizId = defaultConfig.ig_biz_id;
+                opts.LongAccessToken = defaultConfig.long_access_token ?? defaultConfig.access_token;
+                opts.TokenLastRefreshed = ((DateTime)defaultConfig.last_refreshed_at).ToUniversalTime();
+                _currentConfigId = (Guid)defaultConfig.id;
+            }
+            else
+            {
+                _currentConfigId = null;
+            }
+
+            // 4. Overlays from app_settings for overrides (Intervals, Throttling)
+            var overrides = await _appSettings.GetSectionInternalAsync("Meta");
+            var overrideDict = overrides.ToDictionary(s => s.Key, s => s.Value);
+
+            void Apply(string key, Action<string> apply)
+            {
+                if (overrideDict.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v))
                     apply(v);
             }
 
-            Override("Meta:AppId",                  v => opts.AppId = v);
-            Override("Meta:AppSecret",              v => opts.AppSecret = v);
-            Override("Meta:IgBizId",                v => opts.IgBizId = v);
-            Override("Meta:AccessToken",            v => opts.AccessToken = v);
-            Override("Meta:SyncIntervalMinutes",    v => { if (int.TryParse(v, out var i)) opts.SyncIntervalMinutes = i; });
-            Override("Meta:EngagementRefreshLimit", v => { if (int.TryParse(v, out var i)) opts.EngagementRefreshLimit = i; });
-            Override("Meta:TokenLastRefreshed",     v => { if (DateTime.TryParse(v, out var d)) opts.TokenLastRefreshed = d.ToUniversalTime(); });
-            Override("Meta:ThrottleIntervalMs",    v => { if (int.TryParse(v, out var i)) opts.ThrottleIntervalMs = i; });
+            Apply("Meta:SyncIntervalMinutes",    v => { if (int.TryParse(v, out var i)) opts.SyncIntervalMinutes = i; });
+            Apply("Meta:EngagementRefreshLimit", v => { if (int.TryParse(v, out var i)) opts.EngagementRefreshLimit = i; });
+            Apply("Meta:ThrottleIntervalMs",    v => { if (int.TryParse(v, out var i)) opts.ThrottleIntervalMs = i; });
 
             _opts = opts;
         }
@@ -96,7 +174,7 @@ namespace DeepLens.Infrastructure.Services
             opts.AppId = section["AppId"] ?? opts.AppId;
             opts.AppSecret = section["AppSecret"] ?? opts.AppSecret;
             opts.IgBizId = section["IgBizId"] ?? opts.IgBizId;
-            opts.AccessToken = section["AccessToken"] ?? opts.AccessToken;
+            opts.LongAccessToken = section["LongAccessToken"] ?? section["AccessToken"] ?? opts.LongAccessToken;
             
             if (int.TryParse(section["TokenRefreshThresholdDays"], out var thr)) opts.TokenRefreshThresholdDays = thr;
             if (int.TryParse(section["SyncIntervalMinutes"], out var sync)) opts.SyncIntervalMinutes = sync;
@@ -130,7 +208,7 @@ namespace DeepLens.Infrastructure.Services
             {
                 _logger.LogInformation("Attempting to refresh Meta long-lived token...");
                 var url = $"https://graph.instagram.com/refresh_access_token" +
-                          $"?grant_type=ig_refresh_token&access_token={_opts.AccessToken}";
+                          $"?grant_type=ig_refresh_token&access_token={_opts.LongAccessToken}";
 
                 var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
                 var body = await response.Content.ReadAsStringAsync();
@@ -143,7 +221,7 @@ namespace DeepLens.Infrastructure.Services
                 }
 
                 _logger.LogWarning("Standard refresh failed. Attempting short-to-long exchange...");
-                var exchangedToken = await ExchangeForLongLivedTokenAsync(_opts.AccessToken);
+                var exchangedToken = await ExchangeForLongLivedTokenAsync(_opts.LongAccessToken);
                 return !string.IsNullOrEmpty(exchangedToken);
             }
             catch (Exception ex)
@@ -155,24 +233,43 @@ namespace DeepLens.Infrastructure.Services
 
         private async Task PersistNewTokenAsync(string token)
         {
-            _opts.AccessToken = token;
+            _opts.LongAccessToken = token;
             _opts.TokenLastRefreshed = DateTime.UtcNow;
+
+            using var conn = await _db.CreateConnectionAsync();
+            
+            // Update the default configuration in the new table
+            await conn.ExecuteAsync(@"
+                UPDATE meta_configurations 
+                SET long_access_token = @LongAccessToken, 
+                    last_refreshed_at = @LastRefreshed,
+                    updated_at = @LastRefreshed
+                WHERE is_default = TRUE",
+                new { LongAccessToken = token, LastRefreshed = _opts.TokenLastRefreshed });
+
+            // Also update legacy app_settings for backward compatibility/sync workers that might still use it
             await _appSettings.UpsertAsync("Meta:AccessToken", token);
             await _appSettings.UpsertAsync("Meta:TokenLastRefreshed", _opts.TokenLastRefreshed.ToString("O"));
-            _logger.LogInformation("Meta token updated and persisted to settings.");
+            
+            _logger.LogInformation("Meta token updated and persisted to configurations and settings.");
         }
 
-        public async Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken)
+        public async Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken, string? appId = null, string? appSecret = null)
         {
             try
             {
+                var targetAppId = appId ?? _opts.AppId;
+                var targetAppSecret = appSecret ?? _opts.AppSecret;
+
+                _logger.LogInformation("Exchanging Meta token for AppId: {AppId}", targetAppId);
+
                 var url = $"{_opts.BaseUrl}/{_opts.ApiVersion}/oauth/access_token" +
                           $"?grant_type=fb_exchange_token" +
-                          $"&client_id={_opts.AppId}" +
-                          $"&client_secret={_opts.AppSecret}" +
-                          $"&fb_exchange_token={shortLivedToken}";
+                          $"&client_id={Uri.EscapeDataString(targetAppId)}" +
+                          $"&client_secret={Uri.EscapeDataString(targetAppSecret)}" +
+                          $"&fb_exchange_token={Uri.EscapeDataString(shortLivedToken)}";
 
-                _logger.LogInformation("Exchanging short-lived token for long-lived Meta token...");
+                _logger.LogInformation("Token exchange URL built (secret masked). Attempting request...");
                 var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
                 var body = await response.Content.ReadAsStringAsync();
 
@@ -186,13 +283,25 @@ namespace DeepLens.Infrastructure.Services
 
                 if (!string.IsNullOrEmpty(result?.AccessToken))
                 {
-                    _opts.AccessToken = result.AccessToken;
-                    _opts.TokenLastRefreshed = DateTime.UtcNow;
+                    // Only update global state if we are exchanging for the CURRENT account
+                    if (targetAppId == _opts.AppId)
+                    {
+                        _opts.LongAccessToken = result.AccessToken;
+                        _opts.TokenLastRefreshed = DateTime.UtcNow;
 
-                    await _appSettings.UpsertAsync("Meta:AccessToken", result.AccessToken);
-                    await _appSettings.UpsertAsync("Meta:TokenLastRefreshed", _opts.TokenLastRefreshed.ToString("O"));
+                        using var conn = await _db.CreateConnectionAsync();
+                        await conn.ExecuteAsync(@"
+                            UPDATE meta_configurations 
+                            SET long_access_token = @LongAccessToken, 
+                                last_refreshed_at = @LastRefreshed,
+                                updated_at = @LastRefreshed
+                            WHERE is_default = TRUE",
+                            new { LongAccessToken = result.AccessToken, LastRefreshed = _opts.TokenLastRefreshed });
 
-                    _logger.LogInformation("Token exchanged and persisted to DB. Expires in {Days} days.", result.ExpiresIn / 86400);
+                        await _appSettings.UpsertAsync("Meta:AccessToken", result.AccessToken);
+                        await _appSettings.UpsertAsync("Meta:TokenLastRefreshed", _opts.TokenLastRefreshed.ToString("O"));
+                    }
+
                     return result.AccessToken;
                 }
 
@@ -394,7 +503,7 @@ namespace DeepLens.Infrastructure.Services
 
         private string BuildUrl(string path, string fields)
         {
-            return $"{_opts.BaseUrl}/{_opts.ApiVersion}{path}?fields={Uri.EscapeDataString(fields)}&access_token={_opts.AccessToken}";
+            return $"{_opts.BaseUrl}/{_opts.ApiVersion}{path}?fields={Uri.EscapeDataString(fields)}&access_token={_opts.LongAccessToken}";
         }
 
         public async Task<MetaQuotaInfo> GetQuotaAsync()
@@ -424,6 +533,175 @@ namespace DeepLens.Infrastructure.Services
                 Metrics = metrics ?? new AppUsageMetrics(),
                 LastUpdated = DateTime.UtcNow
             };
+        }
+
+        public async Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+
+            // 1. Look up the target post/video
+            var video = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT platform, platform_video_id FROM competitor_videos WHERE id = @Id",
+                new { Id = competitorVideoId });
+
+            if (video == null)
+            {
+                throw new Exception($"Post not found for ID: {competitorVideoId}");
+            }
+
+            string platform = (string)video.platform;
+            string platformVideoId = (string)video.platform_video_id;
+            bool isInstagram = platform.Equals("instagram", StringComparison.OrdinalIgnoreCase);
+
+            // 2. Determine the time horizon of the last successful scrape
+            var lastScrapedAtVal = await conn.ExecuteScalarAsync<DateTime?>(
+                "SELECT MAX(posted_at) FROM post_comments WHERE video_id = @VideoId",
+                new { VideoId = competitorVideoId });
+
+            DateTime? lastScrapedAt = lastScrapedAtVal?.ToUniversalTime();
+
+            // 3. Set up initial API Payload Structure
+            int limit = 80;
+            string baseUrl = $"{_opts.BaseUrl}/{_opts.ApiVersion}/{platformVideoId}/comments";
+            string nextUrl = isInstagram
+                ? $"{baseUrl}?fields=id,timestamp,text,like_count,hidden,from{{id,username}}&access_token={accessToken}&limit={limit}"
+                : $"{baseUrl}?filter=stream&fields=id,created_time,message,like_count,from{{id,name}}&access_token={accessToken}&limit={limit}";
+
+            _logger.LogInformation("Starting comment sync for {PlatformVideoId} ({Platform}). Last scraped at: {LastScrapedAt}", 
+                platformVideoId, platform, lastScrapedAt?.ToString("O") ?? "never");
+
+            int totalUpserted = 0;
+
+            // 4. Client-side pagination loop
+            while (!string.IsNullOrEmpty(nextUrl))
+            {
+                await RecordRequestAsync();
+                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(nextUrl));
+                var body = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Meta API error during comment sync: {Body}", body);
+                    throw new Exception($"Meta API error: {response.StatusCode} - {response.ReasonPhrase}");
+                }
+
+                var data = JsonSerializer.Deserialize<GraphCommentsResponse>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (data?.Error != null)
+                {
+                    _logger.LogError("Meta API error: [{Code}] {Msg}", data.Error.Code, data.Error.Message);
+                    throw new Exception($"Meta API error: {data.Error.Message}");
+                }
+
+                var comments = data?.Data;
+                if (comments == null || !comments.Any())
+                {
+                    break;
+                }
+
+                bool hitOlderComment = false;
+
+                foreach (var item in comments)
+                {
+                    if (string.IsNullOrEmpty(item.Id)) continue;
+
+                    string dateStr = isInstagram ? item.Timestamp : item.CreatedTime;
+                    if (string.IsNullOrEmpty(dateStr) || !DateTime.TryParse(dateStr, out var postedAt))
+                    {
+                        postedAt = DateTime.UtcNow;
+                    }
+                    postedAt = postedAt.ToUniversalTime();
+
+                    // Time-Window Sync Optimization
+                    if (lastScrapedAt.HasValue && postedAt <= lastScrapedAt.Value)
+                    {
+                        hitOlderComment = true;
+                        break;
+                    }
+
+                    string? platformAccountId = item.From?.Id;
+                    if (string.IsNullOrEmpty(platformAccountId)) continue;
+
+                    string? username = isInstagram ? item.From?.Username : null;
+                    string? fullName = isInstagram ? null : item.From?.Name;
+                    string? commentText = isInstagram ? item.Text : item.Message;
+                    long likeCount = item.LikeCount;
+                    bool isHidden = item.Hidden ?? false;
+                    string platformCommentId = item.Id;
+
+                    if (conn.State != ConnectionState.Open)
+                    {
+                        conn.Open();
+                    }
+
+                    using var tx = conn.BeginTransaction();
+                    try
+                    {
+                        // Step 4a. Upsert Account First
+                        var accountUpsertQuery = @"
+                            INSERT INTO public.instagram_accounts (platform, platform_account_id, username, full_name)
+                            VALUES (@Platform, @PlatformAccountId, @Username, @FullName)
+                            ON CONFLICT (platform, platform_account_id)
+                            DO UPDATE SET 
+                                username = COALESCE(EXCLUDED.username, public.instagram_accounts.username),
+                                full_name = COALESCE(EXCLUDED.full_name, public.instagram_accounts.full_name),
+                                updated_at = now()
+                            RETURNING id;";
+                        
+                        var accountId = await conn.ExecuteScalarAsync<Guid>(accountUpsertQuery, new {
+                            Platform = platform.ToUpper(),
+                            PlatformAccountId = platformAccountId,
+                            Username = username,
+                            FullName = fullName
+                        }, transaction: tx);
+
+                        // Step 4b. Upsert Comment Second
+                        var commentUpsertQuery = @"
+                            INSERT INTO public.post_comments (
+                                video_id, account_id, platform_comment_id, parent_platform_comment_id, 
+                                comment_text, posted_at, like_count, is_hidden, raw_metadata, scraped_at
+                            )
+                            VALUES (@VideoId, @AccountId, @PlatformCommentId, NULL, @CommentText, @PostedAt, @LikeCount, @IsHidden, @RawMetadata::jsonb, now())
+                            ON CONFLICT (platform_comment_id)
+                            DO UPDATE SET
+                                comment_text = EXCLUDED.comment_text,
+                                like_count = EXCLUDED.like_count,
+                                is_hidden = EXCLUDED.is_hidden,
+                                raw_metadata = EXCLUDED.raw_metadata,
+                                scraped_at = now();";
+
+                        var rawMetadata = JsonSerializer.Serialize(item);
+
+                        await conn.ExecuteAsync(commentUpsertQuery, new {
+                            VideoId = competitorVideoId,
+                            AccountId = accountId,
+                            PlatformCommentId = platformCommentId,
+                            CommentText = commentText ?? string.Empty,
+                            PostedAt = postedAt,
+                            LikeCount = likeCount,
+                            IsHidden = isHidden,
+                            RawMetadata = rawMetadata
+                        }, transaction: tx);
+
+                        tx.Commit();
+                        totalUpserted++;
+                    }
+                    catch (Exception ex)
+                    {
+                        tx.Rollback();
+                        _logger.LogError(ex, "Failed to upsert comment {PlatformCommentId}", platformCommentId);
+                        // Continue with next comment
+                    }
+                }
+
+                if (hitOlderComment)
+                {
+                    break;
+                }
+
+                nextUrl = data?.Paging?.Next ?? string.Empty;
+            }
+
+            _logger.LogInformation("Finished comment sync for {PlatformVideoId}. Upserted {TotalUpserted} comments.", platformVideoId, totalUpserted);
         }
 
         private async Task<List<long>> GetRequestLogAsync()
@@ -461,6 +739,24 @@ namespace DeepLens.Infrastructure.Services
                     await _cache.SetStringAsync("meta:usage_metrics_v2", JsonSerializer.Serialize(metrics), new DistributedCacheEntryOptions {
                         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
                     });
+
+                    if (_currentConfigId.HasValue)
+                    {
+                        using var conn = await _db.CreateConnectionAsync();
+                        await conn.ExecuteAsync(@"
+                            UPDATE meta_configurations 
+                            SET call_count = @CallCount, 
+                                total_time = @TotalTime, 
+                                total_cpu = @TotalCpuTime,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = @Id",
+                            new { 
+                                metrics.CallCount, 
+                                metrics.TotalTime, 
+                                metrics.TotalCpuTime, 
+                                Id = _currentConfigId.Value 
+                            });
+                    }
                 }
             }
             catch (Exception ex)
@@ -493,7 +789,7 @@ namespace DeepLens.Infrastructure.Services
                 
                 LastCall = new MetaCallDetails
                 {
-                    RequestUrl = url.Replace(_opts.AccessToken, "REDACTED"),
+                    RequestUrl = url.Replace(_opts.LongAccessToken, "REDACTED"),
                     RequestPayload = null, // Business Discovery uses GET with query params
                     ResponseBody = LastRawResponse,
                     Timestamp = DateTime.UtcNow
@@ -523,6 +819,123 @@ namespace DeepLens.Infrastructure.Services
             }
         }
 
+
+        // --- Configuration Management ---
+
+        public async Task<List<MetaConfigurationDto>> GetConfigurationsAsync()
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var configs = await conn.QueryAsync<MetaConfigurationDto>(@"
+                SELECT id, name, app_id as AppId, app_secret as AppSecret, 
+                       ig_biz_id as IgBizId, long_access_token as LongAccessToken, 
+                       is_default as IsDefault, last_refreshed_at as LastRefreshedAt
+                FROM meta_configurations
+                ORDER BY is_default DESC, name ASC");
+            return configs.ToList();
+        }
+
+        public async Task<MetaConfigurationDto?> GetConfigurationAsync(Guid id)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            return await conn.QueryFirstOrDefaultAsync<MetaConfigurationDto>(@"
+                SELECT id, name, app_id as AppId, app_secret as AppSecret, 
+                       ig_biz_id as IgBizId, long_access_token as LongAccessToken, 
+                       is_default as IsDefault, last_refreshed_at as LastRefreshedAt
+                FROM meta_configurations
+                WHERE id = @id", new { id });
+        }
+
+        public async Task<MetaConfigurationDto> CreateConfigurationAsync(MetaConfigurationDto config)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var id = Guid.NewGuid();
+            
+            if (config.IsDefault)
+            {
+                await conn.ExecuteAsync("UPDATE meta_configurations SET is_default = FALSE");
+            }
+
+            await conn.ExecuteAsync(@"
+                INSERT INTO meta_configurations (id, name, app_id, app_secret, ig_biz_id, long_access_token, is_default, last_refreshed_at)
+                VALUES (@Id, @Name, @AppId, @AppSecret, @IgBizId, @LongAccessToken, @IsDefault, @LastRefreshedAt)",
+                new {
+                    Id = id,
+                    config.Name,
+                    config.AppId,
+                    config.AppSecret,
+                    config.IgBizId,
+                    config.LongAccessToken,
+                    config.IsDefault,
+                    LastRefreshedAt = config.LastRefreshedAt ?? DateTime.UtcNow
+                });
+
+            config.Id = id;
+            if (config.IsDefault) await ReloadFromDbAsync();
+            return config;
+        }
+
+        public async Task UpdateConfigurationAsync(MetaConfigurationDto config)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+
+            if (config.IsDefault)
+            {
+                await conn.ExecuteAsync("UPDATE meta_configurations SET is_default = FALSE WHERE id <> @Id", new { config.Id });
+            }
+
+            await conn.ExecuteAsync(@"
+                UPDATE meta_configurations
+                SET name = @Name,
+                    app_id = @AppId,
+                    app_secret = @AppSecret,
+                    ig_biz_id = @IgBizId,
+                    long_access_token = @LongAccessToken,
+                    is_default = @IsDefault,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = @Id",
+                new {
+                    config.Id,
+                    config.Name,
+                    config.AppId,
+                    config.AppSecret,
+                    config.IgBizId,
+                    config.LongAccessToken,
+                    config.IsDefault
+                });
+
+            if (config.IsDefault) await ReloadFromDbAsync();
+        }
+
+        public async Task DeleteConfigurationAsync(Guid id)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var config = await GetConfigurationAsync(id);
+            if (config == null) return;
+
+            await conn.ExecuteAsync("DELETE FROM meta_configurations WHERE id = @id", new { id });
+            
+            if (config.IsDefault)
+            {
+                // Set another one as default if any exists
+                var next = await conn.QueryFirstOrDefaultAsync<Guid?>("SELECT id FROM meta_configurations LIMIT 1");
+                if (next.HasValue)
+                {
+                    await SetDefaultConfigurationAsync(next.Value);
+                }
+                else
+                {
+                    await ReloadFromDbAsync(); // Reset to defaults from config file
+                }
+            }
+        }
+
+        public async Task SetDefaultConfigurationAsync(Guid id)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            await conn.ExecuteAsync("UPDATE meta_configurations SET is_default = FALSE");
+            await conn.ExecuteAsync("UPDATE meta_configurations SET is_default = TRUE WHERE id = @id", new { id });
+            await ReloadFromDbAsync();
+        }
         // --- Internal Graph API Models (Infrastructure Private) ---
 
         private class GraphProfileResponse
@@ -592,6 +1005,32 @@ namespace DeepLens.Infrastructure.Services
         {
             [JsonPropertyName("message")] public string? Message { get; set; }
             [JsonPropertyName("code")] public int Code { get; set; }
+        }
+
+        private class GraphCommentsResponse
+        {
+            [JsonPropertyName("data")] public List<GraphCommentItem> Data { get; set; } = new();
+            [JsonPropertyName("paging")] public GraphPaging? Paging { get; set; }
+            [JsonPropertyName("error")] public GraphError? Error { get; set; }
+        }
+
+        private class GraphCommentItem
+        {
+            [JsonPropertyName("id")] public string? Id { get; set; }
+            [JsonPropertyName("timestamp")] public string? Timestamp { get; set; }
+            [JsonPropertyName("created_time")] public string? CreatedTime { get; set; }
+            [JsonPropertyName("text")] public string? Text { get; set; }
+            [JsonPropertyName("message")] public string? Message { get; set; }
+            [JsonPropertyName("like_count")] public long LikeCount { get; set; }
+            [JsonPropertyName("hidden")] public bool? Hidden { get; set; }
+            [JsonPropertyName("from")] public GraphCommentUser? From { get; set; }
+        }
+
+        private class GraphCommentUser
+        {
+            [JsonPropertyName("id")] public string? Id { get; set; }
+            [JsonPropertyName("username")] public string? Username { get; set; }
+            [JsonPropertyName("name")] public string? Name { get; set; }
         }
     }
 }

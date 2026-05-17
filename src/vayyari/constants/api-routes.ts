@@ -65,6 +65,9 @@ export const API_ROUTES = {
     UPDATE_ADDRESS: (id: string) => `/api/v1/customers/addresses/${id}`,
     DELETE_ADDRESS: (id: string) => `/api/v1/customers/addresses/${id}`,
     SET_DEFAULT_ADDRESS: (customerId: string, addressId: string) => `/api/v1/customers/${customerId}/addresses/${addressId}/default`,
+    VALIDATE_INSTAGRAM: (username: string, currentCustomerId?: string) => 
+      `/api/v1/customers/validate-instagram?username=${encodeURIComponent(username)}${currentCustomerId ? `&currentCustomerId=${currentCustomerId}` : ''}`,
+    LANGUAGES: '/api/v1/customers/languages',
   },
 
   // WhatsApp communication (Specific implementation)
@@ -93,6 +96,12 @@ export const API_ROUTES = {
     PURPOSE_CUSTOMERS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/customers`,
     UNASSIGNED_CUSTOMERS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/unassigned-customers`,
     DISTRIBUTE: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/distribute`,
+    PURPOSE_STEPS: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/steps`,
+    PURPOSE_STEP_DETAIL: (purposeKey: string, stepId: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/steps/${stepId}`,
+    CUSTOMER_PROGRESS: (purposeKey: string, customerId: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/customers/${customerId}/progress`,
+    UPDATE_STEP_STATUS: (purposeKey: string, customerId: string, stepId: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/customers/${customerId}/steps/${stepId}/status`,
+    PURPOSE_TRACKING: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/tracking`,
+    VARIABLES: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/variables`,
   },
 
   // Instagram Product Links

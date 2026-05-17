@@ -28,6 +28,13 @@ public record CreateBroadcastChannelRequest(
     [property: JsonPropertyName("metadata")] string? Metadata
 );
 
+public record UpdateBroadcastChannelRequest(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("description")] string? Description,
+    [property: JsonPropertyName("channelType")] string ChannelType,
+    [property: JsonPropertyName("metadata")] string? Metadata
+);
+
 public record PurposeMappingDto(
     [property: JsonPropertyName("id")] Guid Id,
     [property: JsonPropertyName("purposeKey")] string PurposeKey,
@@ -56,6 +63,7 @@ public interface ICommunicationBroadcastService
     Task<IEnumerable<BroadcastChannelDto>> GetAllChannelsAsync();
     Task<BroadcastChannelDto?> GetChannelByIdAsync(Guid id);
     Task<BroadcastChannelDto> CreateChannelAsync(CreateBroadcastChannelRequest request);
+    Task<BroadcastChannelDto?> UpdateChannelAsync(Guid id, UpdateBroadcastChannelRequest request);
     Task<bool> DeleteChannelAsync(Guid id);
     Task<IEnumerable<ChannelTypeDto>> GetChannelTypesAsync();
 
@@ -74,4 +82,19 @@ public interface ICommunicationBroadcastService
     Task<IEnumerable<PurposeCustomerDto>> GetPurposeCustomersAsync(string purposeKey);
     Task<IEnumerable<PurposeCustomerDto>> GetUnassignedPurposeCustomersAsync(string purposeKey);
     Task<int> DistributeCustomersToChannelsAsync(string purposeKey);
+
+    // Purpose Campaign Steps
+    Task<IEnumerable<PurposeStepDto>> GetPurposeStepsAsync(string purposeKey);
+    Task<PurposeStepDto> CreatePurposeStepAsync(string purposeKey, CreatePurposeStepRequest request);
+    Task<PurposeStepDto> UpdatePurposeStepAsync(string purposeKey, Guid stepId, UpdatePurposeStepRequest request);
+    Task<bool> DeletePurposeStepAsync(string purposeKey, Guid stepId);
+
+    // Customer Steps Progress
+    Task<IEnumerable<CustomerStepProgressDto>> GetCustomerStepProgressAsync(string purposeKey, Guid customerId);
+    Task<bool> UpdateCustomerStepStatusAsync(string purposeKey, Guid customerId, Guid stepId, string status, string? sentMessage);
+    Task<IEnumerable<PurposeCustomerTrackingDto>> GetPurposeCustomersTrackingAsync(string purposeKey);
+
+    // Campaign Variables
+    Task<IEnumerable<CampaignVariableDto>> GetCampaignVariablesAsync(string purposeKey);
+    Task<bool> UpsertCampaignVariablesAsync(string purposeKey, IEnumerable<CampaignVariableInput> variables);
 }

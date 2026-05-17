@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Avatar, IconButton, Button, Modal, Divider, List, Card, Switch, ActivityIndicator, useTheme } from 'react-native-paper';
+import { Text, Avatar, IconButton, Button, Modal, Divider, List, Card, Switch, ActivityIndicator, useTheme, Chip } from 'react-native-paper';
 import { Customer } from '@/types/customers';
 import { WhatsAppChannel, CustomerChannelMembership } from '@/services/whatsappService';
 
@@ -52,9 +52,65 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 {customer.firstName || customer.lastName ? `${customer.firstName || ''} ${customer.lastName || ''}`.trim() : 'Unknown'}
               </Text>
               {customer.phoneNumber && <Text variant="bodyMedium">{customer.phoneNumber}</Text>}
-              {customer.instagramId && <Text variant="bodySmall" style={styles.handle}>@{customer.instagramId}</Text>}
+              {customer.email && <Text variant="bodySmall" style={{ opacity: 0.7 }}>{customer.email}</Text>}
+              {customer.referralCode && (
+                <View style={{ flexDirection: 'row', marginTop: 6 }}>
+                  <Chip 
+                    icon="ticket-percent" 
+                    style={{ backgroundColor: '#E8F5E9', height: 28, justifyContent: 'center', borderRadius: 8 }}
+                    textStyle={{ color: '#2E7D32', fontSize: 11, fontWeight: 'bold' }}
+                  >
+                    REF: {customer.referralCode}
+                  </Chip>
+                </View>
+              )}
            </View>
         </View>
+
+        {customer.instagramAccounts && customer.instagramAccounts.length > 0 && (
+          <>
+            <Divider style={styles.divider} />
+            <Text variant="titleMedium" style={[styles.bold, { marginBottom: 8 }]}>Instagram Accounts</Text>
+            <View style={styles.handlesContainer}>
+              {customer.instagramAccounts.map((acc) => (
+                <View key={acc.id} style={styles.instagramChip}>
+                  <IconButton
+                    icon={acc.isPrimary ? 'star' : 'star-outline'}
+                    iconColor={acc.isPrimary ? '#FFD700' : 'rgba(0,0,0,0.3)'}
+                    size={16}
+                    style={{ margin: 0 }}
+                  />
+                  <Text style={styles.chipText}>@{acc.username}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {customer.preferredLanguages && customer.preferredLanguages.length > 0 && (
+          <>
+            <Divider style={styles.divider} />
+            <Text variant="titleMedium" style={[styles.bold, { marginBottom: 8 }]}>Preferred Languages</Text>
+            <View style={styles.chipContainer}>
+              {customer.preferredLanguages.map((code) => {
+                const friendlyNames: Record<string, string> = {
+                  'en-in': 'English',
+                  'te-in': 'Telugu',
+                  'hi-in': 'Hindi',
+                  'ta-in': 'Tamil',
+                  'ml-in': 'Malayalam',
+                  'kn-in': 'Kannada',
+                  'en-te': 'English & Telugu'
+                };
+                return (
+                  <Chip key={code} style={styles.languageChip} compact>
+                    {friendlyNames[code] || code}
+                  </Chip>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         <Divider style={styles.divider} />
 
@@ -143,11 +199,34 @@ const styles = StyleSheet.create({
   name: {
     fontWeight: 'bold',
   },
-  handle: {
-    opacity: 0.6,
-  },
   divider: {
     marginVertical: 16,
+  },
+  handlesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  instagramChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingRight: 10,
+    height: 32,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  languageChip: {
+    backgroundColor: '#EAEAEA',
   },
   sectionHeader: {
     flexDirection: 'row',

@@ -218,7 +218,7 @@ export default function ModalScreen() {
                   left={props => <List.Icon {...props} icon="cogs" />}
                 >
                   <View style={{ paddingHorizontal: 16, paddingBottom: 16, backgroundColor: theme.colors.background }}>
-                    {settings[sectionName].map(renderSettingRow)}
+                    {settings[sectionName].filter(s => !["Meta:AppId", "Meta:AppSecret", "Meta:IgBizId", "Meta:AccessToken", "Meta:TokenLastRefreshed", "Meta:ExchangeShortLivedToken"].includes(s.key)).map(renderSettingRow)}
                   </View>
                 </List.Accordion>
               </Surface>

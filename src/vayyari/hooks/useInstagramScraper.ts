@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { instagramService, TokenHealth, SyncResult } from '../services/instagram.service';
+import { instagramService, TokenHealth, SyncResult, MetaQuotaInfo } from '../services/instagram.service';
 
 export const useInstagramScraper = () => {
   const [handle, setHandle] = useState('');
@@ -9,6 +9,8 @@ export const useInstagramScraper = () => {
   const [tokenHealth, setTokenHealth] = useState<TokenHealth | null>(null);
   const [tokenLoading, setTokenLoading] = useState(true);
   const [refreshingToken, setRefreshingToken] = useState(false);
+  const [quota, setQuota] = useState<MetaQuotaInfo | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(true);
   const [depthMode, setDepthMode] = useState<'full' | 'limited'>('limited');
   const [depthValue, setDepthValue] = useState('50');
   const [activeJobs, setActiveJobs] = useState<any[]>([]);
@@ -35,12 +37,25 @@ export const useInstagramScraper = () => {
     }
   }, []);
 
+  const loadQuota = useCallback(async () => {
+    setQuotaLoading(true);
+    try {
+      const data = await instagramService.getQuota();
+      setQuota(data);
+    } catch {
+      // non-critical
+    } finally {
+      setQuotaLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadTokenHealth();
+    loadQuota();
     loadActiveJobs();
     const interval = setInterval(loadActiveJobs, 5000);
     return () => clearInterval(interval);
-  }, [loadTokenHealth, loadActiveJobs]);
+  }, [loadTokenHealth, loadQuota, loadActiveJobs]);
 
   const handleRefreshToken = useCallback(async () => {
     setRefreshingToken(true);
@@ -85,6 +100,8 @@ export const useInstagramScraper = () => {
     tokenHealth,
     tokenLoading,
     refreshingToken,
+    quota,
+    quotaLoading,
     depthMode,
     setDepthMode,
     depthValue,

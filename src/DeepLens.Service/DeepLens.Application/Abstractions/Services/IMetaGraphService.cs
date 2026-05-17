@@ -11,7 +11,7 @@ namespace DeepLens.Application.Abstractions.Services
         Task ReloadFromDbAsync();
         TokenHealthInfo GetTokenHealth();
         Task<bool> RefreshTokenAsync();
-        Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken);
+        Task<string?> ExchangeForLongLivedTokenAsync(string shortLivedToken, string? appId = null, string? appSecret = null);
         Task<MetaPost?> GetPostByIdAsync(string postId);
         Task<MetaPost?> GetPostByDiscoveryAsync(string targetUsername, string postId);
         Task<MetaProfile?> GetProfileAsync(string targetUsername);
@@ -20,6 +20,16 @@ namespace DeepLens.Application.Abstractions.Services
         int GetSyncIntervalMinutes();
         int GetEngagementRefreshLimit();
         Task<MetaQuotaInfo> GetQuotaAsync();
+        Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken);
+
+        // --- Configuration Management ---
+        Task<List<MetaConfigurationDto>> GetConfigurationsAsync();
+        Task<MetaConfigurationDto?> GetConfigurationAsync(Guid id);
+        Task<MetaConfigurationDto> CreateConfigurationAsync(MetaConfigurationDto config);
+        Task UpdateConfigurationAsync(MetaConfigurationDto config);
+        Task DeleteConfigurationAsync(Guid id);
+        Task SetDefaultConfigurationAsync(Guid id);
+
         string? LastRawResponse { get; }
         MetaCallDetails? LastCall { get; }
     }

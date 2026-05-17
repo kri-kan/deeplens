@@ -17,4 +17,10 @@ public interface ICustomerRepository
     Task<bool> UpdateAddressAsync(CustomerAddress address);
     Task<bool> DeleteAddressAsync(Guid addressId);
     Task<bool> SetDefaultAddressAsync(Guid customerId, Guid addressId);
+
+    // Multi-handle Instagram & Languages mapping
+    Task<Guid?> GetCustomerIdByInstagramUsernameAsync(string username);
+    Task<IEnumerable<DeepLens.Contracts.Customers.LanguageDto>> GetPreferredLanguagesMasterAsync();
+    Task SaveInstagramAccountsAsync(Guid customerId, List<DeepLens.Contracts.Customers.CustomerInstagramAccountDto> accounts);
+    Task SavePreferredLanguagesAsync(Guid customerId, List<string> languages);
 }

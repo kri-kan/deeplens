@@ -11,6 +11,7 @@ interface GridMenuItem {
   icon: any; // Changed from string to any to support required assets
   route?: string;
   onPress?: () => void;
+  onLongPress?: () => void;
   color?: string;
   disabled?: boolean;
 }
@@ -44,6 +45,7 @@ export const GridMenu: React.FC<GridMenuProps> = ({
               if (item.onPress) item.onPress();
               else if (item.route) router.push(item.route as any);
             }}
+            onLongPress={item.onLongPress}
             disabled={isDisabled}
             style={{ width: tileSize, height: tileSize }}
           >

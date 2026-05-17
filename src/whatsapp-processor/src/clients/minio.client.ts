@@ -125,3 +125,26 @@ export async function clearBucket(): Promise<number> {
         throw new Error(`MinIO bucket clear failed: ${err.message}`);
     }
 }
+
+/**
+ * Uploads a file buffer to MinIO
+ */
+export async function uploadFile(path: string, buffer: Buffer, contentType: string): Promise<string> {
+    const bucketName = MINIO_CONFIG.bucket;
+    await minioClient.putObject(bucketName, path, buffer, buffer.length, {
+        'Content-Type': contentType
+    });
+    return path;
+}
+
+/**
+ * Deletes a file from MinIO
+ */
+export async function deleteFile(path: string): Promise<void> {
+    const bucketName = MINIO_CONFIG.bucket;
+    try {
+        await minioClient.removeObject(bucketName, path);
+    } catch (err: any) {
+        logger.warn({ err: err.message, path }, 'Failed to delete file from MinIO (might not exist)');
+    }
+}

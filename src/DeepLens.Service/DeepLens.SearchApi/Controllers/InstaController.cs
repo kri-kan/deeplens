@@ -15,6 +15,7 @@ namespace DeepLens.SearchApi.Controllers;
 [Route("api/v1/[controller]")]
 public class InstaController : ControllerBase
 {
+
     private readonly IMetaGraphService _metaGraph;
     private readonly IDbConnectionFactory _db;
     private readonly IStorageService _storage;
@@ -279,17 +280,62 @@ public class InstaController : ControllerBase
         return Ok(quota);
     }
 
+    [HttpGet("config")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<MetaConfigurationDto>>> GetConfigurations()
+    {
+        var configs = await _metaGraph.GetConfigurationsAsync();
+        return Ok(configs);
+    }
+
+    [HttpPost("config")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult<MetaConfigurationDto>> CreateConfiguration([FromBody] MetaConfigurationDto config)
+    {
+        var result = await _metaGraph.CreateConfigurationAsync(config);
+        return Ok(result);
+    }
+
+    [HttpPut("config/{id}")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult> UpdateConfiguration(Guid id, [FromBody] MetaConfigurationDto config)
+    {
+        config.Id = id;
+        await _metaGraph.UpdateConfigurationAsync(config);
+        return Ok();
+    }
+
+    [HttpDelete("config/{id}")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult> DeleteConfiguration(Guid id)
+    {
+        await _metaGraph.DeleteConfigurationAsync(id);
+        return Ok();
+    }
+
+    [HttpPost("config/{id}/default")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult> SetDefaultConfiguration(Guid id)
+    {
+        await _metaGraph.SetDefaultConfigurationAsync(id);
+        return Ok();
+    }
+
+
     [HttpPost("token/exchange")]
     [Authorize(Policy = "IngestPolicy")]
-    public async Task<ActionResult> ExchangeToken([FromBody] string shortLivedToken)
+    public async Task<ActionResult> ExchangeToken([FromBody] MetaTokenExchangeRequest request)
     {
         await _metaGraph.ReloadFromDbAsync();
-        var longLivedToken = await _metaGraph.ExchangeForLongLivedTokenAsync(shortLivedToken);
+        var longLivedToken = await _metaGraph.ExchangeForLongLivedTokenAsync(
+            request.ShortLivedToken, 
+            request.AppId, 
+            request.AppSecret);
         
         if (string.IsNullOrEmpty(longLivedToken))
             return BadRequest(new { message = "Token exchange failed" });
 
-        return Ok(new { message = "Token exchanged and saved" });
+        return Ok(new { message = "Token exchanged successfully", token = longLivedToken });
     }
 
     [HttpPost("token/refresh")]
@@ -619,6 +665,67 @@ public class InstaController : ControllerBase
         }
         return Ok(new { message = "Media refreshed successfully." });
     }
+
+    [HttpPost("video/{id}/comments/sync")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult> SyncComments(Guid id, [FromBody] InstagramCommentsSyncRequest request)
+    {
+        if (string.IsNullOrEmpty(request.AccessToken))
+            return BadRequest(new { message = "AccessToken is required." });
+
+        try
+        {
+            await _metaGraph.SyncPostCommentsAsync(id, request.AccessToken);
+            return Ok(new { message = "Comments synchronization completed successfully." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Comments synchronization failed for video {VideoId}", id);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("video/{id}/comments")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetComments(Guid id)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = @"
+                SELECT 
+                    pc.id AS Id,
+                    pc.comment_text AS CommentText,
+                    pc.posted_at AS PostedAt,
+                    pc.like_count AS LikeCount,
+                    pc.is_hidden AS IsHidden,
+                    ea.username AS Username,
+                    ea.full_name AS FullName
+                FROM post_comments pc
+                LEFT JOIN instagram_accounts ea ON ea.id = pc.account_id
+                WHERE pc.video_id = @VideoId
+                ORDER BY pc.posted_at DESC;";
+
+            var comments = await conn.QueryAsync<InstagramCommentDto>(sql, new { VideoId = id });
+            return Ok(comments);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve comments for video {VideoId}", id);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+}
+
+public class InstagramCommentDto
+{
+    public Guid Id { get; set; }
+    public string CommentText { get; set; } = string.Empty;
+    public DateTime PostedAt { get; set; }
+    public int LikeCount { get; set; }
+    public bool IsHidden { get; set; }
+    public string? Username { get; set; }
+    public string? FullName { get; set; }
 }
 
 

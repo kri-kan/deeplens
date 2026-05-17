@@ -2,6 +2,7 @@ using DeepLens.Contracts.Marketing;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace DeepLens.SearchApi.Controllers;
@@ -36,6 +37,13 @@ public class CommunicationBroadcastController : ControllerBase
     {
         var channel = await _broadcastService.CreateChannelAsync(request);
         return CreatedAtAction(nameof(GetChannel), new { id = channel.Id }, channel);
+    }
+
+    [HttpPut("channels/{id}")]
+    public async Task<IActionResult> UpdateChannel(Guid id, [FromBody] UpdateBroadcastChannelRequest request)
+    {
+        var channel = await _broadcastService.UpdateChannelAsync(id, request);
+        return channel != null ? Ok(channel) : NotFound();
     }
 
     [HttpDelete("channels/{id}")]
@@ -136,5 +144,98 @@ public class CommunicationBroadcastController : ControllerBase
     {
         var count = await _broadcastService.DistributeCustomersToChannelsAsync(purposeKey);
         return Ok(new { Count = count });
+    }
+
+    [HttpGet("purposes/{purposeKey}/steps")]
+    public async Task<IActionResult> GetPurposeSteps(string purposeKey)
+    {
+        var steps = await _broadcastService.GetPurposeStepsAsync(purposeKey);
+        return Ok(steps);
+    }
+
+    [HttpPost("purposes/{purposeKey}/steps")]
+    public async Task<IActionResult> CreatePurposeStep(string purposeKey, [FromBody] CreatePurposeStepRequest request)
+    {
+        try
+        {
+            var step = await _broadcastService.CreatePurposeStepAsync(purposeKey, request);
+            return Ok(step);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpPut("purposes/{purposeKey}/steps/{stepId}")]
+    public async Task<IActionResult> UpdatePurposeStep(string purposeKey, Guid stepId, [FromBody] UpdatePurposeStepRequest request)
+    {
+        try
+        {
+            var step = await _broadcastService.UpdatePurposeStepAsync(purposeKey, stepId, request);
+            return Ok(step);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpDelete("purposes/{purposeKey}/steps/{stepId}")]
+    public async Task<IActionResult> DeletePurposeStep(string purposeKey, Guid stepId)
+    {
+        var result = await _broadcastService.DeletePurposeStepAsync(purposeKey, stepId);
+        return result ? Ok() : BadRequest("Failed to delete purpose step");
+    }
+
+    [HttpGet("purposes/{purposeKey}/customers/{customerId}/progress")]
+    public async Task<IActionResult> GetCustomerStepProgress(string purposeKey, Guid customerId)
+    {
+        var progress = await _broadcastService.GetCustomerStepProgressAsync(purposeKey, customerId);
+        return Ok(progress);
+    }
+
+    [HttpPost("purposes/{purposeKey}/customers/{customerId}/steps/{stepId}/status")]
+    public async Task<IActionResult> UpdateCustomerStepStatus(string purposeKey, Guid customerId, Guid stepId, [FromBody] UpdateStatusRequest request)
+    {
+        try
+        {
+            var result = await _broadcastService.UpdateCustomerStepStatusAsync(purposeKey, customerId, stepId, request.Status, request.SentMessage);
+            return result ? Ok() : BadRequest("Failed to update step status");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    public record UpdateStatusRequest(
+        [property: JsonPropertyName("status")] string Status,
+        [property: JsonPropertyName("sentMessage")] string? SentMessage
+    );
+
+    [HttpGet("purposes/{purposeKey}/tracking")]
+    public async Task<IActionResult> GetPurposeCustomersTracking(string purposeKey)
+    {
+        var tracking = await _broadcastService.GetPurposeCustomersTrackingAsync(purposeKey);
+        return Ok(tracking);
+    }
+
+    [HttpGet("purposes/{purposeKey}/variables")]
+    public async Task<IActionResult> GetCampaignVariables(string purposeKey)
+    {
+        var variables = await _broadcastService.GetCampaignVariablesAsync(purposeKey);
+        return Ok(variables);
+    }
+
+    [HttpPost("purposes/{purposeKey}/variables")]
+    public async Task<IActionResult> UpsertCampaignVariables(string purposeKey, [FromBody] UpsertCampaignVariablesRequest request)
+    {
+        var result = await _broadcastService.UpsertCampaignVariablesAsync(purposeKey, request.Variables);
+        return result ? Ok() : BadRequest("Failed to update campaign variables");
     }
 }

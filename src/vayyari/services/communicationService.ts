@@ -39,6 +39,55 @@ export interface ChannelType {
   description?: string;
 }
 
+export interface MessageTemplate {
+  templateName: string;
+  languageCode: string;
+  body: string;
+}
+
+export interface PurposeStep {
+  id: string;
+  purposeKey: string;
+  stepNumber: number;
+  description: string;
+  action: string;
+  messageTemplates: MessageTemplate[];
+}
+
+export interface CustomerStepProgress {
+  stepId: string;
+  stepNumber: number;
+  description: string;
+  action: string;
+  messageTemplates: MessageTemplate[];
+  status: 'new' | 'completed';
+  completedAt?: string;
+}
+
+export interface PurposeCustomerTracking {
+  customerId: string;
+  customerName: string;
+  phoneNumber: string;
+  totalSteps: number;
+  completedSteps: number;
+  isCompleted: boolean;
+  assignedChannelId?: string;
+  assignedChannelName?: string;
+  preferredLanguages: string[];
+  instagramId?: string;
+  referralCode?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  lastStepCompletedAt?: string;
+}
+
+export interface CampaignVariable {
+  purposeKey: string;
+  variableKey: string;
+  variableValue: string;
+}
+
 export interface CreateChannelRequest {
   name: string;
   description?: string;
@@ -61,6 +110,10 @@ class CommunicationService {
 
   async deleteChannel(id: string): Promise<void> {
     return productMgmtApiClient.delete(API_ROUTES.COMMUNICATION.CHANNEL_DETAIL(id));
+  }
+
+  async updateChannel(id: string, request: CreateChannelRequest): Promise<BroadcastChannel> {
+    return productMgmtApiClient.put<BroadcastChannel>(API_ROUTES.COMMUNICATION.CHANNEL_DETAIL(id), request);
   }
 
   async getChannelTypes(): Promise<ChannelType[]> {
@@ -113,6 +166,42 @@ class CommunicationService {
 
   async distributeToChannels(purposeKey: string): Promise<{ count: number }> {
     return productMgmtApiClient.post<{ count: number }>(API_ROUTES.COMMUNICATION.DISTRIBUTE(purposeKey));
+  }
+
+  async getPurposeSteps(purposeKey: string): Promise<PurposeStep[]> {
+    return productMgmtApiClient.get<PurposeStep[]>(API_ROUTES.COMMUNICATION.PURPOSE_STEPS(purposeKey));
+  }
+
+  async createPurposeStep(purposeKey: string, request: Omit<PurposeStep, 'id' | 'purposeKey'>): Promise<PurposeStep> {
+    return productMgmtApiClient.post<PurposeStep>(API_ROUTES.COMMUNICATION.PURPOSE_STEPS(purposeKey), request);
+  }
+
+  async updatePurposeStep(purposeKey: string, stepId: string, request: Omit<PurposeStep, 'id' | 'purposeKey' | 'stepNumber'>): Promise<PurposeStep> {
+    return productMgmtApiClient.put<PurposeStep>(API_ROUTES.COMMUNICATION.PURPOSE_STEP_DETAIL(purposeKey, stepId), request);
+  }
+
+  async deletePurposeStep(purposeKey: string, stepId: string): Promise<void> {
+    return productMgmtApiClient.delete(API_ROUTES.COMMUNICATION.PURPOSE_STEP_DETAIL(purposeKey, stepId));
+  }
+
+  async getCustomerProgress(purposeKey: string, customerId: string): Promise<CustomerStepProgress[]> {
+    return productMgmtApiClient.get<CustomerStepProgress[]>(API_ROUTES.COMMUNICATION.CUSTOMER_PROGRESS(purposeKey, customerId));
+  }
+
+  async updateStepStatus(purposeKey: string, customerId: string, stepId: string, status: 'new' | 'completed', sentMessage?: string): Promise<void> {
+    return productMgmtApiClient.post(API_ROUTES.COMMUNICATION.UPDATE_STEP_STATUS(purposeKey, customerId, stepId), { status, sentMessage });
+  }
+
+  async getPurposeTracking(purposeKey: string): Promise<PurposeCustomerTracking[]> {
+    return productMgmtApiClient.get<PurposeCustomerTracking[]>(API_ROUTES.COMMUNICATION.PURPOSE_TRACKING(purposeKey));
+  }
+
+  async getCampaignVariables(purposeKey: string): Promise<CampaignVariable[]> {
+    return productMgmtApiClient.get<CampaignVariable[]>(API_ROUTES.COMMUNICATION.VARIABLES(purposeKey));
+  }
+
+  async saveCampaignVariables(purposeKey: string, variables: Omit<CampaignVariable, 'purposeKey'>[]): Promise<void> {
+    return productMgmtApiClient.post(API_ROUTES.COMMUNICATION.VARIABLES(purposeKey), { variables });
   }
 }
 

@@ -37,8 +37,7 @@ const SYSTEM_UTILITIES: UtilityItem[] = [
 ];
 
 const COMMUNICATION_UTILITIES: UtilityItem[] = [
-  { id: 'broadcast', title: 'WA communications', icon: 'whatsapp', route: '/utilities/communication-management', color: '#25D366' },
-  { id: 'campaigns', title: 'Campaigns', icon: 'bullhorn-variant', route: '', color: '#FF9800' },
+  { id: 'campaigns', title: 'Campaigns', icon: 'bullhorn-variant', route: '/utilities/communication-management', color: '#FF9800' },
 ];
 
 export default function UtilityScreen() {

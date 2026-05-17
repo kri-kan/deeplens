@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Linking, Image, ScrollView } from 'react-native';
-import { Surface, List, Text, useTheme, IconButton, Portal, Dialog, Button } from 'react-native-paper';
+import { StyleSheet, View, Linking, Image, ScrollView, Platform } from 'react-native';
+import { Surface, List, Text, useTheme, IconButton, Portal, Dialog, Button, Snackbar } from 'react-native-paper';
+import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
@@ -28,6 +30,8 @@ export default function QuickLinksScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [selectedInfo, setSelectedInfo] = useState<QuickLink | null>(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const handleOpenLink = async (url: string) => {
     try {
@@ -40,6 +44,17 @@ export default function QuickLinksScreen() {
     }
   };
 
+  const handleLongPress = async (url: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await Clipboard.setStringAsync(url);
+    
+    // Modern Android (13+) shows its own visual confirmation when copying to clipboard
+    if (Platform.OS !== 'android') {
+      setSnackbarMessage('URL copied to clipboard');
+      setSnackbarVisible(true);
+    }
+  };
+
   const COURIER_LINKS = [
     { id: 'dtdc-tracking', title: 'DTDC', url: 'https://www.dtdc.com/track-your-shipment/', color: '#004791' },
     { id: 'india-post-tracking', title: 'India Post', url: 'https://www.indiapost.gov.in/', color: '#DA251C' },
@@ -49,7 +64,8 @@ export default function QuickLinksScreen() {
   ].map(link => ({
     ...link,
     icon: COURIER_LOGOS[link.id], // GridMenu expects icon as source
-    onPress: () => handleOpenLink(link.url)
+    onPress: () => handleOpenLink(link.url),
+    onLongPress: () => handleLongPress(link.url)
   }));
 
   const UTILITY_LINKS: QuickLink[] = [
@@ -68,7 +84,21 @@ export default function QuickLinksScreen() {
       icon: 'facebook',
       url: 'https://developers.facebook.com/tools/explorer/',
       color: '#1877F2',
-      info: `Required User Permissions:\n\n• manage_fundraisers\n• read_insights\n• publish_video\n• catalog_management\n• instagram_basic\n• instagram_manage_comments\n• instagram_manage_insights\n• instagram_content_publish\n• business_management\n• pages_messaging`
+      info: `Required User Permissions:
+
+• manage_fundraisers
+• read_insights
+• publish_video
+• catalog_management
+• instagram_basic
+• instagram_manage_comments
+• instagram_manage_insights
+• instagram_content_publish
+• business_management
+• pages_messaging
+
+Reference for generating a long-lived access token from a short-lived one:
+https://graph.facebook.com/v25.0/oauth/access_token?grant_type=fb_exchange_token&client_id={app_id}&client_secret={app_secret}&fb_exchange_token={user_access_token}`
     }
   ];
 
@@ -142,6 +172,15 @@ export default function QuickLinksScreen() {
             <Button onPress={() => setSelectedInfo(null)}>Close</Button>
           </Dialog.Actions>
         </Dialog>
+
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={2000}
+          style={styles.snackbar}
+        >
+          {snackbarMessage}
+        </Snackbar>
       </Portal>
     </ScreenWrapper>
   );
@@ -149,7 +188,7 @@ export default function QuickLinksScreen() {
 
 const styles = StyleSheet.create({
   section: {
-    paddingHorizontal: 0, // GridMenu handles its own padding or container handles it
+    paddingHorizontal: 16,
     marginVertical: 16,
   },
   utilityCard: {
@@ -179,6 +218,9 @@ const styles = StyleSheet.create({
   },
   infoText: {
     lineHeight: 24,
+  },
+  snackbar: {
+    marginBottom: 20,
   }
 });
 

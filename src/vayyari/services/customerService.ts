@@ -4,7 +4,8 @@ import type {
   Customer, 
   CustomerAddress, 
   CreateCustomerRequest, 
-  CreateAddressRequest 
+  CreateAddressRequest,
+  Language
 } from '../types/customers';
 
 class CustomerService {
@@ -49,6 +50,14 @@ class CustomerService {
 
   async setDefaultAddress(customerId: string, addressId: string): Promise<void> {
     return productMgmtApiClient.post(API_ROUTES.CUSTOMERS.SET_DEFAULT_ADDRESS(customerId, addressId), {});
+  }
+
+  async validateInstagram(username: string, currentCustomerId?: string): Promise<{ isValid: boolean }> {
+    return productMgmtApiClient.get<{ isValid: boolean }>(API_ROUTES.CUSTOMERS.VALIDATE_INSTAGRAM(username, currentCustomerId));
+  }
+
+  async getLanguages(): Promise<Language[]> {
+    return productMgmtApiClient.get<Language[]>(API_ROUTES.CUSTOMERS.LANGUAGES);
   }
 }
 

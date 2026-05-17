@@ -16,4 +16,7 @@ public interface ICustomerService
     Task<bool> UpdateAddressAsync(Guid addressId, CreateAddressRequest request);
     Task<bool> DeleteAddressAsync(Guid addressId);
     Task<bool> SetDefaultAddressAsync(Guid customerId, Guid addressId);
+
+    Task<bool> ValidateInstagramHandleAsync(string username, Guid? currentCustomerId);
+    Task<IEnumerable<LanguageDto>> GetPreferredLanguagesMasterAsync();
 }

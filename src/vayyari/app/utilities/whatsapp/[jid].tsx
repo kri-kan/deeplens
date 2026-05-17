@@ -13,6 +13,7 @@ import {
   Surface,
   Menu,
   Portal,
+  Avatar,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { waProcessorService, ConversationStats, Message } from '@/services/wa-processor.service';
@@ -23,12 +24,14 @@ import { GroupingConfigModal } from '@/components/utility/whatsapp/GroupingConfi
 
 export default function ConversationDetailScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { jid } = useLocalSearchParams<{ jid: string }>();
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [deepSyncLoading, setDeepSyncLoading] = useState(false);
   const [purging, setPurging] = useState(false);
 
   // Modals
@@ -63,12 +66,27 @@ export default function ConversationDetailScreen() {
 
   const handleToggleDeepSync = async () => {
     if (!stats) return;
-    setSyncing(true);
+    setDeepSyncLoading(true);
+    const nextState = !stats.deepSyncEnabled;
     try {
-      await waProcessorService.toggleDeepSync(stats.jid, !stats.deepSyncEnabled);
-      await fetchStats();
+      await waProcessorService.toggleDeepSync(stats.jid, nextState);
+      setStats({ ...stats, deepSyncEnabled: nextState });
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to toggle deep sync');
+    } finally {
+      setDeepSyncLoading(false);
+    }
+  };
+
+  const handleSyncHistory = async () => {
+    if (!stats) return;
+    setSyncing(true);
+    try {
+      await waProcessorService.syncHistory(stats.jid);
+      Alert.alert('Sync Started', 'Requested message history from WhatsApp. This may take a moment to appear.');
+      setTimeout(fetchStats, 2000);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message ?? 'Failed to trigger sync');
     } finally {
       setSyncing(false);
     }
@@ -101,7 +119,7 @@ export default function ConversationDetailScreen() {
     );
   };
 
-  if (loading && !stats) {
+  if (loading && !refreshing) {
     return (
       <ScreenWrapper title="Conversation Detail">
         <ActivityIndicator style={{ marginTop: 40 }} />
@@ -124,8 +142,30 @@ export default function ConversationDetailScreen() {
         contentContainerStyle={styles.container}
       >
         <Surface style={styles.headerCard} elevation={1}>
-          <Text variant="headlineSmall" style={styles.title}>{stats.name}</Text>
-          <Text variant="bodySmall" style={styles.jid}>{stats.jid}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {stats.profilePicUrl ? (
+              <Image 
+                source={{ uri: stats.profilePicUrl }} 
+                style={[
+                  { width: 80, height: 80, borderRadius: 40, marginRight: 16 },
+                  stats.deepSyncEnabled && { borderWidth: 3, borderColor: '#25D366' }
+                ]} 
+              />
+            ) : (
+              <Avatar.Text 
+                label={stats.name?.substring(0, 2).toUpperCase() || '?'} 
+                size={80} 
+                style={[
+                  { backgroundColor: '#ccc', marginRight: 16 },
+                  stats.deepSyncEnabled && { borderWidth: 3, borderColor: '#25D366' }
+                ]} 
+              />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text variant="headlineSmall" style={styles.title}>{stats.name}</Text>
+              <Text variant="bodySmall" style={styles.jid}>{stats.jid}</Text>
+            </View>
+          </View>
           <View style={styles.badgeRow}>
             <Chip 
               selectedColor={stats.isExcluded ? theme.colors.error : '#25D366'}
@@ -171,22 +211,22 @@ export default function ConversationDetailScreen() {
             <Divider style={styles.divider} />
             <InfoRow label="Last Updated" value={format(new Date(stats.updatedAt), 'PPP')} />
             <Divider style={styles.divider} />
-            <View style={styles.infoRow}>
-              <Text variant="bodyMedium" style={{ opacity: 0.6 }}>Deep Sync</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text variant="bodyMedium" style={{ fontWeight: '500', marginRight: 8 }}>
-                  {stats.deepSyncEnabled ? 'Enabled' : 'Disabled'}
-                </Text>
-                {syncing ? <ActivityIndicator size={12} /> : (
-                  <IconButton 
-                    icon={stats.deepSyncEnabled ? "sync-circle" : "sync-off"} 
-                    size={16} 
-                    onPress={handleToggleDeepSync}
-                    iconColor={stats.deepSyncEnabled ? theme.colors.primary : undefined}
-                  />
-                )}
-              </View>
+            
+            <View style={styles.settingsRow}>
+              <Text variant="bodyMedium">Deep Sync</Text>
+              {deepSyncLoading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <IconButton 
+                  icon={stats.deepSyncEnabled ? "toggle-switch" : "toggle-switch-off"} 
+                  iconColor={stats.deepSyncEnabled ? "#25D366" : undefined}
+                  size={30}
+                  onPress={handleToggleDeepSync}
+                  style={{ margin: 0 }}
+                />
+              )}
             </View>
+            
             <Divider style={styles.divider} />
             <View style={styles.infoRow}>
               <Text variant="bodyMedium" style={{ opacity: 0.6 }}>Message Grouping</Text>
@@ -226,6 +266,20 @@ export default function ConversationDetailScreen() {
           </Button>
         </View>
 
+        <Card style={{ backgroundColor: '#075E54' }}>
+          <Card.Actions>
+            <Button 
+              textColor="#fff" 
+              icon="sync" 
+              onPress={handleSyncHistory} 
+              disabled={syncing}
+              loading={syncing}
+            >
+              Manual Sync History
+            </Button>
+          </Card.Actions>
+        </Card>
+
         <SectionHeader title="Recent Messages" count={messages.length} />
         <Card style={styles.messageCard}>
           {messages.length === 0 ? (
@@ -252,7 +306,7 @@ export default function ConversationDetailScreen() {
 
         <Button 
           mode="text" 
-          onPress={() => Alert.alert('Coming Soon', 'Full message browser is under development.')}
+          onPress={() => router.push(`/utilities/whatsapp/messages/${encodeURIComponent(stats.jid)}`)}
           style={styles.fullMessagesBtn}
         >
           View All Messages
@@ -272,8 +326,6 @@ export default function ConversationDetailScreen() {
           jid={stats.jid}
           chatName={stats.name}
           initialEnabled={stats.enableMessageGrouping}
-          // Note: ConversationStats doesn't include the grouping config details directly, 
-          // but we can pass them if the service provides them in the future.
           onSuccess={fetchStats}
         />
       </ScrollView>
@@ -374,6 +426,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 4,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
   },
   actionRow: {
     flexDirection: 'row',

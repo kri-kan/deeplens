@@ -30,6 +30,16 @@ export const CustomerTile: React.FC<CustomerTileProps> = ({ customer, onPress, t
     return '?';
   };
 
+  const getLanguageIndicator = () => {
+    if (!customer.preferredLanguages || customer.preferredLanguages.length === 0) return null;
+    return customer.preferredLanguages
+      .map(lang => {
+        if (lang === 'en-te') return 'EN-TE';
+        return lang.split('-')[0].toUpperCase();
+      })
+      .join(', ');
+  };
+
   return (
     <TouchableOpacity 
       activeOpacity={0.8} 
@@ -73,6 +83,19 @@ export const CustomerTile: React.FC<CustomerTileProps> = ({ customer, onPress, t
            <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
              {customer.addresses?.length || 0} Addr.
            </Text>
+           {customer.referralCode && (
+             <CompactChip 
+               color="#E8F5E9"
+               textStyle={{ fontSize: 9, color: '#2E7D32', fontWeight: 'bold' }}
+             >
+               {customer.referralCode}
+             </CompactChip>
+           )}
+           {getLanguageIndicator() && (
+             <Text variant="labelSmall" style={styles.languageIndicator}>
+               {getLanguageIndicator()}
+             </Text>
+           )}
             <CompactChip 
               outline 
               color={theme.colors.outline}
@@ -118,6 +141,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  languageIndicator: {
+    opacity: 0.6,
+    fontWeight: 'bold',
+    fontSize: 9,
+    textTransform: 'uppercase',
   },
   badge: {
     backgroundColor: 'rgba(0,0,0,0.05)',

@@ -114,4 +114,23 @@ export const styles = StyleSheet.create({
     overflow: 'hidden',
     maxHeight: '80%',
   },
+  metaModal: {
+    margin: 20,
+    borderRadius: 24,
+    padding: 0,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  modalTitle: {
+    fontWeight: 'bold',
+  },
 });

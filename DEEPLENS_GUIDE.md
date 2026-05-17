@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-05-15 18:40:20
+**Auto-generated on:** 2026-05-17 22:16:23
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -553,7 +553,7 @@ This application connects to WhatsApp Web using the Baileys library, allowing yo
 
 ### Backend
 - **Node.js + TypeScript** - Server runtime
-- **Express** - Web server
+- **Express** - Web server with OOP Controller-Repository pattern (`AdminController`, `ConversationController`, `ManagementController` delegating database and Baileys actions through dedicated services and PostgreSQL repositories)
 - **Socket.IO** - Real-time WebSocket communication
 - **Baileys** - WhatsApp Web API client
 - **MinIO SDK** - Object storage for media

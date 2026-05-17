@@ -81,7 +81,12 @@ export default function WhatsAppSettingsScreen() {
 
   return (
     <ScreenWrapper title="Processing Settings">
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={loading && !!state} onRefresh={fetchState} />
+        }
+      >
         <Card style={styles.card}>
           <Card.Content>
             <View style={styles.row}>

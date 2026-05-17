@@ -8,6 +8,17 @@ ROOT_DIR="$(pwd)"
 
 SERVICES_TO_BUILD=("$@")
 
+# --- Source Environment Variables ---
+ENV_FILE="$ROOT_DIR/setupscripts/application/services/.env"
+if [ -f "$ENV_FILE" ]; then
+    echo -e "\e[34m--- Sourcing environment from $ENV_FILE ---\e[0m"
+    set -a
+    source "$ENV_FILE"
+    set +a
+else
+    echo -e "\e[31mWarning: $ENV_FILE not found. Build may fail.\e[0m"
+fi
+
 should_build() {
     local target=$1
     if [ ${#SERVICES_TO_BUILD[@]} -eq 0 ]; then

@@ -1,145 +1,46 @@
 import { Router } from 'express';
 import { WhatsAppService } from '../services/whatsapp.service';
-import { resetDatabase, getDatabaseStats, getSampleData } from '../services/admin.service';
-import { logger } from '../utils/logger';
+import { AdminController } from '../controllers/admin.controller';
 
 export function createAdminRoutes(waService: WhatsAppService): Router {
     const router = Router();
+    const controller = new AdminController(waService);
 
     /**
      * GET /api/admin/stats
      * Get database statistics
      */
-    router.get('/stats', async (req, res) => {
-        try {
-            const stats = await getDatabaseStats();
-            res.json(stats);
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to get database stats');
-            res.status(500).json({ error: err.message });
-        }
-    });
+    router.get('/stats', (req, res) => controller.getStats(req, res));
 
     /**
      * GET /api/admin/sample-data
      * Get sample data from database
      */
-    router.get('/sample-data', async (req, res) => {
-        try {
-            const data = await getSampleData();
-            res.json(data);
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to get sample data');
-            res.status(500).json({ error: err.message });
-        }
-    });
+    router.get('/sample-data', (req, res) => controller.getSampleData(req, res));
 
     /**
      * POST /api/admin/reset-database
      * Reset database to clean slate
      */
-    router.post('/reset-database', async (req, res) => {
-        try {
-            logger.warn('⚠️  Database reset requested');
-            const result = await resetDatabase();
-
-            if (result.success) {
-                logger.warn({ deletedCounts: result.deletedCounts }, '✅ Database reset successful');
-            }
-
-            res.json(result);
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to reset database');
-            res.status(500).json({
-                success: false,
-                message: err.message,
-                deletedCounts: { chats: 0, messages: 0, syncState: 0 }
-            });
-        }
-    });
+    router.post('/reset-database', (req, res) => controller.resetDatabase(req, res));
 
     /**
      * POST /api/admin/sync
      * Manually trigger full sync (groups, newsletters, contacts, chats)
      */
-    router.post('/sync', async (req, res) => {
-        try {
-            logger.info('🔄 Manual full sync requested');
-
-            if (waService.getStatus() !== 'connected') {
-                return res.status(400).json({
-                    success: false,
-                    message: 'WhatsApp not connected'
-                });
-            }
-
-            await waService.manualSync();
-
-            res.json({
-                success: true,
-                message: 'Manual sync completed successfully'
-            });
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to perform manual sync');
-            res.status(500).json({
-                success: false,
-                message: err.message
-            });
-        }
-    });
+    router.post('/sync', (req, res) => controller.manualSync(req, res));
 
     /**
      * POST /api/admin/force-initial-sync
      * Force initial sync (manually trigger chats.set logic)
      */
-    router.post('/force-initial-sync', async (req, res) => {
-        try {
-            logger.info('🔄 Force initial sync requested');
-
-            const sock = waService.getSocket();
-            if (!sock) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'WhatsApp not connected'
-                });
-            }
-
-            await waService.performManualInitialSync();
-
-            res.json({
-                success: true,
-                message: 'Initial sync triggered successfully'
-            });
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to force initial sync');
-            res.status(500).json({
-                success: false,
-                message: err.message
-            });
-        }
-    });
+    router.post('/force-initial-sync', (req, res) => controller.forceInitialSync(req, res));
 
     /**
      * POST /api/admin/refresh-groups
      * Manually refresh groups cache
      */
-    router.post('/refresh-groups', async (req, res) => {
-        try {
-            logger.info('🔄 Manual group refresh requested');
-            await waService.refreshGroups();
-
-            res.json({
-                success: true,
-                message: 'Groups refreshed successfully'
-            });
-        } catch (err: any) {
-            logger.error({ err }, 'Failed to refresh groups');
-            res.status(500).json({
-                success: false,
-                message: err.message
-            });
-        }
-    });
+    router.post('/refresh-groups', (req, res) => controller.refreshGroups(req, res));
 
     return router;
 }

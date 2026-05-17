@@ -28,7 +28,16 @@ export async function getProcessingState(): Promise<ProcessingState> {
 
     try {
         const res = await client.query('SELECT * FROM wa.processing_state WHERE id = 1');
+        
+        // If no row exists, initialize it with defaults
         if (res.rows.length === 0) {
+            logger.info('Initializing wa.processing_state with default values');
+            await client.query(`
+                INSERT INTO wa.processing_state (id, is_paused, track_chats, track_groups, track_announcements)
+                VALUES (1, FALSE, TRUE, TRUE, TRUE)
+                ON CONFLICT (id) DO NOTHING
+            `);
+            
             return {
                 isPaused: false,
                 pausedAt: null,

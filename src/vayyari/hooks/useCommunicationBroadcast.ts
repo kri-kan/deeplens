@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { communicationService, BroadcastChannel, PurposeMapping, PurposeWithChannels, ChannelType, PurposeCustomer } from '@/services/communicationService';
+import { communicationService, BroadcastChannel, PurposeMapping, PurposeWithChannels, ChannelType, PurposeCustomer, PurposeStep, PurposeCustomerTracking, MessageTemplate, CampaignVariable } from '@/services/communicationService';
 
 export const useCommunicationBroadcast = () => {
   const [channels, setChannels] = useState<BroadcastChannel[]>([]);
@@ -13,12 +13,19 @@ export const useCommunicationBroadcast = () => {
   const [unassignedCustomers, setUnassignedCustomers] = useState<PurposeCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [mappingsLoading, setMappingsLoading] = useState(false);
+  
+  const [purposeSteps, setPurposeSteps] = useState<PurposeStep[]>([]);
+  const [customersTracking, setCustomersTracking] = useState<PurposeCustomerTracking[]>([]);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [campaignVariables, setCampaignVariables] = useState<CampaignVariable[]>([]);
+  const [variablesLoading, setVariablesLoading] = useState(false);
 
   const [showAddChannelModal, setShowAddChannelModal] = useState(false);
   const [showAddPurposeModal, setShowAddPurposeModal] = useState(false);
   
   const [newChannelName, setNewChannelName] = useState('');
   const [newChannelDesc, setNewChannelDesc] = useState('');
+  const [newChannelLink, setNewChannelLink] = useState('');
   const [newChannelType, setNewChannelType] = useState('whatsapp');
   
   const [newPurposeName, setNewPurposeName] = useState('');
@@ -50,6 +57,52 @@ export const useCommunicationBroadcast = () => {
     }
   }, []);
 
+  const loadPurposeSteps = useCallback(async (purpose: string) => {
+    try {
+      const steps = await communicationService.getPurposeSteps(purpose);
+      setPurposeSteps(steps);
+    } catch (error) {
+      console.error('Failed to load purpose steps:', error);
+    }
+  }, []);
+
+  const loadTrackingData = useCallback(async (purpose: string) => {
+    try {
+      setTrackingLoading(true);
+      const tracking = await communicationService.getPurposeTracking(purpose);
+      setCustomersTracking(tracking);
+    } catch (error) {
+      console.error('Failed to load customer tracking data:', error);
+    } finally {
+      setTrackingLoading(false);
+    }
+  }, []);
+
+  const loadCampaignVariables = useCallback(async (purpose: string) => {
+    try {
+      setVariablesLoading(true);
+      const vars = await communicationService.getCampaignVariables(purpose);
+      setCampaignVariables(vars);
+    } catch (error) {
+      console.error('Failed to load campaign variables:', error);
+    } finally {
+      setVariablesLoading(false);
+    }
+  }, []);
+
+  const handleSaveCampaignVariables = async (purpose: string, variables: Omit<CampaignVariable, 'purposeKey'>[]) => {
+    try {
+      setVariablesLoading(true);
+      await communicationService.saveCampaignVariables(purpose, variables);
+      await loadCampaignVariables(purpose);
+    } catch (error) {
+      console.error('Failed to save campaign variables:', error);
+      throw error;
+    } finally {
+      setVariablesLoading(false);
+    }
+  };
+
   const loadPurposeMappings = useCallback(async (purpose: string) => {
     try {
       setMappingsLoading(true);
@@ -63,12 +116,19 @@ export const useCommunicationBroadcast = () => {
       setPurposeCustomers(customers);
       setUnassignedCustomers(unassigned);
       setUnlinkedChannels(unlinked);
+      
+      // Load steps, tracking metrics, and campaign variables
+      await Promise.all([
+        loadPurposeSteps(purpose),
+        loadTrackingData(purpose),
+        loadCampaignVariables(purpose)
+      ]);
     } catch (error) {
       console.error('Failed to load purpose details:', error);
     } finally {
       setMappingsLoading(false);
     }
-  }, []);
+  }, [loadPurposeSteps, loadTrackingData, loadCampaignVariables]);
 
   useEffect(() => {
     loadAllChannels();
@@ -88,6 +148,7 @@ export const useCommunicationBroadcast = () => {
         name: newChannelName,
         description: newChannelDesc,
         channelType: newChannelType,
+        metadata: JSON.stringify({ inviteLink: newChannelLink })
       });
       setChannels(prev => [...prev, channel]);
       
@@ -99,9 +160,26 @@ export const useCommunicationBroadcast = () => {
       
       setNewChannelName('');
       setNewChannelDesc('');
+      setNewChannelLink('');
       setShowAddChannelModal(false);
     } catch (error) {
       console.error('Failed to create channel:', error);
+    }
+  };
+
+  const handleUpdateChannel = async (id: string, name: string, description: string, channelType: string, link: string) => {
+    try {
+      const updated = await communicationService.updateChannel(id, {
+        name,
+        description,
+        channelType,
+        metadata: JSON.stringify({ inviteLink: link })
+      });
+      setChannels(prev => prev.map(c => c.id === id ? updated : c));
+      await loadPurposes(); // Reload detailed list
+    } catch (error) {
+      console.error('Failed to update channel:', error);
+      throw error;
     }
   };
 
@@ -193,6 +271,58 @@ export const useCommunicationBroadcast = () => {
     }
   };
 
+  const handleCreateStep = async (purpose: string, stepNumber: number, description: string, action: string, templates: MessageTemplate[]) => {
+    try {
+      const newStep = await communicationService.createPurposeStep(purpose, {
+        stepNumber,
+        description,
+        action,
+        messageTemplates: templates
+      });
+      await loadPurposeSteps(purpose);
+      await loadTrackingData(purpose);
+    } catch (error) {
+      console.error('Failed to create step:', error);
+      throw error;
+    }
+  };
+
+  const handleUpdateStep = async (purpose: string, stepId: string, description: string, action: string, templates: MessageTemplate[]) => {
+    try {
+      await communicationService.updatePurposeStep(purpose, stepId, {
+        description,
+        action,
+        messageTemplates: templates
+      });
+      await loadPurposeSteps(purpose);
+      await loadTrackingData(purpose);
+    } catch (error) {
+      console.error('Failed to update step:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteStep = async (purpose: string, stepId: string) => {
+    try {
+      await communicationService.deletePurposeStep(purpose, stepId);
+      await loadPurposeSteps(purpose);
+      await loadTrackingData(purpose);
+    } catch (error) {
+      console.error('Failed to delete step:', error);
+      throw error;
+    }
+  };
+
+  const handleUpdateStepStatus = async (purpose: string, customerId: string, stepId: string, status: 'new' | 'completed', sentMessage?: string) => {
+    try {
+      await communicationService.updateStepStatus(purpose, customerId, stepId, status, sentMessage);
+      await loadTrackingData(purpose);
+    } catch (error) {
+      console.error('Failed to update step status:', error);
+      throw error;
+    }
+  };
+
   const refreshAll = useCallback(async () => {
     await loadAllChannels();
     await loadPurposes();
@@ -222,11 +352,14 @@ export const useCommunicationBroadcast = () => {
     setNewChannelName,
     newChannelDesc,
     setNewChannelDesc,
+    newChannelLink,
+    setNewChannelLink,
     newChannelType,
     setNewChannelType,
     newPurposeName,
     setNewPurposeName,
     handleCreateChannel,
+    handleUpdateChannel,
     handleAddPurpose,
     handleDeleteChannel,
     handleRemoveFromPurpose,
@@ -235,6 +368,19 @@ export const useCommunicationBroadcast = () => {
     handleAddCustomers,
     handleRemoveCustomers,
     setMappingsLoading,
+    purposeSteps,
+    customersTracking,
+    trackingLoading,
+    campaignVariables,
+    variablesLoading,
+    loadPurposeSteps,
+    loadTrackingData,
+    loadCampaignVariables,
+    handleCreateStep,
+    handleUpdateStep,
+    handleDeleteStep,
+    handleUpdateStepStatus,
+    handleSaveCampaignVariables,
     refresh: refreshAll,
   };
 };

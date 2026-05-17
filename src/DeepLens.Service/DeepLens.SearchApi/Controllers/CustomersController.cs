@@ -24,7 +24,7 @@ public class CustomersController : ControllerBase
         return Ok(customers);
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetCustomerById(Guid id)
     {
         var customer = await _customerService.GetCustomerByIdAsync(id);
@@ -39,7 +39,7 @@ public class CustomersController : ControllerBase
         return CreatedAtAction(nameof(GetCustomerById), new { id = customer.Id }, customer);
     }
 
-    [HttpPut("{id}")]
+    [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateCustomer(Guid id, [FromBody] CreateCustomerRequest request)
     {
         var success = await _customerService.UpdateCustomerAsync(id, request);
@@ -47,7 +47,7 @@ public class CustomersController : ControllerBase
         return Ok();
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteCustomer(Guid id)
     {
         var success = await _customerService.DeleteCustomerAsync(id);
@@ -55,14 +55,14 @@ public class CustomersController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("{id}/addresses")]
+    [HttpPost("{id:guid}/addresses")]
     public async Task<IActionResult> AddAddress(Guid id, [FromBody] CreateAddressRequest request)
     {
         var addressId = await _customerService.AddAddressAsync(id, request);
         return Ok(new { id = addressId });
     }
 
-    [HttpPut("addresses/{addressId}")]
+    [HttpPut("addresses/{addressId:guid}")]
     public async Task<IActionResult> UpdateAddress(Guid addressId, [FromBody] CreateAddressRequest request)
     {
         var success = await _customerService.UpdateAddressAsync(addressId, request);
@@ -70,7 +70,7 @@ public class CustomersController : ControllerBase
         return Ok();
     }
 
-    [HttpDelete("addresses/{addressId}")]
+    [HttpDelete("addresses/{addressId:guid}")]
     public async Task<IActionResult> DeleteAddress(Guid addressId)
     {
         var success = await _customerService.DeleteAddressAsync(addressId);
@@ -78,11 +78,25 @@ public class CustomersController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("{id}/addresses/{addressId}/default")]
+    [HttpPost("{id:guid}/addresses/{addressId:guid}/default")]
     public async Task<IActionResult> SetDefaultAddress(Guid id, Guid addressId)
     {
         var success = await _customerService.SetDefaultAddressAsync(id, addressId);
         if (!success) return NotFound();
         return Ok();
+    }
+
+    [HttpGet("validate-instagram")]
+    public async Task<IActionResult> ValidateInstagram([FromQuery] string username, [FromQuery] Guid? currentCustomerId = null)
+    {
+        var isValid = await _customerService.ValidateInstagramHandleAsync(username, currentCustomerId);
+        return Ok(new { isValid });
+    }
+
+    [HttpGet("languages")]
+    public async Task<IActionResult> GetPreferredLanguages()
+    {
+        var languages = await _customerService.GetPreferredLanguagesMasterAsync();
+        return Ok(languages);
     }
 }

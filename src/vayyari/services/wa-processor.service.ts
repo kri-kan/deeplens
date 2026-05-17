@@ -8,6 +8,7 @@
 import { identityService } from './identity.service';
 
 const BASE_URL = process.env.EXPO_PUBLIC_WHATSAPP_PROCESSOR_URL ?? 'http://localhost:3001';
+const PAGE_SIZE = 50;
 
 async function get<T>(path: string): Promise<T> {
   const token = await identityService.getAccessTokenWithRefresh();
@@ -50,12 +51,28 @@ async function del<T = void>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/**
+ * Defensive mapper to handle both camelCase and snake_case from backend
+ */
+function mapProcessingState(data: unknown): ProcessingState {
+  const source = (data as any)?.state || (data as any) || {};
+
+  return {
+    isPaused: !!(source.isPaused ?? source.is_paused ?? false),
+    pausedAt: source.pausedAt ?? source.paused_at ?? null,
+    resumedAt: source.resumedAt ?? source.resumed_at ?? null,
+    trackChats: !!(source.trackChats ?? source.track_chats ?? true),
+    trackGroups: !!(source.trackGroups ?? source.track_groups ?? true),
+    trackAnnouncements: !!(source.trackAnnouncements ?? source.track_announcements ?? true),
+  };
+}
+
 // ---------- Types ----------
 
 export type WaConnectionStatus = 'disconnected' | 'scanning' | 'connected';
 
 export interface Group {
-  id: string;
+  jid: string;
   name: string; // Unified with Chat
   creation?: number;
   isExcluded: boolean;
@@ -63,7 +80,7 @@ export interface Group {
 }
 
 export interface Chat {
-  id: string;
+  jid: string;
   name: string;
   lastMessageTime?: number;
   isExcluded: boolean;
@@ -100,6 +117,28 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
+export interface Conversation {
+  jid: string;
+  name: string;
+  isGroup: boolean;
+  isAnnouncement: boolean;
+  unreadCount: number;
+  lastMessageText: string | null;
+  lastMessageTimestamp: number | null;
+  lastMessageFromMe: boolean;
+  isPinned: boolean;
+  isArchived: boolean;
+  isMuted: boolean;
+  canonicalJid: string;
+  pinOrder: number;
+  communityName?: string;
+  profilePicId: string | null;
+  profilePicUrl: string | null;
+  metadata: any;
+  deepSyncEnabled: boolean;
+  isExcluded: boolean;
+}
+
 // ---------- API ----------
 
 export const waProcessorService = {
@@ -107,7 +146,20 @@ export const waProcessorService = {
    * Get current live connection status and QR code (if scanning).
    */
   getStatus: async (): Promise<WaProcessorStatus> => {
-    return get<WaProcessorStatus>('/status');
+    const data = await get<any>('/status');
+    return {
+      status: data.status,
+      qr: data.qr,
+      sessionId: data.sessionId,
+      tenant: data.tenant,
+      hasSession: data.hasSession,
+      processingState: mapProcessingState(data.processingState),
+      systemHealth: data.systemHealth || {
+        minioAvailable: false,
+        databaseAvailable: false,
+        whatsappConnected: false,
+      }
+    };
   },
 
   /**
@@ -127,25 +179,30 @@ export const waProcessorService = {
 
   // ---------- Administration ----------
 
-  fetchGroups: async (limit = 100, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Group>> => {
-    let path = `/groups?limit=${limit}&offset=${offset}`;
+  fetchGroups: async (limit = PAGE_SIZE, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Group>> => {
+    let path = `/conversations/groups?limit=${limit}&offset=${offset}`;
     if (search) path += `&search=${encodeURIComponent(search)}`;
     if (excluded !== undefined) path += `&excluded=${excluded}`;
     return get<PaginatedResponse<Group>>(path);
   },
 
-  fetchChats: async (limit = 100, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Chat>> => {
-    let path = `/chats?limit=${limit}&offset=${offset}`;
+  fetchChats: async (limit = PAGE_SIZE, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Chat>> => {
+    let path = `/conversations/chats?limit=${limit}&offset=${offset}`;
     if (search) path += `&search=${encodeURIComponent(search)}`;
     if (excluded !== undefined) path += `&excluded=${excluded}`;
     return get<PaginatedResponse<Chat>>(path);
   },
 
-  fetchAnnouncements: async (limit = 100, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Chat>> => {
-    let path = `/announcements?limit=${limit}&offset=${offset}`;
+  fetchAnnouncements: async (limit = PAGE_SIZE, offset = 0, search?: string, excluded?: boolean): Promise<PaginatedResponse<Chat>> => {
+    let path = `/conversations/announcements?limit=${limit}&offset=${offset}`;
     if (search) path += `&search=${encodeURIComponent(search)}`;
     if (excluded !== undefined) path += `&excluded=${excluded}`;
     return get<PaginatedResponse<Chat>>(path);
+  },
+
+  fetchConversations: async (): Promise<Conversation[]> => {
+    const data = await get<Conversation[]>('/conversations');
+    return data || [];
   },
 
   excludeChat: async (jid: string): Promise<void> => {
@@ -163,17 +220,18 @@ export const waProcessorService = {
   // ---------- Processing Control ----------
 
   pauseProcessing: async (): Promise<ProcessingState> => {
-    const data = await post<{ state: ProcessingState }>('/processing/pause');
-    return data.state;
+    const data = await post<any>('/processing/toggle', { pause: true });
+    return mapProcessingState(data);
   },
 
   resumeProcessing: async (): Promise<ProcessingState> => {
-    const data = await post<{ state: ProcessingState }>('/processing/resume');
-    return data.state;
+    const data = await post<any>('/processing/toggle', { pause: false });
+    return mapProcessingState(data);
   },
 
   fetchProcessingState: async (): Promise<ProcessingState> => {
-    return get<ProcessingState>('/processing/state');
+    const data = await get<any>('/status');
+    return mapProcessingState(data.processingState || data);
   },
 
   updateSyncSettings: async (settings: {
@@ -181,12 +239,24 @@ export const waProcessorService = {
     trackGroups?: boolean;
     trackAnnouncements?: boolean;
   }): Promise<ProcessingState> => {
-    const data = await post<{ state: ProcessingState }>('/processing/sync-settings', settings);
-    return data.state;
+    // Map to snake_case for the backend
+    const payload = {
+      sync_chats: settings.trackChats,
+      sync_groups: settings.trackGroups,
+      sync_announcements: settings.trackAnnouncements
+    };
+    const data = await post<any>('/sync/settings', payload);
+    // The backend updateSyncSettings returns { success: true, settings }
+    // We can fetch the full status after update or just map the settings
+    return mapProcessingState(data.settings || data);
   },
 
   toggleDeepSync: async (jid: string, enabled: boolean): Promise<void> => {
-    await post('/sync/deep', { jid, enabled });
+    await post(`/conversations/${encodeURIComponent(jid)}/deep-sync`, { enabled });
+  },
+
+  syncHistory: async (jid: string): Promise<void> => {
+    await post(`/conversations/${encodeURIComponent(jid)}/sync-history`);
   },
 
   purgeMessages: async (jid: string): Promise<void> => {
@@ -200,11 +270,50 @@ export const waProcessorService = {
   // ---------- Conversation Details & Stats ----------
 
   fetchConversationStats: async (jid: string): Promise<ConversationStats> => {
-    return get<ConversationStats>(`/conversations/${encodeURIComponent(jid)}/stats`);
+    const data = await get<any>(`/conversations/${encodeURIComponent(jid)}/stats`);
+    // Defensive mapping for stats
+    return {
+      jid: data.jid,
+      name: data.name,
+      isGroup: data.isGroup ?? data.is_group ?? false,
+      isAnnouncement: data.isAnnouncement ?? data.is_announcement ?? false,
+      isExcluded: data.isExcluded ?? data.is_excluded ?? false,
+      deepSyncEnabled: data.deepSyncEnabled ?? data.deep_sync_enabled ?? false,
+      enableMessageGrouping: data.enableMessageGrouping ?? data.enable_message_grouping ?? false,
+      createdAt: data.createdAt ?? data.created_at,
+      updatedAt: data.updatedAt ?? data.updated_at,
+      lastMessageTimestamp: data.lastMessageTimestamp ?? data.last_message_timestamp ?? null,
+      profilePicId: data.profilePicId ?? data.profile_pic_id ?? null,
+      profilePicUrl: data.profilePicUrl ?? data.profile_pic_url ?? null,
+      messages: {
+        total: data.messages?.total ?? 0,
+        sent: data.messages?.sent ?? 0,
+        received: data.messages?.received ?? 0,
+        oldestTimestamp: data.messages?.oldestTimestamp ?? data.messages?.oldest_timestamp ?? null,
+        newestTimestamp: data.messages?.newestTimestamp ?? data.messages?.newest_timestamp ?? null,
+      },
+      media: data.media || { total: 0, photos: 0, videos: 0, audio: 0, documents: 0, stickers: 0 }
+    };
   },
 
   fetchMessages: async (jid: string, limit = 50, offset = 0): Promise<{ messages: Message[]; total: number }> => {
-    return get<{ messages: Message[]; total: number }>(`/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`);
+    const res = await get<{ messages: any[]; total: number }>(`/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`);
+    return {
+      total: res.total ?? 0,
+      messages: (res.messages || []).map((m) => ({
+        messageId: m.messageId ?? m.message_id,
+        chatJid: m.chatJid ?? m.chat_jid,
+        senderJid: m.senderJid ?? m.sender_jid,
+        messageText: m.messageText ?? m.message_text ?? '',
+        messageType: m.messageType ?? m.message_type ?? 'chat',
+        mediaType: m.mediaType ?? m.media_type ?? null,
+        timestamp: m.timestamp,
+        isFromMe: m.isFromMe ?? m.is_from_me ?? false,
+        mediaUrl: m.mediaUrl ?? m.media_url ?? null,
+        metadata: m.metadata,
+        groupId: m.groupId ?? m.group_id
+      }))
+    };
   },
 
   toggleMessageGrouping: async (jid: string, enabled: boolean, config?: any): Promise<void> => {
@@ -259,6 +368,8 @@ export interface ConversationStats {
   createdAt: string;
   updatedAt: string;
   lastMessageTimestamp: number | null;
+  profilePicId: string | null;
+  profilePicUrl: string | null;
   messages: {
     total: number;
     sent: number;

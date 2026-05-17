@@ -221,3 +221,57 @@ public class ScraperJobDto
     [JsonPropertyName("origin")]
     public string? Origin { get; set; }
 }
+
+public class MetaConfigurationDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("appId")]
+    public string AppId { get; set; } = string.Empty;
+
+    [JsonPropertyName("appSecret")]
+    public string AppSecret { get; set; } = string.Empty;
+
+    [JsonPropertyName("igBizId")]
+    public string IgBizId { get; set; } = string.Empty;
+
+    [JsonPropertyName("longAccessToken")]
+    public string LongAccessToken { get; set; } = string.Empty;
+
+    [JsonPropertyName("isDefault")]
+    public bool IsDefault { get; set; }
+
+    [JsonPropertyName("lastRefreshedAt")]
+    public DateTime? LastRefreshedAt { get; set; }
+
+    [JsonPropertyName("callCount")]
+    public int CallCount { get; set; }
+
+    [JsonPropertyName("totalTime")]
+    public int TotalTime { get; set; }
+
+    [JsonPropertyName("totalCpu")]
+    public int TotalCpu { get; set; }
+}
+
+public class MetaTokenExchangeRequest
+{
+    [JsonPropertyName("shortLivedToken")]
+    public string ShortLivedToken { get; set; } = string.Empty;
+
+    [JsonPropertyName("appId")]
+    public string? AppId { get; set; }
+
+    [JsonPropertyName("appSecret")]
+    public string? AppSecret { get; set; }
+}
+
+public class InstagramCommentsSyncRequest
+{
+    [JsonPropertyName("accessToken")]
+    public string AccessToken { get; set; } = string.Empty;
+}

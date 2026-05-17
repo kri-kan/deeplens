@@ -41,16 +41,59 @@ export default function CommunicationManagementScreen() {
     setNewChannelName,
     newChannelDesc,
     setNewChannelDesc,
+    newChannelLink,
+    setNewChannelLink,
     newChannelType,
     setNewChannelType,
     newPurposeName,
     setNewPurposeName,
     handleCreateChannel,
+    handleUpdateChannel,
     handleAddPurpose,
     handleDeleteChannel,
     handleRemoveFromPurpose,
     refresh
   } = useCommunicationBroadcast();
+
+  const [editingChannel, setEditingChannel] = React.useState<any | null>(null);
+
+  const openAddChannel = () => {
+    setEditingChannel(null);
+    setNewChannelName('');
+    setNewChannelDesc('');
+    setNewChannelLink('');
+    setNewChannelType('whatsapp');
+    setShowAddChannelModal(true);
+  };
+
+  const openEditChannel = (channel: any) => {
+    setEditingChannel(channel);
+    setNewChannelName(channel.name);
+    setNewChannelDesc(channel.description || '');
+    let link = '';
+    try {
+      if (channel.metadata) {
+        const metaObj = JSON.parse(channel.metadata);
+        link = metaObj.inviteLink || '';
+      }
+    } catch (e) {
+      console.error('Failed to parse metadata:', e);
+    }
+    setNewChannelLink(link);
+    setNewChannelType(channel.channelType);
+    setShowAddChannelModal(true);
+  };
+
+  const handleSaveChannel = async () => {
+    if (!newChannelName) return;
+    if (editingChannel) {
+      await handleUpdateChannel(editingChannel.id, newChannelName, newChannelDesc, newChannelType, newChannelLink);
+      setEditingChannel(null);
+      setShowAddChannelModal(false);
+    } else {
+      await handleCreateChannel();
+    }
+  };
 
   return (
     <ScreenWrapper 
@@ -71,27 +114,29 @@ export default function CommunicationManagementScreen() {
           <ActivityIndicator style={{ marginTop: 40 }} />
         ) : (
           <ScrollView style={styles.scrollContent}>
-            {/* All Channels Section (Optional / Collapsed or just a tile) */}
-            <Surface style={styles.purposeTile} elevation={2}>
-              <View style={styles.purposeTileHeader}>
-                <Text variant="titleMedium" style={styles.purposeTitle}>All Broadcast Channels</Text>
-                <IconButton icon="plus" size={20} onPress={() => setShowAddChannelModal(true)} />
-              </View>
-              <View style={styles.channelsList}>
-                {channels.map(channel => (
-                  <View key={channel.id} style={styles.innerChannelRow}>
-                    <View style={styles.channelInfoSmall}>
-                      <IconButton icon="whatsapp" iconColor="#25D366" size={18} style={{ margin: 0 }} />
-                      <Text variant="bodyMedium">{channel.name}</Text>
-                    </View>
-                    <IconButton icon="delete-outline" size={18} onPress={() => handleDeleteChannel(channel.id)} />
-                  </View>
-                ))}
-                {channels.length === 0 && (
-                  <Text variant="bodySmall" style={styles.emptyText}>No channels registered</Text>
-                )}
-              </View>
-            </Surface>
+             <Surface style={styles.purposeTile} elevation={2}>
+               <View style={styles.purposeTileHeader}>
+                 <Text variant="titleMedium" style={styles.purposeTitle}>All Broadcast Channels</Text>
+                 <IconButton icon="plus" size={20} onPress={openAddChannel} />
+               </View>
+               <View style={styles.channelsList}>
+                 {channels.map(channel => (
+                   <View key={channel.id} style={styles.innerChannelRow}>
+                     <View style={styles.channelInfoSmall}>
+                       <IconButton icon="whatsapp" iconColor="#25D366" size={18} style={{ margin: 0 }} />
+                       <Text variant="bodyMedium">{channel.name}</Text>
+                     </View>
+                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                       <IconButton icon="pencil-outline" size={18} onPress={() => openEditChannel(channel)} />
+                       <IconButton icon="delete-outline" size={18} onPress={() => handleDeleteChannel(channel.id)} />
+                     </View>
+                   </View>
+                 ))}
+                 {channels.length === 0 && (
+                   <Text variant="bodySmall" style={styles.emptyText}>No channels registered</Text>
+                 )}
+               </View>
+             </Surface>
 
             {/* Purpose Tiles */}
             {purposesDetailed.map(purpose => (
@@ -173,7 +218,54 @@ export default function CommunicationManagementScreen() {
       </View>
 
       <Portal>
-        {/* New Channel Modal removed from here as per request, now in detail screen */}
+        {/* Add/Edit Channel Modal */}
+        <Modal 
+          visible={showAddChannelModal} 
+          onDismiss={() => setShowAddChannelModal(false)}
+          contentContainerStyle={styles.modal}
+        >
+          <Text variant="headlineSmall">{editingChannel ? 'Edit Channel' : 'New Broadcast Channel'}</Text>
+          <TextInput 
+            label="Channel Name"
+            value={newChannelName}
+            onChangeText={setNewChannelName}
+            style={styles.input}
+          />
+          <TextInput 
+            label="Description"
+            value={newChannelDesc}
+            onChangeText={setNewChannelDesc}
+            style={styles.input}
+          />
+          <TextInput 
+            label="Channel Link (e.g. Invite URL)"
+            value={newChannelLink}
+            onChangeText={setNewChannelLink}
+            style={styles.input}
+          />
+          
+          <Text variant="titleSmall" style={{ marginTop: 16, marginBottom: 8 }}>Channel Type</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+            {channelTypes.map(type => (
+              <Chip
+                key={type.typeKey}
+                selected={newChannelType === type.typeKey}
+                onPress={() => setNewChannelType(type.typeKey)}
+                style={{ marginRight: 8, paddingHorizontal: 4, paddingVertical: 2 }}
+                showSelectedOverlay
+              >
+                {type.name} ({type.memberLimit})
+              </Chip>
+            ))}
+          </ScrollView>
+          <Text variant="bodySmall" style={{ opacity: 0.6 }}>
+            {channelTypes.find(t => t.typeKey === newChannelType)?.description}
+          </Text>
+
+          <Button mode="contained" onPress={handleSaveChannel} style={styles.modalButton}>
+            {editingChannel ? 'Save Changes' : 'Create Channel'}
+          </Button>
+        </Modal>
         
         {/* New Purpose Modal */}
         <Modal 

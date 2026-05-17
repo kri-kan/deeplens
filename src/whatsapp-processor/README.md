@@ -14,7 +14,7 @@ This application connects to WhatsApp Web using the Baileys library, allowing yo
 
 ### Backend
 - **Node.js + TypeScript** - Server runtime
-- **Express** - Web server
+- **Express** - Web server with OOP Controller-Repository pattern (`AdminController`, `ConversationController`, `ManagementController` delegating database and Baileys actions through dedicated services and PostgreSQL repositories)
 - **Socket.IO** - Real-time WebSocket communication
 - **Baileys** - WhatsApp Web API client
 - **MinIO SDK** - Object storage for media

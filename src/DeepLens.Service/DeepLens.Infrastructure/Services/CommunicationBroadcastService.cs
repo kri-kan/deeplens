@@ -3,6 +3,7 @@ using DeepLens.Application.Abstractions.Data;
 using DeepLens.Contracts.Marketing;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace DeepLens.Infrastructure.Services;
@@ -49,6 +50,23 @@ public class CommunicationBroadcastService : ICommunicationBroadcastService
             request.Description, 
             request.ChannelType, 
             Metadata = request.Metadata ?? "{}" 
+        });
+    }
+
+    public async Task<BroadcastChannelDto?> UpdateChannelAsync(Guid id, UpdateBroadcastChannelRequest request)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            UPDATE comm_broadcast_channels 
+            SET name = @Name, description = @Description, channel_type = @ChannelType, metadata = @Metadata::jsonb
+            WHERE id = @Id
+            RETURNING id, name, description, channel_type as ChannelType, metadata, created_at as CreatedAt;";
+        return await connection.QueryFirstOrDefaultAsync<BroadcastChannelDto>(sql, new {
+            Id = id,
+            request.Name,
+            request.Description,
+            request.ChannelType,
+            Metadata = request.Metadata ?? "{}"
         });
     }
 
@@ -311,5 +329,341 @@ public class CommunicationBroadcastService : ICommunicationBroadcastService
         }
 
         return totalDistributed;
+    }
+
+    // Private mapping row classes for campaign steps to handle dynamic JSONB deserialization cleanly
+    private class PurposeStepRow
+    {
+        public Guid Id { get; set; }
+        public string PurposeKey { get; set; } = string.Empty;
+        public int StepNumber { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string MessageTemplates { get; set; } = "[]";
+    }
+
+    private class CustomerStepProgressRow
+    {
+        public Guid StepId { get; set; }
+        public int StepNumber { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string MessageTemplates { get; set; } = "[]";
+        public string Status { get; set; } = "new";
+        public DateTime? CompletedAt { get; set; }
+    }
+
+    // Purpose Campaign Steps
+    public async Task<IEnumerable<PurposeStepDto>> GetPurposeStepsAsync(string purposeKey)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            SELECT 
+                id, 
+                purpose_key as PurposeKey, 
+                step_number as StepNumber, 
+                description, 
+                action, 
+                message_templates as MessageTemplates
+            FROM comm_purpose_steps
+            WHERE purpose_key = @PurposeKey
+            ORDER BY step_number ASC";
+        
+        var rows = await connection.QueryAsync<PurposeStepRow>(sql, new { PurposeKey = purposeKey });
+        var dtos = new List<PurposeStepDto>();
+        foreach (var r in rows)
+        {
+            var templates = System.Text.Json.JsonSerializer.Deserialize<List<MessageTemplate>>(r.MessageTemplates) 
+                            ?? new List<MessageTemplate>();
+            dtos.Add(new PurposeStepDto(r.Id, r.PurposeKey, r.StepNumber, r.Description, r.Action, templates));
+        }
+        return dtos;
+    }
+
+    public async Task<PurposeStepDto> CreatePurposeStepAsync(string purposeKey, CreatePurposeStepRequest request)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            INSERT INTO comm_purpose_steps (purpose_key, step_number, description, action, message_templates)
+            VALUES (
+                @PurposeKey, 
+                COALESCE((SELECT MAX(step_number) FROM comm_purpose_steps WHERE purpose_key = @PurposeKey), 0) + 1, 
+                @Description, 
+                @Action, 
+                @MessageTemplates::jsonb
+            )
+            RETURNING id, purpose_key as PurposeKey, step_number as StepNumber, description, action, message_templates as MessageTemplates;";
+        
+        var templatesJson = System.Text.Json.JsonSerializer.Serialize(request.MessageTemplates ?? Enumerable.Empty<MessageTemplate>());
+
+        var r = await connection.QuerySingleAsync<PurposeStepRow>(sql, new {
+            PurposeKey = purposeKey,
+            request.StepNumber,
+            request.Description,
+            request.Action,
+            MessageTemplates = templatesJson
+        });
+
+        var templates = System.Text.Json.JsonSerializer.Deserialize<List<MessageTemplate>>(r.MessageTemplates) 
+                        ?? new List<MessageTemplate>();
+        return new PurposeStepDto(r.Id, r.PurposeKey, r.StepNumber, r.Description, r.Action, templates);
+    }
+
+    public async Task<PurposeStepDto> UpdatePurposeStepAsync(string purposeKey, Guid stepId, UpdatePurposeStepRequest request)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            UPDATE comm_purpose_steps 
+            SET description = @Description,
+                action = @Action,
+                message_templates = @MessageTemplates::jsonb,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = @StepId AND purpose_key = @PurposeKey
+            RETURNING id, purpose_key as PurposeKey, step_number as StepNumber, description, action, message_templates as MessageTemplates;";
+        
+        var templatesJson = System.Text.Json.JsonSerializer.Serialize(request.MessageTemplates ?? Enumerable.Empty<MessageTemplate>());
+
+        var r = await connection.QuerySingleOrDefaultAsync<PurposeStepRow>(sql, new {
+            PurposeKey = purposeKey,
+            StepId = stepId,
+            request.Description,
+            request.Action,
+            MessageTemplates = templatesJson
+        });
+
+        if (r == null) throw new Exception("Step not found or could not be updated.");
+
+        var templates = System.Text.Json.JsonSerializer.Deserialize<List<MessageTemplate>>(r.MessageTemplates) 
+                        ?? new List<MessageTemplate>();
+        return new PurposeStepDto(r.Id, r.PurposeKey, r.StepNumber, r.Description, r.Action, templates);
+    }
+
+    public async Task<bool> DeletePurposeStepAsync(string purposeKey, Guid stepId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = "DELETE FROM comm_purpose_steps WHERE purpose_key = @PurposeKey AND id = @StepId";
+        var rows = await connection.ExecuteAsync(sql, new { PurposeKey = purposeKey, StepId = stepId });
+        return rows > 0;
+    }
+
+    // Customer Steps Progress
+    public async Task<IEnumerable<CustomerStepProgressDto>> GetCustomerStepProgressAsync(string purposeKey, Guid customerId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            SELECT 
+                s.id as StepId,
+                s.step_number as StepNumber,
+                s.description,
+                s.action,
+                s.message_templates as MessageTemplates,
+                COALESCE(cs.status, 'new') as Status,
+                cs.completed_at as CompletedAt
+            FROM comm_purpose_steps s
+            LEFT JOIN comm_purpose_customer_steps cs ON s.id = cs.step_id AND cs.customer_id = @CustomerId
+            WHERE s.purpose_key = @PurposeKey
+            ORDER BY s.step_number ASC";
+        
+        var rows = await connection.QueryAsync<CustomerStepProgressRow>(sql, new { PurposeKey = purposeKey, CustomerId = customerId });
+        var dtos = new List<CustomerStepProgressDto>();
+        foreach (var r in rows)
+        {
+            var templates = System.Text.Json.JsonSerializer.Deserialize<List<MessageTemplate>>(r.MessageTemplates) 
+                            ?? new List<MessageTemplate>();
+            dtos.Add(new CustomerStepProgressDto(r.StepId, r.StepNumber, r.Description, r.Action, templates, r.Status, r.CompletedAt));
+        }
+        return dtos;
+    }
+
+    public async Task<bool> UpdateCustomerStepStatusAsync(string purposeKey, Guid customerId, Guid stepId, string status, string? sentMessage)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        
+        const string getStepSql = "SELECT step_number FROM comm_purpose_steps WHERE id = @StepId AND purpose_key = @PurposeKey";
+        var stepNumber = await connection.QueryFirstOrDefaultAsync<int?>(getStepSql, new { StepId = stepId, PurposeKey = purposeKey });
+        if (stepNumber == null) return false;
+
+        if (status == "completed")
+        {
+            const string checkPriorSql = @"
+                SELECT COUNT(*) 
+                FROM comm_purpose_steps s
+                LEFT JOIN comm_purpose_customer_steps cs ON s.id = cs.step_id AND cs.customer_id = @CustomerId
+                WHERE s.purpose_key = @PurposeKey 
+                  AND s.step_number < @StepNumber 
+                  AND (cs.status IS NULL OR cs.status != 'completed')";
+            
+            var incompletePriorCount = await connection.ExecuteScalarAsync<int>(checkPriorSql, new { 
+                PurposeKey = purposeKey, 
+                CustomerId = customerId, 
+                StepNumber = stepNumber.Value 
+            });
+            
+            if (incompletePriorCount > 0)
+            {
+                throw new InvalidOperationException("Cannot complete step because previous steps are not completed.");
+            }
+        }
+        else if (status == "new")
+        {
+            const string checkSubsequentSql = @"
+                SELECT COUNT(*) 
+                FROM comm_purpose_steps s
+                JOIN comm_purpose_customer_steps cs ON s.id = cs.step_id AND cs.customer_id = @CustomerId
+                WHERE s.purpose_key = @PurposeKey 
+                  AND s.step_number > @StepNumber 
+                  AND cs.status = 'completed'";
+            
+            var completedSubsequentCount = await connection.ExecuteScalarAsync<int>(checkSubsequentSql, new { 
+                PurposeKey = purposeKey, 
+                CustomerId = customerId, 
+                StepNumber = stepNumber.Value 
+            });
+            
+            if (completedSubsequentCount > 0)
+            {
+                throw new InvalidOperationException("Cannot reset step because subsequent steps are completed.");
+            }
+
+            const string deleteSql = "DELETE FROM comm_purpose_customer_steps WHERE customer_id = @CustomerId AND step_id = @StepId";
+            var deleteRows = await connection.ExecuteAsync(deleteSql, new { CustomerId = customerId, StepId = stepId });
+            return deleteRows >= 0;
+        }
+
+        const string upsertSql = @"
+            INSERT INTO comm_purpose_customer_steps (purpose_key, customer_id, step_id, status, completed_at, sent_message)
+            VALUES (@PurposeKey, @CustomerId, @StepId, @Status, @CompletedAt, @SentMessage)
+            ON CONFLICT (customer_id, step_id) 
+            DO UPDATE SET 
+                status = EXCLUDED.status, 
+                completed_at = EXCLUDED.completed_at, 
+                sent_message = EXCLUDED.sent_message,
+                updated_at = CURRENT_TIMESTAMP;";
+        
+        var completedAt = status == "completed" ? (DateTime?)DateTime.UtcNow : null;
+        var rows = await connection.ExecuteAsync(upsertSql, new {
+            PurposeKey = purposeKey,
+            CustomerId = customerId,
+            StepId = stepId,
+            Status = status,
+            CompletedAt = completedAt,
+            SentMessage = sentMessage
+        });
+        return rows > 0;
+    }
+
+    public async Task<IEnumerable<PurposeCustomerTrackingDto>> GetPurposeCustomersTrackingAsync(string purposeKey)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            SELECT 
+                s.customer_id as CustomerId,
+                TRIM(COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, '')) as CustomerName,
+                COALESCE(c.phone_number, '') as PhoneNumber,
+                (SELECT COUNT(*)::INTEGER FROM comm_purpose_steps WHERE purpose_key = s.purpose_key) as TotalSteps,
+                (SELECT COUNT(*)::INTEGER FROM comm_purpose_customer_steps cs 
+                 JOIN comm_purpose_steps ps ON cs.step_id = ps.id 
+                 WHERE cs.customer_id = s.customer_id AND ps.purpose_key = s.purpose_key AND cs.status = 'completed') as CompletedSteps,
+                (SELECT MAX(cs.completed_at) FROM comm_purpose_customer_steps cs 
+                 JOIN comm_purpose_steps ps ON cs.step_id = ps.id 
+                 WHERE cs.customer_id = s.customer_id AND ps.purpose_key = s.purpose_key AND cs.status = 'completed') as LastStepCompletedAt,
+                cs.channel_id as AssignedChannelId,
+                bc.name as AssignedChannelName,
+                COALESCE((SELECT string_agg(language_code, ',') FROM customer_languages WHERE customer_id = s.customer_id), '') as PreferredLanguagesRaw,
+                COALESCE(c.instagram_id, '') as InstagramId,
+                COALESCE(c.referral_code, '') as ReferralCode,
+                COALESCE(c.first_name, '') as FirstName,
+                COALESCE(c.last_name, '') as LastName,
+                COALESCE(c.email, '') as Email
+            FROM comm_purpose_subscriptions s
+            JOIN customers c ON s.customer_id = c.id
+            LEFT JOIN comm_channel_subscriptions cs ON s.customer_id = cs.customer_id 
+                AND cs.channel_id IN (SELECT channel_id FROM comm_broadcast_purposes WHERE purpose_key = @PurposeKey)
+            LEFT JOIN comm_broadcast_channels bc ON cs.channel_id = bc.id
+            WHERE s.purpose_key = @PurposeKey
+            ORDER BY c.first_name ASC";
+        
+        var rawList = await connection.QueryAsync<dynamic>(sql, new { PurposeKey = purposeKey });
+        
+        return rawList.Select(item => {
+            var langsStr = (string)item.preferredlanguagesraw;
+            var preferredLanguages = string.IsNullOrEmpty(langsStr) 
+                ? new List<string>() 
+                : langsStr.Split(',').Select(x => x.Trim()).ToList();
+
+            return new PurposeCustomerTrackingDto(
+                (Guid)item.customerid,
+                (string)item.customername,
+                (string)item.phonenumber,
+                (int)item.totalsteps,
+                (int)item.completedsteps,
+                (int)item.totalsteps > 0 && (int)item.completedsteps == (int)item.totalsteps,
+                item.assignedchannelid != null ? (Guid)item.assignedchannelid : null,
+                (string)item.assignedchannelname,
+                preferredLanguages,
+                (string)item.instagramid,
+                (string)item.referralcode,
+                (string)item.firstname,
+                (string)item.lastname,
+                (string)item.email,
+                item.laststepcompletedat != null ? (DateTime?)item.laststepcompletedat : null
+            );
+        });
+    }
+
+    public async Task<IEnumerable<CampaignVariableDto>> GetCampaignVariablesAsync(string purposeKey)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        const string sql = @"
+            SELECT 
+                purpose_key as PurposeKey,
+                variable_key as VariableKey,
+                variable_value as VariableValue
+            FROM comm_campaign_variables
+            WHERE purpose_key = @PurposeKey
+            ORDER BY variable_key ASC";
+        return await connection.QueryAsync<CampaignVariableDto>(sql, new { PurposeKey = purposeKey });
+    }
+
+    public async Task<bool> UpsertCampaignVariablesAsync(string purposeKey, IEnumerable<CampaignVariableInput> variables)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            connection.Open();
+        }
+
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            const string deleteSql = "DELETE FROM comm_campaign_variables WHERE purpose_key = @PurposeKey";
+            await connection.ExecuteAsync(deleteSql, new { PurposeKey = purposeKey }, transaction);
+
+            if (variables != null && variables.Any())
+            {
+                const string insertSql = @"
+                    INSERT INTO comm_campaign_variables (purpose_key, variable_key, variable_value)
+                    VALUES (@PurposeKey, @VariableKey, @VariableValue)";
+                
+                foreach (var v in variables)
+                {
+                    if (string.IsNullOrWhiteSpace(v.VariableKey)) continue;
+                    await connection.ExecuteAsync(insertSql, new { 
+                        PurposeKey = purposeKey, 
+                        VariableKey = v.VariableKey.Trim(), 
+                        VariableValue = (v.VariableValue ?? string.Empty).Trim() 
+                    }, transaction);
+                }
+            }
+
+            transaction.Commit();
+            return true;
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 }
