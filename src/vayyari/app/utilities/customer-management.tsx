@@ -5,8 +5,8 @@ import { Text, Appbar, Searchbar, IconButton, Portal, useTheme } from 'react-nat
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { CustomerTile } from '@/components/utility/customer/CustomerTile';
 import { AddCustomerModal } from '@/components/utility/customer/AddCustomerModal';
-import { CustomerDetailModal } from '@/components/utility/customer/CustomerDetailModal';
 import { AddAddressModal } from '@/components/utility/customer/AddAddressModal';
+import { useRouter } from 'expo-router';
 import { CountrySelectorModal } from '@/components/utility/customer/CountrySelectorModal';
 
 import { useCustomerManagement } from '@/hooks/useCustomerManagement';
@@ -14,6 +14,7 @@ import { styles, TILE_SIZE, COLUMN_COUNT } from '@/styles/screens/customer-manag
 
 export default function CustomerManagementScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const {
     searchQuery,
     setSearchQuery,
@@ -107,7 +108,7 @@ export default function CustomerManagementScreen() {
             renderItem={({ item }) => (
               <CustomerTile 
                 customer={item} 
-                onPress={setSelectedCustomer} 
+                onPress={(cust) => router.push(`/utilities/customer/${cust.id}`)} 
                 tileSize={TILE_SIZE} 
               />
             )}
@@ -152,17 +153,6 @@ export default function CustomerManagementScreen() {
           onRemoveInstagramField={removeInstagramAccountField}
           onUpdateInstagramUsername={updateInstagramAccountUsername}
           onSetInstagramPrimary={setInstagramAccountPrimary}
-        />
-
-        <CustomerDetailModal 
-          visible={!!selectedCustomer}
-          onDismiss={() => setSelectedCustomer(null)}
-          customer={selectedCustomer}
-          onAddAddress={() => setShowAddressModal(true)}
-          allChannels={allChannels}
-          memberships={memberships}
-          channelLoading={channelLoading}
-          onToggleSubscription={toggleSubscription}
         />
 
         <AddAddressModal 
