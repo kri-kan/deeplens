@@ -733,9 +733,16 @@ namespace DeepLens.Infrastructure.Services
 
             try
             {
-                var metrics = JsonSerializer.Deserialize<AppUsageMetrics>(usageHeader, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (metrics != null)
+                var rawMetrics = JsonSerializer.Deserialize<MetaAppUsageHeader>(usageHeader, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (rawMetrics != null)
                 {
+                    var metrics = new AppUsageMetrics
+                    {
+                        CallCount = rawMetrics.CallCount,
+                        TotalCpuTime = rawMetrics.TotalCpuTime,
+                        TotalTime = rawMetrics.TotalTime
+                    };
+
                     await _cache.SetStringAsync("meta:usage_metrics_v2", JsonSerializer.Serialize(metrics), new DistributedCacheEntryOptions {
                         AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
                     });
@@ -1033,6 +1040,13 @@ namespace DeepLens.Infrastructure.Services
             [JsonPropertyName("id")] public string? Id { get; set; }
             [JsonPropertyName("username")] public string? Username { get; set; }
             [JsonPropertyName("name")] public string? Name { get; set; }
+        }
+
+        private class MetaAppUsageHeader
+        {
+            [JsonPropertyName("call_count")] public int CallCount { get; set; }
+            [JsonPropertyName("total_cputime")] public int TotalCpuTime { get; set; }
+            [JsonPropertyName("total_time")] public int TotalTime { get; set; }
         }
     }
 }
