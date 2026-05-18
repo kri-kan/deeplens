@@ -828,7 +828,8 @@ namespace DeepLens.Infrastructure.Services
             var configs = await conn.QueryAsync<MetaConfigurationDto>(@"
                 SELECT id, name, app_id as AppId, app_secret as AppSecret, 
                        ig_biz_id as IgBizId, long_access_token as LongAccessToken, 
-                       is_default as IsDefault, last_refreshed_at as LastRefreshedAt
+                       is_default as IsDefault, last_refreshed_at as LastRefreshedAt,
+                       call_count as CallCount, total_time as TotalTime, total_cpu as TotalCpu
                 FROM meta_configurations
                 ORDER BY is_default DESC, name ASC");
             return configs.ToList();
@@ -840,7 +841,8 @@ namespace DeepLens.Infrastructure.Services
             return await conn.QueryFirstOrDefaultAsync<MetaConfigurationDto>(@"
                 SELECT id, name, app_id as AppId, app_secret as AppSecret, 
                        ig_biz_id as IgBizId, long_access_token as LongAccessToken, 
-                       is_default as IsDefault, last_refreshed_at as LastRefreshedAt
+                       is_default as IsDefault, last_refreshed_at as LastRefreshedAt,
+                       call_count as CallCount, total_time as TotalTime, total_cpu as TotalCpu
                 FROM meta_configurations
                 WHERE id = @id", new { id });
         }
