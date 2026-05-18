@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Dimensions, TouchableOpacity, Linking, FlatList, ScrollView, ActivityIndicator, Alert } from 'react-native';
-import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider } from 'react-native-paper';
+import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider, Switch, Icon } from 'react-native-paper';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -278,9 +278,9 @@ export const InstagramPostDetailItem = ({
         }
     };
 
-    const handleSyncComments = async (deep = false) => {
+    const handleSyncComments = async () => {
         try {
-            setIsDeepSync(deep);
+            setIsDeepSync(false);
             setIsMenuVisible(false);
             menuSheetTop.value = withSpring(MENU_HIDDEN);
             setIsLoadingConfigs(true);
@@ -752,6 +752,22 @@ export const InstagramPostDetailItem = ({
                 <Dialog visible={isTokenSelectionVisible} onDismiss={() => setIsTokenSelectionVisible(false)}>
                     <Dialog.Title>Select Meta Account</Dialog.Title>
                     <Dialog.Content>
+                        <View style={styles.dialogToggleRow}>
+                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Icon source="database-sync-outline" size={20} color={theme.colors.primary} />
+                                <View style={{ flex: 1 }}>
+                                    <Text variant="labelLarge" style={styles.bold}>Deep Sync (Full Scan)</Text>
+                                    <Text variant="bodySmall" style={{ opacity: 0.6 }}>Forces comments refresh, bypassing optimizations</Text>
+                                </View>
+                            </View>
+                            <Switch 
+                                value={isDeepSync} 
+                                onValueChange={(val) => setIsDeepSync(val)} 
+                                color={theme.colors.primary}
+                            />
+                        </View>
+                        <Divider style={{ marginVertical: 12 }} />
+
                         <ScrollView style={{ maxHeight: 250 }}>
                             {availableConfigs.map((config, idx) => (
                                 <React.Fragment key={config.id || idx}>
@@ -802,18 +818,10 @@ export const InstagramPostDetailItem = ({
 
                                     <TouchableOpacity 
                                         style={styles.menuItem}
-                                        onPress={() => handleSyncComments(false)}
+                                        onPress={handleSyncComments}
                                     >
                                         <IconButton icon="comment-sync-outline" size={24} iconColor={theme.colors.primary} />
                                         <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Sync Comments</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        onPress={() => handleSyncComments(true)}
-                                    >
-                                        <IconButton icon="comment-text-multiple-outline" size={24} iconColor={theme.colors.primary} />
-                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Deep Sync Comments</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity 
@@ -1299,5 +1307,12 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 8,
         marginVertical: 2,
+    },
+    dialogToggleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        paddingHorizontal: 4,
     },
 });
