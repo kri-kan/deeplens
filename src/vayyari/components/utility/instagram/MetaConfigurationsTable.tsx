@@ -171,9 +171,9 @@ export const MetaConfigurationsTable: React.FC = () => {
             </View>
             <ProgressBar progress={maxQuota / 100} color={getQuotaColor(maxQuota)} style={styles.progressBar} />
             <View style={styles.metricsRow}>
-               <Text variant="labelSmall" style={styles.metricText}>Calls: {item.callCount || 0}</Text>
-               <Text variant="labelSmall" style={styles.metricText}>Time: {item.totalTime || 0}</Text>
-               <Text variant="labelSmall" style={styles.metricText}>CPU: {item.totalCpu || 0}</Text>
+               <Text variant="labelSmall" style={styles.metricText}>Calls: {((item.callCount || 0) * 2)}/200</Text>
+               <Text variant="labelSmall" style={styles.metricText}>Time: {item.totalTime || 0}%</Text>
+               <Text variant="labelSmall" style={styles.metricText}>CPU: {item.totalCpu || 0}%</Text>
             </View>
           </View>
         </View>
