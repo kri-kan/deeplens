@@ -675,7 +675,7 @@ public class InstaController : ControllerBase
 
         try
         {
-            await _metaGraph.SyncPostCommentsAsync(id, request.AccessToken);
+            await _metaGraph.SyncPostCommentsAsync(id, request.AccessToken, request.DeepSync);
             return Ok(new { message = "Comments synchronization completed successfully." });
         }
         catch (Exception ex)

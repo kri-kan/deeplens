@@ -20,7 +20,7 @@ namespace DeepLens.Application.Abstractions.Services
         int GetSyncIntervalMinutes();
         int GetEngagementRefreshLimit();
         Task<MetaQuotaInfo> GetQuotaAsync();
-        Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken);
+        Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken, bool deepSync = false);
 
         // --- Configuration Management ---
         Task<List<MetaConfigurationDto>> GetConfigurationsAsync();

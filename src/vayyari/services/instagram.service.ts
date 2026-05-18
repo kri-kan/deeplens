@@ -327,11 +327,8 @@ class InstagramService {
     return searchApiClient.post(`/api/v1/Insta/video/${id}/youtube`, data);
   };
 
-  /**
-   * Syncs top-level comments for a specific post via the DeepLens SearchApi.
-   */
-  syncPostComments = async (competitorVideoId: string, accessToken: string): Promise<void> => {
-    return searchApiClient.post(`/api/v1/Insta/video/${competitorVideoId}/comments/sync`, { accessToken });
+  syncPostComments = async (competitorVideoId: string, accessToken: string, deepSync = false): Promise<void> => {
+    return searchApiClient.post(`/api/v1/Insta/video/${competitorVideoId}/comments/sync`, { accessToken, deepSync });
   };
 
   /**

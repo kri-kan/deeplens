@@ -274,4 +274,7 @@ public class InstagramCommentsSyncRequest
 {
     [JsonPropertyName("accessToken")]
     public string AccessToken { get; set; } = string.Empty;
+
+    [JsonPropertyName("deepSync")]
+    public bool DeepSync { get; set; }
 }

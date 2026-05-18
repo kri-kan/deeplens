@@ -535,7 +535,7 @@ namespace DeepLens.Infrastructure.Services
             };
         }
 
-        public async Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken)
+        public async Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken, bool deepSync = false)
         {
             using var conn = await _db.CreateConnectionAsync();
 
@@ -612,7 +612,7 @@ namespace DeepLens.Infrastructure.Services
                     postedAt = postedAt.ToUniversalTime();
 
                     // Time-Window Sync Optimization
-                    if (lastScrapedAt.HasValue && postedAt <= lastScrapedAt.Value)
+                    if (!deepSync && lastScrapedAt.HasValue && postedAt <= lastScrapedAt.Value)
                     {
                         hitOlderComment = true;
                         break;

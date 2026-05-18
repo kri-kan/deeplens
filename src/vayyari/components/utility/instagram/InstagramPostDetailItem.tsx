@@ -69,6 +69,7 @@ export const InstagramPostDetailItem = ({
 
     // Syncing State
     const [isSyncingComments, setIsSyncingComments] = useState(false);
+    const [isDeepSync, setIsDeepSync] = useState(false);
 
     // YouTube Upload State
     const [isYoutubeDialogVisible, setIsYoutubeDialogVisible] = useState(false);
@@ -277,8 +278,9 @@ export const InstagramPostDetailItem = ({
         }
     };
 
-    const handleSyncComments = async () => {
+    const handleSyncComments = async (deep = false) => {
         try {
+            setIsDeepSync(deep);
             setIsMenuVisible(false);
             menuSheetTop.value = withSpring(MENU_HIDDEN);
             setIsLoadingConfigs(true);
@@ -307,7 +309,7 @@ export const InstagramPostDetailItem = ({
             setIsTokenSelectionVisible(false);
             setIsSyncingComments(true);
 
-            await instagramService.syncPostComments(localItem.id, accessToken);
+            await instagramService.syncPostComments(localItem.id, accessToken, isDeepSync);
             Alert.alert('Success', 'Comments synchronization completed successfully.');
             
             // Refresh to update comment count if possible
@@ -800,10 +802,18 @@ export const InstagramPostDetailItem = ({
 
                                     <TouchableOpacity 
                                         style={styles.menuItem}
-                                        onPress={handleSyncComments}
+                                        onPress={() => handleSyncComments(false)}
                                     >
                                         <IconButton icon="comment-sync-outline" size={24} iconColor={theme.colors.primary} />
                                         <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Sync Comments</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity 
+                                        style={styles.menuItem}
+                                        onPress={() => handleSyncComments(true)}
+                                    >
+                                        <IconButton icon="comment-text-multiple-outline" size={24} iconColor={theme.colors.primary} />
+                                        <Text variant="bodyLarge" style={{ color: theme.colors.primary }}>Deep Sync Comments</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity 
