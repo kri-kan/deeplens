@@ -121,6 +121,17 @@ public class CustomerRepository : ICustomerRepository
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var rows = await connection.ExecuteAsync("DELETE FROM customers WHERE id = @Id", new { Id = id });
+        
+        // Cleanup unmapped manual accounts (platform_account_id is NULL) that are orphans
+        const string cleanupSql = @"
+            DELETE FROM instagram_accounts 
+            WHERE customer_id IS NULL 
+              AND (platform_account_id IS NULL OR platform_account_id = '')
+              AND NOT EXISTS (
+                  SELECT 1 FROM post_comments WHERE account_id = instagram_accounts.id
+              );";
+        await connection.ExecuteAsync(cleanupSql);
+
         return rows > 0;
     }
 
@@ -240,6 +251,16 @@ public class CustomerRepository : ICustomerRepository
                     new { Username = acc.Username, CustomerId = customerId, IsPrimary = acc.IsPrimary });
             }
         }
+
+        // Cleanup unmapped manual accounts (platform_account_id is NULL) that are orphans
+        const string cleanupSql = @"
+            DELETE FROM instagram_accounts 
+            WHERE customer_id IS NULL 
+              AND (platform_account_id IS NULL OR platform_account_id = '')
+              AND NOT EXISTS (
+                  SELECT 1 FROM post_comments WHERE account_id = instagram_accounts.id
+              );";
+        await connection.ExecuteAsync(cleanupSql);
     }
 
     public async Task SavePreferredLanguagesAsync(Guid customerId, List<string> languages)

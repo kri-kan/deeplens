@@ -39,7 +39,8 @@ public record CustomerStepProgressDto(
     [property: JsonPropertyName("action")] string Action,
     [property: JsonPropertyName("messageTemplates")] IEnumerable<MessageTemplate> MessageTemplates,
     [property: JsonPropertyName("status")] string Status,
-    [property: JsonPropertyName("completedAt")] DateTime? CompletedAt
+    [property: JsonPropertyName("completedAt")] DateTime? CompletedAt,
+    [property: JsonPropertyName("sentMessage")] string? SentMessage
 );
 
 public record PurposeCustomerTrackingDto(

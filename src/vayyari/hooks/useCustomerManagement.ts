@@ -231,7 +231,7 @@ export const useCustomerManagement = () => {
         instagramAccounts: instagramAccounts
           .filter(a => a.username.trim() !== '')
           .map(a => ({
-            id: '',
+            id: '00000000-0000-0000-0000-000000000000',
             username: a.username.trim(),
             isPrimary: a.isPrimary
           })),
@@ -308,6 +308,8 @@ export const useCustomerManagement = () => {
   };
 
   const filteredCustomers = customers.filter(c => {
+    if (!searchQuery) return true;
+    
     const query = searchQuery.toLowerCase();
     const matchesInstagramAccounts = c.instagramAccounts?.some(acc => 
       acc.username?.toLowerCase().includes(query)

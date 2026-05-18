@@ -62,6 +62,7 @@ export interface CustomerStepProgress {
   messageTemplates: MessageTemplate[];
   status: 'new' | 'completed';
   completedAt?: string;
+  sentMessage?: string;
 }
 
 export interface PurposeCustomerTracking {

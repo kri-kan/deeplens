@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, FlatList, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal as RNModal, Dimensions, Linking, BackHandler } from 'react-native';
+import { View, FlatList, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal as RNModal, Dimensions, Linking, BackHandler, PanResponder } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -20,7 +20,8 @@ import {
   Searchbar,
   SegmentedButtons,
   Card,
-  Avatar
+  Avatar,
+  Switch
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -55,6 +56,8 @@ export default function PurposeDetailScreen() {
   const [customerStepsProgress, setCustomerStepsProgress] = useState<CustomerStepProgress[]>([]);
   const [loadingProgress, setLoadingProgress] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [activeTraversalList, setActiveTraversalList] = useState<PurposeCustomerTracking[]>([]);
+  const [stepEligibility, setStepEligibility] = useState<Record<string, boolean>>({});
 
   // New step creation states
   const [newStepDesc, setNewStepDesc] = useState('');
@@ -160,7 +163,9 @@ export default function PurposeDetailScreen() {
     campaignVariables,
     variablesLoading,
     handleSaveCampaignVariables,
-    refresh
+    refresh,
+    handleAddCustomers,
+    handleRemoveCustomers
   } = useCommunicationBroadcast();
 
   useEffect(() => {
@@ -372,7 +377,17 @@ export default function PurposeDetailScreen() {
 
   const handleBulkAction = async () => {
     if (selectedCustomerIds.length === 0 || !purpose) return;
-    setSelectedCustomerIds([]);
+    
+    try {
+      if (customerSubTab === 'unassigned') {
+        await handleAddCustomers(purpose, selectedCustomerIds);
+      } else {
+        await handleRemoveCustomers(purpose, selectedCustomerIds);
+      }
+      setSelectedCustomerIds([]);
+    } catch (e) {
+      Alert.alert("Error", "Failed to update customer assignments");
+    }
   };
 
   const handleLinkExisting = async (channelId: string) => {
@@ -382,10 +397,14 @@ export default function PurposeDetailScreen() {
   };
 
   // Open modal and fetch customer progress
-  const handleOpenCustomerSteps = async (c: PurposeCustomerTracking) => {
+  const handleOpenCustomerSteps = async (c: PurposeCustomerTracking, customList?: PurposeCustomerTracking[]) => {
     setSelectedTrackingCustomer(c);
+    if (customList) {
+      setActiveTraversalList(customList);
+    }
     setViewMode('steps_tracking');
     setLoadingProgress(true);
+    setActiveStepIndex(0); // Reset index to Step 1 on change
     try {
       if (purpose) {
         const progress = await communicationService.getCustomerProgress(purpose, c.customerId);
@@ -393,7 +412,9 @@ export default function PurposeDetailScreen() {
         
         // Randomize default template indices within matching languages for this customer
         const initialIndices: Record<string, number> = {};
+        const initialEligibility: Record<string, boolean> = {};
         progress.forEach(step => {
+          initialEligibility[step.stepId] = step.status === 'completed' ? (step.sentMessage !== '[INELIGIBLE]') : true;
           const eligible = getEligibleTemplates(step.messageTemplates || [], c.preferredLanguages || []);
           if (eligible.length > 1) {
             const randomIdx = Math.floor(Math.random() * eligible.length);
@@ -403,6 +424,7 @@ export default function PurposeDetailScreen() {
           }
         });
         setSelectedTemplateIndices(initialIndices);
+        setStepEligibility(initialEligibility);
       }
     } catch (e) {
       console.error(e);
@@ -412,21 +434,80 @@ export default function PurposeDetailScreen() {
     }
   };
 
+  const selectedTrackingCustomerRef = useRef(selectedTrackingCustomer);
+  const activeTraversalListRef = useRef(activeTraversalList);
+
+  useEffect(() => {
+    selectedTrackingCustomerRef.current = selectedTrackingCustomer;
+  }, [selectedTrackingCustomer]);
+
+  useEffect(() => {
+    activeTraversalListRef.current = activeTraversalList;
+  }, [activeTraversalList]);
+
+  // Navigate between customers in the active traversal list
+  const handleNavigateCustomer = useCallback((direction: 'next' | 'prev') => {
+    const activeList = activeTraversalListRef.current;
+    const currentCustomer = selectedTrackingCustomerRef.current;
+    if (!currentCustomer || activeList.length <= 1) return;
+    
+    const currentIndex = activeList.findIndex(c => c.customerId === currentCustomer.customerId);
+    if (currentIndex === -1) return;
+
+    let targetIndex = currentIndex;
+    if (direction === 'next') {
+      targetIndex = currentIndex + 1;
+    } else {
+      targetIndex = currentIndex - 1;
+    }
+
+    if (targetIndex >= 0 && targetIndex < activeList.length) {
+      const targetCustomer = activeList[targetIndex];
+      handleOpenCustomerSteps(targetCustomer);
+    }
+  }, [handleOpenCustomerSteps]);
+
+  // PanResponder to detect horizontal swipe gestures
+  const panResponder = useMemo(() => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        // Require horizontal swipe movement (> 35 pixels) with minimal vertical slope
+        return Math.abs(dx) > 35 && Math.abs(dy) < 30;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const { dx } = gestureState;
+        if (dx < -50) {
+          // Swiped from right to left (finger moves left) -> Show next customer
+          handleNavigateCustomer('next');
+        } else if (dx > 50) {
+          // Swiped from left to right (finger moves right) -> Show previous customer
+          handleNavigateCustomer('prev');
+        }
+      }
+    });
+  }, [handleNavigateCustomer]);
+
   // Toggle step completion and enforce sequence validation
-  const handleToggleStep = async (stepId: string, currentStatus: 'new' | 'completed') => {
+  const handleToggleStep = async (stepId: string, currentStatus: 'new' | 'completed', targetStatus?: 'new' | 'completed', isIneligibleBypass?: boolean) => {
     if (!purpose || !selectedTrackingCustomer) return;
-    const newStatus = currentStatus === 'completed' ? 'new' : 'completed';
+    const newStatus = targetStatus || (currentStatus === 'completed' ? 'new' : 'completed');
     
     // Find the current matched message for audit logs if marking completed
     const targetStep = customerStepsProgress.find(s => s.stepId === stepId);
     let sentMessage: string | undefined = undefined;
-    if (newStatus === 'completed' && targetStep) {
-      const matchingTemplates = getEligibleTemplates(targetStep.messageTemplates || [], selectedTrackingCustomer.preferredLanguages || []);
-      const currentIdx = selectedTemplateIndices[stepId] || 0;
-      const safeIdx = currentIdx < matchingTemplates.length ? currentIdx : 0;
-      const matchedMsg = matchingTemplates[safeIdx] || null;
-      if (matchedMsg) {
-        sentMessage = matchedMsg.body;
+    if (newStatus === 'completed') {
+      if (isIneligibleBypass) {
+        sentMessage = '[INELIGIBLE]';
+      } else if (targetStep) {
+        const matchingTemplates = getEligibleTemplates(targetStep.messageTemplates || [], selectedTrackingCustomer.preferredLanguages || []);
+        const currentIdx = selectedTemplateIndices[stepId] || 0;
+        const safeIdx = currentIdx < matchingTemplates.length ? currentIdx : 0;
+        const matchedMsg = matchingTemplates[safeIdx] || null;
+        if (matchedMsg) {
+          sentMessage = matchedMsg.body;
+        }
       }
     }
 
@@ -437,11 +518,17 @@ export default function PurposeDetailScreen() {
       const updatedProgress = await communicationService.getCustomerProgress(purpose, selectedTrackingCustomer.customerId);
       setCustomerStepsProgress(updatedProgress);
       
-      // Update selected customer aggregate metrics in modal view
-      const freshCustomer = customersTracking.find(cust => cust.customerId === selectedTrackingCustomer.customerId);
-      if (freshCustomer) {
-        setSelectedTrackingCustomer(freshCustomer);
-      }
+      // Update selected customer aggregate metrics in modal view instantly
+      setSelectedTrackingCustomer(prev => {
+        if (!prev) return null;
+        const diff = newStatus === 'completed' ? 1 : -1;
+        const nextCompleted = Math.max(0, Math.min(prev.totalSteps, prev.completedSteps + diff));
+        return {
+          ...prev,
+          completedSteps: nextCompleted,
+          isCompleted: nextCompleted === prev.totalSteps
+        };
+      });
 
       // Auto scroll to next step if marked completed successfully and there is a next step
       if (newStatus === 'completed') {
@@ -885,7 +972,7 @@ export default function PurposeDetailScreen() {
             renderItem={({ item }) => {
               const progressPercent = item.totalSteps > 0 ? (item.completedSteps / item.totalSteps) * 100 : 0;
               return (
-                <Card style={styles.trackingCard} elevation={1} onPress={() => handleOpenCustomerSteps(item)}>
+                <Card style={styles.trackingCard} elevation={1} onPress={() => handleOpenCustomerSteps(item, filteredCustomers)}>
                   <Card.Content style={styles.trackingCardContent}>
                     <View style={styles.trackingInfoRow}>
                       <Avatar.Text 
@@ -958,7 +1045,7 @@ export default function PurposeDetailScreen() {
           data={customersTracking.filter(c => c.isCompleted)}
           keyExtractor={(item) => item.customerId}
           renderItem={({ item }) => (
-            <Card style={[styles.trackingCard, { borderLeftWidth: 4, borderLeftColor: '#4CAF50' }]} elevation={1} onPress={() => handleOpenCustomerSteps(item)}>
+            <Card style={[styles.trackingCard, { borderLeftWidth: 4, borderLeftColor: '#4CAF50' }]} elevation={1} onPress={() => handleOpenCustomerSteps(item, customersTracking.filter(c => c.isCompleted))}>
               <Card.Content style={styles.trackingCardContent}>
                 <View style={styles.trackingInfoRow}>
                   <Avatar.Icon 
@@ -1305,7 +1392,7 @@ export default function PurposeDetailScreen() {
   const renderStepsTracking = () => {
     if (!selectedTrackingCustomer) return null;
     return (
-      <View style={{ flex: 1, backgroundColor: '#f4f6fa' }}>
+      <View style={{ flex: 1, backgroundColor: '#f4f6fa' }} {...panResponder.panHandlers}>
         {loadingProgress ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -1357,8 +1444,16 @@ export default function PurposeDetailScreen() {
               >
                 {customerStepsProgress.map((step, idx) => {
                   const isCompleted = step.status === 'completed';
-                  const isLocked = !isCompleted && idx > 0 && customerStepsProgress[idx - 1].status !== 'completed';
-                  const isResetLocked = isCompleted && idx < customerStepsProgress.length - 1 && customerStepsProgress[idx + 1].status === 'completed';
+                  const isIneligibleCompleted = isCompleted && step.sentMessage === '[INELIGIBLE]';
+                  const isProcessed = isCompleted;
+
+                  const isLocked = !isProcessed && idx > 0 && 
+                                   customerStepsProgress[idx - 1].status !== 'completed';
+
+                  const isResetLocked = isProcessed && idx < customerStepsProgress.length - 1 && 
+                                        customerStepsProgress[idx + 1].status === 'completed';
+
+                  const currentEligible = stepEligibility[step.stepId] ?? true;
 
                   // Find matching preferred language templates and resolve active index
                   const matchingTemplates = getEligibleTemplates(step.messageTemplates || [], selectedTrackingCustomer.preferredLanguages || []);
@@ -1397,7 +1492,7 @@ export default function PurposeDetailScreen() {
                               <Avatar.Text 
                                 size={28} 
                                 label={step.stepNumber.toString()} 
-                                style={{ backgroundColor: isCompleted ? '#4CAF50' : theme.colors.primary }}
+                                style={{ backgroundColor: isCompleted ? (isIneligibleCompleted ? '#C62828' : '#4CAF50') : theme.colors.primary }}
                                 color="white"
                               />
                               <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
@@ -1405,10 +1500,10 @@ export default function PurposeDetailScreen() {
                               </Text>
                             </View>
                             <Chip 
-                              style={{ backgroundColor: isCompleted ? '#E8F5E9' : '#FFF3E0', paddingHorizontal: 4, paddingVertical: 2 }}
-                              textStyle={{ color: isCompleted ? '#2E7D32' : '#E65100', fontWeight: 'bold', fontSize: 11 }}
+                              style={{ backgroundColor: isCompleted ? (isIneligibleCompleted ? '#FFEBEE' : '#E8F5E9') : '#FFF3E0', paddingHorizontal: 4, paddingVertical: 2 }}
+                              textStyle={{ color: isCompleted ? (isIneligibleCompleted ? '#C62828' : '#2E7D32') : '#E65100', fontWeight: 'bold', fontSize: 11 }}
                             >
-                              {isCompleted ? 'COMPLETED' : 'PENDING'}
+                              {isCompleted ? (isIneligibleCompleted ? 'INELIGIBLE' : 'COMPLETED') : 'PENDING'}
                             </Chip>
                           </View>
 
@@ -1428,19 +1523,102 @@ export default function PurposeDetailScreen() {
                             </View>
                           </View>
 
+
+
                           <View 
                             style={{ 
                               flex: 1, 
-                              backgroundColor: '#f8fafc', 
+                              backgroundColor: isIneligibleCompleted 
+                                ? '#FFF8F8' 
+                                : (!currentEligible && !isCompleted) 
+                                  ? '#FFFDF5' 
+                                  : '#f8fafc', 
                               borderRadius: 16, 
                               padding: 20, 
                               marginBottom: 16,
                               marginHorizontal: 0,
                               borderWidth: 1.5,
-                              borderColor: '#e2e8f0',
+                              borderColor: isIneligibleCompleted 
+                                ? '#FFCDD2' 
+                                : (!currentEligible && !isCompleted) 
+                                  ? '#FFE0B2' 
+                                  : '#e2e8f0',
                             }}
                           >
-                            {matchedMsg ? (
+                            {isIneligibleCompleted ? (
+                              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 12 }}>
+                                <View style={{ 
+                                  width: 64, 
+                                  height: 64, 
+                                  borderRadius: 32, 
+                                  backgroundColor: '#FFEAEA', 
+                                  justifyContent: 'center', 
+                                  alignItems: 'center',
+                                  marginBottom: 16,
+                                  borderWidth: 1.5,
+                                  borderColor: '#FFCDD2',
+                                  shadowColor: '#C62828',
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.1,
+                                  shadowRadius: 6,
+                                  elevation: 2
+                                }}>
+                                  <IconButton icon="account-cancel-outline" size={32} iconColor="#C62828" style={{ margin: 0 }} />
+                                </View>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#B71C1C', marginBottom: 8, letterSpacing: 0.3 }}>
+                                  Template Delivery Skipped
+                                </Text>
+                                <Text style={{ textAlign: 'center', fontSize: 13, color: '#5C6B73', lineHeight: 18, paddingHorizontal: 12, marginBottom: 16 }}>
+                                  This step was bypassed because the customer was marked as <Text style={{ fontWeight: 'bold', color: '#B71C1C' }}>ineligible</Text> for this stage of the campaign.
+                                </Text>
+                                
+                                {step.completedAt && (
+                                  <View style={{ 
+                                    flexDirection: 'row', 
+                                    alignItems: 'center', 
+                                    backgroundColor: '#FFF1F1', 
+                                    borderRadius: 8, 
+                                    paddingVertical: 4, 
+                                    paddingHorizontal: 12,
+                                    borderWidth: 1,
+                                    borderColor: '#FFEBEE',
+                                    gap: 2
+                                  }}>
+                                    <IconButton icon="clock-outline" size={14} iconColor="#C62828" style={{ margin: 0, padding: 0 }} />
+                                    <Text style={{ fontSize: 11, color: '#C62828', fontWeight: 'bold' }}>
+                                      Bypassed: {new Date(step.completedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            ) : !currentEligible && !isCompleted ? (
+                              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 12 }}>
+                                <View style={{ 
+                                  width: 64, 
+                                  height: 64, 
+                                  borderRadius: 32, 
+                                  backgroundColor: '#FFF3E0', 
+                                  justifyContent: 'center', 
+                                  alignItems: 'center',
+                                  marginBottom: 16,
+                                  borderWidth: 1.5,
+                                  borderColor: '#FFE0B2',
+                                  shadowColor: '#E65100',
+                                  shadowOffset: { width: 0, height: 4 },
+                                  shadowOpacity: 0.1,
+                                  shadowRadius: 6,
+                                  elevation: 2
+                                }}>
+                                  <IconButton icon="alert-decagram-outline" size={32} iconColor="#E65100" style={{ margin: 0 }} />
+                                </View>
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#E65100', marginBottom: 8, letterSpacing: 0.3 }}>
+                                  Bypass Flow Pending
+                                </Text>
+                                <Text style={{ textAlign: 'center', fontSize: 13, color: '#5C6B73', lineHeight: 18, paddingHorizontal: 12 }}>
+                                  The customer is marked <Text style={{ fontWeight: 'bold', color: '#E65100' }}>ineligible</Text> for this step. Marking this step as completed will proceed immediately without sending any template messages.
+                                </Text>
+                              </View>
+                            ) : matchedMsg ? (
                               <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1495,45 +1673,66 @@ export default function PurposeDetailScreen() {
                         </View>
 
                         <View style={{ paddingBottom: 16 }}>
-                          {matchedMsg && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 4, marginBottom: 16 }}>
-                              <Text variant="titleMedium" style={{ fontWeight: 'bold', color: '#5c6b73', marginRight: 4 }}>
-                                Share to:
-                              </Text>
-                              
-                              {selectedTrackingCustomer.phoneNumber ? (
-                                <IconButton 
-                                  icon="whatsapp" 
-                                  mode="contained"
-                                  containerColor="#E8FAF0"
-                                  iconColor="#25D366"
-                                  size={24}
-                                  onPress={() => handleWhatsAppShare(selectedTrackingCustomer.phoneNumber, substitutedBody)}
-                                  style={{ margin: 0 }}
-                                />
-                              ) : null}
+                          {!isProcessed && !isLocked && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 4 }}>
+                              {/* Left Side: Share icons (only if eligible & template matches) */}
+                              {matchedMsg && currentEligible ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                  <Text variant="titleMedium" style={{ fontWeight: 'bold', color: '#5c6b73', marginRight: 2 }}>
+                                    Share to:
+                                  </Text>
+                                  
+                                  {selectedTrackingCustomer.phoneNumber ? (
+                                    <IconButton 
+                                      icon="whatsapp" 
+                                      mode="contained"
+                                      containerColor="#E8FAF0"
+                                      iconColor="#25D366"
+                                      size={22}
+                                      onPress={() => handleWhatsAppShare(selectedTrackingCustomer.phoneNumber, substitutedBody)}
+                                      style={{ margin: 0 }}
+                                    />
+                                  ) : null}
 
-                              {selectedTrackingCustomer.instagramId ? (
-                                <IconButton 
-                                  icon="instagram" 
-                                  mode="contained"
-                                  containerColor="#FDF0F5"
-                                  iconColor="#E1306C"
-                                  size={24}
-                                  onPress={() => handleInstagramShare(selectedTrackingCustomer.instagramId || '', substitutedBody)}
-                                  style={{ margin: 0 }}
-                                />
-                              ) : null}
+                                  {selectedTrackingCustomer.instagramId ? (
+                                    <IconButton 
+                                      icon="instagram" 
+                                      mode="contained"
+                                      containerColor="#FDF0F5"
+                                      iconColor="#E1306C"
+                                      size={22}
+                                      onPress={() => handleInstagramShare(selectedTrackingCustomer.instagramId || '', substitutedBody)}
+                                      style={{ margin: 0 }}
+                                    />
+                                  ) : null}
 
-                              <IconButton 
-                                icon="content-copy" 
-                                mode="contained"
-                                containerColor="#F0F4FF"
-                                iconColor={theme.colors.primary}
-                                size={24}
-                                onPress={() => handleCopyMessage(substitutedBody)}
-                                style={{ margin: 0 }}
-                              />
+                                  <IconButton 
+                                    icon="content-copy" 
+                                    mode="contained"
+                                    containerColor="#F0F4FF"
+                                    iconColor={theme.colors.primary}
+                                    size={22}
+                                    onPress={() => handleCopyMessage(substitutedBody)}
+                                    style={{ margin: 0 }}
+                                  />
+                                </View>
+                              ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <IconButton icon="information-outline" size={16} iconColor="#E65100" style={{ margin: 0 }} />
+                                  <Text style={{ fontSize: 13, color: '#E65100', fontWeight: 'bold' }}>Customer Ineligible</Text>
+                                </View>
+                              )}
+
+                              {/* Right Side: Toggle Switch */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#334155' }}>Eligible</Text>
+                                <Switch
+                                  value={currentEligible}
+                                  onValueChange={(val) => setStepEligibility(prev => ({ ...prev, [step.stepId]: val }))}
+                                  color={theme.colors.primary}
+                                  style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                                />
+                              </View>
                             </View>
                           )}
 
@@ -1541,24 +1740,44 @@ export default function PurposeDetailScreen() {
                             <View style={{ flexDirection: 'row', backgroundColor: '#FFF8E1', padding: 12, borderRadius: 8, alignItems: 'center', gap: 8 }}>
                               <IconButton icon="lock" iconColor="#F57F17" size={20} style={{ margin: 0 }} />
                               <Text style={{ fontSize: 12, color: '#F57F17', flex: 1 }}>
-                                Step locked. Please complete prior campaign steps first.
+                                Step locked. Please resolve prior campaign steps first.
                               </Text>
                             </View>
-                          ) : (
+                          ) : isProcessed ? (
                             <Button
                               mode="contained"
-                              icon={isCompleted ? "refresh" : "check-circle"}
-                              buttonColor={isCompleted ? theme.colors.secondary : '#4CAF50'}
+                              icon="refresh"
+                              buttonColor={theme.colors.secondary}
                               onPress={() => handleToggleStep(step.stepId, step.status)}
                               disabled={isResetLocked}
                               contentStyle={{ paddingVertical: 6 }}
                             >
-                              {isCompleted ? 'Reset Step to Pending' : 'Mark Step as Completed'}
+                              Reset Step to Pending
+                            </Button>
+                          ) : !currentEligible ? (
+                            <Button
+                              mode="contained"
+                              icon="close-circle-outline"
+                              buttonColor="#FF9800"
+                              onPress={() => handleToggleStep(step.stepId, step.status, 'completed', true)}
+                              contentStyle={{ paddingVertical: 6 }}
+                            >
+                              Skip Step (Mark Completed)
+                            </Button>
+                          ) : (
+                            <Button
+                              mode="contained"
+                              icon="check-circle"
+                              buttonColor="#4CAF50"
+                              onPress={() => handleToggleStep(step.stepId, step.status, 'completed', false)}
+                              contentStyle={{ paddingVertical: 6 }}
+                            >
+                              Mark Step as Completed
                             </Button>
                           )}
                           {isResetLocked && (
                             <Text style={{ fontSize: 10, color: 'red', textAlign: 'center', marginTop: 4 }}>
-                              Cannot reset because subsequent steps in the sequence are already completed.
+                              Cannot reset because subsequent steps in the sequence are already resolved.
                             </Text>
                           )}
                         </View>
@@ -1581,6 +1800,12 @@ export default function PurposeDetailScreen() {
 
   const showStepsTracking = viewMode === 'steps_tracking' && selectedTrackingCustomer;
 
+  const traversalIndex = selectedTrackingCustomer && activeTraversalList.length > 0
+    ? activeTraversalList.findIndex(c => c.customerId === selectedTrackingCustomer.customerId)
+    : -1;
+  const hasPrevCustomer = traversalIndex > 0;
+  const hasNextCustomer = traversalIndex !== -1 && traversalIndex < activeTraversalList.length - 1;
+
   return (
     <ScreenWrapper 
       title={showStepsTracking ? selectedTrackingCustomer.customerName : (purpose || 'Purpose Details')}
@@ -1589,20 +1814,16 @@ export default function PurposeDetailScreen() {
       actions={
         showStepsTracking ? (
           <>
+            {/* 1. WhatsApp */}
             {selectedTrackingCustomer.phoneNumber ? (
-              <>
-                <Appbar.Action 
-                  icon="phone" 
-                  color={theme.colors.primary}
-                  onPress={() => Linking.openURL(`tel:${selectedTrackingCustomer.phoneNumber}`)} 
-                />
-                <Appbar.Action 
-                  icon="whatsapp" 
-                  color="#25D366"
-                  onPress={() => handleWhatsAppShare(selectedTrackingCustomer.phoneNumber, '')} 
-                />
-              </>
+              <Appbar.Action 
+                icon="whatsapp" 
+                color="#25D366"
+                onPress={() => handleWhatsAppShare(selectedTrackingCustomer.phoneNumber, '')} 
+              />
             ) : null}
+
+            {/* 2. Instagram */}
             {selectedTrackingCustomer.instagramId ? (
               <Appbar.Action 
                 icon="instagram" 
@@ -1613,6 +1834,31 @@ export default function PurposeDetailScreen() {
                 }} 
               />
             ) : null}
+
+            {/* 3. Mobile (Phone) */}
+            {selectedTrackingCustomer.phoneNumber ? (
+              <Appbar.Action 
+                icon="phone" 
+                color={theme.colors.primary}
+                onPress={() => Linking.openURL(`tel:${selectedTrackingCustomer.phoneNumber}`)} 
+              />
+            ) : null}
+
+            {/* 4. Left Chevron */}
+            <Appbar.Action 
+              icon="chevron-left" 
+              color={hasPrevCustomer ? theme.colors.primary : '#b0bec5'}
+              disabled={!hasPrevCustomer}
+              onPress={() => handleNavigateCustomer('prev')} 
+            />
+
+            {/* 5. Right Chevron */}
+            <Appbar.Action 
+              icon="chevron-right" 
+              color={hasNextCustomer ? theme.colors.primary : '#b0bec5'}
+              disabled={!hasNextCustomer}
+              onPress={() => handleNavigateCustomer('next')} 
+            />
           </>
         ) : (
           <Appbar.Action icon="refresh" onPress={refresh} />

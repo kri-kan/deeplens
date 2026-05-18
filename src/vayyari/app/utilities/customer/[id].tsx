@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { Text, Avatar, Button, Divider, List, Card, Switch, ActivityIndicator, useTheme, Chip, Portal, IconButton } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, RefreshControl, Platform } from 'react-native';
+import { Text, Avatar, Button, Divider, List, Card, Switch, ActivityIndicator, useTheme, Chip, Portal, IconButton, Snackbar, Appbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { AddAddressModal } from '@/components/utility/customer/AddAddressModal';
 import { CountrySelectorModal } from '@/components/utility/customer/CountrySelectorModal';
+import { EditCustomerModal } from '@/components/utility/customer/EditCustomerModal';
 
 import { customerService } from '@/services/customerService';
 import { whatsappService, WhatsAppChannel, CustomerChannelMembership } from '@/services/whatsappService';
 import { productMgmtApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
-import { Customer, CreateAddressRequest } from '@/types/customers';
+import { Customer, CreateAddressRequest, CreateCustomerRequest, Language } from '@/types/customers';
 import { CountryCode } from '@/hooks/useCustomerManagement';
 
 export default function CustomerDetailScreen() {
@@ -32,6 +34,16 @@ export default function CustomerDetailScreen() {
   const [showCountrySelector, setShowCountrySelector] = useState(false);
   const [countryCodes, setCountryCodes] = useState<CountryCode[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<CountryCode | null>(null);
+
+  // Edit Customer Modals & Forms State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [availableLanguages, setAvailableLanguages] = useState<Language[]>([]);
+  const [editSelectedCountry, setEditSelectedCountry] = useState<CountryCode | null>(null);
+  const [showEditCountrySelector, setShowEditCountrySelector] = useState(false);
+
+  // Clipboard / Snackbar State
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   // New Address Fields
   const [addrName, setAddrName] = useState('');
@@ -76,10 +88,69 @@ export default function CustomerDetailScreen() {
     }
   }, []);
 
+  const loadLanguages = useCallback(async () => {
+    try {
+      const data = await customerService.getLanguages();
+      setAvailableLanguages(data);
+    } catch (error) {
+      console.error('Failed to load languages:', error);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
     loadCountryCodes();
-  }, [loadData, loadCountryCodes]);
+    loadLanguages();
+  }, [loadData, loadCountryCodes, loadLanguages]);
+
+  // Set default editSelectedCountry based on customer's phone prefix
+  useEffect(() => {
+    if (customer && countryCodes.length > 0) {
+      if (customer.phoneNumber) {
+        const sortedCountries = [...countryCodes].sort((a, b) => b.dialCode.length - a.dialCode.length);
+        const country = sortedCountries.find(c => customer.phoneNumber?.startsWith(c.dialCode));
+        if (country) {
+          setEditSelectedCountry(country);
+        } else {
+          setEditSelectedCountry(countryCodes.find(c => c.code === 'IN') || countryCodes[0] || null);
+        }
+      } else {
+        setEditSelectedCountry(countryCodes.find(c => c.code === 'IN') || countryCodes[0] || null);
+      }
+    }
+  }, [customer, countryCodes]);
+
+  const handleUpdateCustomer = async (request: CreateCustomerRequest) => {
+    if (!customer) return;
+    try {
+      await customerService.updateCustomer(customer.id, request);
+      setSnackbarMessage('Customer profile updated successfully!');
+      setSnackbarVisible(true);
+      await loadData(false);
+    } catch (error) {
+      console.error('Failed to update customer:', error);
+      setSnackbarMessage('Failed to update customer profile.');
+      setSnackbarVisible(true);
+    }
+  };
+
+  const handleCopyReferralCode = async () => {
+    if (!customer?.referralCode) return;
+    const textToCopy = `Your referral code is : ${customer.referralCode}`;
+    await Clipboard.setStringAsync(textToCopy);
+    if (Platform.OS !== 'android') {
+      setSnackbarMessage('Referral code copied to clipboard!');
+      setSnackbarVisible(true);
+    }
+  };
+
+  const handleCopyInstagramHandle = async (username: string) => {
+    await Clipboard.setStringAsync(username);
+    if (Platform.OS !== 'android') {
+      setSnackbarMessage(`Instagram account @${username} copied!`);
+      setSnackbarVisible(true);
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -178,7 +249,13 @@ export default function CustomerDetailScreen() {
   const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown';
 
   return (
-    <ScreenWrapper title={fullName} withScrollView={false}>
+    <ScreenWrapper 
+      title={fullName} 
+      withScrollView={false}
+      actions={
+        <Appbar.Action icon="pencil" onPress={() => setShowEditModal(true)} />
+      }
+    >
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -208,6 +285,7 @@ export default function CustomerDetailScreen() {
                     icon="ticket-percent" 
                     style={styles.referralChip}
                     textStyle={styles.referralText}
+                    onPress={handleCopyReferralCode}
                   >
                     REF: {customer.referralCode}
                   </Chip>
@@ -221,18 +299,24 @@ export default function CustomerDetailScreen() {
         {customer.instagramAccounts && customer.instagramAccounts.length > 0 && (
           <Card style={styles.sectionCard} elevation={1}>
             <Card.Content>
-              <Text variant="titleMedium" style={styles.sectionTitle}>Instagram Accounts</Text>
-              <View style={styles.handlesContainer}>
+              <View style={styles.handlesRowContainer}>
+                <IconButton 
+                  icon="instagram" 
+                  iconColor="#E1306C" 
+                  size={26} 
+                  style={{ margin: 0, marginRight: -4, width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}
+                />
                 {customer.instagramAccounts.map((acc) => (
-                  <View key={acc.id} style={styles.instagramChip}>
-                    <IconButton
-                      icon={acc.isPrimary ? 'star' : 'star-outline'}
-                      iconColor={acc.isPrimary ? '#FFD700' : 'rgba(0,0,0,0.3)'}
-                      size={16}
-                      style={{ margin: 0 }}
-                    />
-                    <Text style={styles.chipText}>@{acc.username}</Text>
-                  </View>
+                  <Chip 
+                    key={acc.id}
+                    icon={acc.isPrimary ? 'star' : undefined}
+                    onPress={() => handleCopyInstagramHandle(acc.username)}
+                    style={styles.instagramSelectableChip}
+                    textStyle={styles.chipText}
+                    selectedColor={acc.isPrimary ? '#FFD700' : undefined}
+                  >
+                    @{acc.username}
+                  </Chip>
                 ))}
               </View>
             </Card.Content>
@@ -380,7 +464,38 @@ export default function CustomerDetailScreen() {
             setShowCountrySelector(false);
           }}
         />
+
+        <EditCustomerModal
+          visible={showEditModal}
+          onDismiss={() => setShowEditModal(false)}
+          customer={customer}
+          countryCodes={countryCodes}
+          availableLanguages={availableLanguages}
+          selectedCountry={editSelectedCountry}
+          onShowCountrySelector={() => setShowEditCountrySelector(true)}
+          onSubmit={handleUpdateCustomer}
+        />
+
+        <CountrySelectorModal 
+          visible={showEditCountrySelector}
+          onDismiss={() => setShowEditCountrySelector(false)}
+          countryCodes={countryCodes}
+          selectedCountry={editSelectedCountry}
+          onSelect={(country) => {
+            setEditSelectedCountry(country);
+            setShowEditCountrySelector(false);
+          }}
+        />
       </Portal>
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={2000}
+        style={{ marginBottom: 20 }}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </ScreenWrapper>
   );
 }
@@ -456,18 +571,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  handlesContainer: {
+  instagramSectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  handlesRowContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  instagramChip: {
-    flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  instagramSelectableChip: {
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
-    paddingRight: 10,
-    height: 32,
   },
   chipText: {
     fontSize: 13,

@@ -351,6 +351,7 @@ public class CommunicationBroadcastService : ICommunicationBroadcastService
         public string MessageTemplates { get; set; } = "[]";
         public string Status { get; set; } = "new";
         public DateTime? CompletedAt { get; set; }
+        public string? SentMessage { get; set; }
     }
 
     // Purpose Campaign Steps
@@ -458,7 +459,8 @@ public class CommunicationBroadcastService : ICommunicationBroadcastService
                 s.action,
                 s.message_templates as MessageTemplates,
                 COALESCE(cs.status, 'new') as Status,
-                cs.completed_at as CompletedAt
+                cs.completed_at as CompletedAt,
+                cs.sent_message as SentMessage
             FROM comm_purpose_steps s
             LEFT JOIN comm_purpose_customer_steps cs ON s.id = cs.step_id AND cs.customer_id = @CustomerId
             WHERE s.purpose_key = @PurposeKey
@@ -470,7 +472,7 @@ public class CommunicationBroadcastService : ICommunicationBroadcastService
         {
             var templates = System.Text.Json.JsonSerializer.Deserialize<List<MessageTemplate>>(r.MessageTemplates) 
                             ?? new List<MessageTemplate>();
-            dtos.Add(new CustomerStepProgressDto(r.StepId, r.StepNumber, r.Description, r.Action, templates, r.Status, r.CompletedAt));
+            dtos.Add(new CustomerStepProgressDto(r.StepId, r.StepNumber, r.Description, r.Action, templates, r.Status, r.CompletedAt, r.SentMessage));
         }
         return dtos;
     }
