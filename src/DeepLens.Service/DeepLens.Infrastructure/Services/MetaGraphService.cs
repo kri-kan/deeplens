@@ -1,6 +1,8 @@
 using System.Data;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Threading;
 using DeepLens.Application.Abstractions.Services;
 using DeepLens.Domain.Enums;
 using DeepLens.Contracts.Instagram;
@@ -10,6 +12,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Polly;
 using Polly.Retry;
 using Dapper;
+using System.Threading;
 using DeepLens.Application.Abstractions.Data;
 
 namespace DeepLens.Infrastructure.Services
@@ -43,6 +46,12 @@ namespace DeepLens.Infrastructure.Services
         public string? LastRawResponse { get; private set; }
         public MetaCallDetails? LastCall { get; private set; }
         private Guid? _currentConfigId;
+        private readonly AsyncLocal<System.Guid?> _activeJobId = new AsyncLocal<System.Guid?>();
+
+        public void SetActiveJobId(System.Guid? jobId)
+        {
+            _activeJobId.Value = jobId;
+        }
 
         public MetaGraphService(
             ILogger<MetaGraphService> logger,
@@ -210,7 +219,7 @@ namespace DeepLens.Infrastructure.Services
                 var url = $"https://graph.instagram.com/refresh_access_token" +
                           $"?grant_type=ig_refresh_token&access_token={_opts.LongAccessToken}";
 
-                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
+                var response = await SendGetLoggedAsync(url);
                 var body = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<GraphTokenRefreshResponse>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
@@ -270,7 +279,7 @@ namespace DeepLens.Infrastructure.Services
                           $"&fb_exchange_token={Uri.EscapeDataString(shortLivedToken)}";
 
                 _logger.LogInformation("Token exchange URL built (secret masked). Attempting request...");
-                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
+                var response = await SendGetLoggedAsync(url);
                 var body = await response.Content.ReadAsStringAsync();
 
                 var result = JsonSerializer.Deserialize<GraphTokenRefreshResponse>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -323,7 +332,7 @@ namespace DeepLens.Infrastructure.Services
             try
             {
                 await RecordRequestAsync();
-                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
+                var response = await SendGetLoggedAsync(url);
                 
                 if (response.Headers.TryGetValues("x-app-usage", out var values))
                 {
@@ -576,7 +585,7 @@ namespace DeepLens.Infrastructure.Services
             while (!string.IsNullOrEmpty(nextUrl))
             {
                 await RecordRequestAsync();
-                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(nextUrl));
+                var response = await SendGetLoggedAsync(nextUrl);
                 var body = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
@@ -598,7 +607,6 @@ namespace DeepLens.Infrastructure.Services
                     break;
                 }
 
-                bool hitOlderComment = false;
 
                 foreach (var item in comments)
                 {
@@ -611,18 +619,17 @@ namespace DeepLens.Infrastructure.Services
                     }
                     postedAt = postedAt.ToUniversalTime();
 
-                    // Time-Window Sync Optimization
-                    if (!deepSync && lastScrapedAt.HasValue && postedAt <= lastScrapedAt.Value)
-                    {
-                        hitOlderComment = true;
-                        break;
-                    }
+
 
                     string? platformAccountId = item.From?.Id;
-                    if (string.IsNullOrEmpty(platformAccountId)) continue;
-
                     string? username = isInstagram ? item.From?.Username : null;
                     string? fullName = isInstagram ? null : item.From?.Name;
+
+                    if (string.IsNullOrEmpty(platformAccountId)) 
+                    {
+                        platformAccountId = "unknown_" + item.Id;
+                        username = "hidden_user";
+                    }
                     string? commentText = isInstagram ? item.Text : item.Message;
                     long likeCount = item.LikeCount;
                     bool isHidden = item.Hidden ?? false;
@@ -693,15 +700,131 @@ namespace DeepLens.Infrastructure.Services
                     }
                 }
 
-                if (hitOlderComment)
-                {
-                    break;
-                }
 
                 nextUrl = data?.Paging?.Next ?? string.Empty;
             }
 
             _logger.LogInformation("Finished comment sync for {PlatformVideoId}. Upserted {TotalUpserted} comments.", platformVideoId, totalUpserted);
+        }
+
+        private string RedactUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+            var redacted = Regex.Replace(url, @"(access_token=)[^&]+", "$1[REDACTED]");
+            redacted = Regex.Replace(redacted, @"(fb_exchange_token=)[^&]+", "$1[REDACTED]");
+            return redacted;
+        }
+
+        private string ExtractToken(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return string.Empty;
+            var match = Regex.Match(url, @"(?:access_token|fb_exchange_token)=([^&]+)");
+            return match.Success ? match.Groups[1].Value : string.Empty;
+        }
+
+        private string MaskToken(string token)
+        {
+            if (string.IsNullOrEmpty(token)) return string.Empty;
+            if (token.Length <= 12) return "[REDACTED]";
+            return $"{token.Substring(0, 8)}...{token.Substring(token.Length - 4)}";
+        }
+
+        private async Task<HttpResponseMessage> SendGetLoggedAsync(string url)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            HttpResponseMessage? response = null;
+            Exception? exception = null;
+            try
+            {
+                response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
+                return response;
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+                throw;
+            }
+            finally
+            {
+                sw.Stop();
+                var token = ExtractToken(url);
+                var maskedToken = MaskToken(token);
+                var redactedUrl = RedactUrl(url);
+
+                await LogApiRequestAsync(redactedUrl, maskedToken, sw.ElapsedMilliseconds, response, exception);
+            }
+        }
+
+        private async Task LogApiRequestAsync(string url, string maskedToken, long elapsedMs, HttpResponseMessage? response, Exception? exception)
+        {
+            try
+            {
+                Guid jobId = _activeJobId.Value ?? Guid.Empty;
+                
+                var headers = new Dictionary<string, string>();
+                if (response != null)
+                {
+                    foreach (var header in response.Headers)
+                    {
+                        headers[header.Key] = string.Join(",", header.Value);
+                    }
+                }
+
+                string? responseBody = null;
+                if (response != null && response.Content != null)
+                {
+                    try { responseBody = await response.Content.ReadAsStringAsync(); } catch { }
+                }
+
+                object? parsedBody = null;
+                if (!string.IsNullOrEmpty(responseBody))
+                {
+                    try { parsedBody = JsonSerializer.Deserialize<object>(responseBody); }
+                    catch { parsedBody = responseBody; }
+                }
+
+                var payload = new
+                {
+                    logType = "MetaApiCall",
+                    tokenUsedMasked = maskedToken,
+                    executionTimeMs = elapsedMs,
+                    request = new
+                    {
+                        method = "GET",
+                        url = url
+                    },
+                    response = response != null ? new
+                    {
+                        statusCode = (int)response.StatusCode,
+                        headers = headers,
+                        body = parsedBody
+                    } : null,
+                    error = exception?.Message
+                };
+
+                using var conn = await _db.CreateConnectionAsync();
+                
+                string message = exception != null 
+                    ? $"Meta API Call Failed: GET {url}" 
+                    : $"Meta API Call: GET {url} returned {(int)response!.StatusCode}";
+
+                string level = exception != null ? "ERROR" : (response != null && !response.IsSuccessStatusCode ? "WARNING" : "INFO");
+
+                await conn.ExecuteAsync(@"
+                    INSERT INTO public.scraper_logs (job_id, log_level, message, raw_payload, created_at)
+                    VALUES (@JobId, @LogLevel, @Message, @RawPayload::jsonb, now())",
+                    new
+                    {
+                        JobId = jobId,
+                        LogLevel = level,
+                        Message = message,
+                        RawPayload = JsonSerializer.Serialize(payload)
+                    });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to log Meta API request telemetry.");
+            }
         }
 
         private async Task<List<long>> GetRequestLogAsync()
@@ -784,7 +907,7 @@ namespace DeepLens.Infrastructure.Services
 
                 await RecordRequestAsync();
 
-                var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
+                var response = await SendGetLoggedAsync(url);
                 
                 // Quota Tracking
                 if (response.Headers.TryGetValues("x-app-usage", out var values))
@@ -945,6 +1068,8 @@ namespace DeepLens.Infrastructure.Services
             await conn.ExecuteAsync("UPDATE meta_configurations SET is_default = TRUE WHERE id = @id", new { id });
             await ReloadFromDbAsync();
         }
+
+
         // --- Internal Graph API Models (Infrastructure Private) ---
 
         private class GraphProfileResponse

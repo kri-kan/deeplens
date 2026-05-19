@@ -21,6 +21,7 @@ namespace DeepLens.Application.Abstractions.Services
         int GetEngagementRefreshLimit();
         Task<MetaQuotaInfo> GetQuotaAsync();
         Task SyncPostCommentsAsync(Guid competitorVideoId, string accessToken, bool deepSync = false);
+        void SetActiveJobId(System.Guid? jobId);
 
         // --- Configuration Management ---
         Task<List<MetaConfigurationDto>> GetConfigurationsAsync();

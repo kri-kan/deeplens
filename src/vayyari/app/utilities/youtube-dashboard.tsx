@@ -17,6 +17,7 @@ export default function YoutubeDashboard() {
   const [authDialogVisible, setAuthDialogVisible] = useState(false);
   const [authCode, setAuthCode] = useState('');
   const [submittingAuth, setSubmittingAuth] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -54,6 +55,32 @@ export default function YoutubeDashboard() {
     } finally {
       setRefreshing(false);
     }
+  };
+
+  const handleDisconnect = async () => {
+    Alert.alert(
+      'Disconnect Account',
+      'Are you sure you want to disconnect your YouTube account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Disconnect', 
+          style: 'destructive',
+          onPress: async () => {
+            setDisconnecting(true);
+            try {
+              await youtubeService.disconnect();
+              await fetchData();
+              Alert.alert('Success', 'YouTube account disconnected.');
+            } catch (e: any) {
+              Alert.alert('Error', e.message || 'Failed to disconnect account.');
+            } finally {
+              setDisconnecting(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const startAuthFlow = async () => {
@@ -132,10 +159,14 @@ export default function YoutubeDashboard() {
             </View>
           </Card.Content>
           <Card.Actions>
-            {!health?.isAuthorized ? (
+            {!health?.isAuthorized && (
               <Button mode="contained" onPress={startAuthFlow} icon="google">Sign In with Google</Button>
-            ) : (
-              <Button mode="outlined" onPress={handleRefresh} loading={refreshing} icon="refresh">Refresh Token</Button>
+            )}
+            {health?.isAuthorized && (
+              <Button mode="outlined" onPress={handleRefresh} loading={refreshing} icon="refresh">Refresh</Button>
+            )}
+            {health?.isAuthorized && (
+              <Button mode="outlined" onPress={handleDisconnect} loading={disconnecting} icon="logout" textColor={theme.colors.error}>Disconnect</Button>
             )}
             <Button mode="text" onPress={() => router.push('/modal')}>Settings</Button>
           </Card.Actions>

@@ -82,6 +82,21 @@ namespace DeepLens.SearchApi.Controllers
             return BadRequest(new { message = "Token refresh failed" });
         }
 
+        [HttpPost("disconnect")]
+        public async Task<IActionResult> Disconnect()
+        {
+            try
+            {
+                var result = await _youtube.DisconnectAsync();
+                return Ok(new { success = result, message = "Successfully disconnected" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to disconnect YouTube account");
+                return BadRequest(new { success = false, message = "Failed to disconnect" });
+            }
+        }
+
         [HttpPost("upload")]
         public async Task<IActionResult> UploadVideo([FromBody] YoutubeUploadRequest request)
         {

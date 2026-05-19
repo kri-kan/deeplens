@@ -121,7 +121,10 @@ namespace DeepLens.WorkerService.Workers
 
             try
             {
-                await graph.ReloadFromDbAsync();
+                graph.SetActiveJobId(jobId);
+                try
+                {
+                    await graph.ReloadFromDbAsync();
                 
                 // Logging Table Link
                 // Note: We use the jobId from scraper_queue as the unique job identifier in logs and history
@@ -211,6 +214,11 @@ namespace DeepLens.WorkerService.Workers
                         VALUES (@watchlistId, 'routine', 'pending', 1, @nextRun, @Target)",
                         new { watchlistId, nextRun, Target = graph.GetEngagementRefreshLimit() });
                 }
+            }
+            }
+            finally
+            {
+                graph.SetActiveJobId(null);
             }
 
             return true;

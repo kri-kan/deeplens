@@ -32,5 +32,10 @@ namespace DeepLens.Application.Abstractions.Services
         /// Gets the next available scheduling slot to avoid overlaps.
         /// </summary>
         Task<DateTime> GetNextScheduleSlotAsync();
+
+        /// <summary>
+        /// Disconnects the YouTube account by clearing the tokens.
+        /// </summary>
+        Task<bool> DisconnectAsync();
     }
 }

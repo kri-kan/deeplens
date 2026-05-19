@@ -171,6 +171,18 @@ namespace DeepLens.Infrastructure.Services
             return true;
         }
 
+        public async Task<bool> DisconnectAsync()
+        {
+            _accessToken = null;
+            _refreshToken = null;
+
+            await _appSettings.UpsertAsync("Youtube:AccessToken", "");
+            await _appSettings.UpsertAsync("Youtube:RefreshToken", "");
+            
+            _logger.LogInformation("YouTube account disconnected successfully.");
+            return true;
+        }
+
         public async Task<string> GetAuthUrlAsync(string redirectUri)
         {
             await ReloadFromDbAsync();

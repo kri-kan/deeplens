@@ -52,6 +52,10 @@ class YoutubeService {
     return searchApiClient.post('/api/v1/Youtube/refresh');
   };
 
+  disconnect = async (): Promise<{ success: boolean, message: string }> => {
+    return searchApiClient.post<{ success: boolean, message: string }>('/api/v1/Youtube/disconnect');
+  };
+
   uploadVideo = async (request: YoutubeUploadRequest): Promise<YoutubeUploadResponse> => {
     return searchApiClient.post<YoutubeUploadResponse>('/api/v1/Youtube/upload', request);
   };
