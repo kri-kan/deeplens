@@ -15,6 +15,7 @@ console.log('[RootLayout] Global execution started');
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
+// eslint-disable-next-line camelcase
 export const unstable_settings = {
   anchor: '(tabs)',
 };
@@ -84,6 +85,7 @@ function InnerRootLayout() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             )}
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
+            <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
         </NavigationThemeProvider>

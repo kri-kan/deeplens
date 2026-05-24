@@ -13,7 +13,14 @@ const MASTER_DATA_ITEMS = [
     route: '/system/categories', 
     color: '#673AB7' 
   },
-  // You can add more master data items here later (e.g., Vendors, Sizes, etc.)
+  { 
+    id: 'vendors', 
+    title: 'Vendors', 
+    icon: 'storefront', 
+    route: '/system/vendors', 
+    color: '#FF9800' 
+  },
+  // You can add more master data items here later (e.g., Sizes, etc.)
 ];
 
 export default function MasterDataHub() {

@@ -22,21 +22,21 @@ export class ManagementRepository {
     }
 
     async getProcessingState(): Promise<any> {
-        const result = await this.client.query('SELECT is_paused as "isPaused", last_paused_at as "pausedAt" FROM wa.processing_state LIMIT 1');
+        const result = await this.client.query('SELECT is_paused as "isPaused", paused_at as "pausedAt" FROM wa.processing_state LIMIT 1');
         return result.rows[0] || { isPaused: false, pausedAt: null };
     }
 
     async updateProcessingState(isPaused: boolean): Promise<void> {
         const now = isPaused ? new Date() : null;
         await this.client.query(`
-            INSERT INTO wa.processing_state (id, is_paused, last_paused_at)
+            INSERT INTO wa.processing_state (id, is_paused, paused_at)
             VALUES (1, $1, $2)
-            ON CONFLICT (id) DO UPDATE SET is_paused = $1, last_paused_at = $2
+            ON CONFLICT (id) DO UPDATE SET is_paused = $1, paused_at = $2
         `, [isPaused, now]);
     }
 
     async getSyncSettings(): Promise<any> {
-        const result = await this.client.query('SELECT sync_chats as "syncChats", sync_groups as "syncGroups", sync_announcements as "syncAnnouncements" FROM wa.sync_settings LIMIT 1');
+        const result = await this.client.query('SELECT track_chats as "syncChats", track_groups as "syncGroups", track_announcements as "syncAnnouncements" FROM wa.processing_state LIMIT 1');
         return result.rows[0] || { syncChats: true, syncGroups: true, syncAnnouncements: true };
     }
 
@@ -46,10 +46,10 @@ export class ManagementRepository {
         const syncAnnouncements = settings.syncAnnouncements !== undefined ? settings.syncAnnouncements : (settings.sync_announcements !== undefined ? settings.sync_announcements : true);
 
         await this.client.query(`
-            INSERT INTO wa.sync_settings (id, sync_chats, sync_groups, sync_announcements)
+            INSERT INTO wa.processing_state (id, track_chats, track_groups, track_announcements)
             VALUES (1, $1, $2, $3)
             ON CONFLICT (id) DO UPDATE SET 
-                sync_chats = $1, sync_groups = $2, sync_announcements = $3, updated_at = NOW()
+                track_chats = $1, track_groups = $2, track_announcements = $3, updated_at = NOW()
         `, [syncChats, syncGroups, syncAnnouncements]);
     }
 }

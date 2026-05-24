@@ -11,5 +11,17 @@ export const vendorService = {
 
   getVendor: async (id: string): Promise<VendorResponse> => {
     return await productMgmtApiClient.get<VendorResponse>(API_ROUTES.VENDORS.DETAIL(id));
+  },
+
+  createVendor: async (data: Partial<VendorResponse>): Promise<VendorResponse> => {
+    return await productMgmtApiClient.post<VendorResponse>(API_ROUTES.VENDORS.LIST, data);
+  },
+
+  updateVendor: async (id: string, data: Partial<VendorResponse>): Promise<VendorResponse> => {
+    return await productMgmtApiClient.patch<VendorResponse>(API_ROUTES.VENDORS.DETAIL(id), data);
+  },
+
+  deleteVendor: async (id: string): Promise<void> => {
+    await productMgmtApiClient.delete(API_ROUTES.VENDORS.DETAIL(id));
   }
 };

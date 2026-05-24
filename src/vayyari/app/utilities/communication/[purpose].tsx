@@ -1261,7 +1261,7 @@ export default function PurposeDetailScreen() {
             <View style={[styles.emptyView, { marginTop: 40 }]}>
               <IconButton icon="toy-brick-outline" size={48} style={{ opacity: 0.4 }} />
               <Text variant="bodyMedium" style={{ opacity: 0.5, textAlign: 'center', paddingHorizontal: 20 }}>
-                No variables defined for this campaign yet. Tap "Add Variable" below to get started!
+                No variables defined for this campaign yet. Tap &quot;Add Variable&quot; below to get started!
               </Text>
             </View>
           }

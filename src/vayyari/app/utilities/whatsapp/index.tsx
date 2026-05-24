@@ -11,6 +11,7 @@ import {
   Divider,
   Surface,
   Chip,
+  Switch,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { waProcessorService, WaProcessorStatus, Conversation } from '@/services/wa-processor.service';
@@ -28,6 +29,7 @@ export default function WhatsAppChatListScreen() {
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [onlyTracked, setOnlyTracked] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -58,6 +60,9 @@ export default function WhatsAppChatListScreen() {
 
   const filteredConversations = useMemo(() => {
     return conversations.filter(c => {
+      // Tracked filter
+      if (onlyTracked && !c.deepSyncEnabled) return false;
+
       // Search filter
       const matchesSearch = !search || 
         (c.name && c.name.toLowerCase().includes(search.toLowerCase())) || 
@@ -72,7 +77,7 @@ export default function WhatsAppChatListScreen() {
       
       return true;
     });
-  }, [conversations, search, activeTab]);
+  }, [conversations, search, activeTab, onlyTracked]);
 
   const renderItem = ({ item }: { item: Conversation }) => {
     const timestamp = (item.lastMessageTimestamp && item.lastMessageTimestamp > 0) 
@@ -81,7 +86,7 @@ export default function WhatsAppChatListScreen() {
     
     return (
       <TouchableOpacity 
-        onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(item.jid)}`)}
+        onPress={() => router.push(`/utilities/whatsapp/messages/${encodeURIComponent(item.jid)}`)}
         activeOpacity={0.7}
       >
         <View style={styles.chatItem}>
@@ -123,6 +128,13 @@ export default function WhatsAppChatListScreen() {
               <Text variant="bodyMedium" style={styles.chatMessage} numberOfLines={1}>
                 {item.lastMessageText || (item.isGroup ? 'Group chat' : 'No messages')}
               </Text>
+              {item.messageCount !== undefined && (
+                <View style={styles.msgCountBadge}>
+                  <Text style={styles.msgCountText}>
+                    {item.messageCount}
+                  </Text>
+                </View>
+              )}
               {item.unreadCount > 0 && (
                 <View style={styles.unreadBadge}>
                   <Text style={styles.unreadText}>
@@ -141,10 +153,21 @@ export default function WhatsAppChatListScreen() {
     <ScreenWrapper 
       title="WhatsApp" 
       actions={
-        <IconButton 
-          icon="menu" 
-          onPress={() => router.push('/utilities/whatsapp/admin')} 
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            Tracked
+          </Text>
+          <Switch
+            value={onlyTracked}
+            onValueChange={setOnlyTracked}
+            color={theme.colors.primary}
+            style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+          />
+          <IconButton 
+            icon="menu" 
+            onPress={() => router.push('/utilities/whatsapp/admin')} 
+          />
+        </View>
       }
       withScrollView={false}
     >
@@ -333,6 +356,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  msgCountBadge: {
+    backgroundColor: '#E0E0E0',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    marginLeft: 8,
+  },
+  msgCountText: {
+    color: '#666',
+    fontSize: 10,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',

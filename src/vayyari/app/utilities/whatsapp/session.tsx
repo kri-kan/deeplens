@@ -160,9 +160,10 @@ export default function WhatsAppSessionScreen() {
   };
 
   const handleLogout = () => {
+    const effectiveSessionId = sessionId ?? status?.sessionId ?? 'current';
     Alert.alert(
       'Log out session',
-      `This will clear the Baileys auth state for session "${sessionId}" and require re-scanning a QR code. Continue?`,
+      `This will clear the Baileys auth state for session "${effectiveSessionId}" and require re-scanning a QR code. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -187,12 +188,15 @@ export default function WhatsAppSessionScreen() {
   const connStatus = status?.status ?? 'disconnected';
   const statusColor = STATUS_COLORS[connStatus] ?? '#B0BEC5';
 
+  // Fall back to the live session ID from the processor when no param was passed
+  const effectiveSessionId = sessionId ?? status?.sessionId;
+
   // Is this the currently active session in the processor?
-  const isThisSessionActive = !status?.sessionId || status.sessionId === sessionId;
+  const isThisSessionActive = !status?.sessionId || status.sessionId === effectiveSessionId;
 
   return (
     <ScreenWrapper
-      title={label ?? sessionId ?? 'Session'}
+      title={label ?? effectiveSessionId ?? 'Session'}
       contentContainerStyle={styles.container}
     >
       <ScrollView
@@ -246,7 +250,7 @@ export default function WhatsAppSessionScreen() {
                           {STATUS_LABELS[connStatus]}
                         </Text>
                         <Text variant="labelSmall" style={{ opacity: 0.45 }}>
-                          Session ID: {sessionId}
+                          Session ID: {effectiveSessionId}
                         </Text>
                       </View>
                       <StatusChip status={connStatus} />
@@ -259,8 +263,8 @@ export default function WhatsAppSessionScreen() {
                       </>
                     )}
 
-                    {/* Connected actions */}
-                    {connStatus === 'connected' && isThisSessionActive && (
+                    {/* Actions (Available if active session exists) */}
+                    {isThisSessionActive && status?.hasSession && (
                       <>
                         <Divider style={styles.divider} />
                         <View style={styles.actionRow}>
@@ -325,7 +329,7 @@ export default function WhatsAppSessionScreen() {
           <Section title="About This Session" style={styles.section}>
             <Card style={styles.infoCard}>
               <Card.Content style={styles.infoContent}>
-                <InfoRow label="Session ID" value={sessionId ?? '—'} />
+                <InfoRow label="Session ID" value={effectiveSessionId ?? '—'} />
                 <InfoRow label="Label" value={label ?? '—'} />
                 <InfoRow label="Processor URL" value={process.env.EXPO_PUBLIC_WHATSAPP_PROCESSOR_URL ?? 'localhost:3000'} />
               </Card.Content>

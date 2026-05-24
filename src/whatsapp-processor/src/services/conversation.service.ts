@@ -116,4 +116,30 @@ export class ConversationService {
         }
         return stats;
     }
+
+    async getChatVendor(jid: string) {
+        const vendor = await this.repository.getChatVendor(jid);
+        if (!vendor || !vendor.vendor_id) {
+            return { hasVendor: false };
+        }
+        return {
+            hasVendor: true,
+            vendor: {
+                vendorId: vendor.vendor_id,
+                vendorName: vendor.vendor_name,
+                assignedAt: vendor.vendor_assigned_at,
+                assignedBy: vendor.vendor_assigned_by
+            }
+        };
+    }
+
+    async assignChatVendor(jid: string, vendorId: string, vendorName: string, assignedBy: string) {
+        await this.repository.assignChatVendor(jid, vendorId, vendorName, assignedBy);
+        return { success: true, jid, vendorId };
+    }
+
+    async removeChatVendor(jid: string) {
+        await this.repository.removeChatVendor(jid);
+        return { success: true, jid };
+    }
 }

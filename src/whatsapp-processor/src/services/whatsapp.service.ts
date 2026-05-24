@@ -302,16 +302,14 @@ export class WhatsAppService {
                 this.qrCode = null;
 
                 // Delete session files
-                this.clearSession();
-
-                // Emit logged out status
-                this.io.emit('status', { status: 'disconnected', loggedOut: true });
-
-                // Restart to generate new QR code
-                setTimeout(() => {
-                    logger.info('Restarting after logout...');
-                    this.start();
-                }, 2000);
+                this.clearSession().finally(() => {
+                    // Emit logged out status
+                    this.io.emit('status', { status: 'disconnected', loggedOut: true });
+                    
+                    // Exit cleanly to let Docker restart the container and wipe all memory state
+                    logger.info('Exiting process to trigger clean Docker restart...');
+                    setTimeout(() => process.exit(0), 1000);
+                });
             }
             this.io.emit('status', { status: 'disconnected' });
             this.updateAccountStatus('disconnected');
@@ -403,19 +401,18 @@ export class WhatsAppService {
                     UPDATE wa.chats c
                     SET name = sub.push_name,
                         is_contact = true,
-                        updated_at = NOW()
-                    FROM (
+                                       FROM (
                         SELECT DISTINCT ON (jid) 
                             jid, 
                             metadata->>'pushName' as push_name
                         FROM wa.messages
                         WHERE metadata->>'pushName' IS NOT NULL 
-                          AND metadata->>'pushName' !~ '^[0-9+\\-@.]+$'
+                          AND metadata->>'pushName' !~ '^[0-9+@.-]+$'
                           AND jid NOT LIKE '%@g.us'
                         ORDER BY jid, timestamp DESC
                     ) sub
                     WHERE c.jid = sub.jid
-                      AND (c.name ~ '^[0-9+\\-@.]+$' OR c.name IS NULL OR c.name = c.jid OR c.name LIKE '%@%' OR c.name = 'Group' OR c.name = 'group')
+                      AND (c.name ~ '^[0-9+@.-]+$' OR c.name IS NULL OR c.name = c.jid OR c.name LIKE '%@%' OR c.name = 'Group' OR c.name = 'group')
                     RETURNING c.jid, c.name;
                 `);
                 logger.info(`✨ Deep Reconciliation: Updated ${reconcileResult.rowCount} chat names from message history`);
@@ -428,7 +425,7 @@ export class WhatsAppService {
                 const mysteryGroups = await client.query(`
                     SELECT jid FROM wa.chats 
                     WHERE jid LIKE '%@g.us' 
-                      AND (name ~ '^[0-9+\\-@.]+$' OR name = 'Group' OR name = 'group')
+                      AND (name ~ '^[0-9+@.-]+$' OR name = 'Group' OR name = 'group')
                     LIMIT 20
                 `);
 
@@ -1162,8 +1159,8 @@ export class WhatsAppService {
     }
 
     hasSession(): boolean {
-        // Only return true if we have a socket AND an authenticated user
-        return !!this.sock?.user;
+        // Return true if we have valid credentials
+        return !!this.sock?.authState?.creds?.me;
     }
 
     /**
@@ -1552,7 +1549,12 @@ export class WhatsAppService {
         // Notify client
         this.io.emit('status', { status: 'disconnected', loggedOut: true });
 
-        logger.info('✅ Successfully logged out and cleared session');
+        logger.info('✅ Successfully logged out and cleared session. Restarting container...');
+        
+        // Force a process exit so Docker restarts a pristine instance for the new QR code
+        setTimeout(() => {
+            process.exit(0);
+        }, 1000);
     }
 
     getSystemHealth(): SystemHealth {

@@ -51,4 +51,34 @@ export class ManagementController {
             res.status(500).json({ error: err.message });
         }
     }
+
+    async excludeChat(req: Request, res: Response) {
+        const { jid } = req.body;
+        try {
+            const result = await this.service.excludeChat(jid);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async bulkExcludeChats(req: Request, res: Response) {
+        const { jids } = req.body;
+        try {
+            const result = await this.service.bulkExcludeChats(jids);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async includeChat(req: Request, res: Response) {
+        const { jid, resumeMode } = req.body;
+        try {
+            const result = await this.service.includeChat(jid, resumeMode);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    }
 }

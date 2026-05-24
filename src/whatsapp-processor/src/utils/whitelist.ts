@@ -56,17 +56,17 @@ export async function upsertChat(
                     WHEN EXCLUDED.is_contact = TRUE THEN EXCLUDED.name
                     
                     -- 2. If we already have an address book name, keep it
-                    WHEN wa.chats.is_contact = TRUE AND wa.chats.name NOT LIKE '%@%' AND wa.chats.name !~ '^[0-9+\\-@.]+$' THEN wa.chats.name
+                    WHEN wa.chats.is_contact = TRUE AND wa.chats.name NOT LIKE '%@%' AND wa.chats.name !~ '^[0-9+@.-]+$' THEN wa.chats.name
                     
                     -- 3. If current name is generic (JID, number, or literal 'Group'), and new name is descriptive
-                WHEN (wa.chats.name LIKE '%@%' OR wa.chats.name ~ '^[0-9+\\-@.]+$' OR wa.chats.name = '' OR wa.chats.name IS NULL OR wa.chats.name = 'Group' OR wa.chats.name = 'group')
+                WHEN (wa.chats.name LIKE '%@%' OR wa.chats.name ~ '^[0-9+@.-]+$' OR wa.chats.name = '' OR wa.chats.name IS NULL OR wa.chats.name = 'Group' OR wa.chats.name = 'group')
                      AND EXCLUDED.name IS NOT NULL AND EXCLUDED.name != '' 
-                     AND EXCLUDED.name NOT LIKE '%@%' AND EXCLUDED.name !~ '^[0-9+\\-@.]+$'
+                     AND EXCLUDED.name NOT LIKE '%@%' AND EXCLUDED.name !~ '^[0-9+@.-]+$'
                      AND EXCLUDED.name != 'Group' AND EXCLUDED.name != 'group'
                 THEN EXCLUDED.name
                 
                 -- 4. Keep existing descriptive name
-                WHEN wa.chats.name IS NOT NULL AND wa.chats.name != '' AND wa.chats.name NOT LIKE '%@%' AND wa.chats.name !~ '^[0-9+\\-@.]+$'
+                WHEN wa.chats.name IS NOT NULL AND wa.chats.name != '' AND wa.chats.name NOT LIKE '%@%' AND wa.chats.name !~ '^[0-9+@.-]+$'
                 THEN wa.chats.name
                     
                     -- 5. Final fallback to whatever is newest
@@ -169,8 +169,21 @@ export async function isExcluded(jid: string): Promise<boolean> {
         }
 
         if (isGroup) {
+            // Announcement channels in WhatsApp communities use @g.us JIDs (not @newsletter).
+            // We must check wa.chats.is_announcement to apply track_announcements, not track_groups.
+            const chatRes = await client.query(
+                'SELECT is_announcement FROM wa.chats WHERE jid = $1',
+                [jid]
+            );
+            const isAnnouncement = chatRes.rows.length > 0 && chatRes.rows[0].is_announcement;
+
+            if (isAnnouncement) {
+                // Apply track_announcements setting, not the group default
+                return !globalState.track_announcements;
+            }
+
             if (globalState.track_groups === false) return true; // Section off
-            return !DEFAULT_TRACK_GROUPS; // Follow default
+            return !DEFAULT_TRACK_GROUPS; // Follow default for regular groups
         } else {
             if (globalState.track_chats === false) return true; // Section off
             return !DEFAULT_TRACK_PRIVATE; // Follow default

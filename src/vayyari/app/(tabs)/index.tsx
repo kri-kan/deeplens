@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
 import { GridMenu } from '@/components/utility/GridMenu';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 interface UtilityItem {
   id: string;
@@ -40,12 +41,36 @@ const COMMUNICATION_UTILITIES: UtilityItem[] = [
   { id: 'campaigns', title: 'Campaigns', icon: 'bullhorn-variant', route: '/utilities/communication-management', color: '#FF9800' },
 ];
 
+/**
+ * UtilityScreen Component
+ * 
+ * Serves as the central hub for all DeepLens operational and system utilities.
+ * Includes a swipe-right gesture detector that navigates to the AI assistant.
+ * 
+ * @remarks
+ * The gesture detector is configured with `activeOffsetX(40)` and `failOffsetY([-20, 20])` 
+ * to ensure that horizontal swipes trigger the AI screen transition without 
+ * interfering with the vertical ScrollView of the utility grid.
+ */
 export default function UtilityScreen() {
   const router = useRouter();
 
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX(40)
+    .failOffsetY([-20, 20])
+    .runOnJS(true)
+    .onEnd((e) => {
+      // Swipe right means finger moves from left to right (translationX > 0)
+      if (e.translationX > 50) {
+        router.push('/ai');
+      }
+    });
+
   return (
-    <ScreenWrapper 
-      title="Utilities" 
+    <GestureDetector gesture={swipeGesture}>
+      <View style={{ flex: 1 }}>
+        <ScreenWrapper 
+          title="Utilities" 
       actions={
         <Appbar.Action icon="cog" onPress={() => router.push('/modal')} />
       }
@@ -73,6 +98,8 @@ export default function UtilityScreen() {
         </View>
       </Section>
     </ScreenWrapper>
+      </View>
+    </GestureDetector>
   );
 }
 

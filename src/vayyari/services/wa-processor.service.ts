@@ -1,3 +1,4 @@
+/* eslint-disable camelcase */
 /**
  * wa-processor.service.ts
  * Client for the single whatsapp-processor Node.js REST API.
@@ -137,6 +138,7 @@ export interface Conversation {
   metadata: any;
   deepSyncEnabled: boolean;
   isExcluded: boolean;
+  messageCount?: number;
 }
 
 // ---------- API ----------
@@ -331,15 +333,15 @@ export const waProcessorService = {
   // ---------- Vendor Management ----------
 
   fetchVendor: async (jid: string): Promise<{ hasVendor: boolean; vendor?: { vendorId: string; vendorName: string; assignedAt?: string } }> => {
-    return get<{ hasVendor: boolean; vendor?: { vendorId: string; vendorName: string; assignedAt?: string } }>(`/chats/${encodeURIComponent(jid)}/vendor`);
+    return get<{ hasVendor: boolean; vendor?: { vendorId: string; vendorName: string; assignedAt?: string } }>(`/conversations/${encodeURIComponent(jid)}/vendor`);
   },
 
   assignVendor: async (jid: string, vendorId: string, vendorName: string): Promise<void> => {
-    await post(`/chats/${encodeURIComponent(jid)}/vendor`, { vendorId, vendorName, assignedBy: 'admin' });
+    await post(`/conversations/${encodeURIComponent(jid)}/vendor`, { vendorId, vendorName, assignedBy: 'admin' });
   },
 
   removeVendor: async (jid: string): Promise<void> => {
-    await del(`/chats/${encodeURIComponent(jid)}/vendor`);
+    await del(`/conversations/${encodeURIComponent(jid)}/vendor`);
   }
 };
 

@@ -132,7 +132,7 @@ export default function FullMessageBrowser() {
     const showGroupDivider = item.groupId && (!nextMsg || nextMsg.groupId !== item.groupId);
 
     return (
-      <View style={{ transform: [{ scaleY: -1 }] }}>
+      <View>
         {showGroupDivider && (
           <View style={styles.groupDivider}>
             <View style={styles.groupLine} />
@@ -207,7 +207,20 @@ export default function FullMessageBrowser() {
     <ScreenWrapper 
       title={stats?.name || 'Messages'} 
       withScrollView={false}
-      actions={<IconButton icon="refresh" iconColor={theme.colors.primary} onPress={onRefresh} />}
+      actions={
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <IconButton 
+            icon="cog-outline" 
+            iconColor={theme.colors.primary} 
+            onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(jid)}`)} 
+          />
+          <IconButton 
+            icon="refresh" 
+            iconColor={theme.colors.primary} 
+            onPress={onRefresh} 
+          />
+        </View>
+      }
     >
       <View style={styles.container}>
         <Image 

@@ -154,4 +154,40 @@ export class ConversationController {
             res.status(500).json({ error: err.message });
         }
     }
+
+    async getChatVendor(req: Request, res: Response) {
+        const { jid } = req.params;
+        try {
+            const result = await this.service.getChatVendor(jid);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async assignChatVendor(req: Request, res: Response) {
+        const { jid } = req.params;
+        const { vendorId, vendorName, assignedBy } = req.body;
+        
+        if (!vendorId) {
+            return res.status(400).json({ error: 'vendorId is required' });
+        }
+
+        try {
+            const result = await this.service.assignChatVendor(jid, vendorId, vendorName || '', assignedBy || 'system');
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    }
+
+    async removeChatVendor(req: Request, res: Response) {
+        const { jid } = req.params;
+        try {
+            const result = await this.service.removeChatVendor(jid);
+            res.json(result);
+        } catch (err: any) {
+            res.status(500).json({ error: err.message });
+        }
+    }
 }

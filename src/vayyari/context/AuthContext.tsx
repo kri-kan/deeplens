@@ -1,3 +1,4 @@
+/* eslint-disable camelcase */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { identityService, TOKEN_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRY_KEY, LAST_ACTIVITY_KEY } from '../services/identity.service';
@@ -79,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setState(prev => ({ ...prev, isLoading: true }));
       try {
         const response = await identityService.login(email, password);
+        // eslint-disable-next-line camelcase
         const { access_token } = response;
         
         // Fetch full profile immediately

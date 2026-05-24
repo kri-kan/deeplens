@@ -118,7 +118,7 @@ function AddAccountModal({ visible, onDismiss, onSave }: AddAccountModalProps) {
           Add WhatsApp Account
         </Text>
         <Text variant="bodySmall" style={styles.modalHint}>
-          Register a session ID that matches your Baileys processor's SESSION_ID env var.
+          Register a session ID that matches your Baileys processor&apos;s SESSION_ID env var.
         </Text>
 
         <TextInput

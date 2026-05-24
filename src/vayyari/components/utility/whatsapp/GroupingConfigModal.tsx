@@ -106,7 +106,7 @@ export function GroupingConfigModal({
                     <RadioButton.Android value="sticker" />
                     <View style={{ flex: 1 }}>
                       <Text variant="bodyLarge">Sticker Separator</Text>
-                      <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use a sticker as a "break" between groups</Text>
+                      <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use a sticker as a &quot;break&quot; between groups</Text>
                     </View>
                   </View>
                   <Divider style={styles.divider} />

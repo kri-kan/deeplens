@@ -21,8 +21,26 @@ export interface ChatRow {
     communityName?: string;
     isExcluded?: boolean;
     deepSyncEnabled?: boolean;
+    messageCount?: number;
 }
 
+/**
+ * ConversationRepository
+ * 
+ * Data access layer for WhatsApp conversations (chats, groups, announcements).
+ * 
+ * @remarks
+ * **Performance Critical**: The methods in this repository power the main 
+ * WhatsApp list screens in the DeepLens utility app. 
+ * 
+ * We specifically DO NOT include an inline `COUNT(*)` subquery for messages 
+ * in the main `findAll`, `findChats`, `findGroups`, and `findAnnouncements` 
+ * methods. Executing a subquery count on `wa.messages` per row leads to 
+ * catastrophic N+1 performance degradation as message volume scales.
+ * 
+ * For full message counts, use `countMessages(jid)` or `getStats(jid)` 
+ * on an as-needed basis (e.g. within a specific conversation detail screen).
+ */
 export class ConversationRepository {
     private get client() {
         const client = getWhatsAppDbClient();
@@ -432,5 +450,26 @@ export class ConversationRepository {
                 stickers: parseInt(mediaStats.rows[0].stickers),
             }
         };
+    }
+
+    async getChatVendor(jid: string): Promise<any> {
+        const result = await this.client.query('SELECT vendor_id, vendor_name, vendor_assigned_at, vendor_assigned_by FROM wa.chats WHERE jid = $1', [jid]);
+        return result.rows[0] || null;
+    }
+
+    async assignChatVendor(jid: string, vendorId: string, vendorName: string, assignedBy: string): Promise<void> {
+        await this.client.query(`
+            UPDATE wa.chats 
+            SET vendor_id = $1, vendor_name = $2, vendor_assigned_at = NOW(), vendor_assigned_by = $3 
+            WHERE jid = $4
+        `, [vendorId, vendorName, assignedBy, jid]);
+    }
+
+    async removeChatVendor(jid: string): Promise<void> {
+        await this.client.query(`
+            UPDATE wa.chats 
+            SET vendor_id = NULL, vendor_name = NULL, vendor_assigned_at = NULL, vendor_assigned_by = NULL 
+            WHERE jid = $1
+        `, [jid]);
     }
 }

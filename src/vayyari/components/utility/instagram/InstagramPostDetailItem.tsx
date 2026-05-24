@@ -1315,4 +1315,7 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         paddingHorizontal: 4,
     },
+    bold: {
+        fontWeight: 'bold',
+    },
 });

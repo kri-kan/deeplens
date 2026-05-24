@@ -34,7 +34,6 @@ export default function ConversationDetailScreen() {
   const [deepSyncLoading, setDeepSyncLoading] = useState(false);
   const [purging, setPurging] = useState(false);
 
-  // Modals
   const [vendorModalVisible, setVendorModalVisible] = useState(false);
   const [groupingModalVisible, setGroupingModalVisible] = useState(false);
 
@@ -137,10 +136,10 @@ export default function ConversationDetailScreen() {
 
   return (
     <ScreenWrapper title={stats.name || 'Detail'}>
-      <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStats(); }} />}
-        contentContainerStyle={styles.container}
-      >
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStats(); }} />}
+            contentContainerStyle={styles.container}
+          >
         <Surface style={styles.headerCard} elevation={1}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {stats.profilePicUrl ? (
@@ -452,5 +451,9 @@ const styles = StyleSheet.create({
   fullMessagesBtn: {
     marginTop: 8,
     marginBottom: 20,
-  }
+  },
+  fullMessagesBtn: {
+    marginTop: 8,
+    marginBottom: 20,
+  },
 });

@@ -74,5 +74,23 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
      */
     router.delete('/:jid/messages', (req, res) => controller.purge(req, res));
 
+    /**
+     * GET /api/conversations/:jid/vendor
+     * Get the vendor assigned to a chat
+     */
+    router.get('/:jid/vendor', (req, res) => controller.getChatVendor(req, res));
+
+    /**
+     * POST /api/conversations/:jid/vendor
+     * Assign a vendor to a chat
+     */
+    router.post('/:jid/vendor', (req, res) => controller.assignChatVendor(req, res));
+
+    /**
+     * DELETE /api/conversations/:jid/vendor
+     * Remove the vendor from a chat
+     */
+    router.delete('/:jid/vendor', (req, res) => controller.removeChatVendor(req, res));
+
     return router;
 }
