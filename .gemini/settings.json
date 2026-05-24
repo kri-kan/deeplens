@@ -1,0 +1,26 @@
+{
+  "context": {
+    "files": [
+      ".gemini/INDEX.md"
+    ]
+  },
+  "codeExecution": {
+    "allowedPaths": [
+      "src/",
+      "docs/",
+      "setupscripts/",
+      "infrastructure/",
+      "migrations/",
+      "tests/"
+    ]
+  },
+  "skills": [
+    "src/whatsapp-processor/SKILL.md",
+    "src/vayyari/SKILL.md",
+    "src/DeepLens.Service/SKILL.md",
+    "src/DeepLens.FeatureExtractionService/SKILL.md",
+    "src/DeepLens.WebUI/SKILL.md",
+    "src/NextGen.Identity/SKILL.md"
+  ]
+}
+
