@@ -52,28 +52,30 @@ export async function initializeMessageQueue() {
 
         if (prevMsg) {
             const strategy = grouping_config?.strategy || 'sticker';
+            const isPrevSticker = prevMsg.media_type === 'sticker';
+            const isCurSticker = message.media_type === 'sticker';
 
-            if (strategy === 'sticker') {
-                // Sticker Separator Logic
-                const isPrevSticker = prevMsg.media_type === 'sticker';
-                const isCurSticker = message.media_type === 'sticker';
-
-                if (!isPrevSticker && !isCurSticker && prevMsg.group_id) {
+            if (!isPrevSticker && !isCurSticker && prevMsg.group_id) {
+                if (strategy === 'sticker') {
+                    // Sticker Separator Logic
                     groupId = prevMsg.group_id;
                     isNewGroup = false;
-                }
-            } else if (strategy === 'time_gap') {
-                // Time Gap Logic
-                const threshold = (grouping_config?.timeGapSeconds || 300); // Default 5 mins
-                const diff = message.timestamp - prevMsg.timestamp;
-
-                // Sticker Exception: Stickers should never be grouped
-                const isPrevSticker = prevMsg.media_type === 'sticker';
-                const isCurSticker = message.media_type === 'sticker';
-
-                if (diff <= threshold && prevMsg.group_id && !isPrevSticker && !isCurSticker) {
-                    groupId = prevMsg.group_id;
-                    isNewGroup = false;
+                } else if (strategy === 'time_gap') {
+                    // Time Gap Logic
+                    const threshold = (grouping_config?.timeGapSeconds || 300); // Default 5 mins
+                    const diff = message.timestamp - prevMsg.timestamp;
+                    if (diff <= threshold) {
+                        groupId = prevMsg.group_id;
+                        isNewGroup = false;
+                    }
+                } else if (strategy === 'hybrid') {
+                    // Hybrid Logic: Sticker Separator + Time Gap
+                    const threshold = (grouping_config?.timeGapSeconds || 300); // Default 5 mins
+                    const diff = message.timestamp - prevMsg.timestamp;
+                    if (diff <= threshold) {
+                        groupId = prevMsg.group_id;
+                        isNewGroup = false;
+                    }
                 }
             }
         }

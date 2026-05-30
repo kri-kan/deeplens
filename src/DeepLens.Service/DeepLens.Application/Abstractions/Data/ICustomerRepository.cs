@@ -10,6 +10,7 @@ public interface ICustomerRepository
     Task<Guid> CreateAsync(Customer customer);
     Task<bool> UpdateAsync(Customer customer);
     Task<bool> DeleteAsync(Guid id);
+    Task<int> GetOrderCountAsync(Guid customerId);
     
     // Address management
     Task<IEnumerable<CustomerAddress>> GetAddressesByCustomerIdAsync(Guid customerId);

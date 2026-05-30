@@ -25,7 +25,7 @@ import { GroupingConfigModal } from '@/components/utility/whatsapp/GroupingConfi
 export default function ConversationDetailScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { jid } = useLocalSearchParams<{ jid: string }>();
+  const { jid, name } = useLocalSearchParams<{ jid: string, name?: string }>();
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +135,7 @@ export default function ConversationDetailScreen() {
   }
 
   return (
-    <ScreenWrapper title={stats.name || 'Detail'}>
+    <ScreenWrapper title={stats?.name || name || 'Detail'}>
           <ScrollView
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStats(); }} />}
             contentContainerStyle={styles.container}
@@ -161,8 +161,8 @@ export default function ConversationDetailScreen() {
               />
             )}
             <View style={{ flex: 1 }}>
-              <Text variant="headlineSmall" style={styles.title}>{stats.name}</Text>
-              <Text variant="bodySmall" style={styles.jid}>{stats.jid}</Text>
+              <Text variant="headlineSmall" style={styles.title}>{stats?.name || name}</Text>
+              <Text variant="bodySmall" style={styles.jid}>{stats?.jid}</Text>
             </View>
           </View>
           <View style={styles.badgeRow}>
@@ -305,7 +305,7 @@ export default function ConversationDetailScreen() {
 
         <Button 
           mode="text" 
-          onPress={() => router.push(`/utilities/whatsapp/messages/${encodeURIComponent(stats.jid)}`)}
+          onPress={() => router.push({ pathname: '/utilities/whatsapp/messages/[jid]', params: { jid: stats?.jid, name: stats?.name || name } })}
           style={styles.fullMessagesBtn}
         >
           View All Messages
@@ -447,10 +447,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: 24,
     opacity: 0.4,
-  },
-  fullMessagesBtn: {
-    marginTop: 8,
-    marginBottom: 20,
   },
   fullMessagesBtn: {
     marginTop: 8,

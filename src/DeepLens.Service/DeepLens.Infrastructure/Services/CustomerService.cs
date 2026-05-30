@@ -203,6 +203,16 @@ public class CustomerService : ICustomerService
         return await _customerRepository.DeleteAsync(id);
     }
 
+    public async Task<bool> SafeDeleteDummyCustomerAsync(Guid id)
+    {
+        var count = await _customerRepository.GetOrderCountAsync(id);
+        if (count > 0)
+        {
+            return false;
+        }
+        return await _customerRepository.DeleteAsync(id);
+    }
+
     public async Task<Guid> AddAddressAsync(Guid customerId, CreateAddressRequest request)
     {
         var address = new CustomerAddress

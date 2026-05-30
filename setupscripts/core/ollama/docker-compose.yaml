@@ -18,6 +18,11 @@ services:
     entrypoint: ["/bin/bash", "/init.sh"]
     networks:
       - deeplens-network
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '10.0'
 
   open-webui:
     container_name: open-webui

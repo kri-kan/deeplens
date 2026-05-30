@@ -46,9 +46,9 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID.
     /// </summary>
     [HttpPost("order")]
-    public async Task<IActionResult> GenerateOrderId([FromQuery] OrderSource? source, [FromQuery] PaymentMode? paymentMode, [FromQuery] string? sourceHandle, [FromQuery] string? instagramUserId)
+    public async Task<IActionResult> GenerateOrderId([FromQuery] OrderSource? source, [FromQuery] PaymentMode? paymentMode, [FromQuery] string? sourceHandle, [FromQuery] string? instagramUserId, [FromQuery] Guid? customerId)
     {
-        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode, sourceHandle, instagramUserId);
+        var orderId = await _idGenerator.GenerateOrderIdAsync(source, paymentMode, sourceHandle, instagramUserId, customerId);
         return Ok(new { orderId });
     }
 
@@ -56,12 +56,12 @@ public class OrderIdController : ControllerBase
     /// Generates a new unique Order ID and a set of item sub-IDs.
     /// </summary>
     [HttpPost("orderwithitems")]
-    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] OrderSource? source = null, [FromQuery] PaymentMode? paymentMode = null, [FromQuery] string? sourceHandle = null, [FromQuery] string? instagramUserId = null)
+    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] OrderSource? source = null, [FromQuery] PaymentMode? paymentMode = null, [FromQuery] string? sourceHandle = null, [FromQuery] string? instagramUserId = null, [FromQuery] Guid? customerId = null)
     {
         if (itemCount < 1 || itemCount > 100)
             return BadRequest(new { message = "Item count must be between 1 and 100" });
 
-        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode, sourceHandle, instagramUserId);
+        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode, sourceHandle, instagramUserId, customerId);
 
         return Ok(new { orderId, itemIds });
     }
@@ -103,9 +103,21 @@ public class OrderIdController : ControllerBase
             details.SourceHandle,
             details.PaymentMode,
             details.Items,
-            details.TransactionId);
+            details.TransactionId,
+            details.CustomerId);
             
         if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
         return Ok(new { message = "Details updated successfully" });
+    }
+
+    /// <summary>
+    /// Soft deletes an order by its ID.
+    /// </summary>
+    [HttpDelete("order/{orderId}")]
+    public async Task<IActionResult> DeleteOrder(string orderId)
+    {
+        var success = await _idGenerator.SoftDeleteOrderAsync(orderId);
+        if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
+        return Ok(new { message = "Order deleted successfully" });
     }
 }

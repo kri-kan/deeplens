@@ -190,7 +190,7 @@ export class ConversationRepository {
 
         const result = await this.client.query(`
             SELECT 
-                c.jid, c.name,
+                c.jid, COALESCE(c.metadata->>'subject', c.name) as name,
                 c.is_group as "isGroup", c.is_announcement as "isAnnouncement",
                 c.unread_count as "unreadCount", c.last_message_text as "lastMessageText",
                 c.last_message_timestamp as "lastMessageTimestamp", c.last_message_from_me as "lastMessageFromMe",
@@ -234,7 +234,7 @@ export class ConversationRepository {
 
         const result = await this.client.query(`
             SELECT 
-                c.jid, c.name,
+                c.jid, COALESCE(c.metadata->>'subject', c.name) as name,
                 c.is_group as "isGroup", c.is_announcement as "isAnnouncement",
                 c.unread_count as "unreadCount", c.last_message_text as "lastMessageText",
                 c.last_message_timestamp as "lastMessageTimestamp", c.last_message_from_me as "lastMessageFromMe",
@@ -393,7 +393,7 @@ export class ConversationRepository {
         // 1. Get Chat Info
         const chatRes = await this.client.query(`
             SELECT 
-                jid, name, is_group as "isGroup", is_announcement as "isAnnouncement", 
+                jid, COALESCE(metadata->>'subject', name) as name, is_group as "isGroup", is_announcement as "isAnnouncement", 
                 is_pinned as "isPinned", is_archived as "isArchived", is_muted as "isMuted",
                 unread_count as "unreadCount", last_message_text as "lastMessageText",
                 last_message_timestamp as "lastMessageTimestamp",

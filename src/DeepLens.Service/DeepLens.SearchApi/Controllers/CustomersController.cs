@@ -55,6 +55,14 @@ public class CustomersController : ControllerBase
         return Ok();
     }
 
+    [HttpDelete("{id:guid}/safe-delete-dummy")]
+    public async Task<IActionResult> SafeDeleteDummyCustomer(Guid id)
+    {
+        var success = await _customerService.SafeDeleteDummyCustomerAsync(id);
+        if (!success) return BadRequest(new { message = "Customer is linked to active orders and cannot be deleted." });
+        return Ok();
+    }
+
     [HttpPost("{id:guid}/addresses")]
     public async Task<IActionResult> AddAddress(Guid id, [FromBody] CreateAddressRequest request)
     {

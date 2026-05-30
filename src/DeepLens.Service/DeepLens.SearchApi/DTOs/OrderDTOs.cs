@@ -18,6 +18,9 @@ public class OrderUpdateDto
     [JsonPropertyName("customerAddress")]
     public string? CustomerAddress { get; set; }
 
+    [JsonPropertyName("customerId")]
+    public Guid? CustomerId { get; set; }
+
     [JsonPropertyName("source")]
     public OrderSource? Source { get; set; }
 

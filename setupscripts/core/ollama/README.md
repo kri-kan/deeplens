@@ -3,9 +3,11 @@
 This folder contains the Docker Compose setup for running Ollama with GPU support and the Open WebUI.
  
 ## Files
- 
+
 - `docker-compose.yaml` - Primary orchestration file for Ollama and WebUI.
 - `init.sh` - Container startup script to pull initial models.
+- `CONTEXT_AND_METRICS_GUIDE.md` - Guide for managing context windows, calculating KV cache sizes, and monitoring model execution metrics.
+- `MODEL_USAGE_GUIDELINES.md` - Performance recommendations, parameter tuning presets, and model selection guidelines for Gemma 3, Phi-4, and Qwen 3.5.
  
 ## Running the Setup
  

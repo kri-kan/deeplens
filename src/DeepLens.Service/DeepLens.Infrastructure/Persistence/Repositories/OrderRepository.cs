@@ -18,12 +18,12 @@ public class OrderRepository : IOrderRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<int> CreateOrderRecordAsync(long id, string orderId, int? sourceId, int? paymentModeId, string? sourceHandle, string? instagramUserId, string? customerPhone)
+    public async Task<int> CreateOrderRecordAsync(long id, string orderId, int? sourceId, int? paymentModeId, string? sourceHandle, string? instagramUserId, string? customerPhone, Guid? customerId = null)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         return await connection.ExecuteAsync(@"
-            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, source_handle, instagram_user_id, customer_phone)
-            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @SourceHandle, @InstagramUserId, @CustomerPhone)", 
+            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, source_handle, instagram_user_id, customer_phone, customer_id)
+            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @SourceHandle, @InstagramUserId, @CustomerPhone, @CustomerId)", 
             new { 
                 Id = id, 
                 OrderId = orderId, 
@@ -31,7 +31,8 @@ public class OrderRepository : IOrderRepository
                 PaymentModeId = paymentModeId, 
                 SourceHandle = sourceHandle,
                 InstagramUserId = instagramUserId,
-                CustomerPhone = customerPhone
+                CustomerPhone = customerPhone,
+                CustomerId = customerId
             });
     }
 
@@ -49,7 +50,9 @@ public class OrderRepository : IOrderRepository
                 o.instagram_user_id as InstagramUserId,
                 o.customer_address as CustomerAddress,
                 o.transaction_id as TransactionId,
-                o.created_at as Timestamp
+                o.created_at as Timestamp,
+                o.is_deleted as IsDeleted,
+                o.customer_id as CustomerId
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
@@ -73,7 +76,9 @@ public class OrderRepository : IOrderRepository
                 o.instagram_user_id as InstagramUserId,
                 o.customer_address as CustomerAddress,
                 o.transaction_id as TransactionId,
-                o.created_at as Timestamp
+                o.created_at as Timestamp,
+                o.is_deleted as IsDeleted,
+                o.customer_id as CustomerId
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
@@ -129,12 +134,14 @@ public class OrderRepository : IOrderRepository
             CustomerAddress = order.CustomerAddress,
             TransactionId = order.TransactionId,
             Timestamp = order.Timestamp,
+            IsDeleted = order.IsDeleted,
+            CustomerId = order.CustomerId,
             Attachments = attachments.ToList(),
             Items = itemsList
         };
     }
 
-    public async Task<bool> UpdateDetailsAsync(string orderId, string? phone, string? address, int? sourceId, string? sourceHandle, int? paymentModeId, string? transactionId)
+    public async Task<bool> UpdateDetailsAsync(string orderId, string? phone, string? address, int? sourceId, string? sourceHandle, int? paymentModeId, string? transactionId, Guid? customerId = null)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var rows = await connection.ExecuteAsync(@"
@@ -144,7 +151,8 @@ public class OrderRepository : IOrderRepository
                 source_handle = COALESCE(@SourceHandle, source_handle),
                 payment_mode_id = COALESCE(@PaymentModeId, payment_mode_id),
                 customer_address = COALESCE(@Address, customer_address),
-                transaction_id = COALESCE(@TransactionId, transaction_id)
+                transaction_id = COALESCE(@TransactionId, transaction_id),
+                customer_id = COALESCE(@CustomerId, customer_id)
             WHERE order_id = @OrderId",
             new { 
                 OrderId = orderId, 
@@ -153,7 +161,8 @@ public class OrderRepository : IOrderRepository
                 SourceHandle = sourceHandle,
                 PaymentModeId = paymentModeId,
                 Address = address,
-                TransactionId = transactionId
+                TransactionId = transactionId,
+                CustomerId = customerId
             });
         return rows > 0;
     }
@@ -184,6 +193,17 @@ public class OrderRepository : IOrderRepository
         return await connection.QuerySingleAsync<int>("SELECT id FROM \"orderId\" WHERE order_id = @OrderId", new { OrderId = orderId });
     }
 
+    public async Task<bool> SoftDeleteOrderAsync(string orderId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var rows = await connection.ExecuteAsync(@"
+            UPDATE ""orderId"" 
+            SET is_deleted = true
+            WHERE order_id = @OrderId",
+            new { OrderId = orderId });
+        return rows > 0;
+    }
+
     private record OrderDetailsQueryResult(
         string Id, 
         string? SourceName, 
@@ -194,7 +214,9 @@ public class OrderRepository : IOrderRepository
         string? InstagramUserId, 
         string? CustomerAddress, 
         string? TransactionId, 
-        DateTime Timestamp);
+        DateTime Timestamp,
+        bool IsDeleted,
+        Guid? CustomerId);
 
     private record OrderItemQueryResult(int Id, string? ProductId, string? Comments);
 }

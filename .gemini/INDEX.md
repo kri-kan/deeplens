@@ -48,6 +48,7 @@ Use the **master agent** for any feature that touches more than one service:
 | `kafka-event-agent` | `src/DeepLens.Service/.gemini/agents/kafka-event-agent.md` | New Kafka topic or async event |
 | `schema-migration-agent` | `src/DeepLens.Service/.gemini/agents/schema-migration-agent.md` | Any DB schema change |
 | `whatsapp-feature-agent` | `src/whatsapp-processor/.gemini/agents/whatsapp-feature-agent.md` | Any WhatsApp Processor feature |
+| `giglog` | `.gemini/agents/giglog.agent.md` | Log work activity, summarize progress, analyze time |
 
 ---
 
@@ -110,6 +111,8 @@ Use the **master agent** for any feature that touches more than one service:
 |---|---|---|
 | Port Allocation | `docs/infrastructure/port-allocation.md` | Adding a new service or checking port conflicts |
 | Port Audit | `docs/infrastructure/port-audit.md` | Diagnosing port conflicts |
+| Ollama Context & Metrics Guide | `setupscripts/core/ollama/CONTEXT_AND_METRICS_GUIDE.md` | Monitoring LLM metrics and sizing context windows on 8GB GPUs |
+
 
 ### Guides
 

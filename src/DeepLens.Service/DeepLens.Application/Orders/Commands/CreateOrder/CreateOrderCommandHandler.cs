@@ -30,7 +30,8 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Res
     {
         try
         {
-            var orderIdStr = await _idGenerator.GetNextOrderIdAsync();
+            var result = await _idGenerator.GetNextOrderIdAsync();
+            var orderIdStr = result.OrderId;
             
             int? sourceId = null;
             if (!string.IsNullOrEmpty(request.Source) && Enum.TryParse<DeepLens.Domain.Enums.OrderSource>(request.Source, true, out var srcEnum))
@@ -39,6 +40,8 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Res
             int? paymentModeId = null;
             if (!string.IsNullOrEmpty(request.PaymentMode) && Enum.TryParse<DeepLens.Domain.Enums.PaymentMode>(request.PaymentMode, true, out var payEnum))
                 paymentModeId = (int)payEnum;
+
+            await _orderRepository.CreateOrderRecordAsync(result.Id, orderIdStr, sourceId, paymentModeId, null, null, null);
 
             return Result<CreateOrderResponse>.Success(new CreateOrderResponse(orderIdStr));
         }

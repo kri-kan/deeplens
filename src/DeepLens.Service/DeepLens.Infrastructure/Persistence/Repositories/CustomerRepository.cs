@@ -135,6 +135,12 @@ public class CustomerRepository : ICustomerRepository
         return rows > 0;
     }
 
+    public async Task<int> GetOrderCountAsync(Guid customerId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        return await connection.ExecuteScalarAsync<int>(@"SELECT COUNT(1) FROM ""orderId"" WHERE customer_id = @CustomerId", new { CustomerId = customerId });
+    }
+
     public async Task<IEnumerable<CustomerAddress>> GetAddressesByCustomerIdAsync(Guid customerId)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();

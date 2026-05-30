@@ -22,6 +22,9 @@ public class OrderDetailDto
     [JsonPropertyName("sourceHandle")]
     public string? SourceHandle { get; set; }
 
+    [JsonPropertyName("customerId")]
+    public Guid? CustomerId { get; set; }
+
     [JsonPropertyName("instagramHandle")]
     public string? InstagramHandle { get; set; }
 
@@ -42,6 +45,9 @@ public class OrderDetailDto
 
     [JsonPropertyName("items")]
     public List<OrderItemDetailDto>? Items { get; set; }
+
+    [JsonPropertyName("isDeleted")]
+    public bool IsDeleted { get; set; }
 }
 
 public class OrderItemDetailDto

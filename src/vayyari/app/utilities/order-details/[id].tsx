@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { searchApiClient } from '@/api/client';
+import { customersApi, Customer, CustomerAddress } from '@/api/customers';
 import { API_ROUTES } from '@/constants/api-routes';
 import { OrderIdEntry, OrderItem, OrderComment, OrderUpdateRequest, Attachment } from '@/types/orders';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
@@ -34,9 +35,40 @@ export default function OrderFormScreen() {
     const [isProductsExpanded, setIsProductsExpanded] = useState(true);
     const [isCommentsExpanded, setIsCommentsExpanded] = useState(true);
 
+    const [addrFirstName, setAddrFirstName] = useState('');
+    const [addrLastName, setAddrLastName] = useState('');
+    const [addrPhone, setAddrPhone] = useState('');
+    const [addrPincode, setAddrPincode] = useState('');
+    const [addrText, setAddrText] = useState('');
+    const [smartFillText, setSmartFillText] = useState('');
+    const [isSmartFillMode, setIsSmartFillMode] = useState(false);
+    const [initialState, setInitialState] = useState<any>(null);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // Customer related state
+    const [customer, setCustomer] = useState<Customer | null>(null);
+    const [showAddressBook, setShowAddressBook] = useState(false);
+    const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
+
+    const isReadOnly = orderData?.isDeleted === true;
+
     useEffect(() => {
         fetchOrderDetails();
     }, [id]);
+
+    useEffect(() => {
+        if (!initialState) return;
+        const currentItems = JSON.stringify(items);
+        const hasChanged = 
+            currentItems !== initialState.items ||
+            transactionId !== initialState.transactionId ||
+            addrFirstName !== initialState.addrFirstName ||
+            addrLastName !== initialState.addrLastName ||
+            addrPhone !== initialState.addrPhone ||
+            addrPincode !== initialState.addrPincode ||
+            addrText !== initialState.addrText;
+        setHasUnsavedChanges(hasChanged);
+    }, [items, transactionId, addrFirstName, addrLastName, addrPhone, addrPincode, addrText, initialState]);
 
     const fetchOrderDetails = async () => {
         if (!id) return;
@@ -48,6 +80,18 @@ export default function OrderFormScreen() {
             setItems(data.items || []);
             setTransactionId(data.transactionId || '');
             
+            if (data.customerId) {
+                try {
+                    const cust = await customersApi.getCustomerById(data.customerId);
+                    setCustomer(cust);
+                    if (cust.addresses) {
+                        setCustomerAddresses(cust.addresses);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load customer data', e);
+                }
+            }
+            
             // Extract screenshot from attachments (tag: receipt)
             const receipt = data.attachments?.find((a: any) => a.tag === 'receipt');
             if (receipt) {
@@ -56,6 +100,38 @@ export default function OrderFormScreen() {
             } else {
                 setScreenshotUrl('');
             }
+
+            let pFirstName = '', pLastName = '', pPhone = '', pPincode = '', pAddress = '';
+            if (data.customerAddress) {
+                try {
+                    const parsed = JSON.parse(data.customerAddress);
+                    pFirstName = parsed.firstName || '';
+                    pLastName = parsed.lastName || '';
+                    pPhone = parsed.phone || '';
+                    pPincode = parsed.pincode || '';
+                    pAddress = parsed.address || '';
+                } catch (e) {
+                    pAddress = data.customerAddress;
+                }
+            } else {
+                pPhone = data.customerPhone || '';
+            }
+
+            setAddrFirstName(pFirstName);
+            setAddrLastName(pLastName);
+            setAddrPhone(pPhone);
+            setAddrPincode(pPincode);
+            setAddrText(pAddress);
+
+            setInitialState({
+                items: JSON.stringify(data.items || []),
+                transactionId: data.transactionId || '',
+                addrFirstName: pFirstName,
+                addrLastName: pLastName,
+                addrPhone: pPhone,
+                addrPincode: pPincode,
+                addrText: pAddress
+            });
 
             fetchComments();
         } catch (error) {
@@ -233,6 +309,26 @@ export default function OrderFormScreen() {
         ]);
     };
 
+    const handleDeleteOrder = async () => {
+        Alert.alert('Delete Order', 'Are you sure you want to delete this order?', [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+                text: 'Delete', 
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        setLoading(true);
+                        await searchApiClient.delete(API_ROUTES.ORDERS.DELETE(id as string));
+                        router.back();
+                    } catch (error) {
+                        Alert.alert('Error', 'Failed to delete order.');
+                        setLoading(false);
+                    }
+                }
+            }
+        ]);
+    };
+
     const startEditComment = (comment: OrderComment) => {
         setNewComment(comment.content);
         setEditingCommentId(comment.id || null);
@@ -346,17 +442,63 @@ export default function OrderFormScreen() {
         if (!id) return;
         try {
             setSaving(true);
+            
+            const addressJson = JSON.stringify({
+                firstName: addrFirstName,
+                lastName: addrLastName,
+                phone: addrPhone,
+                pincode: addrPincode,
+                address: addrText
+            });
+
             await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(id), {
-                customerPhone: orderData?.customerPhone,
-                customerAddress: orderData?.customerAddress,
+                customerPhone: addrPhone || orderData?.customerPhone,
+                customerAddress: addressJson,
                 source: orderData?.source,
                 sourceHandle: orderData?.instagramHandle || orderData?.customerPhone,
                 paymentMode: orderData?.paymentMode,
                 items: items,
                 transactionId: transactionId,
+                customerId: orderData?.customerId,
             } as OrderUpdateRequest);
+
+            // Update Customer Name if dummy
+            if (customer && (addrFirstName || addrLastName)) {
+                const currentName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+                const isDummy = !currentName || currentName.toLowerCase().startsWith('cust');
+                if (isDummy) {
+                    await customersApi.updateCustomerName(customer.id, customer, addrFirstName, addrLastName);
+                }
+
+                // Save Address to address book if not exists
+                const existingAddress = customerAddresses.find(a => 
+                    a.line1 === addrText && a.pincode === addrPincode
+                );
+                if (!existingAddress && addrText) {
+                    await customersApi.saveCustomerAddress(customer.id, {
+                        name: `${addrFirstName} ${addrLastName}`.trim(),
+                        phone: addrPhone,
+                        line1: addrText,
+                        pincode: addrPincode,
+                        isDefault: false
+                    });
+                    // Refresh addresses
+                    const updatedCust = await customersApi.getCustomerById(customer.id);
+                    setCustomer(updatedCust);
+                    setCustomerAddresses(updatedCust.addresses || []);
+                }
+            }
             Alert.alert('Success', 'Order form saved successfully.');
-            router.back();
+            setHasUnsavedChanges(false);
+            setInitialState({
+                items: JSON.stringify(items),
+                transactionId: transactionId,
+                addrFirstName: addrFirstName,
+                addrLastName: addrLastName,
+                addrPhone: addrPhone,
+                addrPincode: addrPincode,
+                addrText: addrText
+            });
         } catch (error) {
             console.error('Failed to update order details:', error);
             Alert.alert('Error', 'Failed to save form.');
@@ -365,6 +507,24 @@ export default function OrderFormScreen() {
         }
     };
 
+
+    const handleSmartFill = () => {
+        if (!smartFillText) return;
+        const text = smartFillText;
+        const firstNameMatch = text.match(/first_name:\s*(.+)/i);
+        const lastNameMatch = text.match(/last_name:\s*(.+)/i);
+        const phoneMatch = text.match(/phone_number:\s*(.+)/i) || text.match(/phone:\s*(.+)/i);
+        const pinMatch = text.match(/pincode:\s*(.+)/i) || text.match(/pin:\s*(.+)/i);
+        const addrMatch = text.match(/address:\s*([\s\S]+)/i);
+
+        if (firstNameMatch) setAddrFirstName(firstNameMatch[1].trim());
+        if (lastNameMatch) setAddrLastName(lastNameMatch[1].trim());
+        if (phoneMatch) setAddrPhone(phoneMatch[1].trim());
+        if (pinMatch) setAddrPincode(pinMatch[1].trim());
+        if (addrMatch) setAddrText(addrMatch[1].trim());
+        
+        setSmartFillText('');
+    };
 
     if (loading) {
         return (
@@ -378,7 +538,21 @@ export default function OrderFormScreen() {
     return (
         <Surface style={{ flex: 1, backgroundColor: theme.colors.background }}>
             <Appbar.Header elevated>
-                <Appbar.BackAction onPress={() => router.back()} />
+                <Appbar.BackAction onPress={() => {
+                    if (hasUnsavedChanges) {
+                        Alert.alert(
+                            "Unsaved Changes",
+                            "You have unsaved changes. Do you want to save them before exiting?",
+                            [
+                                { text: "Cancel", style: "cancel" },
+                                { text: "Exit without Saving", style: "destructive", onPress: () => router.back() },
+                                { text: "Save and Exit", onPress: async () => { await handleSave(); router.back(); } }
+                            ]
+                        );
+                    } else {
+                        router.back();
+                    }
+                }} />
                 <Appbar.Content 
                     title={`Order: ${id}`} 
                     onPress={() => copyToClipboard(id || '', 'Order ID')}
@@ -398,6 +572,9 @@ export default function OrderFormScreen() {
                         </Text>
                     </View>
                 )}
+                {isReadOnly && <Chip style={{ marginRight: 8, backgroundColor: theme.colors.errorContainer }} textStyle={{ color: theme.colors.onErrorContainer, fontSize: 12, fontWeight: 'bold' }}>DELETED</Chip>}
+                {!isReadOnly && <Appbar.Action icon="content-save" onPress={handleSave} disabled={saving} />}
+                {!isReadOnly && <Appbar.Action icon="trash-can-outline" onPress={handleDeleteOrder} iconColor={theme.colors.error} />}
             </Appbar.Header>
 
             <ScrollView contentContainerStyle={{ padding: 4, gap: 24 }}>
@@ -426,7 +603,7 @@ export default function OrderFormScreen() {
                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                                 <Text variant="labelLarge" style={{ opacity: 0.5 }}>Txn ID:</Text>
-                                {isEditingTxn ? (
+                                {isEditingTxn && !isReadOnly ? (
                                     <TextInput
                                         value={transactionId}
                                         onChangeText={setTransactionId}
@@ -436,11 +613,13 @@ export default function OrderFormScreen() {
                                         onBlur={() => setIsEditingTxn(false)}
                                         style={{ flex: 1, height: 36, backgroundColor: 'transparent' }}
                                         right={<TextInput.Icon icon="check" onPress={() => setIsEditingTxn(false)} />}
+                                        disabled={isReadOnly}
                                     />
                                 ) : (
                                     <TouchableOpacity 
-                                        onPress={() => setIsEditingTxn(true)}
+                                        onPress={() => !isReadOnly && setIsEditingTxn(true)}
                                         style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                        disabled={isReadOnly}
                                     >
                                         <Text variant="bodyLarge" style={{ 
                                             fontWeight: 'bold',
@@ -448,7 +627,7 @@ export default function OrderFormScreen() {
                                         }}>
                                             {transactionId || 'Not Set'}
                                         </Text>
-                                        <Icon source="pencil-outline" size={14} color={theme.colors.primary} />
+                                        {!isReadOnly && <Icon source="pencil-outline" size={14} color={theme.colors.primary} />}
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -458,7 +637,7 @@ export default function OrderFormScreen() {
                                 <TouchableOpacity 
                                     onPress={() => {
                                         if (!screenshotUrl) {
-                                            pickImage(false);
+                                            if (!isReadOnly) pickImage(false);
                                             return;
                                         }
                                         const now = Date.now();
@@ -469,13 +648,14 @@ export default function OrderFormScreen() {
                                         }
                                     }}
                                     onLongPress={() => {
+                                        if (isReadOnly) return;
                                         Alert.alert('Manage Screenshot', 'What would you like to do?', [
                                             { text: 'Replace', onPress: () => pickImage(true) },
                                             { text: 'Delete', onPress: handleDeleteScreenshot, style: 'destructive' },
                                             { text: 'Cancel', style: 'cancel' }
                                         ]);
                                     }}
-                                    disabled={isUploading}
+                                    disabled={isUploading || (isReadOnly && !screenshotUrl)}
                                     style={{ 
                                         width: 44, 
                                         height: 44, 
@@ -518,6 +698,85 @@ export default function OrderFormScreen() {
                     </Surface>
                 </View>
 
+                {/* Address Capture Section */}
+                <Surface style={{ borderRadius: 12, padding: 12, backgroundColor: theme.colors.surface, gap: 12 }} elevation={1}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>Delivery Address</Text>
+                        {!isReadOnly && (
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {customer && (
+                                    <Button 
+                                        icon="book" 
+                                        mode="outlined" 
+                                        compact
+                                        onPress={() => setShowAddressBook(true)}
+                                    >
+                                        Address Book
+                                    </Button>
+                                )}
+                                <Button 
+                                    icon="magic-staff" 
+                                    mode={isSmartFillMode ? 'contained' : 'outlined'} 
+                                    compact
+                                    onPress={() => setIsSmartFillMode(!isSmartFillMode)}
+                                >
+                                    Smart Fill
+                                </Button>
+                            </View>
+                        )}
+                    </View>
+                    
+                    {!isReadOnly && isSmartFillMode ? (
+                        <View style={{ gap: 8 }}>
+                            <TextInput
+                                label="Paste Template Here"
+                                placeholder={"first_name: Krishna\nlast_name: Kanth\nphone_number: 9876543210\npincode: 500090\naddress:"}
+                                value={smartFillText}
+                                onChangeText={setSmartFillText}
+                                mode="outlined"
+                                multiline
+                                numberOfLines={6}
+                                style={{ backgroundColor: theme.colors.surfaceVariant }}
+                            />
+                            <Button 
+                                mode="contained" 
+                                onPress={() => {
+                                    handleSmartFill();
+                                    setIsSmartFillMode(false);
+                                }}
+                                disabled={!smartFillText}
+                            >
+                                Process
+                            </Button>
+                        </View>
+                    ) : (
+                        <View style={{ gap: 12 }}>
+                            {/* Fields */}
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TextInput label="First Name" value={addrFirstName} onChangeText={setAddrFirstName} mode="outlined" dense style={{ flex: 1 }} disabled={isReadOnly} />
+                                <TextInput label="Last Name" value={addrLastName} onChangeText={setAddrLastName} mode="outlined" dense style={{ flex: 1 }} disabled={isReadOnly} />
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TextInput label="Phone Number" value={addrPhone} onChangeText={setAddrPhone} mode="outlined" dense style={{ flex: 1 }} keyboardType="phone-pad" disabled={isReadOnly} />
+                                <TextInput label="Pincode" value={addrPincode} onChangeText={setAddrPincode} mode="outlined" dense style={{ flex: 1 }} keyboardType="number-pad" disabled={isReadOnly} />
+                            </View>
+                            <TextInput label="Full Address" value={addrText} onChangeText={setAddrText} mode="outlined" multiline numberOfLines={3} dense disabled={isReadOnly} />
+                            
+                            {!isReadOnly && hasUnsavedChanges && (
+                                <Button 
+                                    mode="contained" 
+                                    icon="content-save" 
+                                    onPress={handleSave} 
+                                    loading={saving}
+                                    style={{ marginTop: 4 }}
+                                >
+                                    Update Details
+                                </Button>
+                            )}
+                        </View>
+                    )}
+                </Surface>
+
                 {/* Product List */}
                 <View style={{ gap: 16 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -540,7 +799,7 @@ export default function OrderFormScreen() {
                                 <Text style={{ fontSize: 11, fontWeight: 'bold', lineHeight: 14 }}>{items.length}</Text>
                             </View>
                         </TouchableOpacity>
-                        <Button icon="plus" mode="contained-tonal" onPress={handleAddItem}>Add Item</Button>
+                        {!isReadOnly && <Button icon="plus" mode="contained-tonal" onPress={handleAddItem}>Add Item</Button>}
                     </View>
 
                     {isProductsExpanded && (
@@ -550,7 +809,7 @@ export default function OrderFormScreen() {
                             <Card.Title 
                                 title={`#${index + 1} Product`} 
                                 right={(props) => (
-                                    <IconButton {...props} icon="trash-can-outline" iconColor={theme.colors.error} onPress={() => removeItem(index)} />
+                                    !isReadOnly ? <IconButton {...props} icon="trash-can-outline" iconColor={theme.colors.error} onPress={() => removeItem(index)} /> : null
                                 )}
                             />
                             <Card.Content style={{ gap: 12 }}>
@@ -560,6 +819,7 @@ export default function OrderFormScreen() {
                                     onChangeText={(val) => updateItem(index, 'productId', val)}
                                     mode="outlined"
                                     dense
+                                    disabled={isReadOnly}
                                 />
                                 
                                 <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
@@ -570,6 +830,7 @@ export default function OrderFormScreen() {
                                             onChangeText={(val) => updateItem(index, 'photoUrl', val)}
                                             mode="outlined"
                                             dense
+                                            disabled={isReadOnly}
                                             right={
                                                 <TextInput.Icon 
                                                     icon="content-copy" 
@@ -625,6 +886,7 @@ export default function OrderFormScreen() {
                                         multiline
                                         numberOfLines={3}
                                         dense
+                                        disabled={isReadOnly}
                                     />
                                 </View>
                             </Card.Content>
@@ -668,29 +930,24 @@ export default function OrderFormScreen() {
                     {isCommentsExpanded && (
                         <>
                             {/* Add/Edit Comment Input */}
+                            {!isReadOnly && (
                     <View style={{ marginBottom: 4 }}>
                         {editingCommentId && (
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>Editing Comment</Text>
                             </View>
                         )}
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                        <View style={{ marginBottom: 4 }}>
                             <TextInput
                                 placeholder={editingCommentId ? "Update note..." : "Add a note..."}
                                 value={newComment}
                                 onChangeText={setNewComment}
                                 mode="outlined"
                                 multiline
-                                style={{ backgroundColor: theme.colors.surface, flex: 1, textAlignVertical: 'center' }}
-                                contentStyle={{ paddingVertical: 10, textAlignVertical: 'center' }}
+                                numberOfLines={4}
+                                style={{ backgroundColor: theme.colors.surface }}
+                                contentStyle={{ paddingVertical: 10, textAlignVertical: 'top', minHeight: 100 }}
                                 autoFocus={!!editingCommentId}
-                            />
-                            <IconButton 
-                                icon="paperclip" 
-                                size={24} 
-                                style={{ marginTop: 8 }}
-                                onPress={handleAttachFiles} 
-                                iconColor={newCommentAttachments.length > 0 ? theme.colors.primary : theme.colors.outline}
                             />
                         </View>
 
@@ -758,42 +1015,52 @@ export default function OrderFormScreen() {
                                 </View>
                             </ScrollView>
                         )}
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4, gap: 8 }}>
-                            {editingCommentId ? (
-                                <>
-                                    <Button 
-                                        mode="contained-tonal" 
-                                        compact 
-                                        onPress={() => {
-                                            setNewComment('');
-                                            setEditingCommentId(null);
-                                        }}
-                                        style={{ borderRadius: 8 }}
-                                    >
-                                        Cancel
-                                    </Button>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                            <IconButton 
+                                icon="paperclip" 
+                                size={24} 
+                                onPress={handleAttachFiles} 
+                                iconColor={newCommentAttachments.length > 0 ? theme.colors.primary : theme.colors.outline}
+                                style={{ margin: 0 }}
+                            />
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {editingCommentId ? (
+                                    <>
+                                        <Button 
+                                            mode="contained-tonal" 
+                                            compact 
+                                            onPress={() => {
+                                                setNewComment('');
+                                                setEditingCommentId(null);
+                                            }}
+                                            style={{ borderRadius: 8 }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button 
+                                            mode="contained" 
+                                            onPress={handleAddComment}
+                                            disabled={!newComment.trim()}
+                                            style={{ borderRadius: 8 }}
+                                        >
+                                            Update
+                                        </Button>
+                                    </>
+                                ) : (
                                     <Button 
                                         mode="contained" 
                                         onPress={handleAddComment}
-                                        disabled={!newComment.trim()}
+                                        disabled={(!newComment.trim() && newCommentAttachments.length === 0) || isUploadingAttachments}
                                         style={{ borderRadius: 8 }}
+                                        loading={isUploadingAttachments}
                                     >
-                                        Update
+                                        Post
                                     </Button>
-                                </>
-                            ) : (
-                                <Button 
-                                    mode="contained" 
-                                    onPress={handleAddComment}
-                                    disabled={(!newComment.trim() && newCommentAttachments.length === 0) || isUploadingAttachments}
-                                    style={{ borderRadius: 8 }}
-                                    loading={isUploadingAttachments}
-                                >
-                                    Post
-                                </Button>
-                            )}
+                                )}
+                            </View>
                         </View>
                     </View>
+                            )}
 
                     {/* Timeline List */}
                     <View style={{ gap: 6 }}>
@@ -819,6 +1086,8 @@ export default function OrderFormScreen() {
                                             }) : 'Recently'}
                                         </Text>
                                         <View style={{ flexDirection: 'row' }}>
+                                            {!isReadOnly && (
+                                                <>
                                             <IconButton 
                                                 icon="pencil-outline" 
                                                 size={24} 
@@ -832,6 +1101,8 @@ export default function OrderFormScreen() {
                                                 onPress={() => handleDeleteComment(comment.id!)} 
                                                 style={{ margin: 0 }}
                                             />
+                                                </>
+                                            )}
                                         </View>
                                     </View>
                                     <Text style={{marginBottom:4}} variant="bodyMedium">{comment.content}</Text>
@@ -860,6 +1131,52 @@ export default function OrderFormScreen() {
                 imageUrl={previewImage || ''} 
                 title="Image Preview" 
             />
+
+            {/* Address Book Modal */}
+            <Portal>
+                <Modal 
+                    visible={showAddressBook} 
+                    onDismiss={() => setShowAddressBook(false)}
+                    contentContainerStyle={{ backgroundColor: theme.colors.surface, margin: 20, padding: 20, borderRadius: 12, maxHeight: '80%' }}
+                >
+                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginBottom: 16 }}>Address Book</Text>
+                    {customerAddresses.length === 0 ? (
+                        <Text style={{ opacity: 0.6, textAlign: 'center', marginVertical: 20 }}>No saved addresses found.</Text>
+                    ) : (
+                        <ScrollView>
+                            {customerAddresses.map((addr, idx) => (
+                                <Surface key={idx} style={{ padding: 12, borderRadius: 8, marginBottom: 12, backgroundColor: theme.colors.surfaceVariant }} elevation={0}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View style={{ flex: 1, paddingRight: 12 }}>
+                                            <Text style={{ fontWeight: 'bold' }}>{addr.name}</Text>
+                                            <Text variant="bodySmall">{addr.phone}</Text>
+                                            <Text variant="bodySmall" style={{ marginTop: 4 }}>{addr.line1}</Text>
+                                            {addr.line2 && <Text variant="bodySmall">{addr.line2}</Text>}
+                                            <Text variant="bodySmall">{addr.city ? `${addr.city}, ` : ''}{addr.state ? `${addr.state}, ` : ''}{addr.pincode}</Text>
+                                        </View>
+                                        <Button 
+                                            mode="contained-tonal"
+                                            compact
+                                            onPress={() => {
+                                                const parts = addr.name.split(' ');
+                                                setAddrFirstName(parts[0] || '');
+                                                setAddrLastName(parts.slice(1).join(' ') || '');
+                                                setAddrPhone(addr.phone || '');
+                                                setAddrPincode(addr.pincode || '');
+                                                setAddrText([addr.line1, addr.line2, addr.city, addr.state].filter(Boolean).join(', '));
+                                                setShowAddressBook(false);
+                                            }}
+                                        >
+                                            Select
+                                        </Button>
+                                    </View>
+                                </Surface>
+                            ))}
+                        </ScrollView>
+                    )}
+                    <Button mode="outlined" onPress={() => setShowAddressBook(false)} style={{ marginTop: 8 }}>Close</Button>
+                </Modal>
+            </Portal>
         </Surface>
     );
 }

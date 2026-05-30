@@ -35,4 +35,13 @@ public class OrderHistoryDto
 
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("isDeleted")]
+    public bool IsDeleted { get; set; }
+
+    [JsonPropertyName("customerId")]
+    public Guid? CustomerId { get; set; }
 }

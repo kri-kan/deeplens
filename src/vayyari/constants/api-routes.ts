@@ -22,6 +22,7 @@ export const API_ROUTES = {
     HISTORY: '/api/v1/orderid/history',
     GET_BY_ID: (orderId: string) => `/api/v1/orderid/${orderId}`,
     UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
+    DELETE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
   },
 
   // Product ID generation (separate concern from catalog CRUD)

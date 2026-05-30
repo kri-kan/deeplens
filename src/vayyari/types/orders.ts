@@ -30,6 +30,8 @@ export interface OrderIdEntry {
   attachments?: Attachment[];
   items?: OrderItem[];
   orderDetails?: string;
+  isDeleted?: boolean;
+  customerId?: string;
 }
 
 /**
@@ -43,6 +45,7 @@ export interface OrderUpdateRequest {
   sourceHandle?: string;
   paymentMode?: PaymentMode;
   transactionId?: string;
+  customerId?: string;
   items?: OrderItem[];
 }
 

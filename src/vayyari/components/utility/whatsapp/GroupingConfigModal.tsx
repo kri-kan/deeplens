@@ -11,6 +11,7 @@ import {
   IconButton,
   Surface,
   Divider,
+  Checkbox,
 } from 'react-native-paper';
 import { waProcessorService } from '@/services/wa-processor.service';
 
@@ -35,14 +36,16 @@ export function GroupingConfigModal({
 }: GroupingConfigModalProps) {
   const theme = useTheme();
   const [enabled, setEnabled] = useState(initialEnabled);
-  const [strategy, setStrategy] = useState<'sticker' | 'time_gap'>(initialConfig?.strategy || 'sticker');
+  const [useSticker, setUseSticker] = useState(initialConfig?.strategy === 'sticker' || initialConfig?.strategy === 'hybrid');
+  const [useTimeGap, setUseTimeGap] = useState(initialConfig?.strategy === 'time_gap' || initialConfig?.strategy === 'hybrid');
   const [timeGap, setTimeGap] = useState(initialConfig?.timeGapSeconds?.toString() || '300');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setEnabled(initialEnabled);
-      setStrategy(initialConfig?.strategy || 'sticker');
+      setUseSticker(initialConfig?.strategy === 'sticker' || initialConfig?.strategy === 'hybrid' || !initialConfig?.strategy);
+      setUseTimeGap(initialConfig?.strategy === 'time_gap' || initialConfig?.strategy === 'hybrid');
       setTimeGap(initialConfig?.timeGapSeconds?.toString() || '300');
     }
   }, [visible, initialEnabled, initialConfig]);
@@ -50,9 +53,21 @@ export function GroupingConfigModal({
   const handleSave = async () => {
     setSaving(true);
     try {
+      let strategy = 'sticker';
+      if (useSticker && useTimeGap) strategy = 'hybrid';
+      else if (!useSticker && useTimeGap) strategy = 'time_gap';
+      else if (useSticker && !useTimeGap) strategy = 'sticker';
+      else strategy = 'none'; // if both unchecked, default to something, maybe sticker
+
+      if (strategy === 'none') {
+        Alert.alert('Validation Error', 'Please select at least one grouping strategy.');
+        setSaving(false);
+        return;
+      }
+
       const config = {
         strategy,
-        timeGapSeconds: strategy === 'time_gap' ? parseInt(timeGap) : undefined
+        timeGapSeconds: useTimeGap ? parseInt(timeGap) : undefined
       };
       await waProcessorService.toggleMessageGrouping(jid, enabled, config);
       Alert.alert('Success', 'Grouping configuration updated');
@@ -101,26 +116,32 @@ export function GroupingConfigModal({
             <>
               <Text variant="labelMedium" style={styles.sectionLabel}>Grouping Strategy</Text>
               <Surface style={styles.section} elevation={1}>
-                <RadioButton.Group onValueChange={value => setStrategy(value as any)} value={strategy}>
-                  <View style={styles.radioItem}>
-                    <RadioButton.Android value="sticker" />
-                    <View style={{ flex: 1 }}>
-                      <Text variant="bodyLarge">Sticker Separator</Text>
-                      <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use a sticker as a &quot;break&quot; between groups</Text>
-                    </View>
+                <View style={styles.radioItem}>
+                  <Checkbox.Android 
+                    status={useSticker ? 'checked' : 'unchecked'} 
+                    onPress={() => setUseSticker(!useSticker)}
+                    color={theme.colors.primary}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodyLarge">Sticker Separator</Text>
+                    <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use a sticker as a &quot;break&quot; between groups</Text>
                   </View>
-                  <Divider style={styles.divider} />
-                  <View style={styles.radioItem}>
-                    <RadioButton.Android value="time_gap" />
-                    <View style={{ flex: 1 }}>
-                      <Text variant="bodyLarge">Time Gap</Text>
-                      <Text variant="bodySmall" style={{ opacity: 0.6 }}>New group starts after a period of silence</Text>
-                    </View>
+                </View>
+                <Divider style={styles.divider} />
+                <View style={styles.radioItem}>
+                  <Checkbox.Android 
+                    status={useTimeGap ? 'checked' : 'unchecked'} 
+                    onPress={() => setUseTimeGap(!useTimeGap)}
+                    color={theme.colors.primary}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodyLarge">Time Gap</Text>
+                    <Text variant="bodySmall" style={{ opacity: 0.6 }}>New group starts after a period of silence</Text>
                   </View>
-                </RadioButton.Group>
+                </View>
               </Surface>
 
-              {strategy === 'time_gap' && (
+              {useTimeGap && (
                 <>
                   <Text variant="labelMedium" style={styles.sectionLabel}>Time Gap Threshold (seconds)</Text>
                   <TextInput

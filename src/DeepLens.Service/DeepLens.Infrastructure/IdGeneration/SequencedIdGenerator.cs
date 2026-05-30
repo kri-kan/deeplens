@@ -13,11 +13,11 @@ public class SequencedIdGenerator : ISequencedIdGenerator
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<string> GetNextOrderIdAsync()
+    public async Task<(long Id, string OrderId)> GetNextOrderIdAsync()
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var nextValue = await connection.QuerySingleAsync<long>("SELECT nextval('\"orderId_id_seq\"')");
-        return ToBase36(nextValue, 5);
+        return (nextValue, ToBase36(nextValue, 5));
     }
 
     public async Task<string> GetNextProductIdAsync()

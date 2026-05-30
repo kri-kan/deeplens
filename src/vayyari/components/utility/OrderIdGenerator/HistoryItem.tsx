@@ -28,72 +28,27 @@ export const HistoryItem = ({
 }: HistoryItemProps) => {
   const theme = useTheme();
   const router = useRouter();
-  const [editSource, setEditSource] = useState(item.source);
   const [editPaymentMode, setEditPaymentMode] = useState<PaymentMode | null>(item.paymentMode);
   const [editHandle, setEditHandle] = useState(item.source === 'WhatsApp' ? item.customerPhone || '' : item.instagramHandle || '');
-  const [detectedInstaId, setDetectedInstaId] = useState<string | null>(item.instagramUserId || null);
-  const [isLookupLoading, setIsLookupLoading] = useState(false);
   
-  const hasChanged = editSource !== item.source || 
-                    editPaymentMode !== item.paymentMode || 
-                    editHandle !== (item.source === 'WhatsApp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
-
-  // Sync handle when platform is switched in the edit form
-  React.useEffect(() => {
-    setEditHandle(editSource === 'WhatsApp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
-  }, [editSource, item.customerPhone, item.instagramHandle]);
+  const hasChanged = editPaymentMode !== item.paymentMode || 
+                     editHandle !== (item.source === 'WhatsApp' ? (item.customerPhone || '') : (item.instagramHandle || ''));
 
   const handleReset = () => {
-    setEditSource(item.source);
     setEditPaymentMode(item.paymentMode);
     setEditHandle(item.source === 'WhatsApp' ? item.customerPhone || '' : item.instagramHandle || '');
-    setDetectedInstaId(item.instagramUserId || null);
-  };
-
-  // Debounced Instagram ID Lookup
-  React.useEffect(() => {
-    if (isEditing && editSource === 'Instagram' && editHandle.trim().length > 3) {
-      const handler = setTimeout(() => {
-        fetchInstagramId(editHandle.trim());
-      }, 400); 
-      return () => clearTimeout(handler);
-    }
-  }, [editHandle, editSource, isEditing]);
-
-  const fetchInstagramId = async (handle: string) => {
-    let username = handle;
-    if (handle.includes('instagram.com/')) {
-        const parts = handle.split('instagram.com/')[1].split('/')[0].split('?')[0];
-        if (parts) username = parts;
-    }
-    username = username.replace('@', '');
-
-    try {
-      setIsLookupLoading(true);
-      const response = await searchApiClient.get<{ profile: { userId: string } }>(`/api/v1/insta/profile/${username}`);
-      setDetectedInstaId(response.profile.userId);
-    } catch (e) {
-      console.warn('[HistoryItem] Failed to fetch insta id', e);
-      // Keep existing ID if lookup fails
-    } finally {
-      setIsLookupLoading(false);
-    }
   };
 
   const handleSave = () => {
     performUpdate();
   };
 
-  const performUpdate = (finalHandle?: string) => {
-    const handleValue = finalHandle !== undefined ? finalHandle : editHandle;
-    
+  const performUpdate = () => {
     onUpdate(item.id, { 
       ...item, 
-      source: editSource, 
       paymentMode: editPaymentMode,
-      customerPhone: editSource === 'WhatsApp' ? handleValue : '',
-      instagramHandle: editSource === 'Instagram' ? handleValue : '',
-      instagramUserId: editSource === 'Instagram' ? (detectedInstaId || item.instagramUserId) : undefined,
+      customerPhone: item.source === 'WhatsApp' ? editHandle : '',
+      instagramHandle: item.source === 'Instagram' ? editHandle : '',
     });
     onEdit(null);
   };
@@ -101,7 +56,7 @@ export const HistoryItem = ({
 
   return (
     <>
-    <Surface style={styles.historyItem} elevation={0}>
+    <Surface style={[styles.historyItem, item.isDeleted && { opacity: 0.5, backgroundColor: theme.colors.surfaceVariant }]} elevation={0}>
       <View style={styles.historyLeft}>
         <PlatformHandle 
           source={item.source} 
@@ -113,6 +68,7 @@ export const HistoryItem = ({
           <TouchableOpacity onPress={() => router.push(`/utilities/order-details/${item.id}`)}>
             <Text style={[styles.historySubtitle, { marginBottom: -2 }]}>
               ID: <Text style={{ fontWeight: '700', color: theme.colors.primary }}>{item.id}</Text>
+              {item.isDeleted && <Text style={{ color: theme.colors.error, fontSize: 10, fontWeight: 'bold' }}> [DELETED]</Text>}
             </Text>
           </TouchableOpacity>
           <Text style={styles.historySubtitle}>
@@ -144,6 +100,7 @@ export const HistoryItem = ({
           }} 
           iconColor={theme.colors.outline}
           style={styles.iconButtonPencil}
+          disabled={item.isDeleted}
         />
       </View>
     </Surface>
@@ -153,46 +110,16 @@ export const HistoryItem = ({
       <Dialog visible={isEditing} onDismiss={() => onEdit(null)} style={{ borderRadius: 16 }}>
         <Dialog.Title style={{ fontWeight: 'bold' }}>Edit Order: {item.id}</Dialog.Title>
         <Dialog.Content style={{ gap: 16 }}>
-          <View style={[styles.selectionRow, { justifyContent: 'center' }]}>
-            <TouchableOpacity 
-              style={styles.pureIconContainer}
-              onPress={() => setEditSource('WhatsApp')}
-            >
-              <Icon 
-                source="whatsapp" 
-                size={48} 
-                color={editSource === 'WhatsApp' ? '#25D366' : theme.colors.outline} 
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.pureIconContainer}
-              onPress={() => setEditSource('Instagram')}
-            >
-              <Icon 
-                source="instagram" 
-                size={48} 
-                color={editSource === 'Instagram' ? '#E4405F' : theme.colors.outline} 
-              />
-            </TouchableOpacity>
-          </View>
-
           <View>
             <TextInput
-              label={editSource === 'WhatsApp' ? 'Phone Number' : 'Instagram URL'}
+              label={item.source === 'WhatsApp' ? 'Phone Number' : 'Instagram URL'}
               value={editHandle}
               onChangeText={setEditHandle}
               mode="outlined"
               dense
-              keyboardType={editSource === 'WhatsApp' ? 'phone-pad' : 'default'}
-              left={<TextInput.Icon icon={editSource === 'WhatsApp' ? 'phone' : 'instagram'} />}
-              right={isLookupLoading ? <TextInput.Icon icon={() => <ActivityIndicator size="small" color={theme.colors.primary} />} /> : null}
+              keyboardType={item.source === 'WhatsApp' ? 'phone-pad' : 'default'}
+              left={<TextInput.Icon icon={item.source === 'WhatsApp' ? 'phone' : 'instagram'} />}
             />
-            {editSource === 'Instagram' && detectedInstaId && (
-              <Text style={{ fontSize: 11, color: theme.colors.outline, marginTop: 4, marginLeft: 12 }}>
-                Permanent ID: <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>{detectedInstaId}</Text>
-              </Text>
-            )}
           </View>
 
           <View style={styles.selectionRow}>
@@ -231,7 +158,7 @@ export const HistoryItem = ({
                 icon="check" 
                 size={28} 
                 onPress={handleSave}
-                disabled={!hasChanged || isLookupLoading}
+                disabled={!hasChanged}
                 iconColor={theme.colors.primary}
                 mode="contained"
                 style={{ backgroundColor: theme.colors.primaryContainer }}

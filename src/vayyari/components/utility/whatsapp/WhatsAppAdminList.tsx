@@ -228,7 +228,7 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
     return (
       <Card 
         style={styles.card} 
-        onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(item.jid)}`)}
+        onPress={() => router.push({ pathname: '/utilities/whatsapp/[jid]', params: { jid: item.jid, name: item.name || '' } })}
         onLongPress={() => handleToggleSelection(item.jid)}
       >
         <Card.Content style={styles.cardContent}>

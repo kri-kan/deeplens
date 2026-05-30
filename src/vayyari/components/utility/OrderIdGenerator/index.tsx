@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { Surface, Text, Appbar, Button, Icon, ActivityIndicator, IconButton, useTheme, Snackbar, TextInput } from 'react-native-paper';
+import { Surface, Text, Appbar, Button, Icon, ActivityIndicator, IconButton, useTheme, Snackbar, TextInput, Switch } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { searchApiClient } from '@/api/client';
+import { customersApi } from '@/api/customers';
 import { API_ROUTES } from '@/constants/api-routes';
 import { HistoryItem } from './HistoryItem';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,45 +29,11 @@ export const OrderIdGenerator = () => {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sourceHandle, setSourceHandle] = useState('');
-  const [detectedInstaId, setDetectedInstaId] = useState<string | null>(null);
-  const [isLookupLoading, setIsLookupLoading] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   useEffect(() => {
     loadRecentIds();
   }, []);
-
-  useEffect(() => {
-    if (selectedSource === 'Instagram' && sourceHandle.trim().length > 3) {
-      const handler = setTimeout(() => {
-        fetchInstagramId(sourceHandle.trim());
-      }, 400); // Faster trigger after paste
-      return () => clearTimeout(handler);
-    } else {
-      setDetectedInstaId(null);
-    }
-  }, [sourceHandle, selectedSource]);
-
-  const fetchInstagramId = async (handle: string) => {
-    let username = handle;
-    if (handle.includes('instagram.com/')) {
-       const parts = handle.split('instagram.com/')[1].split('/')[0].split('?')[0];
-       if (parts) username = parts;
-    }
-    
-    // Remote any @ if present
-    username = username.replace('@', '');
-
-    try {
-      setIsLookupLoading(true);
-      const response = await searchApiClient.get<{ profile: { userId: string } }>(`/api/v1/insta/profile/${username}`);
-      setDetectedInstaId(response.profile.userId);
-    } catch (e) {
-      console.warn('[OrderIdGenerator] Failed to fetch insta id', e);
-      setDetectedInstaId(null);
-    } finally {
-      setIsLookupLoading(false);
-    }
-  };
 
   const loadRecentIds = async () => {
     try {
@@ -112,17 +79,46 @@ export const OrderIdGenerator = () => {
     }
   };
 
+  const isGenerateDisabled = () => {
+    if (!selectedSource) return true;
+    if (loading) return true;
+    if (!sourceHandle || sourceHandle.trim().length === 0) return true;
+    
+    if (selectedSource === 'WhatsApp') {
+      const digits = sourceHandle.replace(/\D/g, '');
+      if (digits.length < 10) return true;
+    }
+    return false;
+  };
+
   const handleGenerate = async () => {
     if (!selectedSource) return;
 
     try {
       setLoading(true);
+
+      let customerId: string | undefined = undefined;
+
+      // Get or create customer if phone or instagram handle provided
+      if (sourceHandle) {
+        try {
+          const customer = await customersApi.getOrCreateCustomer(
+            selectedSource === 'WhatsApp' ? sourceHandle : undefined,
+            selectedSource === 'Instagram' ? sourceHandle : undefined
+          );
+          customerId = customer.id;
+        } catch (e) {
+          console.warn('[OrderIdGenerator] Failed to get/create customer:', e);
+          // Proceed without customer ID if it fails
+        }
+      }
+
       const response = await searchApiClient.post<{ orderId: string }>(API_ROUTES.ORDERS.GENERATE, null, {
         params: { 
           source: selectedSource, 
           paymentMode: paymentMode || '' ,
           sourceHandle: sourceHandle || '',
-          instagramUserId: detectedInstaId || ''
+          customerId
         }
       });
       const newEntry: OrderIdEntry = {
@@ -132,7 +128,7 @@ export const OrderIdGenerator = () => {
         timestamp: new Date().toISOString(),
         customerPhone: selectedSource === 'WhatsApp' ? sourceHandle : undefined,
         instagramHandle: selectedSource === 'Instagram' ? sourceHandle : undefined,
-        instagramUserId: selectedSource === 'Instagram' ? (detectedInstaId || undefined) : undefined,
+        customerId
       };
       
       const updated = [newEntry, ...recentIds].slice(0, 10);
@@ -277,28 +273,22 @@ export const OrderIdGenerator = () => {
         {selectedSource && (
           <View>
             <TextInput
-              label={selectedSource === 'WhatsApp' ? 'Phone Number (Optional)' : 'Instagram URL (Optional)'}
+              label={selectedSource === 'WhatsApp' ? 'Phone Number *' : 'Instagram URL / Handle *'}
               value={sourceHandle}
               onChangeText={setSourceHandle}
               mode="outlined"
               style={styles.sourceHandleInput}
               keyboardType={selectedSource === 'WhatsApp' ? 'phone-pad' : 'default'}
               left={<TextInput.Icon icon={selectedSource === 'WhatsApp' ? 'phone' : 'instagram'} />}
-              right={isLookupLoading ? <TextInput.Icon icon={() => <ActivityIndicator size="small" color={theme.colors.primary} />} /> : null}
               placeholder={selectedSource === 'WhatsApp' ? '+91 99999 00000' : 'instagram.com/username'}
             />
-            {selectedSource === 'Instagram' && detectedInstaId && (
-              <Text style={{ fontSize: 11, color: theme.colors.outline, marginTop: 4, marginLeft: 12 }}>
-                Permanent ID: <Text style={{ fontWeight: 'bold', color: theme.colors.primary }}>{detectedInstaId}</Text>
-              </Text>
-            )}
           </View>
         )}
 
         <Button 
           mode="contained" 
           onPress={handleGenerate} 
-          disabled={!selectedSource || loading || isLookupLoading}
+          disabled={isGenerateDisabled()}
           loading={loading}
           style={[
             styles.generateButton,
@@ -323,9 +313,15 @@ export const OrderIdGenerator = () => {
       </View>
 
       <View style={styles.listSection}>
-        <Text style={styles.listTitle}>Recent IDs</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={styles.listTitle}>Recent IDs</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 16 }}>
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Show Deleted</Text>
+            <Switch value={showDeleted} onValueChange={setShowDeleted} />
+          </View>
+        </View>
         <FlatList
-          data={recentIds}
+          data={showDeleted ? recentIds : recentIds.filter(item => !item.isDeleted)}
           keyExtractor={(item) => item.id + item.timestamp}
           renderItem={renderHistoryItem}
           ListEmptyComponent={<Text style={styles.emptyText}>No recent activity</Text>}

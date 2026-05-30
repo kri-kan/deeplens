@@ -11,6 +11,7 @@ public interface ICustomerService
     Task<CustomerDto> CreateCustomerAsync(CreateCustomerRequest request);
     Task<bool> UpdateCustomerAsync(Guid id, CreateCustomerRequest request);
     Task<bool> DeleteCustomerAsync(Guid id);
+    Task<bool> SafeDeleteDummyCustomerAsync(Guid id);
     
     Task<Guid> AddAddressAsync(Guid customerId, CreateAddressRequest request);
     Task<bool> UpdateAddressAsync(Guid addressId, CreateAddressRequest request);
