@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, TextInput, Button, IconButton, Modal, useTheme, Chip } from 'react-native-paper';
 import { CountryCode, FormInstagramAccount } from '@/hooks/useCustomerManagement';
-import { Language, Customer, CreateCustomerRequest } from '@/types/customers';
+import { Language, Customer, CreateCustomerRequest, CreateAddressRequest } from '@/types/customers';
 import { customerService } from '@/services/customerService';
+
+import { AddressFormComponent, AddressFormState } from './AddressFormComponent';
 
 interface EditCustomerModalProps {
   visible: boolean;
@@ -31,9 +33,11 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   // Form states
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female' | undefined>(undefined);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [preferredLanguages, setPreferredLanguages] = useState<string[]>([]);
+  const [addresses, setAddresses] = useState<CreateAddressRequest[]>([]);
   const [instagramAccounts, setInstagramAccounts] = useState<FormInstagramAccount[]>([]);
   const [instagramErrors, setInstagramErrors] = useState<Record<number, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -43,8 +47,26 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
     if (visible && customer) {
       setFirstName(customer.firstName || '');
       setLastName(customer.lastName || '');
+      setGender(customer.gender);
       setEmail(customer.email || '');
       setPreferredLanguages(customer.preferredLanguages || []);
+      
+      // Parse addresses
+      if (customer.addresses && customer.addresses.length > 0) {
+        setAddresses(customer.addresses.map(a => ({
+          id: a.id,
+          name: a.name,
+          phone: a.phone,
+          line1: a.line1,
+          line2: a.line2,
+          pincode: a.pincode,
+          city: a.city,
+          state: a.state,
+          isDefault: a.isDefault
+        })));
+      } else {
+        setAddresses([]);
+      }
       
       // Parse phone number
       if (customer.phoneNumber) {
@@ -115,6 +137,90 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
     });
   };
 
+  const addAddressField = () => {
+    setAddresses(prev => [
+      ...prev,
+      { name: '', phone: '', line1: '', pincode: '', isDefault: prev.length === 0 }
+    ]);
+  };
+
+  const removeAddressField = (index: number) => {
+    setAddresses(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const setAddressDefault = (index: number, isDefault: boolean) => {
+    setAddresses(prev => prev.map((addr, idx) => ({ 
+      ...addr, 
+      isDefault: idx === index ? isDefault : (isDefault ? false : addr.isDefault) 
+    })));
+  };
+
+  const getAddressState = (addr: CreateAddressRequest): AddressFormState => {
+    const parts = (addr.name || '').split(' ');
+    return {
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || '',
+      phone: addr.phone || '',
+      pincode: addr.pincode || '',
+      fullAddress: addr.line1 || '',
+      isDefault: addr.isDefault
+    };
+  };
+
+  const handleAddressChange = (index: number, state: AddressFormState) => {
+    setAddresses(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        name: [state.firstName, state.lastName].filter(Boolean).join(' '),
+        phone: state.phone,
+        pincode: state.pincode,
+        line1: state.fullAddress,
+      };
+      return updated;
+    });
+  };
+
+  const handleSaveAddress = async (index: number) => {
+    const addr = addresses[index];
+    if (!addr.name.trim() || !addr.phone.trim() || !addr.line1.trim() || !addr.pincode.trim()) {
+      return; 
+    }
+
+    try {
+      if (addr.id) {
+        await customerService.updateAddress(addr.id, {
+          name: addr.name,
+          phone: addr.phone,
+          line1: addr.line1,
+          line2: addr.line2,
+          pincode: addr.pincode,
+          city: addr.city,
+          state: addr.state,
+          isDefault: addr.isDefault
+        });
+      } else {
+        const res = await customerService.addAddress(customer.id, {
+          name: addr.name,
+          phone: addr.phone,
+          line1: addr.line1,
+          line2: addr.line2,
+          pincode: addr.pincode,
+          city: addr.city,
+          state: addr.state,
+          isDefault: addr.isDefault
+        });
+        setAddresses(prev => {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], id: res.id };
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save address:', err);
+    }
+  };
+
   const validateInstagramHandle = async (index: number, username: string) => {
     if (!username.trim()) {
       setInstagramErrors(prev => {
@@ -177,8 +283,10 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
         firstName: firstName || undefined,
         lastName: lastName || undefined,
         phoneNumber: phone ? `${selectedCountry?.dialCode}${phone}` : undefined,
+        gender: gender,
         instagramId: instagramAccounts.find(a => a.isPrimary)?.username || undefined,
         email: email || undefined,
+        addresses: addresses.filter(a => a.name.trim() !== '' && a.phone.trim() !== '' && a.line1.trim() !== '' && a.pincode.trim() !== ''),
         instagramAccounts: instagramAccounts
           .filter(a => a.username.trim() !== '')
           .map(a => ({
@@ -226,6 +334,35 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
             mode="outlined"
             style={[styles.input, { flex: 1 }]}
           />
+        </View>
+
+        {/* Gender Section */}
+        <View style={styles.genderRow}>
+          <TouchableOpacity 
+            style={[styles.genderButton, gender === 'Male' && styles.genderButtonSelected]}
+            onPress={() => setGender('Male')}
+          >
+            <IconButton 
+              icon="face-man" 
+              iconColor={gender === 'Male' ? theme.colors.primary : theme.colors.outline} 
+              size={24} 
+              style={{ margin: 0 }}
+            />
+            <Text style={[styles.genderText, gender === 'Male' && { color: theme.colors.primary }]}>Male</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.genderButton, gender === 'Female' && styles.genderButtonSelected]}
+            onPress={() => setGender('Female')}
+          >
+            <IconButton 
+              icon="face-woman" 
+              iconColor={gender === 'Female' ? theme.colors.primary : theme.colors.outline} 
+              size={24} 
+              style={{ margin: 0 }}
+            />
+            <Text style={[styles.genderText, gender === 'Female' && { color: theme.colors.primary }]}>Female</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Phone Section */}
@@ -307,6 +444,35 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
             </View>
           );
         })}
+
+        {/* Addresses Section */}
+        <View style={[styles.sectionHeader, { marginTop: 16 }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Addresses</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Button 
+              mode="text" 
+              compact 
+              icon="plus" 
+              onPress={addAddressField}
+              labelStyle={{ color: theme.colors.primary }}
+            >
+              Add
+            </Button>
+          </View>
+        </View>
+
+        {addresses.map((addr, index) => (
+          <AddressFormComponent
+            key={index}
+            value={getAddressState(addr)}
+            onChange={(state) => handleAddressChange(index, state)}
+            title={`Address ${index + 1}`}
+            showCardLayout
+            onRemove={() => removeAddressField(index)}
+            onSetDefault={(val) => setAddressDefault(index, val)}
+            onSave={() => handleSaveAddress(index)}
+          />
+        ))}
 
         {/* Preferred Languages Section */}
         <Text variant="titleMedium" style={[styles.sectionTitle, { marginTop: 12, marginBottom: 8 }]}>
@@ -399,6 +565,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
   },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  genderButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    backgroundColor: 'white',
+  },
+  genderButtonSelected: {
+    borderColor: '#6200ee',
+    backgroundColor: 'rgba(98, 0, 238, 0.05)',
+  },
+  genderText: {
+    fontWeight: '500',
+    marginLeft: 4,
+  },
   phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -434,6 +624,27 @@ const styles = StyleSheet.create({
   },
   primaryToggle: {
     margin: 0,
+  },
+  addressCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: '#FAFAFA',
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addressInput: {
+    marginBottom: 8,
+    backgroundColor: 'white',
+  },
+  addressRow: {
+    flexDirection: 'row',
   },
   errorContainer: {
     flexDirection: 'row',

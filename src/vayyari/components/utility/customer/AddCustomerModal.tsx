@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, TextInput, Button, IconButton, Modal, useTheme, Chip } from 'react-native-paper';
 import { CountryCode, FormInstagramAccount } from '@/hooks/useCustomerManagement';
-import { Language } from '@/types/customers';
+import { Language, CreateAddressRequest } from '@/types/customers';
+import { AddressFormComponent, AddressFormState } from './AddressFormComponent';
 
 interface AddCustomerModalProps {
   visible: boolean;
@@ -15,9 +16,11 @@ interface AddCustomerModalProps {
   setPhone: (v: string) => void;
   email: string;
   setEmail: (v: string) => void;
+  gender: 'Male' | 'Female' | undefined;
+  setGender: (v: 'Male' | 'Female' | undefined) => void;
   selectedCountry: CountryCode | null;
   onShowCountrySelector: () => void;
-  onSubmit: () => void;
+  onSubmit: (addresses: CreateAddressRequest[]) => void;
 
   // Multi-Instagram & Languages Props
   instagramAccounts: FormInstagramAccount[];
@@ -42,6 +45,8 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   setPhone,
   email,
   setEmail,
+  gender,
+  setGender,
   selectedCountry,
   onShowCountrySelector,
   onSubmit,
@@ -57,6 +62,71 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   onSetInstagramPrimary,
 }) => {
   const theme = useTheme();
+  const [submitting, setSubmitting] = React.useState(false);
+  const [addresses, setAddresses] = React.useState<CreateAddressRequest[]>([]);
+
+  // Clear addresses when modal becomes visible/invisible
+  React.useEffect(() => {
+    if (visible) setAddresses([]);
+  }, [visible]);
+
+  const addAddressField = () => {
+    setAddresses(prev => [
+      ...prev,
+      {
+        name: '',
+        phone: '',
+        line1: '',
+        pincode: '',
+        isDefault: prev.length === 0
+      }
+    ]);
+  };
+
+  const removeAddressField = (index: number) => {
+    setAddresses(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const updateAddress = (index: number, field: keyof CreateAddressRequest, value: string) => {
+    setAddresses(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const setAddressDefault = (index: number, isDefault: boolean) => {
+    setAddresses(prev => prev.map((addr, idx) => ({ 
+      ...addr, 
+      isDefault: idx === index ? isDefault : (isDefault ? false : addr.isDefault) 
+    })));
+  };
+
+  const getAddressState = (addr: CreateAddressRequest): AddressFormState => {
+    const parts = (addr.name || '').split(' ');
+    return {
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || '',
+      phone: addr.phone || '',
+      pincode: addr.pincode || '',
+      fullAddress: addr.line1 || '',
+      isDefault: addr.isDefault
+    };
+  };
+
+  const handleAddressChange = (index: number, state: AddressFormState) => {
+    setAddresses(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        name: [state.firstName, state.lastName].filter(Boolean).join(' '),
+        phone: state.phone,
+        pincode: state.pincode,
+        line1: state.fullAddress,
+      };
+      return updated;
+    });
+  };
 
   const handleLanguageToggle = (code: string) => {
     if (preferredLanguages.includes(code)) {
@@ -97,6 +167,35 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
             mode="outlined"
             style={[styles.input, { flex: 1 }]}
           />
+        </View>
+
+        {/* Gender Section */}
+        <View style={styles.genderRow}>
+          <TouchableOpacity 
+            style={[styles.genderButton, gender === 'Male' && styles.genderButtonSelected]}
+            onPress={() => setGender('Male')}
+          >
+            <IconButton 
+              icon="face-man" 
+              iconColor={gender === 'Male' ? theme.colors.primary : theme.colors.outline} 
+              size={24} 
+              style={{ margin: 0 }}
+            />
+            <Text style={[styles.genderText, gender === 'Male' && { color: theme.colors.primary }]}>Male</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.genderButton, gender === 'Female' && styles.genderButtonSelected]}
+            onPress={() => setGender('Female')}
+          >
+            <IconButton 
+              icon="face-woman" 
+              iconColor={gender === 'Female' ? theme.colors.primary : theme.colors.outline} 
+              size={24} 
+              style={{ margin: 0 }}
+            />
+            <Text style={[styles.genderText, gender === 'Female' && { color: theme.colors.primary }]}>Female</Text>
+          </TouchableOpacity>
         </View>
         
         {/* Phone Section */}
@@ -179,6 +278,34 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           );
         })}
 
+        {/* Addresses Section */}
+        <View style={[styles.sectionHeader, { marginTop: 16 }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Addresses</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Button 
+              mode="text" 
+              compact 
+              icon="plus" 
+              onPress={addAddressField}
+              labelStyle={{ color: theme.colors.primary }}
+            >
+              Add
+            </Button>
+          </View>
+        </View>
+
+        {addresses.map((addr, index) => (
+          <AddressFormComponent
+            key={index}
+            value={getAddressState(addr)}
+            onChange={(state) => handleAddressChange(index, state)}
+            title={`Address ${index + 1}`}
+            showCardLayout
+            onRemove={() => removeAddressField(index)}
+            onSetDefault={(val) => setAddressDefault(index, val)}
+          />
+        ))}
+
         {/* Preferred Languages Section */}
         <Text variant="titleMedium" style={[styles.sectionTitle, { marginTop: 12, marginBottom: 8 }]}>
           Preferred Languages
@@ -221,7 +348,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           <Button mode="text" onPress={onDismiss}>Cancel</Button>
           <Button 
             mode="contained" 
-            onPress={onSubmit} 
+            onPress={() => onSubmit(addresses)} 
             disabled={isSubmitDisabled}
             style={styles.submit}
           >
@@ -268,6 +395,29 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     marginBottom: 16,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  genderButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    backgroundColor: 'white',
+  },
+  genderButtonSelected: {
+    borderColor: '#6200ee',
+    backgroundColor: 'rgba(98, 0, 238, 0.05)',
+  },
+  genderText: {
+    fontWeight: '500',
   },
   phoneRow: {
     flexDirection: 'row',
@@ -333,5 +483,19 @@ const styles = StyleSheet.create({
   },
   submit: {
     borderRadius: 8,
+  },
+  addressCard: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 8,
+    marginBottom: 16,
+    backgroundColor: '#FAFAFA',
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
 });
