@@ -160,8 +160,8 @@ public class CustomerRepository : ICustomerRepository
         }
 
         const string sql = @"
-            INSERT INTO customer_addresses (id, customer_id, name, phone, line1, line2, pincode, city, state, is_default, created_at, updated_at)
-            VALUES (@Id, @CustomerId, @Name, @Phone, @Line1, @Line2, @Pincode, @City, @State, @IsDefault, @CreatedAt, @UpdatedAt)
+            INSERT INTO customer_addresses (id, customer_id, name, phone, line1, pincode, is_default, created_at, updated_at)
+            VALUES (@Id, @CustomerId, @Name, @Phone, @Line1, @Pincode, @IsDefault, @CreatedAt, @UpdatedAt)
             RETURNING id;";
         
         return await connection.ExecuteScalarAsync<Guid>(sql, address);
@@ -182,10 +182,7 @@ public class CustomerRepository : ICustomerRepository
             SET name = @Name, 
                 phone = @Phone, 
                 line1 = @Line1, 
-                line2 = @Line2, 
                 pincode = @Pincode, 
-                city = @City, 
-                state = @State, 
                 is_default = @IsDefault, 
                 updated_at = @UpdatedAt
             WHERE id = @Id;";
@@ -207,6 +204,64 @@ public class CustomerRepository : ICustomerRepository
         await connection.ExecuteAsync("UPDATE customer_addresses SET is_default = false WHERE customer_id = @CustomerId", new { CustomerId = customerId });
         var rows = await connection.ExecuteAsync("UPDATE customer_addresses SET is_default = true WHERE id = @Id AND customer_id = @CustomerId", new { Id = addressId, CustomerId = customerId });
         return rows > 0;
+    }
+
+    public async Task SaveAddressesAsync(Guid customerId, List<CustomerAddress> addresses)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+
+        if (addresses == null || !addresses.Any())
+        {
+            await connection.ExecuteAsync("DELETE FROM customer_addresses WHERE customer_id = @CustomerId", new { CustomerId = customerId });
+            return;
+        }
+
+        var incomingIds = addresses.Select(a => a.Id).Where(id => id != Guid.Empty).ToList();
+        
+        // Delete addresses not in the new list
+        if (incomingIds.Any())
+        {
+            await connection.ExecuteAsync("DELETE FROM customer_addresses WHERE customer_id = @CustomerId AND id NOT IN @Ids", 
+                new { CustomerId = customerId, Ids = incomingIds });
+        }
+        else
+        {
+            await connection.ExecuteAsync("DELETE FROM customer_addresses WHERE customer_id = @CustomerId", new { CustomerId = customerId });
+        }
+
+        foreach (var address in addresses)
+        {
+            address.CustomerId = customerId;
+            if (address.Id == Guid.Empty)
+            {
+                address.Id = Guid.NewGuid();
+                const string insertSql = @"
+                    INSERT INTO customer_addresses (id, customer_id, name, phone, line1, pincode, is_default, created_at, updated_at)
+                    VALUES (@Id, @CustomerId, @Name, @Phone, @Line1, @Pincode, @IsDefault, @CreatedAt, @UpdatedAt);";
+                await connection.ExecuteAsync(insertSql, address);
+            }
+            else
+            {
+                const string updateSql = @"
+                    UPDATE customer_addresses 
+                    SET name = @Name, 
+                        phone = @Phone, 
+                        line1 = @Line1, 
+                        pincode = @Pincode, 
+                        is_default = @IsDefault, 
+                        updated_at = @UpdatedAt
+                    WHERE id = @Id AND customer_id = @CustomerId;";
+                
+                var rows = await connection.ExecuteAsync(updateSql, address);
+                if (rows == 0) // if for some reason the ID was sent but doesn't exist
+                {
+                    const string insertSql = @"
+                        INSERT INTO customer_addresses (id, customer_id, name, phone, line1, pincode, is_default, created_at, updated_at)
+                        VALUES (@Id, @CustomerId, @Name, @Phone, @Line1, @Pincode, @IsDefault, @CreatedAt, @UpdatedAt);";
+                    await connection.ExecuteAsync(insertSql, address);
+                }
+            }
+        }
     }
 
     public async Task<Guid?> GetCustomerIdByInstagramUsernameAsync(string username)

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Alert, TouchableOpacity, Image, Linking } from 'react-native';
-import { Surface, Text, Appbar, TextInput, Button, useTheme, ActivityIndicator, IconButton, Card, Divider, Chip, Icon, Portal, Modal } from 'react-native-paper';
+import { Surface, Text, Appbar, TextInput, Button, useTheme, ActivityIndicator, IconButton, Card, Divider, Chip, Icon, Portal, Modal, Dialog, Checkbox } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { searchApiClient } from '@/api/client';
 import { customersApi, Customer, CustomerAddress } from '@/api/customers';
+
+import { ManageAddressModal } from '@/components/utility/customer/ManageAddressModal';
+import { customerService } from '@/services/customerService';
 import { API_ROUTES } from '@/constants/api-routes';
 import { OrderIdEntry, OrderItem, OrderComment, OrderUpdateRequest, Attachment } from '@/types/orders';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
@@ -40,8 +43,7 @@ export default function OrderFormScreen() {
     const [addrPhone, setAddrPhone] = useState('');
     const [addrPincode, setAddrPincode] = useState('');
     const [addrText, setAddrText] = useState('');
-    const [smartFillText, setSmartFillText] = useState('');
-    const [isSmartFillMode, setIsSmartFillMode] = useState(false);
+    const [isEditingComment, setIsEditingComment] = useState(false);
     const [initialState, setInitialState] = useState<any>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -49,6 +51,8 @@ export default function OrderFormScreen() {
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [showAddressBook, setShowAddressBook] = useState(false);
     const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
+    const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+    const [showAddressUpdateWarning, setShowAddressUpdateWarning] = useState(false);
 
     const isReadOnly = orderData?.isDeleted === true;
 
@@ -438,7 +442,7 @@ export default function OrderFormScreen() {
         }
     };
 
-    const handleSave = async () => {
+    const executeSave = async () => {
         if (!id) return;
         try {
             setSaving(true);
@@ -462,31 +466,30 @@ export default function OrderFormScreen() {
                 customerId: orderData?.customerId,
             } as OrderUpdateRequest);
 
-            // Update Customer Name if dummy
-            if (customer && (addrFirstName || addrLastName)) {
+            if (customer && (addrFirstName || addrLastName || addrText)) {
                 const currentName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
                 const isDummy = !currentName || currentName.toLowerCase().startsWith('cust');
                 if (isDummy) {
                     await customersApi.updateCustomerName(customer.id, customer, addrFirstName, addrLastName);
                 }
 
-                // Save Address to address book if not exists
-                const existingAddress = customerAddresses.find(a => 
-                    a.line1 === addrText && a.pincode === addrPincode
-                );
-                if (!existingAddress && addrText) {
-                    await customersApi.saveCustomerAddress(customer.id, {
-                        name: `${addrFirstName} ${addrLastName}`.trim(),
-                        phone: addrPhone,
-                        line1: addrText,
-                        pincode: addrPincode,
-                        isDefault: false
-                    });
-                    // Refresh addresses
-                    const updatedCust = await customersApi.getCustomerById(customer.id);
-                    setCustomer(updatedCust);
-                    setCustomerAddresses(updatedCust.addresses || []);
+                const requestBody = {
+                    name: `${addrFirstName} ${addrLastName}`.trim(),
+                    phone: addrPhone,
+                    line1: addrText,
+                    pincode: addrPincode,
+                    isDefault: customerAddresses.length === 0
+                };
+
+                if (selectedAddressId) {
+                    await customersApi.updateCustomerAddress(selectedAddressId, requestBody);
+                } else if (addrText) {
+                    await customersApi.saveCustomerAddress(customer.id, requestBody);
                 }
+                
+                const updatedCust = await customersApi.getCustomerById(customer.id);
+                setCustomer(updatedCust);
+                setCustomerAddresses(updatedCust.addresses || []);
             }
             Alert.alert('Success', 'Order form saved successfully.');
             setHasUnsavedChanges(false);
@@ -507,24 +510,25 @@ export default function OrderFormScreen() {
         }
     };
 
-
-    const handleSmartFill = () => {
-        if (!smartFillText) return;
-        const text = smartFillText;
-        const firstNameMatch = text.match(/first_name:\s*(.+)/i);
-        const lastNameMatch = text.match(/last_name:\s*(.+)/i);
-        const phoneMatch = text.match(/phone_number:\s*(.+)/i) || text.match(/phone:\s*(.+)/i);
-        const pinMatch = text.match(/pincode:\s*(.+)/i) || text.match(/pin:\s*(.+)/i);
-        const addrMatch = text.match(/address:\s*([\s\S]+)/i);
-
-        if (firstNameMatch) setAddrFirstName(firstNameMatch[1].trim());
-        if (lastNameMatch) setAddrLastName(lastNameMatch[1].trim());
-        if (phoneMatch) setAddrPhone(phoneMatch[1].trim());
-        if (pinMatch) setAddrPincode(pinMatch[1].trim());
-        if (addrMatch) setAddrText(addrMatch[1].trim());
-        
-        setSmartFillText('');
+    const handleSave = async () => {
+        if (selectedAddressId && addrText) {
+            const originalAddr = customerAddresses.find(a => a.id === selectedAddressId);
+            const originalText = [originalAddr?.line1].filter(Boolean).join(', ');
+            
+            if (originalAddr && (
+                addrText !== originalText || 
+                addrPhone !== originalAddr.phone || 
+                addrPincode !== originalAddr.pincode ||
+                addrFirstName !== originalAddr.name?.split(' ')[0]
+            )) {
+                setShowAddressUpdateWarning(true);
+                return;
+            }
+        }
+        await executeSave();
     };
+    const [showManageAddress, setShowManageAddress] = useState(false);
+    const [addressToEdit, setAddressToEdit] = useState<CustomerAddress | null>(null);
 
     if (loading) {
         return (
@@ -581,13 +585,25 @@ export default function OrderFormScreen() {
                 {/* Header Info */}
                 <View style={{ gap: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text variant="labelLarge" style={{ opacity: 0.6, marginRight: 4 }}>Source:</Text>
-                            <PlatformHandle 
-                                source={orderData?.source || ''} 
-                                handle={orderData?.source === 'WhatsApp' ? (orderData?.customerPhone || '') : (orderData?.instagramHandle || orderData?.sourceHandle || '')}
-                                fontSize={15}
-                            />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Text variant="labelLarge" style={{ opacity: 0.6, marginRight: 4 }}>Source:</Text>
+                                <PlatformHandle 
+                                    source={orderData?.source || ''} 
+                                    handle={orderData?.source === 'WhatsApp' ? (orderData?.customerPhone || '') : (orderData?.instagramHandle || orderData?.sourceHandle || '')}
+                                    fontSize={15}
+                                />
+                            </View>
+                            {orderData?.customerId && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text variant="labelLarge" style={{ opacity: 0.6, marginRight: 4 }}>Customer:</Text>
+                                    <TouchableOpacity onPress={() => router.push(`/utilities/customer/${orderData.customerId}` as any)}>
+                                        <Text style={{ color: theme.colors.primary, fontWeight: 'bold', textDecorationLine: 'underline' }}>
+                                            {customer?.referralCode || orderData.customerId.substring(0, 8).toUpperCase()}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </View>
                         <Chip 
                             mode="flat" 
@@ -714,54 +730,30 @@ export default function OrderFormScreen() {
                                         Address Book
                                     </Button>
                                 )}
-                                <Button 
-                                    icon="magic-staff" 
-                                    mode={isSmartFillMode ? 'contained' : 'outlined'} 
-                                    compact
-                                    onPress={() => setIsSmartFillMode(!isSmartFillMode)}
-                                >
-                                    Smart Fill
-                                </Button>
                             </View>
                         )}
                     </View>
                     
-                    {!isReadOnly && isSmartFillMode ? (
-                        <View style={{ gap: 8 }}>
-                            <TextInput
-                                label="Paste Template Here"
-                                placeholder={"first_name: Krishna\nlast_name: Kanth\nphone_number: 9876543210\npincode: 500090\naddress:"}
-                                value={smartFillText}
-                                onChangeText={setSmartFillText}
-                                mode="outlined"
-                                multiline
-                                numberOfLines={6}
-                                style={{ backgroundColor: theme.colors.surfaceVariant }}
-                            />
-                            <Button 
-                                mode="contained" 
-                                onPress={() => {
-                                    handleSmartFill();
-                                    setIsSmartFillMode(false);
-                                }}
-                                disabled={!smartFillText}
-                            >
-                                Process
-                            </Button>
-                        </View>
-                    ) : (
-                        <View style={{ gap: 12 }}>
-                            {/* Fields */}
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <TextInput label="First Name" value={addrFirstName} onChangeText={setAddrFirstName} mode="outlined" dense style={{ flex: 1 }} disabled={isReadOnly} />
-                                <TextInput label="Last Name" value={addrLastName} onChangeText={setAddrLastName} mode="outlined" dense style={{ flex: 1 }} disabled={isReadOnly} />
+                    <View style={{ gap: 12 }}>
+                        {selectedAddressId ? (
+                            <View style={{ padding: 12, backgroundColor: theme.colors.surfaceVariant, borderRadius: 8 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{[addrFirstName, addrLastName].filter(Boolean).join(' ')}</Text>
+                                        <Text variant="bodyMedium">{addrPhone}</Text>
+                                        <Text variant="bodyMedium" style={{ marginTop: 4 }}>{addrText}</Text>
+                                        <Text variant="bodyMedium">PIN: {addrPincode}</Text>
+                                    </View>
+                                    <Button compact mode="text" onPress={() => setSelectedAddressId(null)}>
+                                        Clear
+                                    </Button>
+                                </View>
                             </View>
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <TextInput label="Phone Number" value={addrPhone} onChangeText={setAddrPhone} mode="outlined" dense style={{ flex: 1 }} keyboardType="phone-pad" disabled={isReadOnly} />
-                                <TextInput label="Pincode" value={addrPincode} onChangeText={setAddrPincode} mode="outlined" dense style={{ flex: 1 }} keyboardType="number-pad" disabled={isReadOnly} />
-                            </View>
-                            <TextInput label="Full Address" value={addrText} onChangeText={setAddrText} mode="outlined" multiline numberOfLines={3} dense disabled={isReadOnly} />
-                            
+                        ) : (
+                            <Text style={{ opacity: 0.6, fontStyle: 'italic', paddingVertical: 12 }}>
+                                No delivery address selected. Please select from the Address Book.
+                            </Text>
+                        )}
                             {!isReadOnly && hasUnsavedChanges && (
                                 <Button 
                                     mode="contained" 
@@ -774,7 +766,6 @@ export default function OrderFormScreen() {
                                 </Button>
                             )}
                         </View>
-                    )}
                 </Surface>
 
                 {/* Product List */}
@@ -1137,45 +1128,104 @@ export default function OrderFormScreen() {
                 <Modal 
                     visible={showAddressBook} 
                     onDismiss={() => setShowAddressBook(false)}
-                    contentContainerStyle={{ backgroundColor: theme.colors.surface, margin: 20, padding: 20, borderRadius: 12, maxHeight: '80%' }}
+                    style={{ justifyContent: 'flex-end', margin: 0 }}
+                    contentContainerStyle={{ backgroundColor: theme.colors.surface, padding: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%' }}
                 >
-                    <Text variant="titleLarge" style={{ fontWeight: 'bold', marginBottom: 16 }}>Address Book</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <Text variant="titleLarge" style={{ fontWeight: 'bold' }}>Address Book</Text>
+                        <Button mode="outlined" compact icon="plus" onPress={() => { setAddressToEdit(null); setShowManageAddress(true); }}>
+                            Add New
+                        </Button>
+                    </View>
                     {customerAddresses.length === 0 ? (
                         <Text style={{ opacity: 0.6, textAlign: 'center', marginVertical: 20 }}>No saved addresses found.</Text>
                     ) : (
                         <ScrollView>
-                            {customerAddresses.map((addr, idx) => (
-                                <Surface key={idx} style={{ padding: 12, borderRadius: 8, marginBottom: 12, backgroundColor: theme.colors.surfaceVariant }} elevation={0}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <View style={{ flex: 1, paddingRight: 12 }}>
-                                            <Text style={{ fontWeight: 'bold' }}>{addr.name}</Text>
-                                            <Text variant="bodySmall">{addr.phone}</Text>
-                                            <Text variant="bodySmall" style={{ marginTop: 4 }}>{addr.line1}</Text>
-                                            {addr.line2 && <Text variant="bodySmall">{addr.line2}</Text>}
-                                            <Text variant="bodySmall">{addr.city ? `${addr.city}, ` : ''}{addr.state ? `${addr.state}, ` : ''}{addr.pincode}</Text>
+                            {[...customerAddresses].sort((a,b) => (b.isDefault === true ? 1 : 0) - (a.isDefault === true ? 1 : 0)).map((addr, idx) => {
+                                const addressUiId = customerAddresses.findIndex(a => a.id === addr.id) + 1;
+                                const isSelected = selectedAddressId === addr.id;
+                                
+                                return (
+                                    <Surface key={idx} style={{ padding: 12, borderRadius: 8, marginBottom: 12, backgroundColor: theme.colors.surfaceVariant, borderWidth: isSelected ? 2 : 0, borderColor: theme.colors.primary }} elevation={0}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                                            <View style={{ marginTop: -8, marginLeft: -8 }}>
+                                                <Checkbox
+                                                    status={isSelected ? 'checked' : 'unchecked'}
+                                                    onPress={() => {
+                                                        if (isSelected) {
+                                                            setSelectedAddressId(null);
+                                                        } else {
+                                                            const parts = addr.name.split(' ');
+                                                            setAddrFirstName(parts[0] || '');
+                                                            setAddrLastName(parts.slice(1).join(' ') || '');
+                                                            setAddrPhone(addr.phone || '');
+                                                            setAddrPincode(addr.pincode || '');
+                                                            setAddrText([addr.line1].filter(Boolean).join(', '));
+                                                            if (addr.id) setSelectedAddressId(addr.id);
+                                                        }
+                                                    }}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1, paddingLeft: 4 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                                    <Text style={{ fontWeight: 'bold', marginRight: 8 }}>Address {addressUiId}</Text>
+                                                    {addr.isDefault && <Chip compact style={{ height: 24 }} textStyle={{ fontSize: 10, marginTop: -2 }}>Default</Chip>}
+                                                </View>
+                                                <Text variant="bodySmall" style={{ fontWeight: 'bold' }}>{addr.name}</Text>
+                                                <Text variant="bodySmall">{addr.phone}</Text>
+                                                <Text variant="bodySmall" style={{ marginTop: 4 }}>{addr.line1}</Text>
+                                                <Text variant="bodySmall">PIN: {addr.pincode}</Text>
+                                                <Button 
+                                                    mode="text" 
+                                                    compact 
+                                                    style={{ alignSelf: 'flex-start', marginLeft: -8, marginTop: 4 }}
+                                                    onPress={() => { setAddressToEdit(addr); setShowManageAddress(true); }}
+                                                >
+                                                    Edit
+                                                </Button>
+                                            </View>
                                         </View>
-                                        <Button 
-                                            mode="contained-tonal"
-                                            compact
-                                            onPress={() => {
-                                                const parts = addr.name.split(' ');
-                                                setAddrFirstName(parts[0] || '');
-                                                setAddrLastName(parts.slice(1).join(' ') || '');
-                                                setAddrPhone(addr.phone || '');
-                                                setAddrPincode(addr.pincode || '');
-                                                setAddrText([addr.line1, addr.line2, addr.city, addr.state].filter(Boolean).join(', '));
-                                                setShowAddressBook(false);
-                                            }}
-                                        >
-                                            Select
-                                        </Button>
-                                    </View>
-                                </Surface>
-                            ))}
+                                    </Surface>
+                                );
+                            })}
                         </ScrollView>
                     )}
-                    <Button mode="outlined" onPress={() => setShowAddressBook(false)} style={{ marginTop: 8 }}>Close</Button>
+                    <Button mode="contained" onPress={() => setShowAddressBook(false)} style={{ marginTop: 8 }}>Done</Button>
                 </Modal>
+            </Portal>
+
+            <Portal>
+                {customer && (
+                    <ManageAddressModal 
+                        visible={showManageAddress}
+                        onDismiss={() => setShowManageAddress(false)}
+                        customerId={customer.id}
+                        addressToEdit={addressToEdit}
+                        onSuccess={async () => {
+                            // Refetch addresses for this customer
+                            try {
+                                const updatedCustomer = await customerService.getCustomerById(customer.id);
+                                setCustomerAddresses(updatedCustomer.addresses || []);
+                            } catch (e) {
+                                console.error('Failed to reload addresses', e);
+                            }
+                        }}
+                    />
+                )}
+            </Portal>
+
+            <Portal>
+                <Dialog visible={showAddressUpdateWarning} onDismiss={() => setShowAddressUpdateWarning(false)}>
+                    <Dialog.Title>Update Address</Dialog.Title>
+                    <Dialog.Content>
+                        <Text>You are editing an existing address from the Address Book. Do you want to update the saved address, or create a new one?</Text>
+                    </Dialog.Content>
+                    <Dialog.Actions>
+                        <Button onPress={() => setShowAddressUpdateWarning(false)}>Cancel</Button>
+                        <Button onPress={() => { setShowAddressUpdateWarning(false); setSelectedAddressId(null); executeSave(); }}>Save as New</Button>
+                        <Button onPress={() => { setShowAddressUpdateWarning(false); executeSave(); }}>Update Existing</Button>
+                    </Dialog.Actions>
+                </Dialog>
             </Portal>
         </Surface>
     );

@@ -5,7 +5,7 @@ import { Text, Appbar, Searchbar, IconButton, Portal, useTheme } from 'react-nat
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { CustomerTile } from '@/components/utility/customer/CustomerTile';
 import { AddCustomerModal } from '@/components/utility/customer/AddCustomerModal';
-import { AddAddressModal } from '@/components/utility/customer/AddAddressModal';
+
 import { useRouter } from 'expo-router';
 import { CountrySelectorModal } from '@/components/utility/customer/CountrySelectorModal';
 
@@ -26,8 +26,7 @@ export default function CustomerManagementScreen() {
     setShowAddModal,
     selectedCustomer,
     setSelectedCustomer,
-    showAddressModal,
-    setShowAddressModal,
+
     countryCodes,
     selectedCountry,
     setSelectedCountry,
@@ -55,24 +54,11 @@ export default function CustomerManagementScreen() {
     setInstagramAccountPrimary,
     email,
     setEmail,
-    addrName,
-    setAddrName,
-    addrPhone,
-    setAddrPhone,
-    addrLine1,
-    setAddrLine1,
-    addrLine2,
-    setAddrLine2,
-    addrPincode,
-    setAddrPincode,
-    addrCity,
-    setAddrCity,
-    addrState,
-    setAddrState,
-    isDefault,
-    setIsDefault,
+
+    gender,
+    setGender,
     handleAddCustomer,
-    handleAddAddress,
+
     toggleSubscription,
   } = useCustomerManagement();
 
@@ -141,6 +127,8 @@ export default function CustomerManagementScreen() {
           setPhone={setPhone}
           email={email}
           setEmail={setEmail}
+          gender={gender}
+          setGender={setGender}
           selectedCountry={selectedCountry}
           onShowCountrySelector={() => setShowCountrySelector(true)}
           onSubmit={handleAddCustomer}
@@ -155,29 +143,6 @@ export default function CustomerManagementScreen() {
           onSetInstagramPrimary={setInstagramAccountPrimary}
         />
 
-        <AddAddressModal 
-          visible={showAddressModal}
-          onDismiss={() => setShowAddressModal(false)}
-          addrName={addrName}
-          setAddrName={setAddrName}
-          addrPhone={addrPhone}
-          setAddrPhone={setAddrPhone}
-          addrLine1={addrLine1}
-          setAddrLine1={setAddrLine1}
-          addrLine2={addrLine2}
-          setAddrLine2={setAddrLine2}
-          addrCity={addrCity}
-          setAddrCity={setAddrCity}
-          addrPincode={addrPincode}
-          setAddrPincode={setAddrPincode}
-          addrState={addrState}
-          setAddrState={setAddrState}
-          isDefault={isDefault}
-          setIsDefault={setIsDefault}
-          selectedCountry={selectedCountry}
-          onShowCountrySelector={() => setShowCountrySelector(true)}
-          onSubmit={handleAddAddress}
-        />
 
         <CountrySelectorModal 
           visible={showCountrySelector}

@@ -11,6 +11,8 @@ using DeepLens.Contracts.Media;
 using DeepLens.Shared.Common;
 using DeepLens.Domain.Enums;
 using DeepLens.Contracts.Instagram;
+using DeepLens.Shared.Telemetry;
+using System.Diagnostics;
 
 namespace DeepLens.WorkerService.Workers
 {
@@ -112,8 +114,12 @@ namespace DeepLens.WorkerService.Workers
 
             Guid watchlistId = job.watchlist_id;
             string username = job.username;
-            int targetCount = job.target_count;
             string jobType = job.job_type;
+
+            using var activity = DeepLensActivitySource.StartActivity("InstagramSyncWorker.ProcessQueue");
+            activity?.SetTag("job.id", jobId.ToString());
+            activity?.SetTag("job.type", jobType);
+            activity?.SetTag("username", username);
 
             var startTime = DateTime.UtcNow;
             int scrapedCount = 0;
@@ -160,6 +166,8 @@ namespace DeepLens.WorkerService.Workers
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
+                activity?.SetTag("items.found", scrapedCount);
+                activity?.SetTag("items.processed", newCount);
 
                 // --- 3. Engagement Refresh (optional for manual?) ---
                 int refreshLimit = graph.GetEngagementRefreshLimit();
@@ -198,6 +206,8 @@ namespace DeepLens.WorkerService.Workers
             }
             catch (Exception ex)
             {
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                activity?.RecordException(ex);
                 _logger.LogError(ex, "Job {JobId} failed", jobId);
                 errorMessage = ex.Message;
                 await LogAsync(conn, jobId, "ERROR", $"Job failed: {ex.Message}", ex.ToString());
@@ -328,7 +338,8 @@ namespace DeepLens.WorkerService.Workers
                     // Link to 'competitor_watchlist' via 'media_links'
                     await conn.ExecuteAsync(@"
                         INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                        VALUES (@mediaId, @id, 'instagram_profile', true)",
+                        VALUES (@mediaId, @id, 'instagram_profile', true)
+                        ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
                         new { mediaId, id });
 
                     // Also update the shortcut column in watchlist
@@ -373,11 +384,6 @@ namespace DeepLens.WorkerService.Workers
                     // If it exists and already has a storage path, we skip thumbnail download
                     if (exists && !string.IsNullOrEmpty(storagePath)) 
                     {
-                        if (isOwnAccount)
-                        {
-                            var dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
-                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId);
-                        }
                         continue;
                     }
 
@@ -415,7 +421,8 @@ namespace DeepLens.WorkerService.Workers
 
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                                VALUES (@mediaId, @dbPostId, 'competitor_video', true)",
+                                VALUES (@mediaId, @dbPostId, 'competitor_video', true)
+                                ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
                                 new { mediaId, dbPostId });
                         }
 
@@ -447,14 +454,8 @@ namespace DeepLens.WorkerService.Workers
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
                                 VALUES (@mediaId, @dbPostId, 'competitor_video', true)
-                                ON CONFLICT DO NOTHING",
+                                ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
                                 new { mediaId, dbPostId });
-                        }
-
-                        // Full Media Download for Own Accounts
-                        if (isOwnAccount)
-                        {
-                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId);
                         }
 
                         count++;

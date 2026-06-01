@@ -158,6 +158,9 @@ namespace DeepLens.Infrastructure.Services
                 if (path != null)
                 {
                     await RegisterAndLinkMediaAsync(conn, dbPostId, path, (short)post.MediaType, "instagram", "full_media", true);
+                    
+                    // Ensure the main post record correctly points to the new primary media
+                    await conn.ExecuteAsync("UPDATE competitor_videos SET storage_path = @path WHERE id = @dbPostId", new { path, dbPostId });
                 }
             }
 
@@ -217,7 +220,7 @@ namespace DeepLens.Infrastructure.Services
             await conn.ExecuteAsync(@"
                 INSERT INTO media_links (media_id, entity_id, entity_type, is_primary, display_order)
                 VALUES (@finalMediaId, @entityId, 'competitor_video', @isPrimary, @displayOrder)
-                ON CONFLICT DO NOTHING",
+                ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
                 new { finalMediaId, entityId, isPrimary, displayOrder });
         }
 

@@ -23,7 +23,7 @@ class CustomerService {
     return productMgmtApiClient.post<Customer>(API_ROUTES.CUSTOMERS.UPSERT, request);
   }
 
-  async updateCustomer(id: string, customer: Partial<Customer>): Promise<void> {
+  async updateCustomer(id: string, customer: CreateCustomerRequest): Promise<void> {
     return productMgmtApiClient.put(API_ROUTES.CUSTOMERS.DETAIL(id), customer);
   }
 

@@ -5,7 +5,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { AddAddressModal } from '@/components/utility/customer/AddAddressModal';
+import { ManageAddressModal } from '@/components/utility/customer/ManageAddressModal';
+import { CustomerAddress } from '@/api/customers';
 import { CountrySelectorModal } from '@/components/utility/customer/CountrySelectorModal';
 import { EditCustomerModal } from '@/components/utility/customer/EditCustomerModal';
 
@@ -45,15 +46,7 @@ export default function CustomerDetailScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  // New Address Fields
-  const [addrName, setAddrName] = useState('');
-  const [addrPhone, setAddrPhone] = useState('');
-  const [addrLine1, setAddrLine1] = useState('');
-  const [addrLine2, setAddrLine2] = useState('');
-  const [addrCity, setAddrCity] = useState('');
-  const [addrPincode, setAddrPincode] = useState('');
-  const [addrState, setAddrState] = useState('');
-  const [isDefault, setIsDefault] = useState(true);
+  const [addressToEdit, setAddressToEdit] = useState<CustomerAddress | null>(null);
 
   const loadData = useCallback(async (showIndicator = true) => {
     if (!id) return;
@@ -158,39 +151,7 @@ export default function CustomerDetailScreen() {
     setRefreshing(false);
   };
 
-  const handleAddAddress = async () => {
-    if (!customer || !addrLine1 || !addrPincode || !addrPhone || !addrName) return;
 
-    try {
-      const request: CreateAddressRequest = {
-        name: addrName,
-        phone: `${selectedCountry?.dialCode}${addrPhone}`,
-        line1: addrLine1,
-        line2: addrLine2 || undefined,
-        pincode: addrPincode,
-        city: addrCity || undefined,
-        state: addrState || undefined,
-        isDefault: isDefault
-      };
-
-      await customerService.addAddress(customer.id, request);
-      
-      // Reset form
-      setAddrName('');
-      setAddrPhone('');
-      setAddrLine1('');
-      setAddrLine2('');
-      setAddrPincode('');
-      setAddrCity('');
-      setAddrState('');
-      setShowAddressModal(false);
-
-      // Reload customer info
-      loadData(false);
-    } catch (error) {
-      console.error('Failed to add address:', error);
-    }
-  };
 
   const toggleSubscription = async (channelId: string) => {
     if (!customer) return;
@@ -281,6 +242,17 @@ export default function CustomerDetailScreen() {
               )}
               {customer.referralCode && (
                 <View style={styles.referralRow}>
+                  <Chip
+                    icon={
+                      customer.gender === 'Male' ? 'face-man' :
+                      customer.gender === 'Female' ? 'face-woman' :
+                      'account-question-outline'
+                    }
+                    style={[styles.referralChip, { marginRight: 8, backgroundColor: '#f0f0f0' }]}
+                    textStyle={{ color: customer.gender ? (customer.gender === 'Male' ? '#1976D2' : '#C2185B') : 'grey' }}
+                  >
+                    {customer.gender || 'Not Set'}
+                  </Chip>
                   <Chip 
                     icon="ticket-percent" 
                     style={styles.referralChip}
@@ -355,7 +327,7 @@ export default function CustomerDetailScreen() {
           <Card.Content>
             <View style={styles.sectionHeader}>
               <Text variant="titleMedium" style={styles.sectionTitle}>Addresses</Text>
-              <Button icon="plus" mode="outlined" compact onPress={() => setShowAddressModal(true)}>
+              <Button icon="plus" mode="outlined" compact onPress={() => { setAddressToEdit(null); setShowAddressModal(true); }}>
                 Add
               </Button>
             </View>
@@ -365,18 +337,27 @@ export default function CustomerDetailScreen() {
                 <Card key={addr.id} style={styles.addressCard} mode="outlined">
                   <Card.Content>
                     <View style={styles.addressTitleRow}>
-                      <Text variant="titleSmall" style={styles.bold}>{addr.name}</Text>
-                      {addr.isDefault && (
-                        <Chip style={styles.defaultChip} textStyle={styles.defaultChipText} compact>
-                          DEFAULT
-                        </Chip>
-                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text variant="titleSmall" style={styles.bold}>{addr.name}</Text>
+                        {addr.isDefault && (
+                          <Chip style={[styles.defaultChip, { marginLeft: 8 }]} textStyle={styles.defaultChipText} compact>
+                            DEFAULT
+                          </Chip>
+                        )}
+                      </View>
+                      <Button 
+                        mode="text" 
+                        compact 
+                        onPress={() => { setAddressToEdit(addr); setShowAddressModal(true); }}
+                        labelStyle={{ fontSize: 12 }}
+                      >
+                        Edit
+                      </Button>
                     </View>
                     <Text variant="bodySmall" style={styles.addressText}>{addr.phone}</Text>
                     <Text variant="bodySmall" style={styles.addressText}>{addr.line1}</Text>
-                    {addr.line2 && <Text variant="bodySmall" style={styles.addressText}>{addr.line2}</Text>}
                     <Text variant="bodySmall" style={styles.addressText}>
-                      {addr.city}, {addr.state} - {addr.pincode}
+                      PIN: {addr.pincode}
                     </Text>
                   </Card.Content>
                 </Card>
@@ -430,28 +411,12 @@ export default function CustomerDetailScreen() {
 
       {/* Portal Modals for Address Form */}
       <Portal>
-        <AddAddressModal 
+        <ManageAddressModal 
           visible={showAddressModal}
           onDismiss={() => setShowAddressModal(false)}
-          addrName={addrName}
-          setAddrName={setAddrName}
-          addrPhone={addrPhone}
-          setAddrPhone={setAddrPhone}
-          addrLine1={addrLine1}
-          setAddrLine1={setAddrLine1}
-          addrLine2={addrLine2}
-          setAddrLine2={setAddrLine2}
-          addrCity={addrCity}
-          setAddrCity={setAddrCity}
-          addrPincode={addrPincode}
-          setAddrPincode={setAddrPincode}
-          addrState={addrState}
-          setAddrState={setAddrState}
-          isDefault={isDefault}
-          setIsDefault={setIsDefault}
-          selectedCountry={selectedCountry}
-          onShowCountrySelector={() => setShowCountrySelector(true)}
-          onSubmit={handleAddAddress}
+          customerId={customer.id}
+          addressToEdit={addressToEdit}
+          onSuccess={() => loadData(false)}
         />
 
         <CountrySelectorModal 

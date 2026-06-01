@@ -42,6 +42,21 @@ export const InstagramVideoPlayer = React.memo(({
     });
 
     const [isReady, setIsReady] = useState(player.status === 'readyToPlay');
+    const [hasError, setHasError] = useState(false);
+    const [showFallbackIcon, setShowFallbackIcon] = useState(false);
+    
+    const isImageFallback = uri?.toLowerCase().endsWith('.jpg') || uri?.toLowerCase().endsWith('.jpeg');
+    
+    useEffect(() => {
+        if (hasError || isImageFallback) {
+            const timer = setTimeout(() => {
+                setShowFallbackIcon(true);
+            }, 1000);
+            return () => clearTimeout(timer);
+        } else {
+            setShowFallbackIcon(false);
+        }
+    }, [hasError, isImageFallback]);
 
     useEffect(() => {
         setIsReady(player.status === 'readyToPlay');
@@ -71,7 +86,8 @@ export const InstagramVideoPlayer = React.memo(({
                 setIsReady(true);
             }
             if (event.error && isActive) {
-                if (uri?.toLowerCase().endsWith('.jpg') || uri?.toLowerCase().endsWith('.jpeg')) return;
+                setHasError(true);
+                if (isImageFallback) return;
                 console.error(`[Video] Error: ${event.error.message} | URI: ${uri}`);
             }
         });
@@ -140,11 +156,20 @@ export const InstagramVideoPlayer = React.memo(({
             />
             
             {!isReady && (
-                <Image 
-                    source={{ uri: media?.thumbnailUrl || media?.mediaUrl }} 
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                />
+                <View style={StyleSheet.absoluteFill}>
+                    <Image 
+                        source={{ uri: media?.thumbnailUrl || media?.mediaUrl }} 
+                        style={StyleSheet.absoluteFill}
+                        contentFit="cover"
+                    />
+                    {showFallbackIcon && (
+                        <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
+                            <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 32, padding: 4 }}>
+                                <IconButton icon="video-off-outline" iconColor="white" size={32} />
+                            </View>
+                        </View>
+                    )}
+                </View>
             )}
             
             <View style={styles.rightVolumeOverlay}>

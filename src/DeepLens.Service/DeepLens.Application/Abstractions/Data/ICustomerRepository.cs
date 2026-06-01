@@ -18,6 +18,7 @@ public interface ICustomerRepository
     Task<bool> UpdateAddressAsync(CustomerAddress address);
     Task<bool> DeleteAddressAsync(Guid addressId);
     Task<bool> SetDefaultAddressAsync(Guid customerId, Guid addressId);
+    Task SaveAddressesAsync(Guid customerId, List<CustomerAddress> addresses);
 
     // Multi-handle Instagram & Languages mapping
     Task<Guid?> GetCustomerIdByInstagramUsernameAsync(string username);

@@ -25,7 +25,7 @@ export const useCustomerManagement = () => {
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [showAddressModal, setShowAddressModal] = useState(false);
+
   const [countryCodes, setCountryCodes] = useState<CountryCode[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<CountryCode | null>(null);
   const [showCountrySelector, setShowCountrySelector] = useState(false);
@@ -40,6 +40,7 @@ export const useCustomerManagement = () => {
   const [phone, setPhone] = useState('');
   const [instagramId, setInstagramId] = useState('');
   const [email, setEmail] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female' | undefined>(undefined);
 
   // Multi-handle Instagram & languages state
   const [instagramAccounts, setInstagramAccounts] = useState<FormInstagramAccount[]>([
@@ -49,15 +50,7 @@ export const useCustomerManagement = () => {
   const [availableLanguages, setAvailableLanguages] = useState<Language[]>([]);
   const [preferredLanguages, setPreferredLanguages] = useState<string[]>(['en-in']);
 
-  // New Address Form State
-  const [addrName, setAddrName] = useState('');
-  const [addrPhone, setAddrPhone] = useState('');
-  const [addrLine1, setAddrLine1] = useState('');
-  const [addrLine2, setAddrLine2] = useState('');
-  const [addrPincode, setAddrPincode] = useState('');
-  const [addrCity, setAddrCity] = useState('');
-  const [addrState, setAddrState] = useState('');
-  const [isDefault, setIsDefault] = useState(true);
+
 
   const loadCustomers = useCallback(async () => {
     try {
@@ -212,7 +205,7 @@ export const useCustomerManagement = () => {
     setRefreshing(false);
   };
 
-  const handleAddCustomer = async () => {
+  const handleAddCustomer = async (addresses?: CreateAddressRequest[]) => {
     const hasIg = instagramAccounts.some(acc => acc.username.trim() !== '');
     if (!phone && !hasIg) return;
     
@@ -235,7 +228,9 @@ export const useCustomerManagement = () => {
             username: a.username.trim(),
             isPrimary: a.isPrimary
           })),
-        preferredLanguages: preferredLanguages
+        preferredLanguages: preferredLanguages,
+        addresses: addresses,
+        gender: gender
       };
       
       const newCust = await customerService.createCustomer(request);
@@ -249,46 +244,14 @@ export const useCustomerManagement = () => {
       setInstagramErrors({});
       setPreferredLanguages(['en-in']);
       setEmail('');
+      setGender(undefined);
       setShowAddModal(false);
     } catch (error) {
       console.error('Failed to create customer:', error);
     }
   };
 
-  const handleAddAddress = async () => {
-    if (!selectedCustomer || !addrLine1 || !addrPincode || !addrPhone || !addrName) return;
 
-    try {
-      const request: CreateAddressRequest = {
-        name: addrName,
-        phone: `${selectedCountry?.dialCode}${addrPhone}`,
-        line1: addrLine1,
-        line2: addrLine2 || undefined,
-        pincode: addrPincode,
-        city: addrCity || undefined,
-        state: addrState || undefined,
-        isDefault: isDefault
-      };
-
-      await customerService.addAddress(selectedCustomer.id, request);
-      
-      const updatedCust = await customerService.getCustomerById(selectedCustomer.id);
-      setSelectedCustomer(updatedCust);
-      loadCustomers();
-
-      // Reset form
-      setAddrName('');
-      setAddrPhone('');
-      setAddrLine1('');
-      setAddrLine2('');
-      setAddrPincode('');
-      setAddrCity('');
-      setAddrState('');
-      setShowAddressModal(false);
-    } catch (error) {
-      console.error('Failed to add address:', error);
-    }
-  };
 
   const toggleSubscription = async (channelId: string) => {
     if (!selectedCustomer) return;
@@ -335,8 +298,7 @@ export const useCustomerManagement = () => {
     setShowAddModal,
     selectedCustomer,
     setSelectedCustomer,
-    showAddressModal,
-    setShowAddressModal,
+
     countryCodes,
     selectedCountry,
     setSelectedCountry,
@@ -366,24 +328,11 @@ export const useCustomerManagement = () => {
     setInstagramAccountPrimary,
     email,
     setEmail,
-    addrName,
-    setAddrName,
-    addrPhone,
-    setAddrPhone,
-    addrLine1,
-    setAddrLine1,
-    addrLine2,
-    setAddrLine2,
-    addrPincode,
-    setAddrPincode,
-    addrCity,
-    setAddrCity,
-    addrState,
-    setAddrState,
-    isDefault,
-    setIsDefault,
+
+    gender,
+    setGender,
     handleAddCustomer,
-    handleAddAddress,
+
     toggleSubscription,
   };
 };

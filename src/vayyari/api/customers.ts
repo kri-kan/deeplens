@@ -10,6 +10,7 @@ export interface Customer {
   instagramId?: string;
   email?: string;
   notes?: string;
+  referralCode?: string;
   addresses?: CustomerAddress[];
 }
 
@@ -19,10 +20,7 @@ export interface CustomerAddress {
   name: string;
   phone: string;
   line1: string;
-  line2?: string;
   pincode: string;
-  city?: string;
-  state?: string;
   isDefault: boolean;
 }
 
@@ -33,16 +31,14 @@ export const customersApi = {
    * Otherwise, it creates a new dummy customer.
    */
   getOrCreateCustomer: async (phone?: string, instagramId?: string): Promise<Customer> => {
-    const response = await searchApiClient.post('/api/v1/customers', {
+    return searchApiClient.post<Customer>('/api/v1/customers', {
       phoneNumber: phone,
       instagramId: instagramId
     });
-    return response.data;
   },
 
   getCustomerById: async (id: string): Promise<Customer> => {
-    const response = await searchApiClient.get(`/api/v1/customers/${id}`);
-    return response.data;
+    return searchApiClient.get<Customer>(`/api/v1/customers/${id}`);
   },
 
   updateCustomerName: async (id: string, currentCustomer: Customer, firstName: string, lastName: string): Promise<void> => {
@@ -73,8 +69,8 @@ export const customersApi = {
   },
 
   saveCustomerAddress: async (customerId: string, address: Omit<CustomerAddress, 'id' | 'customerId'>): Promise<string> => {
-    const response = await searchApiClient.post(`/api/v1/customers/${customerId}/addresses`, address);
-    return response.data.id;
+    const response = await searchApiClient.post<{ id: string }>(`/api/v1/customers/${customerId}/addresses`, address);
+    return response.id;
   },
   
   updateCustomerAddress: async (addressId: string, address: Omit<CustomerAddress, 'id' | 'customerId'>): Promise<void> => {

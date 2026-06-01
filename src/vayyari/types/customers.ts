@@ -25,6 +25,7 @@ export interface Customer {
   instagramId?: string;
   email?: string;
   notes?: string;
+  gender?: 'Male' | 'Female';
   referralCode?: string;
   createdAt: string;
   addresses?: CustomerAddress[];
@@ -45,10 +46,7 @@ export interface CustomerAddress {
   name: string;
   phone: string;
   line1: string;
-  line2?: string;
   pincode: string;
-  city?: string;
-  state?: string;
   isDefault: boolean;
 }
 
@@ -63,8 +61,10 @@ export interface CreateCustomerRequest {
   instagramId?: string;
   email?: string;
   notes?: string;
-  instagramAccounts?: CustomerInstagramAccount[];
+  gender?: 'Male' | 'Female';
+  instagramAccounts?: Omit<CustomerInstagramAccount, 'fullName' | 'profilePictureUrl'>[];
   preferredLanguages?: string[];
+  addresses?: CreateAddressRequest[];
 }
 
 /**
@@ -72,12 +72,10 @@ export interface CreateCustomerRequest {
  * Mirrors CreateAddressRequest from backend.
  */
 export interface CreateAddressRequest {
+  id?: string;
   name: string;
   phone: string;
   line1: string;
-  line2?: string;
   pincode: string;
-  city?: string;
-  state?: string;
   isDefault?: boolean;
 }

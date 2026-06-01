@@ -98,6 +98,7 @@ public class CustomerService : ICustomerService
             InstagramId = primaryInstagramId,
             Email = request.Email,
             Notes = request.Notes,
+            Gender = request.Gender,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -113,6 +114,23 @@ public class CustomerService : ICustomerService
 
         // Save new relationships
         await _customerRepository.SaveInstagramAccountsAsync(customer.Id, instagramAccountsToSave);
+
+        if (request.Addresses != null)
+        {
+            var addressesToSave = request.Addresses.Select(a => new CustomerAddress
+            {
+                Id = a.Id ?? Guid.Empty,
+                CustomerId = customer.Id,
+                Name = a.Name,
+                Phone = a.Phone,
+                Line1 = a.Line1,
+                Pincode = a.Pincode,
+                IsDefault = a.IsDefault,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            }).ToList();
+            await _customerRepository.SaveAddressesAsync(customer.Id, addressesToSave);
+        }
 
         if (request.PreferredLanguages != null)
         {
@@ -182,12 +200,29 @@ public class CustomerService : ICustomerService
         customer.InstagramId = primaryInstagramId;
         customer.Email = request.Email;
         customer.Notes = request.Notes;
+        customer.Gender = request.Gender;
         customer.UpdatedAt = DateTime.UtcNow;
 
         var success = await _customerRepository.UpdateAsync(customer);
         if (success)
         {
             await _customerRepository.SaveInstagramAccountsAsync(customer.Id, instagramAccountsToSave);
+            
+            if (request.Addresses != null)
+            {
+                var addressesToSave = request.Addresses.Select(a => new CustomerAddress
+                {
+                    Id = a.Id ?? Guid.Empty,
+                    CustomerId = customer.Id,
+                    Name = a.Name,
+                    Phone = a.Phone,
+                    Line1 = a.Line1,
+                    Pincode = a.Pincode,
+                    IsDefault = a.IsDefault,
+                    UpdatedAt = DateTime.UtcNow
+                }).ToList();
+                await _customerRepository.SaveAddressesAsync(customer.Id, addressesToSave);
+            }
             
             if (request.PreferredLanguages != null)
             {
@@ -222,10 +257,7 @@ public class CustomerService : ICustomerService
             Name = request.Name,
             Phone = request.Phone,
             Line1 = request.Line1,
-            Line2 = request.Line2,
             Pincode = request.Pincode,
-            City = request.City,
-            State = request.State,
             IsDefault = request.IsDefault,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -242,10 +274,7 @@ public class CustomerService : ICustomerService
             Name = request.Name,
             Phone = request.Phone,
             Line1 = request.Line1,
-            Line2 = request.Line2,
             Pincode = request.Pincode,
-            City = request.City,
-            State = request.State,
             IsDefault = request.IsDefault,
             UpdatedAt = DateTime.UtcNow
         };
@@ -291,6 +320,7 @@ public class CustomerService : ICustomerService
             customer.InstagramId,
             customer.Email,
             customer.Notes,
+            customer.Gender,
             customer.ReferralCode,
             customer.CreatedAt,
             customer.Addresses?.Select(a => new CustomerAddressDto(
@@ -299,10 +329,7 @@ public class CustomerService : ICustomerService
                 a.Name,
                 a.Phone,
                 a.Line1,
-                a.Line2,
                 a.Pincode,
-                a.City,
-                a.State,
                 a.IsDefault
             )).ToList() ?? new List<CustomerAddressDto>(),
             customer.InstagramAccounts?.Select(i => new CustomerInstagramAccountDto(

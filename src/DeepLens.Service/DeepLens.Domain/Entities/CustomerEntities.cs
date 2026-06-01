@@ -13,6 +13,7 @@ public class Customer
     public string? InstagramId { get; set; }
     public string? Email { get; set; }
     public string? Notes { get; set; }
+    public string? Gender { get; set; }
     public string ReferralCode { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -42,10 +43,7 @@ public class CustomerAddress
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string Line1 { get; set; } = string.Empty;
-    public string? Line2 { get; set; }
     public string Pincode { get; set; } = string.Empty;
-    public string? City { get; set; }
-    public string? State { get; set; }
     public bool IsDefault { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
