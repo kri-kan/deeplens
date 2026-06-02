@@ -104,34 +104,82 @@ public class VendorsController : ControllerBase
     }
 
     /// <summary>
-    /// Add a contact person to a Vendor
+    /// Get addresses for a vendor
     /// </summary>
-    [HttpPost("{vendorId}/contacts")]
-    public async Task<ActionResult<VendorContactResponse>> AddContact(
+    [HttpGet("{vendorId}/addresses")]
+    public async Task<ActionResult<List<VendorAddressResponse>>> GetVendorAddresses(Guid vendorId)
+    {
+        var addresses = await _vendorService.GetVendorAddressesAsync(vendorId);
+        return Ok(addresses);
+    }
+
+    /// <summary>
+    /// Add an address for a vendor
+    /// </summary>
+    [HttpPost("{vendorId}/addresses")]
+    public async Task<ActionResult<VendorAddressResponse>> AddVendorAddress(
         Guid vendorId,
-        [FromBody] VendorContactRequest request)
+        [FromBody] VendorAddressRequest request)
     {
         try
         {
-            var contact = await _vendorService.AddContactAsync(vendorId, request);
-            return CreatedAtAction(nameof(GetVendor), new { vendorId }, contact);
+            var address = await _vendorService.AddVendorAddressAsync(vendorId, request);
+            return CreatedAtAction(nameof(GetVendorAddresses), new { vendorId }, address);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
-            return BadRequest(new { message = ex.Message });
+            _logger.LogError(ex, "Failed to add vendor address");
+            return StatusCode(500, new { message = "Failed to add address", error = ex.Message });
         }
     }
 
     /// <summary>
-    /// Remove a contact person from a Vendor
+    /// Update a vendor address
     /// </summary>
-    [HttpDelete("contacts/{contactId}")]
-    public async Task<IActionResult> RemoveContact(Guid contactId)
+    [HttpPut("addresses/{addressId}")]
+    public async Task<ActionResult<VendorAddressResponse>> UpdateVendorAddress(
+        Guid addressId,
+        [FromBody] VendorAddressRequest request)
     {
-        var removed = await _vendorService.RemoveContactAsync(contactId);
-        if (!removed)
-            return NotFound(new { message = "Contact not found" });
+        try
+        {
+            var address = await _vendorService.UpdateVendorAddressAsync(addressId, request);
+            return Ok(address);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update vendor address");
+            return StatusCode(500, new { message = "Failed to update address", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Delete a vendor address
+    /// </summary>
+    [HttpDelete("addresses/{addressId}")]
+    public async Task<IActionResult> DeleteVendorAddress(Guid addressId)
+    {
+        var deleted = await _vendorService.DeleteVendorAddressAsync(addressId);
+        if (!deleted)
+            return NotFound(new { message = "Address not found" });
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Set a default vendor address
+    /// </summary>
+    [HttpPost("{vendorId}/addresses/{addressId}/default")]
+    public async Task<IActionResult> SetDefaultVendorAddress(Guid vendorId, Guid addressId)
+    {
+        var success = await _vendorService.SetDefaultAddressAsync(vendorId, addressId);
+        if (!success)
+            return NotFound(new { message = "Address not found or could not be updated" });
+
+        return Ok();
     }
 }

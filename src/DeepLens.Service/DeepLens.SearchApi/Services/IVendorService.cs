@@ -12,6 +12,10 @@ public interface IVendorService
     Task<VendorListResponse> ListVendorsAsync(int page, int pageSize, bool? activeOnly);
     Task<VendorResponse> UpdateVendorAsync(Guid vendorId, UpdateVendorRequest request);
     Task<bool> DeleteVendorAsync(Guid vendorId);
-    Task<VendorContactResponse> AddContactAsync(Guid vendorId, VendorContactRequest request);
-    Task<bool> RemoveContactAsync(Guid contactId);
+
+    Task<List<VendorAddressResponse>> GetVendorAddressesAsync(Guid vendorId);
+    Task<VendorAddressResponse> AddVendorAddressAsync(Guid vendorId, VendorAddressRequest request);
+    Task<VendorAddressResponse> UpdateVendorAddressAsync(Guid addressId, VendorAddressRequest request);
+    Task<bool> DeleteVendorAddressAsync(Guid addressId);
+    Task<bool> SetDefaultAddressAsync(Guid vendorId, Guid addressId);
 }

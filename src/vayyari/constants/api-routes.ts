@@ -129,5 +129,9 @@ export const API_ROUTES = {
   VENDORS: {
     LIST: '/api/v1/Vendors',
     DETAIL: (id: string) => `/api/v1/Vendors/${id}`,
+    ADDRESSES: (id: string) => `/api/v1/Vendors/${id}/addresses`,
+    UPDATE_ADDRESS: (addressId: string) => `/api/v1/Vendors/addresses/${addressId}`,
+    DELETE_ADDRESS: (addressId: string) => `/api/v1/Vendors/addresses/${addressId}`,
+    SET_DEFAULT_ADDRESS: (vendorId: string, addressId: string) => `/api/v1/Vendors/${vendorId}/addresses/${addressId}/default`,
   }
 };

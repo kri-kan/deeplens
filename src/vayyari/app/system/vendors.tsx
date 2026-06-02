@@ -1,47 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Alert } from 'react-native';
-import { Text, Button, IconButton, Surface, TextInput, Portal, Modal, Switch } from 'react-native-paper';
+import { Text, Button, IconButton, Surface, useTheme, Avatar } from 'react-native-paper';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { vendorService } from '@/services/vendorService';
 import { VendorResponse } from '@/types/vendors';
+import { VendorAddressesModal } from '@/components/utility/vendor/VendorAddressesModal';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 
 export default function VendorManagement() {
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editModal, setEditModal] = useState(false);
-  const [editingVendor, setEditingVendor] = useState<Partial<VendorResponse>>({});
+  
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [selectedVendorForAddresses, setSelectedVendorForAddresses] = useState<VendorResponse | null>(null);
+
+  const theme = useTheme();
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await vendorService.listVendors(1, 100);
-      setVendors(res.vendors || []);
+      const data = await vendorService.listVendors(1, 100);
+      setVendors(data.vendors || []);
     } catch (error) {
-      console.error('Failed to fetch vendors', error);
-      Alert.alert('Error', 'Failed to load vendors');
+      Alert.alert('Error', 'Failed to fetch vendors');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleSave = async () => {
-    if (!editingVendor.vendorName) return;
-    try {
-      if (editingVendor.id) {
-        await vendorService.updateVendor(editingVendor.id, editingVendor);
-      } else {
-        await vendorService.createVendor(editingVendor);
-      }
-      setEditModal(false);
+  useFocusEffect(
+    useCallback(() => {
       fetchData();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save vendor');
-    }
-  };
+    }, [])
+  );
 
   const handleDelete = (id: string) => {
     Alert.alert('Delete', 'Are you sure you want to deactivate this vendor?', [
@@ -58,89 +50,109 @@ export default function VendorManagement() {
   };
 
   return (
-    <ScreenWrapper title="Vendor Management" withScrollView={false}>
+    <ScreenWrapper title="Vendor Directory" withScrollView={false}>
       <View style={styles.container}>
-        <Button 
-          mode="contained" 
-          icon="plus" 
-          onPress={() => { setEditingVendor({ isActive: true }); setEditModal(true); }}
-          style={styles.addBtn}
-        >
-          Add New Vendor
-        </Button>
+        
+        {/* Header Action */}
+        <View style={styles.headerSection}>
+          <Text variant="bodyLarge" style={styles.summaryText}>
+            {vendors.length} Vendors Found
+          </Text>
+          <Button 
+            mode="contained" 
+            icon="plus" 
+            onPress={() => { 
+              router.push('/system/vendor/new');
+            }}
+            style={styles.addBtn}
+            contentStyle={{ paddingHorizontal: 8 }}
+          >
+            Add New
+          </Button>
+        </View>
 
         <FlatList
           data={vendors}
           keyExtractor={(item) => item.id}
           refreshing={loading}
           onRefresh={fetchData}
+          contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
-            <Surface style={[styles.card, !item.isActive && styles.inactiveCard]} elevation={1}>
-              <View style={styles.details}>
-                <Text variant="titleMedium">{item.vendorName} {item.vendorCode ? `(${item.vendorCode})` : ''}</Text>
-                <Text variant="bodySmall" style={styles.subtitle}>
-                  {item.email || 'No email provided'} {item.isActive ? '' : '(Inactive)'}
-                </Text>
+            <Surface style={[styles.card, !item.isActive && styles.inactiveCard]} elevation={2}>
+              <View style={styles.cardHeader}>
+                <Avatar.Text 
+                  size={40} 
+                  label={item.vendorName.substring(0, 2).toUpperCase()} 
+                  style={{ backgroundColor: theme.colors.primaryContainer }}
+                  color={theme.colors.onPrimaryContainer}
+                />
+                <View style={styles.details}>
+                  <Text variant="titleMedium" style={styles.vendorName}>
+                    {item.vendorName}
+                  </Text>
+                  <View style={styles.tagsContainer}>
+                    {item.vendorCode && (
+                      <Surface style={styles.tag} elevation={0}>
+                        <Text style={styles.tagText}>{item.vendorCode}</Text>
+                      </Surface>
+                    )}
+                    {!item.isActive && (
+                      <Surface style={[styles.tag, { backgroundColor: '#ffebee' }]} elevation={0}>
+                        <Text style={[styles.tagText, { color: '#c62828' }]}>Inactive</Text>
+                      </Surface>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.actions}>
+                  <IconButton 
+                    icon="map-marker-outline" 
+                    size={20} 
+                    onPress={() => {
+                      setSelectedVendorForAddresses(item);
+                      setAddressModalVisible(true);
+                    }} 
+                  />
+                  <IconButton 
+                    icon="pencil-outline" 
+                    size={20} 
+                    onPress={() => {
+                      router.push(`/system/vendor/${item.id}`);
+                    }} 
+                  />
+                  {item.isActive && (
+                    <IconButton icon="delete-outline" size={20} onPress={() => handleDelete(item.id)} iconColor={theme.colors.error} />
+                  )}
+                </View>
               </View>
-              <View style={styles.actions}>
-                <IconButton icon="pencil" onPress={() => { setEditingVendor(item); setEditModal(true); }} />
-                {item.isActive && (
-                  <IconButton icon="delete" onPress={() => handleDelete(item.id)} iconColor="red" />
-                )}
+              
+              {/* Contact Info Footer */}
+              <View style={styles.cardFooter}>
+                <View style={styles.contactRow}>
+                  <IconButton icon="account-outline" size={16} style={styles.tinyIcon} />
+                  <Text variant="bodySmall" style={styles.contactText}>
+                    {item.firstName || item.lastName ? `${item.firstName || ''} ${item.lastName || ''}` : 'No Name provided'}
+                  </Text>
+                </View>
+                <View style={styles.contactRow}>
+                  <IconButton icon="whatsapp" size={16} style={styles.tinyIcon} iconColor="#25D366" />
+                  <Text variant="bodySmall" style={styles.contactText}>
+                    {item.whatsappPrimary || 'No WhatsApp'}
+                  </Text>
+                </View>
               </View>
             </Surface>
           )}
-          ListEmptyComponent={!loading ? <Text style={styles.emptyText}>No vendors found</Text> : null}
+          ListEmptyComponent={!loading ? <Text style={styles.emptyText}>No vendors found. Start by adding one!</Text> : null}
         />
-
-        <Portal>
-          <Modal visible={editModal} onDismiss={() => setEditModal(false)} contentContainerStyle={styles.modal}>
-            <Text variant="headlineSmall" style={styles.modalTitle}>
-              {editingVendor.id ? 'Edit Vendor' : 'New Vendor'}
-            </Text>
-            
-            <TextInput
-              label="Vendor Name *"
-              value={editingVendor.vendorName || ''}
-              onChangeText={(t) => setEditingVendor({ ...editingVendor, vendorName: t })}
-              mode="outlined"
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Vendor Code"
-              value={editingVendor.vendorCode || ''}
-              onChangeText={(t) => setEditingVendor({ ...editingVendor, vendorCode: t })}
-              mode="outlined"
-              style={styles.input}
-            />
-
-            <TextInput
-              label="Email"
-              value={editingVendor.email || ''}
-              onChangeText={(t) => setEditingVendor({ ...editingVendor, email: t })}
-              mode="outlined"
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            {editingVendor.id && (
-              <View style={styles.switchContainer}>
-                <Text variant="bodyLarge">Is Active</Text>
-                <Switch
-                  value={editingVendor.isActive}
-                  onValueChange={(val) => setEditingVendor({ ...editingVendor, isActive: val })}
-                />
-              </View>
-            )}
-
-            <View style={styles.modalActions}>
-              <Button onPress={() => setEditModal(false)}>Cancel</Button>
-              <Button mode="contained" onPress={handleSave} disabled={!editingVendor.vendorName}>Save Changes</Button>
-            </View>
-          </Modal>
-        </Portal>
+        
+        <VendorAddressesModal 
+          visible={addressModalVisible}
+          onDismiss={() => {
+            setAddressModalVisible(false);
+            setSelectedVendorForAddresses(null);
+          }}
+          vendor={selectedVendorForAddresses}
+        />
       </View>
     </ScreenWrapper>
   );
@@ -149,60 +161,161 @@ export default function VendorManagement() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#F8F9FA',
+  },
+  headerSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  summaryText: {
+    color: '#6c757d',
+    fontWeight: '500',
   },
   addBtn: {
-    marginBottom: 16,
+    borderRadius: 8,
+  },
+  listContent: {
+    padding: 16,
+    paddingTop: 4,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     padding: 16,
-    marginBottom: 12,
-    borderRadius: 12,
+    marginBottom: 16,
+    borderRadius: 16,
     backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   inactiveCard: {
     opacity: 0.6,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   details: {
     flex: 1,
+    marginLeft: 12,
   },
-  subtitle: {
-    opacity: 0.6,
-    marginTop: 4,
+  vendorName: {
+    fontWeight: '700',
+    color: '#212529',
+    marginBottom: 4,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tag: {
+    backgroundColor: '#e9ecef',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tagText: {
+    fontSize: 12,
+    color: '#495057',
+    fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',
   },
+  cardFooter: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f3f5',
+    paddingTop: 12,
+    gap: 16,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tinyIcon: {
+    margin: 0,
+    padding: 0,
+    width: 20,
+    height: 20,
+  },
+  contactText: {
+    color: '#495057',
+    marginLeft: 4,
+  },
   modal: {
     backgroundColor: 'white',
-    padding: 24,
-    margin: 20,
-    borderRadius: 16,
+    margin: 16,
+    borderRadius: 24,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f5',
   },
   modalTitle: {
-    marginBottom: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    color: '#212529',
+  },
+  modalScroll: {
+    paddingHorizontal: 24,
+    maxHeight: 500,
+  },
+  sectionTitle: {
+    marginTop: 20,
+    marginBottom: 12,
+    color: '#495057',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontSize: 12,
   },
   input: {
-    marginBottom: 16,
+    marginBottom: 12,
+    backgroundColor: 'white',
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  flex1: {
+    flex: 1,
   },
   switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    marginTop: 8,
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
   },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 12,
+    padding: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f3f5',
+  },
+  saveBtn: {
+    marginLeft: 12,
+    borderRadius: 8,
   },
   emptyText: {
     textAlign: 'center',
-    marginTop: 40,
-    opacity: 0.5,
+    marginTop: 60,
+    color: '#adb5bd',
+    fontSize: 16,
   }
 });

@@ -411,11 +411,15 @@ export default function CustomerDetailScreen() {
 
       {/* Portal Modals for Address Form */}
       <Portal>
-        <ManageAddressModal 
-          visible={showAddressModal}
-          onDismiss={() => setShowAddressModal(false)}
-          customerId={customer.id}
-          addressToEdit={addressToEdit}
+        <ManageAddressModal
+          visible={addressModalVisible}
+          onDismiss={() => {
+            setAddressModalVisible(false);
+            setEditingAddress(null);
+          }}
+          entityId={id as string}
+          entityType="customer"
+          addressToEdit={editingAddress}
           onSuccess={() => loadData(false)}
         />
 

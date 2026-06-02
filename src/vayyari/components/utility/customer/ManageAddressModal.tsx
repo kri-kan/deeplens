@@ -3,21 +3,25 @@ import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, Modal, Checkbox, useTheme } from 'react-native-paper';
 import { AddressFormComponent, AddressFormState } from './AddressFormComponent';
 import { customerService } from '@/services/customerService';
+import { vendorService } from '@/services/vendorService';
 import { CustomerAddress } from '@/api/customers';
+import { VendorAddressResponse } from '@/types/vendors';
 import { wrapInSpan } from '@/utils/telemetry';
 
 interface ManageAddressModalProps {
   visible: boolean;
   onDismiss: () => void;
-  customerId: string;
-  addressToEdit?: CustomerAddress | null;
+  entityId: string;
+  entityType?: 'customer' | 'vendor';
+  addressToEdit?: CustomerAddress | VendorAddressResponse | null;
   onSuccess: () => void;
 }
 
 export const ManageAddressModal: React.FC<ManageAddressModalProps> = ({
   visible,
   onDismiss,
-  customerId,
+  entityId,
+  entityType = 'customer',
   addressToEdit,
   onSuccess,
 }) => {
@@ -77,10 +81,18 @@ export const ManageAddressModal: React.FC<ManageAddressModalProps> = ({
       };
 
       await wrapInSpan('ManageAddressModal: saveAddress', async () => {
-        if (addressToEdit && addressToEdit.id) {
-          await customerService.updateAddress(addressToEdit.id, requestData);
+        if (entityType === 'vendor') {
+          if (addressToEdit && addressToEdit.id) {
+            await vendorService.updateVendorAddress(addressToEdit.id, requestData);
+          } else {
+            await vendorService.addVendorAddress(entityId, requestData);
+          }
         } else {
-          await customerService.addAddress(customerId, requestData);
+          if (addressToEdit && addressToEdit.id) {
+            await customerService.updateAddress(addressToEdit.id, requestData);
+          } else {
+            await customerService.addAddress(entityId, requestData);
+          }
         }
       });
       

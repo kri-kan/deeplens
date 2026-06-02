@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace DeepLens.Contracts.Vendors;
@@ -9,26 +10,34 @@ public record CreateVendorRequest
 {
     [JsonPropertyName("vendorName")]
     public required string VendorName { get; init; }
+    
     [JsonPropertyName("vendorCode")]
-    public string? VendorCode { get; init; }
-    [JsonPropertyName("address")]
-    public string? Address { get; init; }
-    [JsonPropertyName("city")]
-    public string? City { get; init; }
-    [JsonPropertyName("state")]
-    public string? State { get; init; }
-    [JsonPropertyName("country")]
-    public string? Country { get; init; }
-    [JsonPropertyName("postalCode")]
-    public string? PostalCode { get; init; }
+    [Required]
+    [StringLength(8, MinimumLength = 3, ErrorMessage = "Vendor Code must be between 3 and 8 characters")]
+    public required string VendorCode { get; init; }
+    
+    [JsonPropertyName("firstName")]
+    public string? FirstName { get; init; }
+    
+    [JsonPropertyName("lastName")]
+    public string? LastName { get; init; }
+    
+    [JsonPropertyName("whatsappPrimary")]
+    public string? WhatsappPrimary { get; init; }
+    
+    [JsonPropertyName("whatsappSecondary")]
+    public string? WhatsappSecondary { get; init; }
+    
+    [JsonPropertyName("orderGroupLink")]
+    public string? OrderGroupLink { get; init; }
+    
+
     [JsonPropertyName("email")]
     public string? Email { get; init; }
     [JsonPropertyName("website")]
     public string? Website { get; init; }
     [JsonPropertyName("notes")]
     public string? Notes { get; init; }
-    [JsonPropertyName("contacts")]
-    public List<VendorContactRequest>? Contacts { get; init; }
 }
 
 /// <summary>
@@ -38,18 +47,27 @@ public record UpdateVendorRequest
 {
     [JsonPropertyName("vendorName")]
     public string? VendorName { get; init; }
+    
     [JsonPropertyName("vendorCode")]
+    [StringLength(8, MinimumLength = 3, ErrorMessage = "Vendor Code must be between 3 and 8 characters")]
     public string? VendorCode { get; init; }
-    [JsonPropertyName("address")]
-    public string? Address { get; init; }
-    [JsonPropertyName("city")]
-    public string? City { get; init; }
-    [JsonPropertyName("state")]
-    public string? State { get; init; }
-    [JsonPropertyName("country")]
-    public string? Country { get; init; }
-    [JsonPropertyName("postalCode")]
-    public string? PostalCode { get; init; }
+    
+    [JsonPropertyName("firstName")]
+    public string? FirstName { get; init; }
+    
+    [JsonPropertyName("lastName")]
+    public string? LastName { get; init; }
+    
+    [JsonPropertyName("whatsappPrimary")]
+    public string? WhatsappPrimary { get; init; }
+    
+    [JsonPropertyName("whatsappSecondary")]
+    public string? WhatsappSecondary { get; init; }
+    
+    [JsonPropertyName("orderGroupLink")]
+    public string? OrderGroupLink { get; init; }
+    
+
     [JsonPropertyName("email")]
     public string? Email { get; init; }
     [JsonPropertyName("website")]
@@ -60,24 +78,7 @@ public record UpdateVendorRequest
     public bool? IsActive { get; init; }
 }
 
-/// <summary>
-/// Contact person for a vendor
-/// </summary>
-public record VendorContactRequest
-{
-    [JsonPropertyName("contactName")]
-    public required string ContactName { get; init; }
-    [JsonPropertyName("contactRole")]
-    public string? ContactRole { get; init; }
-    [JsonPropertyName("phoneNumber")]
-    public string? PhoneNumber { get; init; }
-    [JsonPropertyName("alternatePhone")]
-    public string? AlternatePhone { get; init; }
-    [JsonPropertyName("email")]
-    public string? Email { get; init; }
-    [JsonPropertyName("isPrimary")]
-    public bool IsPrimary { get; init; }
-}
+
 
 /// <summary>
 /// Vendor response DTO
@@ -92,16 +93,17 @@ public record VendorResponse
     public required string VendorName { get; init; }
     [JsonPropertyName("vendorCode")]
     public string? VendorCode { get; init; }
-    [JsonPropertyName("address")]
-    public string? Address { get; init; }
-    [JsonPropertyName("city")]
-    public string? City { get; init; }
-    [JsonPropertyName("state")]
-    public string? State { get; init; }
-    [JsonPropertyName("country")]
-    public string? Country { get; init; }
-    [JsonPropertyName("postalCode")]
-    public string? PostalCode { get; init; }
+    [JsonPropertyName("firstName")]
+    public string? FirstName { get; init; }
+    [JsonPropertyName("lastName")]
+    public string? LastName { get; init; }
+    [JsonPropertyName("whatsappPrimary")]
+    public string? WhatsappPrimary { get; init; }
+    [JsonPropertyName("whatsappSecondary")]
+    public string? WhatsappSecondary { get; init; }
+    [JsonPropertyName("orderGroupLink")]
+    public string? OrderGroupLink { get; init; }
+
     [JsonPropertyName("email")]
     public string? Email { get; init; }
     [JsonPropertyName("website")]
@@ -114,33 +116,6 @@ public record VendorResponse
     public DateTime CreatedAt { get; init; }
     [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; init; }
-    [JsonPropertyName("contacts")]
-    public List<VendorContactResponse>? Contacts { get; init; }
-}
-
-/// <summary>
-/// Vendor contact response DTO
-/// </summary>
-public record VendorContactResponse
-{
-    [JsonPropertyName("id")]
-    public Guid Id { get; init; }
-    [JsonPropertyName("vendorId")]
-    public Guid VendorId { get; init; }
-    [JsonPropertyName("contactName")]
-    public required string ContactName { get; init; }
-    [JsonPropertyName("contactRole")]
-    public string? ContactRole { get; init; }
-    [JsonPropertyName("phoneNumber")]
-    public string? PhoneNumber { get; init; }
-    [JsonPropertyName("alternatePhone")]
-    public string? AlternatePhone { get; init; }
-    [JsonPropertyName("email")]
-    public string? Email { get; init; }
-    [JsonPropertyName("isPrimary")]
-    public bool IsPrimary { get; init; }
-    [JsonPropertyName("createdAt")]
-    public DateTime CreatedAt { get; init; }
 }
 
 /// <summary>
@@ -159,3 +134,76 @@ public record VendorListResponse
     [JsonPropertyName("totalPages")]
     public int TotalPages { get; init; }
 }
+
+/// <summary>
+/// Request to add or update a vendor address
+/// </summary>
+public record VendorAddressRequest
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+    
+    [JsonPropertyName("phone")]
+    public required string Phone { get; init; }
+    
+    [JsonPropertyName("line1")]
+    public required string Line1 { get; init; }
+    
+    [JsonPropertyName("line2")]
+    public string? Line2 { get; init; }
+    
+    [JsonPropertyName("pincode")]
+    public required string Pincode { get; init; }
+    
+    [JsonPropertyName("city")]
+    public string? City { get; init; }
+    
+    [JsonPropertyName("state")]
+    public string? State { get; init; }
+    
+    [JsonPropertyName("isDefault")]
+    public bool IsDefault { get; init; }
+}
+
+/// <summary>
+/// Response DTO for a vendor address
+/// </summary>
+public record VendorAddressResponse
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; init; }
+    
+    [JsonPropertyName("vendorId")]
+    public Guid VendorId { get; init; }
+    
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+    
+    [JsonPropertyName("phone")]
+    public required string Phone { get; init; }
+    
+    [JsonPropertyName("line1")]
+    public required string Line1 { get; init; }
+    
+    [JsonPropertyName("line2")]
+    public string? Line2 { get; init; }
+    
+    [JsonPropertyName("pincode")]
+    public required string Pincode { get; init; }
+    
+    [JsonPropertyName("city")]
+    public string? City { get; init; }
+    
+    [JsonPropertyName("state")]
+    public string? State { get; init; }
+    
+    [JsonPropertyName("isDefault")]
+    public bool IsDefault { get; init; }
+    
+    [JsonPropertyName("createdAt")]
+    public DateTime CreatedAt { get; init; }
+    
+    [JsonPropertyName("updatedAt")]
+    public DateTime UpdatedAt { get; init; }
+}
+

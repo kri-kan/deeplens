@@ -23,5 +23,25 @@ export const vendorService = {
 
   deleteVendor: async (id: string): Promise<void> => {
     await productMgmtApiClient.delete(API_ROUTES.VENDORS.DETAIL(id));
+  },
+
+  getVendorAddresses: async (vendorId: string): Promise<VendorAddressResponse[]> => {
+    return await productMgmtApiClient.get<VendorAddressResponse[]>(API_ROUTES.VENDORS.ADDRESSES(vendorId));
+  },
+
+  addVendorAddress: async (vendorId: string, address: VendorAddressRequest): Promise<VendorAddressResponse> => {
+    return await productMgmtApiClient.post<VendorAddressResponse>(API_ROUTES.VENDORS.ADDRESSES(vendorId), address);
+  },
+
+  updateVendorAddress: async (addressId: string, address: VendorAddressRequest): Promise<VendorAddressResponse> => {
+    return await productMgmtApiClient.put<VendorAddressResponse>(API_ROUTES.VENDORS.UPDATE_ADDRESS(addressId), address);
+  },
+
+  deleteVendorAddress: async (addressId: string): Promise<void> => {
+    await productMgmtApiClient.delete(API_ROUTES.VENDORS.DELETE_ADDRESS(addressId));
+  },
+
+  setDefaultAddress: async (vendorId: string, addressId: string): Promise<void> => {
+    await productMgmtApiClient.post(API_ROUTES.VENDORS.SET_DEFAULT_ADDRESS(vendorId, addressId), {});
   }
 };

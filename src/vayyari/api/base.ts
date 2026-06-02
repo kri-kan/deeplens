@@ -188,10 +188,18 @@ export class ApiClient {
     try {
       const result: any = text ? JSON.parse(text) : {};
       console.error('[API Error Detail]', { status: response.status, result });
-      error = result.error || {
-        code: `HTTP_${response.status}`,
-        message: result.message || response.statusText || 'Unknown error',
-      };
+      
+      if (typeof result.error === 'string') {
+        error = {
+          code: `HTTP_${response.status}`,
+          message: result.error,
+        };
+      } else {
+        error = result.error || {
+          code: `HTTP_${response.status}`,
+          message: result.message || response.statusText || 'Unknown error',
+        };
+      }
     } catch {
       console.error('[API Error Detail] Raw response (non-JSON):', text);
       error = {

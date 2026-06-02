@@ -32,20 +32,31 @@ public class VendorService : IVendorService
 
         try
         {
+            var existingVendorCode = await conn.QuerySingleOrDefaultAsync<bool>(
+                "SELECT EXISTS(SELECT 1 FROM Vendors WHERE vendor_code = @VendorCode)",
+                new { request.VendorCode },
+                transaction
+            );
+
+            if (existingVendorCode)
+            {
+                throw new InvalidOperationException($"Vendor Code '{request.VendorCode}' is already in use.");
+            }
+
             // Insert Vendor
             var vendorId = await conn.QuerySingleAsync<Guid>(
-                @"INSERT INTO Vendors (vendor_name, vendor_code, address, city, state, country, postal_code, email, website, notes)
-                  VALUES (@VendorName, @VendorCode, @Address, @City, @State, @Country, @PostalCode, @Email, @Website, @Notes)
+                @"INSERT INTO Vendors (vendor_name, vendor_code, first_name, last_name, whatsapp_primary, whatsapp_secondary, order_group_link, email, website, notes)
+                  VALUES (@VendorName, @VendorCode, @FirstName, @LastName, @WhatsappPrimary, @WhatsappSecondary, @OrderGroupLink, @Email, @Website, @Notes)
                   RETURNING id",
                 new
                 {
                     request.VendorName,
                     request.VendorCode,
-                    request.Address,
-                    request.City,
-                    request.State,
-                    Country = request.Country ?? "India",
-                    request.PostalCode,
+                    request.FirstName,
+                    request.LastName,
+                    request.WhatsappPrimary,
+                    request.WhatsappSecondary,
+                    request.OrderGroupLink,
                     request.Email,
                     request.Website,
                     request.Notes
@@ -53,28 +64,7 @@ public class VendorService : IVendorService
                 transaction
             );
 
-            // Insert contacts if provided
-            if (request.Contacts != null && request.Contacts.Any())
-            {
-                foreach (var contact in request.Contacts)
-                {
-                    await conn.ExecuteAsync(
-                        @"INSERT INTO Vendor_contacts (vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary)
-                          VALUES (@VendorId, @ContactName, @ContactRole, @PhoneNumber, @AlternatePhone, @Email, @IsPrimary)",
-                        new
-                        {
-                            VendorId = vendorId,
-                            contact.ContactName,
-                            contact.ContactRole,
-                            contact.PhoneNumber,
-                            contact.AlternatePhone,
-                            contact.Email,
-                            contact.IsPrimary
-                        },
-                        transaction
-                    );
-                }
-            }
+
 
             await transaction.CommitAsync();
             _logger.LogInformation("Created Vendor {VendorId}", vendorId);
@@ -94,24 +84,14 @@ public class VendorService : IVendorService
         using var conn = await GetConnectionAsync();
 
         var vendor = await conn.QuerySingleOrDefaultAsync<VendorResponse>(
-            @"SELECT id, vendor_name, vendor_code, address, city, state, country, postal_code, 
-                     email, website, notes, is_active, created_at, updated_at
+            @"SELECT id, vendor_name as VendorName, vendor_code as VendorCode, first_name as FirstName, last_name as LastName, whatsapp_primary as WhatsappPrimary, whatsapp_secondary as WhatsappSecondary, order_group_link as OrderGroupLink, 
+                     email, website, notes, is_active as IsActive, created_at as CreatedAt, updated_at as UpdatedAt
               FROM Vendors
               WHERE id = @VendorId",
             new { VendorId = vendorId }
         );
 
-        if (vendor == null) return null;
-
-        var contacts = await conn.QueryAsync<VendorContactResponse>(
-            @"SELECT id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
-              FROM Vendor_contacts
-              WHERE vendor_id = @VendorId
-              ORDER BY is_primary DESC, contact_name",
-            new { VendorId = vendorId }
-        );
-
-        return vendor with { Contacts = contacts.ToList() };
+        return vendor;
     }
 
     public async Task<VendorListResponse> ListVendorsAsync(int page, int pageSize, bool? activeOnly)
@@ -125,8 +105,8 @@ public class VendorService : IVendorService
             $@"SELECT COUNT(*) FROM Vendors {whereClause}");
 
         var vendors = await conn.QueryAsync<VendorResponse>(
-            $@"SELECT id, vendor_name, vendor_code, address, city, state, country, postal_code, 
-                      email, website, notes, is_active, created_at, updated_at
+            $@"SELECT id, vendor_name as VendorName, vendor_code as VendorCode, first_name as FirstName, last_name as LastName, whatsapp_primary as WhatsappPrimary, whatsapp_secondary as WhatsappSecondary, order_group_link as OrderGroupLink, 
+                      email, website, notes, is_active as IsActive, created_at as CreatedAt, updated_at as UpdatedAt
                FROM Vendors
                {whereClause}
                ORDER BY vendor_name
@@ -134,23 +114,9 @@ public class VendorService : IVendorService
             new { PageSize = pageSize, Offset = offset }
         );
 
-        var vendorsList = new List<VendorResponse>();
-        foreach (var v in vendors)
-        {
-            var contacts = await conn.QueryAsync<VendorContactResponse>(
-                @"SELECT id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
-                  FROM Vendor_contacts
-                  WHERE vendor_id = @VendorId
-                  ORDER BY is_primary DESC, contact_name",
-                new { VendorId = v.Id }
-            );
-
-            vendorsList.Add(v with { Contacts = contacts.ToList() });
-        }
-
         return new VendorListResponse
         {
-            Vendors = vendorsList,
+            Vendors = vendors.ToList(),
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize,
@@ -167,12 +133,26 @@ public class VendorService : IVendorService
         parameters.Add("VendorId", vendorId);
 
         if (request.VendorName != null) { updates.Add("vendor_name = @VendorName"); parameters.Add("VendorName", request.VendorName); }
-        if (request.VendorCode != null) { updates.Add("vendor_code = @VendorCode"); parameters.Add("VendorCode", request.VendorCode); }
-        if (request.Address != null) { updates.Add("address = @Address"); parameters.Add("Address", request.Address); }
-        if (request.City != null) { updates.Add("city = @City"); parameters.Add("City", request.City); }
-        if (request.State != null) { updates.Add("state = @State"); parameters.Add("State", request.State); }
-        if (request.Country != null) { updates.Add("country = @Country"); parameters.Add("Country", request.Country); }
-        if (request.PostalCode != null) { updates.Add("postal_code = @PostalCode"); parameters.Add("PostalCode", request.PostalCode); }
+        if (request.VendorCode != null)
+        {
+            var existingVendorCode = await conn.QuerySingleOrDefaultAsync<bool>(
+                "SELECT EXISTS(SELECT 1 FROM Vendors WHERE vendor_code = @VendorCode AND id != @VendorId)",
+                new { request.VendorCode, VendorId = vendorId }
+            );
+
+            if (existingVendorCode)
+            {
+                throw new InvalidOperationException($"Vendor Code '{request.VendorCode}' is already in use.");
+            }
+            updates.Add("vendor_code = @VendorCode"); parameters.Add("VendorCode", request.VendorCode);
+        }
+
+        if (request.FirstName != null) { updates.Add("first_name = @FirstName"); parameters.Add("FirstName", request.FirstName); }
+        if (request.LastName != null) { updates.Add("last_name = @LastName"); parameters.Add("LastName", request.LastName); }
+        if (request.WhatsappPrimary != null) { updates.Add("whatsapp_primary = @WhatsappPrimary"); parameters.Add("WhatsappPrimary", request.WhatsappPrimary); }
+        if (request.WhatsappSecondary != null) { updates.Add("whatsapp_secondary = @WhatsappSecondary"); parameters.Add("WhatsappSecondary", request.WhatsappSecondary); }
+        if (request.OrderGroupLink != null) { updates.Add("order_group_link = @OrderGroupLink"); parameters.Add("OrderGroupLink", request.OrderGroupLink); }
+
         if (request.Email != null) { updates.Add("email = @Email"); parameters.Add("Email", request.Email); }
         if (request.Website != null) { updates.Add("website = @Website"); parameters.Add("Website", request.Website); }
         if (request.Notes != null) { updates.Add("notes = @Notes"); parameters.Add("Notes", request.Notes); }
@@ -208,51 +188,173 @@ public class VendorService : IVendorService
         return rowsAffected > 0;
     }
 
-    public async Task<VendorContactResponse> AddContactAsync(Guid vendorId, VendorContactRequest request)
+    public async Task<List<VendorAddressResponse>> GetVendorAddressesAsync(Guid vendorId)
     {
         using var conn = await GetConnectionAsync();
 
-        var vendorExists = await conn.QuerySingleOrDefaultAsync<bool>(
-            "SELECT EXISTS(SELECT 1 FROM Vendors WHERE id = @VendorId)",
+        var addresses = await conn.QueryAsync<VendorAddressResponse>(
+            @"SELECT id, vendor_id as VendorId, name, phone, line1, line2, pincode, city, state, is_default as IsDefault, created_at as CreatedAt, updated_at as UpdatedAt
+              FROM vendor_addresses
+              WHERE vendor_id = @VendorId
+              ORDER BY is_default DESC, created_at DESC",
             new { VendorId = vendorId }
         );
 
-        if (!vendorExists)
-            throw new InvalidOperationException("Vendor not found");
-
-        var contactId = await conn.QuerySingleAsync<Guid>(
-            @"INSERT INTO Vendor_contacts (vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary)
-              VALUES (@VendorId, @ContactName, @ContactRole, @PhoneNumber, @AlternatePhone, @Email, @IsPrimary)
-              RETURNING id",
-            new
-            {
-                VendorId = vendorId,
-                request.ContactName,
-                request.ContactRole,
-                request.PhoneNumber,
-                request.AlternatePhone,
-                request.Email,
-                request.IsPrimary
-            }
-        );
-
-        return await conn.QuerySingleAsync<VendorContactResponse>(
-            @"SELECT id, vendor_id, contact_name, contact_role, phone_number, alternate_phone, email, is_primary, created_at
-              FROM Vendor_contacts
-              WHERE id = @ContactId",
-            new { ContactId = contactId }
-        );
+        return addresses.ToList();
     }
 
-    public async Task<bool> RemoveContactAsync(Guid contactId)
+    public async Task<VendorAddressResponse> AddVendorAddressAsync(Guid vendorId, VendorAddressRequest request)
     {
         using var conn = await GetConnectionAsync();
+        using var transaction = await conn.BeginTransactionAsync();
 
-        var rowsAffected = await conn.ExecuteAsync(
-            "DELETE FROM Vendor_contacts WHERE id = @ContactId",
-            new { ContactId = contactId }
-        );
+        try
+        {
+            if (request.IsDefault)
+            {
+                await conn.ExecuteAsync(
+                    "UPDATE vendor_addresses SET is_default = false WHERE vendor_id = @VendorId",
+                    new { VendorId = vendorId },
+                    transaction
+                );
+            }
+            else
+            {
+                var count = await conn.QuerySingleAsync<int>("SELECT COUNT(*) FROM vendor_addresses WHERE vendor_id = @VendorId", new { VendorId = vendorId }, transaction);
+                if (count == 0)
+                {
+                    request = request with { IsDefault = true };
+                }
+            }
 
-        return rowsAffected > 0;
+            var id = await conn.QuerySingleAsync<Guid>(
+                @"INSERT INTO vendor_addresses (vendor_id, name, phone, line1, line2, pincode, city, state, is_default)
+                  VALUES (@VendorId, @Name, @Phone, @Line1, @Line2, @Pincode, @City, @State, @IsDefault)
+                  RETURNING id",
+                new
+                {
+                    VendorId = vendorId,
+                    request.Name,
+                    request.Phone,
+                    request.Line1,
+                    request.Line2,
+                    request.Pincode,
+                    request.City,
+                    request.State,
+                    request.IsDefault
+                },
+                transaction
+            );
+
+            await transaction.CommitAsync();
+
+            var added = await conn.QuerySingleAsync<VendorAddressResponse>(
+                @"SELECT id, vendor_id as VendorId, name, phone, line1, line2, pincode, city, state, is_default as IsDefault, created_at as CreatedAt, updated_at as UpdatedAt
+                  FROM vendor_addresses WHERE id = @Id",
+                new { Id = id }
+            );
+            return added;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<VendorAddressResponse> UpdateVendorAddressAsync(Guid addressId, VendorAddressRequest request)
+    {
+        using var conn = await GetConnectionAsync();
+        using var transaction = await conn.BeginTransactionAsync();
+
+        try
+        {
+            var vendorId = await conn.QuerySingleOrDefaultAsync<Guid?>(
+                "SELECT vendor_id FROM vendor_addresses WHERE id = @Id",
+                new { Id = addressId },
+                transaction
+            );
+
+            if (vendorId == null) throw new InvalidOperationException("Address not found");
+
+            if (request.IsDefault)
+            {
+                await conn.ExecuteAsync(
+                    "UPDATE vendor_addresses SET is_default = false WHERE vendor_id = @VendorId",
+                    new { VendorId = vendorId },
+                    transaction
+                );
+            }
+
+            await conn.ExecuteAsync(
+                @"UPDATE vendor_addresses 
+                  SET name = @Name, phone = @Phone, line1 = @Line1, line2 = @Line2, pincode = @Pincode, 
+                      city = @City, state = @State, is_default = @IsDefault, updated_at = NOW()
+                  WHERE id = @Id",
+                new
+                {
+                    Id = addressId,
+                    request.Name,
+                    request.Phone,
+                    request.Line1,
+                    request.Line2,
+                    request.Pincode,
+                    request.City,
+                    request.State,
+                    request.IsDefault
+                },
+                transaction
+            );
+
+            await transaction.CommitAsync();
+
+            var updated = await conn.QuerySingleAsync<VendorAddressResponse>(
+                @"SELECT id, vendor_id as VendorId, name, phone, line1, line2, pincode, city, state, is_default as IsDefault, created_at as CreatedAt, updated_at as UpdatedAt
+                  FROM vendor_addresses WHERE id = @Id",
+                new { Id = addressId }
+            );
+            return updated;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<bool> DeleteVendorAddressAsync(Guid addressId)
+    {
+        using var conn = await GetConnectionAsync();
+        var rows = await conn.ExecuteAsync("DELETE FROM vendor_addresses WHERE id = @Id", new { Id = addressId });
+        return rows > 0;
+    }
+
+    public async Task<bool> SetDefaultAddressAsync(Guid vendorId, Guid addressId)
+    {
+        using var conn = await GetConnectionAsync();
+        using var transaction = await conn.BeginTransactionAsync();
+
+        try
+        {
+            await conn.ExecuteAsync(
+                "UPDATE vendor_addresses SET is_default = false WHERE vendor_id = @VendorId",
+                new { VendorId = vendorId },
+                transaction
+            );
+            
+            var rows = await conn.ExecuteAsync(
+                "UPDATE vendor_addresses SET is_default = true WHERE id = @Id AND vendor_id = @VendorId",
+                new { Id = addressId, VendorId = vendorId },
+                transaction
+            );
+
+            await transaction.CommitAsync();
+            return rows > 0;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }

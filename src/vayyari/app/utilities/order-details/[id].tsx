@@ -1199,7 +1199,8 @@ export default function OrderFormScreen() {
                     <ManageAddressModal 
                         visible={showManageAddress}
                         onDismiss={() => setShowManageAddress(false)}
-                        customerId={customer.id}
+                        entityId={customer.id}
+                        entityType="customer"
                         addressToEdit={addressToEdit}
                         onSuccess={async () => {
                             // Refetch addresses for this customer
