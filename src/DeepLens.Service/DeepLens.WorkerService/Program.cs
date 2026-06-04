@@ -21,6 +21,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IMetaGraphService, MetaGraphService>();
 builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService>();
 builder.Services.AddHttpClient<IVectorStoreService, VectorStoreService>();
+builder.Services.AddHttpClient<IAiService, AiService>();
 
 // MinIO Setup
 builder.Services.AddSingleton<IMinioClient>(sp => 
@@ -63,6 +64,7 @@ builder.Services.AddHostedService<FeatureExtractionWorker>();
 builder.Services.AddHostedService<VectorIndexingWorker>();
 builder.Services.AddHostedService<ImageMaintenanceWorker>();
 builder.Services.AddHostedService<InstagramSyncWorker>();
+builder.Services.AddHostedService<WhatsAppGroupWorker>();
 
 var host = builder.Build();
 host.Run();

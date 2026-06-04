@@ -399,6 +399,7 @@ export class ConversationRepository {
                 last_message_timestamp as "lastMessageTimestamp",
                 profile_pic_id as "profilePicId", profile_pic_url as "profilePicUrl",
                 deep_sync_enabled as "deepSyncEnabled", enable_message_grouping as "enableMessageGrouping",
+                vendor_id as "vendorId", auto_process_products as "autoProcessProducts",
                 created_at as "createdAt", updated_at as "updatedAt"
             FROM wa.chats 
             WHERE jid = $1

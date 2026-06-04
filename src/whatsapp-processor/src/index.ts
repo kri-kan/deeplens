@@ -66,11 +66,19 @@ async function initializeServices() {
     const waService = new WhatsAppService(io);
     await waService.start();
 
+    // Initialize product created write-back consumer
+    const { productCreatedConsumer } = await import('./services/product-created-consumer.service');
+    await productCreatedConsumer.start(io);
+
     // --- API Routes ---
     const apiRouter = Router();
     apiRouter.use('/', createApiRoutes(waService));
     apiRouter.use('/conversations', createConversationRoutes(waService));
     apiRouter.use('/admin', createAdminRoutes(waService));
+    
+    const { createGroupReviewRoutes } = await import('./routes/group-review.routes');
+    apiRouter.use('/', createGroupReviewRoutes());
+
     app.use('/api', apiRouter);
 
     // Verify DB Sync
@@ -99,6 +107,10 @@ async function shutdown(signal: string) {
         // Shutdown services
         const { deepLensIntegration } = await import('./services/deeplens-integration.service');
         await deepLensIntegration.stop();
+        
+        const { productCreatedConsumer } = await import('./services/product-created-consumer.service');
+        await productCreatedConsumer.shutdown();
+
         await shutdownMessageQueue();
 
         server.close(() => {

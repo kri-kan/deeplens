@@ -1,6 +1,6 @@
 import { productMgmtApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
-import { VendorListResponse, VendorResponse } from '@/types/vendors';
+import { VendorListResponse, VendorResponse, VendorAddressRequest, VendorAddressResponse } from '@/types/vendors';
 
 export const vendorService = {
   listVendors: async (page = 1, pageSize = 50, activeOnly?: boolean): Promise<VendorListResponse> => {

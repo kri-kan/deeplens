@@ -13,6 +13,7 @@ using DeepLens.Domain.Enums;
 using DeepLens.Contracts.Instagram;
 using DeepLens.Shared.Telemetry;
 using System.Diagnostics;
+using OpenTelemetry.Trace;
 
 namespace DeepLens.WorkerService.Workers
 {
@@ -128,12 +129,11 @@ namespace DeepLens.WorkerService.Workers
             try
             {
                 graph.SetActiveJobId(jobId);
-                try
-                {
-                    await graph.ReloadFromDbAsync();
+                await graph.ReloadFromDbAsync();
                 
                 // Logging Table Link
                 // Note: We use the jobId from scraper_queue as the unique job identifier in logs and history
+                int targetCount = job.target_count ?? 50;
                 
                 await LogAsync(conn, jobId, "INFO", $"Starting {jobType} sync for @{username} (Target: {targetCount})");
 
@@ -224,7 +224,6 @@ namespace DeepLens.WorkerService.Workers
                         VALUES (@watchlistId, 'routine', 'pending', 1, @nextRun, @Target)",
                         new { watchlistId, nextRun, Target = graph.GetEngagementRefreshLimit() });
                 }
-            }
             }
             finally
             {

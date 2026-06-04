@@ -15,6 +15,7 @@ export interface MessageRecord {
     isFromMe: boolean;
     isForwarded: boolean;
     metadata: any;
+    status?: string;
 }
 
 /**
@@ -41,14 +42,19 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
                 timestamp, 
                 is_from_me, 
                 is_forwarded, 
-                metadata
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                metadata,
+                processing_status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (message_id) 
             DO UPDATE SET 
                 content = EXCLUDED.content,
                 metadata = EXCLUDED.metadata,
                 media_url = COALESCE(EXCLUDED.media_url, wa.messages.media_url),
-                media_type = COALESCE(EXCLUDED.media_type, wa.messages.media_type)
+                media_type = COALESCE(EXCLUDED.media_type, wa.messages.media_type),
+                processing_status = CASE 
+                    WHEN wa.messages.processing_status = 'pending' THEN EXCLUDED.processing_status 
+                    ELSE wa.messages.processing_status 
+                END
             WHERE wa.messages.content = '' OR wa.messages.content IS NULL OR wa.messages.content = EXCLUDED.content`,
             [
                 msg.messageId,
@@ -62,7 +68,8 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
                 msg.timestamp,
                 msg.isFromMe,
                 msg.isForwarded,
-                JSON.stringify(msg.metadata)
+                JSON.stringify(msg.metadata),
+                msg.status || 'ready'
             ]
         );
         if (result.rowCount && result.rowCount > 0) {

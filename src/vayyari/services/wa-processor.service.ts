@@ -52,6 +52,21 @@ async function del<T = void>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function patch<T = void>(path: string, body?: object): Promise<T> {
+  const token = await identityService.getAccessTokenWithRefresh();
+  const res = await fetch(`${BASE_URL}/api${path}`, {
+    method: 'PATCH',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`WA Processor ${res.status}: ${await res.text()}`);
+  if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 /**
  * Defensive mapper to handle both camelCase and snake_case from backend
  */
@@ -282,6 +297,8 @@ export const waProcessorService = {
       isExcluded: data.isExcluded ?? data.is_excluded ?? false,
       deepSyncEnabled: data.deepSyncEnabled ?? data.deep_sync_enabled ?? false,
       enableMessageGrouping: data.enableMessageGrouping ?? data.enable_message_grouping ?? false,
+      vendorId: data.vendorId ?? data.vendor_id ?? null,
+      autoProcessProducts: data.autoProcessProducts ?? data.auto_process_products ?? false,
       createdAt: data.createdAt ?? data.created_at,
       updatedAt: data.updatedAt ?? data.updated_at,
       lastMessageTimestamp: data.lastMessageTimestamp ?? data.last_message_timestamp ?? null,
@@ -342,6 +359,48 @@ export const waProcessorService = {
 
   removeVendor: async (jid: string): Promise<void> => {
     await del(`/conversations/${encodeURIComponent(jid)}/vendor`);
+  },
+
+  // ---------- Group Product Pipeline (REST Endpoints) ----------
+
+  fetchGroupsReview: async (jid: string): Promise<any[]> => {
+    return get<any[]>(`/group-review/${encodeURIComponent(jid)}`);
+  },
+
+  fetchGroupAuditLog: async (groupId: string): Promise<any[]> => {
+    return get<any[]>(`/group-review/${encodeURIComponent(groupId)}/audit`);
+  },
+
+  toggleGroupProcessProduct: async (groupId: string, processAsProduct: boolean): Promise<void> => {
+    await patch(`/group-review/${encodeURIComponent(groupId)}/flag`, { processAsProduct });
+  },
+
+  ignoreGroup: async (groupId: string, ignore: boolean): Promise<void> => {
+    await post(`/group-review/${encodeURIComponent(groupId)}/ignore`, { ignore });
+  },
+
+  splitGroupZone: async (groupId: string, messageId: string): Promise<any> => {
+    return post<any>(`/group-review/${encodeURIComponent(groupId)}/split`, { messageId });
+  },
+
+  mergeGroupZones: async (groupId: string, targetGroupId: string): Promise<any> => {
+    return post<any>(`/group-review/${encodeURIComponent(groupId)}/merge`, { targetGroupId });
+  },
+
+  reassignGroupMessage: async (groupId: string, messageId: string, targetGroupId: string): Promise<void> => {
+    await patch(`/group-review/${encodeURIComponent(groupId)}/reassign-message`, { messageId, targetGroupId });
+  },
+
+  forcePublishGroup: async (groupId: string): Promise<void> => {
+    await post(`/group-review/${encodeURIComponent(groupId)}/force-publish`);
+  },
+
+  assignChatVendor: async (jid: string, vendorId: string | null): Promise<void> => {
+    await patch(`/chats/${encodeURIComponent(jid)}/vendor`, { vendorId });
+  },
+
+  toggleChatAutoProcess: async (jid: string, autoProcess: boolean): Promise<void> => {
+    await patch(`/chats/${encodeURIComponent(jid)}/auto-process`, { autoProcess });
   }
 };
 
@@ -367,6 +426,8 @@ export interface ConversationStats {
   isExcluded: boolean;
   deepSyncEnabled: boolean;
   enableMessageGrouping: boolean;
+  vendorId?: string | null;
+  autoProcessProducts?: boolean;
   createdAt: string;
   updatedAt: string;
   lastMessageTimestamp: number | null;

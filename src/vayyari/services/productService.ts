@@ -104,6 +104,28 @@ class ProductService {
   async unlinkInstagramPost(postId: string, productId: string): Promise<void> {
     return productMgmtApiClient.delete(API_ROUTES.INSTAGRAM.UNLINK(postId, productId));
   }
+
+  async fetchMergeCandidates(): Promise<any[]> {
+    return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/merge-candidates');
+  }
+
+  async mergeProductsSimilarity(productAId: string, productBId: string, candidateId: string): Promise<any> {
+    return productMgmtApiClient.post<any>('/api/v1/whatsapp/products/merge', {
+      productAId,
+      productBId,
+      candidateId
+    });
+  }
+
+  async dismissMergeCandidate(candidateId: string): Promise<any> {
+    return productMgmtApiClient.post<any>('/api/v1/whatsapp/products/dismiss-merge', {
+      candidateId
+    });
+  }
+
+  async fetchTodayWhatsAppProducts(): Promise<any[]> {
+    return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/today');
+  }
 }
 
 export const productService = new ProductService();

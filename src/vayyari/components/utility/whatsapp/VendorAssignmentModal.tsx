@@ -68,7 +68,7 @@ export function VendorAssignmentModal({ visible, onDismiss, jid, chatName, onSuc
   const handleAssign = async (vendor: VendorResponse) => {
     setSaving(true);
     try {
-      await waProcessorService.assignVendor(jid, vendor.id, vendor.vendorName);
+      await waProcessorService.assignChatVendor(jid, vendor.id);
       Alert.alert('Success', `Vendor "${vendor.vendorName}" assigned to ${chatName}`);
       onSuccess();
       onDismiss();
@@ -91,7 +91,7 @@ export function VendorAssignmentModal({ visible, onDismiss, jid, chatName, onSuc
           onPress: async () => {
             setSaving(true);
             try {
-              await waProcessorService.removeVendor(jid);
+              await waProcessorService.assignChatVendor(jid, null);
               Alert.alert('Success', 'Vendor assignment removed');
               onSuccess();
               onDismiss();

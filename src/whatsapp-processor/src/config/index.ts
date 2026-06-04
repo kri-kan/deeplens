@@ -86,6 +86,10 @@ export const KAFKA_CONFIG = {
     brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
     clientId: process.env.KAFKA_CLIENT_ID || 'whatsapp-processor',
     groupId: process.env.KAFKA_GROUP_ID || 'whatsapp-processing-group',
-    topic: process.env.KAFKA_TOPIC || 'whatsapp-ready-messages'
+    topic: process.env.KAFKA_TOPIC || 'whatsapp-ready-messages',
+    groupProductCreateTopic: process.env.KAFKA_GROUP_PRODUCT_CREATE_TOPIC || 'WhatsApp.group.product.create',
+    groupMediaAddedTopic: process.env.KAFKA_GROUP_MEDIA_ADDED_TOPIC || 'WhatsApp.group.media.added',
+    groupProductCreatedTopic: process.env.KAFKA_GROUP_PRODUCT_CREATED_TOPIC || 'WhatsApp.group.product.created',
+    groupReprocessTopic: process.env.KAFKA_GROUP_REPROCESS_TOPIC || 'WhatsApp.group.reprocess'
 };
 

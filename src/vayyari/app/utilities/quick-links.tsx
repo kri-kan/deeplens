@@ -70,6 +70,22 @@ export default function QuickLinksScreen() {
 
   const UTILITY_LINKS: QuickLink[] = [
     {
+      id: 'wa-products-today',
+      title: 'WhatsApp Products Today',
+      description: 'Review and manage products generated from WhatsApp message groups today.',
+      icon: 'package-variant-closed',
+      url: '/utilities/whatsapp/today',
+      color: '#075E54'
+    },
+    {
+      id: 'wa-merge-candidates',
+      title: 'WhatsApp Merge Candidates',
+      description: 'Review similarity candidates and merge redundant products.',
+      icon: 'call-merge',
+      url: '/utilities/whatsapp/merge-candidates',
+      color: '#075E54'
+    },
+    {
       id: 'category-master-data',
       title: 'Category Master Data',
       description: 'Manage product categories and assigned icons.',

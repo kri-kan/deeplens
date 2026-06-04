@@ -1,9 +1,3 @@
-/**
- * Integration Script: Message Processing Queue
- * 
- * This file integrates the message queue into the WhatsApp service
- */
-
 import { messageQueue } from './services/message-queue.service';
 import { logger } from './utils/logger';
 import { randomUUID } from 'crypto';
@@ -14,6 +8,43 @@ import { randomUUID } from 'crypto';
  */
 export async function initializeMessageQueue() {
     logger.info('Initializing message grouping queue...');
+
+    // --- Startup Recovery and stuck event processing ---
+    try {
+        const { getWhatsAppDbClient } = await import('./clients/db.client');
+        const client = getWhatsAppDbClient();
+        if (client) {
+            logger.info('Running startup recovery for stuck message processing states...');
+            const recoveryRes = await client.query(
+                `UPDATE wa.messages 
+                 SET processing_status = 'ready'
+                 WHERE processing_status IN ('queued', 'processing')
+                   AND (processing_last_attempt IS NULL OR processing_last_attempt < NOW() - INTERVAL '5 minutes')`
+            );
+            logger.info(`Startup recovery completed. Reset ${recoveryRes.rowCount} stuck messages.`);
+
+            // Recovery of stuck product creation events
+            logger.info('Re-emitting stuck product create events for groups in product_create_sent...');
+            const stuckGroupsRes = await client.query(
+                `SELECT group_id FROM wa.message_groups 
+                 WHERE status = 'product_create_sent' AND deeplens_product_id IS NULL`
+            );
+            if (stuckGroupsRes.rows.length > 0) {
+                const { groupReadinessService } = await import('./services/group-readiness.service');
+                for (const row of stuckGroupsRes.rows) {
+                    logger.info({ groupId: row.group_id }, 'Re-emitting stuck product creation');
+                    // Reset status to staging so checkAndEmitGroupEvent triggers re-emission
+                    await client.query(
+                        `UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`,
+                        [row.group_id]
+                    );
+                    await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
+                }
+            }
+        }
+    } catch (err: any) {
+        logger.error({ err: err.message }, 'Failed to run startup recovery check');
+    }
 
     messageQueue.registerHandler(async (message) => {
         const { getWhatsAppDbClient } = await import('./clients/db.client');
@@ -83,24 +114,12 @@ export async function initializeMessageQueue() {
         // Apply semantic prefix if creating a new group
         if (isNewGroup) {
             let prefix = 'chat_';
-            // Check media type of the current message (which is starting the group)
             if (message.media_type === 'sticker') {
                 prefix = 'sticker_';
             } else if (message.media_type && ['image', 'photo', 'video'].includes(message.media_type)) {
                 prefix = 'product_';
             }
-            // Ensure we don't double-generate if line 50 already made a UUID (it did)
-            // But we need to be careful not to keep the raw UUID if we want prefix.
-            // Line 50: let groupId = randomUUID(); 
-            // So just prepend.
-            // Note: UUID is 36 chars. Prefix is max 8. Total 44. Fits in VARCHAR(50).
-            // Be careful if groupId was assigned from prevMsg (isNewGroup=false), we DO NOT change it.
-            // The logic above ensures isNewGroup is correct.
-
-            // However, line 50 set groupId to a raw UUID.
-            // We must overwrite it with prefixed version.
-            groupId = `${prefix}${randomUUID()}`; // Generate fresh one to be clean, or use existing? 
-            // Existing is fine, but cleaner to be explicit.
+            groupId = `${prefix}${randomUUID()}`;
         }
 
         // 4. Save Group ID
@@ -115,6 +134,14 @@ export async function initializeMessageQueue() {
             isNewGroup,
             strategy: grouping_config?.strategy
         }, 'Message grouped');
+
+        // 5. Evaluate group readiness for products
+        try {
+            const { groupReadinessService } = await import('./services/group-readiness.service');
+            await groupReadinessService.checkAndEmitGroupEvent(groupId);
+        } catch (err: any) {
+            logger.error({ err: err.message, groupId }, 'Error invoking group readiness service');
+        }
     });
 
     await messageQueue.start();
@@ -128,5 +155,15 @@ export async function initializeMessageQueue() {
 export function shutdownMessageQueue() {
     logger.info('Shutting down message processing queue...');
     messageQueue.stopPolling();
+    
+    // Shut down GroupReadinessService Kafka connection
+    import('./services/group-readiness.service').then(({ groupReadinessService }) => {
+        groupReadinessService.shutdown().catch(err => {
+            logger.error({ err: err.message }, 'Error shutting down GroupReadinessService');
+        });
+    }).catch(err => {
+        logger.error({ err: err.message }, 'Failed to import groupReadinessService for shutdown');
+    });
+
     logger.info('Message processing queue stopped');
 }

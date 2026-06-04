@@ -130,12 +130,13 @@ export class DeepLensIntegrationService {
         if (!client) return;
 
         try {
-            // Find messages without group_id
+            // Find messages without group_id for chats where message grouping is NOT enabled
             const ungroupedMessages = await client.query<WhatsAppMessage>(
-                `SELECT message_id, jid, timestamp, sender, is_from_me
-                 FROM wa.messages
-                 WHERE group_id IS NULL
-                 ORDER BY jid, timestamp ASC
+                `SELECT m.message_id, m.jid, m.timestamp, m.sender, m.is_from_me
+                 FROM wa.messages m
+                 JOIN wa.chats c ON m.jid = c.jid
+                 WHERE m.group_id IS NULL AND c.enable_message_grouping = false
+                 ORDER BY m.jid, m.timestamp ASC
                  LIMIT $1`,
                 [this.BATCH_SIZE]
             );
@@ -196,7 +197,7 @@ export class DeepLensIntegrationService {
                 // Check if we should start a new group
                 const timeSinceLastMessage = msg.timestamp - lastTimestamp;
 
-                if (!currentGroupId || timeSinceLastMessage > this.GROUPING_TIME_WINDOW_MS) {
+                if (!currentGroupId || timeSinceLastMessage > (this.GROUPING_TIME_WINDOW_MS / 1000)) {
                     // Create new group ID: chat_jid_timestamp
                     currentGroupId = `${jid}_${msg.timestamp}`;
                     logger.debug({ jid, groupId: currentGroupId }, 'Created new message group');

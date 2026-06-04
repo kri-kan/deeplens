@@ -14,6 +14,7 @@ import {
   Menu,
   Portal,
   Avatar,
+  Switch,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { waProcessorService, ConversationStats, Message } from '@/services/wa-processor.service';
@@ -28,6 +29,7 @@ export default function ConversationDetailScreen() {
   const { jid, name } = useLocalSearchParams<{ jid: string, name?: string }>();
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [vendorName, setVendorName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -40,12 +42,18 @@ export default function ConversationDetailScreen() {
   const fetchStats = useCallback(async () => {
     if (!jid) return;
     try {
-      const [data, msgRes] = await Promise.all([
+      const [data, msgRes, vendorRes] = await Promise.all([
         waProcessorService.fetchConversationStats(decodeURIComponent(jid)),
-        waProcessorService.fetchMessages(decodeURIComponent(jid), 10, 0)
+        waProcessorService.fetchMessages(decodeURIComponent(jid), 10, 0),
+        waProcessorService.fetchVendor(decodeURIComponent(jid))
       ]);
       setStats(data);
       setMessages(msgRes.messages);
+      if (vendorRes.hasVendor && vendorRes.vendor) {
+        setVendorName(vendorRes.vendor.vendorName);
+      } else {
+        setVendorName(null);
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to fetch stats');
     } finally {
@@ -241,6 +249,51 @@ export default function ConversationDetailScreen() {
                 />
               </View>
             </View>
+
+            <Divider style={styles.divider} />
+            <Text variant="titleMedium" style={{ marginTop: 8, marginBottom: 8, fontWeight: 'bold' }}>Product Processing</Text>
+            
+            <View style={styles.infoRow}>
+              <Text variant="bodyMedium" style={{ opacity: 0.6 }}>Assigned Vendor</Text>
+              <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                {vendorName ?? 'None'}
+              </Text>
+            </View>
+
+            {!stats.vendorId && (
+              <View style={[styles.warningCard, { backgroundColor: theme.colors.errorContainer }]}>
+                <Text style={{ color: theme.colors.onErrorContainer, fontSize: 13 }}>
+                  ⚠️ Assign a vendor to this chat before enabling product processing.
+                </Text>
+              </View>
+            )}
+
+            <Divider style={styles.divider} />
+            
+            <View style={styles.settingsRow}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text variant="bodyMedium">Auto-Process Products</Text>
+                <Text variant="bodySmall" style={{ opacity: 0.5 }}>
+                  Automatically publish qualified message groups as products
+                </Text>
+              </View>
+              <Switch
+                value={stats.autoProcessProducts}
+                disabled={!stats.vendorId}
+                onValueChange={async (newValue) => {
+                  if (!stats.vendorId) {
+                    Alert.alert('Error', 'Please assign a vendor first.');
+                    return;
+                  }
+                  try {
+                    await waProcessorService.toggleChatAutoProcess(stats.jid, newValue);
+                    setStats({ ...stats, autoProcessProducts: newValue });
+                  } catch (err: any) {
+                    Alert.alert('Error', err?.message ?? 'Failed to update auto-process setting');
+                  }
+                }}
+              />
+            </View>
           </Card.Content>
         </Card>
 
@@ -249,9 +302,17 @@ export default function ConversationDetailScreen() {
             mode="contained" 
             icon="store-plus" 
             onPress={() => setVendorModalVisible(true)}
-            style={[styles.actionBtn, { flex: 1.5 }]}
+            style={[styles.actionBtn, { flex: 1.2 }]}
           >
             Assign Vendor
+          </Button>
+          <Button
+            mode="contained"
+            icon="view-dashboard-outline"
+            onPress={() => router.push({ pathname: '/utilities/whatsapp/zones/[jid]', params: { jid: stats?.jid, name: stats?.name || name } })}
+            style={[styles.actionBtn, { flex: 1.5, backgroundColor: '#075E54' }]}
+          >
+            Review Zones
           </Button>
           <Button 
             mode="outlined" 
@@ -259,7 +320,7 @@ export default function ConversationDetailScreen() {
             onPress={handlePurge}
             loading={purging}
             textColor={theme.colors.error}
-            style={[styles.actionBtn, { borderColor: theme.colors.error, flex: 1 }]}
+            style={[styles.actionBtn, { borderColor: theme.colors.error, flex: 0.8 }]}
           >
             Purge
           </Button>
@@ -431,6 +492,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
+  },
+  warningCard: {
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(211, 47, 47, 0.2)',
   },
   actionRow: {
     flexDirection: 'row',
