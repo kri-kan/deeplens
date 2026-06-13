@@ -480,14 +480,22 @@ gio set ~/Desktop/antigravity-agent-manager.desktop metadata::trusted true
 
 ## 4. Automating with the Install/Update Script
 
-A unified installation and update script is provided in `setupscripts/install-antigravity.sh`. It automatically handles directory cleanups, extraction, sandbox permissions, shortcut generation, icon download/installation, and configuration migration.
+### 4. Automating with the Install/Update Script
+
+A unified installation and update script is provided in `setupscripts/install-antigravity.sh`. It automatically handles directory cleanups, extraction, sandbox permissions, shortcut generation, terminal symlink creation (`~/.local/bin`), icon download/installation, and configuration migration.
+
+Recent improvements to the script include:
+- **Case-Insensitive Search:** It automatically matches lowercase downloads (e.g., `antigravity ide.tar.gz`).
+- **Auto-Cleanup:** Stale `.tar.gz` files older than 1 day in `~/Downloads` are automatically deleted to prevent reinstalling outdated versions.
+- **Process Management:** Automatically forcefully quits any stuck ghost `antigravity` background processes prior to updating.
+- **Auto-Start:** Both the IDE and the Agent Manager are automatically launched after successful installation.
 
 > [!NOTE]
 > **Package Manager Fallback**: If the local archive file for the Antigravity Agent Manager (`Antigravity.tar.gz`) is not found, the script will automatically register the official Google Artifact Registry APT repository (`https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/`) and install/update the `antigravity` package via `apt`.
 
 ### How to Run the Script
 
-1. Make sure you have downloaded the latest archives (`Antigravity.tar.gz` and/or `Antigravity IDE.tar.gz`) to your `~/Downloads` or the repository folder. If the Agent archive is not present, it will be downloaded/installed via the package manager.
+1. Make sure you have freshly downloaded the latest archives (`Antigravity.tar.gz` and/or `Antigravity IDE.tar.gz`) to your `~/Downloads` folder. If the Agent archive is not present, it will be downloaded/installed via the `apt` package manager.
 2. Run the script as a regular user (with sudo privileges):
 
 ```bash

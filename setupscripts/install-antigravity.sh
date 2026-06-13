@@ -99,7 +99,26 @@ fi
 info "Checking sudo privileges..."
 sudo -v
 
+# --- Check for running instances ---
+if pgrep -x "antigravity" >/dev/null 2>&1 || pgrep -f "/opt/antigravity/antigravity" >/dev/null 2>&1; then
+    warn "The Antigravity Agent Manager is currently running."
+    info "The update will be applied to the disk, but you must restart the Agent Manager after this script completes to run the new version."
+fi
+
+if pgrep -x "antigravity-ide" >/dev/null 2>&1 || pgrep -f "/opt/antigravity-ide/antigravity-ide" >/dev/null 2>&1; then
+    warn "The Antigravity IDE is currently running."
+    info "The update will be applied to the disk, but you must restart the IDE after this script completes to run the new version."
+fi
+
 # --- Locate archives ---
+cleanup_old_archives() {
+    info "Checking for stale installation archives older than 1 day..."
+    # Clean up old files in ~/Downloads to prevent reinstalling outdated versions
+    find "$USER_HOME/Downloads" -maxdepth 1 -iname "*Antigravity*.tar.gz" -mtime +1 -exec rm -f {} \; 2>/dev/null || true
+    find . -maxdepth 1 -iname "*Antigravity*.tar.gz" -mtime +1 -exec rm -f {} \; 2>/dev/null || true
+}
+cleanup_old_archives
+
 find_archive() {
     local pattern="$1"
     local desc="$2"
@@ -117,7 +136,7 @@ find_archive() {
 
     # 2. Check SEARCH_DIR if specified
     if [ -n "$SEARCH_DIR" ]; then
-        found=$(find "$SEARCH_DIR" -maxdepth 1 -name "$pattern" -print -quit 2>/dev/null || true)
+        found=$(find "$SEARCH_DIR" -maxdepth 1 -iname "$pattern" -print -quit 2>/dev/null || true)
         if [ -n "$found" ]; then
             echo "$found"
             return 0
@@ -125,14 +144,14 @@ find_archive() {
     fi
 
     # 3. Check current directory
-    found=$(find . -maxdepth 1 -name "$pattern" -print -quit 2>/dev/null || true)
+    found=$(find . -maxdepth 1 -iname "$pattern" -print -quit 2>/dev/null || true)
     if [ -n "$found" ]; then
         echo "$found"
         return 0
     fi
 
     # 4. Check ~/Downloads
-    found=$(find "$USER_HOME/Downloads" -maxdepth 1 -name "$pattern" -print -quit 2>/dev/null || true)
+    found=$(find "$USER_HOME/Downloads" -maxdepth 1 -iname "$pattern" -print -quit 2>/dev/null || true)
     if [ -n "$found" ]; then
         echo "$found"
         return 0
@@ -426,11 +445,34 @@ fi
 
 setup_icons
 setup_shortcuts
+setup_symlinks() {
+    info "Setting up terminal symlinks in ~/.local/bin..."
+    mkdir -p "$USER_HOME/.local/bin"
+    if [ "$INSTALL_IDE" = true ]; then
+        ln -sf /opt/antigravity-ide/antigravity-ide "$USER_HOME/.local/bin/antigravity-ide"
+    fi
+    if [ "$INSTALL_AGENT" = true ] && [ "$AGENT_INSTALL_METHOD" != "apt" ]; then
+        ln -sf /opt/antigravity/antigravity "$USER_HOME/.local/bin/antigravity"
+    fi
+}
+setup_symlinks
 migrate_settings
+
+info "Killing stuck background processes..."
+pkill -f "antigravity" || true
 
 success "Antigravity setup completed successfully!"
 echo "--------------------------------------------------------"
-echo "You can now launch:"
-[ "$INSTALL_IDE" = true ] && echo "  - Antigravity IDE (from Desktop or Applications menu)"
-[ "$INSTALL_AGENT" = true ] && echo "  - Antigravity Agent Manager (from Desktop or Applications menu)"
+echo "Starting applications..."
+
+if [ "$INSTALL_IDE" = true ]; then
+    info "Starting Antigravity IDE..."
+    nohup /opt/antigravity-ide/antigravity-ide >/dev/null 2>&1 &
+fi
+
+if [ "$INSTALL_AGENT" = true ]; then
+    info "Starting Antigravity Agent Manager..."
+    nohup /opt/antigravity/antigravity >/dev/null 2>&1 &
+fi
+
 echo "--------------------------------------------------------"
