@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, IconButton, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme } from 'react-native-paper';
+import { Text, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';

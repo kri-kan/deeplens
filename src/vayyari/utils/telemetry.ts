@@ -1,10 +1,9 @@
-import { trace, context, Span, SpanStatusCode } from '@opentelemetry/api';
+import { trace, Span, SpanStatusCode , diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 import { WebTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-web';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-base';
-import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
 
 let isInitialized = false;
 

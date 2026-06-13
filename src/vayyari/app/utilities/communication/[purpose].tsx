@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, FlatList, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal as RNModal, Dimensions, Linking, BackHandler, PanResponder } from 'react-native';
+import { View, FlatList, StyleSheet, ScrollView, TouchableOpacity, Alert, Dimensions, Linking, BackHandler, PanResponder } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -26,7 +26,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { communicationService } from '@/services/communicationService';
-import type { PurposeCustomer, PurposeStep, PurposeCustomerTracking, CustomerStepProgress, MessageTemplate, CampaignVariable } from '@/services/communicationService';
+import type { PurposeCustomer, PurposeStep, PurposeCustomerTracking, CustomerStepProgress, MessageTemplate } from '@/services/communicationService';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { useCommunicationBroadcast } from '@/hooks/useCommunicationBroadcast';
 

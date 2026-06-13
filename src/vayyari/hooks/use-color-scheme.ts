@@ -1,4 +1,3 @@
-import { useContext } from 'react';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export function useColorScheme() {

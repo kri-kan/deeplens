@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
 import { Text, IconButton, useTheme } from 'react-native-paper';
 import { ProfileAvatar } from './ProfileAvatar';
 

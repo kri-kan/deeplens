@@ -64,7 +64,7 @@ export const VendorAddressesModal: React.FC<VendorAddressesModalProps> = ({
           try {
             await vendorService.deleteVendorAddress(addressId);
             fetchAddresses();
-          } catch (error) {
+          } catch {
             Alert.alert('Error', 'Failed to delete address');
           }
         },
@@ -77,7 +77,7 @@ export const VendorAddressesModal: React.FC<VendorAddressesModalProps> = ({
     try {
       await vendorService.setDefaultAddress(vendor.id, addressId);
       fetchAddresses();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to set default address');
     }
   };

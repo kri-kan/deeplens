@@ -5,7 +5,6 @@ import {
   useTheme,
   IconButton,
   Surface,
-  Avatar,
   Divider,
   Portal,
   Modal,

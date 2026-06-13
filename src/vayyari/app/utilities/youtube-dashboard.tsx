@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Linking, Alert, RefreshControl } from 'react-native';
-import { Surface, Text, Button, Divider, ActivityIndicator, useTheme, ProgressBar, Card, List, TextInput, Portal, Dialog } from 'react-native-paper';
+import { Surface, Text, Button, ActivityIndicator, useTheme, ProgressBar, Card, List, TextInput, Portal, Dialog } from 'react-native-paper';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { youtubeService, YoutubeTokenHealth, YoutubeQuotaInfo } from '@/services/youtube.service';
 import { useRouter } from 'expo-router';

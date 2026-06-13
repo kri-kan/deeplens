@@ -112,7 +112,9 @@ public class InstaController : ControllerBase
         [FromQuery] string sortBy = "date", 
         [FromQuery] string sortOrder = "desc",
         [FromQuery] DateTime? fromDate = null,
-        [FromQuery] DateTime? toDate = null)
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int limit = 100,
+        [FromQuery] int offset = 0)
     {
         using var conn = await _db.CreateConnectionAsync();
         var profileInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
@@ -147,9 +149,10 @@ public class InstaController : ControllerBase
                 WHERE cv.watchlist_id = (SELECT id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram')
                 {dateFilter}
                 ORDER BY {orderBy} {direction}
-                LIMIT 1000";
+                LIMIT @limit OFFSET @offset";
 
-            videos = (await conn.QueryAsync<MetaPost>(sql, new { username, fromDate, toDate })).ToList();
+            videos = (await conn.QueryAsync<MetaPost>(sql, new { username, fromDate, toDate, limit, offset })).ToList();
+            _logger.LogInformation("GetProfile DB query returned {Count} videos for limit {Limit} and offset {Offset}", videos.Count, limit, offset);
         }
 
         double postFrequency = 0;

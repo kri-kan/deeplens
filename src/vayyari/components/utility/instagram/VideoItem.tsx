@@ -19,7 +19,7 @@ interface VideoItemProps {
   selectionMode?: boolean;
 }
 
-export const VideoItem: React.FC<VideoItemProps> = ({ 
+const VideoItemComponent: React.FC<VideoItemProps> = ({ 
   item: rawItem, 
   onPress, 
   onLongPress,
@@ -114,6 +114,14 @@ export const VideoItem: React.FC<VideoItemProps> = ({
     </TouchableOpacity>
   );
 };
+
+export const VideoItem = React.memo(VideoItemComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.selectionMode === nextProps.selectionMode
+  );
+});
 
 const styles = StyleSheet.create({
   videoItem: {

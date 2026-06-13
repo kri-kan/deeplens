@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { CategoryIcon, CATEGORY_REGISTRY } from '@/components/CategoryIcons';
-import { ProductCategory, CategoryDefinition } from '@/types/products';
-import { systemService, AppCategory } from '@/services/system.service';
-import { useState, useEffect } from 'react';
+import { ProductCategory } from '@/types/products';
+import { systemService } from '@/services/system.service';
 
 interface ProductCategoryPickerProps {
   selectedCategory: string;

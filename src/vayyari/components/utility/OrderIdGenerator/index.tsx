@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { Surface, Text, Appbar, Button, Icon, ActivityIndicator, IconButton, useTheme, Snackbar, TextInput, Switch } from 'react-native-paper';
+import { Surface, Text, Appbar, Button, Icon, useTheme, TextInput, Switch } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { searchApiClient } from '@/api/client';
 import { customersApi } from '@/api/customers';
@@ -9,7 +9,6 @@ import { HistoryItem } from './HistoryItem';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getStyles } from './styles';
 import * as Clipboard from 'expo-clipboard';
-import { ProfileCopyIcon } from '../../icons/ProfileCopyIcon';
 import { GeneratedIdCard } from './GeneratedIdCard';
 
 import { OrderIdEntry, PaymentMode } from '@/types/orders';

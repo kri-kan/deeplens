@@ -17,7 +17,6 @@ interface PlatformHandleProps {
 export const PlatformHandle = ({ 
     source, 
     handle, 
-    instagramUserId, 
     showText = true, 
     size = 24,
     fontSize = 14,

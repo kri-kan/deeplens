@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Alert, TouchableOpacity, Image, Linking } from 'react-native';
-import { Surface, Text, Appbar, TextInput, Button, useTheme, ActivityIndicator, IconButton, Card, Divider, Chip, Icon, Portal, Modal, Dialog, Checkbox } from 'react-native-paper';
+import { Surface, Text, Appbar, TextInput, Button, useTheme, ActivityIndicator, IconButton, Card, Chip, Icon, Portal, Modal, Dialog, Checkbox } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,7 +11,7 @@ import { customersApi, Customer, CustomerAddress } from '@/api/customers';
 import { ManageAddressModal } from '@/components/utility/customer/ManageAddressModal';
 import { customerService } from '@/services/customerService';
 import { API_ROUTES } from '@/constants/api-routes';
-import { OrderIdEntry, OrderItem, OrderComment, OrderUpdateRequest, Attachment } from '@/types/orders';
+import { OrderIdEntry, OrderItem, OrderComment, OrderUpdateRequest } from '@/types/orders';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
 import { PlatformHandle } from '@/components/ui/PlatformHandle';
 
@@ -43,7 +43,6 @@ export default function OrderFormScreen() {
     const [addrPhone, setAddrPhone] = useState('');
     const [addrPincode, setAddrPincode] = useState('');
     const [addrText, setAddrText] = useState('');
-    const [isEditingComment, setIsEditingComment] = useState(false);
     const [initialState, setInitialState] = useState<any>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -114,7 +113,7 @@ export default function OrderFormScreen() {
                     pPhone = parsed.phone || '';
                     pPincode = parsed.pincode || '';
                     pAddress = parsed.address || '';
-                } catch (e) {
+                } catch {
                     pAddress = data.customerAddress;
                 }
             } else {
@@ -305,7 +304,7 @@ export default function OrderFormScreen() {
                     try {
                         await searchApiClient.delete(`/api/v1/Comment/${commentId}`);
                         fetchComments();
-                    } catch (error) {
+                    } catch {
                         Alert.alert('Error', 'Failed to delete comment.');
                     }
                 }
@@ -324,7 +323,7 @@ export default function OrderFormScreen() {
                         setLoading(true);
                         await searchApiClient.delete(API_ROUTES.ORDERS.DELETE(id as string));
                         router.back();
-                    } catch (error) {
+                    } catch {
                         Alert.alert('Error', 'Failed to delete order.');
                         setLoading(false);
                     }
@@ -387,8 +386,8 @@ export default function OrderFormScreen() {
                 if (oldReceipt?.id) {
                     try {
                         await searchApiClient.delete(`/api/v1/Attachment/${oldReceipt.id}`);
-                    } catch (e) {
-                        console.error('Failed to mark old attachment for deletion:', e);
+                    } catch (error) {
+                        console.error('Failed to mark old attachment for deletion:', error);
                     }
                 }
             }
@@ -1207,8 +1206,8 @@ export default function OrderFormScreen() {
                             try {
                                 const updatedCustomer = await customerService.getCustomerById(customer.id);
                                 setCustomerAddresses(updatedCustomer.addresses || []);
-                            } catch (e) {
-                                console.error('Failed to reload addresses', e);
+                            } catch (error) {
+                                console.error('Failed to reload addresses', error);
                             }
                         }}
                     />

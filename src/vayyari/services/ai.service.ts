@@ -32,7 +32,7 @@ class AiService {
     try {
       const response = await this.generateTitle(description, 'youtube_shorts');
       return response.title;
-    } catch (error) {
+    } catch {
       // Fallback to original description if AI fails
       return description.substring(0, 100);
     }

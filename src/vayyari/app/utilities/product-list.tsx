@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, FlatList, Dimensions, RefreshControl } from 'react-native';
-import { Surface, Text, IconButton, useTheme, ActivityIndicator, Appbar } from 'react-native-paper';
+import { Text, IconButton, useTheme, ActivityIndicator } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';

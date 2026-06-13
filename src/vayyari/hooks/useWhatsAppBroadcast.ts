@@ -40,7 +40,7 @@ export const useWhatsAppBroadcast = () => {
       setNewChannelDesc('');
       setShowAddModal(false);
       loadChannels();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to create channel');
     }
   };
@@ -58,7 +58,7 @@ export const useWhatsAppBroadcast = () => {
             try {
               await whatsappService.deleteChannel(channel.id);
               loadChannels();
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to delete channel');
             }
           }

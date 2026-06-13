@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, IconButton, Button, SegmentedButtons, Chip, useTheme } from 'react-native-paper';
+import { Text, IconButton, SegmentedButtons, Chip, useTheme } from 'react-native-paper';
 import { instagramService } from '@/services/instagram.service';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Stack, useRouter } from 'expo-router';

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
-import { Surface, Text, Icon, IconButton, useTheme, Portal, Dialog, Button, TextInput, ActivityIndicator } from 'react-native-paper';
-import { searchApiClient } from '@/api/client';
+import { Surface, Text, IconButton, useTheme, Portal, Dialog, TextInput } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { OrderIdEntry, PaymentMode } from '@/types/orders';
 import { ProfileCopyIcon } from '../../icons/ProfileCopyIcon';

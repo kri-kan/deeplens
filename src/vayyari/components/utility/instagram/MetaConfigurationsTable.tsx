@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
-import { Surface, Text, IconButton, Button, ActivityIndicator, useTheme, Chip, Divider, List, ProgressBar } from 'react-native-paper';
+import { Surface, Text, IconButton, Button, ActivityIndicator, useTheme, Chip, ProgressBar } from 'react-native-paper';
 import { instagramService } from '@/services/instagram.service';
 import { MetaConfigEditorDialog } from './MetaConfigEditorDialog';
 import * as Clipboard from 'expo-clipboard';
@@ -37,7 +37,7 @@ export const MetaConfigurationsTable: React.FC = () => {
         await instagramService.createConfiguration(config);
       }
       await fetchConfigs();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to save configuration');
     }
   };
@@ -55,7 +55,7 @@ export const MetaConfigurationsTable: React.FC = () => {
             try {
               await instagramService.deleteConfiguration(id);
               await fetchConfigs();
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to delete configuration');
             }
           }
@@ -68,7 +68,7 @@ export const MetaConfigurationsTable: React.FC = () => {
     try {
       await instagramService.setDefaultConfiguration(id);
       await fetchConfigs();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to set default configuration');
     }
   };

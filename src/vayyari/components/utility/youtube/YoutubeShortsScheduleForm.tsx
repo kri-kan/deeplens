@@ -45,8 +45,8 @@ export const YoutubeShortsScheduleForm: React.FC<YoutubeShortsScheduleFormProps>
         try {
             const resp = await youtubeService.getNextSlot();
             setNextSlot(resp.nextSlot);
-        } catch (err) {
-            console.error('Failed to fetch next slot:', err);
+        } catch (error) {
+            console.error('Failed to fetch next slot:', error);
         }
     };
 
@@ -56,7 +56,7 @@ export const YoutubeShortsScheduleForm: React.FC<YoutubeShortsScheduleFormProps>
             setIsGeneratingTitle(true);
             const title = await aiService.generateYoutubeTitle(youtubeDesc);
             setYoutubeTitle(title);
-        } catch (err) {
+        } catch {
             Alert.alert('AI Error', 'Failed to generate title.');
         } finally {
             setIsGeneratingTitle(false);

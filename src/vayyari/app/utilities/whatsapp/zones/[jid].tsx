@@ -7,7 +7,6 @@ import {
   useTheme,
   ActivityIndicator,
   Divider,
-  List,
   Chip,
   IconButton,
   Surface,

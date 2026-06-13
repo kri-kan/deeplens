@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Portal, Dialog, TextInput, Button, useTheme, Text, IconButton, Divider, Checkbox, Switch } from 'react-native-paper';
+import { Portal, Dialog, TextInput, Button, useTheme, Text, IconButton, Switch } from 'react-native-paper';
 
 interface MetaConfigEditorDialogProps {
   visible: boolean;

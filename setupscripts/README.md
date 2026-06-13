@@ -8,6 +8,7 @@ A modular, configuration-driven ecosystem for orchestrating DeepLens services. T
 - **`application/`**: Application-specific logic and specialized workers.
 - **`server/`**: Documentation and setup guides for the host environment.
 - **`tests/`**: Located inside `core/tests/`, these validate infrastructure stability.
+- **`install-antigravity.sh`**: Setup script to install or update the Antigravity IDE and Agent Manager.
 - **`.env`**: Centralized configuration and secrets for the entire stack.
 
 ---

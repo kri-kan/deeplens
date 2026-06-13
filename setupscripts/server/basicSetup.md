@@ -37,7 +37,14 @@
   - [2. Initial Setup](#2-initial-setup)
   - [3. Set a Global Shortcut (Super + V)](#3-set-a-global-shortcut-super--v)
 
+- [Installing Antigravity (IDE & Agent Manager)](#installing-antigravity-ide--agent-manager)
+  - [1. Directory Structure and Execution Layout](#1-directory-structure-and-execution-layout)
+  - [2. Setting Up Sandbox Permissions](#2-setting-up-sandbox-permissions)
+  - [3. Desktop and Menu Shortcuts](#3-desktop-and-menu-shortcuts)
+  - [4. Automating with the Install/Update Script](#4-automating-with-the-installupdate-script)
+
 - [Summary Checklist for New Machines](#summary-checklist-for-new-machines)
+
 
 
 
@@ -392,6 +399,109 @@ Since Ubuntu uses the GNOME desktop, setting a shortcut inside CopyQ sometimes f
   - **Shortcut:** Press **Super (Windows key) + V**.
 4. Click **Add**. 
 
+# Installing Antigravity (IDE & Agent Manager)
+
+This section explains how the Antigravity IDE and Antigravity Agent Manager are installed on Ubuntu, their directory structures, execution privileges, and how to use the automated setup/update script.
+
+## 1. Directory Structure and Execution Layout
+
+Antigravity consists of two distinct components, both packaged as Electron applications and located in `/opt/`:
+
+- **Antigravity IDE**:
+  - Binaries location: `/opt/antigravity-ide/`
+  - Main executable: `/opt/antigravity-ide/antigravity-ide`
+- **Antigravity Agent Manager**:
+  - Binaries location: `/opt/antigravity/`
+  - Main executable: `/opt/antigravity/antigravity`
+
+## 2. Setting Up Sandbox Permissions
+
+Electron applications running on Linux require a setuid sandbox binary (`chrome-sandbox`) to isolate untrusted web contents. For the sandbox to function properly without crash issues, the binary must be owned by `root` and have `4755` permissions:
+
+```bash
+# Fix permissions for Antigravity IDE
+sudo chown root:root /opt/antigravity-ide/chrome-sandbox
+sudo chmod 4755 /opt/antigravity-ide/chrome-sandbox
+
+# Fix permissions for Antigravity Agent Manager
+sudo chown root:root /opt/antigravity/chrome-sandbox
+sudo chmod 4755 /opt/antigravity/chrome-sandbox
+```
+
+## 3. Desktop and Menu Shortcuts
+
+To launch these applications conveniently, desktop shortcut files (`.desktop`) are registered in the user's local application folder (`~/.local/share/applications/`) and on the Desktop (`~/Desktop/`).
+
+### Desktop Shortcut Structure for Antigravity IDE
+Create `~/.local/share/applications/antigravity-ide.desktop` and `~/Desktop/antigravity-ide.desktop` with the following content:
+
+```ini
+[Desktop Entry]
+Name=Antigravity IDE
+Comment=Antigravity Code Editor
+Exec="/opt/antigravity-ide/antigravity-ide" %F
+Icon=/usr/share/pixmaps/antigravity.png
+Type=Application
+Terminal=false
+StartupNotify=true
+StartupWMClass=Antigravity IDE
+Categories=Development;IDE;TextEditor;
+```
+
+### Desktop Shortcut Structure for Antigravity Agent Manager
+Create `~/.local/share/applications/antigravity-agent-manager.desktop` and `~/Desktop/antigravity-agent-manager.desktop` with the following content:
+
+```ini
+[Desktop Entry]
+Name=Antigravity Agent Manager
+Comment=Antigravity Agentic Workspace Platform
+GenericName=Agent Manager
+Exec=/opt/antigravity/antigravity %F
+Icon=antigravity
+Type=Application
+Terminal=false
+StartupNotify=true
+StartupWMClass=Antigravity
+Categories=Development;IDE;
+```
+
+### Trusting Desktop Shortcuts (GNOME)
+On Ubuntu's GNOME desktop environment, you must make the desktop shortcut files executable and mark them as trusted. Otherwise, they will show a lock/unsafe icon and refuse to run:
+
+```bash
+# Make shortcuts executable
+chmod +x ~/.local/share/applications/antigravity-*.desktop
+chmod +x ~/Desktop/antigravity-*.desktop
+
+# Trust them using GNOME's GIO utility
+gio set ~/Desktop/antigravity-ide.desktop metadata::trusted true
+gio set ~/Desktop/antigravity-agent-manager.desktop metadata::trusted true
+```
+
+## 4. Automating with the Install/Update Script
+
+A unified installation and update script is provided in `setupscripts/install-antigravity.sh`. It automatically handles directory cleanups, extraction, sandbox permissions, shortcut generation, icon download/installation, and configuration migration.
+
+> [!NOTE]
+> **Package Manager Fallback**: If the local archive file for the Antigravity Agent Manager (`Antigravity.tar.gz`) is not found, the script will automatically register the official Google Artifact Registry APT repository (`https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/`) and install/update the `antigravity` package via `apt`.
+
+### How to Run the Script
+
+1. Make sure you have downloaded the latest archives (`Antigravity.tar.gz` and/or `Antigravity IDE.tar.gz`) to your `~/Downloads` or the repository folder. If the Agent archive is not present, it will be downloaded/installed via the package manager.
+2. Run the script as a regular user (with sudo privileges):
+
+```bash
+# Run the installation (automatically searches for archives in ~/Downloads)
+bash setupscripts/install-antigravity.sh
+
+# You can also pass direct paths to the archive files
+bash setupscripts/install-antigravity.sh --ide-archive "~/Downloads/Antigravity IDE.tar.gz" --agent-archive "~/Downloads/Antigravity.tar.gz"
+
+# Or restrict the setup to one component only
+bash setupscripts/install-antigravity.sh --ide-only
+bash setupscripts/install-antigravity.sh --agent-only
+```
+
 ---
 
 ### Summary Checklist for New Machines
@@ -404,3 +514,4 @@ Since Ubuntu uses the GNOME desktop, setting a shortcut inside CopyQ sometimes f
 This setup is now "production-ready" for your local environment. It's isolated, high-performance, and won't be broken by Ubuntu system updates.
 
 ---
+

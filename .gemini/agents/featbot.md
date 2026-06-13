@@ -1,5 +1,5 @@
 ---
-name: deeplens-feature-agent
+name: featbot
 description: >
   Master orchestrator for building end-to-end features across the full DeepLens platform.
   Coordinates schema changes, backend APIs, Kafka events, mobile screens, and web UI pages

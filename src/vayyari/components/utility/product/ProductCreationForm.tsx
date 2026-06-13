@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { TextInput, Button, Surface, Text, useTheme } from 'react-native-paper';
 import { ProductCategoryPicker } from './ProductCategoryPicker';
 import { InstagramLinkSection } from './InstagramLinkSection';

@@ -138,8 +138,8 @@ export const InstagramPostDetailItem = ({
             youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_HIDDEN);
             setTimeout(() => setIsYoutubeDialogVisible(false), 300);
             postDetailsRefresh();
-        } catch (err) {
-            console.error('Failed to persist YouTube status', err);
+        } catch (error) {
+            console.error('Failed to persist YouTube status', error);
             Alert.alert('Persistence Error', 'Video scheduled but local status failed to update.');
         } finally {
             setIsYoutubeBusy(false);
@@ -843,7 +843,7 @@ export const InstagramPostDetailItem = ({
                                                 Alert.alert('Success', 'Media saved to gallery!');
                                                 setIsMenuVisible(false);
                                                 menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                            } catch (err) {
+                                            } catch {
                                                 setDownloadProgress(null);
                                                 Alert.alert('Download Failed', 'Could not download media.');
                                             }
@@ -879,7 +879,7 @@ export const InstagramPostDetailItem = ({
                                                 setShareProgress(null);
                                                 setIsMenuVisible(false);
                                                 menuSheetTop.value = withSpring(MENU_HIDDEN);
-                                            } catch (err) {
+                                            } catch {
                                                 setShareProgress(null);
                                                 Alert.alert('Sharing Failed', 'Could not prepare media for sharing.');
                                             }
@@ -914,7 +914,7 @@ export const InstagramPostDetailItem = ({
                                                         // Prepare defaults
                                                         setIsYoutubeDialogVisible(true);
                                                         youtubeSheetTop.value = withSpring(YOUTUBE_SHEET_VISIBLE);
-                                                    } catch (err) {
+                                                    } catch {
                                                         Alert.alert('Error', 'Could not prepare YouTube upload.');
                                                     }
                                                 }}

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Text, TextInput, IconButton, Surface, ActivityIndicator, useTheme } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, Alert , ScrollView } from 'react-native';
+import { Text, TextInput, IconButton, ActivityIndicator, useTheme } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { instagramService } from '@/services/instagram.service';
-import { ScrollView } from 'react-native';
 
 interface InstagramLinkSectionProps {
   linkedPosts: any[];

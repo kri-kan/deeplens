@@ -6,7 +6,6 @@ import {
   List,
   Divider,
   useTheme,
-  IconButton,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';

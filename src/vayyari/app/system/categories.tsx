@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Alert, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, Alert } from 'react-native';
 import { Text, Button, IconButton, Surface, TextInput, Portal, Modal, Chip } from 'react-native-paper';
-import { searchApiClient } from '@/api/client';
-import { API_ROUTES } from '@/constants/api-routes';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { systemService, AppCategory, AppIcon } from '@/services/system.service';
 import { CategoryIcon } from '@/components/CategoryIcons';

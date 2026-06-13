@@ -1,5 +1,5 @@
 import { searchApiClient } from '../api/client';
-import { MediaDto, SearchFilters, UploadImageResponse } from '../types/search';
+import { MediaDto, SearchFilters } from '../types/search';
 import { API_ROUTES } from '../constants/api-routes';
 
 /**

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Linking, Image, ScrollView, Platform } from 'react-native';
+import { StyleSheet, View, Linking, ScrollView, Platform } from 'react-native';
 import { Surface, List, Text, useTheme, IconButton, Portal, Dialog, Button, Snackbar } from 'react-native-paper';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';

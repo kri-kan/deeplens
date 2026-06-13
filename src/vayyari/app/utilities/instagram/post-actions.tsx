@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text, List, Button, Surface } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 

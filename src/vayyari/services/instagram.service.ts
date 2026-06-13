@@ -1,6 +1,5 @@
 import { searchApiClient } from '../api/client';
 import type { InstagramLink } from '../utils/instagram-helpers';
-import { waProcessorService } from './wa-processor.service';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -196,8 +195,8 @@ class InstagramService {
     return searchApiClient.get<InstagramProfile[]>('/api/v1/Insta');
   };
 
-  getProfileDetails = async (username: string, sortBy = 'date', sortOrder = 'desc', fromDate?: string, toDate?: string): Promise<ProfileDetailsResponse> => {
-    let url = `/api/v1/Insta/profile/${username}?sortBy=${sortBy}&sortOrder=${sortOrder}`;
+  getProfileDetails = async (username: string, sortBy = 'date', sortOrder = 'desc', fromDate?: string, toDate?: string, limit = 100, offset = 0): Promise<ProfileDetailsResponse> => {
+    let url = `/api/v1/Insta/profile/${username}?sortBy=${sortBy}&sortOrder=${sortOrder}&limit=${limit}&offset=${offset}`;
     if (fromDate) url += `&fromDate=${fromDate}`;
     if (toDate) url += `&toDate=${toDate}`;
     return searchApiClient.get<ProfileDetailsResponse>(url);

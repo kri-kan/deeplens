@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Linking } from 'react-native';
-import { Text, IconButton, Surface, useTheme, Menu, Button, Portal, Dialog, TextInput, List, ActivityIndicator, Modal as PaperModal } from 'react-native-paper';
+import { Text, IconButton, Surface, useTheme, Button, Portal, TextInput, List, ActivityIndicator, Modal as PaperModal } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import * as Clipboard from 'expo-clipboard';
 import { ProductCreationForm } from '../product/ProductCreationForm';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';

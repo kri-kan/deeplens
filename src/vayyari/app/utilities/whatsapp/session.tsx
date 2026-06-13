@@ -21,7 +21,7 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
-import { waProcessorService, WaProcessorStatus, WaConnectionStatus } from '@/services/wa-processor.service';
+import { waProcessorService, WaProcessorStatus } from '@/services/wa-processor.service';
 import QRCode from 'react-native-qrcode-svg';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

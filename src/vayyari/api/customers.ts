@@ -1,4 +1,3 @@
-import { API_ROUTES } from '../constants/api-routes';
 import { searchApiClient } from './client';
 
 export interface Customer {

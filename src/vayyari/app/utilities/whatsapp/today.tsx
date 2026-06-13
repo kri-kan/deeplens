@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Image, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Image, TouchableOpacity, Alert } from 'react-native';
 import {
   Text,
   Card,

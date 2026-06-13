@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Surface, Text, IconButton, Button, SegmentedButtons, Chip, useTheme, Portal, Modal } from 'react-native-paper';
+import { Text, IconButton, Button, SegmentedButtons, Chip, useTheme, Portal, Modal } from 'react-native-paper';
 import { instagramService } from '../../../services/instagram.service';
 
 interface ControlCenterProps {

@@ -1,19 +1,17 @@
 import React from 'react';
-import { View, FlatList, ScrollView, StyleSheet } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { 
   Surface, 
   Text, 
   Appbar, 
   IconButton, 
   useTheme, 
-  FAB, 
   Portal, 
   ActivityIndicator,
   Button,
   TextInput,
   Modal,
-  Chip,
-  SegmentedButtons
+  Chip
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 

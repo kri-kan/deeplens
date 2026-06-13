@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState,  useCallback } from 'react';
 import { View, StyleSheet, FlatList, Alert } from 'react-native';
 import { Text, Button, IconButton, Surface, useTheme, Avatar } from 'react-native-paper';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -6,7 +6,6 @@ import { vendorService } from '@/services/vendorService';
 import { VendorResponse } from '@/types/vendors';
 import { VendorAddressesModal } from '@/components/utility/vendor/VendorAddressesModal';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
 
 export default function VendorManagement() {
   const [vendors, setVendors] = useState<VendorResponse[]>([]);

@@ -6,7 +6,6 @@ import {
   Button,
   useTheme,
   ActivityIndicator,
-  Divider,
   IconButton,
   Surface,
   ProgressBar,

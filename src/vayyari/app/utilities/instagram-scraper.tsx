@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, ScrollView } from 'react-native';
-import { Surface, Text, Appbar, Banner, Divider, ActivityIndicator, useTheme, Button } from 'react-native-paper';
+import { View } from 'react-native';
+import { Text, Banner, Divider, ActivityIndicator, useTheme, Button } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 
 import { ScreenWrapper } from '../../components/layout/ScreenWrapper';

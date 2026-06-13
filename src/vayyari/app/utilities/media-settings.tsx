@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, RefreshControl } from 'react-native';
+import { ScrollView, RefreshControl } from 'react-native';
 import { useTheme, Card, List, FAB } from 'react-native-paper';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';

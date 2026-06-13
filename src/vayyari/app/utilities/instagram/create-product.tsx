@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import React from 'react';
+import { StyleSheet, ScrollView } from 'react-native';
 import { IconButton } from 'react-native-paper';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { ProductCreationForm } from '@/components/utility/product/ProductCreationForm';

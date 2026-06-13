@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Text, Appbar, useTheme } from 'react-native-paper';
+import { Text, Appbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';

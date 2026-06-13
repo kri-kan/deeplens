@@ -1,5 +1,5 @@
 import { EventEmitter } from 'eventemitter3';
-import ApiClient from './base';
+import { ApiClient } from './base';
 import { identityService } from '../services/identity.service';
 
 // Global event bus for auth events

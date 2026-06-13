@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Platform } from 'react-native';
-import { Text, Avatar, Button, Divider, List, Card, Switch, ActivityIndicator, useTheme, Chip, Portal, IconButton, Snackbar, Appbar } from 'react-native-paper';
+import { Text, Avatar, Button, List, Card, Switch, ActivityIndicator, useTheme, Chip, Portal, IconButton, Snackbar, Appbar } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 
@@ -14,7 +14,7 @@ import { customerService } from '@/services/customerService';
 import { whatsappService, WhatsAppChannel, CustomerChannelMembership } from '@/services/whatsappService';
 import { productMgmtApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
-import { Customer, CreateAddressRequest, CreateCustomerRequest, Language } from '@/types/customers';
+import { Customer, CreateCustomerRequest, Language } from '@/types/customers';
 import { CountryCode } from '@/hooks/useCustomerManagement';
 
 export default function CustomerDetailScreen() {

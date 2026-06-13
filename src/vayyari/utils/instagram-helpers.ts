@@ -1,7 +1,5 @@
 import {
-    InstagramPost,
     InstagramMediaType,
-    InstagramProfile,
     normalizeData,
     normalizeProfile,
 } from '@/services/instagram.service';

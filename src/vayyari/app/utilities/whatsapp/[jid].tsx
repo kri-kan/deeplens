@@ -11,8 +11,6 @@ import {
   Chip,
   IconButton,
   Surface,
-  Menu,
-  Portal,
   Avatar,
   Switch,
 } from 'react-native-paper';

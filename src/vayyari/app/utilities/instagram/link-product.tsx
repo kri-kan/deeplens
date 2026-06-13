@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
-import { Text, IconButton, useTheme, Button, TextInput, List, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { IconButton, useTheme, Button, TextInput, List, ActivityIndicator } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { productService } from '@/services/productService';
 import { searchApiClient, productMgmtApiClient } from '@/api/client';
 
-const { width, height } = Dimensions.get('window');
 
 export default function LinkProductScreen() {
     const params = useLocalSearchParams();

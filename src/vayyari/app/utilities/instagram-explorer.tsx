@@ -1,21 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, FlatList, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
-import { Text, Avatar, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, Portal, Dialog, Modal as PaperModal } from 'react-native-paper';
-import { Image } from 'expo-image';
+import React, { useState, useRef, useCallback } from 'react';
+import { View, FlatList, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
+import { Text, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button,  useTheme } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { VideoItem } from '@/components/utility/instagram/VideoItem';
 import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
-import { BentoCard } from '@/components/ui/BentoCard';
-import { MetaConfigurationsTable } from '@/components/utility/instagram/MetaConfigurationsTable';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
-import { useTheme } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 
 export default function InstagramExplorer() {
@@ -28,10 +24,6 @@ export default function InstagramExplorer() {
     profileData,
     loading,
     quota,
-    syncMode,
-    setSyncMode,
-    targetPostCount,
-    setTargetPostCount,
     bioExpanded,
     setBioExpanded,
     sortBy,
@@ -45,10 +37,9 @@ export default function InstagramExplorer() {
     refreshing,
     handleRefresh,
     manualSync,
-    deleteProfileData,
-    toggleWatch,
-    toggleOwn,
     selectProfile,
+    loadMorePosts,
+    loadingMore,
   } = useInstagramExplorer();
 
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -58,6 +49,36 @@ export default function InstagramExplorer() {
   const isNavigating = useRef(false);
 
   const selectionMode = selectedPosts.size > 0;
+
+  const renderVideoItem = useCallback(({ item }: { item: any }) => (
+    <VideoItem 
+      item={item} 
+      onPress={() => {
+        if (selectionMode) {
+          toggleSelection(item);
+        } else {
+          if (isNavigating.current) return;
+          isNavigating.current = true;
+          instagramService.setLastFetchedPosts(profileData?.videos || []);
+          router.push({
+            pathname: '/utilities/instagram/post-detail',
+            params: { 
+                id: item.id, 
+                username: selectedProfile,
+                sortBy,
+                sortOrder,
+                data: JSON.stringify(item) 
+            }
+          } as any);
+          // Reset after a short delay to allow navigation to complete
+          setTimeout(() => { isNavigating.current = false; }, 1000);
+        }
+      }} 
+      onLongPress={() => toggleSelection(item)}
+      isSelected={selectedPosts.has(item.id)}
+      selectionMode={selectionMode}
+    />
+  ), [selectionMode, selectedPosts, selectedProfile, sortBy, sortOrder, profileData?.videos]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -121,39 +142,24 @@ export default function InstagramExplorer() {
 
         <FlatList
           data={profileData.videos}
-          renderItem={({ item }) => (
-            <VideoItem 
-              item={item} 
-              onPress={() => {
-                if (selectionMode) {
-                  toggleSelection(item);
-                } else {
-                  if (isNavigating.current) return;
-                  isNavigating.current = true;
-                  instagramService.setLastFetchedPosts(profileData.videos);
-                  router.push({
-                    pathname: '/utilities/instagram/post-detail',
-                    params: { 
-                        id: item.id, 
-                        username: selectedProfile,
-                        sortBy,
-                        sortOrder,
-                        data: JSON.stringify(item) 
-                    }
-                  } as any);
-                  // Reset after a short delay to allow navigation to complete
-                  setTimeout(() => { isNavigating.current = false; }, 1000);
-                }
-              }} 
-              onLongPress={() => toggleSelection(item)}
-              isSelected={selectedPosts.has(item.id)}
-              selectionMode={selectionMode}
-            />
-          )}
+          renderItem={renderVideoItem}
           keyExtractor={(item) => item.id}
           numColumns={3}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 20 }}
+          onEndReached={loadMorePosts}
+          onEndReachedThreshold={0.5}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          initialNumToRender={10}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator animating={true} color={theme.colors.primary} />
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
