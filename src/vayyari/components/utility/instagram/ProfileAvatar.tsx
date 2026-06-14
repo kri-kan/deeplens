@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
-import { Avatar } from 'react-native-paper';
+import { Avatar, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { normalizeProfile } from '@/utils/instagram-helpers';
@@ -19,6 +19,7 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
   showBadge = false,
   style 
 }) => {
+  const theme = useTheme();
   const profile = normalizeProfile(rawProfile);
 
   const getProfilePicUri = (p: any) => {
@@ -62,6 +63,21 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
         )}
       </View>
       
+      {profile.isPinned && (
+        <View style={[styles.badge, { 
+          top: -4, 
+          left: -4, 
+          backgroundColor: theme.colors.onSurface,
+          borderRadius: 12,
+          width: 24,
+          height: 24,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }]}>
+          <MaterialCommunityIcons name="pin" color={theme.colors.surface} size={16} style={{ transform: [{ rotate: '45deg' }] }} />
+        </View>
+      )}
+
       {showBadge && (
         <View style={[styles.badge, { 
           bottom: -1, 

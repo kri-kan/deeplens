@@ -4,7 +4,7 @@ import { Surface, Appbar, useTheme } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 
 interface ScreenWrapperProps {
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   onBack?: () => void;
   actions?: React.ReactNode;
@@ -52,15 +52,22 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
   return (
     <Surface style={[styles.container, { backgroundColor: theme.colors.background }]} elevation={0}>
       <Appbar.Header 
-        style={{ backgroundColor: theme.colors.background }} 
+        style={{ 
+          backgroundColor: theme.colors.background, 
+          height: React.isValidElement(title) ? 72 : 56 
+        }} 
         elevated={headerElevation > 0}
       >
         {onBack ? (
-          <Appbar.BackAction onPress={onBack} />
+          <Appbar.BackAction onPress={onBack} style={{ alignSelf: 'center' }} />
         ) : (
-          router.canGoBack() && <Appbar.BackAction onPress={() => router.back()} />
+          router.canGoBack() && <Appbar.BackAction onPress={() => router.back()} style={{ alignSelf: 'center' }} />
         )}
-        <Appbar.Content title={title} titleStyle={styles.headerTitle} />
+        {React.isValidElement(title) ? (
+          <View style={{ flex: 1, marginRight: 8, justifyContent: 'center', height: '100%' }}>{title}</View>
+        ) : (
+          <Appbar.Content title={title as any} titleStyle={styles.headerTitle} />
+        )}
         {actions}
       </Appbar.Header>
       {renderContent()}

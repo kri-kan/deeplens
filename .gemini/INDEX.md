@@ -48,6 +48,7 @@ Use the **master agent** for any feature that touches more than one service:
 | `kafka-event-agent` | `src/DeepLens.Service/.gemini/agents/kafka-event-agent.md` | New Kafka topic or async event |
 | `schema-migration-agent` | `src/DeepLens.Service/.gemini/agents/schema-migration-agent.md` | Any DB schema change |
 | `whatsapp-feature-agent` | `src/whatsapp-processor/.gemini/agents/whatsapp-feature-agent.md` | Any WhatsApp Processor feature |
+| `code-review-agent` | `.gemini/agents/code-review-agent.md` | Review code, review PR, analyze and fix, check standards |
 | `giglog` | `.gemini/agents/giglog.agent.md` | Log work activity, summarize progress, analyze time |
 
 ---

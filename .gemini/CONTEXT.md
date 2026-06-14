@@ -147,6 +147,7 @@ Use the **master agent first** for any multi-service feature. It orchestrates al
 | `kafka-event-agent` | `src/DeepLens.Service/.gemini/agents/kafka-event-agent.md` | Adding a new Kafka topic or async event |
 | `schema-migration-agent` | `src/DeepLens.Service/.gemini/agents/schema-migration-agent.md` | Any DB schema change (columns, tables) |
 | `whatsapp-feature-agent` | `src/whatsapp-processor/.gemini/agents/whatsapp-feature-agent.md` | Any new WhatsApp Processor feature |
+| `code-review-agent` | `.gemini/agents/code-review-agent.md` | Reviewing code/PRs, analyzing code quality, applying fixes |
 
 ---
 

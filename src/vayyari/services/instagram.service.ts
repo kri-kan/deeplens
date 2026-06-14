@@ -23,6 +23,7 @@ export interface InstagramProfile {
   isActive: boolean;
   isOwnAccount: boolean;
   isDataDeleted: boolean;
+  isPinned?: boolean;
   lastSyncedAt?: string;
   isInWatchlist?: boolean;
 }
@@ -42,6 +43,12 @@ export interface InstagramPost {
   productCode?: string;
   youtubeVideoId?: string;
   youtubeUrl?: string;
+  status?: 'active' | 'suspend' | 'ignore';
+  suspendUntil?: string;
+  lastReviewedAt?: string;
+  ownerUsername?: string;
+  ownerProfilePictureUrl?: string;
+  isStarred?: boolean;
 }
 
 export interface ProfileMetrics {
@@ -146,6 +153,7 @@ export const normalizeProfile = (data: any): InstagramProfile => {
       mediaCount: data.mediaCount || data.MediaCount || 0,
       profilePictureUrl: data.profilePictureUrl || data.ProfilePictureUrl,
       storagePath: data.storagePath || data.StoragePath,
+      isPinned: data.isPinned !== undefined ? data.isPinned : data.IsPinned,
   };
 };
 
@@ -173,6 +181,7 @@ export const normalizeData = (data: any): InstagramPost => {
       productCode: data.productCode || data.ProductCode,
       youtubeVideoId: data.youtubeVideoId || data.YoutubeVideoId,
       youtubeUrl: data.youtubeUrl || data.YoutubeUrl,
+      isStarred: data.isStarred !== undefined ? data.isStarred : data.IsStarred,
   };
 };
 
@@ -290,6 +299,10 @@ class InstagramService {
     return searchApiClient.post(`/api/v1/Insta/profile/${username}/toggle-own?isOwn=${isOwn}`, {});
   };
 
+  togglePinStatus = async (username: string, isPinned: boolean): Promise<any> => {
+    return searchApiClient.post(`/api/v1/Insta/profile/${username}/toggle-pin?isPinned=${isPinned}`, {});
+  };
+
   deleteJob = async (id: string): Promise<void> => {
     return searchApiClient.delete(`/api/v1/Insta/jobs/${id}`);
   };
@@ -305,6 +318,23 @@ class InstagramService {
   getVideoDetails = async (id: string): Promise<InstagramPost> => {
     return searchApiClient.get<InstagramPost>(`/api/v1/Insta/video/${id}`);
   };
+
+  updateVideoStatus = async (id: string, payload: { status?: 'active' | 'suspend' | 'ignore'; suspendDays?: number; lastReviewedAt?: string }): Promise<{ success: boolean }> => {
+    return searchApiClient.patch(`/api/v1/Insta/video/${id}`, payload);
+  };
+
+  getSuspendedVideos = async (): Promise<InstagramPost[]> => {
+    const raw = await searchApiClient.get<any[]>('/api/v1/Insta/videos/suspended');
+    return raw ? raw.map(normalizeData) : [];
+  };
+
+  getOwnAccountsVideos = async (sortBy = 'date', sortOrder = 'desc', limit = 100, offset = 0, search?: string): Promise<InstagramPost[]> => {
+    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/own-accounts/videos?sortBy=${sortBy}&sortOrder=${sortOrder}&limit=${limit}&offset=${offset}${searchParam}`);
+    return raw ? raw.map(normalizeData) : [];
+  };
+
+
 
   getPostMedia = async (id: string): Promise<InstagramPost[]> => {
     return searchApiClient.get<InstagramPost[]>(`/api/v1/Insta/video/${id}/media`);
@@ -336,6 +366,69 @@ class InstagramService {
   getPostComments = async (competitorVideoId: string): Promise<InstagramComment[]> => {
     return searchApiClient.get<InstagramComment[]>(`/api/v1/Insta/video/${competitorVideoId}/comments`);
   };
+
+  // ── Story Planner ─────────────────────────────────────────────────────────
+
+  getStoryGroups = async (search?: string): Promise<StoryGroup[]> => {
+    const searchParam = search ? `?search=${encodeURIComponent(search)}` : '';
+    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/story-groups${searchParam}`);
+    return raw.map(g => ({
+      ...g,
+      posts: g.posts ? g.posts.map(normalizeData) : []
+    })) as StoryGroup[];
+  };
+
+  getStoryGroup = async (id: string): Promise<StoryGroup> => {
+    const raw = await searchApiClient.get<any>(`/api/v1/Insta/story-groups/${id}`);
+    return {
+      ...raw,
+      posts: raw.posts ? raw.posts.map(normalizeData) : []
+    } as StoryGroup;
+  };
+
+  createStoryGroup = async (payload: CreateStoryGroupPayload): Promise<{ success: boolean; groupId: string }> => {
+    return searchApiClient.post('/api/v1/Insta/story-groups', payload);
+  };
+
+  updateStoryGroup = async (id: string, payload: UpdateStoryGroupPayload): Promise<{ success: boolean }> => {
+    return searchApiClient.patch(`/api/v1/Insta/story-groups/${id}`, payload);
+  };
+
+  renewStoryGroup = async (id: string): Promise<{ success: boolean }> => {
+    return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/renew`, {});
+  };
+
+  mergeStoryGroups = async (group1Id: string, group2Id: string): Promise<{ success: boolean; parentGroupId: string; mergedGroupId: string }> => {
+    return searchApiClient.post('/api/v1/Insta/story-groups/merge', { group1Id, group2Id });
+  };
+
+  deleteStoryGroup = async (id: string): Promise<{ success: boolean }> => {
+    return searchApiClient.delete(`/api/v1/Insta/story-groups/${id}`);
+  };
+
+  markGroupPosted = async (id: string, targetWatchlistId: string): Promise<{ success: boolean; historyId: string }> => {
+    return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/post?targetWatchlistId=${targetWatchlistId}`, {});
+  };
+
+  getEligibleGroups = async (targetWatchlistId: string): Promise<StoryGroup[]> => {
+    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/story-groups/eligible/${targetWatchlistId}`);
+    return raw.map(g => ({
+      ...g,
+      posts: g.posts ? g.posts.map(normalizeData) : []
+    })) as StoryGroup[];
+  };
+
+  getPendingSwipeCards = async (): Promise<StoryPostingHistory[]> => {
+    const raw = await searchApiClient.get<any[]>('/api/v1/Insta/story-groups/pending-swipes');
+    return (raw || []).map(h => ({
+      ...h,
+      posts: h.posts ? h.posts.map(normalizeData) : []
+    })) as StoryPostingHistory[];
+  };
+
+  submitSwipes = async (swipes: SwipeResponseItem[]): Promise<{ success: boolean }> => {
+    return searchApiClient.post('/api/v1/Insta/story-groups/swipes', swipes);
+  };
 }
 
 export interface InstagramComment {
@@ -348,4 +441,55 @@ export interface InstagramComment {
   fullName?: string;
 }
 
+export interface StoryGroup {
+  id: string;
+  name: string;
+  status: 'active' | 'suspend' | 'ignore';
+  suspendUntil?: string;
+  lastReviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  posts: InstagramPost[];
+  eligibleAccounts: string[];
+  needsReview: boolean;
+  keywords?: string;
+  rightSwipes?: number;
+  leftSwipes?: number;
+}
+
+export interface CreateStoryGroupPayload {
+  name: string;
+  postIds: string[];
+  targetWatchlistIds: string[];
+  keywords?: string;
+}
+
+export interface UpdateStoryGroupPayload {
+  name?: string;
+  status?: 'active' | 'suspend' | 'ignore';
+  suspendDays?: number;
+  postIds?: string[];
+  starredPostIds?: string[];
+  targetWatchlistIds?: string[];
+  keywords?: string;
+}
+
+export interface StoryPostingHistory {
+  id: string;
+  groupId: string;
+  groupName: string;
+  targetWatchlistId: string;
+  targetUsername: string;
+  postedAt: string;
+  swipeStatus: 'pending' | 'left' | 'right';
+  swipedAt?: string;
+  posts: InstagramPost[];
+}
+
+export interface SwipeResponseItem {
+  historyId: string;
+  direction: 'left' | 'right';
+}
+
 export const instagramService = new InstagramService();
+

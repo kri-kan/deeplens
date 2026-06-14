@@ -47,6 +47,9 @@ public class InstagramProfileDto
     [JsonPropertyName("isDataDeleted")]
     public bool IsDataDeleted { get; set; }
 
+    [JsonPropertyName("isPinned")]
+    public bool IsPinned { get; set; }
+
     [JsonPropertyName("lastSyncedAt")]
     public DateTime? LastSyncedAt { get; set; }
 }
@@ -158,8 +161,26 @@ public class MetaPost
     [JsonPropertyName("youtubeUrl")]
     public string? YoutubeUrl { get; set; }
 
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "active";
+
+    [JsonPropertyName("suspendUntil")]
+    public DateTime? SuspendUntil { get; set; }
+
+    [JsonPropertyName("lastReviewedAt")]
+    public DateTime? LastReviewedAt { get; set; }
+
     [JsonPropertyName("children")]
     public List<MetaPost>? Children { get; set; }
+
+    [JsonPropertyName("ownerUsername")]
+    public string? OwnerUsername { get; set; }
+
+    [JsonPropertyName("ownerProfilePictureUrl")]
+    public string? OwnerProfilePictureUrl { get; set; }
+
+    [JsonPropertyName("isStarred")]
+    public bool IsStarred { get; set; }
 }
 
 public class InstagramProfileDetailsDto

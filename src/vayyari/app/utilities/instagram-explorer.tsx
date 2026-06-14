@@ -6,7 +6,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { VideoItem } from '@/components/utility/instagram/VideoItem';
 import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
-import { QuotaDashboard } from '@/components/utility/instagram/QuotaDashboard';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';
@@ -17,6 +16,19 @@ import { useRouter, useFocusEffect } from 'expo-router';
 export default function InstagramExplorer() {
   const theme = useTheme();
   const router = useRouter();
+  const [needsReviewCount, setNeedsReviewCount] = useState(0);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      instagramService.getStoryGroups()
+        .then(groups => {
+          const count = groups.filter(g => g.needsReview).length;
+          setNeedsReviewCount(count);
+        })
+        .catch(err => console.error('Failed to load story groups for badge', err));
+    }, [])
+  );
+
   const {
     watchlist,
     selectedProfile,
@@ -40,12 +52,15 @@ export default function InstagramExplorer() {
     selectProfile,
     loadMorePosts,
     loadingMore,
+    togglePin,
   } = useInstagramExplorer();
 
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [selectedPosts, setSelectedPosts] = useState<Map<string, any>>(new Map());
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
   const isNavigating = useRef(false);
 
   const selectionMode = selectedPosts.size > 0;
@@ -288,7 +303,99 @@ export default function InstagramExplorer() {
       refreshing={refreshing}
       onRefresh={handleRefresh}
     >
-      <QuotaDashboard quota={quota} />
+      <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 12, color: theme.colors.onSurface }}>Story Planner</Text>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+          {/* Curation Card */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/story-planner')}
+            activeOpacity={0.8}
+            style={{ 
+              flex: 1, 
+              backgroundColor: theme.colors.surfaceVariant, 
+              borderRadius: 16, 
+              padding: 16, 
+              justifyContent: 'space-between',
+              height: 100
+            }}
+          >
+            <IconButton icon="calendar-edit" size={24} iconColor={theme.colors.secondary} style={{ margin: 0, padding: 0 }} />
+            <View>
+              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Curation Mode</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Group & curate reels</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Sharing Card */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/story-planner/sharing')}
+            activeOpacity={0.8}
+            style={{ 
+              flex: 1, 
+              backgroundColor: theme.colors.surfaceVariant, 
+              borderRadius: 16, 
+              padding: 16, 
+              justifyContent: 'space-between',
+              height: 100
+            }}
+          >
+            <IconButton icon="share-variant" size={24} iconColor={theme.colors.secondary} style={{ margin: 0, padding: 0 }} />
+            <View>
+              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Sharing Mode</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Post stories to IG</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {/* Swipe Game Card */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/story-planner/swipe-game')}
+            activeOpacity={0.8}
+            style={{ 
+              flex: 1, 
+              backgroundColor: theme.colors.surfaceVariant, 
+              borderRadius: 16, 
+              padding: 16, 
+              justifyContent: 'space-between',
+              height: 100
+            }}
+          >
+            <IconButton icon="cards-heart" size={24} iconColor={theme.colors.secondary} style={{ margin: 0, padding: 0 }} />
+            <View>
+              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Swipe Game</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Tinder swipes (24h+)</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Review List Card */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/story-planner/review-list')}
+            activeOpacity={0.8}
+            style={{ 
+              flex: 1, 
+              backgroundColor: theme.colors.surfaceVariant, 
+              borderRadius: 16, 
+              padding: 16, 
+              justifyContent: 'space-between',
+              height: 100
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <IconButton icon="alert-decagram" size={24} iconColor={theme.colors.error} style={{ margin: 0, padding: 0 }} />
+              {needsReviewCount > 0 && (
+                <View style={{ backgroundColor: theme.colors.error, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
+                  <Text style={{ color: theme.colors.onError, fontSize: 10, fontWeight: 'bold' }}>{needsReviewCount}</Text>
+                </View>
+              )}
+            </View>
+            <View>
+              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Review Queue</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Renew story eligibility</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <View style={styles.profileList}>
         <Text variant="titleMedium" style={styles.sectionTitle}>Active Profiles</Text>
@@ -297,6 +404,11 @@ export default function InstagramExplorer() {
             <TouchableOpacity 
               key={item.id || item.username} 
               onPress={() => selectProfile(item.username)}
+              onLongPress={(e) => {
+                const { pageX, pageY } = e.nativeEvent;
+                setMenuAnchor({ x: pageX, y: pageY });
+                setActiveMenu(item.username);
+              }}
               activeOpacity={0.7}
               style={styles.profileGridItem}
             >
@@ -317,6 +429,27 @@ export default function InstagramExplorer() {
             </TouchableOpacity>
           ))}
         </View>
+
+        <Menu
+          visible={!!activeMenu}
+          onDismiss={() => setActiveMenu(null)}
+          anchor={menuAnchor}
+        >
+          <Menu.Item 
+            onPress={() => {
+              const profile = watchlist.find(p => p.username === activeMenu);
+              if (profile) {
+                togglePin(profile.username, !!profile.isPinned);
+              }
+              setActiveMenu(null);
+            }} 
+            title={
+              watchlist.find(p => p.username === activeMenu)?.isPinned 
+                ? "Unpin Account" 
+                : "Pin Account"
+            } 
+          />
+        </Menu>
       </View>
 
       {/* ControlCenter removed and replaced with navigable screen */}

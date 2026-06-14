@@ -248,6 +248,29 @@ export const useInstagramExplorer = () => {
     }
   };
 
+  const togglePin = async (username: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+    
+    // Optimistic Update for watchlist sorting and status
+    setWatchlist(prev => {
+      const updated = prev.map(p => p.username === username ? { ...p, isPinned: newStatus } : p);
+      // Re-sort: isPinned first, then isOwnAccount, then alphabetical
+      return updated.sort((a, b) => {
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        if (a.isOwnAccount !== b.isOwnAccount) return a.isOwnAccount ? -1 : 1;
+        return a.username.localeCompare(b.username);
+      });
+    });
+
+    try {
+      await instagramService.togglePinStatus(username, newStatus);
+    } catch {
+      // Revert on error by fetching
+      await fetchWatchlist();
+      Alert.alert("Error", "Failed to update pin status.");
+    }
+  };
+
   return {
     watchlist,
     selectedProfile,
@@ -278,6 +301,7 @@ export const useInstagramExplorer = () => {
     deleteProfileData,
     toggleWatch,
     toggleOwn,
+    togglePin,
     fetchQueue,
     selectProfile,
     loadMorePosts,

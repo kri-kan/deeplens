@@ -37,7 +37,32 @@ public class InstaController : ControllerBase
             cv.storage_path AS StoragePath,
             cv.youtube_video_id AS YoutubeVideoId,
             cv.youtube_url AS YoutubeUrl,
+            cv.status AS Status,
+            cv.suspend_until AS SuspendUntil,
+            cv.last_reviewed_at AS LastReviewedAt,
             (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+        FROM competitor_videos cv";
+
+    private const string MetaPostWithStarredSelectSql = @"
+        SELECT 
+            cv.id::text AS Id, 
+            cv.platform_video_id AS PlatformId,
+            cv.url AS Permalink, 
+            cv.description AS Caption,
+            cv.media_type AS MediaType, 
+            cv.thumbnail_url AS ThumbnailUrl, 
+            cv.media_url AS MediaUrl,
+            cv.like_count AS LikeCount, 
+            cv.comment_count AS CommentCount, 
+            cv.posted_at AS Timestamp,
+            cv.storage_path AS StoragePath,
+            cv.youtube_video_id AS YoutubeVideoId,
+            cv.youtube_url AS YoutubeUrl,
+            cv.status AS Status,
+            cv.suspend_until AS SuspendUntil,
+            cv.last_reviewed_at AS LastReviewedAt,
+            (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
+            sgi.is_starred AS IsStarred
         FROM competitor_videos cv";
 
     public InstaController(
@@ -76,6 +101,8 @@ public class InstaController : ControllerBase
         public bool IsActive { get; set; }
         [JsonPropertyName("isOwnAccount")]
         public bool IsOwnAccount { get; set; }
+        [JsonPropertyName("isPinned")]
+        public bool IsPinned { get; set; }
         [JsonPropertyName("lastSyncedAt")]
         public DateTime? LastSyncedAt { get; set; }
     }
@@ -97,10 +124,11 @@ public class InstaController : ControllerBase
                 post_count AS MediaCount, 
                 is_active AS IsActive, 
                 is_own_account AS IsOwnAccount, 
+                is_pinned AS IsPinned,
                 last_scraped_at AS LastSyncedAt
             FROM competitor_watchlist 
             WHERE platform = 'instagram' 
-            ORDER BY is_own_account DESC, username ASC");
+            ORDER BY is_pinned DESC, is_own_account DESC, username ASC");
 
         return Ok(watchlist);
     }
@@ -547,6 +575,18 @@ public class InstaController : ControllerBase
             return Ok(new { username, isOwnAccount = isOwn });
         }
 
+    [HttpPost("profile/{username}/toggle-pin")]
+    public async Task<IActionResult> TogglePin(string username, [FromQuery] bool isPinned)
+    {
+            using var conn = await _db.CreateConnectionAsync();
+            await conn.ExecuteAsync(@"
+                UPDATE competitor_watchlist 
+                SET is_pinned = @isPinned 
+                WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
+                new { username, isPinned });
+            return Ok(new { username, isPinned = isPinned });
+        }
+
     [HttpDelete("profile/{username}/data")]
     [Authorize(Policy = "IngestPolicy")]
     public async Task<ActionResult> DeleteProfileData(string username)
@@ -571,6 +611,174 @@ public class InstaController : ControllerBase
 
         return Ok(video);
     }
+
+    [HttpPatch("video/{id}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> UpdateVideoStatus([FromRoute] Guid id, [FromBody] UpdateVideoStatusRequest req)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var exists = await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM competitor_videos WHERE id = @Id)", new { Id = id });
+            if (!exists) return NotFound();
+
+            if (req.Status != null)
+            {
+                DateTime? suspendUntil = null;
+                if (req.Status == "suspend" && req.SuspendDays.HasValue)
+                {
+                    suspendUntil = DateTime.UtcNow.AddDays(req.SuspendDays.Value);
+                }
+                await conn.ExecuteAsync(@"
+                    UPDATE competitor_videos 
+                    SET status = @Status, suspend_until = @SuspendUntil, updated_at = now() 
+                    WHERE id = @Id", 
+                    new { Status = req.Status, SuspendUntil = suspendUntil, Id = id });
+            }
+
+            if (req.LastReviewedAt != null)
+            {
+                await conn.ExecuteAsync(@"
+                    UPDATE competitor_videos 
+                    SET last_reviewed_at = @LastReviewedAt, updated_at = now() 
+                    WHERE id = @Id", 
+                    new { LastReviewedAt = req.LastReviewedAt, Id = id });
+            }
+
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update video status");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("videos/suspended")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<MetaPost>>> GetSuspendedVideos()
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = $@"{MetaPostSelectSql}
+                WHERE cv.status = 'suspend'
+                ORDER BY cv.suspend_until ASC";
+            var videos = await conn.QueryAsync<MetaPost>(sql);
+            return Ok(videos.ToList());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve suspended videos");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("own-accounts/videos")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<MetaPost>>> GetOwnAccountsVideos(
+        [FromQuery] string sortBy = "date", 
+        [FromQuery] string sortOrder = "desc",
+        [FromQuery] int limit = 100,
+        [FromQuery] int offset = 0,
+        [FromQuery] string? search = null)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            
+            string orderBy = sortBy.ToLower() switch {
+                "likes" => "cv.like_count",
+                "comments" => "cv.comment_count",
+                _ => "cv.posted_at"
+            };
+            string direction = sortOrder.ToLower() == "asc" ? "ASC" : "DESC";
+
+            string searchFilter = "";
+            if (!string.IsNullOrEmpty(search))
+            {
+                searchFilter = "AND (cv.description ILIKE @search OR cw.username ILIKE @search)";
+            }
+
+            var sql = $@"
+                SELECT 
+                    cv.id::text AS Id, 
+                    cv.platform_video_id AS PlatformId,
+                    cv.url AS Permalink, 
+                    cv.description AS Caption,
+                    cv.media_type AS MediaType, 
+                    cv.thumbnail_url AS ThumbnailUrl, 
+                    cv.media_url AS MediaUrl,
+                    cv.like_count AS LikeCount, 
+                    cv.comment_count AS CommentCount, 
+                    cv.posted_at AS Timestamp,
+                    cv.storage_path AS StoragePath,
+                    cv.youtube_video_id AS YoutubeVideoId,
+                    cv.youtube_url AS YoutubeUrl,
+                    cv.status AS Status,
+                    cv.suspend_until AS SuspendUntil,
+                    cv.last_reviewed_at AS LastReviewedAt,
+                    cw.username AS OwnerUsername,
+                    cw.profile_pic_url AS OwnerProfilePictureUrl,
+                    cw.profile_pic_storage_path AS OwnerProfilePicStoragePath,
+                    (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+                FROM competitor_videos cv
+                JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+                WHERE cw.is_own_account = true AND cw.platform = 'instagram'
+                  AND cw.is_data_deleted = false
+                  {searchFilter}
+                ORDER BY {orderBy} {direction}
+                LIMIT @limit OFFSET @offset";
+
+            var searchParam = string.IsNullOrEmpty(search) ? null : $"%{search}%";
+            var videos = (await conn.QueryAsync<OwnAccountVideoQueryResult>(sql, new { limit, offset, search = searchParam })).ToList();
+            var list = new List<MetaPost>();
+
+            foreach (var item in videos)
+            {
+                var mp = new MetaPost
+                {
+                    Id = item.Id,
+                    Permalink = item.Permalink,
+                    Caption = item.Caption,
+                    MediaType = Enum.TryParse<InstagramMediaType>(item.MediaType, true, out var mt) ? mt : InstagramMediaType.IMAGE,
+                    ThumbnailUrl = item.ThumbnailUrl,
+                    MediaUrl = item.MediaUrl,
+                    LikeCount = item.LikeCount,
+                    CommentCount = item.CommentCount,
+                    Timestamp = item.Timestamp,
+                    StoragePath = item.StoragePath,
+                    YoutubeVideoId = item.YoutubeVideoId,
+                    YoutubeUrl = item.YoutubeUrl,
+                    Status = item.Status,
+                    SuspendUntil = item.SuspendUntil,
+                    LastReviewedAt = item.LastReviewedAt,
+                    OwnerUsername = item.OwnerUsername,
+                    ProductCode = item.ProductCode
+                };
+
+                if (!string.IsNullOrEmpty(item.OwnerProfilePicStoragePath))
+                {
+                    mp.OwnerProfilePictureUrl = $"/api/v1/Attachment/download?path={Uri.EscapeDataString(item.OwnerProfilePicStoragePath)}";
+                }
+                else
+                {
+                    mp.OwnerProfilePictureUrl = item.OwnerProfilePictureUrl;
+                }
+
+                list.Add(mp);
+            }
+
+            return Ok(list);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve own accounts videos");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+
 
     [HttpGet("video/{id}/media")]
     [Authorize(Policy = "SearchPolicy")]
@@ -718,18 +926,873 @@ public class InstaController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    // ── Story Planner Endpoints ──────────────────────────────────────────────
+
+    [HttpGet("story-groups")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetStoryGroups([FromQuery] string? search, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            
+            string searchFilter = "";
+            if (!string.IsNullOrEmpty(search))
+            {
+                searchFilter = @"
+                    WHERE sg.name ILIKE @search 
+                       OR sg.keywords ILIKE @search
+                       OR EXISTS (
+                           SELECT 1 
+                           FROM story_group_items sgi
+                           JOIN competitor_videos cv ON cv.id = sgi.post_id
+                           WHERE sgi.group_id = sg.id 
+                             AND cv.description ILIKE @search
+                       )";
+            }
+
+            var sql = $@"
+                SELECT 
+                    sg.id as Id, 
+                    sg.name as Name, 
+                    sg.status as Status, 
+                    sg.suspend_until as SuspendUntil, 
+                    sg.last_reviewed_at as LastReviewedAt, 
+                    sg.created_at as CreatedAt, 
+                    sg.updated_at as UpdatedAt, 
+                    sg.keywords as Keywords,
+                    (SELECT COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) FROM story_posting_history sph WHERE sph.group_id = sg.id) as RightSwipes,
+                    (SELECT COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) FROM story_posting_history sph WHERE sph.group_id = sg.id) as LeftSwipes
+                FROM story_groups sg
+                {searchFilter}
+                ORDER BY sg.created_at DESC";
+
+            var searchParam = string.IsNullOrEmpty(search) ? null : $"%{search}%";
+            var groups = await conn.QueryAsync<StoryGroupDto>(new CommandDefinition(sql, new { search = searchParam }, cancellationToken: ct));
+
+            var groupList = groups.ToList();
+
+            foreach (var g in groupList)
+            {
+                // Fetch items (posts)
+                var postsSql = $@"{MetaPostWithStarredSelectSql}
+                    JOIN story_group_items sgi ON sgi.post_id = cv.id
+                    WHERE sgi.group_id = @GroupId
+                    ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
+                
+                var posts = await conn.QueryAsync<MetaPost>(new CommandDefinition(postsSql, new { GroupId = g.Id }, cancellationToken: ct));
+                g.Posts = posts.ToList();
+
+                // Fetch eligible target watchlist IDs
+                var eligibleAccounts = await conn.QueryAsync<Guid>(new CommandDefinition(@"
+                    SELECT target_watchlist_id 
+                    FROM story_group_eligibility 
+                    WHERE group_id = @GroupId AND is_eligible = true", new { GroupId = g.Id }, cancellationToken: ct));
+                g.EligibleAccounts = eligibleAccounts.ToList();
+
+                // Calculate needsReview
+                bool needsReview = false;
+                if (g.Status == "suspend" && g.SuspendUntil.HasValue && g.SuspendUntil.Value < DateTime.UtcNow)
+                {
+                    needsReview = true;
+                }
+                else if (g.Posts.Count > 0)
+                {
+                    var newestPostDate = g.Posts.Max(p => p.Timestamp ?? DateTime.MinValue);
+                    if (newestPostDate != DateTime.MinValue && newestPostDate < DateTime.UtcNow.AddDays(-15))
+                    {
+                        if (!g.LastReviewedAt.HasValue || g.LastReviewedAt.Value < newestPostDate)
+                        {
+                            needsReview = true;
+                        }
+                    }
+                }
+                g.NeedsReview = needsReview;
+            }
+
+            return Ok(groupList);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve story groups");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("story-groups/{id}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetStoryGroup(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = $@"
+                SELECT 
+                    sg.id as Id, 
+                    sg.name as Name, 
+                    sg.status as Status, 
+                    sg.suspend_until as SuspendUntil, 
+                    sg.last_reviewed_at as LastReviewedAt, 
+                    sg.created_at as CreatedAt, 
+                    sg.updated_at as UpdatedAt, 
+                    sg.keywords as Keywords,
+                    (SELECT COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) FROM story_posting_history sph WHERE sph.group_id = sg.id) as RightSwipes,
+                    (SELECT COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) FROM story_posting_history sph WHERE sph.group_id = sg.id) as LeftSwipes
+                FROM story_groups sg
+                WHERE sg.id = @Id";
+
+            var g = await conn.QueryFirstOrDefaultAsync<StoryGroupDto>(new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
+            if (g == null) return NotFound();
+
+            // Fetch items (posts)
+            var postsSql = $@"{MetaPostWithStarredSelectSql}
+                JOIN story_group_items sgi ON sgi.post_id = cv.id
+                WHERE sgi.group_id = @GroupId
+                ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
+            
+            var posts = await conn.QueryAsync<MetaPost>(new CommandDefinition(postsSql, new { GroupId = g.Id }, cancellationToken: ct));
+            g.Posts = posts.ToList();
+
+            // Fetch eligible target watchlist IDs
+            var eligibleAccounts = await conn.QueryAsync<Guid>(new CommandDefinition(@"
+                SELECT target_watchlist_id 
+                FROM story_group_eligibility 
+                WHERE group_id = @GroupId AND is_eligible = true", new { GroupId = g.Id }, cancellationToken: ct));
+            g.EligibleAccounts = eligibleAccounts.ToList();
+
+            // Calculate needsReview
+            bool needsReview = false;
+            if (g.Status == "suspend" && g.SuspendUntil.HasValue && g.SuspendUntil.Value < DateTime.UtcNow)
+            {
+                needsReview = true;
+            }
+            else if (g.Posts.Count > 0)
+            {
+                var newestPostDate = g.Posts.Max(p => p.Timestamp ?? DateTime.MinValue);
+                if (newestPostDate != DateTime.MinValue && newestPostDate < DateTime.UtcNow.AddDays(-15))
+                {
+                    if (!g.LastReviewedAt.HasValue || g.LastReviewedAt.Value < newestPostDate)
+                    {
+                        needsReview = true;
+                    }
+                }
+            }
+            g.NeedsReview = needsReview;
+
+            return Ok(g);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve story group {Id}", id);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("story-groups")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> CreateStoryGroup([FromBody] CreateStoryGroupRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Name) || req.PostIds == null || req.PostIds.Count == 0)
+        {
+            return BadRequest("Name and at least one post ID are required.");
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+        using var trans = conn.BeginTransaction();
+        try
+        {
+            var groupId = Guid.NewGuid();
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                INSERT INTO story_groups (id, name, status, created_at, updated_at, keywords)
+                VALUES (@Id, @Name, 'active', now(), now(), @Keywords)",
+                new { Id = groupId, Name = req.Name, Keywords = req.Keywords }, transaction: trans, cancellationToken: ct));
+
+            bool isFirst = true;
+            foreach (var postId in req.PostIds)
+            {
+                bool isStarred = isFirst;
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    INSERT INTO story_group_items (group_id, post_id, is_starred, created_at)
+                    VALUES (@GroupId, @PostId, @IsStarred, now())",
+                    new { GroupId = groupId, PostId = postId, IsStarred = isStarred }, transaction: trans, cancellationToken: ct));
+                isFirst = false;
+            }
+
+            if (req.TargetWatchlistIds != null)
+            {
+                foreach (var wlId in req.TargetWatchlistIds)
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        INSERT INTO story_group_eligibility (group_id, target_watchlist_id, is_eligible, created_at)
+                        VALUES (@GroupId, @TargetWatchlistId, true, now())",
+                        new { GroupId = groupId, TargetWatchlistId = wlId }, transaction: trans, cancellationToken: ct));
+                }
+            }
+
+            trans.Commit();
+            return Ok(new { success = true, groupId });
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            _logger.LogError(ex, "Failed to create story group");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPatch("story-groups/{id}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> UpdateStoryGroup(Guid id, [FromBody] UpdateStoryGroupRequest req, CancellationToken ct)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        using var trans = conn.BeginTransaction();
+        try
+        {
+            var exists = await conn.ExecuteScalarAsync<bool>(new CommandDefinition("SELECT EXISTS(SELECT 1 FROM story_groups WHERE id = @Id)", new { Id = id }, transaction: trans, cancellationToken: ct));
+            if (!exists) return NotFound();
+
+            if (req.Name != null)
+            {
+                await conn.ExecuteAsync(new CommandDefinition("UPDATE story_groups SET name = @Name, updated_at = now() WHERE id = @Id", new { Name = req.Name, Id = id }, transaction: trans, cancellationToken: ct));
+            }
+
+            if (req.Keywords != null)
+            {
+                await conn.ExecuteAsync(new CommandDefinition("UPDATE story_groups SET keywords = @Keywords, updated_at = now() WHERE id = @Id", new { Keywords = req.Keywords, Id = id }, transaction: trans, cancellationToken: ct));
+            }
+
+            if (req.Status != null)
+            {
+                DateTime? suspendUntil = null;
+                if (req.Status == "suspend" && req.SuspendDays.HasValue)
+                {
+                    suspendUntil = DateTime.UtcNow.AddDays(req.SuspendDays.Value);
+                }
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    UPDATE story_groups 
+                    SET status = @Status, suspend_until = @SuspendUntil, updated_at = now() 
+                    WHERE id = @Id", 
+                    new { Status = req.Status, SuspendUntil = suspendUntil, Id = id }, transaction: trans, cancellationToken: ct));
+            }
+
+            if (req.PostIds != null)
+            {
+                // Fetch existing starred post IDs to preserve them if possible
+                var starredPostIds = (await conn.QueryAsync<Guid>(new CommandDefinition(
+                    "SELECT post_id FROM story_group_items WHERE group_id = @GroupId AND is_starred = true",
+                    new { GroupId = id }, transaction: trans, cancellationToken: ct))).ToList();
+
+                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM story_group_items WHERE group_id = @GroupId", new { GroupId = id }, transaction: trans, cancellationToken: ct));
+                
+                bool isFirst = true;
+                foreach (var postId in req.PostIds)
+                {
+                    bool isStarred = starredPostIds.Contains(postId) || (isFirst && starredPostIds.Count == 0);
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        INSERT INTO story_group_items (group_id, post_id, is_starred, created_at)
+                        VALUES (@GroupId, @PostId, @IsStarred, now())",
+                        new { GroupId = id, PostId = postId, IsStarred = isStarred }, transaction: trans, cancellationToken: ct));
+                    isFirst = false;
+                }
+            }
+
+            if (req.StarredPostIds != null)
+            {
+                await conn.ExecuteAsync(new CommandDefinition("UPDATE story_group_items SET is_starred = false WHERE group_id = @GroupId", new { GroupId = id }, transaction: trans, cancellationToken: ct));
+                foreach (var postId in req.StarredPostIds)
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        UPDATE story_group_items 
+                        SET is_starred = true 
+                        WHERE group_id = @GroupId AND post_id = @PostId", 
+                        new { GroupId = id, PostId = postId }, transaction: trans, cancellationToken: ct));
+                }
+            }
+
+            if (req.TargetWatchlistIds != null)
+            {
+                await conn.ExecuteAsync(new CommandDefinition("DELETE FROM story_group_eligibility WHERE group_id = @GroupId", new { GroupId = id }, transaction: trans, cancellationToken: ct));
+                foreach (var wlId in req.TargetWatchlistIds)
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        INSERT INTO story_group_eligibility (group_id, target_watchlist_id, is_eligible, created_at)
+                        VALUES (@GroupId, @TargetWatchlistId, true, now())",
+                        new { GroupId = id, TargetWatchlistId = wlId }, transaction: trans, cancellationToken: ct));
+                }
+            }
+
+            trans.Commit();
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            _logger.LogError(ex, "Failed to update story group");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("story-groups/{id}/renew")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> RenewStoryGroup(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var affected = await conn.ExecuteAsync(new CommandDefinition(@"
+                UPDATE story_groups 
+                SET status = 'active', suspend_until = NULL, last_reviewed_at = now(), updated_at = now() 
+                WHERE id = @Id", new { Id = id }, cancellationToken: ct));
+
+            if (affected == 0) return NotFound();
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to renew story group");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("story-groups/merge")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> MergeStoryGroups([FromBody] MergeStoryGroupsRequest req, CancellationToken ct)
+    {
+        if (req.Group1Id == Guid.Empty || req.Group2Id == Guid.Empty)
+        {
+            return BadRequest("Both Group1Id and Group2Id are required.");
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+        using var trans = conn.BeginTransaction();
+        try
+        {
+            var g1 = await conn.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(
+                "SELECT id, created_at FROM story_groups WHERE id = @Id", new { Id = req.Group1Id }, transaction: trans, cancellationToken: ct));
+            var g2 = await conn.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(
+                "SELECT id, created_at FROM story_groups WHERE id = @Id", new { Id = req.Group2Id }, transaction: trans, cancellationToken: ct));
+
+            if (g1 == null || g2 == null)
+            {
+                return NotFound("One or both story groups do not exist.");
+            }
+
+            DateTime g1Created = g1.created_at;
+            DateTime g2Created = g2.created_at;
+
+            Guid parentId = g1Created <= g2Created ? req.Group1Id : req.Group2Id;
+            Guid mergedId = parentId == req.Group1Id ? req.Group2Id : req.Group1Id;
+
+            // Move posts
+            var existingPosts = (await conn.QueryAsync<Guid>(new CommandDefinition(
+                "SELECT post_id FROM story_group_items WHERE group_id = @GroupId", new { GroupId = parentId }, transaction: trans, cancellationToken: ct))).ToList();
+
+            var mergedPosts = (await conn.QueryAsync<dynamic>(new CommandDefinition(
+                "SELECT post_id, is_starred FROM story_group_items WHERE group_id = @GroupId", new { GroupId = mergedId }, transaction: trans, cancellationToken: ct))).ToList();
+
+            foreach (var post in mergedPosts)
+            {
+                Guid pId = post.post_id;
+                bool isStarred = post.is_starred;
+                if (!existingPosts.Contains(pId))
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        INSERT INTO story_group_items (group_id, post_id, is_starred, created_at)
+                        VALUES (@GroupId, @PostId, @IsStarred, now())",
+                        new { GroupId = parentId, PostId = pId, IsStarred = isStarred }, transaction: trans, cancellationToken: ct));
+                }
+            }
+
+            // Combine eligibility
+            var parentEl = (await conn.QueryAsync<Guid>(new CommandDefinition(
+                "SELECT target_watchlist_id FROM story_group_eligibility WHERE group_id = @GroupId AND is_eligible = true",
+                new { GroupId = parentId }, transaction: trans, cancellationToken: ct))).ToList();
+
+            var mergedEl = (await conn.QueryAsync<Guid>(new CommandDefinition(
+                "SELECT target_watchlist_id FROM story_group_eligibility WHERE group_id = @GroupId AND is_eligible = true",
+                new { GroupId = mergedId }, transaction: trans, cancellationToken: ct))).ToList();
+
+            foreach (var targetId in mergedEl)
+            {
+                if (!parentEl.Contains(targetId))
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        INSERT INTO story_group_eligibility (group_id, target_watchlist_id, is_eligible, created_at)
+                        VALUES (@GroupId, @TargetWatchlistId, true, now())
+                        ON CONFLICT (group_id, target_watchlist_id) DO UPDATE SET is_eligible = true",
+                        new { GroupId = parentId, TargetWatchlistId = targetId }, transaction: trans, cancellationToken: ct));
+                }
+            }
+
+            // Rebind history
+            await conn.ExecuteAsync(new CommandDefinition(
+                "UPDATE story_posting_history SET group_id = @ParentId WHERE group_id = @MergedId",
+                new { ParentId = parentId, MergedId = mergedId }, transaction: trans, cancellationToken: ct));
+
+            // Log merge
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                INSERT INTO story_group_merges (parent_group_id, merged_group_id, merged_at)
+                VALUES (@ParentId, @MergedId, now())",
+                new { ParentId = parentId, MergedId = mergedId }, transaction: trans, cancellationToken: ct));
+
+            // Delete merged group
+            await conn.ExecuteAsync(new CommandDefinition("DELETE FROM story_groups WHERE id = @Id", new { Id = mergedId }, transaction: trans, cancellationToken: ct));
+
+            trans.Commit();
+            return Ok(new { success = true, parentGroupId = parentId, mergedGroupId = mergedId });
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            _logger.LogError(ex, "Failed to merge story groups {Group1} and {Group2}", req.Group1Id, req.Group2Id);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("story-groups/{id}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> DeleteStoryGroup(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var affected = await conn.ExecuteAsync(new CommandDefinition("DELETE FROM story_groups WHERE id = @Id", new { Id = id }, cancellationToken: ct));
+            if (affected == 0) return NotFound();
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete story group");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("story-groups/{id}/post")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> MarkGroupPosted(Guid id, [FromQuery] Guid targetWatchlistId, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var historyId = Guid.NewGuid();
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                INSERT INTO story_posting_history (id, group_id, target_watchlist_id, posted_at, swipe_status)
+                VALUES (@Id, @GroupId, @TargetWatchlistId, now(), 'pending')",
+                new { Id = historyId, GroupId = id, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct));
+
+            return Ok(new { success = true, historyId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark group as posted to story");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    private class EligibleGroupQueryResult
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Status { get; set; } = "active";
+        public DateTime? SuspendUntil { get; set; }
+        public DateTime? LastReviewedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        public string? Keywords { get; set; }
+        public long RightSwipes { get; set; }
+        public long LeftSwipes { get; set; }
+        public DateTime? LastPostedAt { get; set; }
+    }
+
+    [HttpGet("story-groups/eligible/{targetWatchlistId}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetEligibleGroups(Guid targetWatchlistId, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = @"
+                SELECT 
+                    sg.id AS Id, 
+                    sg.name AS Name, 
+                    sg.status AS Status, 
+                    sg.suspend_until AS SuspendUntil, 
+                    sg.last_reviewed_at AS LastReviewedAt, 
+                    sg.created_at AS CreatedAt, 
+                    sg.updated_at AS UpdatedAt,
+                    sg.keywords AS Keywords,
+                    COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) as RightSwipes,
+                    COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) as LeftSwipes,
+                    MAX(sph.posted_at) as LastPostedAt
+                FROM story_groups sg
+                JOIN story_group_eligibility sge ON sge.group_id = sg.id
+                LEFT JOIN story_posting_history sph ON sph.group_id = sg.id AND sph.target_watchlist_id = @TargetWatchlistId
+                WHERE sge.target_watchlist_id = @TargetWatchlistId
+                  AND sge.is_eligible = true
+                  AND sg.status != 'ignore'
+                  AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
+                GROUP BY sg.id, sg.name, sg.status, sg.suspend_until, sg.last_reviewed_at, sg.created_at, sg.updated_at, sg.keywords
+                HAVING MAX(sph.posted_at) IS NULL OR MAX(sph.posted_at) < now() - INTERVAL '24 hours'";
+
+            var rawGroups = (await conn.QueryAsync<EligibleGroupQueryResult>(new CommandDefinition(sql, new { TargetWatchlistId = targetWatchlistId }, cancellationToken: ct))).ToList();
+            var groupList = new List<StoryGroupDto>();
+
+            foreach (var item in rawGroups)
+            {
+                var g = new StoryGroupDto
+                {
+                    Id = item.Id,
+                    Name = item.Name,
+                    Status = item.Status,
+                    SuspendUntil = item.SuspendUntil,
+                    LastReviewedAt = item.LastReviewedAt,
+                    CreatedAt = item.CreatedAt,
+                    UpdatedAt = item.UpdatedAt,
+                    Keywords = item.Keywords,
+                    RightSwipes = item.RightSwipes,
+                    LeftSwipes = item.LeftSwipes
+                };
+
+                // Fetch posts
+                var postsSql = $@"{MetaPostWithStarredSelectSql}
+                    JOIN story_group_items sgi ON sgi.post_id = cv.id
+                    WHERE sgi.group_id = @GroupId
+                    ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
+                var posts = await conn.QueryAsync<MetaPost>(new CommandDefinition(postsSql, new { GroupId = g.Id }, cancellationToken: ct));
+                g.Posts = posts.ToList();
+
+                // Fetch eligible target watchlist IDs
+                var eligibleAccounts = await conn.QueryAsync<Guid>(new CommandDefinition(@"
+                    SELECT target_watchlist_id 
+                    FROM story_group_eligibility 
+                    WHERE group_id = @GroupId AND is_eligible = true", new { GroupId = g.Id }, cancellationToken: ct));
+                g.EligibleAccounts = eligibleAccounts.ToList();
+
+                // Calculate needsReview
+                bool needsReview = false;
+                if (g.Status == "suspend" && g.SuspendUntil.HasValue && g.SuspendUntil.Value < DateTime.UtcNow)
+                {
+                    needsReview = true;
+                }
+                else if (g.Posts.Count > 0)
+                {
+                    var newestPostDate = g.Posts.Max(p => p.Timestamp ?? DateTime.MinValue);
+                    if (newestPostDate != DateTime.MinValue && newestPostDate < DateTime.UtcNow.AddDays(-15))
+                    {
+                        if (!g.LastReviewedAt.HasValue || g.LastReviewedAt.Value < newestPostDate)
+                        {
+                            needsReview = true;
+                        }
+                    }
+                }
+                g.NeedsReview = needsReview;
+
+                groupList.Add(g);
+            }
+
+            // Sort groups: new ones on top, then old ones ranked by Laplace swipe score
+            var sortedList = groupList.Select(g => {
+                var rawItem = rawGroups.First(rg => rg.Id == g.Id);
+                long right = rawItem.RightSwipes;
+                long left = rawItem.LeftSwipes;
+                bool isNew = (right == 0 && left == 0);
+                double score = isNew ? 2.0 : (double)(right + 1) / (right + left + 2); // 2.0 puts new groups on top
+                return new { Group = g, Score = score, CreatedAt = g.CreatedAt };
+            })
+            .OrderByDescending(x => x.Score)
+            .ThenByDescending(x => x.CreatedAt)
+            .Select(x => x.Group)
+            .ToList();
+
+            return Ok(sortedList);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve eligible story groups");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("story-groups/pending-swipes")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetPendingSwipeCards(CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            
+            // 1. Find the last game played time (max swiped_at older than 1 hour to avoid session overlap issues)
+            var lastSwipedAt = await conn.ExecuteScalarAsync<DateTime?>(new CommandDefinition(@"
+                SELECT MAX(swiped_at) 
+                FROM story_posting_history
+                WHERE swiped_at < now() - INTERVAL '1 hour'", cancellationToken: ct));
+            
+            // Default to 7 days ago if no swipes have been made yet
+            var queryTime = lastSwipedAt ?? DateTime.UtcNow.AddDays(-7);
+
+            var sql = @"
+                SELECT 
+                    sph.id AS Id,
+                    sph.group_id AS GroupId,
+                    sg.name AS GroupName,
+                    sph.target_watchlist_id AS TargetWatchlistId,
+                    cw.username AS TargetUsername,
+                    sph.posted_at AS PostedAt,
+                    sph.swipe_status AS SwipeStatus,
+                    sph.swiped_at AS SwipedAt
+                FROM story_posting_history sph
+                JOIN story_groups sg ON sg.id = sph.group_id
+                JOIN competitor_watchlist cw ON cw.id = sph.target_watchlist_id
+                WHERE sph.swipe_status = 'pending'
+                  AND sph.posted_at >= @QueryTime - INTERVAL '1 day'
+                  AND sph.posted_at <= now() - INTERVAL '24 hours'
+                ORDER BY sph.posted_at ASC";
+
+            var rawHistory = await conn.QueryAsync<StoryPostingHistoryDto>(new CommandDefinition(sql, new { QueryTime = queryTime }, cancellationToken: ct));
+            var historyList = rawHistory.ToList();
+
+            foreach (var h in historyList)
+            {
+                var postsSql = $@"{MetaPostWithStarredSelectSql}
+                    JOIN story_group_items sgi ON sgi.post_id = cv.id
+                    WHERE sgi.group_id = @GroupId
+                    ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
+                var posts = await conn.QueryAsync<MetaPost>(new CommandDefinition(postsSql, new { GroupId = h.GroupId }, cancellationToken: ct));
+                h.Posts = posts.ToList();
+            }
+
+            return Ok(historyList);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve pending swipe cards");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("story-groups/swipes")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> SubmitSwipes([FromBody] List<SwipeResponseItem> swipes, CancellationToken ct)
+    {
+        if (swipes == null || swipes.Count == 0) return BadRequest("Swipes data is empty.");
+
+        using var conn = await _db.CreateConnectionAsync();
+        using var trans = conn.BeginTransaction();
+        try
+        {
+            foreach (var item in swipes)
+            {
+                if (item.Direction != "left" && item.Direction != "right") continue;
+
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    UPDATE story_posting_history
+                    SET swipe_status = @Direction, swiped_at = now()
+                    WHERE id = @HistoryId",
+                    new { Direction = item.Direction, HistoryId = item.HistoryId }, transaction: trans, cancellationToken: ct));
+            }
+            trans.Commit();
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            trans.Rollback();
+            _logger.LogError(ex, "Failed to submit swipes");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
 
 public class InstagramCommentDto
 {
+    [JsonPropertyName("id")]
     public Guid Id { get; set; }
+
+    [JsonPropertyName("commentText")]
     public string CommentText { get; set; } = string.Empty;
+
+    [JsonPropertyName("postedAt")]
     public DateTime PostedAt { get; set; }
+
+    [JsonPropertyName("likeCount")]
     public int LikeCount { get; set; }
+
+    [JsonPropertyName("isHidden")]
     public bool IsHidden { get; set; }
+
+    [JsonPropertyName("username")]
     public string? Username { get; set; }
+
+    [JsonPropertyName("fullName")]
     public string? FullName { get; set; }
 }
+
+public class StoryGroupDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "active";
+
+    [JsonPropertyName("suspendUntil")]
+    public DateTime? SuspendUntil { get; set; }
+
+    [JsonPropertyName("lastReviewedAt")]
+    public DateTime? LastReviewedAt { get; set; }
+
+    [JsonPropertyName("createdAt")]
+    public DateTime CreatedAt { get; set; }
+
+    [JsonPropertyName("updatedAt")]
+    public DateTime UpdatedAt { get; set; }
+
+    [JsonPropertyName("posts")]
+    public List<MetaPost> Posts { get; set; } = new();
+
+    [JsonPropertyName("eligibleAccounts")]
+    public List<Guid> EligibleAccounts { get; set; } = new();
+
+    [JsonPropertyName("needsReview")]
+    public bool NeedsReview { get; set; }
+
+    [JsonPropertyName("keywords")]
+    public string? Keywords { get; set; }
+
+    [JsonPropertyName("rightSwipes")]
+    public long RightSwipes { get; set; }
+
+    [JsonPropertyName("leftSwipes")]
+    public long LeftSwipes { get; set; }
+}
+
+public class UpdateVideoStatusRequest
+{
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("suspendDays")]
+    public int? SuspendDays { get; set; }
+
+    [JsonPropertyName("lastReviewedAt")]
+    public DateTime? LastReviewedAt { get; set; }
+}
+
+public class CreateStoryGroupRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("postIds")]
+    public List<Guid> PostIds { get; set; } = new();
+
+    [JsonPropertyName("targetWatchlistIds")]
+    public List<Guid> TargetWatchlistIds { get; set; } = new();
+
+    [JsonPropertyName("keywords")]
+    public string? Keywords { get; set; }
+}
+
+public class UpdateStoryGroupRequest
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("suspendDays")]
+    public int? SuspendDays { get; set; }
+
+    [JsonPropertyName("postIds")]
+    public List<Guid>? PostIds { get; set; }
+
+    [JsonPropertyName("starredPostIds")]
+    public List<Guid>? StarredPostIds { get; set; }
+
+    [JsonPropertyName("targetWatchlistIds")]
+    public List<Guid>? TargetWatchlistIds { get; set; }
+
+    [JsonPropertyName("keywords")]
+    public string? Keywords { get; set; }
+}
+
+public class StoryPostingHistoryDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("groupId")]
+    public Guid GroupId { get; set; }
+
+    [JsonPropertyName("groupName")]
+    public string GroupName { get; set; } = string.Empty;
+
+    [JsonPropertyName("targetWatchlistId")]
+    public Guid TargetWatchlistId { get; set; }
+
+    [JsonPropertyName("targetUsername")]
+    public string TargetUsername { get; set; } = string.Empty;
+
+    [JsonPropertyName("postedAt")]
+    public DateTime PostedAt { get; set; }
+
+    [JsonPropertyName("swipeStatus")]
+    public string SwipeStatus { get; set; } = "pending";
+
+    [JsonPropertyName("swipedAt")]
+    public DateTime? SwipedAt { get; set; }
+
+    [JsonPropertyName("posts")]
+    public List<MetaPost> Posts { get; set; } = new();
+}
+
+public class SwipeResponseItem
+{
+    [JsonPropertyName("historyId")]
+    public Guid HistoryId { get; set; }
+
+    [JsonPropertyName("direction")]
+    public string Direction { get; set; } = string.Empty;
+}
+
+public class MergeStoryGroupsRequest
+{
+    [JsonPropertyName("group1Id")]
+    public Guid Group1Id { get; set; }
+
+    [JsonPropertyName("group2Id")]
+    public Guid Group2Id { get; set; }
+}
+
+public class OwnAccountVideoQueryResult
+{
+    public string? Id { get; set; }
+    public string? PlatformId { get; set; }
+    public string? Permalink { get; set; }
+    public string? Caption { get; set; }
+    public string? MediaType { get; set; }
+    public string? ThumbnailUrl { get; set; }
+    public string? MediaUrl { get; set; }
+    public long LikeCount { get; set; }
+    public long CommentCount { get; set; }
+    public DateTime? Timestamp { get; set; }
+    public string? StoragePath { get; set; }
+    public string? YoutubeVideoId { get; set; }
+    public string? YoutubeUrl { get; set; }
+    public string Status { get; set; } = "active";
+    public DateTime? SuspendUntil { get; set; }
+    public DateTime? LastReviewedAt { get; set; }
+    public string? OwnerUsername { get; set; }
+    public string? OwnerProfilePictureUrl { get; set; }
+    public string? OwnerProfilePicStoragePath { get; set; }
+    public string? ProductCode { get; set; }
+}
+
+
 
 
 

@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { ScreenWrapper } from '../../components/layout/ScreenWrapper';
 import { TokenHealthCard } from '../../components/utility/instagram/TokenHealthCard';
+import { QuotaDashboard } from '../../components/utility/instagram/QuotaDashboard';
 import { ScraperForm } from '../../components/utility/instagram/ScraperForm';
 import { RecentJobsList } from '../../components/utility/instagram/RecentJobsList';
 import { SyncResultCard } from '../../components/utility/instagram/SyncResultCard';
@@ -35,6 +36,7 @@ export default function InstagramScraper() {
     queuedJobId,
     handleRefreshToken,
     startSync,
+    quota,
   } = useInstagramScraper();
 
   React.useEffect(() => {
@@ -73,6 +75,10 @@ export default function InstagramScraper() {
           refreshing={refreshingToken}
           onRefresh={handleRefreshToken}
         />
+
+        <Divider style={styles.divider} />
+
+        <QuotaDashboard quota={quota} />
 
         <Divider style={styles.divider} />
 
