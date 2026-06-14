@@ -1,6 +1,6 @@
 # DeepLens Complete Documentation Guide
 
-**Auto-generated on:** 2026-06-13 18:48:08
+**Auto-generated on:** 2026-06-14 17:58:18
 
 > **Note:** This is a consolidated version of all repository documentation. Generic code samples and implementation templates have been omitted for high-level reading.
 
@@ -106,192 +106,33 @@ We have organized all system documentation into a central hub to ensure clarity 
 
 # DeepLens Development Guide
 
-**The ultimate reference for setting up, developing, and troubleshooting the DeepLens ecosystem.**
+## Deployment
 
-Last Updated: December 20, 2025
+Whenever building, publishing, or deploying any of the DeepLens backend services or the WhatsApp processor, you **MUST** use the provided deployment scripts. Do not manually run `dotnet publish` or restart Docker containers independently.
 
----
+### Using the Makefile
 
-## 🚀 Quick Start (15 Minutes)
+The root `Makefile` exposes the following commands for easy discoverability:
+- `make deploy-identity-api`
+- `make deploy-search-api`
+- `make deploy-worker-service`
+- `make deploy-whatsapp-processor`
 
-1.  **Prerequisites**: Install Podman/Docker, .NET 9 SDK, Python 3.11+, and PowerShell 7+.
-2.  **Infrastructure**: 
-    
-*(Code block omitted for brevity)*
+### Using the deploy script directly
 
-3.  **Identity API**:
-    
-*(Code block omitted for brevity)*
-
-4.  **Checkpoint (Identity)**:
-    
-*(Code block omitted for brevity)*
-
-5.  **Verification**: 
-    
-*(Code block omitted for brevity)*
-
-
----
-
-## 🔑 Development Credentials
-
-**DEVELOPMENT ONLY - DO NOT USE IN PRODUCTION** (Standard Password: `DeepLens123!`)
-
-| Service            | Username               | Password             | Notes               |
-| :----------------- | :--------------------- | :------------------- | :------------------ |
-| **PostgreSQL**     | `postgres`             | `Krikank1$`          | `192.168.0.170:5432`|
-| **Identity Admin** | `admin@deeplens.local` | `Krikank1$` | Initial Admin       |
-| **MinIO**          | `krikan`               | `Krikank1$`          | Port 9001 (Console) |
-| **Grafana**        | `admin`                | `DeepLens123!`       | Port 3000           |
-| **Ollama WebUI**   | `kriishnakanth@GMAIL.COM` | `krikank1$`     | `192.168.0.170:11435` |
-| **Kafka UI**       | -                      | -                    | `192.168.0.170:8080`|
-
----
-
-## 🔌 Port Reference
-
-### Core Services
-| Port     | Service    | Description            |
-| :------- | :--------- | :--------------------- |
-| **5432** (remote) | PostgreSQL | Metadata & Identity DB — `192.168.0.170` |
-| **6379** (remote) | Redis      | Caching & State — `192.168.0.170`        |
-| **6333** (remote) | Qdrant     | Vector DB Dashboard — `192.168.0.170`   |
-| **9001** (remote) | MinIO      | Object Storage Console — `192.168.0.170`|
-| **9092** (remote) | Kafka      | Message Broker — `192.168.0.170`         |
-| **8080** (remote) | Kafka UI   | Kafka Management — `192.168.0.170`       |
-
-### DeepLens APIs
-| Port     | Service      | Description                 |
-| :------- | :----------- | :-------------------------- |
-| **5198** | Identity API | Auth & Tenant Orchestration |
-| **5000** | Search API   | Image Upload & Search       |
-| **5001** | Web UI       | React Frontend              |
-| **8001** | Feature Ext. | Python AI Microservice      |
-| **8006** | Competitor Orchestrator | Meta Graph API sync & competitor intel |
-
-### WhatsApp Processor
-| Port     | Service      | Description               |
-| :------- | :----------- | :------------------------ |
-| **3005** | WhatsApp API | Express Backend Server    |
-| **3006** | WhatsApp UI  | React Frontend (Dev Mode) |
-
-**Note**: In production, the React app is served by the Express backend on port 3005.
-
-### Monitoring & Observability
-| Port      | Service    | Description            |
-| :-------- | :--------- | :--------------------- |
-| **3000**  | Grafana    | Monitoring Dashboards  |
-| **9090**  | Prometheus | Metrics Time-Series DB |
-| **16686** | Jaeger     | Distributed Tracing UI |
-
----
-
-## 🛠️ Development Workflow
-
-### .NET Development
-- **Solution**: Open `src/DeepLens.Service/DeepLens.sln` in VS 2022 or VS Code.
-- **Migrations**: Always use `dotnet ef database update` from the project directory.
-- **Style**: Follow C# Clean Architecture patterns.
-
-### Python (AI) Development
-- **Venv**: Always use a virtual environment.
-- **Setup**: 
-    
-*(Code block omitted for brevity)*
-
-
----
-
-## 📋 Roadmaps & Plans
-
-### Current Implementation Status
-- ✅ **Phase 1**: Core Infrastructure & Podman Setup.
-- ✅ **Phase 2**: Multi-Tenant Provisioning & Identity API.
-- 🚧 **Phase 3**: Kafka Integration & Async Processing (In Progress).
-- ⏳ **Phase 4**: Web UI Full Implementation.
-
----
-
-## 🆘 Troubleshooting
-
-1.  **Port Conflicts**: Run `Get-NetTCPConnection -LocalPort <Port>` to find blockers.
-2.  **Container Failures**: Check logs using `bash setupscripts/core/orchestrate-linux.sh logs <service-name>`.
-3.  **Database Errors**: Ensure `.env` infrastructure host points to `192.168.0.170`.
-4.  **Identity API Not Starting**: Check that PostgreSQL is accessible on `192.168.0.170:5432`.
-
----
-
-## 📸 Image Ingestion Workflow
-
-### Bulk Image Upload
-
-To ingest a collection of images for a tenant:
-
-1. **Prepare Your Images**:
-   - Place images in a designated folder (e.g., `tests/saree_images/`)
-   - Supported formats: JPEG, PNG, WebP
-   - Recommended: High-quality source images for best thumbnail generation
-
-2. **Create Metadata File**:
-   Create a JSON file mapping images to product metadata:
-   
-*(Code block omitted for brevity)*
-
-
-3. **Upload via API**:
-   
-*(Code block omitted for brevity)*
-
-
-4. **Verify in Visual Catalog**:
-   - Navigate to http://localhost:5001/images
-   - Images should appear with status "Uploaded" → "Processed"
-   - Thumbnails auto-generated based on tenant thumbnail settings
-
-### Tenant-Specific Thumbnail Configuration
-
-Configure per-tenant thumbnail settings in the database:
-
+You can also run the deployment script directly:
 
 *(Code block omitted for brevity)*
 
 
-### Testing the End-to-End Pipeline
+### Why use these scripts?
 
-1. **Start All Services**:
-   
-*(Code block omitted for brevity)*
+The deployment script (`infrastructure/deploy.sh`) automates:
+1. Building and publishing the project (`dotnet publish` or `npm run build:all`).
+2. Copying binaries to the correct bind-mounted hosting path (e.g. `/data/hosting/*`).
+3. Restarting the appropriate Docker container via `docker compose`.
 
-
-2. **Upload Test Images** (as shown above)
-
-3. **Monitor Processing**:
-   - Worker logs show thumbnail generation progress
-   - Check MinIO for uploaded files and generated thumbnails
-   - Database updates: status transitions from 0→1, dimensions populated
-
-4. **Verify in UI**:
-   - Login at http://localhost:5001/login
-   - Navigate to Images page
-   - Grid displays processed images with metadata
-
----
-
-## 🌐 Networking & CORS
-
-DeepLens is designed to be accessible across an intranet. Key settings in `src/NextGen.Identity/NextGen.Identity.Api/appsettings.json`:
-
-- **`Cors:AllowAnyIntranetOrigin`**: Set to `true` to automatically allow any request from a local network (10.*, 192.168.*, 172.16-31.*, and localhost).
-- **`Cors:AllowedOrigins`**: Array of explicit URLs to allow if they don't fall into the intranet IP ranges.
-
----
-
-## 📖 Documentation Index
-- [**ARCHITECTURE.md**](ARCHITECTURE.md) - High-level design & ADRs.
-- [**infrastructure/README.md**](infrastructure/README.md) - Deep dive into container setup.
-- [**infrastructure/TENANT-GUIDE.md**](infrastructure/TENANT-GUIDE.md) - How to provision new clients.
-- [**docs/SECURITY.md**](docs/SECURITY.md) - Auth & RBAC details.
+This ensures critical configuration files (like `appsettings.json`) located in the hosting paths are preserved and not accidentally overwritten during deployments.
 
 
 ---
