@@ -89,17 +89,6 @@ public class MediaController : ControllerBase
 
         string fileName = Path.GetFileNameWithoutExtension(item.StoragePath);
         string thumbPath = StoragePathRegistry.GetThumbnailPath(fileName, spec);
-        string cacheKey = $"thumb:path:{item.StoragePath}:{spec}";
-
-        try
-        {
-            byte[]? cachedThumb = await _cache.GetAsync(cacheKey);
-            if (cachedThumb != null) return File(cachedThumb, MediaConstants.Formats.WebP);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Cache access failed for {Path}: {Msg}", item.StoragePath, ex.Message);
-        }
 
         _logger.LogInformation("Serving thumbnail for {Path}. Derived thumb path: {ThumbPath}", item.StoragePath, thumbPath);
 
@@ -109,14 +98,6 @@ public class MediaController : ControllerBase
             using var ms = new MemoryStream();
             await thumbStream.CopyToAsync(ms);
             byte[] data = ms.ToArray();
-            
-            try {
-                await _cache.SetAsync(cacheKey, data, new DistributedCacheEntryOptions {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
-                });
-            } catch (Exception ex) {
-                _logger.LogWarning("Failed to update cache for {Path}: {Msg}", item.StoragePath, ex.Message);
-            }
 
             var allSettings = await _settings.GetAllAsync();
             var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
@@ -130,53 +111,55 @@ public class MediaController : ControllerBase
         {
             _logger.LogWarning("Thumbnail file {ThumbPath} not found or inaccessible. Attempting on-demand generation from {OriginalPath}. Error: {Msg}", thumbPath, item.StoragePath, ex.Message);
 
-            if (item.MediaType == 1) // Image
+            // Always try to find a source image to generate the thumbnail from.
+            // If it's a video, the scraper downloaded the thumbnail with a .jpg extension instead of .mp4.
+            string sourcePath = item.StoragePath;
+            if (item.MediaType == 2 || sourcePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || sourcePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase))
             {
+                sourcePath = sourcePath.Replace("_full.mp4", ".jpg", StringComparison.OrdinalIgnoreCase)
+                                       .Replace("_full.mov", ".jpg", StringComparison.OrdinalIgnoreCase)
+                                       .Replace("_child.mp4", ".jpg", StringComparison.OrdinalIgnoreCase)
+                                       .Replace("_child.mov", ".jpg", StringComparison.OrdinalIgnoreCase)
+                                       .Replace(".mp4", ".jpg", StringComparison.OrdinalIgnoreCase)
+                                       .Replace(".mov", ".jpg", StringComparison.OrdinalIgnoreCase);
+            }
+
+            try {
+                using var rawStream = await _storageService.GetFileAsync(sourcePath);
+                using var imageObj = await Image.LoadAsync(rawStream);
+                
+                var (width, height) = MediaConstants.ThumbnailSpecs.Presets[spec];
+
+                imageObj.Mutate(x => x.Resize(new ResizeOptions {
+                    Size = new Size(width, height),
+                    Mode = ResizeMode.Max
+                }));
+
+                using var outMs = new MemoryStream();
+                await imageObj.SaveAsWebpAsync(outMs);
+                byte[] outData = outMs.ToArray();
+
+                // Proactively upload to MinIO
                 try {
-                    using var rawStream = await _storageService.GetFileAsync(item.StoragePath);
-                    using var imageObj = await Image.LoadAsync(rawStream);
-                    
-                    var (width, height) = MediaConstants.ThumbnailSpecs.Presets[spec];
+                    outMs.Position = 0;
+                    await _storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP);
+                } catch (Exception uploadEx) { 
+                    _logger.LogWarning("Failed to proactively upload generated thumbnail for {Path}: {Msg}", sourcePath, uploadEx.Message);
+                }
 
-                    imageObj.Mutate(x => x.Resize(new ResizeOptions {
-                        Size = new Size(width, height),
-                        Mode = ResizeMode.Max
-                    }));
-
-                    using var outMs = new MemoryStream();
-                    await imageObj.SaveAsWebpAsync(outMs);
-                    byte[] outData = outMs.ToArray();
-
-                    try {
-                        await _cache.SetAsync(cacheKey, outData, new DistributedCacheEntryOptions {
-                            AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(7)
-                        });
-                    } catch { }
-
-                    // Proactively upload to MinIO
-                    try {
-                        outMs.Position = 0;
-                        await _storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP);
-                    } catch (Exception uploadEx) { 
-                        _logger.LogWarning("Failed to proactively upload generated thumbnail for {Path}: {Msg}", item.StoragePath, uploadEx.Message);
-                    }
-
-                    return File(outData, MediaConstants.Formats.WebP);
-                } catch (Exception genEx) {
-                    _logger.LogError(genEx, "Failed to generate thumbnail on-demand for {Path}", item.StoragePath);
-                    
-                    // Final fallback: serve the original content if generation failed but file exists
-                    try {
-                        var originalStream = await _storageService.GetFileAsync(item.StoragePath);
-                        return File(originalStream, item.MimeType ?? "image/jpeg");
-                    } catch (Exception originalEx) {
-                        _logger.LogError(originalEx, "Final fallback failed for {Path}", item.StoragePath);
-                        return NotFound($"Media content unavailable: {item.StoragePath}");
-                    }
+                return File(outData, MediaConstants.Formats.WebP);
+            } catch (Exception genEx) {
+                _logger.LogError(genEx, "Failed to generate thumbnail on-demand for {Path} from source {SourcePath}", item.StoragePath, sourcePath);
+                
+                // Final fallback: serve the original content if generation failed but file exists
+                try {
+                    var originalStream = await _storageService.GetFileAsync(sourcePath);
+                    return File(originalStream, "image/jpeg");
+                } catch (Exception originalEx) {
+                    _logger.LogError(originalEx, "Final fallback failed for {Path}", sourcePath);
+                    return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
                 }
             }
-            
-            return NotFound($"Thumbnail for spec '{spec}' missing and cannot be generated on-demand.");
         }
     }
 
@@ -186,14 +169,6 @@ public class MediaController : ControllerBase
     [HttpGet("{mediaId:guid}/preview")]
     public async Task<IActionResult> GetPreview(Guid mediaId)
     {
-        string cacheKey = $"preview:{mediaId}";
-        try {
-            byte[]? cachedPreview = await _cache.GetAsync(cacheKey);
-            if (cachedPreview != null) return File(cachedPreview, "image/gif");
-        } catch (Exception ex) {
-             _logger.LogWarning("Preview cache access failed for {MediaId}: {Msg}", mediaId, ex.Message);
-        }
-
         try
         {
             var item = await _metadataService.GetMediaByIdAsync(mediaId);
@@ -205,12 +180,6 @@ public class MediaController : ControllerBase
             using var ms = new MemoryStream();
             await previewStream.CopyToAsync(ms);
             byte[] data = ms.ToArray();
-            
-            try {
-                await _cache.SetAsync(cacheKey, data, new DistributedCacheEntryOptions {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
-                });
-            } catch { }
 
             var allSettings = await _settings.GetAllAsync();
             var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;

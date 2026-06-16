@@ -28,8 +28,7 @@ export default function StoryPlannerDashboard() {
   // State
   const [loading, setLoading] = useState(true);
   const [ownProfiles, setOwnProfiles] = useState<InstagramProfile[]>([]);
-  const [allPosts, setAllPosts] = useState<InstagramPost[]>([]);
-  const [groups, setGroups] = useState<StoryGroup[]>([]);
+  const [unifiedList, setUnifiedList] = useState<UnifiedItem[]>([]);
   
   // Selection
   const [selectedItems, setSelectedItems] = useState<Map<string, UnifiedItem>>(new Map());
@@ -39,7 +38,7 @@ export default function StoryPlannerDashboard() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const LIMIT = 24;
+  const LIMIT = 100;
 
   // Merge Preview Dialog State
   const [mergeDialogVisible, setMergeDialogVisible] = useState(false);
@@ -138,30 +137,50 @@ export default function StoryPlannerDashboard() {
       const own = watchlist.filter(p => p.isOwnAccount);
       setOwnProfiles(own);
  
-      // 2. Fetch first page of posts (offset = 0) with search filter
-      const posts = await wrapInSpan('StoryPlannerDashboard: getOwnAccountsVideos', () => 
-        instagramService.getOwnAccountsVideos('date', 'desc', LIMIT, 0, search)
+      // 2. Fetch unified planner feed
+      const feed = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeed', () => 
+        instagramService.getStoryPlannerFeed(LIMIT, 0, search)
       );
+      
       const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      const normalizedPosts = posts.map(post => {
-        const avatarUri = post.ownerProfilePictureUrl?.startsWith('/')
-          ? `${cleanBaseUrl}${post.ownerProfilePictureUrl}`
-          : post.ownerProfilePictureUrl;
-        return {
-          ...post,
-          ownerProfilePictureUrl: avatarUri
-        };
+      
+      const normalizedFeed = feed.map(item => {
+        if (item.type === 'post' && item.post) {
+          const avatarUri = item.post.ownerProfilePictureUrl?.startsWith('/')
+            ? `${cleanBaseUrl}${item.post.ownerProfilePictureUrl}`
+            : item.post.ownerProfilePictureUrl;
+          return {
+            ...item,
+            post: {
+              ...item.post,
+              ownerProfilePictureUrl: avatarUri
+            }
+          };
+        } else if (item.type === 'group' && item.group) {
+          const normalizedPosts = (item.group.posts || []).map(post => {
+            const avatarUri = post.ownerProfilePictureUrl?.startsWith('/')
+              ? `${cleanBaseUrl}${post.ownerProfilePictureUrl}`
+              : post.ownerProfilePictureUrl;
+            return {
+              ...post,
+              ownerProfilePictureUrl: avatarUri
+            };
+          });
+          return {
+            ...item,
+            group: {
+              ...item.group,
+              posts: normalizedPosts
+            }
+          };
+        }
+        return item;
       });
-      setAllPosts(normalizedPosts);
+
+      setUnifiedList(normalizedFeed);
       setOffset(0);
-      setHasMore(normalizedPosts.length >= LIMIT);
- 
-      // 3. Fetch groups with search filter
-      const storyGroups = await wrapInSpan('StoryPlannerDashboard: getStoryGroups', () => 
-        instagramService.getStoryGroups(search)
-      );
-      setGroups(storyGroups);
+      setHasMore(feed.length >= LIMIT);
     } catch (error) {
       console.error('Failed to load data', error);
       Alert.alert('Error', 'Failed to load story planner data.');
@@ -181,31 +200,56 @@ export default function StoryPlannerDashboard() {
     setLoadingMore(true);
     try {
       const nextOffset = offset + LIMIT;
-      const posts = await wrapInSpan('StoryPlannerDashboard: getOwnAccountsVideosMore', () => 
-        instagramService.getOwnAccountsVideos('date', 'desc', LIMIT, nextOffset, searchQuery)
+      const feed = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeedMore', () => 
+        instagramService.getStoryPlannerFeed(LIMIT, nextOffset, searchQuery)
       );
+      
       const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      const normalizedPosts = posts.map(post => {
-        const avatarUri = post.ownerProfilePictureUrl?.startsWith('/')
-          ? `${cleanBaseUrl}${post.ownerProfilePictureUrl}`
-          : post.ownerProfilePictureUrl;
-        return {
-          ...post,
-          ownerProfilePictureUrl: avatarUri
-        };
+      
+      const normalizedFeed = feed.map(item => {
+        if (item.type === 'post' && item.post) {
+          const avatarUri = item.post.ownerProfilePictureUrl?.startsWith('/')
+            ? `${cleanBaseUrl}${item.post.ownerProfilePictureUrl}`
+            : item.post.ownerProfilePictureUrl;
+          return {
+            ...item,
+            post: {
+              ...item.post,
+              ownerProfilePictureUrl: avatarUri
+            }
+          };
+        } else if (item.type === 'group' && item.group) {
+          const normalizedPosts = (item.group.posts || []).map(post => {
+            const avatarUri = post.ownerProfilePictureUrl?.startsWith('/')
+              ? `${cleanBaseUrl}${post.ownerProfilePictureUrl}`
+              : post.ownerProfilePictureUrl;
+            return {
+              ...post,
+              ownerProfilePictureUrl: avatarUri
+            };
+          });
+          return {
+            ...item,
+            group: {
+              ...item.group,
+              posts: normalizedPosts
+            }
+          };
+        }
+        return item;
       });
- 
-      if (normalizedPosts.length > 0) {
-        setAllPosts(prev => {
-          const existingIds = new Set(prev.map(p => p.id));
-          const filtered = normalizedPosts.filter(p => !existingIds.has(p.id));
+
+      if (normalizedFeed.length > 0) {
+        setUnifiedList(prev => {
+          const existingIds = new Set(prev.map(p => `${p.type}-${p.id}`));
+          const filtered = normalizedFeed.filter(p => !existingIds.has(`${p.type}-${p.id}`));
           return [...prev, ...filtered];
         });
         setOffset(nextOffset);
       }
       
-      setHasMore(normalizedPosts.length >= LIMIT);
+      setHasMore(feed.length >= LIMIT);
     } catch (error) {
       console.error('Failed to load more posts', error);
     } finally {
@@ -251,47 +295,6 @@ export default function StoryPlannerDashboard() {
       return () => backHandler.remove();
     }, [selectedItems.size])
   );
-
-  // Compute unified list
-  // 1. Find all post IDs that are already grouped
-  const groupedPostIds = new Set<string>();
-  groups.forEach(g => {
-    if (g.posts) {
-      g.posts.forEach(p => groupedPostIds.add(p.id));
-    }
-  });
-
-  // 2. Add ungrouped posts
-  const unifiedList: UnifiedItem[] = allPosts
-    .filter(p => !groupedPostIds.has(p.id))
-    .map(p => ({
-      type: 'post',
-      id: p.id,
-      timestamp: p.timestamp || '',
-      post: p
-    }));
-
-  // 3. Add groups
-  groups.forEach(g => {
-    // Latest post timestamp in the group determines its sequence
-    const latestPostTimestamp = g.posts && g.posts.length > 0
-      ? g.posts.reduce((max, p) => p.timestamp && p.timestamp > max ? p.timestamp : max, '')
-      : g.createdAt;
-
-    unifiedList.push({
-      type: 'group',
-      id: g.id,
-      timestamp: latestPostTimestamp || g.createdAt,
-      group: g
-    });
-  });
-
-  // 4. Sort unified list chronologically (newest first)
-  unifiedList.sort((a, b) => {
-    const da = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-    const db = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-    return db - da;
-  });
 
   // Toggle selection
   const handleItemSelect = (item: UnifiedItem) => {
@@ -368,9 +371,8 @@ export default function StoryPlannerDashboard() {
       } else if (item.type === 'group') {
         if (item.group?.posts) {
           item.group.posts.forEach(gp => {
-            const foundPost = allPosts.find(ap => ap.id === gp.id) as any;
-            if (foundPost?.ownerUsername) {
-              const id = getProfileIdByUsername(foundPost.ownerUsername);
+            if (gp.ownerUsername) {
+              const id = getProfileIdByUsername(gp.ownerUsername);
               if (id && !ids.includes(id)) ids.push(id);
             }
           });
@@ -589,7 +591,7 @@ export default function StoryPlannerDashboard() {
           activeOpacity={0.8}
         >
           <Image 
-            source={{ uri: getMediaUri(post) }} 
+            source={{ uri: getMediaUri(post, 'medium') }} 
             style={[styles.cellImage, isSelected && { opacity: 0.7 }]} 
             contentFit="cover"
             transition={200}
@@ -656,7 +658,7 @@ export default function StoryPlannerDashboard() {
           activeOpacity={0.8}
         >
           <Image 
-            source={{ uri: starredPost ? getMediaUri(starredPost) : '' }} 
+            source={{ uri: starredPost ? getMediaUri(starredPost, 'medium') : '' }} 
             style={[styles.cellImage, isSelected && { opacity: 0.7 }]} 
             contentFit="cover"
             transition={200}
@@ -703,7 +705,7 @@ export default function StoryPlannerDashboard() {
         ? item.post!
         : (item.group!.posts?.find(p => (p as any).isStarred) || item.group!.posts?.[0]);
       return (
-        <Image source={{ uri: getMediaUri(mediaItem) }} style={styles.tileBackground} contentFit="cover" />
+        <Image source={{ uri: getMediaUri(mediaItem, 'medium') }} style={styles.tileBackground} contentFit="cover" />
       );
     }
     
@@ -717,8 +719,8 @@ export default function StoryPlannerDashboard() {
       
       return (
         <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
-          <Image source={{ uri: getMediaUri(media1) }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
-          <Image source={{ uri: getMediaUri(media2) }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
+          <Image source={{ uri: getMediaUri(media1, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
+          <Image source={{ uri: getMediaUri(media2, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
         </View>
       );
     }
@@ -736,10 +738,10 @@ export default function StoryPlannerDashboard() {
 
       return (
         <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
-          <Image source={{ uri: getMediaUri(media1) }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
+          <Image source={{ uri: getMediaUri(media1, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
           <View style={{ width: '50%', height: '100%' }}>
-            <Image source={{ uri: getMediaUri(media2) }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
-            <Image source={{ uri: getMediaUri(media3) }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
+            <Image source={{ uri: getMediaUri(media2, 'medium') }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
+            <Image source={{ uri: getMediaUri(media3, 'medium') }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
           </View>
         </View>
       );
@@ -761,11 +763,11 @@ export default function StoryPlannerDashboard() {
 
     return (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%', height: '100%' }}>
-        <Image source={{ uri: getMediaUri(medias[0]) }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
-        <Image source={{ uri: getMediaUri(medias[1]) }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
-        <Image source={{ uri: getMediaUri(medias[2]) }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
+        <Image source={{ uri: getMediaUri(medias[0], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
+        <Image source={{ uri: getMediaUri(medias[1], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
+        <Image source={{ uri: getMediaUri(medias[2], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
         <View style={{ width: '50%', height: '50%', position: 'relative' }}>
-          <Image source={{ uri: getMediaUri(media4) }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+          <Image source={{ uri: getMediaUri(media4, 'medium') }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
           {remaining > 0 && (
             <View style={{
               position: 'absolute',
@@ -813,7 +815,7 @@ export default function StoryPlannerDashboard() {
             return (
               <View key={item.id} style={styles.headerItemContainer}>
                 <Image 
-                  source={{ uri: starredPost ? getMediaUri(starredPost) : '' }} 
+                  source={{ uri: starredPost ? getMediaUri(starredPost, 'medium') : '' }} 
                   style={styles.headerItemImage}
                   contentFit="cover"
                 />
@@ -885,7 +887,8 @@ export default function StoryPlannerDashboard() {
             contentContainerStyle={{ paddingBottom: 80 }}
             onEndReached={loadMorePosts}
             onEndReachedThreshold={0.5}
-            removeClippedSubviews={true}
+            extraData={selectedItems}
+            removeClippedSubviews={false}
             maxToRenderPerBatch={12}
             windowSize={5}
             initialNumToRender={12}
@@ -975,8 +978,8 @@ export default function StoryPlannerDashboard() {
                     <Image 
                       source={{ 
                         uri: mergeData.destinationItem.type === 'post'
-                          ? getMediaUri(mergeData.destinationItem.post!)
-                          : getMediaUri(mergeData.destinationItem.group!.posts?.find(p => (p as any).isStarred) || mergeData.destinationItem.group!.posts?.[0])
+                          ? getMediaUri(mergeData.destinationItem.post!, 'medium')
+                          : getMediaUri(mergeData.destinationItem.group!.posts?.find(p => (p as any).isStarred) || mergeData.destinationItem.group!.posts?.[0], 'medium')
                       }} 
                       style={styles.tileBackground}
                       contentFit="cover"
@@ -999,14 +1002,14 @@ export default function StoryPlannerDashboard() {
                           mergeData.destinationItem.group!.posts?.map((p, idx) => (
                             <Image 
                               key={p.id || idx} 
-                              source={{ uri: getMediaUri(p) }} 
+                              source={{ uri: getMediaUri(p, 'medium') }} 
                               style={styles.smallTileItemImage} 
                               contentFit="cover"
                             />
                           ))
                         ) : (
                           <Image 
-                            source={{ uri: getMediaUri(mergeData.destinationItem.post!) }} 
+                            source={{ uri: getMediaUri(mergeData.destinationItem.post!, 'medium') }} 
                             style={styles.smallTileItemImage} 
                             contentFit="cover"
                           />

@@ -190,7 +190,7 @@ export default function StorySharingScreen() {
         }}
       >
         <Image
-          source={{ uri: starredPost ? getMediaUri(starredPost) : '' }}
+          source={{ uri: starredPost ? getMediaUri(starredPost, 'medium') : '' }}
           style={styles.cellImage}
           contentFit="cover"
           transition={200}

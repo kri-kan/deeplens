@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Alert , ScrollView } from 'react-na
 import { Text, TextInput, IconButton, ActivityIndicator, useTheme } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { instagramService } from '@/services/instagram.service';
+import { getMediaUri } from '@/utils/instagram-helpers';
 
 interface InstagramLinkSectionProps {
   linkedPosts: any[];
@@ -36,11 +37,6 @@ export const InstagramLinkSection: React.FC<InstagramLinkSectionProps> = ({
     }
   };
 
-  const getMediaUri = (path: string) => {
-    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL;
-    return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
-  };
-
   return (
     <View style={styles.container}>
       <Text variant="titleSmall" style={styles.title}>Link Instagram Post ({linkedPosts.length})</Text>
@@ -52,7 +48,7 @@ export const InstagramLinkSection: React.FC<InstagramLinkSectionProps> = ({
           return (
           <View key={post.id} style={[styles.wrapper, isInvalid && styles.wrapperInvalid]}>
             <Image 
-              source={{ uri: post.storagePath ? getMediaUri(post.storagePath) : post.thumbnailUrl }} 
+              source={{ uri: getMediaUri(post, 'medium') }} 
               style={styles.thumbnail}
             />
             {isInvalid && (

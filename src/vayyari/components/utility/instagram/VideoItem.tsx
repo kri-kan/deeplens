@@ -39,7 +39,7 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
       delayLongPress={300}
     >
       <Image 
-        source={{ uri: getMediaUri(item) }} 
+        source={{ uri: getMediaUri(item, 'medium') }} 
         style={[styles.thumbnail, isSelected && { opacity: 0.7 }]}
         contentFit="cover"
         transition={200}

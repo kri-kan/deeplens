@@ -429,6 +429,36 @@ class InstagramService {
   submitSwipes = async (swipes: SwipeResponseItem[]): Promise<{ success: boolean }> => {
     return searchApiClient.post('/api/v1/Insta/story-groups/swipes', swipes);
   };
+
+  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string): Promise<UnifiedPlannerItem[]> => {
+    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}`);
+    return (raw || []).map(item => {
+      if (item.type === 'post' && item.post) {
+        return {
+          ...item,
+          post: normalizeData(item.post)
+        };
+      } else if (item.type === 'group' && item.group) {
+        return {
+          ...item,
+          group: {
+            ...item.group,
+            posts: item.group.posts ? item.group.posts.map(normalizeData) : []
+          }
+        };
+      }
+      return item;
+    }) as UnifiedPlannerItem[];
+  };
+}
+
+export interface UnifiedPlannerItem {
+  type: 'post' | 'group';
+  id: string;
+  timestamp: string;
+  post?: InstagramPost;
+  group?: StoryGroup;
 }
 
 export interface InstagramComment {

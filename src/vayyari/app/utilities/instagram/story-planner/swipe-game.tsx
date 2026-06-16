@@ -18,6 +18,7 @@ import { useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { instagramService, StoryPostingHistory, InstagramPost } from '@/services/instagram.service';
 import { wrapInSpan } from '@/utils/telemetry';
+import { getMediaUri } from '@/utils/instagram-helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
@@ -166,57 +167,59 @@ export default function StorySwipeGameScreen() {
   // Render Card layout inside the stack
   const renderCardContent = (card: StoryPostingHistory, latestPost: InstagramPost | null) => {
     return (
-      <View style={styles.cardInner}>
-        {/* Header Info */}
-        <View style={styles.cardHeader}>
-          <Text variant="titleMedium" numberOfLines={1} style={styles.bold}>
-            {card.groupName}
-          </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 2 }}>
-            Posted on @{card.targetUsername}
-          </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 11, marginTop: 1 }}>
-            {new Date(card.postedAt).toLocaleString()}
-          </Text>
-        </View>
+      <View style={[styles.cardInner, { padding: 0 }]}>
+        {latestPost ? (
+          <View style={[StyleSheet.absoluteFillObject, { borderRadius: 16, overflow: 'hidden' }]}>
+            <Image 
+              source={{ uri: getMediaUri(latestPost, 'large') }} 
+              style={{ width: '100%', height: '100%' }} 
+              resizeMode="cover"
+            />
+          </View>
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, styles.fallbackContainer, { backgroundColor: theme.colors.surfaceVariant, borderRadius: 16 }]}>
+            <IconButton icon="image-off-outline" size={40} iconColor={theme.colors.onSurfaceVariant} />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No posts in this group</Text>
+          </View>
+        )}
 
-        {/* Image Preview Container */}
-        <View style={styles.imageContainer}>
-          {latestPost ? (
-            <>
-              <Image 
-                source={{ uri: latestPost.thumbnailUrl || latestPost.mediaUrl }} 
-                style={styles.cardPreviewImage} 
-                resizeMode="cover"
-              />
-              <View style={[styles.latestBadge, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.latestBadgeText}>LATEST POST</Text>
-              </View>
-            </>
-          ) : (
-            <View style={[styles.fallbackContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <IconButton icon="image-off-outline" size={40} iconColor={theme.colors.onSurfaceVariant} />
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No posts in this group</Text>
+        <View style={styles.overlay}>
+          {/* Header Info */}
+          <View style={styles.cardHeader}>
+            <Text variant="titleMedium" numberOfLines={1} style={[styles.bold, { color: 'white' }]}>
+              {card.groupName}
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 2 }}>
+              Posted on @{card.targetUsername}
+            </Text>
+            <Text variant="bodySmall" style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 11, marginTop: 1 }}>
+              {new Date(card.postedAt).toLocaleString()}
+            </Text>
+          </View>
+
+          {latestPost && (
+            <View style={[styles.latestBadge, { backgroundColor: theme.colors.primary }]}>
+              <Text style={styles.latestBadgeText}>LATEST POST</Text>
             </View>
           )}
-        </View>
 
-        {/* Footer / Caption */}
-        <View style={styles.cardFooter}>
-          {latestPost?.caption ? (
-            <>
-              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: 'bold' }}>
-                Latest Caption:
+          {/* Footer / Caption */}
+          <View style={styles.cardFooter}>
+            {latestPost?.caption ? (
+              <>
+                <Text variant="labelSmall" style={{ color: 'white', fontWeight: 'bold' }}>
+                  Latest Caption:
+                </Text>
+                <Text variant="bodySmall" numberOfLines={2} style={[styles.captionText, { color: 'white' }]}>
+                  {latestPost.caption}
+                </Text>
+              </>
+            ) : (
+              <Text variant="bodySmall" style={[styles.captionText, { color: 'rgba(255, 255, 255, 0.7)', fontStyle: 'italic' }]}>
+                No caption available.
               </Text>
-              <Text variant="bodySmall" numberOfLines={2} style={styles.captionText}>
-                {latestPost.caption}
-              </Text>
-            </>
-          ) : (
-            <Text variant="bodySmall" style={[styles.captionText, { fontStyle: 'italic', opacity: 0.5 }]}>
-              No caption available.
-            </Text>
-          )}
+            )}
+          </View>
         </View>
       </View>
     );
@@ -375,9 +378,9 @@ export default function StorySwipeGameScreen() {
             })}
             renderItem={({ item }) => (
               <View style={styles.carouselItemContainer}>
-                {item.thumbnailUrl || item.mediaUrl ? (
+                {getMediaUri(item) ? (
                   <Image 
-                    source={{ uri: item.thumbnailUrl || item.mediaUrl }} 
+                    source={{ uri: getMediaUri(item, 'large') }} 
                     style={styles.carouselImage} 
                     resizeMode="contain"
                   />
@@ -421,7 +424,7 @@ export default function StorySwipeGameScreen() {
                     ]}
                   >
                     <Image 
-                      source={{ uri: item.thumbnailUrl || item.mediaUrl }} 
+                      source={{ uri: getMediaUri(item, 'medium') }} 
                       style={styles.thumbnailImage}
                       resizeMode="cover"
                     />
@@ -522,8 +525,8 @@ const styles = StyleSheet.create({
   },
   latestBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 16,
+    right: 16,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -546,6 +549,13 @@ const styles = StyleSheet.create({
   captionText: {
     marginTop: 4,
     opacity: 0.85
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    padding: 16,
+    justifyContent: 'space-between',
+    borderRadius: 16,
   },
   badgeContainer: {
     position: 'absolute',

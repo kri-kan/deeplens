@@ -25,14 +25,25 @@ export const isVideo = (m: any): boolean => {
     return normalized.mediaType === InstagramMediaType.VIDEO;
 };
 
-export const getMediaUri = (m: any): string => {
+export const getMediaUri = (m: any, spec?: 'icon' | 'medium' | 'large'): string => {
     const normalized = normalizeData(m);
     if (!normalized) return '';
 
-    const path = normalized.storagePath;
+    let path = normalized.storagePath;
     if (path) {
         const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
         const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+        if (spec && (path.toLowerCase().endsWith('.mp4') || path.toLowerCase().endsWith('.mov'))) {
+            path = path.replace(/_full\.(mp4|mov)$/i, '.jpg')
+                       .replace(/_child\.(mp4|mov)$/i, '.jpg')
+                       .replace(/\.(mp4|mov)$/i, '.jpg');
+        }
+
+        const isImage = !path.toLowerCase().endsWith('.mp4') && !path.toLowerCase().endsWith('.mov');
+        if (spec && isImage) {
+            return `${cleanBaseUrl}/api/v1/catalog/media/thumbnail-by-path?path=${encodeURIComponent(path)}&spec=${spec}`;
+        }
 
         // Both images and videos use the Attachment/download endpoint
         return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;

@@ -274,7 +274,7 @@ export default function GroupDetailScreen() {
                   delayLongPress={200}
                 >
                   <Image
-                    source={{ uri: getMediaUri(post) }}
+                    source={{ uri: getMediaUri(post, 'medium') }}
                     style={styles.cellImage}
                     contentFit="cover"
                   />
@@ -389,7 +389,7 @@ export default function GroupDetailScreen() {
             {previewPost && (
               <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={true}>
                 <Image
-                  source={{ uri: getMediaUri(previewPost) }}
+                  source={{ uri: getMediaUri(previewPost, 'large') }}
                   style={styles.previewMediaImage}
                   contentFit="contain"
                 />

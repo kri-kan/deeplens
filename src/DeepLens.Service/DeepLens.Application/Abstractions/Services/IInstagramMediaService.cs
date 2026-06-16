@@ -11,16 +11,16 @@ namespace DeepLens.Application.Abstractions.Services
         /// Fully refreshes all media for a specific Instagram post.
         /// Deletes existing files/links and downloads them afresh from Graph API.
         /// </summary>
-        Task<bool> RefreshPostMediaAsync(Guid dbPostId);
+        Task<bool> RefreshPostMediaAsync(Guid dbPostId, CancellationToken ct = default);
 
         /// <summary>
         /// Orchestrates the download and linking of all media for a post based on Meta Graph data.
         /// </summary>
-        Task ProcessFullMediaDownloadAsync(Guid dbPostId, MetaPost post, string externalId);
+        Task ProcessFullMediaDownloadAsync(Guid dbPostId, MetaPost post, string externalId, CancellationToken ct = default);
 
         /// <summary>
         /// Deletes all media and metadata associated with a profile.
         /// </summary>
-        Task<bool> DeleteProfileDataAsync(string username);
+        Task<bool> DeleteProfileDataAsync(string username, CancellationToken ct = default);
     }
 }

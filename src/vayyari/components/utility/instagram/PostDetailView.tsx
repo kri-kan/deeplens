@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { ProductCreationForm } from '../product/ProductCreationForm';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
+import { getMediaUri } from '@/utils/instagram-helpers';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,14 +29,6 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [createDialog, setCreateDialog] = useState(false);
-
-    const getMediaUri = (path: string) => {
-        if (path) {
-            const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL;
-            return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
-        }
-        return item.thumbnailUrl || item.mediaUrl;
-    };
 
     const fetchLinks = async () => {
         try {
@@ -111,7 +104,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
     return (
         <View style={styles.container}>
             <Image 
-                source={{ uri: getMediaUri(item.storagePath) }} 
+                source={{ uri: getMediaUri(item, 'large') }} 
                 style={styles.fullImage}
                 contentFit="cover"
             />

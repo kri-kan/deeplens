@@ -479,7 +479,7 @@ export const InstagramPostDetailItem = ({
                                         />
                                     ) : (
                                         <Image 
-                                            source={{ uri: getMediaUri(media) }} 
+                                            source={{ uri: getMediaUri(media, 'large') }} 
                                             style={{ width, height: mHeight }}
                                             contentFit="cover"
                                             onLoad={(e) => {

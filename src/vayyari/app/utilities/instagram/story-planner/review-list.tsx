@@ -219,7 +219,7 @@ export default function StoryReviewListScreen() {
 
             if (item.type === 'group' && item.group) {
               const starredPost = item.group.posts?.find(p => (p as any).isStarred) || item.group.posts?.[0];
-              starredPostUri = starredPost ? getMediaUri(starredPost) : '';
+              starredPostUri = starredPost ? getMediaUri(starredPost, 'medium') : '';
               
               const newestPost = item.group.posts && item.group.posts.length > 0
                 ? new Date(item.group.posts.reduce((max, p) => p.timestamp && new Date(p.timestamp) > new Date(max) ? p.timestamp : max, item.group.posts[0].timestamp || ''))
@@ -228,7 +228,7 @@ export default function StoryReviewListScreen() {
                 ? `Newest item age: ${Math.floor((new Date().getTime() - newestPost.getTime()) / (1000 * 60 * 60 * 24))} days`
                 : 'No posts';
             } else if (item.type === 'video' && item.video) {
-              starredPostUri = getMediaUri(item.video);
+              starredPostUri = getMediaUri(item.video, 'medium');
               detailsText = item.video.timestamp 
                 ? `Posted: ${new Date(item.video.timestamp).toLocaleDateString()}`
                 : 'Scraped reel';

@@ -14,6 +14,8 @@ using DeepLens.Contracts.Instagram;
 using DeepLens.Shared.Telemetry;
 using System.Diagnostics;
 using OpenTelemetry.Trace;
+using Confluent.Kafka;
+using DeepLens.Contracts.Events;
 
 namespace DeepLens.WorkerService.Workers
 {
@@ -22,15 +24,18 @@ namespace DeepLens.WorkerService.Workers
         private readonly ILogger<InstagramSyncWorker> _logger;
         private readonly IServiceProvider _serviceProvider;
         private readonly string _connectionString;
+        private readonly IProducer<string, string> _producer;
 
         public InstagramSyncWorker(
             ILogger<InstagramSyncWorker> logger,
             IServiceProvider serviceProvider,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IProducer<string, string> producer)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
             _connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
+            _producer = producer;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -162,7 +167,7 @@ namespace DeepLens.WorkerService.Workers
                 var httpClient = serviceScope.ServiceProvider.GetRequiredService<HttpClient>();
                 var instaMedia = serviceScope.ServiceProvider.GetRequiredService<IInstagramMediaService>();
 
-                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, job.is_own_account ?? false);
+                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, job.is_own_account ?? false, ct);
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
@@ -355,7 +360,7 @@ namespace DeepLens.WorkerService.Workers
             }
         }
 
-        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, bool isOwnAccount)
+        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, bool isOwnAccount, CancellationToken ct)
         {
             var existingPosts = (await conn.QueryAsync<dynamic>("SELECT platform_video_id, storage_path FROM competitor_videos WHERE watchlist_id = @Id", new { Id = watchlistId }))
                                 .ToDictionary(x => (string)x.platform_video_id, x => (string?)x.storage_path);
@@ -389,6 +394,12 @@ namespace DeepLens.WorkerService.Workers
                     // Download thumbnail if missing
                     string? newStoragePath = null;
                     string? thumbUrl = p.ThumbnailUrl ?? p.MediaUrl;
+                    if (string.IsNullOrEmpty(thumbUrl) && p.MediaType == InstagramMediaType.CAROUSEL_ALBUM && p.Children != null && p.Children.Any())
+                    {
+                        var firstChild = p.Children.First();
+                        thumbUrl = firstChild.ThumbnailUrl ?? firstChild.MediaUrl;
+                    }
+
                     if (!string.IsNullOrEmpty(thumbUrl))
                     {
                         newStoragePath = await DownloadAndStoreThumbnailAsync(http, storage, externalId, p.Id, thumbUrl);
@@ -412,23 +423,28 @@ namespace DeepLens.WorkerService.Workers
                         // Media Architecture Consistency: Register and Link
                         if (!string.IsNullOrEmpty(newStoragePath))
                         {
-                            var mediaId = Guid.NewGuid();
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media (id, storage_path, media_type, category, subcategory)
-                                VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')",
-                                new { mediaId, newStoragePath });
+                                VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')
+                                ON CONFLICT (storage_path) DO NOTHING",
+                                new { mediaId = Guid.NewGuid(), newStoragePath });
+
+                            var mediaId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM media WHERE storage_path = @newStoragePath", new { newStoragePath });
 
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
                                 VALUES (@mediaId, @dbPostId, 'competitor_video', true)
                                 ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
                                 new { mediaId, dbPostId });
+
+                            // Emit image uploaded event to pre-generate thumbnails via Kafka queue
+                            await EmitImageUploadedEvent(mediaId, newStoragePath, $"{p.Id}.jpg", "image/jpeg", "instagram", "thumbnail", ct);
                         }
 
                         // Full Media Download for Own Accounts
                         if (isOwnAccount)
                         {
-                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId);
+                            await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId, ct);
                         }
 
                         count++;
@@ -443,18 +459,22 @@ namespace DeepLens.WorkerService.Workers
                             await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
                             
                             // Also ensure it's registered in media if it was missing
-                            var mediaId = Guid.NewGuid();
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media (id, storage_path, media_type, category, subcategory)
                                 VALUES (@mediaId, @newStoragePath, 1, 'instagram', 'thumbnail')
-                                ON CONFLICT DO NOTHING", 
-                                new { mediaId, newStoragePath });
+                                ON CONFLICT (storage_path) DO NOTHING", 
+                                new { mediaId = Guid.NewGuid(), newStoragePath });
+
+                            var mediaId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM media WHERE storage_path = @newStoragePath", new { newStoragePath });
 
                             await conn.ExecuteAsync(@"
                                 INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
                                 VALUES (@mediaId, @dbPostId, 'competitor_video', true)
                                 ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
                                 new { mediaId, dbPostId });
+
+                            // Emit image uploaded event to pre-generate thumbnails via Kafka queue
+                            await EmitImageUploadedEvent(mediaId, newStoragePath, $"{p.Id}.jpg", "image/jpeg", "instagram", "thumbnail", ct);
                         }
 
                         count++;
@@ -471,6 +491,55 @@ namespace DeepLens.WorkerService.Workers
                 }
             }
             return count;
+        }
+
+        private async Task EmitImageUploadedEvent(Guid mediaId, string filePath, string fileName, string contentType, string category, string subCategory, CancellationToken ct)
+        {
+            try
+            {
+                var uploadEvent = new ImageUploadedEvent
+                {
+                    EventId = Guid.NewGuid(),
+                    EventType = EventTypes.ImageUploaded,
+                    EventVersion = "1.0",
+                    TenantId = "SINGLE_TENANT",
+                    CorrelationId = Guid.NewGuid(),
+                    Timestamp = DateTime.UtcNow,
+                    Data = new ImageUploadedData
+                    {
+                        ImageId = mediaId,
+                        FilePath = filePath,
+                        FileName = fileName,
+                        FileSize = 0,
+                        ContentType = contentType,
+                        Category = category,
+                        SubCategory = subCategory,
+                        UploadedBy = "instagram-sync",
+                        Metadata = new ImageMetadata
+                        {
+                            OriginalFileName = fileName,
+                            Format = contentType,
+                            ExifData = new Dictionary<string, object>()
+                        }
+                    },
+                    ProcessingOptions = new ProcessingOptions
+                    {
+                        TargetThumbnailSizes = new[] { "icon", "medium", "large" },
+                        Retention = MediaConstants.Retention.Infinite
+                    }
+                };
+
+                await _producer.ProduceAsync(KafkaTopics.ImageUploaded, new Message<string, string>
+                {
+                    Key = mediaId.ToString(),
+                    Value = JsonSerializer.Serialize(uploadEvent)
+                }, ct);
+                _logger.LogInformation("Emitted ImageUploadedEvent to Kafka for media: {MediaId}", mediaId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to emit ImageUploadedEvent to Kafka for media: {MediaId}", mediaId);
+            }
         }
 
         private async Task<string?> DownloadAndStoreThumbnailAsync(HttpClient http, IStorageService storage, string externalId, string postId, string url)
