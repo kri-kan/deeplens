@@ -1171,7 +1171,7 @@ export default function StoryPlannerDashboard() {
   };
 
   return (
-    <ScreenWrapper title={renderHeaderTitle()} subtitle="Curation Dashboard" withScrollView={false}>
+    <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${filteredList.length} Available Item${filteredList.length === 1 ? '' : 's'}`} withScrollView={false}>
       <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : 'Story Planner' }} />
 
       {loading ? (
