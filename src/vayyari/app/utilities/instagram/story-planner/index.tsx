@@ -1113,7 +1113,7 @@ export default function StoryPlannerDashboard() {
 
   const renderHeaderTitle = () => {
     if (selectedItems.size === 0) {
-      return "Story Planner";
+      return `Story Planner (${filteredList.length})`;
     }
 
     const items = Array.from(selectedItems.values());
@@ -1172,7 +1172,7 @@ export default function StoryPlannerDashboard() {
 
   return (
     <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${filteredList.length} Available Item${filteredList.length === 1 ? '' : 's'}`} withScrollView={false}>
-      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : 'Story Planner' }} />
+      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : `Story Planner (${filteredList.length})` }} />
 
       {loading ? (
         <View style={styles.center}>
