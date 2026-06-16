@@ -1140,7 +1140,7 @@ public class InstaController : ControllerBase
                     new CommandDefinition(groupPostsSql, new { GroupIds = groupIds }, cancellationToken: ct)
                 );
 
-                var postsByGroup = rawGroupPosts.GroupBy(p => p.GroupId).ToDictionary(g => g.Key, g => g.ToList());
+                var postsByGroup = rawGroupPosts.GroupBy(p => p.GroupId ?? Guid.Empty).ToDictionary(g => g.Key, g => g.ToList());
 
                 // Fetch eligible watchlist IDs for all groups in one batch
                 var eligibilitySql = $@"
@@ -1148,11 +1148,11 @@ public class InstaController : ControllerBase
                     FROM story_group_eligibility 
                     WHERE group_id = ANY(@GroupIds) AND is_eligible = true";
 
-                var rawEligibility = await conn.QueryAsync<dynamic>(
+                var rawEligibility = await conn.QueryAsync<StoryGroupEligibilityQueryResult>(
                     new CommandDefinition(eligibilitySql, new { GroupIds = groupIds }, cancellationToken: ct)
                 );
 
-                var eligibilityByGroup = rawEligibility.GroupBy(e => (Guid)e.group_id).ToDictionary(g => g.Key, g => g.Select(x => (Guid)x.target_watchlist_id).ToList());
+                var eligibilityByGroup = rawEligibility.GroupBy(e => e.GroupId).ToDictionary(g => g.Key, g => g.Select(x => x.TargetWatchlistId).ToList());
 
                 foreach (var gId in groupIds)
                 {
@@ -1332,7 +1332,7 @@ public class InstaController : ControllerBase
                     new CommandDefinition(groupPostsSql, new { GroupIds = groupIds }, cancellationToken: ct)
                 );
 
-                var postsByGroup = rawGroupPosts.GroupBy(p => p.GroupId).ToDictionary(g => g.Key, g => g.ToList());
+                var postsByGroup = rawGroupPosts.GroupBy(p => p.GroupId ?? Guid.Empty).ToDictionary(g => g.Key, g => g.ToList());
 
                 // Fetch eligible watchlist IDs for all groups in one batch
                 var eligibilitySql = $@"
@@ -1340,11 +1340,11 @@ public class InstaController : ControllerBase
                     FROM story_group_eligibility 
                     WHERE group_id = ANY(@GroupIds) AND is_eligible = true";
 
-                var rawEligibility = await conn.QueryAsync<dynamic>(
+                var rawEligibility = await conn.QueryAsync<StoryGroupEligibilityQueryResult>(
                     new CommandDefinition(eligibilitySql, new { GroupIds = groupIds }, cancellationToken: ct)
                 );
 
-                var eligibilityByGroup = rawEligibility.GroupBy(e => (Guid)e.group_id).ToDictionary(g => g.Key, g => g.Select(x => (Guid)x.target_watchlist_id).ToList());
+                var eligibilityByGroup = rawEligibility.GroupBy(e => e.GroupId).ToDictionary(g => g.Key, g => g.Select(x => x.TargetWatchlistId).ToList());
 
                 foreach (var g in groupList)
                 {
@@ -2204,7 +2204,7 @@ public class OwnAccountVideoQueryResult
     public string? OwnerProfilePicStoragePath { get; set; }
     public string? ProductCode { get; set; }
     public bool IsStarred { get; set; }
-    public Guid GroupId { get; set; }
+    public Guid? GroupId { get; set; }
 }
 
 public class UnifiedFeedQueryResult
@@ -2212,6 +2212,12 @@ public class UnifiedFeedQueryResult
     public string ItemType { get; set; } = string.Empty;
     public string Id { get; set; } = string.Empty;
     public DateTime SortTimestamp { get; set; }
+}
+
+public class StoryGroupEligibilityQueryResult
+{
+    public Guid GroupId { get; set; }
+    public Guid TargetWatchlistId { get; set; }
 }
 
 public class UnifiedPlannerItemDto
