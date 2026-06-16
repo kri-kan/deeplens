@@ -430,10 +430,10 @@ class InstagramService {
     return searchApiClient.post('/api/v1/Insta/story-groups/swipes', swipes);
   };
 
-  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string): Promise<UnifiedPlannerItem[]> => {
+  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string): Promise<{ items: UnifiedPlannerItem[]; totalCount: number }> => {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
-    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}`);
-    return (raw || []).map(item => {
+    const raw = await searchApiClient.get<{ items: any[]; totalCount: number }>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}`);
+    const items = ((raw && raw.items) || []).map(item => {
       if (item.type === 'post' && item.post) {
         return {
           ...item,
@@ -450,6 +450,10 @@ class InstagramService {
       }
       return item;
     }) as UnifiedPlannerItem[];
+    return {
+      items,
+      totalCount: raw?.totalCount || 0
+    };
   };
 }
 

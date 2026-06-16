@@ -515,6 +515,7 @@ export default function StoryPlannerDashboard() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const LIMIT = 100;
   const loadingMoreRef = useRef(false);
 
@@ -610,14 +611,14 @@ export default function StoryPlannerDashboard() {
       setOwnProfiles(own);
  
       // 2. Fetch unified planner feed
-      const feed = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeed', () => 
+      const { items: feedItems, totalCount: feedTotalCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeed', () => 
         instagramService.getStoryPlannerFeed(LIMIT, 0, search)
       );
       
       const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
       
-      const normalizedFeed = feed.map(item => {
+      const normalizedFeed = feedItems.map(item => {
         if (item.type === 'post' && item.post) {
           const avatarUri = item.post.ownerProfilePictureUrl?.startsWith('/')
             ? `${cleanBaseUrl}${item.post.ownerProfilePictureUrl}`
@@ -652,7 +653,8 @@ export default function StoryPlannerDashboard() {
 
       setUnifiedList(normalizedFeed);
       setOffset(0);
-      setHasMore(feed.length >= LIMIT);
+      setHasMore(feedItems.length >= LIMIT);
+      setTotalCount(feedTotalCount);
     } catch (error) {
       console.error('Failed to load data', error);
       Alert.alert('Error', 'Failed to load story planner data.');
@@ -673,14 +675,14 @@ export default function StoryPlannerDashboard() {
     setLoadingMore(true);
     try {
       const nextOffset = offset + LIMIT;
-      const feed = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeedMore', () => 
+      const { items: feedItems, totalCount: feedTotalCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeedMore', () => 
         instagramService.getStoryPlannerFeed(LIMIT, nextOffset, searchQuery)
       );
       
       const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
       
-      const normalizedFeed = feed.map(item => {
+      const normalizedFeed = feedItems.map(item => {
         if (item.type === 'post' && item.post) {
           const avatarUri = item.post.ownerProfilePictureUrl?.startsWith('/')
             ? `${cleanBaseUrl}${item.post.ownerProfilePictureUrl}`
@@ -722,7 +724,8 @@ export default function StoryPlannerDashboard() {
         setOffset(nextOffset);
       }
       
-      setHasMore(feed.length >= LIMIT);
+      setHasMore(feedItems.length >= LIMIT);
+      setTotalCount(feedTotalCount);
     } catch (error) {
       console.error('Failed to load more posts', error);
     } finally {
@@ -1113,7 +1116,7 @@ export default function StoryPlannerDashboard() {
 
   const renderHeaderTitle = () => {
     if (selectedItems.size === 0) {
-      return `Story Planner (${filteredList.length})`;
+      return `Story Planner (${totalCount})`;
     }
 
     const items = Array.from(selectedItems.values());
@@ -1171,8 +1174,8 @@ export default function StoryPlannerDashboard() {
   };
 
   return (
-    <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${filteredList.length} Available Item${filteredList.length === 1 ? '' : 's'}`} withScrollView={false}>
-      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : `Story Planner (${filteredList.length})` }} />
+    <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${totalCount} Available Item${totalCount === 1 ? '' : 's'}`} withScrollView={false}>
+      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : `Story Planner (${totalCount})` }} />
 
       {loading ? (
         <View style={styles.center}>

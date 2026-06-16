@@ -931,7 +931,7 @@ public class InstaController : ControllerBase
 
     [HttpGet("story-planner/feed")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult<List<UnifiedPlannerItemDto>>> GetStoryPlannerFeed(
+    public async Task<ActionResult<StoryPlannerFeedResponseDto>> GetStoryPlannerFeed(
         [FromQuery] int limit = 100,
         [FromQuery] int offset = 0,
         [FromQuery] string? search = null,
@@ -996,12 +996,49 @@ public class InstaController : ControllerBase
                 SELECT item_type AS ItemType, id AS Id, sort_timestamp AS SortTimestamp
                 FROM unified_feed
                 ORDER BY sort_timestamp DESC
-                LIMIT @limit OFFSET @offset";
+                LIMIT @limit OFFSET @offset;
+
+                WITH group_timestamps AS (
+                    SELECT 
+                        sgi.group_id,
+                        MAX(cv.posted_at) AS latest_post_at
+                    FROM story_group_items sgi
+                    JOIN competitor_videos cv ON cv.id = sgi.post_id
+                    GROUP BY sgi.group_id
+                ),
+                unified_feed AS (
+                    SELECT 
+                        'post' AS item_type,
+                        cv.id::text AS id,
+                        cv.posted_at AS sort_timestamp
+                    FROM competitor_videos cv
+                    JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+                    WHERE cw.is_own_account = true 
+                      AND cw.platform = 'instagram'
+                      AND cw.is_data_deleted = false
+                      AND NOT EXISTS (
+                          SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id
+                      )
+                      {postSearchFilter}
+
+                    UNION ALL
+
+                    SELECT 
+                        'group' AS item_type,
+                        sg.id::text AS id,
+                        COALESCE(gt.latest_post_at, sg.created_at) AS sort_timestamp
+                    FROM story_groups sg
+                    LEFT JOIN group_timestamps gt ON gt.group_id = sg.id
+                    {groupSearchFilter}
+                )
+                SELECT COUNT(*) FROM unified_feed;";
 
             var searchParam = string.IsNullOrEmpty(search) ? null : $"%{search}%";
-            var queryResults = (await conn.QueryAsync<UnifiedFeedQueryResult>(
+            using var multi = await conn.QueryMultipleAsync(
                 new CommandDefinition(sql, new { limit, offset, search = searchParam }, cancellationToken: ct)
-            )).ToList();
+            );
+            var queryResults = (await multi.ReadAsync<UnifiedFeedQueryResult>()).ToList();
+            var totalCount = await multi.ReadFirstAsync<int>();
 
             var unifiedItems = new List<UnifiedPlannerItemDto>();
 
@@ -1240,7 +1277,11 @@ public class InstaController : ControllerBase
                 }
             }
 
-            return Ok(unifiedItems);
+            return Ok(new StoryPlannerFeedResponseDto
+            {
+                Items = unifiedItems,
+                TotalCount = totalCount
+            });
         }
         catch (Exception ex)
         {
@@ -2236,6 +2277,15 @@ public class UnifiedPlannerItemDto
 
     [JsonPropertyName("group")]
     public StoryGroupDto? Group { get; set; }
+}
+
+public class StoryPlannerFeedResponseDto
+{
+    [JsonPropertyName("items")]
+    public List<UnifiedPlannerItemDto> Items { get; set; } = new();
+
+    [JsonPropertyName("totalCount")]
+    public int TotalCount { get; set; }
 }
 
 
