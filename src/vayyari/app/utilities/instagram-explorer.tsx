@@ -163,7 +163,7 @@ export default function InstagramExplorer() {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 20 }}
           onEndReached={loadMorePosts}
-          onEndReachedThreshold={0.5}
+          onEndReachedThreshold={2.0}
           removeClippedSubviews={true}
           maxToRenderPerBatch={10}
           windowSize={5}

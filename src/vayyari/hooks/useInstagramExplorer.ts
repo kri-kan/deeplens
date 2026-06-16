@@ -16,6 +16,7 @@ export const useInstagramExplorer = () => {
   
   // Pagination State
   const offsetRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   
@@ -72,6 +73,7 @@ export const useInstagramExplorer = () => {
     setSelectedProfile(username);
     setLoading(true);
     offsetRef.current = 0;
+    loadingMoreRef.current = false;
     setHasMore(true);
     try {
       const data = await instagramService.getProfileDetails(
@@ -97,6 +99,7 @@ export const useInstagramExplorer = () => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     offsetRef.current = 0;
+    loadingMoreRef.current = false;
     setHasMore(true);
     try {
       if (selectedProfile) {
@@ -131,8 +134,9 @@ export const useInstagramExplorer = () => {
   }, [sortBy, sortOrder, fromDate, toDate]);
 
   const loadMorePosts = async () => {
-    if (!selectedProfile || !hasMore || loadingMore || loading || refreshing) return;
+    if (!selectedProfile || !hasMore || loadingMoreRef.current || loading || refreshing) return;
     
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const data = await instagramService.getProfileDetails(
@@ -162,6 +166,7 @@ export const useInstagramExplorer = () => {
     } catch (error) {
       console.error('Failed to load more posts', error);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   };

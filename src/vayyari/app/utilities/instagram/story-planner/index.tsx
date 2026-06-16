@@ -21,6 +21,483 @@ interface UnifiedItem {
   group?: StoryGroup;
 }
 
+const renderMergedItemsCollage = (mergedItems: UnifiedItem[]) => {
+  if (mergedItems.length === 1) {
+    const item = mergedItems[0];
+    const mediaItem = item.type === 'post' 
+      ? item.post!
+      : (item.group!.posts?.find(p => (p as any).isStarred) || item.group!.posts?.[0]);
+    return (
+      <Image source={{ uri: getMediaUri(mediaItem, 'medium') }} style={styles.tileBackground} contentFit="cover" />
+    );
+  }
+  
+  if (mergedItems.length === 2) {
+    const media1 = mergedItems[0].type === 'post' 
+      ? mergedItems[0].post!
+      : (mergedItems[0].group!.posts?.find(p => (p as any).isStarred) || mergedItems[0].group!.posts?.[0]);
+    const media2 = mergedItems[1].type === 'post' 
+      ? mergedItems[1].post!
+      : (mergedItems[1].group!.posts?.find(p => (p as any).isStarred) || mergedItems[1].group!.posts?.[0]);
+    
+    return (
+      <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
+        <Image source={{ uri: getMediaUri(media1, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
+        <Image source={{ uri: getMediaUri(media2, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
+      </View>
+    );
+  }
+
+  if (mergedItems.length === 3) {
+    const media1 = mergedItems[0].type === 'post' 
+      ? mergedItems[0].post!
+      : (mergedItems[0].group!.posts?.find(p => (p as any).isStarred) || mergedItems[0].group!.posts?.[0]);
+    const media2 = mergedItems[1].type === 'post' 
+      ? mergedItems[1].post!
+      : (mergedItems[1].group!.posts?.find(p => (p as any).isStarred) || mergedItems[1].group!.posts?.[0]);
+    const media3 = mergedItems[2].type === 'post' 
+      ? mergedItems[2].post!
+      : (mergedItems[2].group!.posts?.find(p => (p as any).isStarred) || mergedItems[2].group!.posts?.[0]);
+
+    return (
+      <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
+        <Image source={{ uri: getMediaUri(media1, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
+        <View style={{ width: '50%', height: '100%' }}>
+          <Image source={{ uri: getMediaUri(media2, 'medium') }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
+          <Image source={{ uri: getMediaUri(media3, 'medium') }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
+        </View>
+      </View>
+    );
+  }
+
+  // 4 or more items
+  const medias = mergedItems.slice(0, 3).map(item => {
+    return item.type === 'post' 
+      ? item.post!
+      : (item.group!.posts?.find(p => (p as any).isStarred) || item.group!.posts?.[0]);
+  });
+
+  const lastItem = mergedItems[3];
+  const media4 = lastItem.type === 'post'
+    ? lastItem.post!
+    : (lastItem.group!.posts?.find(p => (p as any).isStarred) || lastItem.group!.posts?.[0]);
+
+  const remaining = mergedItems.length - 4;
+
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%', height: '100%' }}>
+      <Image source={{ uri: getMediaUri(medias[0], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
+      <Image source={{ uri: getMediaUri(medias[1], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
+      <Image source={{ uri: getMediaUri(medias[2], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
+      <View style={{ width: '50%', height: '50%', position: 'relative' }}>
+        <Image source={{ uri: getMediaUri(media4, 'medium') }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+        {remaining > 0 && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>+{remaining + 1}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
+
+interface MergeModalInnerProps {
+  destinationItem: UnifiedItem;
+  mergedItems: UnifiedItem[];
+  ownProfiles: InstagramProfile[];
+  onCancel: () => void;
+  onConfirm: (groupName: string, keywords: string, targets: Set<string>) => void;
+  theme: any;
+}
+
+function MergeModalInner({
+  destinationItem,
+  mergedItems,
+  ownProfiles,
+  onCancel,
+  onConfirm,
+  theme
+}: MergeModalInnerProps) {
+  // Helper to get target watchlist ID from username
+  const getProfileIdByUsername = (username: string): string | undefined => {
+    if (!username) return undefined;
+    const normalized = username.toLowerCase().trim();
+    const found = ownProfiles.find(p => p.username.toLowerCase().trim() === normalized);
+    return found?.id;
+  };
+
+  // Helper to get owner channel IDs for any UnifiedItem (post or group)
+  const getOwnerIdsForItem = (item: UnifiedItem): string[] => {
+    const ids: string[] = [];
+    if (item.type === 'post' && item.post?.ownerUsername) {
+      const id = getProfileIdByUsername(item.post.ownerUsername);
+      if (id) ids.push(id);
+    } else if (item.type === 'group') {
+      if (item.group?.posts) {
+        item.group.posts.forEach(gp => {
+          if (gp.ownerUsername) {
+            const id = getProfileIdByUsername(gp.ownerUsername);
+            if (id && !ids.includes(id)) ids.push(id);
+          }
+        });
+      }
+      if (ids.length === 0 && item.group?.eligibleAccounts) {
+        item.group.eligibleAccounts.forEach(accId => {
+          if (!ids.includes(accId)) ids.push(accId);
+        });
+      }
+    }
+    return ids;
+  };
+
+  const [groupName, setGroupName] = useState(() => {
+    if (destinationItem.type === 'group') {
+      return destinationItem.group!.name;
+    }
+    return '';
+  });
+
+  const [keywords, setKeywords] = useState(() => {
+    if (destinationItem.type === 'group') {
+      return destinationItem.group!.keywords || '';
+    }
+    return '';
+  });
+
+  const [targets, setTargets] = useState<Set<string>>(() => {
+    const defaultUsernames = ['vayyari_fashions', 'everydayvayyari', 'editionsbyvayyari'];
+    const defaultChannelIds = ownProfiles
+      .filter(p => defaultUsernames.includes(p.username.toLowerCase()))
+      .map(p => p.id);
+
+    if (destinationItem.type === 'group') {
+      const initialTargets = new Set<string>(destinationItem.group!.eligibleAccounts || []);
+      mergedItems.forEach(item => {
+        getOwnerIdsForItem(item).forEach(id => initialTargets.add(id));
+      });
+      return initialTargets;
+    } else {
+      const initialTargets = new Set<string>(defaultChannelIds);
+      getOwnerIdsForItem(destinationItem).forEach(id => initialTargets.add(id));
+      mergedItems.forEach(item => {
+        getOwnerIdsForItem(item).forEach(id => initialTargets.add(id));
+      });
+      return initialTargets;
+    }
+  });
+
+  return (
+    <>
+      <View style={styles.dragHandle} />
+      <Text variant="titleLarge" style={styles.bottomSheetTitle}>
+        Link / Merge Preview
+      </Text>
+
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.bottomSheetScrollContent}
+        style={{ maxHeight: '72%' }}
+      >
+        <View style={styles.mergePreviewContainer}>
+          {mergedItems.length > 0 ? (
+            <>
+              <View style={styles.previewSection}>
+                <Text variant="labelSmall" style={styles.previewSectionLabel}>NEW ITEM BEING MERGED</Text>
+                <View style={styles.previewTileSquare}>
+                  {renderMergedItemsCollage(mergedItems)}
+                  <View style={styles.tileOverlay}>
+                    <Text style={styles.tileOverlayText} numberOfLines={1}>
+                      {mergedItems.length === 1 
+                        ? (mergedItems[0].type === 'post' ? 'Ungrouped Reel' : mergedItems[0].group!.name)
+                        : `${mergedItems.length} items`}
+                    </Text>
+                    <Text style={styles.tileOverlaySubtitle} numberOfLines={1}>
+                      {mergedItems.length === 1 
+                        ? (mergedItems[0].type === 'post' ? (mergedItems[0].post!.caption || 'No caption') : `${mergedItems[0].group!.posts?.length || 0} reels`)
+                        : 'Merging multiple files'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <Icon source="arrow-right-bold" size={24} color={theme.colors.onSurfaceVariant} />
+            </>
+          ) : null}
+
+          <View style={styles.previewSection}>
+            <Text variant="labelSmall" style={styles.previewSectionLabel}>
+              {mergedItems.length === 0 ? 'POST TO BE GROUPED' : 'MERGING INTO'}
+            </Text>
+            
+            <View style={styles.previewTileSquare}>
+              <Image 
+                source={{ 
+                  uri: destinationItem.type === 'post'
+                    ? getMediaUri(destinationItem.post!, 'medium')
+                    : getMediaUri(destinationItem.group!.posts?.find(p => (p as any).isStarred) || destinationItem.group!.posts?.[0], 'medium')
+                }} 
+                style={styles.tileBackground}
+                contentFit="cover"
+              />
+              
+              <View style={styles.bottomTileSmallTiles}>
+                <Text style={styles.bottomTileSmallTilesTitle} numberOfLines={1}>
+                  {destinationItem.type === 'group' 
+                    ? `Destination: ${destinationItem.group!.name}`
+                    : 'Selected Reel (Group cover)'}
+                </Text>
+                
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  contentContainerStyle={styles.smallTilesScroll}
+                >
+                  {destinationItem.type === 'group' ? (
+                    destinationItem.group!.posts?.map((p, idx) => (
+                      <Image 
+                        key={p.id || idx} 
+                        source={{ uri: getMediaUri(p, 'medium') }} 
+                        style={styles.smallTileItemImage} 
+                        contentFit="cover"
+                      />
+                    ))
+                  ) : (
+                    <Image 
+                      source={{ uri: getMediaUri(destinationItem.post!, 'medium') }} 
+                      style={styles.smallTileItemImage} 
+                      contentFit="cover"
+                    />
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <Divider style={{ marginVertical: 16 }} />
+
+        <TextInput
+          label="Group Name"
+          value={groupName}
+          onChangeText={setGroupName}
+          mode="outlined"
+          placeholder="e.g. Summer Silks"
+          style={{ marginBottom: 12 }}
+        />
+
+        <TextInput
+          label="Keywords (comma-separated)"
+          value={keywords}
+          onChangeText={setKeywords}
+          mode="outlined"
+          placeholder="e.g. summer, silks, floral"
+          style={{ marginBottom: 16 }}
+        />
+
+        {destinationItem.type === 'post' && (
+          <>
+            <Text variant="labelMedium" style={{ marginBottom: 8, paddingHorizontal: 4 }}>Target Eligibilities:</Text>
+            <View style={styles.eligibilityRow}>
+              {ownProfiles.map(p => {
+                const isChecked = targets.has(p.id);
+                const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+                const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+                const avatarUri = p.storagePath
+                  ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(p.storagePath)}`
+                  : p.profilePictureUrl;
+
+                return (
+                  <View key={p.id} style={styles.eligibilityItem}>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setTargets(prev => {
+                          const next = new Set(prev);
+                          if (next.has(p.id)) next.delete(p.id);
+                          else next.add(p.id);
+                          return next;
+                        });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[
+                        styles.eligibilityAvatarContainer, 
+                        isChecked && { borderColor: theme.colors.primary }
+                      ]}>
+                        {avatarUri ? (
+                          <Image source={{ uri: avatarUri }} style={styles.eligibilityAvatar} contentFit="cover" />
+                        ) : (
+                          <View style={[styles.eligibilityAvatar, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{p.username.substring(0, 2).toUpperCase()}</Text>
+                          </View>
+                        )}
+                        {isChecked && (
+                          <View style={[styles.eligibilityCheckBadge, { backgroundColor: theme.colors.primary }]}>
+                            <Icon source="check" size={10} color="white" />
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.eligibilityText} numberOfLines={1}>@{p.username}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+      </ScrollView>
+
+      <Divider style={{ marginVertical: 12 }} />
+
+      <View style={styles.bottomSheetActions}>
+        <Button 
+          mode="outlined" 
+          style={{ flex: 1 }} 
+          onPress={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button 
+          mode="contained" 
+          style={{ flex: 1 }} 
+          onPress={() => onConfirm(groupName, keywords, targets)}
+        >
+          Confirm Merge
+        </Button>
+      </View>
+    </>
+  );
+}
+
+interface EditDialogInnerProps {
+  activeGroup: StoryGroup;
+  theme: any;
+  onCancel: () => void;
+  onSaveDetails: (name: string, keywords: string) => void;
+  onRenew: (groupId: string) => void;
+  onUpdateStatus: (status: 'active' | 'suspend' | 'ignore', suspendDays: string) => void;
+  onDelete: (groupId: string) => void;
+}
+
+function EditDialogInner({
+  activeGroup,
+  theme,
+  onCancel,
+  onSaveDetails,
+  onRenew,
+  onUpdateStatus,
+  onDelete
+}: EditDialogInnerProps) {
+  const [groupName, setGroupName] = useState(activeGroup.name);
+  const [keywords, setKeywords] = useState(activeGroup.keywords || '');
+  const [suspendDays, setSuspendDays] = useState('7');
+
+  return (
+    <>
+      <Dialog.Title>Edit Group: {activeGroup.name}</Dialog.Title>
+      <ScrollView style={{ maxHeight: 400 }}>
+        <Dialog.Content style={{ gap: 12 }}>
+          <TextInput
+            label="Group Name"
+            value={groupName}
+            onChangeText={setGroupName}
+            mode="outlined"
+            placeholder="e.g. Summer Silks"
+          />
+
+          <TextInput
+            label="Keywords (comma-separated)"
+            value={keywords}
+            onChangeText={setKeywords}
+            mode="outlined"
+            placeholder="e.g. summer, silks, floral"
+          />
+
+          <Button 
+            mode="contained" 
+            icon="content-save-outline" 
+            onPress={() => onSaveDetails(groupName, keywords)}
+            style={{ marginVertical: 4 }}
+          >
+            Save Details
+          </Button>
+
+          <Divider style={{ marginVertical: 4 }} />
+
+          <Text variant="labelMedium">Manage status, renew eligibility, or delete group:</Text>
+          
+          {activeGroup.needsReview && (
+            <View style={{ backgroundColor: theme.colors.errorContainer, padding: 12, borderRadius: 8, marginVertical: 4 }}>
+              <Text style={{ color: theme.colors.onErrorContainer, fontWeight: 'bold' }}>⚠️ Needs Review / Renew</Text>
+              <Text style={{ color: theme.colors.onErrorContainer, fontSize: 11, marginTop: 2 }}>
+                Suspension ended or posts are older than 15 days.
+              </Text>
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 8, marginVertical: 4 }}>
+            <Button 
+              mode={activeGroup.status === 'active' ? 'contained' : 'contained-tonal'} 
+              icon="check-circle-outline" 
+              style={{ flex: 1, backgroundColor: activeGroup.status === 'active' ? 'green' : undefined }} 
+              onPress={() => onRenew(activeGroup.id)}
+            >
+              Renew (Active)
+            </Button>
+            <Button 
+              mode={activeGroup.status === 'ignore' ? 'contained' : 'contained-tonal'} 
+              icon="eye-off-outline" 
+              style={{ flex: 1, backgroundColor: activeGroup.status === 'ignore' ? 'green' : undefined }} 
+              onPress={() => onUpdateStatus('ignore', suspendDays)}
+            >
+              Ignore
+            </Button>
+          </View>
+
+          <Divider style={{ marginVertical: 4 }} />
+
+          <Text variant="labelMedium">Suspend Group:</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <TextInput
+              label="Days"
+              value={suspendDays}
+              onChangeText={setSuspendDays}
+              keyboardType="numeric"
+              mode="outlined"
+              style={{ width: 80, height: 42 }}
+            />
+            <Button 
+              mode={activeGroup.status === 'suspend' ? 'contained' : 'contained-tonal'} 
+              icon="clock-alert-outline" 
+              style={{ backgroundColor: activeGroup.status === 'suspend' ? 'green' : undefined }}
+              onPress={() => onUpdateStatus('suspend', suspendDays)}
+            >
+              Suspend
+            </Button>
+          </View>
+
+          <Divider style={{ marginVertical: 4 }} />
+
+          <Button mode="outlined" icon="delete-outline" textColor={theme.colors.error} style={{ borderColor: theme.colors.error }} onPress={() => onDelete(activeGroup.id)}>
+            Delete Group
+          </Button>
+        </Dialog.Content>
+      </ScrollView>
+      <Dialog.Actions>
+        <Button onPress={onCancel}>Close</Button>
+      </Dialog.Actions>
+    </>
+  );
+}
+
 export default function StoryPlannerDashboard() {
   const theme = useTheme();
   const router = useRouter();
@@ -39,19 +516,14 @@ export default function StoryPlannerDashboard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const LIMIT = 100;
+  const loadingMoreRef = useRef(false);
 
   // Merge Preview Dialog State
   const [mergeDialogVisible, setMergeDialogVisible] = useState(false);
-  const [mergeGroupName, setMergeGroupName] = useState('');
-  const [mergeKeywords, setMergeKeywords] = useState('');
-  const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
 
   // Edit Group Dialog State
   const [editDialogVisible, setEditDialogVisible] = useState(false);
   const [activeGroup, setActiveGroup] = useState<StoryGroup | null>(null);
-  const [suspendDays, setSuspendDays] = useState('7');
-  const [editGroupName, setEditGroupName] = useState('');
-  const [editKeywords, setEditKeywords] = useState('');
 
   // Search Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -195,8 +667,9 @@ export default function StoryPlannerDashboard() {
   };
  
   const loadMorePosts = async () => {
-    if (loadingMore || !hasMore || loading || refreshing || ownProfiles.length === 0) return;
+    if (loadingMoreRef.current || !hasMore || loading || refreshing || ownProfiles.length === 0) return;
     
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const nextOffset = offset + LIMIT;
@@ -253,6 +726,7 @@ export default function StoryPlannerDashboard() {
     } catch (error) {
       console.error('Failed to load more posts', error);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   };
@@ -351,73 +825,10 @@ export default function StoryPlannerDashboard() {
       Alert.alert('Selection Error', 'Please select two or more items to merge.');
       return;
     }
-
-    const { destinationItem, mergedItems } = data;
-
-    // Helper to get target watchlist ID from username
-    const getProfileIdByUsername = (username: string): string | undefined => {
-      if (!username) return undefined;
-      const normalized = username.toLowerCase().trim();
-      const found = ownProfiles.find(p => p.username.toLowerCase().trim() === normalized);
-      return found?.id;
-    };
-
-    // Helper to get owner channel IDs for any UnifiedItem (post or group)
-    const getOwnerIdsForItem = (item: UnifiedItem): string[] => {
-      const ids: string[] = [];
-      if (item.type === 'post' && item.post?.ownerUsername) {
-        const id = getProfileIdByUsername(item.post.ownerUsername);
-        if (id) ids.push(id);
-      } else if (item.type === 'group') {
-        if (item.group?.posts) {
-          item.group.posts.forEach(gp => {
-            if (gp.ownerUsername) {
-              const id = getProfileIdByUsername(gp.ownerUsername);
-              if (id && !ids.includes(id)) ids.push(id);
-            }
-          });
-        }
-        if (ids.length === 0 && item.group?.eligibleAccounts) {
-          item.group.eligibleAccounts.forEach(accId => {
-            if (!ids.includes(accId)) ids.push(accId);
-          });
-        }
-      }
-      return ids;
-    };
-
-    const defaultUsernames = ['vayyari_fashions', 'everydayvayyari', 'editionsbyvayyari'];
-    const defaultChannelIds = ownProfiles
-      .filter(p => defaultUsernames.includes(p.username.toLowerCase()))
-      .map(p => p.id);
-
-    if (destinationItem.type === 'group') {
-      setMergeGroupName(destinationItem.group!.name);
-      setMergeKeywords(destinationItem.group!.keywords || '');
-      
-      // For existing groups: union of existing selected + merged items owner channels
-      const initialTargets = new Set<string>(destinationItem.group!.eligibleAccounts || []);
-      mergedItems.forEach(item => {
-        getOwnerIdsForItem(item).forEach(id => initialTargets.add(id));
-      });
-      setSelectedTargets(initialTargets);
-    } else {
-      setMergeGroupName('');
-      setMergeKeywords('');
-      
-      // For new groups: default channels + owner channels of all posts being grouped
-      const initialTargets = new Set<string>(defaultChannelIds);
-      getOwnerIdsForItem(destinationItem).forEach(id => initialTargets.add(id));
-      mergedItems.forEach(item => {
-        getOwnerIdsForItem(item).forEach(id => initialTargets.add(id));
-      });
-      setSelectedTargets(initialTargets);
-    }
-
     setMergeDialogVisible(true);
   };
 
-  const handleMergeConfirm = async () => {
+  const handleMergeConfirm = async (groupName: string, keywords: string, targets: Set<string>) => {
     const data = getMergePreviewData();
     if (!data) return;
 
@@ -453,13 +864,13 @@ export default function StoryPlannerDashboard() {
 
         // 3. Rename group, update keywords, and save target eligibilities (union)
         const updatePayload: any = {
-          targetWatchlistIds: Array.from(selectedTargets)
+          targetWatchlistIds: Array.from(targets)
         };
-        if (mergeGroupName.trim() && mergeGroupName.trim() !== destinationItem.group!.name) {
-          updatePayload.name = mergeGroupName.trim();
+        if (groupName.trim() && groupName.trim() !== destinationItem.group!.name) {
+          updatePayload.name = groupName.trim();
         }
-        if (mergeKeywords.trim() !== (destinationItem.group!.keywords || '')) {
-          updatePayload.keywords = mergeKeywords.trim();
+        if (keywords.trim() !== (destinationItem.group!.keywords || '')) {
+          updatePayload.keywords = keywords.trim();
         }
         await wrapInSpan('StoryPlannerDashboard: updateStoryGroupDetails', () => 
           instagramService.updateStoryGroup(parentId, updatePayload)
@@ -469,10 +880,10 @@ export default function StoryPlannerDashboard() {
         const postIds = [destinationItem.id, ...mergedItems.map(item => item.id)];
         await wrapInSpan('StoryPlannerDashboard: createStoryGroup', () => 
           instagramService.createStoryGroup({
-            name: mergeGroupName.trim() || 'New Story Group',
+            name: groupName.trim() || 'New Story Group',
             postIds,
-            targetWatchlistIds: Array.from(selectedTargets),
-            keywords: mergeKeywords.trim()
+            targetWatchlistIds: Array.from(targets),
+            keywords: keywords.trim()
           })
         );
       }
@@ -487,14 +898,14 @@ export default function StoryPlannerDashboard() {
     }
   };
 
-  const handleUpdateStatus = async (status: 'active' | 'suspend' | 'ignore') => {
+  const handleUpdateStatus = async (status: 'active' | 'suspend' | 'ignore', targetSuspendDays: string) => {
     if (!activeGroup) return;
 
     try {
       setLoading(true);
       const payload: any = { status };
       if (status === 'suspend') {
-        payload.suspendDays = parseInt(suspendDays, 10) || 7;
+        payload.suspendDays = parseInt(targetSuspendDays, 10) || 7;
       }
       await wrapInSpan('StoryPlannerDashboard: updateStatus', () => 
         instagramService.updateStoryGroup(activeGroup.id, payload)
@@ -509,15 +920,15 @@ export default function StoryPlannerDashboard() {
     }
   };
 
-  const handleUpdateGroupDetails = async () => {
+  const handleUpdateGroupDetails = async (groupName: string, keywords: string) => {
     if (!activeGroup) return;
 
     try {
       setLoading(true);
       await wrapInSpan('StoryPlannerDashboard: updateGroupDetails', () => 
         instagramService.updateStoryGroup(activeGroup.id, {
-          name: editGroupName.trim(),
-          keywords: editKeywords.trim()
+          name: groupName.trim(),
+          keywords: keywords.trim()
         })
       );
       setEditDialogVisible(false);
@@ -648,8 +1059,6 @@ export default function StoryPlannerDashboard() {
               handleItemSelect(item);
             } else {
               setActiveGroup(group);
-              setEditGroupName(group.name);
-              setEditKeywords(group.keywords || '');
               setEditDialogVisible(true);
             }
           }}
@@ -664,7 +1073,25 @@ export default function StoryPlannerDashboard() {
             transition={200}
           />
           
-          {selectionMode ? (
+          <View style={styles.groupTopInfo}>
+            {renderGroupAvatars(group)}
+            <View style={styles.groupPostCountBadge}>
+              <Text style={styles.groupPostCountText}>
+                {group.posts?.length || 0} {(group.posts?.length || 0) === 1 ? 'post' : 'posts'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.groupBottomOverlay}>
+            <Text style={styles.groupBottomTitle} numberOfLines={1}>
+              {group.name}
+            </Text>
+            {group.needsReview && (
+              <Text style={styles.groupNeedsReviewBadge}>⚠️ Review</Text>
+            )}
+          </View>
+
+          {selectionMode && (
             <View style={styles.selectionIndicator}>
               <Icon 
                 source={isSelected ? "check-circle" : "circle-outline"} 
@@ -672,120 +1099,13 @@ export default function StoryPlannerDashboard() {
                 color={isSelected ? theme.colors.primary : "white"} 
               />
             </View>
-          ) : (
-            <>
-              <View style={styles.groupTopInfo}>
-                {renderGroupAvatars(group)}
-                <View style={styles.groupPostCountBadge}>
-                  <Text style={styles.groupPostCountText}>
-                    {group.posts?.length || 0} {(group.posts?.length || 0) === 1 ? 'post' : 'posts'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.groupBottomOverlay}>
-                <Text style={styles.groupBottomTitle} numberOfLines={1}>
-                  {group.name}
-                </Text>
-                {group.needsReview && (
-                  <Text style={styles.groupNeedsReviewBadge}>⚠️ Review</Text>
-                )}
-              </View>
-            </>
           )}
         </TouchableOpacity>
       );
     }
   };
 
-  const renderMergedItemsCollage = (mergedItems: UnifiedItem[]) => {
-    if (mergedItems.length === 1) {
-      const item = mergedItems[0];
-      const mediaItem = item.type === 'post' 
-        ? item.post!
-        : (item.group!.posts?.find(p => (p as any).isStarred) || item.group!.posts?.[0]);
-      return (
-        <Image source={{ uri: getMediaUri(mediaItem, 'medium') }} style={styles.tileBackground} contentFit="cover" />
-      );
-    }
-    
-    if (mergedItems.length === 2) {
-      const media1 = mergedItems[0].type === 'post' 
-        ? mergedItems[0].post!
-        : (mergedItems[0].group!.posts?.find(p => (p as any).isStarred) || mergedItems[0].group!.posts?.[0]);
-      const media2 = mergedItems[1].type === 'post' 
-        ? mergedItems[1].post!
-        : (mergedItems[1].group!.posts?.find(p => (p as any).isStarred) || mergedItems[1].group!.posts?.[0]);
-      
-      return (
-        <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
-          <Image source={{ uri: getMediaUri(media1, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
-          <Image source={{ uri: getMediaUri(media2, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
-        </View>
-      );
-    }
-
-    if (mergedItems.length === 3) {
-      const media1 = mergedItems[0].type === 'post' 
-        ? mergedItems[0].post!
-        : (mergedItems[0].group!.posts?.find(p => (p as any).isStarred) || mergedItems[0].group!.posts?.[0]);
-      const media2 = mergedItems[1].type === 'post' 
-        ? mergedItems[1].post!
-        : (mergedItems[1].group!.posts?.find(p => (p as any).isStarred) || mergedItems[1].group!.posts?.[0]);
-      const media3 = mergedItems[2].type === 'post' 
-        ? mergedItems[2].post!
-        : (mergedItems[2].group!.posts?.find(p => (p as any).isStarred) || mergedItems[2].group!.posts?.[0]);
-
-      return (
-        <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
-          <Image source={{ uri: getMediaUri(media1, 'medium') }} style={{ width: '50%', height: '100%' }} contentFit="cover" />
-          <View style={{ width: '50%', height: '100%' }}>
-            <Image source={{ uri: getMediaUri(media2, 'medium') }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
-            <Image source={{ uri: getMediaUri(media3, 'medium') }} style={{ width: '100%', height: '50%' }} contentFit="cover" />
-          </View>
-        </View>
-      );
-    }
-
-    // 4 or more items
-    const medias = mergedItems.slice(0, 3).map(item => {
-      return item.type === 'post' 
-        ? item.post!
-        : (item.group!.posts?.find(p => (p as any).isStarred) || item.group!.posts?.[0]);
-    });
-
-    const lastItem = mergedItems[3];
-    const media4 = lastItem.type === 'post'
-      ? lastItem.post!
-      : (lastItem.group!.posts?.find(p => (p as any).isStarred) || lastItem.group!.posts?.[0]);
-
-    const remaining = mergedItems.length - 4;
-
-    return (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: '100%', height: '100%' }}>
-        <Image source={{ uri: getMediaUri(medias[0], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
-        <Image source={{ uri: getMediaUri(medias[1], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
-        <Image source={{ uri: getMediaUri(medias[2], 'medium') }} style={{ width: '50%', height: '50%' }} contentFit="cover" />
-        <View style={{ width: '50%', height: '50%', position: 'relative' }}>
-          <Image source={{ uri: getMediaUri(media4, 'medium') }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-          {remaining > 0 && (
-            <View style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0,0,0,0.6)',
-              justifyContent: 'center',
-              alignItems: 'center'
-            }}>
-              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>+{remaining + 1}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    );
-  };
+  // Helper collage renderer moved to top-level
 
   const mergeData = getMergePreviewData();
 
@@ -886,7 +1206,7 @@ export default function StoryPlannerDashboard() {
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: 80 }}
             onEndReached={loadMorePosts}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={2.0}
             extraData={selectedItems}
             removeClippedSubviews={false}
             maxToRenderPerBatch={12}
@@ -924,290 +1244,31 @@ export default function StoryPlannerDashboard() {
             { backgroundColor: theme.colors.elevation.level3 }
           ]}
         >
-          {/* Drag Handle Indicator */}
-          <View style={styles.dragHandle} />
-
-          {/* Bottom Sheet Title */}
-          <Text variant="titleLarge" style={styles.bottomSheetTitle}>
-            Link / Merge Preview
-          </Text>
-
-          {/* Scrollable Content */}
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.bottomSheetScrollContent}
-            style={{ maxHeight: '72%' }}
-          >
-            {mergeData && (
-              <View style={styles.mergePreviewContainer}>
-                
-                {mergeData.mergedItems.length > 0 ? (
-                  <>
-                    {/* Left Tile: New Item being merged */}
-                    <View style={styles.previewSection}>
-                      <Text variant="labelSmall" style={styles.previewSectionLabel}>NEW ITEM BEING MERGED</Text>
-                      <View style={styles.previewTileSquare}>
-                        {renderMergedItemsCollage(mergeData.mergedItems)}
-                        <View style={styles.tileOverlay}>
-                          <Text style={styles.tileOverlayText} numberOfLines={1}>
-                            {mergeData.mergedItems.length === 1 
-                              ? (mergeData.mergedItems[0].type === 'post' ? 'Ungrouped Reel' : mergeData.mergedItems[0].group!.name)
-                              : `${mergeData.mergedItems.length} items`}
-                          </Text>
-                          <Text style={styles.tileOverlaySubtitle} numberOfLines={1}>
-                            {mergeData.mergedItems.length === 1 
-                              ? (mergeData.mergedItems[0].type === 'post' ? (mergeData.mergedItems[0].post!.caption || 'No caption') : `${mergeData.mergedItems[0].group!.posts?.length || 0} reels`)
-                              : 'Merging multiple files'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    <Icon source="arrow-right-bold" size={24} color={theme.colors.onSurfaceVariant} />
-                  </>
-                ) : null}
-
-                {/* Right Tile: Group being merged into / Post to be grouped */}
-                <View style={styles.previewSection}>
-                  <Text variant="labelSmall" style={styles.previewSectionLabel}>
-                    {mergeData.mergedItems.length === 0 ? 'POST TO BE GROUPED' : 'MERGING INTO'}
-                  </Text>
-                  
-                  <View style={styles.previewTileSquare}>
-                    {/* Destination Cover Image */}
-                    <Image 
-                      source={{ 
-                        uri: mergeData.destinationItem.type === 'post'
-                          ? getMediaUri(mergeData.destinationItem.post!, 'medium')
-                          : getMediaUri(mergeData.destinationItem.group!.posts?.find(p => (p as any).isStarred) || mergeData.destinationItem.group!.posts?.[0], 'medium')
-                      }} 
-                      style={styles.tileBackground}
-                      contentFit="cover"
-                    />
-                    
-                    {/* Small tiles adjusted to the group tile (preview overlay) */}
-                    <View style={styles.bottomTileSmallTiles}>
-                      <Text style={styles.bottomTileSmallTilesTitle} numberOfLines={1}>
-                        {mergeData.destinationItem.type === 'group' 
-                          ? `Destination: ${mergeData.destinationItem.group!.name}`
-                          : 'Selected Reel (Group cover)'}
-                      </Text>
-                      
-                      <ScrollView 
-                        horizontal 
-                        showsHorizontalScrollIndicator={false} 
-                        contentContainerStyle={styles.smallTilesScroll}
-                      >
-                        {mergeData.destinationItem.type === 'group' ? (
-                          mergeData.destinationItem.group!.posts?.map((p, idx) => (
-                            <Image 
-                              key={p.id || idx} 
-                              source={{ uri: getMediaUri(p, 'medium') }} 
-                              style={styles.smallTileItemImage} 
-                              contentFit="cover"
-                            />
-                          ))
-                        ) : (
-                          <Image 
-                            source={{ uri: getMediaUri(mergeData.destinationItem.post!, 'medium') }} 
-                            style={styles.smallTileItemImage} 
-                            contentFit="cover"
-                          />
-                        )}
-                      </ScrollView>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            <Divider style={{ marginVertical: 16 }} />
-
-            <TextInput
-              label="Group Name"
-              value={mergeGroupName}
-              onChangeText={setMergeGroupName}
-              mode="outlined"
-              placeholder="e.g. Summer Silks"
-              style={{ marginBottom: 12 }}
+          {mergeDialogVisible && mergeData && (
+            <MergeModalInner
+              destinationItem={mergeData.destinationItem}
+              mergedItems={mergeData.mergedItems}
+              ownProfiles={ownProfiles}
+              onCancel={() => setMergeDialogVisible(false)}
+              onConfirm={handleMergeConfirm}
+              theme={theme}
             />
-
-            <TextInput
-              label="Keywords (comma-separated)"
-              value={mergeKeywords}
-              onChangeText={setMergeKeywords}
-              mode="outlined"
-              placeholder="e.g. summer, silks, floral"
-              style={{ marginBottom: 16 }}
-            />
-
-            {mergeData?.destinationItem.type === 'post' && (
-              <>
-                <Text variant="labelMedium" style={{ marginBottom: 8, paddingHorizontal: 4 }}>Target Eligibilities:</Text>
-                <View style={styles.eligibilityRow}>
-                  {ownProfiles.map(p => {
-                    const isChecked = selectedTargets.has(p.id);
-                    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
-                    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-                    const avatarUri = p.storagePath
-                      ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(p.storagePath)}`
-                      : p.profilePictureUrl;
-
-                    return (
-                      <View key={p.id} style={styles.eligibilityItem}>
-                        <TouchableOpacity 
-                          onPress={() => {
-                            setSelectedTargets(prev => {
-                              const next = new Set(prev);
-                              if (next.has(p.id)) next.delete(p.id);
-                              else next.add(p.id);
-                              return next;
-                            });
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <View style={[
-                            styles.eligibilityAvatarContainer, 
-                            isChecked && { borderColor: theme.colors.primary }
-                          ]}>
-                            {avatarUri ? (
-                              <Image source={{ uri: avatarUri }} style={styles.eligibilityAvatar} contentFit="cover" />
-                            ) : (
-                              <View style={[styles.eligibilityAvatar, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
-                                <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{p.username.substring(0, 2).toUpperCase()}</Text>
-                              </View>
-                            )}
-                            {isChecked && (
-                              <View style={[styles.eligibilityCheckBadge, { backgroundColor: theme.colors.primary }]}>
-                                <Icon source="check" size={10} color="white" />
-                              </View>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                        <Text style={styles.eligibilityText} numberOfLines={1}>@{p.username}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-          </ScrollView>
-
-          <Divider style={{ marginVertical: 12 }} />
-
-          {/* Action Buttons */}
-          <View style={styles.bottomSheetActions}>
-            <Button 
-              mode="outlined" 
-              style={{ flex: 1 }} 
-              onPress={() => setMergeDialogVisible(false)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              mode="contained" 
-              style={{ flex: 1 }} 
-              onPress={handleMergeConfirm}
-            >
-              Confirm Merge
-            </Button>
-          </View>
+          )}
         </Modal>
 
         {/* Edit Group Options Dialog */}
         <Dialog visible={editDialogVisible} onDismiss={() => setEditDialogVisible(false)}>
-          <Dialog.Title>Edit Group: {activeGroup?.name}</Dialog.Title>
-          <ScrollView style={{ maxHeight: 400 }}>
-            <Dialog.Content style={{ gap: 12 }}>
-              <TextInput
-                label="Group Name"
-                value={editGroupName}
-                onChangeText={setEditGroupName}
-                mode="outlined"
-                placeholder="e.g. Summer Silks"
-              />
-
-              <TextInput
-                label="Keywords (comma-separated)"
-                value={editKeywords}
-                onChangeText={setEditKeywords}
-                mode="outlined"
-                placeholder="e.g. summer, silks, floral"
-              />
-
-              <Button 
-                mode="contained" 
-                icon="content-save-outline" 
-                onPress={handleUpdateGroupDetails}
-                style={{ marginVertical: 4 }}
-              >
-                Save Details
-              </Button>
-
-              <Divider style={{ marginVertical: 4 }} />
-
-              <Text variant="labelMedium">Manage status, renew eligibility, or delete group:</Text>
-              
-              {activeGroup?.needsReview && (
-                <View style={{ backgroundColor: theme.colors.errorContainer, padding: 12, borderRadius: 8, marginVertical: 4 }}>
-                  <Text style={{ color: theme.colors.onErrorContainer, fontWeight: 'bold' }}>⚠️ Needs Review / Renew</Text>
-                  <Text style={{ color: theme.colors.onErrorContainer, fontSize: 11, marginTop: 2 }}>
-                    Suspension ended or posts are older than 15 days.
-                  </Text>
-                </View>
-              )}
-
-              <View style={{ flexDirection: 'row', gap: 8, marginVertical: 4 }}>
-                <Button 
-                  mode={activeGroup?.status === 'active' ? 'contained' : 'contained-tonal'} 
-                  icon="check-circle-outline" 
-                  style={{ flex: 1, backgroundColor: activeGroup?.status === 'active' ? 'green' : undefined }} 
-                  onPress={() => handleRenew(activeGroup!.id)}
-                >
-                  Renew (Active)
-                </Button>
-                <Button 
-                  mode={activeGroup?.status === 'ignore' ? 'contained' : 'contained-tonal'} 
-                  icon="eye-off-outline" 
-                  style={{ flex: 1, backgroundColor: activeGroup?.status === 'ignore' ? 'green' : undefined }} 
-                  onPress={() => handleUpdateStatus('ignore')}
-                >
-                  Ignore
-                </Button>
-              </View>
-
-              <Divider style={{ marginVertical: 4 }} />
-
-              <Text variant="labelMedium">Suspend Group:</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <TextInput
-                  label="Days"
-                  value={suspendDays}
-                  onChangeText={setSuspendDays}
-                  keyboardType="numeric"
-                  mode="outlined"
-                  style={{ width: 80, height: 42 }}
-                />
-                <Button 
-                  mode={activeGroup?.status === 'suspend' ? 'contained' : 'contained-tonal'} 
-                  icon="clock-alert-outline" 
-                  style={{ backgroundColor: activeGroup?.status === 'suspend' ? 'green' : undefined }}
-                  onPress={() => handleUpdateStatus('suspend')}
-                >
-                  Suspend
-                </Button>
-              </View>
-
-              <Divider style={{ marginVertical: 4 }} />
-
-              <Button mode="outlined" icon="delete-outline" textColor={theme.colors.error} style={{ borderColor: theme.colors.error }} onPress={() => handleDeleteGroup(activeGroup!.id)}>
-                Delete Group
-              </Button>
-            </Dialog.Content>
-          </ScrollView>
-          <Dialog.Actions>
-            <Button onPress={() => setEditDialogVisible(false)}>Close</Button>
-          </Dialog.Actions>
+          {editDialogVisible && activeGroup && (
+            <EditDialogInner
+              activeGroup={activeGroup}
+              theme={theme}
+              onCancel={() => setEditDialogVisible(false)}
+              onSaveDetails={handleUpdateGroupDetails}
+              onRenew={handleRenew}
+              onUpdateStatus={handleUpdateStatus}
+              onDelete={handleDeleteGroup}
+            />
+          )}
         </Dialog>
       </Portal>
     </ScreenWrapper>
