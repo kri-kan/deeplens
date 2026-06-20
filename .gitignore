@@ -418,3 +418,7 @@ worker.log
 RESET_SUMMARY.md
 
 tools/dataimport/insta/
+
+# Ignore large SQL backups (violates GitHub 100MB limit)
+# setupscripts/application/deeplens-core/*.sql
+# setupscripts/application/identity/*.sql
