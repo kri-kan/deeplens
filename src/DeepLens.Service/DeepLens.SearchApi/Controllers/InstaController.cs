@@ -8,6 +8,7 @@ using Dapper;
 using DeepLens.Infrastructure.Services;
 using DeepLens.Domain.Enums;
 using System.Linq;
+using DeepLens.SearchApi.Services;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -20,6 +21,7 @@ public class InstaController : ControllerBase
     private readonly IDbConnectionFactory _db;
     private readonly IStorageService _storage;
     private readonly IInstagramMediaService _instaMedia;
+    private readonly IAttributeExtractionService _attributeService;
     private readonly ILogger<InstaController> _logger;
 
     private const string MetaPostSelectSql = @"
@@ -40,6 +42,7 @@ public class InstaController : ControllerBase
             cv.status AS Status,
             cv.suspend_until AS SuspendUntil,
             cv.last_reviewed_at AS LastReviewedAt,
+            (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id) AS LastPostedAt,
             (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
         FROM competitor_videos cv";
 
@@ -61,6 +64,7 @@ public class InstaController : ControllerBase
             cv.status AS Status,
             cv.suspend_until AS SuspendUntil,
             cv.last_reviewed_at AS LastReviewedAt,
+            (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id) AS LastPostedAt,
             (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
             sgi.is_starred AS IsStarred
         FROM competitor_videos cv";
@@ -70,12 +74,14 @@ public class InstaController : ControllerBase
         IDbConnectionFactory db,
         IStorageService storage,
         IInstagramMediaService instaMedia,
+        IAttributeExtractionService attributeService,
         ILogger<InstaController> logger)
     {
         _metaGraph = metaGraph;
         _db = db;
         _storage = storage;
         _instaMedia = instaMedia;
+        _attributeService = attributeService;
         _logger = logger;
     }
 
@@ -661,8 +667,30 @@ public class InstaController : ControllerBase
         try
         {
             using var conn = await _db.CreateConnectionAsync();
-            var sql = $@"{MetaPostSelectSql}
-                WHERE cv.status = 'suspend'
+            var sql = $@"
+                SELECT 
+                    cv.id::text AS Id, 
+                    cv.platform_video_id AS PlatformId,
+                    cv.url AS Permalink, 
+                    cv.description AS Caption,
+                    cv.media_type AS MediaType, 
+                    cv.thumbnail_url AS ThumbnailUrl, 
+                    cv.media_url AS MediaUrl,
+                    cv.like_count AS LikeCount, 
+                    cv.comment_count AS CommentCount, 
+                    cv.posted_at AS Timestamp,
+                    cv.storage_path AS StoragePath,
+                    cv.youtube_video_id AS YoutubeVideoId,
+                    cv.youtube_url AS YoutubeUrl,
+                    cv.status AS Status,
+                    cv.suspend_until AS SuspendUntil,
+                    cv.last_reviewed_at AS LastReviewedAt,
+                    (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id) AS LastPostedAt,
+                    (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
+                    cw.username AS OwnerUsername
+                FROM competitor_videos cv
+                JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+                WHERE cv.status = 'suspend' AND cw.is_own_account = true AND cw.is_data_deleted = false
                 ORDER BY cv.suspend_until ASC";
             var videos = await conn.QueryAsync<MetaPost>(sql);
             return Ok(videos.ToList());
@@ -670,6 +698,48 @@ public class InstaController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to retrieve suspended videos");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("videos/ignored")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<MetaPost>>> GetIgnoredVideos()
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = $@"
+                SELECT 
+                    cv.id::text AS Id, 
+                    cv.platform_video_id AS PlatformId,
+                    cv.url AS Permalink, 
+                    cv.description AS Caption,
+                    cv.media_type AS MediaType, 
+                    cv.thumbnail_url AS ThumbnailUrl, 
+                    cv.media_url AS MediaUrl,
+                    cv.like_count AS LikeCount, 
+                    cv.comment_count AS CommentCount, 
+                    cv.posted_at AS Timestamp,
+                    cv.storage_path AS StoragePath,
+                    cv.youtube_video_id AS YoutubeVideoId,
+                    cv.youtube_url AS YoutubeUrl,
+                    cv.status AS Status,
+                    cv.suspend_until AS SuspendUntil,
+                    cv.last_reviewed_at AS LastReviewedAt,
+                    (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id) AS LastPostedAt,
+                    (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
+                    cw.username AS OwnerUsername
+                FROM competitor_videos cv
+                JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+                WHERE cv.status = 'ignore' AND cw.is_own_account = true AND cw.is_data_deleted = false
+                ORDER BY cv.posted_at DESC";
+            var videos = await conn.QueryAsync<MetaPost>(sql);
+            return Ok(videos.ToList());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve ignored videos");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -753,6 +823,7 @@ public class InstaController : ControllerBase
                     Status = item.Status,
                     SuspendUntil = item.SuspendUntil,
                     LastReviewedAt = item.LastReviewedAt,
+                    LastPostedAt = item.LastPostedAt,
                     OwnerUsername = item.OwnerUsername,
                     ProductCode = item.ProductCode
                 };
@@ -1031,14 +1102,19 @@ public class InstaController : ControllerBase
                     LEFT JOIN group_timestamps gt ON gt.group_id = sg.id
                     {groupSearchFilter}
                 )
-                SELECT COUNT(*) FROM unified_feed;";
+                SELECT 
+                    COUNT(*) AS TotalCount,
+                    COUNT(*) FILTER (WHERE item_type = 'group') AS GroupCount
+                FROM unified_feed;";
 
             var searchParam = string.IsNullOrEmpty(search) ? null : $"%{search}%";
             using var multi = await conn.QueryMultipleAsync(
                 new CommandDefinition(sql, new { limit, offset, search = searchParam }, cancellationToken: ct)
             );
             var queryResults = (await multi.ReadAsync<UnifiedFeedQueryResult>()).ToList();
-            var totalCount = await multi.ReadFirstAsync<int>();
+            var counts = await multi.ReadFirstAsync<StoryPlannerQueryCounts>();
+            var totalCount = counts.TotalCount;
+            var groupCount = counts.GroupCount;
 
             var unifiedItems = new List<UnifiedPlannerItemDto>();
 
@@ -1099,6 +1175,7 @@ public class InstaController : ControllerBase
                         Status = item.Status,
                         SuspendUntil = item.SuspendUntil,
                         LastReviewedAt = item.LastReviewedAt,
+                        LastPostedAt = item.LastPostedAt,
                         OwnerUsername = item.OwnerUsername,
                         ProductCode = item.ProductCode
                     };
@@ -1217,6 +1294,7 @@ public class InstaController : ControllerBase
                                     Status = item.Status,
                                     SuspendUntil = item.SuspendUntil,
                                     LastReviewedAt = item.LastReviewedAt,
+                                    LastPostedAt = item.LastPostedAt,
                                     OwnerUsername = item.OwnerUsername,
                                     ProductCode = item.ProductCode,
                                     IsStarred = item.IsStarred
@@ -1280,7 +1358,8 @@ public class InstaController : ControllerBase
             return Ok(new StoryPlannerFeedResponseDto
             {
                 Items = unifiedItems,
-                TotalCount = totalCount
+                TotalCount = totalCount,
+                GroupCount = groupCount
             });
         }
         catch (Exception ex)
@@ -1411,6 +1490,7 @@ public class InstaController : ControllerBase
                                 Status = item.Status,
                                 SuspendUntil = item.SuspendUntil,
                                 LastReviewedAt = item.LastReviewedAt,
+                                LastPostedAt = item.LastPostedAt,
                                 OwnerUsername = item.OwnerUsername,
                                 ProductCode = item.ProductCode,
                                 IsStarred = item.IsStarred
@@ -1500,6 +1580,46 @@ public class InstaController : ControllerBase
             _logger.LogError(ex, "Failed to retrieve story group {Id}", id);
             return StatusCode(500, new { error = ex.Message });
         }
+    }
+
+    [HttpPost("suggest-group-metadata")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> SuggestGroupMetadata([FromBody] SuggestGroupMetadataRequest req)
+    {
+        if (req.PostIds == null || req.PostIds.Count == 0)
+        {
+            return BadRequest("At least one post ID is required.");
+        }
+
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var descriptions = (await conn.QueryAsync<string>(@"
+                SELECT description 
+                FROM competitor_videos 
+                WHERE id = ANY(@PostIds)",
+                new { PostIds = req.PostIds.Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty).ToList() }))
+                .Where(desc => !string.IsNullOrWhiteSpace(desc))
+                .ToList();
+
+            if (descriptions.Count == 0)
+            {
+                return Ok(new { title = "New Story Group", hashtags = new List<string>() });
+            }
+
+            var suggestion = await _attributeService.SuggestGroupMetadataAsync(descriptions);
+            return Ok(new { title = suggestion.Title, hashtags = suggestion.Hashtags });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to suggest group metadata for post IDs: {PostIds}", string.Join(", ", req.PostIds));
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    public class SuggestGroupMetadataRequest
+    {
+        public List<string> PostIds { get; set; } = new();
     }
 
     [HttpPost("story-groups")]
@@ -1668,6 +1788,28 @@ public class InstaController : ControllerBase
         }
     }
 
+    [HttpPost("story-groups/{id}/finish")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> FinishStoryGroup(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var affected = await conn.ExecuteAsync(new CommandDefinition(@"
+                UPDATE story_groups 
+                SET status = 'suspend', suspend_until = now() + INTERVAL '24 hours', updated_at = now() 
+                WHERE id = @Id", new { Id = id }, cancellationToken: ct));
+
+            if (affected == 0) return NotFound();
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to finish story group");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     [HttpPost("story-groups/merge")]
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult> MergeStoryGroups([FromBody] MergeStoryGroupsRequest req, CancellationToken ct)
@@ -1803,6 +1945,28 @@ public class InstaController : ControllerBase
         }
     }
 
+    [HttpPost("story-posts/{id}/post")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> MarkPostPosted(Guid id, [FromQuery] Guid targetWatchlistId, [FromQuery] Guid? groupId, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var historyId = Guid.NewGuid();
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                INSERT INTO story_posting_history (id, post_id, group_id, target_watchlist_id, posted_at, swipe_status)
+                VALUES (@Id, @PostId, @GroupId, @TargetWatchlistId, now(), 'pending')",
+                new { Id = historyId, PostId = id, GroupId = groupId, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct));
+
+            return Ok(new { success = true, historyId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark post as posted to story");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     private class EligibleGroupQueryResult
     {
         public Guid Id { get; set; }
@@ -1815,114 +1979,278 @@ public class InstaController : ControllerBase
         public string? Keywords { get; set; }
         public long RightSwipes { get; set; }
         public long LeftSwipes { get; set; }
+        public long ShareCount { get; set; }
         public DateTime? LastPostedAt { get; set; }
     }
 
-    [HttpGet("story-groups/eligible/{targetWatchlistId}")]
+    [HttpGet("story-planner/eligible/{targetWatchlistId}")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult> GetEligibleGroups(Guid targetWatchlistId, CancellationToken ct)
+    public async Task<ActionResult> GetEligibleShares(
+        Guid targetWatchlistId,
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0,
+        CancellationToken ct = default)
     {
         try
         {
             using var conn = await _db.CreateConnectionAsync();
-            var sql = @"
-                SELECT 
-                    sg.id AS Id, 
-                    sg.name AS Name, 
-                    sg.status AS Status, 
-                    sg.suspend_until AS SuspendUntil, 
-                    sg.last_reviewed_at AS LastReviewedAt, 
-                    sg.created_at AS CreatedAt, 
-                    sg.updated_at AS UpdatedAt,
-                    sg.keywords AS Keywords,
-                    COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) as RightSwipes,
-                    COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) as LeftSwipes,
-                    MAX(sph.posted_at) as LastPostedAt
-                FROM story_groups sg
-                JOIN story_group_eligibility sge ON sge.group_id = sg.id
-                LEFT JOIN story_posting_history sph ON sph.group_id = sg.id AND sph.target_watchlist_id = @TargetWatchlistId
-                WHERE sge.target_watchlist_id = @TargetWatchlistId
-                  AND sge.is_eligible = true
-                  AND sg.status != 'ignore'
-                  AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
-                GROUP BY sg.id, sg.name, sg.status, sg.suspend_until, sg.last_reviewed_at, sg.created_at, sg.updated_at, sg.keywords
-                HAVING MAX(sph.posted_at) IS NULL OR MAX(sph.posted_at) < now() - INTERVAL '24 hours'";
 
-            var rawGroups = (await conn.QueryAsync<EligibleGroupQueryResult>(new CommandDefinition(sql, new { TargetWatchlistId = targetWatchlistId }, cancellationToken: ct))).ToList();
-            var groupList = new List<StoryGroupDto>();
+            // Same UNION ALL + sort_timestamp pattern as GetStoryPlannerFeed, with story-sharing filters:
+            // - Groups must be eligible for this target watchlist, not ignored/suspended
+            // - Groups must not have been shared in the last 24 hours (per target)
+            // - Ungrouped own-account posts, not ignored/suspended, not shared in last 24h
+            // Sort: latest post timestamp DESC (matches curation mode)
+            var sql = $@"
+                WITH group_timestamps AS (
+                    SELECT
+                        sgi.group_id,
+                        MAX(cv.posted_at) AS latest_post_at
+                    FROM story_group_items sgi
+                    JOIN competitor_videos cv ON cv.id = sgi.post_id
+                    GROUP BY sgi.group_id
+                ),
+                eligible_feed AS (
+                    SELECT
+                        'group' AS item_type,
+                        sg.id::text AS id,
+                        COALESCE(gt.latest_post_at, sg.created_at) AS sort_timestamp
+                    FROM story_groups sg
+                    JOIN story_group_eligibility sge ON sge.group_id = sg.id
+                        AND sge.target_watchlist_id = @TargetWatchlistId
+                        AND sge.is_eligible = true
+                    LEFT JOIN group_timestamps gt ON gt.group_id = sg.id
+                    LEFT JOIN LATERAL (
+                        SELECT MAX(sph.posted_at) AS last_shared
+                        FROM story_posting_history sph
+                        WHERE sph.group_id = sg.id
+                          AND sph.target_watchlist_id = @TargetWatchlistId
+                    ) last_share ON true
+                    WHERE sg.status != 'ignore'
+                      AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
+                      AND (last_share.last_shared IS NULL OR last_share.last_shared < now() - INTERVAL '24 hours')
 
-            foreach (var item in rawGroups)
+                    UNION ALL
+
+                    SELECT
+                        'post' AS item_type,
+                        cv.id::text AS id,
+                        cv.posted_at AS sort_timestamp
+                    FROM competitor_videos cv
+                    JOIN competitor_watchlist cw ON cw.id = cv.watchlist_id
+                    LEFT JOIN LATERAL (
+                        SELECT MAX(sph.posted_at) AS last_shared
+                        FROM story_posting_history sph
+                        WHERE sph.post_id = cv.id
+                          AND sph.target_watchlist_id = @TargetWatchlistId
+                    ) last_share ON true
+                    WHERE cw.is_own_account = true
+                      AND cw.platform = 'instagram'
+                      AND cw.is_data_deleted = false
+                      AND cv.status != 'ignore'
+                      AND (cv.status != 'suspend' OR cv.suspend_until IS NULL OR cv.suspend_until < now())
+                      AND NOT EXISTS (SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id)
+                      AND (last_share.last_shared IS NULL OR last_share.last_shared < now() - INTERVAL '24 hours')
+                )
+                SELECT item_type AS ItemType, id AS Id, sort_timestamp AS SortTimestamp
+                FROM eligible_feed
+                ORDER BY sort_timestamp DESC
+                LIMIT @limit OFFSET @offset;
+
+                WITH group_timestamps AS (
+                    SELECT
+                        sgi.group_id,
+                        MAX(cv.posted_at) AS latest_post_at
+                    FROM story_group_items sgi
+                    JOIN competitor_videos cv ON cv.id = sgi.post_id
+                    GROUP BY sgi.group_id
+                ),
+                eligible_feed AS (
+                    SELECT 'group' AS item_type, sg.id::text AS id
+                    FROM story_groups sg
+                    JOIN story_group_eligibility sge ON sge.group_id = sg.id
+                        AND sge.target_watchlist_id = @TargetWatchlistId
+                        AND sge.is_eligible = true
+                    LEFT JOIN LATERAL (
+                        SELECT MAX(sph.posted_at) AS last_shared
+                        FROM story_posting_history sph
+                        WHERE sph.group_id = sg.id AND sph.target_watchlist_id = @TargetWatchlistId
+                    ) last_share ON true
+                    WHERE sg.status != 'ignore'
+                      AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
+                      AND (last_share.last_shared IS NULL OR last_share.last_shared < now() - INTERVAL '24 hours')
+
+                    UNION ALL
+
+                    SELECT 'post' AS item_type, cv.id::text AS id
+                    FROM competitor_videos cv
+                    JOIN competitor_watchlist cw ON cw.id = cv.watchlist_id
+                    LEFT JOIN LATERAL (
+                        SELECT MAX(sph.posted_at) AS last_shared
+                        FROM story_posting_history sph
+                        WHERE sph.post_id = cv.id AND sph.target_watchlist_id = @TargetWatchlistId
+                    ) last_share ON true
+                    WHERE cw.is_own_account = true
+                      AND cw.platform = 'instagram'
+                      AND cw.is_data_deleted = false
+                      AND cv.status != 'ignore'
+                      AND (cv.status != 'suspend' OR cv.suspend_until IS NULL OR cv.suspend_until < now())
+                      AND NOT EXISTS (SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id)
+                      AND (last_share.last_shared IS NULL OR last_share.last_shared < now() - INTERVAL '24 hours')
+                )
+                SELECT
+                    COUNT(*) AS TotalCount,
+                    COUNT(*) FILTER (WHERE item_type = 'group') AS GroupCount
+                FROM eligible_feed;";
+
+            using var multi = await conn.QueryMultipleAsync(
+                new CommandDefinition(sql, new { TargetWatchlistId = targetWatchlistId, limit, offset }, cancellationToken: ct)
+            );
+            var queryResults = (await multi.ReadAsync<UnifiedFeedQueryResult>()).ToList();
+            var counts = await multi.ReadFirstAsync<StoryPlannerQueryCounts>();
+
+            var postIds = queryResults.Where(r => r.ItemType == "post").Select(r => Guid.Parse(r.Id)).ToList();
+            var groupIds = queryResults.Where(r => r.ItemType == "group").Select(r => Guid.Parse(r.Id)).ToList();
+
+            // Batch load posts with swipe + share counts
+            var postsMap = new Dictionary<string, MetaPost>();
+            if (postIds.Count > 0)
             {
-                var g = new StoryGroupDto
-                {
-                    Id = item.Id,
-                    Name = item.Name,
-                    Status = item.Status,
-                    SuspendUntil = item.SuspendUntil,
-                    LastReviewedAt = item.LastReviewedAt,
-                    CreatedAt = item.CreatedAt,
-                    UpdatedAt = item.UpdatedAt,
-                    Keywords = item.Keywords,
-                    RightSwipes = item.RightSwipes,
-                    LeftSwipes = item.LeftSwipes
-                };
-
-                // Fetch posts
-                var postsSql = $@"{MetaPostWithStarredSelectSql}
-                    JOIN story_group_items sgi ON sgi.post_id = cv.id
-                    WHERE sgi.group_id = @GroupId
-                    ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
-                var posts = await conn.QueryAsync<MetaPost>(new CommandDefinition(postsSql, new { GroupId = g.Id }, cancellationToken: ct));
-                g.Posts = posts.ToList();
-
-                // Fetch eligible target watchlist IDs
-                var eligibleAccounts = await conn.QueryAsync<Guid>(new CommandDefinition(@"
-                    SELECT target_watchlist_id 
-                    FROM story_group_eligibility 
-                    WHERE group_id = @GroupId AND is_eligible = true", new { GroupId = g.Id }, cancellationToken: ct));
-                g.EligibleAccounts = eligibleAccounts.ToList();
-
-                // Calculate needsReview
-                bool needsReview = false;
-                if (g.Status == "suspend" && g.SuspendUntil.HasValue && g.SuspendUntil.Value < DateTime.UtcNow)
-                {
-                    needsReview = true;
-                }
-                else if (g.Posts.Count > 0)
-                {
-                    var newestPostDate = g.Posts.Max(p => p.Timestamp ?? DateTime.MinValue);
-                    if (newestPostDate != DateTime.MinValue && newestPostDate < DateTime.UtcNow.AddDays(-15))
-                    {
-                        if (!g.LastReviewedAt.HasValue || g.LastReviewedAt.Value < newestPostDate)
-                        {
-                            needsReview = true;
-                        }
-                    }
-                }
-                g.NeedsReview = needsReview;
-
-                groupList.Add(g);
+                var postsSql = @"
+                    SELECT
+                        cv.id::text AS Id,
+                        cv.platform_video_id AS PlatformId,
+                        cv.url AS Permalink,
+                        cv.description AS Caption,
+                        cv.media_type AS MediaType,
+                        cv.thumbnail_url AS ThumbnailUrl,
+                        cv.media_url AS MediaUrl,
+                        cv.like_count AS LikeCount,
+                        cv.comment_count AS CommentCount,
+                        cv.posted_at AS Timestamp,
+                        cv.storage_path AS StoragePath,
+                        cv.youtube_video_id AS YoutubeVideoId,
+                        cv.youtube_url AS YoutubeUrl,
+                        cv.status AS Status,
+                        cv.suspend_until AS SuspendUntil,
+                        cv.last_reviewed_at AS LastReviewedAt,
+                        cw.username AS OwnerUsername,
+                        cw.profile_pic_url AS OwnerProfilePictureUrl,
+                        cw.profile_pic_storage_path AS OwnerProfilePicStoragePath,
+                        (SELECT MAX(sph2.posted_at) FROM story_posting_history sph2 WHERE sph2.post_id = cv.id) AS LastPostedAt,
+                        (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
+                        COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) AS RightSwipes,
+                        COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) AS LeftSwipes,
+                        COUNT(sph.id) FILTER (WHERE sph.posted_at IS NOT NULL) AS ShareCount
+                    FROM competitor_videos cv
+                    JOIN competitor_watchlist cw ON cw.id = cv.watchlist_id
+                    LEFT JOIN story_posting_history sph ON sph.post_id = cv.id
+                    WHERE cv.id = ANY(@PostIds)
+                    GROUP BY cv.id, cw.id, cw.username, cw.profile_pic_url, cw.profile_pic_storage_path";
+                var rawPosts = await conn.QueryAsync<MetaPost>(
+                    new CommandDefinition(postsSql, new { PostIds = postIds }, cancellationToken: ct)
+                );
+                foreach (var p in rawPosts)
+                    if (p.Id != null) postsMap[p.Id] = p;
             }
 
-            // Sort groups: new ones on top, then old ones ranked by Laplace swipe score
-            var sortedList = groupList.Select(g => {
-                var rawItem = rawGroups.First(rg => rg.Id == g.Id);
-                long right = rawItem.RightSwipes;
-                long left = rawItem.LeftSwipes;
-                bool isNew = (right == 0 && left == 0);
-                double score = isNew ? 2.0 : (double)(right + 1) / (right + left + 2); // 2.0 puts new groups on top
-                return new { Group = g, Score = score, CreatedAt = g.CreatedAt };
-            })
-            .OrderByDescending(x => x.Score)
-            .ThenByDescending(x => x.CreatedAt)
-            .Select(x => x.Group)
-            .ToList();
+            // Batch load groups (including their posts)
+            var groupsMap = new Dictionary<string, StoryGroupDto>();
+            if (groupIds.Count > 0)
+            {
+                var groupsSql = @"
+                    SELECT
+                        sg.id AS Id,
+                        sg.name AS Name,
+                        sg.status AS Status,
+                        sg.suspend_until AS SuspendUntil,
+                        sg.last_reviewed_at AS LastReviewedAt,
+                        sg.created_at AS CreatedAt,
+                        sg.updated_at AS UpdatedAt,
+                        sg.keywords AS Keywords,
+                        COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) as RightSwipes,
+                        COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) as LeftSwipes,
+                        COUNT(sph.id) FILTER (WHERE sph.posted_at IS NOT NULL) AS ShareCount
+                    FROM story_groups sg
+                    LEFT JOIN story_posting_history sph ON sph.group_id = sg.id
+                    WHERE sg.id = ANY(@GroupIds)
+                    GROUP BY sg.id, sg.name, sg.status, sg.suspend_until, sg.last_reviewed_at, sg.created_at, sg.updated_at, sg.keywords";
+                var rawGroups = await conn.QueryAsync<EligibleGroupQueryResult>(
+                    new CommandDefinition(groupsSql, new { GroupIds = groupIds, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct)
+                );
 
-            return Ok(sortedList);
+                foreach (var item in rawGroups)
+                {
+                    var g = new StoryGroupDto
+                    {
+                        Id = item.Id,
+                        Name = item.Name,
+                        Status = item.Status,
+                        SuspendUntil = item.SuspendUntil,
+                        LastReviewedAt = item.LastReviewedAt,
+                        CreatedAt = item.CreatedAt,
+                        UpdatedAt = item.UpdatedAt,
+                        Keywords = item.Keywords,
+                        RightSwipes = item.RightSwipes,
+                        LeftSwipes = item.LeftSwipes,
+                        ShareCount = item.ShareCount
+                    };
+
+                    var groupPostsSql = $@"{MetaPostWithStarredSelectSql}
+                        JOIN story_group_items sgi ON sgi.post_id = cv.id
+                        WHERE sgi.group_id = @GroupId
+                        ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
+                    var groupPosts = await conn.QueryAsync<MetaPost>(
+                        new CommandDefinition(groupPostsSql, new { GroupId = g.Id }, cancellationToken: ct)
+                    );
+                    g.Posts = groupPosts.ToList();
+
+                    var eligibleAccounts = await conn.QueryAsync<Guid>(new CommandDefinition(@"
+                        SELECT target_watchlist_id
+                        FROM story_group_eligibility
+                        WHERE group_id = @GroupId AND is_eligible = true", new { GroupId = g.Id }, cancellationToken: ct));
+                    g.EligibleAccounts = eligibleAccounts.ToList();
+
+                    g.UpdateNeedsReview();
+                    groupsMap[g.Id.ToString()] = g;
+                }
+            }
+
+            // Assemble result in SQL-ordered sequence
+            var unifiedItems = new List<UnifiedPlannerItemDto>();
+            foreach (var row in queryResults)
+            {
+                if (row.ItemType == "post" && postsMap.TryGetValue(row.Id, out var post))
+                {
+                    unifiedItems.Add(new UnifiedPlannerItemDto
+                    {
+                        Type = "post",
+                        Id = row.Id,
+                        Timestamp = row.SortTimestamp,
+                        Post = post
+                    });
+                }
+                else if (row.ItemType == "group" && groupsMap.TryGetValue(row.Id, out var group))
+                {
+                    unifiedItems.Add(new UnifiedPlannerItemDto
+                    {
+                        Type = "group",
+                        Id = row.Id,
+                        Timestamp = row.SortTimestamp,
+                        Group = group
+                    });
+                }
+            }
+
+            return Ok(new StoryPlannerFeedResponseDto
+            {
+                Items = unifiedItems,
+                TotalCount = counts.TotalCount,
+                GroupCount = counts.GroupCount
+            });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to retrieve eligible story groups");
+            _logger.LogError(ex, "Failed to retrieve eligible story shares");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -1944,25 +2272,27 @@ public class InstaController : ControllerBase
             // Default to 7 days ago if no swipes have been made yet
             var queryTime = lastSwipedAt ?? DateTime.UtcNow.AddDays(-7);
 
-            // Use DISTINCT ON (group_id) to ensure each group appears only once in the swipe game
+            // Use DISTINCT ON (post_id) to ensure each post appears only once in the swipe game
             var sql = @"
                 SELECT * FROM (
-                    SELECT DISTINCT ON (sph.group_id)
+                    SELECT DISTINCT ON (sph.post_id)
                         sph.id AS Id,
                         sph.group_id AS GroupId,
                         sg.name AS GroupName,
+                        sph.post_id AS PostId,
                         sph.target_watchlist_id AS TargetWatchlistId,
                         cw.username AS TargetUsername,
                         sph.posted_at AS PostedAt,
                         sph.swipe_status AS SwipeStatus,
                         sph.swiped_at AS SwipedAt
                     FROM story_posting_history sph
-                    JOIN story_groups sg ON sg.id = sph.group_id
+                    LEFT JOIN story_groups sg ON sg.id = sph.group_id
                     JOIN competitor_watchlist cw ON cw.id = sph.target_watchlist_id
                     WHERE sph.swipe_status = 'pending'
+                      AND sph.post_id IS NOT NULL
                       AND sph.posted_at >= @QueryTime - INTERVAL '1 day'
                       AND sph.posted_at <= now() - INTERVAL '24 hours'
-                    ORDER BY sph.group_id, sph.posted_at ASC
+                    ORDER BY sph.post_id, sph.posted_at ASC
                 ) t
                 ORDER BY t.PostedAt ASC";
 
@@ -1971,12 +2301,11 @@ public class InstaController : ControllerBase
 
             foreach (var h in historyList)
             {
-                var postsSql = $@"{MetaPostWithStarredSelectSql}
-                    JOIN story_group_items sgi ON sgi.post_id = cv.id
-                    WHERE sgi.group_id = @GroupId
-                    ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
-                var posts = await conn.QueryAsync<MetaPost>(new CommandDefinition(postsSql, new { GroupId = h.GroupId }, cancellationToken: ct));
-                h.Posts = posts.ToList();
+                if (!string.IsNullOrEmpty(h.PostId))
+                {
+                    var postSql = $@"{MetaPostSelectSql} WHERE cv.id = @PostId::uuid";
+                    h.Post = await conn.QueryFirstOrDefaultAsync<MetaPost>(new CommandDefinition(postSql, new { PostId = h.PostId }, cancellationToken: ct));
+                }
             }
 
             return Ok(historyList);
@@ -2002,9 +2331,9 @@ public class InstaController : ControllerBase
             {
                 if (item.Direction != "left" && item.Direction != "right") continue;
 
-                // 1. Get the group_id for this history record before we update it
-                var groupId = await conn.ExecuteScalarAsync<Guid?>(new CommandDefinition(@"
-                    SELECT group_id FROM story_posting_history WHERE id = @HistoryId",
+                // 1. Get the post_id for this history record before we update it
+                var postId = await conn.ExecuteScalarAsync<Guid?>(new CommandDefinition(@"
+                    SELECT post_id FROM story_posting_history WHERE id = @HistoryId",
                     new { HistoryId = item.HistoryId }, transaction: trans, cancellationToken: ct));
 
                 // 2. Update the specific swiped history record
@@ -2014,14 +2343,14 @@ public class InstaController : ControllerBase
                     WHERE id = @HistoryId",
                     new { Direction = item.Direction, HistoryId = item.HistoryId }, transaction: trans, cancellationToken: ct));
 
-                // 3. Update all other pending history records for the same group
-                if (groupId.HasValue)
+                // 3. Update all other pending history records for the same post
+                if (postId.HasValue)
                 {
                     await conn.ExecuteAsync(new CommandDefinition(@"
                         UPDATE story_posting_history
                         SET swipe_status = @Direction, swiped_at = now()
-                        WHERE group_id = @GroupId AND swipe_status = 'pending'",
-                        new { Direction = item.Direction, GroupId = groupId.Value }, transaction: trans, cancellationToken: ct));
+                        WHERE post_id = @PostId AND swipe_status = 'pending'",
+                        new { Direction = item.Direction, PostId = postId.Value }, transaction: trans, cancellationToken: ct));
                 }
             }
             trans.Commit();
@@ -2100,6 +2429,9 @@ public class StoryGroupDto
 
     [JsonPropertyName("leftSwipes")]
     public long LeftSwipes { get; set; }
+
+    [JsonPropertyName("shareCount")]
+    public long ShareCount { get; set; }
 
     public void UpdateNeedsReview()
     {
@@ -2180,10 +2512,13 @@ public class StoryPostingHistoryDto
     public Guid Id { get; set; }
 
     [JsonPropertyName("groupId")]
-    public Guid GroupId { get; set; }
+    public Guid? GroupId { get; set; }
 
     [JsonPropertyName("groupName")]
-    public string GroupName { get; set; } = string.Empty;
+    public string? GroupName { get; set; }
+
+    [JsonPropertyName("postId")]
+    public string? PostId { get; set; }
 
     [JsonPropertyName("targetWatchlistId")]
     public Guid TargetWatchlistId { get; set; }
@@ -2199,6 +2534,9 @@ public class StoryPostingHistoryDto
 
     [JsonPropertyName("swipedAt")]
     public DateTime? SwipedAt { get; set; }
+
+    [JsonPropertyName("post")]
+    public MetaPost? Post { get; set; }
 
     [JsonPropertyName("posts")]
     public List<MetaPost> Posts { get; set; } = new();
@@ -2246,6 +2584,7 @@ public class OwnAccountVideoQueryResult
     public string? ProductCode { get; set; }
     public bool IsStarred { get; set; }
     public Guid? GroupId { get; set; }
+    public DateTime? LastPostedAt { get; set; }
 }
 
 public class UnifiedFeedQueryResult
@@ -2279,6 +2618,12 @@ public class UnifiedPlannerItemDto
     public StoryGroupDto? Group { get; set; }
 }
 
+public class StoryPlannerQueryCounts
+{
+    public int TotalCount { get; set; }
+    public int GroupCount { get; set; }
+}
+
 public class StoryPlannerFeedResponseDto
 {
     [JsonPropertyName("items")]
@@ -2286,6 +2631,9 @@ public class StoryPlannerFeedResponseDto
 
     [JsonPropertyName("totalCount")]
     public int TotalCount { get; set; }
+
+    [JsonPropertyName("groupCount")]
+    public int GroupCount { get; set; }
 }
 
 

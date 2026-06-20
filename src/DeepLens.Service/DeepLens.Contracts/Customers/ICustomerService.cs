@@ -7,7 +7,7 @@ namespace DeepLens.Contracts.Customers;
 public interface ICustomerService
 {
     Task<CustomerDto?> GetCustomerByIdAsync(Guid id);
-    Task<IEnumerable<CustomerDto>> GetAllCustomersAsync(int limit = 50, int offset = 0);
+    Task<CustomerListResponse> GetAllCustomersAsync(string? search = null, string? sortBy = "createdAt", string? sortOrder = "desc", int page = 1, int pageSize = 50, bool? isArchived = null, bool? hasPhone = null, bool? hasInstagram = null, bool? isFollower = null);
     Task<CustomerDto> CreateCustomerAsync(CreateCustomerRequest request);
     Task<bool> UpdateCustomerAsync(Guid id, CreateCustomerRequest request);
     Task<bool> DeleteCustomerAsync(Guid id);

@@ -7,6 +7,7 @@ namespace DeepLens.SearchApi.Services;
 public interface IAttributeExtractionService
 {
     Task<ExtractedAttributes> ExtractAttributesAsync(string description, string category);
+    Task<SuggestedMetadata> SuggestGroupMetadataAsync(List<string> descriptions);
 }
 
 public class ExtractedAttributes
@@ -19,6 +20,12 @@ public class ExtractedAttributes
     public List<string> Occasions { get; set; } = new();
     public List<string> Tags { get; set; } = new();
     public Dictionary<string, string> OtherAttributes { get; set; } = new();
+}
+
+public class SuggestedMetadata
+{
+    public string Title { get; set; } = string.Empty;
+    public List<string> Hashtags { get; set; } = new();
 }
 
 public class LlmAttributeExtractionService : IAttributeExtractionService
@@ -91,6 +98,44 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
         return result;
     }
 
+    public async Task<SuggestedMetadata> SuggestGroupMetadataAsync(List<string> descriptions)
+    {
+        _logger.LogInformation("Calling Reasoning Service (Phi-3) for group metadata suggestion...");
+
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/suggest-group-metadata", new {
+                descriptions = descriptions
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<SuggestResponse>();
+                if (data != null)
+                {
+                    return new SuggestedMetadata
+                    {
+                        Title = data.Title ?? string.Empty,
+                        Hashtags = data.Hashtags ?? new()
+                    };
+                }
+            }
+            
+            _logger.LogWarning("Reasoning Service failed with status {Status} for suggestion.", response.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to call Reasoning Service for metadata suggestion.");
+        }
+
+        // Fallback: simple default suggestions
+        return new SuggestedMetadata
+        {
+            Title = "New Story Group",
+            Hashtags = new List<string> { "#vayyarifashions" }
+        };
+    }
+
     private class ReasoningResponse
     {
         public string? Fabric { get; set; }
@@ -100,5 +145,11 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
         public List<string>? Patterns { get; set; }
         public List<string>? Occasions { get; set; }
         public List<string>? Tags { get; set; }
+    }
+
+    private class SuggestResponse
+    {
+        public string? Title { get; set; }
+        public List<string>? Hashtags { get; set; }
     }
 }

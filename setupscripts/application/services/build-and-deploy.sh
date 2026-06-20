@@ -88,6 +88,23 @@ else
 fi
 fi
 
+# --- Copy Reasoning API source files ---
+if should_build "reasoning-api"; then
+reasoning_path="src/DeepLens.ReasoningService"
+reasoning_dest="$HOSTING_ROOT/reasoning-api"
+
+echo -e "\e[36m--- Copying Reasoning Service ($reasoning_path) ---\e[0m"
+mkdir -p "$reasoning_dest"
+chown -R $USER:$USER "$reasoning_dest"
+
+cp -r "$ROOT_DIR/$reasoning_path"/* "$reasoning_dest/"
+if [ $? -eq 0 ]; then
+    echo -e "\e[32mSuccessfully deployed Reasoning Service to $reasoning_dest\e[0m"
+else
+    echo -e "\e[31mReasoning Service copy failed!\e[0m"
+fi
+fi
+
 
 # --- Build Web UI (using Docker to avoid host dependencies) ---
 if should_build "web-ui"; then
@@ -131,4 +148,10 @@ if should_build "whatsapp-processor"; then
     echo -e "\e[33m--- Restarting WhatsApp Container ---\e[0m"
     cd "$ROOT_DIR/setupscripts/application/whatsapp"
     docker compose restart "whatsapp-processor"
+fi
+
+if should_build "reasoning-api"; then
+    echo -e "\e[33m--- Restarting Reasoning Container ---\e[0m"
+    cd "$ROOT_DIR/setupscripts/application"
+    docker compose restart "reasoning-api"
 fi

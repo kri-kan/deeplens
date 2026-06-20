@@ -15,6 +15,7 @@ services:
       OLLAMA_VULKAN: "1"
       HSA_OVERRIDE_GFX_VERSION: "8.0.3"
       OLLAMA_INTEL_GPU: "0"
+      OLLAMA_MODELS: ${OLLAMA_MODELS:-llama3}
     entrypoint: ["/bin/bash", "/init.sh"]
     networks:
       - deeplens-network

@@ -31,9 +31,19 @@ export interface Customer {
   addresses?: CustomerAddress[];
   instagramAccounts?: CustomerInstagramAccount[];
   preferredLanguages?: string[];
+  orderCount?: number;
+  enquiryCount?: number;
   
   // Virtual field for UI
   fullName?: string; 
+}
+
+export interface CustomerListResponse {
+  customers: Customer[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 /**

@@ -19,7 +19,7 @@ public class CustomerRepository : ICustomerRepository
         const string sql = @"
             SELECT * FROM customers WHERE id = @Id;
             SELECT * FROM customer_addresses WHERE customer_id = @Id;
-            SELECT id, customer_id as CustomerId, username, full_name as FullName, profile_picture_url as ProfilePictureUrl, is_primary as IsPrimary 
+            SELECT id, customer_id as CustomerId, username, full_name as FullName, profile_picture_url as ProfilePictureUrl, is_primary as IsPrimary, is_follower as IsFollower, followed_at as FollowedAt 
             FROM instagram_accounts 
             WHERE customer_id = @Id;
             SELECT language_code 
@@ -49,11 +49,69 @@ public class CustomerRepository : ICustomerRepository
         return await connection.QueryFirstOrDefaultAsync<Customer>(sql, new { Phone = phone, InstagramId = instagramId });
     }
 
-    public async Task<IEnumerable<Customer>> GetAllAsync(int limit, int offset)
+    public async Task<(IEnumerable<Customer> Items, int TotalCount)> GetAllAsync(string? search, string sortBy, string sortOrder, int limit, int offset, bool? isArchived = null, bool? hasPhone = null, bool? hasInstagram = null, bool? isFollower = null)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
-        const string sql = "SELECT * FROM customers ORDER BY created_at DESC LIMIT @Limit OFFSET @Offset";
-        var customers = (await connection.QueryAsync<Customer>(sql, new { Limit = limit, Offset = offset })).AsList();
+
+        var whereConditions = new List<string>();
+        var parameters = new Dapper.DynamicParameters();
+        parameters.Add("Limit", limit);
+        parameters.Add("Offset", offset);
+
+        if (isArchived == true)
+        {
+            whereConditions.Add("is_archived = true");
+        }
+        else
+        {
+            whereConditions.Add("is_archived = false");
+        }
+
+        if (hasPhone == true)
+        {
+            whereConditions.Add("phone_number IS NOT NULL AND phone_number != ''");
+        }
+
+        if (hasInstagram == true)
+        {
+            whereConditions.Add("instagram_id IS NOT NULL AND instagram_id != ''");
+        }
+
+        if (isFollower == true)
+        {
+            whereConditions.Add("id IN (SELECT customer_id FROM instagram_accounts WHERE is_follower = true AND customer_id IS NOT NULL)");
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            whereConditions.Add(@"
+                (first_name ILIKE @Search 
+                 OR last_name ILIKE @Search 
+                 OR phone_number ILIKE @Search 
+                 OR instagram_id ILIKE @Search 
+                 OR referral_code ILIKE @Search
+                 OR id IN (SELECT customer_id FROM instagram_accounts WHERE username ILIKE @Search AND customer_id IS NOT NULL))");
+            parameters.Add("Search", $"%{search}%");
+        }
+
+        var whereClause = whereConditions.Any() ? "WHERE " + string.Join(" AND ", whereConditions) : "";
+
+        var orderCol = sortBy.ToLowerInvariant() switch
+        {
+            "updatedat" => "updated_at",
+            "name" => "first_name",
+            "phone" => "phone_number",
+            "instagramid" => "instagram_id",
+            "referralid" => "referral_code",
+            _ => "created_at"
+        };
+        var dir = sortOrder.ToLowerInvariant() == "asc" ? "ASC" : "DESC";
+
+        var countSql = $"SELECT COUNT(1) FROM customers {whereClause}";
+        var totalCount = await connection.ExecuteScalarAsync<int>(countSql, parameters);
+
+        var sql = $"SELECT * FROM customers {whereClause} ORDER BY {orderCol} {dir} LIMIT @Limit OFFSET @Offset";
+        var customers = (await connection.QueryAsync<Customer>(sql, parameters)).AsList();
 
         if (customers.Any())
         {
@@ -61,7 +119,7 @@ public class CustomerRepository : ICustomerRepository
 
             const string detailSql = @"
                 SELECT * FROM customer_addresses WHERE customer_id = ANY(@Ids);
-                SELECT id, customer_id as CustomerId, username, full_name as FullName, profile_picture_url as ProfilePictureUrl, is_primary as IsPrimary 
+                SELECT id, customer_id as CustomerId, username, full_name as FullName, profile_picture_url as ProfilePictureUrl, is_primary as IsPrimary, is_follower as IsFollower, followed_at as FollowedAt 
                 FROM instagram_accounts 
                 WHERE customer_id = ANY(@Ids);
                 SELECT customer_id, language_code 
@@ -82,7 +140,7 @@ public class CustomerRepository : ICustomerRepository
                 customer.PreferredLanguages = languages.TryGetValue(customer.Id, out var langs) ? langs : new List<string>();
             }
         }
-        return customers;
+        return (customers, totalCount);
     }
 
     public async Task<Guid> CreateAsync(Customer customer)

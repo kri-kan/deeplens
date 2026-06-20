@@ -79,9 +79,9 @@ All services use the same `.env` pattern. See `infrastructure/.env.example`.
 - WhatsApp Processor uses `wrapInSpan()` from `src/utils/telemetry`
 - Vayyari uses `wrapInSpan()` from `src/vayyari/utils/telemetry`
 
-### Deployment (.NET)
-- After **any** C# or service-layer change: run `./setupscripts/application/services/build-and-deploy.sh`
-- Never suggest manually copying DLLs or build artifacts
+### Deployment (Backend Services)
+- After **any** backend change (C#, Node.js, or Python FastAPI): run `./setupscripts/application/services/build-and-deploy.sh <service-name>` or the root Makefile command (e.g. `make deploy-reasoning-api`).
+- Never suggest manually copying files, DLLs, or build artifacts directly; always use the deploy scripts or Makefile targets.
 
 ### Media (Vayyari)
 - **Singleton video player**: one `expo-video` player instance per screen — re-bind source, never create new instances
@@ -114,9 +114,17 @@ dotnet run --project src/DeepLens.Service/DeepLens.SearchApi --urls http://local
 cd src/DeepLens.FeatureExtractionService && source venv/bin/activate && uvicorn main:app --reload --port 8001
 ```
 
-### Deploy .NET services
+### Deploy backend changes
 ```bash
+# Build and deploy all services
 ./setupscripts/application/services/build-and-deploy.sh
+
+# Or deploy a specific service using Makefile targets:
+make deploy-identity-api
+make deploy-search-api
+make deploy-worker-service
+make deploy-whatsapp-processor
+make deploy-reasoning-api
 ```
 
 ### Add a Kafka topic

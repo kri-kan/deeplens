@@ -23,13 +23,24 @@ public class CustomerService : ICustomerService
     public async Task<CustomerDto?> GetCustomerByIdAsync(Guid id)
     {
         var customer = await _customerRepository.GetByIdAsync(id);
-        return customer == null ? null : MapToDto(customer);
+        if (customer == null) return null;
+        var orderCount = await _customerRepository.GetOrderCountAsync(id);
+        return MapToDto(customer, orderCount, 0);
     }
 
-    public async Task<IEnumerable<CustomerDto>> GetAllCustomersAsync(int limit, int offset)
+    public async Task<CustomerListResponse> GetAllCustomersAsync(string? search = null, string? sortBy = "createdAt", string? sortOrder = "desc", int page = 1, int pageSize = 50, bool? isArchived = null, bool? hasPhone = null, bool? hasInstagram = null, bool? isFollower = null)
     {
-        var customers = await _customerRepository.GetAllAsync(limit, offset);
-        return customers.Select(MapToDto);
+        var offset = (page - 1) * pageSize;
+        var (customers, totalCount) = await _customerRepository.GetAllAsync(search, sortBy ?? "createdAt", sortOrder ?? "desc", pageSize, offset, isArchived, hasPhone, hasInstagram, isFollower);
+        
+        return new CustomerListResponse
+        {
+            Customers = customers.Select(c => MapToDto(c, 0, 0)).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+        };
     }
 
     public async Task<CustomerDto> CreateCustomerAsync(CreateCustomerRequest request)
@@ -38,7 +49,7 @@ public class CustomerService : ICustomerService
         if (!string.IsNullOrWhiteSpace(request.PhoneNumber) || !string.IsNullOrWhiteSpace(request.InstagramId))
         {
             var existing = await _customerRepository.GetByPhoneOrInstagramAsync(request.PhoneNumber, request.InstagramId);
-            if (existing != null) return MapToDto(existing);
+            if (existing != null) return MapToDto(existing, 0, 0);
         }
 
         // Validate that no requested Instagram handles are already mapped to another customer
@@ -309,7 +320,7 @@ public class CustomerService : ICustomerService
         return await _customerRepository.GetPreferredLanguagesMasterAsync();
     }
 
-    private static CustomerDto MapToDto(Customer customer)
+    private static CustomerDto MapToDto(Customer customer, int orderCount, int enquiryCount)
     {
         return new CustomerDto(
             customer.Id,
@@ -337,9 +348,14 @@ public class CustomerService : ICustomerService
                 i.Username,
                 i.FullName,
                 i.ProfilePictureUrl,
-                i.IsPrimary
+                i.IsPrimary,
+                i.IsFollower,
+                i.FollowedAt
             )).ToList() ?? new List<CustomerInstagramAccountDto>(),
-            customer.PreferredLanguages ?? new List<string>()
+            customer.PreferredLanguages ?? new List<string>(),
+            orderCount,
+            enquiryCount,
+            customer.IsFollower
         );
     }
 }

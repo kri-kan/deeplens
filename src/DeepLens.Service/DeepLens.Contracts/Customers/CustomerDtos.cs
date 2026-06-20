@@ -18,15 +18,34 @@ public record CustomerDto(
     [property: JsonPropertyName("createdAt")] DateTime CreatedAt,
     [property: JsonPropertyName("addresses")] List<CustomerAddressDto> Addresses,
     [property: JsonPropertyName("instagramAccounts")] List<CustomerInstagramAccountDto> InstagramAccounts,
-    [property: JsonPropertyName("preferredLanguages")] List<string> PreferredLanguages
+    [property: JsonPropertyName("preferredLanguages")] List<string> PreferredLanguages,
+    [property: JsonPropertyName("orderCount")] int OrderCount,
+    [property: JsonPropertyName("enquiryCount")] int EnquiryCount,
+    [property: JsonPropertyName("isFollower")] bool IsFollower
 );
+
+public record CustomerListResponse
+{
+    [JsonPropertyName("customers")]
+    public required List<CustomerDto> Customers { get; init; }
+    [JsonPropertyName("totalCount")]
+    public int TotalCount { get; init; }
+    [JsonPropertyName("page")]
+    public int Page { get; init; }
+    [JsonPropertyName("pageSize")]
+    public int PageSize { get; init; }
+    [JsonPropertyName("totalPages")]
+    public int TotalPages { get; init; }
+}
 
 public record CustomerInstagramAccountDto(
     [property: JsonPropertyName("id")] Guid Id,
     [property: JsonPropertyName("username")] string Username,
     [property: JsonPropertyName("fullName")] string? FullName,
     [property: JsonPropertyName("profilePictureUrl")] string? ProfilePictureUrl,
-    [property: JsonPropertyName("isPrimary")] bool IsPrimary
+    [property: JsonPropertyName("isPrimary")] bool IsPrimary,
+    [property: JsonPropertyName("isFollower")] bool IsFollower = false,
+    [property: JsonPropertyName("followedAt")] DateTime? FollowedAt = null
 );
 
 public record LanguageDto(

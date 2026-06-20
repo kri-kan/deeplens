@@ -1,4 +1,4 @@
-.PHONY: deploy-identity-api deploy-search-api deploy-worker-service deploy-whatsapp-processor
+.PHONY: deploy-identity-api deploy-search-api deploy-worker-service deploy-whatsapp-processor deploy-reasoning-api
 
 deploy-identity-api:
 	./infrastructure/deploy.sh identity-api
@@ -11,3 +11,6 @@ deploy-worker-service:
 
 deploy-whatsapp-processor:
 	./infrastructure/deploy.sh whatsapp-processor
+
+deploy-reasoning-api:
+	./infrastructure/deploy.sh reasoning-api

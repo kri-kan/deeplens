@@ -19,8 +19,14 @@ export interface CountryCode {
 
 export const useCustomerManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   
   const [showAddModal, setShowAddModal] = useState(false);
@@ -52,17 +58,57 @@ export const useCustomerManagement = () => {
 
 
 
-  const loadCustomers = useCallback(async () => {
+  const [activeFilters, setActiveFilters] = useState<{
+    hasPhone?: boolean;
+    hasInstagram?: boolean;
+    isFollower?: boolean;
+    isArchived?: boolean;
+  }>({});
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const loadCustomers = useCallback(async (targetPage = 1) => {
     try {
-      setLoading(true);
-      const data = await customerService.getCustomers();
-      setCustomers(data);
+      if (targetPage === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+      
+      const data = await customerService.getCustomers({
+        search: debouncedSearchQuery,
+        sortBy,
+        sortOrder,
+        page: targetPage,
+        pageSize: 100,
+        filters: activeFilters
+      });
+      
+      setCustomers(prev => targetPage === 1 ? data.customers : [...prev, ...data.customers]);
+      setTotalCount(data.totalCount);
+      setPage(targetPage);
     } catch (error) {
       console.error('Failed to load customers:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, []);
+  }, [debouncedSearchQuery, sortBy, sortOrder, activeFilters]);
+
+  const loadMoreCustomers = () => {
+    if (!loading && !loadingMore && customers.length < totalCount) {
+      loadCustomers(page + 1);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomers(1);
+  }, [loadCustomers]);
 
   const loadCountryCodes = useCallback(async () => {
     try {
@@ -185,11 +231,10 @@ export const useCustomerManagement = () => {
   };
 
   useEffect(() => {
-    loadCustomers();
     loadCountryCodes();
     loadChannels();
     loadLanguages();
-  }, [loadCustomers, loadCountryCodes, loadChannels, loadLanguages]);
+  }, [loadCountryCodes, loadChannels, loadLanguages]);
 
   useEffect(() => {
     if (selectedCustomer) {
@@ -201,7 +246,7 @@ export const useCustomerManagement = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadCustomers();
+    await loadCustomers(1);
     setRefreshing(false);
   };
 
@@ -270,30 +315,20 @@ export const useCustomerManagement = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(c => {
-    if (!searchQuery) return true;
-    
-    const query = searchQuery.toLowerCase();
-    const matchesInstagramAccounts = c.instagramAccounts?.some(acc => 
-      acc.username?.toLowerCase().includes(query)
-    );
-    return (
-      (c.firstName?.toLowerCase().includes(query)) ||
-      (c.lastName?.toLowerCase().includes(query)) ||
-      (c.phoneNumber?.includes(query)) ||
-      (c.instagramId?.toLowerCase().includes(query)) ||
-      matchesInstagramAccounts
-    );
-  });
-
   return {
     searchQuery,
     setSearchQuery,
     customers,
+    totalCount,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
     loading,
+    loadingMore,
     refreshing,
     handleRefresh,
-    filteredCustomers,
+    loadMoreCustomers,
     showAddModal,
     setShowAddModal,
     selectedCustomer,
@@ -334,5 +369,7 @@ export const useCustomerManagement = () => {
     handleAddCustomer,
 
     toggleSubscription,
+    activeFilters,
+    setActiveFilters,
   };
 };

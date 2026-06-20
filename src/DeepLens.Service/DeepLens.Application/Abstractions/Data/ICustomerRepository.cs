@@ -6,7 +6,7 @@ public interface ICustomerRepository
 {
     Task<Customer?> GetByIdAsync(Guid id);
     Task<Customer?> GetByPhoneOrInstagramAsync(string? phone, string? instagramId);
-    Task<IEnumerable<Customer>> GetAllAsync(int limit, int offset);
+    Task<(IEnumerable<Customer> Items, int TotalCount)> GetAllAsync(string? search, string sortBy, string sortOrder, int limit, int offset, bool? isArchived = null, bool? hasPhone = null, bool? hasInstagram = null, bool? isFollower = null);
     Task<Guid> CreateAsync(Customer customer);
     Task<bool> UpdateAsync(Customer customer);
     Task<bool> DeleteAsync(Guid id);

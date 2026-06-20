@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     ports:
       - "${REASONING_API_PORT:-8002}:8002"
+    volumes:
+      - ${REASONING_API_HOSTING_PATH:-/data/hosting/reasoning-api}:/app
     environment:
       MOCK_MODE: ${REASONING_MOCK_MODE:-true}
       MODEL_ID: microsoft/Phi-3-mini-4k-instruct

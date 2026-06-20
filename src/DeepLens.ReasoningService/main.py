@@ -72,6 +72,45 @@ class ExtractionResponse(BaseModel):
     tags: list[str] = []
     raw_response: str | None = None
 
+class SuggestRequest(BaseModel):
+    descriptions: list[str]
+
+class SuggestResponse(BaseModel):
+    title: str
+    hashtags: list[str]
+    raw_response: str | None = None
+
+INDIAN_FASHION_GLOSSARY = {
+    "fabrics": [
+        "Cotton", "Silk", "Georgette", "Organza", "Crepe", "Dola Silk", "Kota Checks", 
+        "Tissue Silk", "Chinnon", "Chiffon", "Velvet", "Paithani", "Tussar", "Bandhani", "Banarasi"
+    ],
+    "styles": [
+        "Saree", "Lehenga", "Gown", "Frock", "Kurti", "Anarkali", "Salwar Suit", "Plazo Set", "Crop Top Lehenga"
+    ],
+    "work_types": [
+        "Zari Weaving", "Embroidery", "Mirror Work", "Ajrakh Print", "Gota Patti", "Sequence Work", "Hand Work", "Cut Work"
+    ]
+}
+
+SYSTEM_PROMPT_SUGGEST = (
+    "You are an expert Indian ethnic fashion merchandiser and cataloging assistant. "
+    "Your task is to generate a short, descriptive title and relevant hashtags for a group of social media posts (reels/posts) representing similar products.\n\n"
+    "GLOSSARY OF INDIAN ETHNIC WEAR TERMS TO ASSIST YOU:\n"
+    f"- Fabrics: {', '.join(INDIAN_FASHION_GLOSSARY['fabrics'])}\n"
+    f"- Styles: {', '.join(INDIAN_FASHION_GLOSSARY['styles'])}\n"
+    f"- Work/Crafts: {', '.join(INDIAN_FASHION_GLOSSARY['work_types'])}\n\n"
+    "RULES:\n"
+    "1. Create a short, descriptive title (maximum 6 words). Strip away marketing fluff and price details. E.g., 'Ajrakh Print Crepe Silk Saree'.\n"
+    "2. Select the 3 to 5 most relevant hashtags/keywords for categorization (e.g., #cotton, #lehenga, #partywear). Do not include generic hashtags like #viral, #trending, #reels, #fashions.\n"
+    "3. You must respond ONLY with a valid JSON object. Do not include markdown formatting like ```json. Do not include any explanations or extra text.\n\n"
+    "REQUIRED JSON SCHEMA:\n"
+    "{\n"
+    "  \"title\": \"String\",\n"
+    "  \"hashtags\": [\"String\", \"String\"]\n"
+    "}"
+)
+
 @app.on_event("startup")
 async def startup_event():
     if not MOCK_MODE:
@@ -103,6 +142,32 @@ Description: {request.text}\n<|assistant|>\n"
     except Exception as e:
         return ExtractionResponse(raw_response=raw_text)
 
+@app.post("/suggest-group-metadata", response_model=SuggestResponse)
+async def suggest_group_metadata(request: SuggestRequest):
+    if MOCK_MODE:
+        return mock_suggest(request.descriptions)
+        
+    combined_desc = "\n---\n".join(request.descriptions)
+    prompt = f"<|system|>\n{SYSTEM_PROMPT_SUGGEST}\n<|user|>\nGenerate title and hashtags for these posts:\n{combined_desc}\n<|assistant|>\n"
+    
+    try:
+        outputs = engine.pipeline(prompt, max_new_tokens=256, do_sample=False)
+        raw_text = outputs[0]['generated_text']
+        
+        start_idx = raw_text.find('{')
+        end_idx = raw_text.rfind('}') + 1
+        json_str = raw_text[start_idx:end_idx]
+        data = json.loads(json_str)
+        
+        return SuggestResponse(
+            title=data.get("title", "New Collection"),
+            hashtags=data.get("hashtags", []),
+            raw_response=raw_text
+        )
+    except Exception as e:
+        print(f"Error calling model: {e}")
+        return mock_suggest(request.descriptions)
+
 def mock_extract(text: str) -> ExtractionResponse:
     text = text.lower()
     res = ExtractionResponse()
@@ -130,6 +195,62 @@ def mock_extract(text: str) -> ExtractionResponse:
     
     res.raw_response = "MOCKED_PHI3_RESPONSE"
     return res
+
+def mock_suggest(descriptions: list[str]) -> SuggestResponse:
+    combined = " ".join(descriptions).lower()
+    
+    detected_fabric = None
+    for f in INDIAN_FASHION_GLOSSARY["fabrics"]:
+        if f.lower() in combined:
+            detected_fabric = f
+            break
+            
+    detected_style = None
+    for s in INDIAN_FASHION_GLOSSARY["styles"]:
+        if s.lower() in combined:
+            detected_style = s
+            break
+            
+    detected_work = None
+    for w in INDIAN_FASHION_GLOSSARY["work_types"]:
+        if w.lower() in combined:
+            detected_work = w
+            break
+
+    parts = []
+    if detected_work:
+        parts.append(detected_work)
+    if detected_fabric:
+        parts.append(detected_fabric)
+    if detected_style:
+        parts.append(detected_style)
+    else:
+        parts.append("Collection")
+        
+    title = " ".join(parts)
+    if not title:
+        title = "New Fashion Collection"
+        
+    hashtags = []
+    if detected_fabric:
+        hashtags.append(f"#{detected_fabric.lower().replace(' ', '')}")
+    if detected_style:
+        hashtags.append(f"#{detected_style.lower().replace(' ', '')}")
+    if detected_work:
+        hashtags.append(f"#{detected_work.lower().replace(' ', '')}")
+        
+    if len(hashtags) < 3:
+        hashtags.append("#ethnicwear")
+    if len(hashtags) < 4:
+        hashtags.append("#designerwear")
+    if len(hashtags) < 5:
+        hashtags.append("#partywear")
+        
+    return SuggestResponse(
+        title=title,
+        hashtags=hashtags,
+        raw_response="MOCKED_PHI3_SUGGEST_RESPONSE"
+    )
 
 if __name__ == "__main__":
     import uvicorn

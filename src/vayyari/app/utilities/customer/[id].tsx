@@ -267,6 +267,34 @@ export default function CustomerDetailScreen() {
           </Card.Content>
         </Card>
 
+        {/* Stats & Notes Card */}
+        <Card style={styles.sectionCard} elevation={1}>
+          <Card.Content>
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text variant="headlineMedium" style={{ color: theme.colors.primary }}>
+                  {customer.orderCount || 0}
+                </Text>
+                <Text variant="labelSmall" style={{ opacity: 0.6 }}>ORDERS</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statBox}>
+                <Text variant="headlineMedium" style={{ color: theme.colors.primary }}>
+                  {customer.enquiryCount || 0}
+                </Text>
+                <Text variant="labelSmall" style={{ opacity: 0.6 }}>ENQUIRIES</Text>
+              </View>
+            </View>
+            
+            {customer.notes && (
+              <View style={styles.notesSection}>
+                <Text variant="titleSmall" style={{ marginTop: 16, marginBottom: 4, fontWeight: 'bold' }}>Notes</Text>
+                <Text variant="bodyMedium" style={{ color: '#444' }}>{customer.notes}</Text>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+
         {/* Instagram Handles */}
         {customer.instagramAccounts && customer.instagramAccounts.length > 0 && (
           <Card style={styles.sectionCard} elevation={1}>
@@ -528,6 +556,26 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: 16,
     backgroundColor: '#fff',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  notesSection: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    paddingTop: 8,
   },
   sectionTitle: {
     fontWeight: 'bold',

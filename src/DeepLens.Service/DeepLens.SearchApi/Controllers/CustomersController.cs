@@ -18,10 +18,19 @@ public class CustomersController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetCustomers([FromQuery] int limit = 50, [FromQuery] int offset = 0)
+    public async Task<IActionResult> GetCustomers(
+        [FromQuery] string? search = null,
+        [FromQuery] string? sortBy = "createdAt",
+        [FromQuery] string? sortOrder = "desc",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] bool? isArchived = null,
+        [FromQuery] bool? hasPhone = null,
+        [FromQuery] bool? hasInstagram = null,
+        [FromQuery] bool? isFollower = null)
     {
-        var customers = await _customerService.GetAllCustomersAsync(limit, offset);
-        return Ok(customers);
+        var result = await _customerService.GetAllCustomersAsync(search, sortBy, sortOrder, page, pageSize, isArchived, hasPhone, hasInstagram, isFollower);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

@@ -12,7 +12,7 @@ RED='\033[0;31m'
 
 if [ -z "$SERVICE_NAME" ]; then
     echo -e "${RED}Error: Service name not specified.${NC}"
-    echo "Usage: ./deploy.sh [identity-api | search-api | worker-service]"
+    echo "Usage: ./deploy.sh [identity-api | search-api | worker-service | reasoning-api | whatsapp-processor]"
     exit 1
 fi
 
@@ -41,6 +41,12 @@ case $SERVICE_NAME in
         HOSTING_PATH="/data/hosting/whatsapp"
         COMPOSE_SERVICE="whatsapp-processor"
         COMPOSE_DIR="setupscripts/application/whatsapp"
+        ;;
+    "reasoning-api")
+        PROJECT_PATH="src/DeepLens.ReasoningService"
+        HOSTING_PATH="/data/hosting/reasoning-api"
+        COMPOSE_SERVICE="reasoning-api"
+        COMPOSE_DIR="setupscripts/application"
         ;;
     *)
         echo -e "${RED}Error: Unknown service '$SERVICE_NAME'${NC}"
@@ -74,6 +80,14 @@ if [ "$SERVICE_NAME" == "whatsapp-processor" ]; then
     cd "$HOSTING_PATH" || exit 1
     npm install --omit=dev
     cd - > /dev/null
+elif [ "$SERVICE_NAME" == "reasoning-api" ]; then
+    echo -e "${CYAN}📂 Copying Python source files to $HOSTING_PATH...${NC}"
+    mkdir -p "$HOSTING_PATH"
+    cp -r "$PROJECT_PATH"/* "$HOSTING_PATH/"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ File copy failed. Check permissions.${NC}"
+        exit 1
+    fi
 else
     echo -e "${CYAN}📦 Building and publishing project...${NC}"
     dotnet publish "$PROJECT_PATH" -c Release -o "./publish/$SERVICE_NAME"

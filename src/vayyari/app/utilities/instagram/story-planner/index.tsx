@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Dimensions, RefreshControl, BackHandler } from 'react-native';
+import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Dimensions, RefreshControl, BackHandler, Switch } from 'react-native';
 import { Text, Button, IconButton, Checkbox, TextInput, useTheme, Card, Portal, Dialog, Modal, ActivityIndicator, Divider, Icon } from 'react-native-paper';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
@@ -195,6 +195,45 @@ function MergeModalInner({
     }
   });
 
+  const [suggesting, setSuggesting] = useState(false);
+
+  const handleSuggestMetadata = async () => {
+    const postIds: string[] = [];
+    if (destinationItem.type === 'post') {
+      postIds.push(destinationItem.id);
+    } else if (destinationItem.type === 'group' && destinationItem.group?.posts) {
+      destinationItem.group.posts.forEach(p => postIds.push(p.id));
+    }
+
+    mergedItems.forEach(item => {
+      if (item.type === 'post') {
+        postIds.push(item.id);
+      } else if (item.type === 'group' && item.group?.posts) {
+        item.group.posts.forEach(p => postIds.push(p.id));
+      }
+    });
+
+    if (postIds.length === 0) return;
+
+    setSuggesting(true);
+    try {
+      const res = await instagramService.suggestGroupMetadata(postIds);
+      if (res.title) {
+        setGroupName(res.title);
+      }
+      if (res.hashtags && res.hashtags.length > 0) {
+        const cleanHashtags = res.hashtags.map(h => h.startsWith('#') ? h.slice(1) : h);
+        setKeywords(cleanHashtags.join(', '));
+      }
+      Alert.alert('AI Suggestions Applied', 'Suggested title and keywords have been filled!');
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('AI Error', 'Failed to generate suggestions.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   return (
     <>
       <View style={styles.dragHandle} />
@@ -284,6 +323,17 @@ function MergeModalInner({
         </View>
 
         <Divider style={{ marginVertical: 16 }} />
+
+        <Button
+          mode="outlined"
+          icon="sparkles"
+          loading={suggesting}
+          disabled={suggesting}
+          onPress={handleSuggestMetadata}
+          style={{ marginBottom: 16 }}
+        >
+          {suggesting ? 'Suggesting...' : 'Suggest Title & Keywords (AI)'}
+        </Button>
 
         <TextInput
           label="Group Name"
@@ -458,7 +508,7 @@ function EditDialogInner({
               style={{ flex: 1, backgroundColor: activeGroup.status === 'ignore' ? 'green' : undefined }} 
               onPress={() => onUpdateStatus('ignore', suspendDays)}
             >
-              Ignore
+              Inactive
             </Button>
           </View>
 
@@ -516,6 +566,8 @@ export default function StoryPlannerDashboard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [groupCount, setGroupCount] = useState(0);
+  const [hideGroups, setHideGroups] = useState(false);
   const LIMIT = 100;
   const loadingMoreRef = useRef(false);
 
@@ -611,7 +663,7 @@ export default function StoryPlannerDashboard() {
       setOwnProfiles(own);
  
       // 2. Fetch unified planner feed
-      const { items: feedItems, totalCount: feedTotalCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeed', () => 
+      const { items: feedItems, totalCount: feedTotalCount, groupCount: feedGroupCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeed', () => 
         instagramService.getStoryPlannerFeed(LIMIT, 0, search)
       );
       
@@ -655,6 +707,7 @@ export default function StoryPlannerDashboard() {
       setOffset(0);
       setHasMore(feedItems.length >= LIMIT);
       setTotalCount(feedTotalCount);
+      setGroupCount(feedGroupCount);
     } catch (error) {
       console.error('Failed to load data', error);
       Alert.alert('Error', 'Failed to load story planner data.');
@@ -675,7 +728,7 @@ export default function StoryPlannerDashboard() {
     setLoadingMore(true);
     try {
       const nextOffset = offset + LIMIT;
-      const { items: feedItems, totalCount: feedTotalCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeedMore', () => 
+      const { items: feedItems, totalCount: feedTotalCount, groupCount: feedGroupCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeedMore', () => 
         instagramService.getStoryPlannerFeed(LIMIT, nextOffset, searchQuery)
       );
       
@@ -726,6 +779,7 @@ export default function StoryPlannerDashboard() {
       
       setHasMore(feedItems.length >= LIMIT);
       setTotalCount(feedTotalCount);
+      setGroupCount(feedGroupCount);
     } catch (error) {
       console.error('Failed to load more posts', error);
     } finally {
@@ -1112,11 +1166,17 @@ export default function StoryPlannerDashboard() {
 
   const mergeData = getMergePreviewData();
 
-  const filteredList = unifiedList;
+  const filteredList = hideGroups 
+    ? unifiedList.filter(item => item.type !== 'group') 
+    : unifiedList;
+
+  const displayCount = hideGroups ? Math.max(0, totalCount - groupCount) : totalCount;
 
   const renderHeaderTitle = () => {
     if (selectedItems.size === 0) {
-      return `Story Planner (${totalCount})`;
+      return (
+        <Text style={styles.headerTitleText}>Story Planner ({displayCount})</Text>
+      );
     }
 
     const items = Array.from(selectedItems.values());
@@ -1174,8 +1234,8 @@ export default function StoryPlannerDashboard() {
   };
 
   return (
-    <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${totalCount} Available Item${totalCount === 1 ? '' : 's'}`} withScrollView={false}>
-      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : `Story Planner (${totalCount})` }} />
+    <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${displayCount} Available Item${displayCount === 1 ? '' : 's'}`} withScrollView={false}>
+      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : `Story Planner (${displayCount})` }} />
 
       {loading ? (
         <View style={styles.center}>
@@ -1196,10 +1256,20 @@ export default function StoryPlannerDashboard() {
               dense
               activeUnderlineColor="transparent"
               underlineColor="transparent"
-              style={styles.searchBarInput}
+              style={styles.searchBarInputFlex}
               left={<TextInput.Icon icon="magnify" size={20} />}
               right={searchQuery ? <TextInput.Icon icon="close" size={20} onPress={() => setSearchQuery('')} /> : null}
             />
+            <View style={styles.headerToggleRow}>
+              <Text style={[styles.headerToggleLabel, { color: hideGroups ? theme.colors.outline : theme.colors.primary }]}>Groups</Text>
+              <Switch
+                value={!hideGroups}
+                onValueChange={(val) => setHideGroups(!val)}
+                thumbColor={hideGroups ? theme.colors.surfaceVariant : theme.colors.primary}
+                trackColor={{ false: theme.colors.surfaceVariant, true: theme.colors.primaryContainer }}
+                style={styles.headerToggleSwitch}
+              />
+            </View>
           </View>
           <FlatList
             data={filteredList}
@@ -1331,6 +1401,26 @@ const styles = StyleSheet.create({
   },
   headerLinkButton: {
     borderRadius: 8,
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitleText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  headerToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+  },
+  headerToggleLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  headerToggleSwitch: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
   center: {
     flex: 1,
@@ -1653,12 +1743,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingTop: 0,
     paddingBottom: 6,
     backgroundColor: 'transparent',
+    gap: 8,
   },
   searchBarInput: {
+    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 8,
+  },
+  searchBarInputFlex: {
+    flex: 1,
     height: 40,
     backgroundColor: 'rgba(0,0,0,0.05)',
     borderRadius: 8,

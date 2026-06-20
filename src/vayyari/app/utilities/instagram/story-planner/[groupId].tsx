@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Dimensions, DeviceEventEmitter } from 'react-native';
 import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
@@ -25,7 +25,7 @@ export default function GroupDetailScreen() {
   const [selectedProfile, setSelectedProfile] = useState<InstagramProfile | null>(null);
   
   // Dialog States
-  const [previewPost, setPreviewPost] = useState<InstagramPost | null>(null);
+  const [postToShare, setPostToShare] = useState<InstagramPost | null>(null);
   const [confirmShareVisible, setConfirmShareVisible] = useState(false);
   const [suspendDialogVisible, setSuspendDialogVisible] = useState(false);
   const [suspendDays, setSuspendDays] = useState('7');
@@ -99,6 +99,7 @@ export default function GroupDetailScreen() {
         await Clipboard.setStringAsync(post.caption);
       }
       await Linking.openURL(post.permalink);
+      setPostToShare(post);
       setConfirmShareVisible(true);
     } catch (error) {
       console.error('Failed to open link', error);
@@ -148,17 +149,18 @@ export default function GroupDetailScreen() {
   };
 
   const handleConfirmDirectPost = async () => {
-    if (!group || !selectedProfile) return;
+    if (!group || !selectedProfile || !postToShare) return;
     try {
       setLoading(true);
-      await wrapInSpan('GroupDetailScreen: markGroupPosted', () => 
-        instagramService.markGroupPosted(group.id, selectedProfile.id)
+      await wrapInSpan('GroupDetailScreen: markPostPosted', () => 
+        instagramService.markPostPosted(postToShare.id, selectedProfile.id, group.id)
       );
       setConfirmShareVisible(false);
+      setPostToShare(null);
       
-      // Go back to the story sharing list screen
-      router.back();
       Alert.alert('Success', 'Story posting recorded.');
+      // Reload data to reflect updated lastPostedAt
+      loadData();
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'Failed to record story post');
@@ -183,6 +185,7 @@ export default function GroupDetailScreen() {
         setGroup({ ...group, status });
         Alert.alert('Success', `Group status set to ${status.toUpperCase()}.`);
       } else {
+        DeviceEventEmitter.emit('GroupFinished', { groupId: group.id });
         // If suspended or ignored, it shouldn't show in sharing list anymore, so go back
         router.back();
         Alert.alert('Success', `Group status set to ${status.toUpperCase()} and removed from active list.`);
@@ -190,6 +193,28 @@ export default function GroupDetailScreen() {
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'Failed to update status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFinishGroup = async () => {
+    if (!group) return;
+    if (!selectedProfile) {
+      Alert.alert('Error', 'No target channel selected.');
+      return;
+    }
+    try {
+      setLoading(true);
+      await wrapInSpan('GroupDetailScreen: markGroupPosted', () => 
+        instagramService.markGroupPosted(group.id, selectedProfile.id)
+      );
+      DeviceEventEmitter.emit('GroupFinished', { groupId: group.id });
+      router.back();
+      Alert.alert('Success', 'Group marked as finished and hidden for 24 hours.');
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert('Error', error.message || 'Failed to finish group');
     } finally {
       setLoading(false);
     }
@@ -254,7 +279,7 @@ export default function GroupDetailScreen() {
             labelStyle={{ fontSize: 10, fontWeight: 'bold' }}
             onPress={() => updateGroupStatusDirect('ignore')}
           >
-            Ignore
+            Inactive
           </Button>
         </View>
 
@@ -263,16 +288,29 @@ export default function GroupDetailScreen() {
         {/* 3-Column Grid of Post Tiles */}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.detailGridScroll}>
           <View style={styles.gridContainer}>
-            {group.posts?.map((post, index) => {
-              return (
-                <TouchableOpacity
-                  key={post.id || index}
-                  style={styles.gridCell}
-                  activeOpacity={0.8}
-                  onPress={() => setPreviewPost(post)}
-                  onLongPress={() => setPreviewPost(post)}
-                  delayLongPress={200}
-                >
+            {(() => {
+              const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+              const now = new Date().getTime();
+              const isSharedRecently = (p: InstagramPost) => {
+                if (!p.lastPostedAt) return false;
+                return (now - new Date(p.lastPostedAt).getTime()) < twentyFourHoursMs;
+              };
+              const posts = [...(group.posts || [])].sort((a, b) => {
+                const aShared = isSharedRecently(a);
+                const bShared = isSharedRecently(b);
+                if (aShared && !bShared) return 1;
+                if (!aShared && bShared) return -1;
+                return 0;
+              });
+              
+              return posts.map((post, index) => {
+                const isShared = isSharedRecently(post);
+                const opacityStyle = isShared ? { opacity: 0.4 } : {};
+                return (
+                  <View
+                    key={post.id || index}
+                    style={[styles.gridCell, opacityStyle]}
+                  >
                   <Image
                     source={{ uri: getMediaUri(post, 'medium') }}
                     style={styles.cellImage}
@@ -308,11 +346,28 @@ export default function GroupDetailScreen() {
                   <View style={styles.itemIndexBadge}>
                     <Text style={styles.itemIndexText}>#{index + 1}</Text>
                   </View>
-                </TouchableOpacity>
+                  </View>
               );
-            })}
+            });
+          })()}
           </View>
         </ScrollView>
+
+        {/* Finished button at the bottom */}
+        <View style={styles.finishButtonContainer}>
+          <Button
+            mode="contained"
+            buttonColor={theme.colors.error}
+            icon="check-circle"
+            style={styles.finishButton}
+            labelStyle={{ fontWeight: 'bold' }}
+            loading={loading}
+            disabled={loading}
+            onPress={handleFinishGroup}
+          >
+            Mark Group as Finished (suspend 24h)
+          </Button>
+        </View>
       </View>
 
       {/* Suspend Sub-Dialog */}
@@ -377,64 +432,7 @@ export default function GroupDetailScreen() {
         </Dialog>
       </Portal>
 
-      {/* Post Preview Dialog */}
-      <Portal>
-        <Dialog 
-          visible={previewPost !== null} 
-          onDismiss={() => setPreviewPost(null)}
-          style={styles.previewDialog}
-        >
-          <Dialog.Title style={{ fontSize: 16, paddingBottom: 0 }}>Post Preview</Dialog.Title>
-          <Dialog.Content style={{ paddingHorizontal: 16 }}>
-            {previewPost && (
-              <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={true}>
-                <Image
-                  source={{ uri: getMediaUri(previewPost, 'large') }}
-                  style={styles.previewMediaImage}
-                  contentFit="contain"
-                />
-                
-                <View style={styles.previewStatsRow}>
-                  <Text variant="labelMedium" style={{ fontWeight: 'bold' }}>
-                    @{previewPost.ownerUsername || 'unknown'}
-                  </Text>
-                  <Text variant="labelMedium" style={{ opacity: 0.7 }}>
-                    ❤️ {previewPost.likeCount || 0} | 💬 {previewPost.commentCount || 0}
-                  </Text>
-                </View>
 
-                {previewPost.timestamp && (
-                  <Text variant="bodySmall" style={{ opacity: 0.5, marginBottom: 8 }}>
-                    Posted: {new Date(previewPost.timestamp).toLocaleString()}
-                  </Text>
-                )}
-
-                <Divider style={{ marginVertical: 8 }} />
-
-                <Text variant="bodyMedium" style={styles.previewCaptionText}>
-                  {previewPost.caption || 'No caption.'}
-                </Text>
-              </ScrollView>
-            )}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setPreviewPost(null)}>Close</Button>
-            {previewPost && (
-              <Button 
-                mode="contained" 
-                icon="instagram"
-                onPress={() => {
-                  const post = previewPost;
-                  setPreviewPost(null);
-                  handleSharePostDirectly(post);
-                }}
-              >
-                Share
-              </Button>
-            )}
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
     </ScreenWrapper>
   );
 }
@@ -458,6 +456,16 @@ const styles = StyleSheet.create({
   },
   statusButton: {
     flex: 1,
+  },
+  finishButtonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: 'rgba(0,0,0,0.02)',
+  },
+  finishButton: {
+    borderRadius: 8,
   },
   detailGridScroll: {
     paddingBottom: 40,

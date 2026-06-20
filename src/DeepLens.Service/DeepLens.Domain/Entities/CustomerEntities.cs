@@ -15,6 +15,7 @@ public class Customer
     public string? Notes { get; set; }
     public string? Gender { get; set; }
     public string ReferralCode { get; set; } = string.Empty;
+    public bool IsFollower { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -34,6 +35,8 @@ public class CustomerInstagramAccount
     public string? FullName { get; set; }
     public string? ProfilePictureUrl { get; set; }
     public bool IsPrimary { get; set; }
+    public bool IsFollower { get; set; }
+    public DateTime? FollowedAt { get; set; }
 }
 
 public class CustomerAddress

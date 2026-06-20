@@ -5,13 +5,40 @@ import type {
   CustomerAddress, 
   CreateCustomerRequest, 
   CreateAddressRequest,
-  Language
+  Language,
+  CustomerListResponse
 } from '../types/customers';
 
 class CustomerService {
-  async getCustomers(limit = 50, offset = 0): Promise<Customer[]> {
-    return productMgmtApiClient.get<Customer[]>(API_ROUTES.CUSTOMERS.LIST, {
-      params: { limit, offset },
+  async getCustomers({
+    search,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    page = 1,
+    pageSize = 50,
+    filters = {}
+  }: {
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    page?: number;
+    pageSize?: number;
+    filters?: {
+      isArchived?: boolean;
+      hasPhone?: boolean;
+      hasInstagram?: boolean;
+      isFollower?: boolean;
+    }
+  } = {}): Promise<CustomerListResponse> {
+    return productMgmtApiClient.get<CustomerListResponse>(API_ROUTES.CUSTOMERS.LIST, {
+      params: { 
+        search, 
+        sortBy, 
+        sortOrder, 
+        page, 
+        pageSize,
+        ...filters
+      },
     });
   }
 

@@ -416,3 +416,5 @@ data/
 worker.err
 worker.log
 RESET_SUMMARY.md
+
+tools/dataimport/insta/

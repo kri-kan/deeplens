@@ -22,7 +22,7 @@ These are non-negotiable. No exceptions.
 | TypeScript interfaces must exactly mirror `JsonPropertyName` values | camelCase, same field names |
 | Image/video processing → Kafka → `202 Accepted` | Never process media synchronously in an API handler |
 | EF Core migrations only | Never write raw `.sql` migration files |
-| After any .NET change → run `./setupscripts/application/services/build-and-deploy.sh` | Mandatory before testing |
+| After any backend change (C#/Node/Python) → run build-and-deploy.sh or Makefile targets | Mandatory before testing |
 | Singleton video player in Vayyari | One `expo-video` instance per screen, rebind source — never create per-item |
 | Always use entity ID as Kafka message key | Ensures sequential ordering per entity across partitions |
 | Dapper for reads, EF Core for writes (.NET) | Dapper in Search/Identity reads; EF Core for domain mutations |
@@ -203,9 +203,13 @@ Use the **master agent** for any feature that touches more than one service:
 ### Add a WhatsApp feature
 → Run `whatsapp-feature-agent` → types → repo → service → controller → route
 
-### Deploy .NET changes
+### Deploy Backend changes
 ```bash
+# Build/deploy all services
 ./setupscripts/application/services/build-and-deploy.sh
+
+# Or deploy specific service
+make deploy-reasoning-api
 ```
 
 ### Add an EF Core migration

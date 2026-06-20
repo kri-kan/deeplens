@@ -181,6 +181,18 @@ public class MetaPost
 
     [JsonPropertyName("isStarred")]
     public bool IsStarred { get; set; }
+
+    [JsonPropertyName("lastPostedAt")]
+    public DateTime? LastPostedAt { get; set; }
+
+    [JsonPropertyName("rightSwipes")]
+    public long RightSwipes { get; set; }
+
+    [JsonPropertyName("leftSwipes")]
+    public long LeftSwipes { get; set; }
+
+    [JsonPropertyName("shareCount")]
+    public long ShareCount { get; set; }
 }
 
 public class InstagramProfileDetailsDto

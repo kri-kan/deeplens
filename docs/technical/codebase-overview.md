@@ -31,6 +31,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
 
 ### Frontend (`src/`)
 - **DeepLens.WebUI**: React/TypeScript dashboard for administrators and tenants.
+- **Vayyari**: Expo/React Native mobile application for customer management and Instagram story planning.
 
 ---
 
@@ -43,13 +44,16 @@ DeepLens is built using a clean architecture pattern across multiple services:
 | `/api/tenants`    | GET/POST | List and provision new organizations. |
 
 ### Search & Ingestion Service (Port 5002)
-| Endpoint                              | Method | Purpose                                            |
-| :------------------------------------ | :----- | :------------------------------------------------- |
-| `/api/v1/ingest/upload`               | POST   | Single image upload with metadata.                 |
-| `/api/v1/ingest/bulk`                 | POST   | Parallel bulk ingestion with LLM-based enrichment. |
-| `/api/v1/catalog/merge`               | POST   | Merge source SKU into target with image dedupe.    |
-| `/api/v1/catalog/images/{id}/default` | PATCH  | Set primary image for quick sharing.               |
-| `/api/v1/search`                      | POST   | Semantic image-to-image/text similarity search.    |
+| Endpoint                              | Method   | Purpose                                            |
+| :------------------------------------ | :------- | :------------------------------------------------- |
+| `/api/v1/ingest/upload`               | POST     | Single image upload with metadata.                 |
+| `/api/v1/ingest/bulk`                 | POST     | Parallel bulk ingestion with LLM-based enrichment. |
+| `/api/v1/catalog/merge`               | POST     | Merge source SKU into target with image dedupe.    |
+| `/api/v1/catalog/images/{id}/default` | PATCH    | Set primary image for quick sharing.               |
+| `/api/v1/search`                      | POST     | Semantic image-to-image/text similarity search.    |
+| `/api/v1/insta/profile/{username}`    | GET/POST | Instagram profile operations and sync.             |
+| `/api/v1/insta/posts/{username}`      | GET      | Retrieve Instagram posts for a profile.            |
+| `/api/v1/customers`                   | GET/POST | Customer management operations.                    |
 
 ### Reasoning Service (Port 8002)
 | Endpoint   | Method | Purpose                               |

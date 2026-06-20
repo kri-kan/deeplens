@@ -74,6 +74,17 @@ if (Should-Build "whatsapp-processor") {
         Write-Host "Build failed for $waPath" -ForegroundColor Red
     }
 }
+
+if (Should-Build "reasoning-api") {
+    Write-Host "--- Copying Reasoning Service (src/DeepLens.ReasoningService) ---" -ForegroundColor Cyan
+    $reasoningDest = "$hostingRoot/reasoning-api"
+    if (-not (Test-Path $reasoningDest)) {
+        New-Item -ItemType Directory -Force -Path $reasoningDest
+    }
+    Copy-Item -Recurse -Force "src/DeepLens.ReasoningService/*" "$reasoningDest/"
+    Write-Host "Successfully deployed Reasoning Service to $reasoningDest" -ForegroundColor Green
+}
+
 Write-Host "--- Restarting Containers ---" -ForegroundColor Yellow
 
 foreach ($project in $projects) {
@@ -85,4 +96,9 @@ foreach ($project in $projects) {
 if (Should-Build "whatsapp-processor") {
     Write-Host "--- Restarting WhatsApp Container ---" -ForegroundColor Yellow
     docker compose -f setupscripts/application/whatsapp/docker-compose.yaml restart "whatsapp-processor"
+}
+
+if (Should-Build "reasoning-api") {
+    Write-Host "--- Restarting Reasoning Container ---" -ForegroundColor Yellow
+    docker compose -f setupscripts/application/docker-compose.yaml restart "reasoning-api"
 }

@@ -49,6 +49,10 @@ export interface InstagramPost {
   ownerUsername?: string;
   ownerProfilePictureUrl?: string;
   isStarred?: boolean;
+  lastPostedAt?: string;
+  rightSwipes?: number;
+  leftSwipes?: number;
+  shareCount?: number;
 }
 
 export interface ProfileMetrics {
@@ -182,6 +186,10 @@ export const normalizeData = (data: any): InstagramPost => {
       youtubeVideoId: data.youtubeVideoId || data.YoutubeVideoId,
       youtubeUrl: data.youtubeUrl || data.YoutubeUrl,
       isStarred: data.isStarred !== undefined ? data.isStarred : data.IsStarred,
+      lastPostedAt: data.lastPostedAt || data.LastPostedAt,
+      rightSwipes: data.rightSwipes ?? data.RightSwipes ?? 0,
+      leftSwipes: data.leftSwipes ?? data.LeftSwipes ?? 0,
+      shareCount: data.shareCount ?? data.ShareCount ?? 0,
   };
 };
 
@@ -328,6 +336,11 @@ class InstagramService {
     return raw ? raw.map(normalizeData) : [];
   };
 
+  getIgnoredVideos = async (): Promise<InstagramPost[]> => {
+    const raw = await searchApiClient.get<any[]>('/api/v1/Insta/videos/ignored');
+    return raw ? raw.map(normalizeData) : [];
+  };
+
   getOwnAccountsVideos = async (sortBy = 'date', sortOrder = 'desc', limit = 100, offset = 0, search?: string): Promise<InstagramPost[]> => {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
     const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/own-accounts/videos?sortBy=${sortBy}&sortOrder=${sortOrder}&limit=${limit}&offset=${offset}${searchParam}`);
@@ -410,29 +423,19 @@ class InstagramService {
     return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/post?targetWatchlistId=${targetWatchlistId}`, {});
   };
 
-  getEligibleGroups = async (targetWatchlistId: string): Promise<StoryGroup[]> => {
-    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/story-groups/eligible/${targetWatchlistId}`);
-    return raw.map(g => ({
-      ...g,
-      posts: g.posts ? g.posts.map(normalizeData) : []
-    })) as StoryGroup[];
+  markPostPosted = async (id: string, targetWatchlistId: string, groupId?: string): Promise<{ success: boolean; historyId: string }> => {
+    const groupParam = groupId ? `&groupId=${groupId}` : '';
+    return searchApiClient.post(`/api/v1/Insta/story-posts/${id}/post?targetWatchlistId=${targetWatchlistId}${groupParam}`, {});
   };
 
-  getPendingSwipeCards = async (): Promise<StoryPostingHistory[]> => {
-    const raw = await searchApiClient.get<any[]>('/api/v1/Insta/story-groups/pending-swipes');
-    return (raw || []).map(h => ({
-      ...h,
-      posts: h.posts ? h.posts.map(normalizeData) : []
-    })) as StoryPostingHistory[];
+  finishStoryGroup = async (id: string): Promise<{ success: boolean }> => {
+    return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/finish`, {});
   };
 
-  submitSwipes = async (swipes: SwipeResponseItem[]): Promise<{ success: boolean }> => {
-    return searchApiClient.post('/api/v1/Insta/story-groups/swipes', swipes);
-  };
-
-  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string): Promise<{ items: UnifiedPlannerItem[]; totalCount: number }> => {
-    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
-    const raw = await searchApiClient.get<{ items: any[]; totalCount: number }>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}`);
+  getEligibleShares = async (targetWatchlistId: string, limit = 50, offset = 0): Promise<{ items: UnifiedPlannerItem[]; totalCount: number }> => {
+    const raw = await searchApiClient.get<{ items: any[]; totalCount: number }>(
+      `/api/v1/Insta/story-planner/eligible/${targetWatchlistId}?limit=${limit}&offset=${offset}`
+    );
     const items = ((raw && raw.items) || []).map(item => {
       if (item.type === 'post' && item.post) {
         return {
@@ -453,6 +456,50 @@ class InstagramService {
     return {
       items,
       totalCount: raw?.totalCount || 0
+    };
+  };
+
+  getPendingSwipeCards = async (): Promise<StoryPostingHistory[]> => {
+    const raw = await searchApiClient.get<any[]>('/api/v1/Insta/story-groups/pending-swipes');
+    return (raw || []).map(h => ({
+      ...h,
+      post: h.post ? normalizeData(h.post) : undefined,
+      posts: h.posts ? h.posts.map(normalizeData) : []
+    })) as StoryPostingHistory[];
+  };
+
+  submitSwipes = async (swipes: SwipeResponseItem[]): Promise<{ success: boolean }> => {
+    return searchApiClient.post('/api/v1/Insta/story-groups/swipes', swipes);
+  };
+
+  suggestGroupMetadata = async (postIds: string[]): Promise<{ title: string; hashtags: string[] }> => {
+    return searchApiClient.post('/api/v1/Insta/suggest-group-metadata', { postIds });
+  };
+
+  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string): Promise<{ items: UnifiedPlannerItem[]; totalCount: number; groupCount: number }> => {
+    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+    const raw = await searchApiClient.get<{ items: any[]; totalCount: number; groupCount: number }>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}`);
+    const items = ((raw && raw.items) || []).map(item => {
+      if (item.type === 'post' && item.post) {
+        return {
+          ...item,
+          post: normalizeData(item.post)
+        };
+      } else if (item.type === 'group' && item.group) {
+        return {
+          ...item,
+          group: {
+            ...item.group,
+            posts: item.group.posts ? item.group.posts.map(normalizeData) : []
+          }
+        };
+      }
+      return item;
+    }) as UnifiedPlannerItem[];
+    return {
+      items,
+      totalCount: raw?.totalCount || 0,
+      groupCount: raw?.groupCount || 0
     };
   };
 }
@@ -489,6 +536,7 @@ export interface StoryGroup {
   keywords?: string;
   rightSwipes?: number;
   leftSwipes?: number;
+  shareCount?: number;
 }
 
 export interface CreateStoryGroupPayload {
@@ -510,13 +558,15 @@ export interface UpdateStoryGroupPayload {
 
 export interface StoryPostingHistory {
   id: string;
-  groupId: string;
-  groupName: string;
+  groupId?: string;
+  groupName?: string;
+  postId?: string;
   targetWatchlistId: string;
   targetUsername: string;
   postedAt: string;
   swipeStatus: 'pending' | 'left' | 'right';
   swipedAt?: string;
+  post?: InstagramPost;
   posts: InstagramPost[];
 }
 

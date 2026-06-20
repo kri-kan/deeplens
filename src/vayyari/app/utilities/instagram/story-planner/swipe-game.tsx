@@ -32,10 +32,9 @@ export default function StorySwipeGameScreen() {
   const [pendingSwipes, setPendingSwipes] = useState<StoryPostingHistory[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Full Screen Carousel Modal State
+  // Full Screen Post Modal State
   const [showModal, setShowModal] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState<StoryPostingHistory | null>(null);
-  const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
+  const [selectedCard, setSelectedCard] = useState<StoryPostingHistory | null>(null);
 
   // Animation & Refs
   const position = useRef(new Animated.ValueXY()).current;
@@ -152,20 +151,18 @@ export default function StorySwipeGameScreen() {
   };
 
   const handleCardPress = (card: StoryPostingHistory) => {
-    setSelectedGroup(card);
-    setActiveCarouselIndex(0);
+    setSelectedCard(card);
     setShowModal(true);
   };
 
   const activeCard = currentIndex < pendingSwipes.length ? pendingSwipes[currentIndex] : null;
   const nextCard = currentIndex + 1 < pendingSwipes.length ? pendingSwipes[currentIndex + 1] : null;
 
-  const currentActivePost = selectedGroup?.posts && selectedGroup.posts[activeCarouselIndex]
-    ? selectedGroup.posts[activeCarouselIndex]
-    : null;
+  const currentActivePost = selectedCard?.post || null;
 
   // Render Card layout inside the stack
-  const renderCardContent = (card: StoryPostingHistory, latestPost: InstagramPost | null) => {
+  const renderCardContent = (card: StoryPostingHistory) => {
+    const latestPost = card.post;
     return (
       <View style={[styles.cardInner, { padding: 0 }]}>
         {latestPost ? (
@@ -187,7 +184,7 @@ export default function StorySwipeGameScreen() {
           {/* Header Info */}
           <View style={styles.cardHeader}>
             <Text variant="titleMedium" numberOfLines={1} style={[styles.bold, { color: 'white' }]}>
-              {card.groupName}
+              {latestPost?.ownerUsername || 'Ungrouped Post'}
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 2 }}>
               Posted on @{card.targetUsername}
@@ -223,16 +220,6 @@ export default function StorySwipeGameScreen() {
         </View>
       </View>
     );
-  };
-
-  const getLatestPost = (posts: InstagramPost[]) => {
-    if (!posts || posts.length === 0) return null;
-    const sorted = [...posts].sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return timeB - timeA;
-    });
-    return sorted[0];
   };
 
   return (
@@ -272,7 +259,7 @@ export default function StorySwipeGameScreen() {
                   }
                 ]}
               >
-                {renderCardContent(nextCard, getLatestPost(nextCard.posts))}
+                {renderCardContent(nextCard)}
               </Animated.View>
             )}
 
@@ -293,7 +280,7 @@ export default function StorySwipeGameScreen() {
                   onPress={() => handleCardPress(activeCard)}
                   style={{ flex: 1 }}
                 >
-                  {renderCardContent(activeCard, getLatestPost(activeCard.posts))}
+                  {renderCardContent(activeCard)}
 
                   {/* LIKE Badge */}
                   <Animated.View style={[styles.badgeContainer, styles.likeBadge, { opacity: likeOpacity }]}>
@@ -344,10 +331,10 @@ export default function StorySwipeGameScreen() {
           <View style={styles.modalHeader}>
             <View style={{ flex: 1 }}>
               <Text variant="titleMedium" style={{ color: 'white', fontWeight: 'bold' }} numberOfLines={1}>
-                {selectedGroup?.groupName}
+                {selectedCard?.post?.ownerUsername || 'Ungrouped Post'}
               </Text>
               <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
-                Posted on @{selectedGroup?.targetUsername}
+                Posted on @{selectedCard?.targetUsername}
               </Text>
             </View>
             <IconButton 
@@ -359,79 +346,20 @@ export default function StorySwipeGameScreen() {
             />
           </View>
 
-          {/* Main Carousel Swipeable Media Viewer */}
-          <FlatList
-            ref={flatListRef}
-            data={selectedGroup?.posts || []}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            onMomentumScrollEnd={(e) => {
-              const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-              setActiveCarouselIndex(index);
-            }}
-            getItemLayout={(_, index) => ({
-              length: SCREEN_WIDTH,
-              offset: SCREEN_WIDTH * index,
-              index,
-            })}
-            renderItem={({ item }) => (
-              <View style={styles.carouselItemContainer}>
-                {getMediaUri(item) ? (
-                  <Image 
-                    source={{ uri: getMediaUri(item, 'large') }} 
-                    style={styles.carouselImage} 
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <View style={styles.carouselFallback}>
-                    <IconButton icon="image-off" size={64} iconColor="rgba(255,255,255,0.3)" />
-                    <Text style={{ color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>No image available</Text>
-                  </View>
-                )}
+          {/* Main Media Viewer */}
+          <View style={styles.carouselItemContainer}>
+            {getMediaUri(currentActivePost) ? (
+              <Image 
+                source={{ uri: getMediaUri(currentActivePost, 'large') }} 
+                style={styles.carouselImage} 
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.carouselFallback}>
+                <IconButton icon="image-off" size={64} iconColor="rgba(255,255,255,0.3)" />
+                <Text style={{ color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>No image available</Text>
               </View>
             )}
-          />
-
-          {/* Page Counter */}
-          {selectedGroup?.posts && selectedGroup.posts.length > 0 && (
-            <Text style={styles.modalPageIndicator}>
-              {activeCarouselIndex + 1} of {selectedGroup.posts.length}
-            </Text>
-          )}
-
-          {/* Horizontal thumbnail navigation strip */}
-          <View style={styles.thumbnailStripContainer}>
-            <FlatList
-              data={selectedGroup?.posts || []}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => `thumb-${item.id}`}
-              contentContainerStyle={styles.thumbnailStripContent}
-              renderItem={({ item, index }) => {
-                const isActive = index === activeCarouselIndex;
-                return (
-                  <TouchableOpacity 
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      setActiveCarouselIndex(index);
-                      flatListRef.current?.scrollToIndex({ index, animated: true });
-                    }}
-                    style={[
-                      styles.thumbnailWrapper,
-                      isActive && { borderColor: theme.colors.primary, borderWidth: 2.5 }
-                    ]}
-                  >
-                    <Image 
-                      source={{ uri: getMediaUri(item, 'medium') }} 
-                      style={styles.thumbnailImage}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                );
-              }}
-            />
           </View>
 
           {/* Post Metrics and Caption */}
