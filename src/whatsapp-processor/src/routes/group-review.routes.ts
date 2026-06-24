@@ -39,27 +39,30 @@ export function createGroupReviewRoutes(): Router {
             // Fetch groups
             const groupsRes = await client.query(
                 `SELECT 
-                    group_id as "groupId",
-                    jid,
-                    status,
-                    process_as_product as "processAsProduct",
-                    description,
-                    media_count as "mediaCount",
-                    text_count as "textCount",
-                    deeplens_product_id as "deeplensProductId",
-                    deeplens_listing_id as "deeplensListingId",
-                    category,
-                    sub_category as "subCategory",
-                    detected_price as "detectedPrice",
-                    detected_shipping as "detectedShipping",
-                    last_message_at as "lastMessageAt",
-                    product_created_at as "productCreatedAt",
-                    error_detail as "errorDetail",
-                    created_at as "createdAt",
-                    updated_at as "updatedAt"
-                 FROM wa.message_groups
-                 WHERE jid = $1
-                 ORDER BY last_message_at DESC`,
+                    mg.group_id as "groupId",
+                    mg.jid,
+                    mg.status,
+                    mg.process_as_product as "processAsProduct",
+                    mg.description,
+                    mg.media_count as "mediaCount",
+                    mg.text_count as "textCount",
+                    mg.deeplens_product_id as "deeplensProductId",
+                    mg.has_pending_media as "hasPendingMedia",
+                    p.base_sku as "productCode",
+                    mg.deeplens_listing_id as "deeplensListingId",
+                    mg.category,
+                    mg.sub_category as "subCategory",
+                    mg.detected_price as "detectedPrice",
+                    mg.detected_shipping as "detectedShipping",
+                    mg.last_message_at as "lastMessageAt",
+                    mg.product_created_at as "productCreatedAt",
+                    mg.error_detail as "errorDetail",
+                    mg.created_at as "createdAt",
+                    mg.updated_at as "updatedAt"
+                 FROM wa.message_groups mg
+                 LEFT JOIN public.products p ON mg.deeplens_product_id = p.id
+                 WHERE mg.jid = $1
+                 ORDER BY mg.last_message_at DESC`,
                 [jid]
             );
 

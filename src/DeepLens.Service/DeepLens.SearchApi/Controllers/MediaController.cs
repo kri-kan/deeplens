@@ -124,36 +124,74 @@ public class MediaController : ControllerBase
                                        .Replace(".mov", ".jpg", StringComparison.OrdinalIgnoreCase);
             }
 
-            try {
-                using var rawStream = await _storageService.GetFileAsync(sourcePath);
-                using var imageObj = await Image.LoadAsync(rawStream);
-                
-                var (width, height) = MediaConstants.ThumbnailSpecs.Presets[spec];
-
-                imageObj.Mutate(x => x.Resize(new ResizeOptions {
-                    Size = new Size(width, height),
-                    Mode = ResizeMode.Max
-                }));
-
-                using var outMs = new MemoryStream();
-                await imageObj.SaveAsWebpAsync(outMs);
-                byte[] outData = outMs.ToArray();
-
-                // Proactively upload to MinIO
-                try {
-                    outMs.Position = 0;
-                    await _storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP);
-                } catch (Exception uploadEx) { 
-                    _logger.LogWarning("Failed to proactively upload generated thumbnail for {Path}: {Msg}", sourcePath, uploadEx.Message);
+            Stream rawStream;
+            try
+            {
+                rawStream = await _storageService.GetFileAsync(sourcePath);
+            }
+            catch (Exception primaryEx)
+            {
+                if (sourcePath.StartsWith("instagram/", StringComparison.OrdinalIgnoreCase))
+                {
+                    string fallbackPath = "product/" + sourcePath.Substring("instagram/".Length);
+                    _logger.LogInformation("Source path {SourcePath} failed: {Msg}. Retrying legacy fallback: {FallbackPath}", sourcePath, primaryEx.Message, fallbackPath);
+                    try
+                    {
+                        rawStream = await _storageService.GetFileAsync(fallbackPath);
+                        sourcePath = fallbackPath;
+                    }
+                    catch (Exception fallbackEx)
+                    {
+                        _logger.LogError(fallbackEx, "Fallback path also failed: {FallbackPath}", fallbackPath);
+                        throw primaryEx;
+                    }
                 }
+                else
+                {
+                    throw;
+                }
+            }
 
-                return File(outData, MediaConstants.Formats.WebP);
+            try {
+                using (rawStream)
+                using (var imageObj = await Image.LoadAsync(rawStream))
+                {
+                    var (width, height) = MediaConstants.ThumbnailSpecs.Presets[spec];
+
+                    imageObj.Mutate(x => x.Resize(new ResizeOptions {
+                        Size = new Size(width, height),
+                        Mode = ResizeMode.Max
+                    }));
+
+                    using var outMs = new MemoryStream();
+                    await imageObj.SaveAsWebpAsync(outMs);
+                    byte[] outData = outMs.ToArray();
+
+                    // Proactively upload to MinIO
+                    try {
+                        outMs.Position = 0;
+                        await _storageService.UploadThumbnailAsync(thumbPath, outMs, MediaConstants.Formats.WebP);
+                    } catch (Exception uploadEx) { 
+                        _logger.LogWarning("Failed to proactively upload generated thumbnail for {Path}: {Msg}", sourcePath, uploadEx.Message);
+                    }
+
+                    return File(outData, MediaConstants.Formats.WebP);
+                }
             } catch (Exception genEx) {
                 _logger.LogError(genEx, "Failed to generate thumbnail on-demand for {Path} from source {SourcePath}", item.StoragePath, sourcePath);
                 
                 // Final fallback: serve the original content if generation failed but file exists
                 try {
-                    var originalStream = await _storageService.GetFileAsync(sourcePath);
+                    Stream originalStream;
+                    try
+                    {
+                        originalStream = await _storageService.GetFileAsync(sourcePath);
+                    }
+                    catch (Exception finalFallbackEx) when (sourcePath.StartsWith("instagram/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string legacyPath = "product/" + sourcePath.Substring("instagram/".Length);
+                        originalStream = await _storageService.GetFileAsync(legacyPath);
+                    }
                     return File(originalStream, "image/jpeg");
                 } catch (Exception originalEx) {
                     _logger.LogError(originalEx, "Final fallback failed for {Path}", sourcePath);
@@ -176,7 +214,26 @@ public class MediaController : ControllerBase
             if (item == null || item.MediaType != 2) return NotFound("Video media not found.");
             if (string.IsNullOrEmpty(item.PreviewPath)) return NotFound("Preview GIF not yet generated.");
 
-            using var previewStream = await _storageService.GetFileAsync(item.PreviewPath);
+            Stream previewStream;
+            try
+            {
+                previewStream = await _storageService.GetFileAsync(item.PreviewPath);
+            }
+            catch (Exception ex) when (item.PreviewPath.StartsWith("instagram/", StringComparison.OrdinalIgnoreCase))
+            {
+                string legacyPath = "product/" + item.PreviewPath.Substring("instagram/".Length);
+                _logger.LogWarning("Failed to fetch preview from {OriginalPath}. Retrying with legacy 'product/' bucket suffix. Error: {Msg}", item.PreviewPath, ex.Message);
+                try
+                {
+                    previewStream = await _storageService.GetFileAsync(legacyPath);
+                }
+                catch
+                {
+                    throw;
+                }
+            }
+
+            using var streamToDispose = previewStream;
             using var ms = new MemoryStream();
             await previewStream.CopyToAsync(ms);
             byte[] data = ms.ToArray();
@@ -200,15 +257,50 @@ public class MediaController : ControllerBase
     /// Serves the original high-quality media file.
     /// </summary>
     [HttpGet("{mediaId:guid}/raw")]
-    public async Task<IActionResult> GetRawMedia(Guid mediaId)
+    public async Task<IActionResult> GetRawMedia(Guid mediaId, CancellationToken ct)
     {
         try
         {
             var item = await _metadataService.GetMediaByIdAsync(mediaId);
             if (item == null) return NotFound();
 
-            var stream = await _storageService.GetFileAsync(item.StoragePath);
             string contentType = item.MimeType ?? (item.MediaType == 1 ? "image/jpeg" : "video/mp4");
+            bool isVideo = contentType.StartsWith("video", StringComparison.OrdinalIgnoreCase) || item.MediaType == 2;
+
+            Stream stream;
+            try
+            {
+                if (isVideo)
+                {
+                    long length = await _storageService.GetFileLengthAsync(item.StoragePath);
+                    stream = new MinioSeekableStream(_storageService, item.StoragePath, length);
+                }
+                else
+                {
+                    stream = await _storageService.GetFileAsync(item.StoragePath);
+                }
+            }
+            catch (Exception ex) when (item.StoragePath.StartsWith("instagram/", StringComparison.OrdinalIgnoreCase))
+            {
+                string legacyPath = "product/" + item.StoragePath.Substring("instagram/".Length);
+                _logger.LogWarning("Failed to fetch raw media from {OriginalPath}. Retrying with legacy 'product/' bucket suffix. Error: {Msg}", item.StoragePath, ex.Message);
+                try
+                {
+                    if (isVideo)
+                    {
+                        long length = await _storageService.GetFileLengthAsync(legacyPath);
+                        stream = new MinioSeekableStream(_storageService, legacyPath, length);
+                    }
+                    else
+                    {
+                        stream = await _storageService.GetFileAsync(legacyPath);
+                    }
+                }
+                catch
+                {
+                    throw;
+                }
+            }
             
             var allSettings = await _settings.GetAllAsync();
             var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
@@ -229,7 +321,7 @@ public class MediaController : ControllerBase
     /// Deletes a media item and all its associated thumbnails.
     /// </summary>
     [HttpDelete("{mediaId:guid}")]
-    public async Task<IActionResult> DeleteMedia(Guid mediaId)
+    public async Task<IActionResult> DeleteMedia(Guid mediaId, CancellationToken ct)
     {
         try
         {

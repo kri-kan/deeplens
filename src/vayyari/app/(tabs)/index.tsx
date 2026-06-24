@@ -24,7 +24,7 @@ const OPERATIONAL_UTILITIES: UtilityItem[] = [
 const PRODUCT_UTILITIES: UtilityItem[] = [
   { id: 'view-catalog', title: 'Catalog', icon: 'format-list-bulleted', route: '/utilities/product-list', color: '#6200ee' },
   { id: 'create-product', title: 'Create', icon: 'plus-box', route: '/utilities/create-product', color: '#00a86b' },
-  { id: 'merge-products', title: 'Merge', icon: 'call-merge', route: '', color: '#999' },
+  { id: 'merge-products', title: 'Merge', icon: 'call-merge', route: '/utilities/product/merge-candidates', color: '#E91E63' },
 ];
 
 const SYSTEM_UTILITIES: UtilityItem[] = [
@@ -35,6 +35,7 @@ const SYSTEM_UTILITIES: UtilityItem[] = [
   { id: 'youtube-dashboard', title: 'YouTube', icon: 'youtube', route: '/utilities/youtube-dashboard', color: '#FF0000' },
   { id: 'quick-links', title: 'Links', icon: 'link-variant', route: '/utilities/quick-links', color: '#2196F3' },
   { id: 'whatsapp-mgmt', title: 'WhatsApp', icon: 'whatsapp', route: '/utilities/whatsapp', color: '#25D366' },
+  { id: 'playground', title: 'Playground', icon: 'test-tube', route: '/system/playground', color: '#9C27B0' },
 ];
 
 const COMMUNICATION_UTILITIES: UtilityItem[] = [

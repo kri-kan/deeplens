@@ -420,5 +420,16 @@ RESET_SUMMARY.md
 tools/dataimport/insta/
 
 # Ignore large SQL backups (violates GitHub 100MB limit)
-# setupscripts/application/deeplens-core/*.sql
-# setupscripts/application/identity/*.sql
+setupscripts/application/deeplens-core/*.sql
+setupscripts/application/identity/*.sql
+
+test_ollama.py
+
+# Local scratch scripts and deployment builds
+scratch/
+deploy/
+
+# WhatsApp processor local utility/reprocess scripts
+src/whatsapp-processor/scripts/
+src/whatsapp-processor/reprocess_products.js
+src/whatsapp-processor/reprocess_products.ts

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Alert, Dimensions, Linking, ScrollView, DeviceEventEmitter } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, TouchableWithoutFeedback, Alert, Dimensions, Linking, ScrollView, DeviceEventEmitter, Modal, Animated } from 'react-native';
 import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon } from 'react-native-paper';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
+import Svg, { Circle } from 'react-native-svg';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useEventListener } from 'expo';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { instagramService, StoryGroup, InstagramPost, InstagramProfile } from '@/services/instagram.service';
+import { instagramService, StoryGroup, InstagramPost, InstagramProfile, InstagramMediaType } from '@/services/instagram.service';
 import { wrapInSpan } from '@/utils/telemetry';
 import { getMediaUri } from '@/utils/instagram-helpers';
 import { UnifiedPlannerItem } from '@/services/instagram.service';
@@ -15,18 +18,456 @@ const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
 const ITEM_SIZE = width / COLUMN_COUNT;
 
+// ── Story Ring Helpers ────────────────────────────────────────────────────────
+const getStoryRingParams = (count: number) => {
+  if (!count || count <= 0) return null;
+
+  // Colors
+  // 1-4: Red, 5-10: Orange, 11-15: Yellow, 16+: Green
+  let color = '#FF2D55'; // Red
+  if (count >= 5 && count <= 10) {
+    color = '#FB8C00'; // Orange
+  } else if (count >= 11 && count <= 15) {
+    color = '#FFD54F'; // Yellow
+  } else if (count > 15) {
+    color = '#4CAF50'; // Green
+  }
+
+  const radius = 27;
+  const strokeWidth = 3;
+  const circumference = 2 * Math.PI * radius; // ~169.646
+
+  let dashArray = '';
+  if (count === 1) {
+    dashArray = `${circumference}`;
+  } else {
+    // Compensate for strokeLinecap="round" by adding slightly larger gap visually
+    const gap = 5;
+    const dashLength = Math.max(1, (circumference / count) - gap);
+    dashArray = `${dashLength} ${gap}`;
+  }
+
+  return { color, radius, strokeWidth, circumference, dashArray };
+};
+
+const formatRelativeTime = (dateStr?: string) => {
+  if (!dateStr) return '';
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (60 * 1000));
+  const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return date.toLocaleDateString();
+};
+
+const getProfilePicUri = (p: InstagramProfile) => {
+  if (!p) return null;
+  const path = p.storagePath;
+  const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+  const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  if (path) {
+    return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
+  }
+  if (p.profilePictureUrl) {
+    return p.profilePictureUrl.startsWith('/') ? `${cleanBaseUrl}${p.profilePictureUrl}` : p.profilePictureUrl;
+  }
+  return null;
+};
+
+const getAvatarColor = (username: string) => {
+  const colors = ['#8D6E63', '#2E7D32', '#558B2F', '#1565C0', '#6A1B9A', '#AD1457'];
+  if (!username) return colors[0];
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) {
+    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
+// ── Story Video Player ────────────────────────────────────────────────────────
+interface StoryVideoPlayerProps {
+  uri: string;
+  isPaused: boolean;
+  onProgress: (val: number) => void;
+  onComplete: () => void;
+}
+
+function StoryVideoPlayer({ uri, isPaused, onProgress, onComplete }: StoryVideoPlayerProps) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = false;
+    p.timeUpdateEventInterval = 0.05;
+    p.muted = false;
+    if (!isPaused) {
+      p.play();
+    }
+  });
+
+  const [isReady, setIsReady] = useState(player.status === 'readyToPlay');
+
+  useEffect(() => {
+    if (isPaused) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }, [isPaused, player]);
+
+  useEventListener(player, 'timeUpdate', (event) => {
+    const duration = player.duration;
+    if (duration > 0) {
+      onProgress(event.currentTime / duration);
+    }
+  });
+
+  useEventListener(player, 'playToEnd', () => {
+    onComplete();
+  });
+
+  useEventListener(player, 'statusChange', (event) => {
+    if (event.status === 'readyToPlay') {
+      setIsReady(true);
+    }
+  });
+
+  return (
+    <View style={styles.storyMediaContainer}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      {!isReady && (
+        <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+          <ActivityIndicator size="large" color="#ffffff" />
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ── Story Viewer Modal ────────────────────────────────────────────────────────
+interface StoryViewerModalProps {
+  visible: boolean;
+  profile: InstagramProfile | null;
+  onClose: () => void;
+}
+
+function StoryViewerModal({ visible, profile, onClose }: StoryViewerModalProps) {
+  const [posts, setPosts] = useState<InstagramPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [isPaused, setPaused] = useState(false);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+
+  const touchStartTime = useRef(0);
+
+  // Fetch stories when visible & profile changes
+  useEffect(() => {
+    if (!visible || !profile) {
+      setPosts([]);
+      setLoading(true);
+      setActiveIndex(0);
+      setProgress(0);
+      setPaused(false);
+      setDetailsExpanded(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchStories = async () => {
+      try {
+        setLoading(true);
+        const fetched = await instagramService.getRecentStories(profile.id);
+        if (isMounted) {
+          setPosts(fetched);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch recent stories', err);
+        if (isMounted) {
+          Alert.alert('Error', 'Failed to fetch recent stories.');
+          onClose();
+        }
+      }
+    };
+
+    fetchStories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [visible, profile]);
+
+  // Handle closing when posts are empty after loading
+  useEffect(() => {
+    if (visible && !loading && posts.length === 0) {
+      Alert.alert('Info', 'No stories posted in the last 24 hours.');
+      onClose();
+    }
+  }, [loading, posts, visible]);
+
+  const activePost = posts[activeIndex];
+  const isVideo = activePost && (activePost.mediaType === 'VIDEO' || activePost.mediaType === InstagramMediaType.VIDEO || activePost.mediaType === '2');
+
+  // Image timer logic
+  useEffect(() => {
+    if (loading || posts.length === 0 || isVideo || isPaused) {
+      return;
+    }
+
+    const intervalDuration = 50; // tick every 50ms
+    const totalDuration = 5000;  // 5 seconds total
+    const timer = setInterval(() => {
+      setProgress(prev => {
+        const next = prev + (intervalDuration / totalDuration);
+        if (next >= 1) {
+          clearInterval(timer);
+          goToNext();
+          return 0;
+        }
+        return next;
+      });
+    }, intervalDuration);
+
+    return () => clearInterval(timer);
+  }, [activeIndex, isPaused, loading, posts.length, isVideo]);
+
+  const goToNext = () => {
+    if (activeIndex < posts.length - 1) {
+      setProgress(0);
+      setActiveIndex(prev => prev + 1);
+    } else {
+      onClose();
+    }
+  };
+
+  const goToPrev = () => {
+    if (activeIndex > 0) {
+      setProgress(0);
+      setActiveIndex(prev => prev - 1);
+    } else {
+      setProgress(0);
+    }
+  };
+
+  const handlePressIn = () => {
+    touchStartTime.current = Date.now();
+    setPaused(true);
+  };
+
+  const handlePressOut = (action: () => void) => {
+    setPaused(false);
+    const duration = Date.now() - touchStartTime.current;
+    if (duration < 300) {
+      action();
+    }
+  };
+
+  if (!visible || !profile) return null;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.storyModalOverlay}>
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#ffffff" />
+            <Text style={{ color: '#ffffff', marginTop: 12 }}>Loading stories...</Text>
+          </View>
+        ) : posts.length === 0 ? null : (
+          <View style={StyleSheet.absoluteFill}>
+            {/* Segmented Progress Bars */}
+            <View style={styles.storyProgressContainer}>
+              {posts.map((_, idx) => {
+                let fill = 0;
+                if (idx < activeIndex) fill = 1;
+                else if (idx === activeIndex) fill = progress;
+
+                return (
+                  <View key={idx} style={styles.storyProgressBarTrack}>
+                    <View style={[styles.storyProgressBarFill, { width: `${fill * 100}%` }]} />
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Story Header */}
+            <View style={styles.storyHeader}>
+              {profile.profilePictureUrl || profile.storagePath ? (
+                <Image
+                  source={{ uri: getProfilePicUri(profile) ?? undefined }}
+                  style={styles.storyHeaderAvatar}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.storyHeaderAvatar, { backgroundColor: getAvatarColor(profile.username), justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ fontSize: 10, color: 'white', fontWeight: 'bold' }}>
+                    {profile.username.substring(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.storyHeaderInfo}>
+                <Text style={styles.storyHeaderUsername}>@{profile.username}</Text>
+                {activePost.sharedAt && (
+                  <Text style={styles.storyHeaderTime}>
+                    Shared {formatRelativeTime(activePost.sharedAt)}
+                  </Text>
+                )}
+              </View>
+              <IconButton
+                icon="close"
+                iconColor="#ffffff"
+                size={24}
+                style={styles.storyCloseButton}
+                onPress={onClose}
+              />
+            </View>
+
+            {/* Media Content */}
+            <View style={styles.storyMediaContainer}>
+              {isVideo ? (
+                <StoryVideoPlayer
+                  uri={getMediaUri(activePost)}
+                  isPaused={isPaused}
+                  onProgress={setProgress}
+                  onComplete={goToNext}
+                />
+              ) : (
+                <Image
+                  source={{ uri: getMediaUri(activePost, 'large') }}
+                  style={styles.storyImage}
+                  contentFit="contain"
+                />
+              )}
+            </View>
+
+            {/* Navigation Touch Zones */}
+            <View style={[StyleSheet.absoluteFillObject, { top: 100, bottom: detailsExpanded ? '40%' : 110 }]}>
+              <View style={{ flex: 1, flexDirection: 'row' }}>
+                <TouchableWithoutFeedback
+                  onPressIn={handlePressIn}
+                  onPressOut={() => handlePressOut(goToPrev)}
+                >
+                  <View style={{ flex: 3 }} />
+                </TouchableWithoutFeedback>
+
+                <TouchableWithoutFeedback
+                  onPressIn={handlePressIn}
+                  onPressOut={() => handlePressOut(goToNext)}
+                >
+                  <View style={{ flex: 7 }} />
+                </TouchableWithoutFeedback>
+              </View>
+            </View>
+
+            {/* Collapsible Bottom Details Sheet */}
+            <View style={[
+              styles.storyDetailsSheet,
+              detailsExpanded ? styles.storyDetailsExpanded : styles.storyDetailsCollapsed
+            ]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setDetailsExpanded(!detailsExpanded)}
+                style={styles.storyDetailsDragHandle}
+              />
+              
+              <View style={styles.storyDetailsHeader}>
+                <Text variant="titleSmall" style={{ color: '#ffffff', fontWeight: 'bold' }}>
+                  @{activePost.ownerUsername || 'Post'}
+                </Text>
+                <TouchableOpacity onPress={() => setDetailsExpanded(!detailsExpanded)}>
+                  <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 12 }}>
+                    {detailsExpanded ? 'Hide info' : 'Tap for info'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {detailsExpanded ? (
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
+                  <View style={styles.storyDetailsStatsRow}>
+                    <View style={styles.storyDetailsStatBadge}>
+                      <Text style={styles.storyDetailsStatText}>👍 {activePost.rightSwipes || 0} Right</Text>
+                    </View>
+                    <View style={styles.storyDetailsStatBadge}>
+                      <Text style={styles.storyDetailsStatText}>👎 {activePost.leftSwipes || 0} Left</Text>
+                    </View>
+                    <View style={styles.storyDetailsStatBadge}>
+                      <Text style={styles.storyDetailsStatText}>🔁 {activePost.shareCount || 0} Shared</Text>
+                    </View>
+                    <View style={styles.storyDetailsStatBadge}>
+                      <Text style={styles.storyDetailsStatText}>❤️ {activePost.likeCount || 0} Likes</Text>
+                    </View>
+                  </View>
+
+                  {activePost.caption ? (
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: 13, lineHeight: 18, marginTop: 4 }}>
+                      {activePost.caption}
+                    </Text>
+                  ) : (
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 12, fontStyle: 'italic' }}>
+                      No caption
+                    </Text>
+                  )}
+
+                  {activePost.permalink && (
+                    <Button
+                      mode="contained"
+                      icon="instagram"
+                      style={{ marginTop: 16, backgroundColor: '#E1306C' }}
+                      onPress={() => Linking.openURL(activePost.permalink!).catch(() => {})}
+                    >
+                      Open in Instagram
+                    </Button>
+                  )}
+                </ScrollView>
+              ) : (
+                <View style={{ flex: 1 }}>
+                  {activePost.caption ? (
+                    <Text numberOfLines={1} style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 12, marginTop: 2 }}>
+                      {activePost.caption}
+                    </Text>
+                  ) : null}
+                  <View style={styles.storyDetailsStatsRow}>
+                    <Text style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 11 }}>
+                      👍 {activePost.rightSwipes || 0}  |  💬 {activePost.commentCount || 0}  |  🔁 {activePost.shareCount || 0}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
 export default function StorySharingScreen() {
   const theme = useTheme();
   const router = useRouter();
 
   // State
   const [loading, setLoading] = useState(true);
+  const [storyViewerVisible, setStoryViewerVisible] = useState(false);
+  const [storyViewerProfile, setStoryViewerProfile] = useState<InstagramProfile | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [ownProfiles, setOwnProfiles] = useState<InstagramProfile[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<InstagramProfile | null>(null);
   const [allShares, setAllShares] = useState<UnifiedPlannerItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedSectionsByProfile, setCollapsedSectionsByProfile] = useState<Record<string, Set<string>>>({});
   const [previewPost, setPreviewPost] = useState<InstagramPost | null>(null);
   const [sharingPost, setSharingPost] = useState(false);
   const [confirmShareVisible, setConfirmShareVisible] = useState(false);
@@ -52,11 +493,15 @@ export default function StorySharingScreen() {
   };
 
   // Load Eligible Shares
-  const loadShares = async (profileId?: string, reset = false) => {
+  const loadShares = async (profileId?: string, reset = false, showPullRefresh = false) => {
     const pid = profileId || selectedProfile?.id;
     if (!pid) return;
     if (reset) {
-      setLoading(true);
+      if (showPullRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       offsetRef.current = 0;
     } else {
       setLoadingMore(true);
@@ -78,8 +523,15 @@ export default function StorySharingScreen() {
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      setRefreshing(false);
     }
   };
+
+  const handleRefresh = useCallback(() => {
+    if (selectedProfile) {
+      loadShares(selectedProfile.id, true, true);
+    }
+  }, [selectedProfile]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMore || loading) return;
@@ -98,11 +550,13 @@ export default function StorySharingScreen() {
     return () => sub.remove();
   }, []);
 
-  useEffect(() => {
-    if (selectedProfile) {
-      loadShares(selectedProfile.id, true);
-    }
-  }, [selectedProfile]);
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedProfile) {
+        loadShares(selectedProfile.id, true);
+      }
+    }, [selectedProfile])
+  );
 
   const handleSharePostDirectly = async (post: InstagramPost) => {
     if (!post.permalink) {
@@ -143,30 +597,6 @@ export default function StorySharingScreen() {
   };
 
   // Helpers
-  const getProfilePicUri = (p: InstagramProfile) => {
-    if (!p) return null;
-    const path = p.storagePath;
-    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    if (path) {
-      return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
-    }
-    if (p.profilePictureUrl) {
-      return p.profilePictureUrl.startsWith('/') ? `${cleanBaseUrl}${p.profilePictureUrl}` : p.profilePictureUrl;
-    }
-    return null;
-  };
-
-  const getAvatarColor = (username: string) => {
-    const colors = ['#8D6E63', '#2E7D32', '#558B2F', '#1565C0', '#6A1B9A', '#AD1457'];
-    if (!username) return colors[0];
-    let hash = 0;
-    for (let i = 0; i < username.length; i++) {
-      hash = username.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
-  };
 
   const renderGroupAvatars = (group: StoryGroup) => {
     const mapped = ownProfiles.filter(p => group.eligibleAccounts?.includes(p.id));
@@ -221,7 +651,7 @@ export default function StorySharingScreen() {
   };
 
   const isSharedRecently = (item: UnifiedPlannerItem) => {
-    const lastPostedStr = item.type === 'group' ? item.group?.posts?.[0]?.lastPostedAt : item.post?.lastPostedAt; // just approximate or check if lastPostedAt > 24h
+    const lastPostedStr = item.type === 'group' ? (item.group?.lastPostedAt || item.group?.posts?.[0]?.lastPostedAt) : item.post?.lastPostedAt;
     if (!lastPostedStr) return false;
     const twentyFourHoursMs = 24 * 60 * 60 * 1000;
     return (new Date().getTime() - new Date(lastPostedStr).getTime()) < twentyFourHoursMs;
@@ -259,7 +689,8 @@ export default function StorySharingScreen() {
 
   const buildSectionRows = (label: string, icon: string, color: string, items: UnifiedPlannerItem[]): FlatListRow[] => {
     const rows: FlatListRow[] = [];
-    const isCollapsed = collapsedSections.has(label);
+    const currentCollapsed = collapsedSectionsByProfile[selectedProfile?.id || 'default'] || new Set(['Active Content', 'Recently Shared (Last 24h)']);
+    const isCollapsed = currentCollapsed.has(label);
     rows.push({ _type: 'header', label, icon, color, key: `header-${label}`, count: items.length, collapsed: isCollapsed });
     if (!isCollapsed) {
       for (let i = 0; i < items.length; i += 3) {
@@ -375,11 +806,13 @@ export default function StorySharingScreen() {
 
 
   const toggleSection = (label: string) => {
-    setCollapsedSections(prev => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
+    const profileId = selectedProfile?.id || 'default';
+    setCollapsedSectionsByProfile(prev => {
+      const currentSet = prev[profileId] || new Set(['Active Content', 'Recently Shared (Last 24h)']);
+      const nextSet = new Set(currentSet);
+      if (nextSet.has(label)) nextSet.delete(label);
+      else nextSet.add(label);
+      return { ...prev, [profileId]: nextSet };
     });
   };
 
@@ -442,23 +875,61 @@ export default function StorySharingScreen() {
               ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(p.storagePath)}`
               : p.profilePictureUrl;
 
+            const hasStories = p.storiesPostedLast24h !== undefined && p.storiesPostedLast24h > 0;
+            const ringParams = hasStories ? getStoryRingParams(p.storiesPostedLast24h!) : null;
+
             return (
               <TouchableOpacity
                 key={p.id}
                 onPress={() => setSelectedProfile(p)}
+                onLongPress={() => {
+                  if (hasStories) {
+                    setStoryViewerProfile(p);
+                    setStoryViewerVisible(true);
+                  }
+                }}
+                delayLongPress={300}
                 activeOpacity={0.8}
                 style={styles.avatarWrapper}
               >
                 <View style={[
                   styles.avatarBorder,
-                  isSelected && { borderColor: theme.colors.primary, borderWidth: 3 }
+                  isSelected && !hasStories && { borderColor: theme.colors.primary, borderWidth: 3 }
                 ]}>
                   {avatarUri ? (
-                    <Image source={{ uri: avatarUri }} style={styles.channelAvatar} contentFit="cover" />
+                    <Image 
+                      source={{ uri: avatarUri }} 
+                      style={[
+                        styles.channelAvatar,
+                        isSelected && hasStories && { borderWidth: 2, borderColor: theme.colors.primary }
+                      ]} 
+                      contentFit="cover" 
+                    />
                   ) : (
-                    <View style={[styles.channelAvatar, { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>
+                    <View style={[
+                      styles.channelAvatar, 
+                      { backgroundColor: '#e0e0e0', justifyContent: 'center', alignItems: 'center' },
+                      isSelected && hasStories && { borderWidth: 2, borderColor: theme.colors.primary }
+                    ]}>
                       <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{p.username.substring(0, 2).toUpperCase()}</Text>
                     </View>
+                  )}
+
+                  {/* Svg story ring */}
+                  {hasStories && ringParams && (
+                    <Svg width={60} height={60} viewBox="0 0 60 60" style={{ position: 'absolute', top: -3, left: -3 }}>
+                      <Circle
+                        cx={30}
+                        cy={30}
+                        r={27}
+                        fill="transparent"
+                        stroke={ringParams.color}
+                        strokeWidth={3}
+                        strokeDasharray={ringParams.dashArray}
+                        strokeLinecap={p.storiesPostedLast24h! > 1 ? "round" : "butt"}
+                        transform="rotate(-90 30 30)"
+                      />
+                    </Svg>
                   )}
                 </View>
                 <Text
@@ -499,6 +970,8 @@ export default function StorySharingScreen() {
           renderItem={renderFlatRow}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
           contentContainerStyle={{ paddingBottom: 60 }}
           ListFooterComponent={loadingMore ? (
             <View style={{ paddingVertical: 16, alignItems: 'center' }}>
@@ -686,6 +1159,16 @@ export default function StorySharingScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {/* Story Viewer Modal */}
+      <StoryViewerModal
+        visible={storyViewerVisible}
+        profile={storyViewerProfile}
+        onClose={() => {
+          setStoryViewerVisible(false);
+          setStoryViewerProfile(null);
+        }}
+      />
     </ScreenWrapper>
   );
 }
@@ -1029,5 +1512,128 @@ const styles = StyleSheet.create({
   confirmationAccountName: {
     fontWeight: 'bold',
     color: '#333333',
+  },
+  storyModalOverlay: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyProgressContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: 50,
+    left: 10,
+    right: 10,
+    zIndex: 20,
+  },
+  storyProgressBarTrack: {
+    flex: 1,
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    marginHorizontal: 2,
+    borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  storyProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#ffffff',
+  },
+  storyHeader: {
+    position: 'absolute',
+    top: 65,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  storyHeaderAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+  },
+  storyHeaderInfo: {
+    flex: 1,
+  },
+  storyHeaderUsername: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14,
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  storyHeaderTime: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 11,
+    textShadowColor: 'rgba(0, 0, 0, 0.6)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  storyCloseButton: {
+    margin: 0,
+  },
+  storyMediaContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  storyImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
+  },
+  storyDetailsSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    zIndex: 30,
+  },
+  storyDetailsCollapsed: {
+    height: 110,
+  },
+  storyDetailsExpanded: {
+    maxHeight: '60%',
+  },
+  storyDetailsDragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  storyDetailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  storyDetailsStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 8,
+    flexWrap: 'wrap',
+  },
+  storyDetailsStatBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  storyDetailsStatText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

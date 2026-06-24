@@ -14,6 +14,7 @@ import {
   Searchbar,
   Portal,
   Modal,
+  Menu,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { productService } from '@/services/productService';
@@ -27,6 +28,7 @@ export default function WhatsAppProductsTodayScreen() {
 
   const [products, setProducts] = useState<any[]>([]);
   const [candidatesCount, setCandidatesCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,18 +44,36 @@ export default function WhatsAppProductsTodayScreen() {
   // Dialogs
   const [vendorFilterVisible, setVendorFilterVisible] = useState(false);
   const [categoryFilterVisible, setCategoryFilterVisible] = useState(false);
+  const [menuVisibleId, setMenuVisibleId] = useState<string | null>(null);
+
+  const handleManualEnrich = async (groupId: string) => {
+    if (!groupId) {
+      Alert.alert('Error', 'Cannot enrich: No Source Group ID found for this product.');
+      return;
+    }
+    try {
+      await productService.retryEnrichment(groupId);
+      Alert.alert('Success', 'Manual enrichment initiated successfully');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to initiate manual enrichment');
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
-      const [todayProds, mergeCandidates, vendorList] = await Promise.all([
+      const [todayProds, mergeCandidates, vendorList, failedList] = await Promise.all([
         productService.fetchTodayWhatsAppProducts(),
         productService.fetchMergeCandidates(),
         vendorService.listVendors(1, 100, true),
+        productService.fetchFailedEnrichments(),
       ]);
 
       setProducts(todayProds || []);
       setCandidatesCount(mergeCandidates?.length || 0);
       setVendors(vendorList.vendors || []);
+      setFailedCount(failedList?.length || 0);
 
       // Extract unique categories
       const uniqueCats = Array.from(
@@ -130,13 +150,25 @@ export default function WhatsAppProductsTodayScreen() {
           </Surface>
 
           <Surface style={[styles.bentoCard, { backgroundColor: theme.colors.secondaryContainer }]} elevation={1}>
-            <TouchableOpacity onPress={() => router.push('/utilities/whatsapp/merge-candidates')}>
+            <TouchableOpacity onPress={() => router.push('/utilities/product/merge-candidates')}>
               <IconButton icon="call-merge" iconColor={theme.colors.onSecondaryContainer} size={24} style={{ margin: 0 }} />
               <Text variant="displaySmall" style={[styles.bentoNumber, { color: theme.colors.onSecondaryContainer }]}>
                 {candidatesCount}
               </Text>
               <Text variant="labelMedium" style={[styles.bentoLabel, { color: theme.colors.onSecondaryContainer }]}>
                 Merge Candidates
+              </Text>
+            </TouchableOpacity>
+          </Surface>
+
+          <Surface style={[styles.bentoCard, { backgroundColor: theme.colors.errorContainer }]} elevation={1}>
+            <TouchableOpacity onPress={() => router.push('/utilities/whatsapp/failed-enrichments')}>
+              <IconButton icon="alert-circle-outline" iconColor={theme.colors.onErrorContainer} size={24} style={{ margin: 0 }} />
+              <Text variant="displaySmall" style={[styles.bentoNumber, { color: theme.colors.onErrorContainer }]}>
+                {failedCount}
+              </Text>
+              <Text variant="labelMedium" style={[styles.bentoLabel, { color: theme.colors.onErrorContainer }]}>
+                Failed Extractions
               </Text>
             </TouchableOpacity>
           </Surface>
@@ -207,7 +239,7 @@ export default function WhatsAppProductsTodayScreen() {
                     {item.Title || item.title || 'Untitled Product'}
                   </Text>
                   <Text variant="bodySmall" style={styles.productSku}>
-                    SKU: {item.Sku || item.sku || 'N/A'}
+                    SKU: {item.Sku || item.sku || 'N/A'} • {item.ListingCount || item.listingCount || 0} listings
                   </Text>
                   <Text variant="bodySmall" style={styles.productCategory}>
                     {item.Category || item.category || 'Uncategorized'}

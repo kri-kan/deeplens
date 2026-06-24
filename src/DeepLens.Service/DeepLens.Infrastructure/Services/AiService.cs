@@ -36,38 +36,27 @@ Return ONLY the title text without any quotes or additional explanations.";
 
     public async Task<string> GenerateYoutubeShortTitleAsync(string description)
     {
-        var settings = await _appSettings.GetSectionInternalAsync("AI");
-        var baseUrl = settings.FirstOrDefault(s => s.Key == "Ai:OllamaBaseUrl")?.Value 
-                     ?? _configuration["Ollama:BaseUrl"] 
-                     ?? "http://localhost:11434";
-        var model = settings.FirstOrDefault(s => s.Key == "Ai:OllamaModel")?.Value 
-                   ?? _configuration["Ollama:Model"] 
-                   ?? "llama3";
-
-        _httpClient.BaseAddress = new Uri(baseUrl);
-        var prompt = string.Format(YoutubeShortsTitlePrompt, description);
-
-        var requestBody = new
-        {
-            model = model,
-            prompt = prompt,
-            stream = false
-        };
+        var baseUrl = _configuration["Services:ReasoningApiUrl"] ?? "http://localhost:8002";
 
         try
         {
-            _logger.LogInformation("Requesting title generation from Ollama at {BaseUrl} using model {Model}", baseUrl, model);
-            var response = await _httpClient.PostAsJsonAsync("/api/generate", requestBody);
+            _logger.LogInformation("Requesting title generation from ReasoningService at {BaseUrl}", baseUrl);
+            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/generate-youtube-title", new { description });
             
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Ollama API returned error: {StatusCode}. Body: {Body}", response.StatusCode, errorContent);
-                throw new Exception($"AI service returned error: {response.StatusCode}");
+                _logger.LogError("ReasoningService API returned error: {StatusCode}. Body: {Body}", response.StatusCode, errorContent);
+                throw new Exception($"Reasoning service returned error: {response.StatusCode}");
             }
 
-            var result = await response.Content.ReadFromJsonAsync<OllamaResponse>();
-            var title = result?.Response?.Trim() ?? string.Empty;
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var result = await response.Content.ReadFromJsonAsync<YoutubeTitleResponse>(options);
+            var title = result?.Title?.Trim() ?? string.Empty;
 
             // Clean up the generated title
             title = title.Trim('\"', '\'', ' ', '\r', '\n');
@@ -77,8 +66,8 @@ Return ONLY the title text without any quotes or additional explanations.";
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Network error while connecting to Ollama at {BaseUrl}", _httpClient.BaseAddress);
-            throw new Exception("Could not connect to AI service. Please check if Ollama is running.", ex);
+            _logger.LogError(ex, "Network error while connecting to ReasoningService at {BaseUrl}", baseUrl);
+            throw new Exception("Could not connect to AI service. Please check if ReasoningService is running.", ex);
         }
         catch (Exception ex)
         {
@@ -87,74 +76,28 @@ Return ONLY the title text without any quotes or additional explanations.";
         }
     }
 
-    private const string ProductExtractionPrompt = @"You are an expert product catalog extraction AI. Analyze the given WhatsApp product description from a vendor and extract the following product details in JSON format.
+    private class YoutubeTitleResponse
+    {
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+    }
 
-WhatsApp Description:
-{0}
 
-Extract and populate these fields in the JSON response:
-1. ""category"": Main product category (e.g. Saree, Dress, Kurti, Lehenga, Kids Wear, Mens Wear, Fabric, Others). If unsure, use ""Others"".
-2. ""subCategory"": Subcategory or type (e.g. Silk Saree, Cotton Kurti, Georgette Dress, Semi-Stitched Lehenga).
-3. ""price"": The base price as a decimal number. If no price is mentioned, use null. Ignore formatting characters like Currency symbols.
-4. ""shippingInfo"": Use ""free"" if free shipping or delivery is mentioned. Use ""extra"" if shipping is extra, plus, or not free. Otherwise, use ""extra"" as default.
-5. ""fabric"": The material/fabric (e.g. Silk, Georgette, Cotton, Organza, Crepe, Net, Velvet). If unknown, use ""Unknown"".
-6. ""stitchType"": The stitch type (e.g. Unstitched, Semi-Stitched, Stitched, Free Size).
-7. ""tags"": An array of relevant search tags/keywords (e.g. [""partywear"", ""wedding"", ""zari border""]).
-
-Output ONLY the JSON object. Do not wrap in markdown or add explanations. Example output:
-{{
-  ""category"": ""Saree"",
-  ""subCategory"": ""Organza Saree"",
-  ""price"": 1250.00,
-  ""shippingInfo"": ""free"",
-  ""fabric"": ""Organza"",
-  ""stitchType"": ""Unstitched"",
-  ""tags"": [""organza"", ""saree"", ""floral"", ""partywear""]
-}}";
 
     public async Task<ExtractedProductInfo> ExtractProductInfoAsync(string description)
     {
-        var settings = await _appSettings.GetSectionInternalAsync("AI");
-        var baseUrl = settings.FirstOrDefault(s => s.Key == "Ai:OllamaBaseUrl")?.Value 
-                     ?? _configuration["Ollama:BaseUrl"] 
-                     ?? "http://localhost:11434";
-        var model = settings.FirstOrDefault(s => s.Key == "Ai:OllamaModel")?.Value 
-                   ?? _configuration["Ollama:Model"] 
-                   ?? "llama3";
-
-        _httpClient.BaseAddress = new Uri(baseUrl);
-        var prompt = string.Format(ProductExtractionPrompt, description);
-
-        var requestBody = new
-        {
-            model = model,
-            prompt = prompt,
-            stream = false,
-            format = "json"
-        };
+        var baseUrl = _configuration["Services:ReasoningApiUrl"] ?? "http://localhost:8002";
 
         try
         {
-            _logger.LogInformation("Requesting product info extraction from Ollama at {BaseUrl} using model {Model}", baseUrl, model);
-            var response = await _httpClient.PostAsJsonAsync("/api/generate", requestBody);
+            _logger.LogInformation("Requesting fast product info extraction from ReasoningService at {BaseUrl}", baseUrl);
+            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/extract-product", new { description });
             
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Ollama API returned error: {StatusCode}. Body: {Body}", response.StatusCode, errorContent);
-                throw new Exception($"AI service returned error: {response.StatusCode}");
-            }
-
-            var result = await response.Content.ReadFromJsonAsync<OllamaResponse>();
-            var responseText = result?.Response?.Trim() ?? string.Empty;
-
-            _logger.LogDebug("Ollama raw response: {Response}", responseText);
-
-            if (responseText.StartsWith("```"))
-            {
-                var lines = responseText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                var jsonLines = lines.Skip(1).Take(lines.Length - 2);
-                responseText = string.Join("\n", jsonLines).Trim();
+                _logger.LogError("ReasoningService API returned error: {StatusCode}. Body: {Body}", response.StatusCode, errorContent);
+                throw new Exception($"Reasoning service returned error: {response.StatusCode}");
             }
 
             var options = new JsonSerializerOptions
@@ -162,11 +105,11 @@ Output ONLY the JSON object. Do not wrap in markdown or add explanations. Exampl
                 PropertyNameCaseInsensitive = true
             };
             
-            var extractedInfo = JsonSerializer.Deserialize<ExtractedProductInfo>(responseText, options);
+            var extractedInfo = await response.Content.ReadFromJsonAsync<ExtractedProductInfo>(options);
 
             if (extractedInfo == null)
             {
-                throw new Exception("Ollama returned empty or invalid JSON structure.");
+                throw new Exception("ReasoningService returned empty or invalid JSON structure.");
             }
 
             extractedInfo.Category = (extractedInfo.Category ?? "Others").Trim();
@@ -183,22 +126,16 @@ Output ONLY the JSON object. Do not wrap in markdown or add explanations. Exampl
             extractedInfo.ShippingInfo = (extractedInfo.ShippingInfo ?? "extra").Trim().ToLower();
             extractedInfo.Fabric = (extractedInfo.Fabric ?? "Unknown").Trim();
             extractedInfo.StitchType = (extractedInfo.StitchType ?? "Unstitched").Trim();
+            extractedInfo.Color = (extractedInfo.Color ?? "Unknown").Trim();
+            extractedInfo.Sizes ??= System.Array.Empty<string>();
             extractedInfo.Tags ??= System.Array.Empty<string>();
 
             return extractedInfo;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to extract product info from description");
-            return new ExtractedProductInfo
-            {
-                Category = "Others",
-                SubCategory = "General",
-                ShippingInfo = "extra",
-                Fabric = "Unknown",
-                StitchType = "Unstitched",
-                Tags = System.Array.Empty<string>()
-            };
+            _logger.LogError(ex, "Failed to extract product info from description via ReasoningService");
+            throw;
         }
     }
 

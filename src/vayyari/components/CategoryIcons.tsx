@@ -68,10 +68,21 @@ export const CategoryIcon = ({
     );
   }
 
-  // Priority: 1. Explicit iconName, 2. Category slug match, 3. Default
-  const asset = (iconName && ICON_ASSET_MAP[iconName]) || 
-                CATEGORY_ASSET_MAP[category] || 
-                ICON_ASSET_MAP['others.svg'];
+  const normalizedIcon = iconName?.toLowerCase() || '';
+  const normalizedCategory = category?.toLowerCase() || '';
+  
+  const findAsset = () => {
+    if (normalizedIcon) {
+      const match = Object.entries(ICON_ASSET_MAP).find(([k]) => k.toLowerCase() === normalizedIcon || k.toLowerCase() === `${normalizedIcon}.svg`);
+      if (match) return match[1];
+    }
+    const matchCat = Object.entries(CATEGORY_ASSET_MAP).find(([k]) => k.toLowerCase() === normalizedCategory);
+    if (matchCat) return matchCat[1];
+    
+    return ICON_ASSET_MAP['others.svg'];
+  };
+
+  const asset = findAsset();
 
   return (
     <IconWrapper size={size}>

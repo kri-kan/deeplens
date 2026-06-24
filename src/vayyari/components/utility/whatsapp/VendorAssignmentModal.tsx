@@ -16,6 +16,7 @@ import {
 import { vendorService } from '@/services/vendorService';
 import { waProcessorService } from '@/services/wa-processor.service';
 import { VendorResponse } from '@/types/vendors';
+import { useRouter } from 'expo-router';
 
 interface VendorAssignmentModalProps {
   visible: boolean;
@@ -27,6 +28,7 @@ interface VendorAssignmentModalProps {
 
 export function VendorAssignmentModal({ visible, onDismiss, jid, chatName, onSuccess }: VendorAssignmentModalProps) {
   const theme = useTheme();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState<VendorResponse[]>([]);
   const [search, setSearch] = useState('');
@@ -144,6 +146,26 @@ export function VendorAssignmentModal({ visible, onDismiss, jid, chatName, onSuc
             </Button>
           </Surface>
         )}
+
+        <Button
+          mode="outlined"
+          icon="plus"
+          style={{ marginBottom: 12, borderRadius: 12 }}
+          onPress={() => {
+            onDismiss();
+            const extractedNumber = jid.split('@')[0].split('-')[0];
+            router.push({
+              pathname: '/system/vendor/[id]',
+              params: { 
+                id: 'new', 
+                prefillWhatsapp: extractedNumber,
+                fromJid: jid
+              }
+            });
+          }}
+        >
+          Create New Vendor
+        </Button>
 
         <Searchbar
           placeholder="Search vendors..."

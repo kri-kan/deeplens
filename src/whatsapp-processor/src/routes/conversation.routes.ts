@@ -39,6 +39,12 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
     router.get('/:jid/stats', (req, res) => controller.getStats(req, res));
 
     /**
+     * GET /api/conversations/vendor/:vendorId
+     * Returns all chats assigned to a specific vendor
+     */
+    router.get('/vendor/:vendorId', (req, res) => controller.getChatsByVendor(req, res));
+
+    /**
      * GET /api/conversations/:jid
      * Returns details for a single conversation
      */

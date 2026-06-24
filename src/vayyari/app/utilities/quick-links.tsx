@@ -82,7 +82,7 @@ export default function QuickLinksScreen() {
       title: 'WhatsApp Merge Candidates',
       description: 'Review similarity candidates and merge redundant products.',
       icon: 'call-merge',
-      url: '/utilities/whatsapp/merge-candidates',
+      url: '/utilities/product/merge-candidates',
       color: '#075E54'
     },
     {

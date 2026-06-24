@@ -18,10 +18,26 @@ export function uuidFromMessageId(messageId: string): string {
     ].join('-');
 }
 
+export function isValidDescription(text: string | null | undefined): boolean {
+    if (!text) return false;
+    const cleanText = text
+        .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
+        .replace(/[\.\,\;\:\!\?\-\_\(\)\*\~\`\+]/g, ' ')
+        .trim();
+    const words = cleanText.split(/\s+/).filter(w => w.length > 0 && /[a-zA-Z0-9]/.test(w));
+    return words.length >= 5;
+}
+
 export class GroupReadinessService {
     private kafka: Kafka;
     private producer: Producer;
     private isConnected = false;
+    private stagingInterval: NodeJS.Timeout | null = null;
+    private io: any = null;
+
+    public setSocketIo(io: any): void {
+        this.io = io;
+    }
 
     constructor() {
         this.kafka = new Kafka({
@@ -77,7 +93,7 @@ export class GroupReadinessService {
     /**
      * Evaluates if a message group qualifies for product pipeline and emits Kafka events
      */
-    public async checkAndEmitGroupEvent(groupId: string): Promise<void> {
+        public async checkAndEmitGroupEvent(groupId: string): Promise<void> {
         const client = getWhatsAppDbClient();
         if (!client) {
             logger.error({ groupId }, 'Database not available in checkAndEmitGroupEvent');
@@ -85,9 +101,9 @@ export class GroupReadinessService {
         }
 
         try {
-            // 1. Fetch messages in group
+            // 1. Fetch messages in group, selecting processing_status to track download completion
             const result = await client.query(
-                `SELECT message_id, jid, content, media_type, media_url, media_mime_type, timestamp 
+                `SELECT message_id, jid, content, media_type, media_url, media_mime_type, timestamp, processing_status 
                  FROM wa.messages 
                  WHERE group_id = $1 AND is_deleted = false 
                  ORDER BY timestamp ASC`,
@@ -105,6 +121,7 @@ export class GroupReadinessService {
             let mediaCount = 0;
             let textCount = 0;
             let lastMessageAt = new Date(0);
+            let hasUndownloadedMedia = false;
             const descriptionParts: string[] = [];
             const mediaFiles: any[] = [];
 
@@ -114,28 +131,46 @@ export class GroupReadinessService {
                     lastMessageAt = msgTime;
                 }
 
-                if (msg.media_type && ['image', 'video', 'sticker'].includes(msg.media_type) && msg.media_url) {
-                    mediaCount++;
-                    let mediaUrl = msg.media_url;
-                    if (!mediaUrl.startsWith('minio://')) {
-                        mediaUrl = `minio://${MINIO_CONFIG.bucket}/${mediaUrl}`;
+                const isMedia = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type);
+                if (isMedia) {
+                    if (msg.media_url) {
+                        mediaCount++;
+                        let mediaUrl = msg.media_url;
+                        if (!mediaUrl.startsWith('minio://')) {
+                            mediaUrl = `minio://${MINIO_CONFIG.bucket}/${mediaUrl}`;
+                        }
+                        mediaFiles.push({
+                            mediaId: uuidFromMessageId(msg.message_id),
+                            messageId: msg.message_id,
+                            mediaUrl: mediaUrl,
+                            mediaType: (msg.media_type === 'sticker' || msg.media_type === 'photo') ? 'image' : msg.media_type,
+                            mimeType: msg.media_mime_type || 
+                                      (msg.media_type === 'video' ? 'video/mp4' : 
+                                       (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg'))
+                        });
+                    } else {
+                        // Mark as pending if message queue hasn't processed it yet
+                        const status = msg.processing_status || '';
+                        if (!['processed', 'failed'].includes(status)) {
+                            hasUndownloadedMedia = true;
+                        }
                     }
-                    mediaFiles.push({
-                        mediaId: uuidFromMessageId(msg.message_id),
-                        messageId: msg.message_id,
-                        mediaUrl: mediaUrl,
-                        mediaType: msg.media_type === 'sticker' ? 'image' : msg.media_type,
-                        mimeType: msg.media_mime_type || (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg')
-                    });
                 }
 
                 if (msg.content && msg.content.trim() !== '') {
-                    textCount++;
-                    descriptionParts.push(msg.content.trim());
+                    const contentTrimmed = msg.content.trim();
+                    if (!['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase())) {
+                        textCount++;
+                        descriptionParts.push(contentTrimmed);
+                    }
                 }
             }
 
-            const description = descriptionParts.join('\n').trim();
+            const rawDescription = descriptionParts.join('\n').trim();
+            const description = rawDescription
+                .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
+                .replace(/[\*\~\_\`]/g, '')
+                .trim();
 
             // 3. Fetch chat config (vendor, auto-process, grouping flag)
             const chatRes = await client.query(
@@ -165,6 +200,7 @@ export class GroupReadinessService {
             let processAsProduct = false;
             let isNewGroup = false;
 
+            const oldHasPendingMedia = groupRes.rows[0]?.has_pending_media;
             if (groupRes.rows.length > 0) {
                 currentStatus = groupRes.rows[0].status;
                 processAsProduct = groupRes.rows[0].process_as_product;
@@ -172,22 +208,34 @@ export class GroupReadinessService {
                 // Update details
                 await client.query(
                     `UPDATE wa.message_groups 
-                     SET media_count = $1, text_count = $2, description = $3, last_message_at = $4, updated_at = NOW() 
-                     WHERE group_id = $5`,
-                    [mediaCount, textCount, description, lastMessageAt, groupId]
+                     SET media_count = $1, text_count = $2, description = $3, last_message_at = $4, has_pending_media = $5, updated_at = NOW() 
+                     WHERE group_id = $6`,
+                    [mediaCount, textCount, description, lastMessageAt, hasUndownloadedMedia, groupId]
                 );
             } else {
                 isNewGroup = true;
                 await client.query(
                     `INSERT INTO wa.message_groups 
-                     (group_id, jid, status, process_as_product, description, media_count, text_count, last_message_at, created_at, updated_at)
-                     VALUES ($1, $2, 'staging', FALSE, $3, $4, $5, $6, NOW(), NOW())`,
-                    [groupId, jid, description, mediaCount, textCount, lastMessageAt]
+                     (group_id, jid, status, process_as_product, description, media_count, text_count, last_message_at, has_pending_media, created_at, updated_at)
+                     VALUES ($1, $2, 'staging', FALSE, $3, $4, $5, $6, $7, NOW(), NOW())`,
+                    [groupId, jid, description, mediaCount, textCount, lastMessageAt, hasUndownloadedMedia]
                 );
                 await this.logAudit(groupId, 'group_staged', 'system', null, {
                     status: 'staging',
                     media_count: mediaCount,
-                    text_count: textCount
+                    text_count: textCount,
+                    has_pending_media: hasUndownloadedMedia
+                });
+            }
+
+            // Emit Socket.IO updates if status is product_created or has_pending_media changes
+            if (this.io && (currentStatus === 'product_created' || oldHasPendingMedia !== hasUndownloadedMedia)) {
+                this.io.emit('group_updated', {
+                    groupId,
+                    status: currentStatus,
+                    mediaCount,
+                    textCount,
+                    hasPendingMedia: hasUndownloadedMedia
                 });
             }
 
@@ -212,49 +260,13 @@ export class GroupReadinessService {
             }
 
             // 6. Check Qualification & Emit Event
-            const qualifies = mediaCount >= 1 && textCount >= 1;
+            const qualifies = mediaCount >= 1 && isValidDescription(description);
             const enabled = processAsProduct || autoProcess;
 
             if (qualifies && enabled) {
-                if (currentStatus === 'staging') {
-                    // Transition to product_create_sent
-                    await this.initialize();
-                    if (!this.isConnected) {
-                        throw new Error('Kafka producer not connected, cannot emit create event');
-                    }
-
-                    await client.query(
-                        `UPDATE wa.message_groups 
-                         SET status = 'product_create_sent', error_detail = NULL, updated_at = NOW() 
-                         WHERE group_id = $1`,
-                        [groupId]
-                    );
-
-                    const createPayload = {
-                        eventId: uuidFromMessageId(`${groupId}_create`),
-                        eventType: 'whatsapp.group.product.create',
-                        groupId: groupId,
-                        jid: jid,
-                        tenantId: TENANT_NAME,
-                        vendorId: vendorId,
-                        description: description,
-                        mediaFiles: mediaFiles,
-                        timestamp: new Date().toISOString()
-                    };
-
-                    await this.producer.send({
-                        topic: KAFKA_CONFIG.groupProductCreateTopic,
-                        messages: [{
-                            key: jid,
-                            value: JSON.stringify(createPayload)
-                        }]
-                    });
-
-                    await this.logAudit(groupId, 'product_create_sent', 'system', { status: currentStatus }, { status: 'product_create_sent' });
-                    logger.info({ groupId, jid }, 'Published WhatsApp.group.product.create event');
-
-                } else if (currentStatus === 'product_created') {
-                    // Emit media.added event
+                // In staging, we do NOT trigger create event immediately. It's handled by staging poller after 45s.
+                if (currentStatus === 'product_created') {
+                    // Emit media.added event for new media files
                     await this.initialize();
                     if (!this.isConnected) {
                         throw new Error('Kafka producer not connected, cannot emit media added event');
@@ -281,6 +293,47 @@ export class GroupReadinessService {
 
                     await this.logAudit(groupId, 'media_added', 'system', null, { media_count: mediaCount });
                     logger.info({ groupId, jid }, 'Published WhatsApp.group.media.added event');
+                }
+            } else {
+                // Ineligible logic: If a group had a product (or product creation was requested) but now doesn't qualify (0 media or 0 text), delete it permanently!
+                if (['product_create_sent', 'product_created'].includes(currentStatus)) {
+                    await this.initialize();
+                    if (!this.isConnected) {
+                        throw new Error('Kafka producer not connected, cannot emit delete event');
+                    }
+
+                    // Update group back to staging and clear IDs locally
+                    await client.query(
+                        `UPDATE wa.message_groups 
+                         SET status = 'staging', 
+                             deeplens_product_id = NULL, 
+                             deeplens_listing_id = NULL, 
+                             product_created_at = NULL, 
+                             error_detail = NULL,
+                             updated_at = NOW() 
+                         WHERE group_id = $1`,
+                        [groupId]
+                    );
+
+                    const deletePayload = {
+                        eventId: uuidFromMessageId(`${groupId}_delete_${Date.now()}`),
+                        eventType: 'whatsapp.group.product.delete',
+                        groupId: groupId,
+                        jid: jid,
+                        tenantId: TENANT_NAME,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    await this.producer.send({
+                        topic: KAFKA_CONFIG.groupProductDeleteTopic,
+                        messages: [{
+                            key: jid,
+                            value: JSON.stringify(deletePayload)
+                        }]
+                    });
+
+                    await this.logAudit(groupId, 'product_delete_sent', 'system', { status: currentStatus }, { status: 'staging' });
+                    logger.info({ groupId, jid }, 'Published WhatsApp.group.product.delete event due to ineligibility');
                 }
             }
 
@@ -349,7 +402,7 @@ export class GroupReadinessService {
         const mediaFiles: any[] = [];
 
         for (const msg of messages) {
-            if (msg.media_type && ['image', 'video', 'sticker'].includes(msg.media_type) && msg.media_url) {
+            if (msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type) && msg.media_url) {
                 mediaCount++;
                 let mediaUrl = msg.media_url;
                 if (!mediaUrl.startsWith('minio://')) {
@@ -359,12 +412,17 @@ export class GroupReadinessService {
                     mediaId: uuidFromMessageId(msg.message_id),
                     messageId: msg.message_id,
                     mediaUrl: mediaUrl,
-                    mediaType: msg.media_type === 'sticker' ? 'image' : msg.media_type,
-                    mimeType: msg.media_mime_type || (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg')
+                    mediaType: (msg.media_type === 'sticker' || msg.media_type === 'photo') ? 'image' : msg.media_type,
+                    mimeType: msg.media_mime_type || 
+                              (msg.media_type === 'video' ? 'video/mp4' : 
+                               (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg'))
                 });
             }
             if (msg.content && msg.content.trim() !== '') {
-                descriptionParts.push(msg.content.trim());
+                const contentTrimmed = msg.content.trim();
+                if (!['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase())) {
+                    descriptionParts.push(contentTrimmed);
+                }
             }
         }
         const description = descriptionParts.join('\n').trim();
@@ -421,9 +479,152 @@ export class GroupReadinessService {
     }
 
     /**
+     * Poller to check for qualifying groups in staging and promote them to products after a delay.
+     * Checks eligibility (mediaCount >= 1 and textCount >= 1) and ensures no media download is pending.
+     */
+    public startStagingPoller(debounceSeconds: number = 45): void {
+        if (this.stagingInterval) return;
+
+        logger.info({ debounceSeconds }, 'Starting WhatsApp Group Staging Buffer Poller...');
+
+        this.stagingInterval = setInterval(async () => {
+            const client = getWhatsAppDbClient();
+            if (!client) return;
+
+            try {
+                // Find all groups in 'staging' where the last message was updated/received more than debounceSeconds ago
+                // and the group has vendor_id assigned in wa.chats.
+                const res = await client.query(
+                    `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products
+                     FROM wa.message_groups mg
+                     JOIN wa.chats c ON mg.jid = c.jid
+                     WHERE mg.status = 'staging'
+                       AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
+                       AND c.vendor_id IS NOT NULL`,
+                    [debounceSeconds]
+                );
+
+                for (const row of res.rows) {
+                    const { group_id, jid, process_as_product, vendor_id, auto_process_products } = row;
+                    const enabled = process_as_product || auto_process_products;
+                    if (!enabled) continue;
+
+                    // Fetch messages for this group to check eligibility and media readiness
+                    const msgRes = await client.query(
+                        `SELECT message_id, content, media_type, media_url, media_mime_type, timestamp, processing_status 
+                         FROM wa.messages 
+                         WHERE group_id = $1 AND is_deleted = false 
+                         ORDER BY timestamp ASC`,
+                        [group_id]
+                    );
+
+                    const messages = msgRes.rows;
+                    if (messages.length === 0) continue;
+
+                    let mediaCount = 0;
+                    let textCount = 0;
+                    let hasUndownloadedMedia = false;
+                    const descriptionParts: string[] = [];
+                    const mediaFiles: any[] = [];
+
+                    for (const msg of messages) {
+                        const isMedia = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type);
+                        if (isMedia) {
+                            if (msg.media_url) {
+                                mediaCount++;
+                                let mediaUrl = msg.media_url;
+                                if (!mediaUrl.startsWith('minio://')) {
+                                    mediaUrl = `minio://${MINIO_CONFIG.bucket}/${mediaUrl}`;
+                                }
+                                mediaFiles.push({
+                                    mediaId: uuidFromMessageId(msg.message_id),
+                                    messageId: msg.message_id,
+                                    mediaUrl: mediaUrl,
+                                    mediaType: (msg.media_type === 'sticker' || msg.media_type === 'photo') ? 'image' : msg.media_type,
+                                    mimeType: msg.media_mime_type || 
+                                              (msg.media_type === 'video' ? 'video/mp4' : 
+                                               (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg'))
+                                });
+                            } else {
+                                // Mark as pending if message queue hasn't processed it yet
+                                const status = msg.processing_status || '';
+                                if (!['processed', 'failed'].includes(status)) {
+                                    hasUndownloadedMedia = true;
+                                }
+                            }
+                        }
+
+                        if (msg.content && msg.content.trim() !== '') {
+                            const contentTrimmed = msg.content.trim();
+                            if (!['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase())) {
+                                textCount++;
+                                descriptionParts.push(contentTrimmed);
+                            }
+                        }
+                    }
+
+                    const rawDescription = descriptionParts.join('\n').trim();
+                    const description = rawDescription
+                        .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
+                        .trim();
+                    const qualifies = mediaCount >= 1 && isValidDescription(description);
+
+                    if (qualifies) {
+                        logger.info({ groupId: group_id, mediaCount, descriptionWords: description.split(/\s+/).length }, 'Staged group qualifies, promoting to product...');
+                        
+                        await this.initialize();
+                        if (!this.isConnected) {
+                            logger.error({ groupId: group_id }, 'Kafka producer not connected, cannot promote staged group');
+                            continue;
+                        }
+
+                        // Update status to prevent double-processing
+                        await client.query(
+                            `UPDATE wa.message_groups 
+                             SET status = 'product_create_sent', error_detail = NULL, updated_at = NOW() 
+                             WHERE group_id = $1`,
+                            [group_id]
+                        );
+
+                        const createPayload = {
+                            eventId: uuidFromMessageId(`${group_id}_create`),
+                            eventType: 'whatsapp.group.product.create',
+                            groupId: group_id,
+                            jid: jid,
+                            tenantId: TENANT_NAME,
+                            vendorId: vendor_id,
+                            description: description,
+                            mediaFiles: mediaFiles,
+                            timestamp: new Date().toISOString()
+                        };
+
+                        await this.producer.send({
+                            topic: KAFKA_CONFIG.groupProductCreateTopic,
+                            messages: [{
+                                key: jid,
+                                value: JSON.stringify(createPayload)
+                            }]
+                        });
+
+                        await this.logAudit(group_id, 'product_create_sent', 'system_poller', { status: 'staging' }, { status: 'product_create_sent' });
+                        logger.info({ groupId: group_id, jid }, 'Poller promoted group and published create event');
+                    }
+                }
+            } catch (err: any) {
+                logger.error({ err: err.message }, 'Error in WhatsApp Group Staging Buffer Poller');
+            }
+        }, 10000); // Run every 10 seconds
+    }
+
+    /**
      * Shut down Kafka connections
      */
     public async shutdown(): Promise<void> {
+        if (this.stagingInterval) {
+            clearInterval(this.stagingInterval);
+            this.stagingInterval = null;
+            logger.info('WhatsApp Group Staging Buffer Poller stopped');
+        }
         if (this.isConnected) {
             await this.producer.disconnect();
             this.isConnected = false;

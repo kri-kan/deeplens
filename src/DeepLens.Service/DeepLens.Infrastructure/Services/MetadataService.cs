@@ -148,6 +148,7 @@ public class MetadataService : IMetadataService
 
             var consolidatedTags = (target.Tags ?? Array.Empty<string>())
                 .Union(source.Tags ?? Array.Empty<string>())
+                .Append(sourceSku)
                 .Distinct()
                 .ToArray();
 
@@ -483,7 +484,7 @@ public class MetadataService : IMetadataService
             LEFT JOIN products p ON ml.entity_id = p.id
             WHERE i.id = @Id";
 
-        return await connection.QuerySingleOrDefaultAsync<MediaDto>(sql, new { Id = id });
+        return await connection.QueryFirstOrDefaultAsync<MediaDto>(sql, new { Id = id });
     }
 
     public async Task UpdateVideoMetadataAsync(Guid id, decimal duration, string? thumbnailPath, string? previewPath)

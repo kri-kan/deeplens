@@ -71,9 +71,9 @@ export async function initializeMessageQueue() {
         const prevRes = await client.query(
             `SELECT group_id, timestamp, media_type, message_type 
              FROM wa.messages 
-             WHERE jid = $1 AND timestamp < $2 
-             ORDER BY timestamp DESC LIMIT 1`,
-            [message.jid, message.timestamp]
+             WHERE jid = $1 AND (timestamp < $2 OR (timestamp = $2 AND id < $3)) 
+             ORDER BY timestamp DESC, id DESC LIMIT 1`,
+            [message.jid, message.timestamp, message.id]
         );
         const prevMsg = prevRes.rows[0];
 
@@ -145,6 +145,14 @@ export async function initializeMessageQueue() {
     });
 
     await messageQueue.start();
+
+    // Start background staging buffer poller (45 seconds delay)
+    try {
+        const { groupReadinessService } = await import('./services/group-readiness.service');
+        groupReadinessService.startStagingPoller(45);
+    } catch (err: any) {
+        logger.error({ err: err.message }, 'Failed to start staging buffer poller');
+    }
 
     logger.info('Message grouping queue initialized successfully');
 }

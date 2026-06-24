@@ -9,7 +9,6 @@ import UsersPage from './pages/Users/UsersPage';
 import ImagesPage from './pages/Images/ImagesPage';
 import SettingsPage from './pages/Settings/SettingsPage';
 import { VendorListPage, VendorFormPage, VendorDetailPage } from './pages/Vendors';
-import { CompetitorWatchlistComp } from './features/competitor-intel/CompetitorWatchlist';
 import { useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
@@ -38,7 +37,6 @@ function App() {
             <Route path="/vendors/new" element={<VendorFormPage />} />
             <Route path="/vendors/:id" element={<VendorDetailPage />} />
             <Route path="/vendors/:id/edit" element={<VendorFormPage />} />
-            <Route path="/competitor-intel" element={<CompetitorWatchlistComp />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>

@@ -3,12 +3,13 @@ import { Text, TextInput, Button, useTheme, Switch, Card, Chip, ActivityIndicato
 import { View, KeyboardAvoidingView, Platform, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { vendorService } from '@/services/vendorService';
+import { waProcessorService } from '@/services/wa-processor.service';
 import { AddressFormComponent, AddressFormState } from '@/components/utility/customer/AddressFormComponent';
 import type { VendorResponse, VendorAddressResponse } from '@/types/vendors';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 export default function VendorFormScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, prefillWhatsapp, fromJid } = useLocalSearchParams<{ id: string, prefillWhatsapp?: string, fromJid?: string }>();
   const router = useRouter();
   const theme = useTheme();
 
@@ -20,6 +21,9 @@ export default function VendorFormScreen() {
 
   const [addresses, setAddresses] = useState<VendorAddressResponse[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
+  const [linkedChats, setLinkedChats] = useState<any[]>([]);
+  const [chatsLoading, setChatsLoading] = useState(false);
+
   const [isEditingAddressInline, setIsEditingAddressInline] = useState(false);
   const [addressToEdit, setAddressToEdit] = useState<VendorAddressResponse | null>(null);
   
@@ -37,11 +41,12 @@ export default function VendorFormScreen() {
     if (!isNew && id) {
       fetchVendor(id);
       fetchAddresses(id);
+      fetchLinkedChats(id);
     } else {
       const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-      setEditingVendor({ isActive: true, vendorCode: `V${randomCode}` });
+      setEditingVendor({ isActive: true, vendorCode: `V${randomCode}`, whatsappPrimary: prefillWhatsapp });
     }
-  }, [id, isNew]);
+  }, [id, isNew, prefillWhatsapp]);
 
   const fetchAddresses = async (vendorId: string) => {
     setAddressesLoading(true);
@@ -52,6 +57,18 @@ export default function VendorFormScreen() {
       console.error('Failed to fetch addresses', error);
     } finally {
       setAddressesLoading(false);
+    }
+  };
+
+  const fetchLinkedChats = async (vendorId: string) => {
+    setChatsLoading(true);
+    try {
+      const chats = await waProcessorService.getChatsByVendor(vendorId);
+      setLinkedChats(chats || []);
+    } catch (error) {
+      console.error('Failed to fetch linked chats', error);
+    } finally {
+      setChatsLoading(false);
     }
   };
 
@@ -142,6 +159,9 @@ export default function VendorFormScreen() {
         savedVendor = await vendorService.updateVendor(editingVendor.id, editingVendor);
       } else {
         savedVendor = await vendorService.createVendor(editingVendor);
+        if (fromJid) {
+          await waProcessorService.assignChatVendor(fromJid, savedVendor.id);
+        }
       }
       
       Alert.alert('Success', 'Vendor saved successfully!', [
@@ -351,6 +371,55 @@ export default function VendorFormScreen() {
           <Text variant="bodySmall" style={{ marginBottom: 16, fontStyle: 'italic', opacity: 0.7 }}>
             You can add addresses after saving the vendor for the first time.
           </Text>
+        )}
+
+        {!isNew && (
+          <Card style={styles.sectionCard} mode="elevated">
+            <Card.Content>
+              <View style={styles.sectionHeader}>
+                <Text variant="titleMedium" style={styles.sectionTitle}>Linked WhatsApp Chats</Text>
+              </View>
+
+              {chatsLoading ? (
+                <ActivityIndicator size="small" style={{ marginVertical: 16 }} />
+              ) : linkedChats.length > 0 ? (
+                linkedChats.map((chat: any) => (
+                  <Card key={chat.jid} style={styles.addressCard} mode="outlined" onPress={() => router.push(`/utilities/whatsapp/messages/${chat.jid}`)}>
+                    <Card.Content>
+                      <View style={styles.addressTitleRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                          <Text variant="titleSmall" style={{ fontWeight: 'bold' }} numberOfLines={1}>{chat.name || chat.jid}</Text>
+                          {chat.isGroup && (
+                            <Chip style={[styles.defaultChip, { marginLeft: 8 }]} textStyle={styles.defaultChipText} compact>
+                              GROUP
+                            </Chip>
+                          )}
+                        </View>
+                        <Button
+                          icon="arrow-right"
+                          mode="text"
+                          compact
+                          onPress={() => router.push(`/utilities/whatsapp/messages/${chat.jid}`)}
+                          labelStyle={{ fontSize: 12 }}
+                        >
+                          View
+                        </Button>
+                      </View>
+                      {chat.assignedAt && (
+                        <Text variant="bodySmall" style={styles.addressText}>
+                          Linked on: {new Date(chat.assignedAt).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </Card.Content>
+                  </Card>
+                ))
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text variant="bodySmall" style={{ opacity: 0.5 }}>No WhatsApp chats linked.</Text>
+                </View>
+              )}
+            </Card.Content>
+          </Card>
         )}
 
         <Button

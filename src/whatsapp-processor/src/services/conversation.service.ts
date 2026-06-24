@@ -66,8 +66,8 @@ export class ConversationService {
         return chat;
     }
 
-    async getMessages(jid: string, limit: number, offset: number) {
-        const messages = await this.repository.findMessages(jid, limit, offset);
+    async getMessages(jid: string, limit: number, offset: number, aroundGroupId?: string) {
+        const messages = await this.repository.findMessages(jid, limit, offset, aroundGroupId);
         const total = await this.repository.countMessages(jid);
 
         const resolvedMessages = await Promise.all(messages.map(async msg => {
@@ -141,5 +141,9 @@ export class ConversationService {
     async removeChatVendor(jid: string) {
         await this.repository.removeChatVendor(jid);
         return { success: true, jid };
+    }
+
+    async getChatsByVendor(vendorId: string) {
+        return await this.repository.getChatsByVendor(vendorId);
     }
 }

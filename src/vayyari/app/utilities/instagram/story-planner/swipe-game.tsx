@@ -184,7 +184,7 @@ export default function StorySwipeGameScreen() {
           {/* Header Info */}
           <View style={styles.cardHeader}>
             <Text variant="titleMedium" numberOfLines={1} style={[styles.bold, { color: 'white' }]}>
-              {latestPost?.ownerUsername || 'Ungrouped Post'}
+              {card.groupName || latestPost?.ownerUsername || 'Instagram Post'}
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.primary, fontWeight: 'bold', marginTop: 2 }}>
               Posted on @{card.targetUsername}
@@ -331,7 +331,7 @@ export default function StorySwipeGameScreen() {
           <View style={styles.modalHeader}>
             <View style={{ flex: 1 }}>
               <Text variant="titleMedium" style={{ color: 'white', fontWeight: 'bold' }} numberOfLines={1}>
-                {selectedCard?.post?.ownerUsername || 'Ungrouped Post'}
+                {selectedCard?.groupName || selectedCard?.post?.ownerUsername || 'Instagram Post'}
               </Text>
               <Text variant="bodySmall" style={{ color: 'rgba(255,255,255,0.6)' }} numberOfLines={1}>
                 Posted on @{selectedCard?.targetUsername}

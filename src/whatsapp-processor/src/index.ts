@@ -58,6 +58,10 @@ async function initializeServices() {
     // Initialize message processing queue
     await initializeMessageQueue();
 
+    // Set Socket.IO on group readiness service
+    const { groupReadinessService } = await import('./services/group-readiness.service');
+    groupReadinessService.setSocketIo(io);
+
     // Initialize DeepLens integration service
     const { deepLensIntegration } = await import('./services/deeplens-integration.service');
     await deepLensIntegration.start();

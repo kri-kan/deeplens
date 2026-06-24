@@ -18,10 +18,17 @@ namespace DeepLens.SearchApi.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly Confluent.Kafka.IProducer<string, string>? _producer;
+    private readonly Microsoft.Extensions.Logging.ILogger<ProductsController> _logger;
 
-    public ProductsController(IProductService productService)
+    public ProductsController(
+        IProductService productService, 
+        System.IServiceProvider serviceProvider,
+        Microsoft.Extensions.Logging.ILogger<ProductsController> logger)
     {
         _productService = productService;
+        _logger = logger;
+        _producer = serviceProvider.GetService(typeof(Confluent.Kafka.IProducer<string, string>)) as Confluent.Kafka.IProducer<string, string>;
     }
 
     [HttpGet("ping")]
@@ -183,6 +190,53 @@ public class ProductsController : ControllerBase
     {
         var result = await _productService.GetCategoriesAsync();
         return Ok(result);
+    }
+
+    public class ChangeCategoryRequest
+    {
+        [JsonPropertyName("categorySlug")]
+        public string CategorySlug { get; set; } = string.Empty;
+    }
+
+    [HttpPost("{id}/category")]
+    public async Task<IActionResult> ChangeCategory(Guid id, [FromBody] ChangeCategoryRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.CategorySlug))
+        {
+            return BadRequest("CategorySlug is required.");
+        }
+
+        try
+        {
+            var success = await _productService.ChangeCategoryAsync(id, request.CategorySlug);
+            if (!success) return NotFound("Product not found or category invalid");
+
+            if (_producer != null)
+            {
+                var evt = new DeepLens.Contracts.Events.ProductCategoryChangedEvent
+                {
+                    EventId = Guid.NewGuid(),
+                    ProductId = id,
+                    NewCategory = request.CategorySlug,
+                    Timestamp = DateTime.UtcNow
+                };
+
+                await _producer.ProduceAsync(DeepLens.Contracts.Events.KafkaTopics.ProductCategoryChanged, new Confluent.Kafka.Message<string, string>
+                {
+                    Key = id.ToString(),
+                    Value = System.Text.Json.JsonSerializer.Serialize(evt, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })
+                });
+
+                _logger.LogInformation("Published ProductCategoryChanged event for Product {ProductId}", id);
+            }
+
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to change category for product {ProductId}", id);
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
 }

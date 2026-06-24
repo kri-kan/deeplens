@@ -10,6 +10,8 @@ public class ExtractedProductInfo
     public string ShippingInfo { get; set; } = string.Empty; // "free" | "extra"
     public string Fabric { get; set; } = string.Empty;
     public string StitchType { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public string[] Sizes { get; set; } = System.Array.Empty<string>();
     public string[] Tags { get; set; } = System.Array.Empty<string>();
 }
 

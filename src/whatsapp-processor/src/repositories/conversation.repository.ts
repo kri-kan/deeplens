@@ -297,33 +297,89 @@ export class ConversationRepository {
         return result.rows[0] || null;
     }
 
-    async findMessages(jid: string, limit: number, offset: number): Promise<any[]> {
-        const result = await this.client.query(`
-            WITH chat_info AS (
-                SELECT COALESCE(canonical_jid, jid) as base_jid 
-                FROM wa.chats 
+    async findMessages(jid: string, limit: number, offset: number, aroundGroupId?: string): Promise<any[]> {
+        const params: any[] = [jid, limit, offset];
+        let query: string;
+
+        if (aroundGroupId) {
+            params.push(aroundGroupId);
+            query = `
+                WITH chat_info AS (
+                    SELECT COALESCE(canonical_jid, jid) as base_jid 
+                    FROM wa.chats 
+                    WHERE jid = $1 
+                    LIMIT 1
+                ),
+                chat_jids AS (
+                    SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info)
+                    UNION
+                    SELECT (SELECT base_jid FROM chat_info)
+                    UNION
+                    SELECT $1
+                ),
+                target_msg AS (
+                    SELECT MIN(timestamp) as min_ts
+                    FROM wa.messages
+                    WHERE jid IN (SELECT jid FROM chat_jids)
+                      AND group_id = $4
+                ),
+                count_newer AS (
+                    SELECT COUNT(*) as cnt
+                    FROM wa.messages
+                    WHERE jid IN (SELECT jid FROM chat_jids)
+                      AND timestamp >= (SELECT min_ts FROM target_msg)
+                )
+                SELECT 
+                    message_id as "messageId",
+                    jid as "chatJid",
+                    sender as "senderJid",
+                    content as "messageText",
+                    message_type as "messageType",
+                    media_type as "mediaType",
+                    media_url as "mediaUrl",
+                    timestamp,
+                    is_from_me as "isFromMe",
+                    metadata,
+                    group_id as "groupId"
+                FROM wa.messages
+                WHERE jid IN (SELECT jid FROM chat_jids)
+                ORDER BY timestamp DESC
+                LIMIT CASE 
+                    WHEN (SELECT min_ts FROM target_msg) IS NOT NULL THEN GREATEST($2, (SELECT cnt FROM count_newer) + 20)
+                    ELSE $2
+                END
+                OFFSET $3
+            `;
+        } else {
+            query = `
+                WITH chat_info AS (
+                    SELECT COALESCE(canonical_jid, jid) as base_jid 
+                    FROM wa.chats 
+                    WHERE jid = $1 
+                    LIMIT 1
+                )
+                SELECT 
+                    message_id as "messageId",
+                    jid as "chatJid",
+                    sender as "senderJid",
+                    content as "messageText",
+                    message_type as "messageType",
+                    media_type as "mediaType",
+                    media_url as "mediaUrl",
+                    timestamp,
+                    is_from_me as "isFromMe",
+                    metadata,
+                    group_id as "groupId"
+                FROM wa.messages
                 WHERE jid = $1 
-                LIMIT 1
-            )
-            SELECT 
-                message_id as "messageId",
-                jid as "chatJid",
-                sender as "senderJid",
-                content as "messageText",
-                message_type as "messageType",
-                media_type as "mediaType",
-                media_url as "mediaUrl",
-                timestamp,
-                is_from_me as "isFromMe",
-                metadata,
-                group_id as "groupId"
-            FROM wa.messages
-            WHERE jid = $1 
-               OR jid = (SELECT base_jid FROM chat_info)
-               OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
-            ORDER BY timestamp DESC
-            LIMIT $2 OFFSET $3
-        `, [jid, limit, offset]);
+                   OR jid = (SELECT base_jid FROM chat_info)
+                   OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
+                ORDER BY timestamp DESC
+                LIMIT $2 OFFSET $3
+            `;
+        }
+
+        const result = await this.client.query(query, params);
         return result.rows;
     }
 
@@ -472,5 +528,23 @@ export class ConversationRepository {
             SET vendor_id = NULL, vendor_name = NULL, vendor_assigned_at = NULL, vendor_assigned_by = NULL 
             WHERE jid = $1
         `, [jid]);
+    }
+
+    async getChatsByVendor(vendorId: string): Promise<any[]> {
+        const result = await this.client.query(`
+            SELECT 
+                jid, 
+                COALESCE(metadata->>'subject', name) as name, 
+                is_group as "isGroup", 
+                profile_pic_url as "profilePicUrl",
+                vendor_name as "vendorName", 
+                vendor_assigned_at as "assignedAt", 
+                vendor_assigned_by as "assignedBy"
+            FROM wa.chats 
+            WHERE vendor_id = $1
+            ORDER BY vendor_assigned_at DESC NULLS LAST
+        `, [vendorId]);
+        
+        return result.rows;
     }
 }

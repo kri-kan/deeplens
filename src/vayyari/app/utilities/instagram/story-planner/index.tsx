@@ -221,9 +221,8 @@ function MergeModalInner({
       if (res.title) {
         setGroupName(res.title);
       }
-      if (res.hashtags && res.hashtags.length > 0) {
-        const cleanHashtags = res.hashtags.map(h => h.startsWith('#') ? h.slice(1) : h);
-        setKeywords(cleanHashtags.join(', '));
+      if (res.keywords) {
+        setKeywords(res.keywords);
       }
       Alert.alert('AI Suggestions Applied', 'Suggested title and keywords have been filled!');
     } catch (err: any) {
@@ -568,6 +567,7 @@ export default function StoryPlannerDashboard() {
   const [totalCount, setTotalCount] = useState(0);
   const [groupCount, setGroupCount] = useState(0);
   const [hideGroups, setHideGroups] = useState(false);
+  const [sortAsc, setSortAsc] = useState(false);
   const LIMIT = 100;
   const loadingMoreRef = useRef(false);
 
@@ -647,7 +647,7 @@ export default function StoryPlannerDashboard() {
   };
 
   // Load Data
-  const loadData = async (isRefreshing = false, search = searchQuery) => {
+  const loadData = async (isRefreshing = false, search = searchQuery, sort = sortAsc) => {
     if (isRefreshing) {
       setRefreshing(true);
     } else {
@@ -664,7 +664,7 @@ export default function StoryPlannerDashboard() {
  
       // 2. Fetch unified planner feed
       const { items: feedItems, totalCount: feedTotalCount, groupCount: feedGroupCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeed', () => 
-        instagramService.getStoryPlannerFeed(LIMIT, 0, search)
+        instagramService.getStoryPlannerFeed(LIMIT, 0, search, sort)
       );
       
       const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
@@ -729,7 +729,7 @@ export default function StoryPlannerDashboard() {
     try {
       const nextOffset = offset + LIMIT;
       const { items: feedItems, totalCount: feedTotalCount, groupCount: feedGroupCount } = await wrapInSpan('StoryPlannerDashboard: getStoryPlannerFeedMore', () => 
-        instagramService.getStoryPlannerFeed(LIMIT, nextOffset, searchQuery)
+        instagramService.getStoryPlannerFeed(LIMIT, nextOffset, searchQuery, sortAsc)
       );
       
       const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
@@ -797,19 +797,19 @@ export default function StoryPlannerDashboard() {
       return;
     }
     if (searchQuery === '') {
-      loadData(false, '');
+      loadData(false, '', sortAsc);
       return;
     }
     const delayDebounceFn = setTimeout(() => {
-      loadData(false, searchQuery);
+      loadData(false, searchQuery, sortAsc);
     }, 500);
  
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
  
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(false, searchQuery, sortAsc);
+  }, [sortAsc]);
 
   // Back handler for clearing selection
   useFocusEffect(
@@ -1261,14 +1261,23 @@ export default function StoryPlannerDashboard() {
               right={searchQuery ? <TextInput.Icon icon="close" size={20} onPress={() => setSearchQuery('')} /> : null}
             />
             <View style={styles.headerToggleRow}>
-              <Text style={[styles.headerToggleLabel, { color: hideGroups ? theme.colors.outline : theme.colors.primary }]}>Groups</Text>
-              <Switch
-                value={!hideGroups}
-                onValueChange={(val) => setHideGroups(!val)}
-                thumbColor={hideGroups ? theme.colors.surfaceVariant : theme.colors.primary}
-                trackColor={{ false: theme.colors.surfaceVariant, true: theme.colors.primaryContainer }}
-                style={styles.headerToggleSwitch}
+              <IconButton
+                icon={sortAsc ? "sort-clock-ascending-outline" : "sort-clock-descending-outline"}
+                size={20}
+                onPress={() => setSortAsc(!sortAsc)}
+                iconColor={theme.colors.primary}
+                style={{ margin: 0 }}
               />
+              <View style={{ flexDirection: 'column', alignItems: 'center', marginLeft: 4 }}>
+                <Switch
+                  value={!hideGroups}
+                  onValueChange={(val) => setHideGroups(!val)}
+                  thumbColor={hideGroups ? theme.colors.surfaceVariant : theme.colors.primary}
+                  trackColor={{ false: theme.colors.surfaceVariant, true: theme.colors.primaryContainer }}
+                  style={styles.headerToggleSwitch}
+                />
+                <Text style={[styles.headerToggleLabel, { color: hideGroups ? theme.colors.outline : theme.colors.primary, marginTop: -4 }]}>Groups</Text>
+              </View>
             </View>
           </View>
           <FlatList

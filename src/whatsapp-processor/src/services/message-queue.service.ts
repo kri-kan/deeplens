@@ -16,6 +16,7 @@ import { KAFKA_CONFIG } from '../config';
 export type MessageStatus = 'pending' | 'media_downloading' | 'ready' | 'queued' | 'processing' | 'processed' | 'failed';
 
 export interface ProcessableMessage {
+    id: number;
     message_id: string;
     jid: string;
     message_text: string | null;

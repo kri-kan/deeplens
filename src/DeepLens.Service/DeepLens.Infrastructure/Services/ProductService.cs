@@ -249,45 +249,60 @@ public class ProductService : IProductService
                 p.description as ""Description"",
                 c.name as ""Category"",
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
-                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorDescription"",
+                COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary))
+                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary, 'mediaType', m.media_type))
                     FROM media m 
                     JOIN media_links ml ON m.id = ml.media_id
                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
-                ), '[]'::json)::text as ""MediaJson""
+                ), '[]'::json)::text as ""MediaJson"",
+                (SELECT COUNT(*) FROM public.vendor_listings WHERE product_id = p.id AND is_active = true) as ""ListingCount""
             FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.is_deleted = FALSE";
+            LEFT JOIN categories c ON p.category_id = c.id";
 
         var parameters = new DynamicParameters();
         parameters.Add("Take", filter.Take);
         parameters.Add("Skip", filter.Skip);
 
+        var whereClause = " WHERE p.is_deleted = FALSE";
+
         if (!string.IsNullOrEmpty(filter.Query))
         {
-            sql += " AND (p.title ILIKE @SearchQuery OR p.base_sku ILIKE @SearchQuery OR p.tags::text ILIKE @SearchQuery OR p.description ILIKE @SearchQuery)";
+            whereClause += @" AND (
+                p.title ILIKE @SearchQuery 
+                OR p.base_sku ILIKE @SearchQuery 
+                OR p.tags::text ILIKE @SearchQuery 
+                OR p.description ILIKE @SearchQuery
+                OR EXISTS (
+                    SELECT 1 
+                    FROM product_merges pm 
+                    JOIN products pm_src ON pm.source_id = pm_src.id 
+                    WHERE pm.target_id = p.id AND pm_src.base_sku ILIKE @SearchQuery
+                )
+            )";
             parameters.Add("SearchQuery", $"%{filter.Query}%");
         }
 
         if (!string.IsNullOrEmpty(filter.Category))
         {
             // Match against formal category slug OR tags
-            sql += " AND (c.slug = @Category OR c.name = @Category OR p.tags::text[] @> ARRAY[@Category]::text[])";
+            whereClause += " AND (c.slug = @Category OR c.name = @Category OR p.tags::text[] @> ARRAY[@Category]::text[])";
             parameters.Add("Category", filter.Category);
         }
 
         if (filter.StartDate.HasValue)
         {
-            sql += " AND p.created_at >= @StartDate";
+            whereClause += " AND p.created_at >= @StartDate";
             parameters.Add("StartDate", filter.StartDate.Value);
         }
 
         if (filter.EndDate.HasValue)
         {
-            sql += " AND p.created_at <= @EndDate";
+            whereClause += " AND p.created_at <= @EndDate";
             parameters.Add("EndDate", filter.EndDate.Value);
         }
+
+        sql += whereClause;
 
         sql += filter.SortBy switch
         {
@@ -307,14 +322,15 @@ public class ProductService : IProductService
                 MasterProductId = r.MasterProductId,
                 Title = r.Title ?? "Untitled Product",
                 ProductCode = r.ProductCode,
-                VendorPrice = r.VendorPrice,
+                VendorPrice = r.VendorPrice ?? 0,
                 ExclusiveDescription = r.VendorDescription,
                 Description = r.Description,
                 CreatedAt = r.CreatedAt,
                 Fabric = r.Fabric,
                 StitchType = r.StitchType,
                 WorkHeaviness = r.WorkHeaviness,
-                Category = r.Category
+                Category = r.Category,
+                ListingCount = r.ListingCount
             };
 
             if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
@@ -332,15 +348,8 @@ public class ProductService : IProductService
             return vp;
         });
 
-        var countSql = "SELECT COUNT(*) FROM products p WHERE is_deleted = FALSE";
-        var countParameters = new DynamicParameters();
-        if (!string.IsNullOrEmpty(filter.Category))
-        {
-            countSql += " AND p.tags::text[] @> ARRAY[@Category]::text[]";
-            countParameters.Add("Category", filter.Category);
-        }
-
-        var totalCount = await db.ExecuteScalarAsync<int>(countSql, countParameters);
+        var countSql = "SELECT COUNT(*) FROM products p LEFT JOIN categories c ON p.category_id = c.id" + whereClause;
+        var totalCount = await db.ExecuteScalarAsync<int>(countSql, parameters);
 
         return new ProductCatalogResult { Products = products, TotalCount = totalCount };
     }
@@ -430,14 +439,34 @@ public class ProductService : IProductService
                 p.description as ""Description"",
                 c.name as ""Category"",
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
-                (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorDescription"",
+                COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 p.created_at as ""CreatedAt"",
+                (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1) as ""SourceJid"",
+                (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1) as ""SourceGroupId"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary))
+                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary, 'mediaType', m.media_type))
                     FROM media m 
                     JOIN media_links ml ON m.id = ml.media_id
                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
-                ), '[]'::json)::text as ""MediaJson""
+                ), '[]'::json)::text as ""MediaJson"",
+                COALESCE((
+                    SELECT json_agg(json_build_object(
+                        'id',            vl.id,
+                        'vendorId',      vl.vendor_id,
+                        'vendorName',    COALESCE(v.vendor_name, 'Unknown Vendor'),
+                        'price',         vl.current_price,
+                        'currency',      COALESCE(vl.currency, 'INR'),
+                        'shippingInfo',  vl.shipping_info,
+                        'description',   vl.description,
+                        'isActive',      vl.is_active,
+                        'updatedAt',     vl.updated_at,
+                        'sourceGroupId', vl.source_group_id,
+                        'sourceJid',     (SELECT jid FROM wa.message_groups WHERE group_id = vl.source_group_id LIMIT 1)
+                    ) ORDER BY vl.is_active DESC, vl.updated_at DESC)
+                    FROM vendor_listings vl
+                    LEFT JOIN vendors v ON v.id = vl.vendor_id
+                    WHERE vl.product_id = p.id
+                ), '[]'::json)::text as ""ListingsJson""
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.id = @Id AND p.is_deleted = FALSE";
@@ -450,14 +479,16 @@ public class ProductService : IProductService
             MasterProductId = r.MasterProductId,
             Title = r.Title ?? "Untitled Product",
             ProductCode = r.ProductCode,
-            VendorPrice = r.VendorPrice,
+            VendorPrice = r.VendorPrice ?? 0,
             ExclusiveDescription = r.VendorDescription,
             Description = r.Description,
             CreatedAt = r.CreatedAt,
             Fabric = r.Fabric,
             StitchType = r.StitchType,
             WorkHeaviness = r.WorkHeaviness,
-            Category = r.Category
+            Category = r.Category,
+            SourceJid = r.SourceJid,
+            SourceGroupId = r.SourceGroupId
         };
 
         if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
@@ -472,8 +503,22 @@ public class ProductService : IProductService
             if (mediaList != null) vp.Media = mediaList;
         }
 
+        if (r.ListingsJson != null)
+        {
+            try
+            {
+                var listings = JsonSerializer.Deserialize<List<VendorListingDto>>(r.ListingsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (listings != null) vp.Listings = listings;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize listings JSON for product {ProductId}", id);
+            }
+        }
+
         return vp;
     }
+
 
     public async Task<MergePreviewDto> GetMergePreviewAsync(Guid sourceId, Guid targetId)
     {
@@ -733,24 +778,53 @@ public class ProductService : IProductService
     public async Task UpdateMasterPriceAsync(Guid masterProductId, decimal sellingPrice, decimal resellerPrice) { }
     public async Task<IEnumerable<CategoryDto>> GetCategoriesAsync()
     {
-        using var db = GetConnection();
-        return await db.QueryAsync<CategoryDto>("SELECT id, name, slug FROM categories ORDER BY name ASC");
+        using var connection = GetConnection();
+        var sql = "SELECT id, name, slug FROM public.categories ORDER BY name ASC";
+        return await connection.QueryAsync<CategoryDto>(sql);
+    }
+
+    public async Task<bool> ChangeCategoryAsync(Guid productId, string categorySlug)
+    {
+        using var connection = GetConnection();
+        
+        var categoryId = await connection.QueryFirstOrDefaultAsync<Guid?>(
+            "SELECT id FROM public.categories WHERE slug = @slug OR name = @slug",
+            new { slug = categorySlug });
+
+        if (!categoryId.HasValue)
+        {
+            throw new Exception($"Category not found: {categorySlug}");
+        }
+
+        var sql = @"
+            UPDATE public.products 
+            SET category_id = @CategoryId 
+            WHERE id = @ProductId";
+
+        var rowsAffected = await connection.ExecuteAsync(sql, new { CategoryId = categoryId, ProductId = productId });
+        return rowsAffected > 0;
     }
 
     private record InstagramPostMetadata(string? StoragePath, string? Title, string? Description);
     private record InstagramProductLinkInfo(string LinkType);
-    private record ProductCatalogQueryResult(
-        Guid MasterProductId, 
-        string? Title, 
-        string? ProductCode, 
-        string[]? Tags, 
-        string? Fabric, 
-        string? StitchType, 
-        string? WorkHeaviness, 
-        DateTime CreatedAt, 
-        string? Description, 
-        string? Category, 
-        decimal VendorPrice, 
-        string? VendorDescription, 
-        string? MediaJson);
+    private class ProductCatalogQueryResult
+    {
+        public Guid MasterProductId { get; init; }
+        public string? Title { get; init; }
+        public string? ProductCode { get; init; }
+        public string[]? Tags { get; init; }
+        public string? Fabric { get; init; }
+        public string? StitchType { get; init; }
+        public string? WorkHeaviness { get; init; }
+        public DateTime CreatedAt { get; init; }
+        public string? Description { get; init; }
+        public string? Category { get; init; }
+        public decimal? VendorPrice { get; init; }
+        public string? VendorDescription { get; init; }
+        public string? MediaJson { get; init; }
+        public string? ListingsJson { get; init; }
+        public string? SourceJid { get; init; }
+        public string? SourceGroupId { get; init; }
+        public int ListingCount { get; init; }
+    }
 }

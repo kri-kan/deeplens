@@ -11,10 +11,12 @@ const TILE_SIZE = width / 3;
 interface ProductTileProps {
   item: VendorProduct;
   onPress: (item: VendorProduct) => void;
+  onLongPress?: (item: VendorProduct) => void;
+  selected?: boolean;
   sizeRatio?: number;
 }
 
-export const ProductTile: React.FC<ProductTileProps> = ({ item, onPress, sizeRatio = 1 }) => {
+export const ProductTile: React.FC<ProductTileProps> = ({ item, onPress, onLongPress, selected, sizeRatio = 1 }) => {
   const theme = useTheme();
   
   // Robust media list extraction
@@ -53,24 +55,34 @@ export const ProductTile: React.FC<ProductTileProps> = ({ item, onPress, sizeRat
 
 
 
+  const productCode = getProp(item, 'productCode', 'ProductCode') || '---';
+  const listingCount = getProp(item, 'listingCount', 'ListingCount') || 0;
+  const vendorPrice = getProp(item, 'vendorPrice', 'VendorPrice');
+
   return (
     <TouchableOpacity 
       style={[
         styles.tile,
-        sizeRatio !== 1 && { width: TILE_SIZE * sizeRatio, height: TILE_SIZE * 1.3 * sizeRatio }
       ]}
       onPress={() => onPress?.(item)}
+      onLongPress={() => onLongPress?.(item)}
     >
       <Image
         source={{ uri: imageUri }}
-        style={styles.image}
+        style={[styles.image, { backgroundColor: theme.colors.surfaceVariant }]}
         contentFit="cover"
         transition={200}
+        cachePolicy="memory-disk"
       />
       <View style={styles.overlay}>
-        <Text style={styles.code}>{item.productCode || '---'}</Text>
-        <Text style={styles.price}>₹{item.vendorPrice}</Text>
+        <Text style={styles.code}>{productCode} • {listingCount} listings</Text>
+        <Text style={styles.price}>₹{vendorPrice}</Text>
       </View>
+      {selected && (
+        <View style={styles.selectedOverlay}>
+          <Text style={{color: 'white', fontWeight: 'bold', fontSize: 24}}>✓</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -100,5 +112,11 @@ const styles = StyleSheet.create({
   price: {
     color: 'white',
     fontSize: 10,
+  },
+  selectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(76, 175, 80, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

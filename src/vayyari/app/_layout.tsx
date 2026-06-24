@@ -61,7 +61,7 @@ function InnerRootLayout() {
     setTimeout(async () => {
       try {
         const { initOtel } = await import('@/utils/telemetry');
-        initOtel();
+        await initOtel();
       } catch (err) {
         console.warn('Failed to initialize OpenTelemetry', err);
       }

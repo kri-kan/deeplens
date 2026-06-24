@@ -17,40 +17,7 @@ interface ReviewItem {
   video?: InstagramPost;
 }
 
-interface SectionHeaderProps {
-  title: string;
-  count: number;
-  expanded: boolean;
-  onToggle: () => void;
-  color: string;
-}
 
-const SectionHeader = ({ title, count, expanded, onToggle, color }: SectionHeaderProps) => {
-  const theme = useTheme();
-  return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={onToggle}
-      style={[
-        styles.sectionHeader,
-        { backgroundColor: theme.colors.surfaceVariant }
-      ]}
-    >
-      <Text style={{ fontWeight: 'bold', color, flex: 1, fontSize: 15 }}>
-        {title}
-      </Text>
-      <View style={[styles.badge, { backgroundColor: color }]}>
-        <Text style={styles.badgeText}>{count}</Text>
-      </View>
-      <IconButton
-        icon={expanded ? 'chevron-up' : 'chevron-down'}
-        iconColor={color}
-        size={20}
-        style={{ margin: 0 }}
-      />
-    </TouchableOpacity>
-  );
-};
 
 export default function StoryReviewListScreen() {
   const theme = useTheme();
@@ -61,10 +28,8 @@ export default function StoryReviewListScreen() {
   const [activeSuspendedItems, setActiveSuspendedItems] = useState<ReviewItem[]>([]);
   const [ignoredItems, setIgnoredItems] = useState<ReviewItem[]>([]);
 
-  // Collapse states
-  const [needsReviewExpanded, setNeedsReviewExpanded] = useState(true);
-  const [suspendedExpanded, setSuspendedExpanded] = useState(true);
-  const [ignoredExpanded, setIgnoredExpanded] = useState(false);
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'needsReview' | 'suspended' | 'ignored'>('needsReview');
 
   // Suspend Dialog
   const [suspendDialogVisible, setSuspendDialogVisible] = useState(false);
@@ -312,75 +277,90 @@ export default function StoryReviewListScreen() {
     if (currentStatus === 'ignore') cardLeftColor = theme.colors.outline;
 
     return (
-      <Card key={`${item.type}-${item.id}`} style={[styles.groupCard, { borderLeftWidth: 6, borderLeftColor: cardLeftColor }]}>
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1, paddingRight: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <Card key={`${item.type}-${item.id}`} style={[styles.groupCard]}>
+        <View style={{ flexDirection: 'row', height: 180 }}>
+          {/* Left Side: Image */}
+          <View style={{ width: 140, backgroundColor: theme.colors.surfaceVariant }}>
+            {starredPostUri ? (
+              <Image 
+                source={{ uri: starredPostUri }} 
+                style={{ width: '100%', height: '100%', resizeMode: 'cover' }} 
+              />
+            ) : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <IconButton
+                  icon={item.type === 'group' ? 'folder-outline' : 'play-circle-outline'}
+                  size={32}
+                />
+              </View>
+            )}
+          </View>
+
+          {/* Right Side: Content */}
+          <View style={{ flex: 1, padding: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, paddingRight: 8 }}>
                 <IconButton
                   icon={item.type === 'group' ? 'folder-outline' : 'play-circle-outline'}
                   size={16}
                   style={{ margin: 0, width: 20, height: 20 }}
                 />
-                <Text variant="titleMedium" style={styles.bold} numberOfLines={1}>
+                <Text variant="titleMedium" style={styles.bold} numberOfLines={2}>
                   {item.name}
                 </Text>
               </View>
-              <Text variant="bodySmall" style={{ color: cardLeftColor, fontWeight: 'bold', marginTop: 2 }}>
-                {item.reason}
-              </Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {detailsText}
-              </Text>
-            </View>
-            {starredPostUri ? (
-              <Image 
-                source={{ uri: starredPostUri }} 
-                style={styles.headerThumbnail} 
+              <IconButton 
+                icon="delete-outline" 
+                iconColor={theme.colors.error} 
+                size={20}
+                onPress={() => handleDelete(item)}
+                style={{ margin: 0, marginTop: -4, marginRight: -4 }}
               />
-            ) : null}
-          </View>
+            </View>
+            <Text variant="bodySmall" style={{ color: cardLeftColor, fontWeight: 'bold' }}>
+              {item.reason}
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {detailsText}
+            </Text>
 
-          <Divider style={{ marginVertical: 12 }} />
+            <View style={{ flex: 1 }} />
 
-          {/* Actions Grid */}
-          <View style={styles.actionsGrid}>
-            <Button 
-              mode={currentStatus === 'active' ? 'contained' : 'contained-tonal'} 
-              compact 
-              icon="check-circle-outline"
-              onPress={() => handleActivate(item)}
-              style={{ flex: 1, backgroundColor: currentStatus === 'active' ? 'green' : undefined }}
-            >
-              Activate
-            </Button>
-            <Button 
-              mode={currentStatus === 'suspend' ? 'contained' : 'contained-tonal'} 
-              compact 
-              icon="clock-alert-outline"
-              onPress={() => { setActiveItem(item); setSuspendDialogVisible(true); }}
-              style={{ flex: 1, backgroundColor: currentStatus === 'suspend' ? 'green' : undefined }}
-            >
-              Suspend
-            </Button>
-            <Button 
-              mode={currentStatus === 'ignore' ? 'contained' : 'contained-tonal'} 
-              compact 
-              icon="eye-off-outline"
-              onPress={() => handleIgnore(item)}
-              style={{ flex: 1, backgroundColor: currentStatus === 'ignore' ? 'green' : undefined }}
-            >
-              Inactive
-            </Button>
-            <IconButton 
-              icon="delete-outline" 
-              iconColor={theme.colors.error} 
-              size={20}
-              onPress={() => handleDelete(item)}
-              style={{ margin: 0 }}
-            />
+            {/* Actions Grid */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, alignItems: 'center' }}>
+              <Button 
+                mode={currentStatus === 'active' ? 'contained' : 'contained-tonal'} 
+                compact 
+                icon="check-circle-outline"
+                onPress={() => handleActivate(item)}
+                style={{ backgroundColor: currentStatus === 'active' ? 'green' : undefined }}
+                labelStyle={{ fontSize: 11, marginHorizontal: 8 }}
+              >
+                Activate
+              </Button>
+              <Button 
+                mode={currentStatus === 'suspend' ? 'contained' : 'contained-tonal'} 
+                compact 
+                icon="clock-alert-outline"
+                onPress={() => { setActiveItem(item); setSuspendDialogVisible(true); }}
+                style={{ backgroundColor: currentStatus === 'suspend' ? 'green' : undefined }}
+                labelStyle={{ fontSize: 11, marginHorizontal: 8 }}
+              >
+                Suspend
+              </Button>
+              <Button 
+                mode={currentStatus === 'ignore' ? 'contained' : 'contained-tonal'} 
+                compact 
+                icon="eye-off-outline"
+                onPress={() => handleIgnore(item)}
+                style={{ backgroundColor: currentStatus === 'ignore' ? 'green' : undefined }}
+                labelStyle={{ fontSize: 11, marginHorizontal: 8 }}
+              >
+                Inactive
+              </Button>
+            </View>
           </View>
-        </Card.Content>
+        </View>
       </Card>
     );
   };
@@ -405,65 +385,66 @@ export default function StoryReviewListScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
-          <Text variant="labelSmall" style={styles.listSubtitle}>
-            Scan and manage story/group eligibilities across three sections:
-          </Text>
-          
-          {/* Section 1: Overdue / Needs Review */}
-          <SectionHeader
-            title="Overdue / Needs Review"
-            count={needsReviewItems.length}
-            expanded={needsReviewExpanded}
-            onToggle={() => setNeedsReviewExpanded(!needsReviewExpanded)}
-            color={theme.colors.error}
-          />
-          {needsReviewExpanded && (
-            <View style={{ marginBottom: 12 }}>
-              {needsReviewItems.length === 0 ? (
-                <Text style={styles.emptySectionText}>No items needing review</Text>
-              ) : (
-                needsReviewItems.map(item => renderItemCard(item))
-              )}
-            </View>
-          )}
+        <View style={{ flex: 1 }}>
+          <View style={styles.tabBar}>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'needsReview' && { borderBottomColor: theme.colors.error }]} 
+              onPress={() => setActiveTab('needsReview')}
+            >
+              <Text style={[styles.tabText, activeTab === 'needsReview' && { color: theme.colors.error, fontWeight: 'bold', opacity: 1 }]} numberOfLines={1}>
+                Review ({needsReviewItems.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'suspended' && { borderBottomColor: theme.colors.secondary }]} 
+              onPress={() => setActiveTab('suspended')}
+            >
+              <Text style={[styles.tabText, activeTab === 'suspended' && { color: theme.colors.secondary, fontWeight: 'bold', opacity: 1 }]} numberOfLines={1}>
+                Suspended ({activeSuspendedItems.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'ignored' && { borderBottomColor: theme.colors.outline }]} 
+              onPress={() => setActiveTab('ignored')}
+            >
+              <Text style={[styles.tabText, activeTab === 'ignored' && { color: theme.colors.outline, fontWeight: 'bold', opacity: 1 }]} numberOfLines={1}>
+                Ignored ({ignoredItems.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          {/* Section 2: Active Suspensions */}
-          <SectionHeader
-            title="Active Suspensions"
-            count={activeSuspendedItems.length}
-            expanded={suspendedExpanded}
-            onToggle={() => setSuspendedExpanded(!suspendedExpanded)}
-            color={theme.colors.secondary}
-          />
-          {suspendedExpanded && (
-            <View style={{ marginBottom: 12 }}>
-              {activeSuspendedItems.length === 0 ? (
-                <Text style={styles.emptySectionText}>No active suspensions</Text>
-              ) : (
-                activeSuspendedItems.map(item => renderItemCard(item))
-              )}
-            </View>
-          )}
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 80 }}>
+            {activeTab === 'needsReview' && (
+              <View style={{ marginBottom: 12 }}>
+                {needsReviewItems.length === 0 ? (
+                  <Text style={styles.emptySectionText}>No items needing review</Text>
+                ) : (
+                  needsReviewItems.map(item => renderItemCard(item))
+                )}
+              </View>
+            )}
 
-          {/* Section 3: Inactive / Ignored */}
-          <SectionHeader
-            title="Inactive / Ignored"
-            count={ignoredItems.length}
-            expanded={ignoredExpanded}
-            onToggle={() => setIgnoredExpanded(!ignoredExpanded)}
-            color={theme.colors.outline}
-          />
-          {ignoredExpanded && (
-            <View style={{ marginBottom: 12 }}>
-              {ignoredItems.length === 0 ? (
-                <Text style={styles.emptySectionText}>No inactive items</Text>
-              ) : (
-                ignoredItems.map(item => renderItemCard(item))
-              )}
-            </View>
-          )}
-        </ScrollView>
+            {activeTab === 'suspended' && (
+              <View style={{ marginBottom: 12 }}>
+                {activeSuspendedItems.length === 0 ? (
+                  <Text style={styles.emptySectionText}>No active suspensions</Text>
+                ) : (
+                  activeSuspendedItems.map(item => renderItemCard(item))
+                )}
+              </View>
+            )}
+
+            {activeTab === 'ignored' && (
+              <View style={{ marginBottom: 12 }}>
+                {ignoredItems.length === 0 ? (
+                  <Text style={styles.emptySectionText}>No inactive items</Text>
+                ) : (
+                  ignoredItems.map(item => renderItemCard(item))
+                )}
+              </View>
+            )}
+          </ScrollView>
+        </View>
       )}
 
       {/* Suspend Options Dialog */}
@@ -509,26 +490,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     opacity: 0.7
   },
-  sectionHeader: {
+  tabBar: {
     flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginVertical: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    paddingHorizontal: 4,
   },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginLeft: 8,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  badgeText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: 'bold'
+  tabText: {
+    fontSize: 13,
+    opacity: 0.6,
   },
   emptySectionText: {
     padding: 16,

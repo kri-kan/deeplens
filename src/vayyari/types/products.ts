@@ -18,6 +18,21 @@ export type MediaCategory = 'Unknown' | 'Product' | 'Order' | 'Archive' | 'Profi
  */
 export type ProductCategory = 'all' | 'Saree' | 'Dress' | 'Lehanga' | 'Kids' | 'General';
 
+export interface VendorListing {
+  id: string;
+  vendorId: string;
+  vendorName?: string;
+  price: number;
+  currency: string;
+  shippingInfo?: string;
+  description?: string;
+  isActive: boolean;
+  updatedAt?: string;
+  sourceGroupId?: string;
+  /** JID of the WhatsApp chat this specific listing came from */
+  sourceJid?: string;
+}
+
 export interface VendorProduct {
   id: string;
   masterProductId: string;
@@ -33,6 +48,14 @@ export interface VendorProduct {
   media: MediaEntry[];
   mediaMap?: Record<string, string>;
   createdAt?: string;
+  /** WhatsApp group JID this product was sourced from (e.g. 120363160307172096@g.us) */
+  sourceJid?: string;
+  /** WhatsApp message group ID used to view the original chat messages */
+  sourceGroupId?: string;
+  /** All vendor listings for this product */
+  listings?: VendorListing[];
+  /** Number of active vendor listings for this product */
+  listingCount?: number;
 }
 
 export interface MediaEntry {
@@ -40,6 +63,8 @@ export interface MediaEntry {
   storagePath: string;
   color?: string;
   isDefault: boolean;
+  /** 1 = image, 2 = video */
+  mediaType?: number;
 }
 
 /**

@@ -90,6 +90,7 @@ export const KAFKA_CONFIG = {
     groupProductCreateTopic: process.env.KAFKA_GROUP_PRODUCT_CREATE_TOPIC || 'WhatsApp.group.product.create',
     groupMediaAddedTopic: process.env.KAFKA_GROUP_MEDIA_ADDED_TOPIC || 'WhatsApp.group.media.added',
     groupProductCreatedTopic: process.env.KAFKA_GROUP_PRODUCT_CREATED_TOPIC || 'WhatsApp.group.product.created',
-    groupReprocessTopic: process.env.KAFKA_GROUP_REPROCESS_TOPIC || 'WhatsApp.group.reprocess'
+    groupReprocessTopic: process.env.KAFKA_GROUP_REPROCESS_TOPIC || 'WhatsApp.group.reprocess',
+    groupProductDeleteTopic: process.env.KAFKA_GROUP_PRODUCT_DELETE_TOPIC || 'WhatsApp.group.product.delete'
 };
 

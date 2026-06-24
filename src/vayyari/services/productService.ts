@@ -97,6 +97,12 @@ class ProductService {
     return `${baseUrl}/api/v1/catalog/media/serve?path=${encodeURIComponent(path)}`;
   }
 
+  getRawMediaUrl(mediaId: string): string {
+    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
+    if (!baseUrl) return '';
+    return `${baseUrl}/api/v1/catalog/media/${mediaId}/raw`;
+  }
+
   async getInstagramLinks(postId: string): Promise<any[]> {
     return productMgmtApiClient.get<any[]>(API_ROUTES.INSTAGRAM.LINKS(postId));
   }
@@ -105,8 +111,10 @@ class ProductService {
     return productMgmtApiClient.delete(API_ROUTES.INSTAGRAM.UNLINK(postId, productId));
   }
 
-  async fetchMergeCandidates(): Promise<any[]> {
-    return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/merge-candidates');
+  async fetchMergeCandidates(skip: number = 0, take: number = 100): Promise<any[]> {
+    return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/merge-candidates', {
+      params: { skip, take }
+    });
   }
 
   async mergeProductsSimilarity(productAId: string, productBId: string, candidateId: string): Promise<any> {
@@ -125,6 +133,22 @@ class ProductService {
 
   async fetchTodayWhatsAppProducts(): Promise<any[]> {
     return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/today');
+  }
+
+  async fetchFailedEnrichments(): Promise<any[]> {
+    return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/failed-enrichments');
+  }
+
+  async retryEnrichment(groupId: string): Promise<any> {
+    return productMgmtApiClient.post<any>(`/api/v1/whatsapp/products/retry-enrichment/${encodeURIComponent(groupId)}`);
+  }
+
+  async changeCategory(productId: string, categorySlug: string): Promise<any> {
+    return productMgmtApiClient.post<any>(`/api/v1/products/${productId}/category`, { categorySlug });
+  }
+
+  async reevaluateProducts(productIds: string[]): Promise<any> {
+    return productMgmtApiClient.post<any>(`/api/v1/whatsapp/products/reevaluate`, { productIds });
   }
 }
 

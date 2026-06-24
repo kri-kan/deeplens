@@ -28,6 +28,7 @@ public interface IProductService
     Task<bool> UnlinkInstagramPostAsync(Guid postId, Guid productId);
     Task<VendorProduct> CreateProductFromPostAsync(Guid postId, ProductIngestionDto data);
     Task<IEnumerable<CategoryDto>> GetCategoriesAsync();
+    Task<bool> ChangeCategoryAsync(Guid productId, string categorySlug);
 }
 
 public class CategoryDto

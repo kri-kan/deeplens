@@ -13,8 +13,8 @@ services:
     volumes:
       - ${REASONING_API_HOSTING_PATH:-/data/hosting/reasoning-api}:/app
     environment:
-      MOCK_MODE: ${REASONING_MOCK_MODE:-true}
-      MODEL_ID: microsoft/Phi-3-mini-4k-instruct
+      OLLAMA_BASE_URL: http://${INFRA_HOST:-192.168.0.170}:11434
+      MODEL_ID: phi4-mini:latest
     networks:
       - deeplens-network
 

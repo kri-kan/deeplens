@@ -315,8 +315,12 @@ export const waProcessorService = {
     };
   },
 
-  fetchMessages: async (jid: string, limit = 50, offset = 0): Promise<{ messages: Message[]; total: number }> => {
-    const res = await get<{ messages: any[]; total: number }>(`/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`);
+  fetchMessages: async (jid: string, limit = 50, offset = 0, highlightGroupId?: string): Promise<{ messages: Message[]; total: number }> => {
+    let url = `/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`;
+    if (highlightGroupId) {
+      url += `&highlightGroupId=${encodeURIComponent(highlightGroupId)}`;
+    }
+    const res = await get<{ messages: any[]; total: number }>(url);
     return {
       total: res.total ?? 0,
       messages: (res.messages || []).map((m) => ({
@@ -357,8 +361,12 @@ export const waProcessorService = {
     await post(`/conversations/${encodeURIComponent(jid)}/vendor`, { vendorId, vendorName, assignedBy: 'admin' });
   },
 
-  removeVendor: async (jid: string): Promise<void> => {
+  removeChatVendor: async (jid: string): Promise<void> => {
     await del(`/conversations/${encodeURIComponent(jid)}/vendor`);
+  },
+
+  getChatsByVendor: async (vendorId: string): Promise<any[]> => {
+    return get<any[]>(`/conversations/vendor/${encodeURIComponent(vendorId)}`);
   },
 
   // ---------- Group Product Pipeline (REST Endpoints) ----------

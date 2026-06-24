@@ -84,9 +84,10 @@ export class ConversationController {
         const { jid } = req.params;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
+        const highlightGroupId = req.query.highlightGroupId as string | undefined;
 
         try {
-            const result = await this.service.getMessages(jid, limit, offset);
+            const result = await this.service.getMessages(jid, limit, offset, highlightGroupId);
             res.json(result);
         } catch (err: any) {
             logger.error({ err, jid }, 'Failed to get messages');
@@ -182,12 +183,22 @@ export class ConversationController {
     }
 
     async removeChatVendor(req: Request, res: Response) {
-        const { jid } = req.params;
         try {
+            const jid = req.params.jid;
             const result = await this.service.removeChatVendor(jid);
             res.json(result);
-        } catch (err: any) {
-            res.status(500).json({ error: err.message });
+        } catch (error: any) {
+            res.status(500).json({ error: error.message });
+        }
+    }
+
+    async getChatsByVendor(req: Request, res: Response) {
+        try {
+            const vendorId = req.params.vendorId;
+            const result = await this.service.getChatsByVendor(vendorId);
+            res.json(result);
+        } catch (error: any) {
+            res.status(500).json({ error: error.message });
         }
     }
 }

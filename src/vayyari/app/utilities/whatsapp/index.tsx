@@ -15,6 +15,7 @@ import {
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { waProcessorService, WaProcessorStatus, Conversation } from '@/services/wa-processor.service';
+import { productService } from '@/services/productService';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -30,15 +31,18 @@ export default function WhatsAppChatListScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [onlyTracked, setOnlyTracked] = useState(true);
+  const [failedCount, setFailedCount] = useState(0);
 
   const fetchData = useCallback(async () => {
     try {
-      const [s, convs] = await Promise.all([
+      const [s, convs, failedList] = await Promise.all([
         waProcessorService.getStatus(),
-        waProcessorService.fetchConversations()
+        waProcessorService.fetchConversations(),
+        productService.fetchFailedEnrichments().catch(() => [])
       ]);
       setStatus(s);
       setConversations(convs);
+      setFailedCount(failedList?.length || 0);
     } catch (err: any) {
       console.error('Failed to fetch WhatsApp data:', err);
     } finally {
@@ -163,9 +167,19 @@ export default function WhatsAppChatListScreen() {
             color={theme.colors.primary}
             style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
           />
+          {failedCount > 0 && (
+            <IconButton 
+              icon="alert-circle" 
+              iconColor={theme.colors.error}
+              size={24}
+              style={{ margin: 0 }}
+              onPress={() => router.push('/utilities/whatsapp/failed-enrichments')} 
+            />
+          )}
           <IconButton 
             icon="menu" 
             onPress={() => router.push('/utilities/whatsapp/admin')} 
+            style={{ margin: 0 }}
           />
         </View>
       }

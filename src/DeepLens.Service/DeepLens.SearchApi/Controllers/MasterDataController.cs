@@ -38,7 +38,7 @@ public class MasterDataController : ControllerBase
     {
         using var conn = await _db.CreateConnectionAsync();
         var categories = await conn.QueryAsync(@"
-            SELECT id, name, slug, icon_name AS iconName 
+            SELECT id, name, slug, icon_name AS ""iconName"", classification_keywords AS ""classificationKeywords""
             FROM categories 
             ORDER BY 
                 CASE slug
@@ -62,16 +62,16 @@ public class MasterDataController : ControllerBase
         {
             await conn.ExecuteAsync(@"
                 UPDATE categories 
-                SET name = @Name, slug = @Slug, icon_name = @IconName, updated_at = NOW() 
+                SET name = @Name, slug = @Slug, icon_name = @IconName, classification_keywords = @ClassificationKeywords, updated_at = NOW() 
                 WHERE id = @Id", 
-                new { dto.Name, Slug = dto.Name.ToLower().Replace(" ", "-"), dto.IconName, dto.Id });
+                new { dto.Name, Slug = dto.Name.ToLower().Replace(" ", "-"), dto.IconName, dto.ClassificationKeywords, dto.Id });
         }
         else
         {
             await conn.ExecuteAsync(@"
-                INSERT INTO categories (name, slug, icon_name) 
-                VALUES (@Name, @Slug, @IconName)", 
-                new { dto.Name, Slug = dto.Name.ToLower().Replace(" ", "-"), dto.IconName });
+                INSERT INTO categories (name, slug, icon_name, classification_keywords) 
+                VALUES (@Name, @Slug, @IconName, @ClassificationKeywords)", 
+                new { dto.Name, Slug = dto.Name.ToLower().Replace(" ", "-"), dto.IconName, dto.ClassificationKeywords });
         }
         
         return Ok();
@@ -91,5 +91,6 @@ public class MasterDataController : ControllerBase
         public Guid? Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? IconName { get; set; }
+        public string[]? ClassificationKeywords { get; set; }
     }
 }

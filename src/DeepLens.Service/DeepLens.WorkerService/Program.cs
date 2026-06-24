@@ -50,6 +50,14 @@ builder.Services.AddSingleton<IProducer<string, string>>(sp =>
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
 
+builder.Services.AddSingleton<PerceptualHashCache>(sp => 
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var connStr = config.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("DefaultConnection not configured.");
+    var logger = sp.GetRequiredService<ILogger<PerceptualHashCache>>();
+    return new PerceptualHashCache(connStr, logger);
+});
+
 // Infrastructure Drivers (Remaining overrides or specialized worker services)
 builder.Services.AddScoped<IStorageService, MinioStorageService>();
 builder.Services.AddScoped<IVectorStoreService, VectorStoreService>();
@@ -65,6 +73,7 @@ builder.Services.AddHostedService<VectorIndexingWorker>();
 builder.Services.AddHostedService<ImageMaintenanceWorker>();
 builder.Services.AddHostedService<InstagramSyncWorker>();
 builder.Services.AddHostedService<WhatsAppGroupWorker>();
+builder.Services.AddHostedService<ProductEnrichmentWorker>();
 
 var host = builder.Build();
 host.Run();

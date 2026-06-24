@@ -40,6 +40,14 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             </View>
             <IconButton icon="cog" size={20} style={styles.settingsIcon} onPress={onShowSettings} />
           </View>
+          {profile.lastSyncedAt && (
+            <Text 
+              variant="bodySmall" 
+              style={{ color: theme.colors.onSurfaceVariant, fontStyle: 'italic', marginBottom: 4 }}
+            >
+              Last Scraped: {new Date(profile.lastSyncedAt).toLocaleString()}
+            </Text>
+          )}
           <Text 
             variant="bodySmall" 
             style={styles.bio} 

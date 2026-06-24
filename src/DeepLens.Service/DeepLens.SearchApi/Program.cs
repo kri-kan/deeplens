@@ -149,17 +149,31 @@ builder.Services.AddAuthorization(options =>
 });
 
 // CORS Configuration for Frontend - read from appsettings.json
-var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? new[] { "http://localhost:3000", "http://localhost:5001", "http://localhost:5173", "http://localhost:8081" };
+var allowAnyIntranet = builder.Configuration.GetValue<bool>("Cors:AllowAnyIntranetOrigin");
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", builder =>
     {
-        builder.WithOrigins(corsOrigins)
-               .AllowAnyMethod()
-               .AllowAnyHeader()
-               .AllowCredentials();
+        if (allowAnyIntranet)
+        {
+            builder.SetIsOriginAllowed(origin => 
+                origin.Contains("localhost") || 
+                origin.Contains("192.168.") || 
+                origin.Contains("10.0.") ||
+                origin.Contains("127.0.0.1"))
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        }
+        else if (corsOrigins.Any())
+        {
+            builder.WithOrigins(corsOrigins)
+                   .AllowAnyMethod()
+                   .AllowAnyHeader()
+                   .AllowCredentials();
+        }
     });
 });
 

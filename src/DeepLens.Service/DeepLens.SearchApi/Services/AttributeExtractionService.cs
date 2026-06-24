@@ -25,7 +25,7 @@ public class ExtractedAttributes
 public class SuggestedMetadata
 {
     public string Title { get; set; } = string.Empty;
-    public List<string> Hashtags { get; set; } = new();
+    public string Keywords { get; set; } = string.Empty;
 }
 
 public class LlmAttributeExtractionService : IAttributeExtractionService
@@ -73,29 +73,14 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
                 }
             }
             
-            _logger.LogWarning("Reasoning Service failed with status {Status}. Falling back to basic extraction.", response.StatusCode);
+            _logger.LogWarning("Reasoning Service failed with status {Status}.", response.StatusCode);
+            throw new Exception($"Reasoning Service failed with status {response.StatusCode}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to call Reasoning Service. Falling back to basic extraction.");
+            _logger.LogError(ex, "Failed to call Reasoning Service.");
+            throw;
         }
-
-        return BasicFallback(description);
-    }
-
-    private ExtractedAttributes BasicFallback(string description)
-    {
-        var result = new ExtractedAttributes();
-        var lower = description.ToLowerInvariant();
-
-        if (lower.Contains("silk")) result.Fabric = "Silk";
-        if (lower.Contains("cotton")) result.Fabric = "Cotton";
-        if (lower.Contains("blue")) result.Color = "Blue";
-        if (lower.Contains("red")) result.Color = "Red";
-        if (lower.Contains("unstitched")) result.StitchType = "Unstitched";
-        if (lower.Contains("heavy")) result.WorkHeaviness = "Heavy";
-        
-        return result;
     }
 
     public async Task<SuggestedMetadata> SuggestGroupMetadataAsync(List<string> descriptions)
@@ -116,24 +101,19 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
                     return new SuggestedMetadata
                     {
                         Title = data.Title ?? string.Empty,
-                        Hashtags = data.Hashtags ?? new()
+                        Keywords = data.Keywords ?? string.Empty
                     };
                 }
             }
             
             _logger.LogWarning("Reasoning Service failed with status {Status} for suggestion.", response.StatusCode);
+            throw new Exception($"Reasoning Service failed with status {response.StatusCode}");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to call Reasoning Service for metadata suggestion.");
+            throw;
         }
-
-        // Fallback: simple default suggestions
-        return new SuggestedMetadata
-        {
-            Title = "New Story Group",
-            Hashtags = new List<string> { "#vayyarifashions" }
-        };
     }
 
     private class ReasoningResponse
@@ -150,6 +130,6 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
     private class SuggestResponse
     {
         public string? Title { get; set; }
-        public List<string>? Hashtags { get; set; }
+        public string? Keywords { get; set; }
     }
 }

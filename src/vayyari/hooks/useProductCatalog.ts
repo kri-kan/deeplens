@@ -2,12 +2,19 @@ import { useState, useCallback, useEffect } from 'react';
 import { productService } from '@/services/productService';
 import { VendorProduct } from '@/types/products';
 
-export const useProductCatalog = (categoryId: string) => {
+export const useProductCatalog = (
+  categoryId: string,
+  query?: string,
+  sortBy?: string,
+  startDate?: string,
+  endDate?: string
+) => {
   const [products, setProducts] = useState<VendorProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchProducts = useCallback(async (isRefresh = false) => {
     if ((loading || refreshing) && !isRefresh) return;
@@ -22,20 +29,26 @@ export const useProductCatalog = (categoryId: string) => {
 
     try {
       const currentSkip = isRefresh ? 0 : products.length;
-      const take = 30;
+      const take = 100;
       const filter = {
         category: categoryId === 'all' ? undefined : categoryId,
+        query: query || undefined,
+        sortBy: sortBy || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
         skip: currentSkip,
         take: take
       };
       
-      const { products: newData, totalCount } = await productService.getCatalog(filter);
+      const { products: newData, totalCount: newTotalCount } = await productService.getCatalog(filter);
       
+      setTotalCount(newTotalCount);
+
       setProducts(prev => {
         const updated = isRefresh 
           ? newData 
           : [...prev, ...newData.filter(n => !prev.some(p => p.id === n.id))];
-        setHasMore(updated.length < totalCount && newData.length > 0);
+        setHasMore(updated.length < newTotalCount && newData.length > 0);
         return updated;
       });
     } catch (err) {
@@ -45,11 +58,11 @@ export const useProductCatalog = (categoryId: string) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [categoryId, products.length, loading, refreshing, hasMore, error]);
+  }, [categoryId, query, sortBy, startDate, endDate, products.length, loading, refreshing, hasMore, error]);
 
   useEffect(() => {
     fetchProducts(true);
-  }, [categoryId]);
+  }, [categoryId, query, sortBy, startDate, endDate]);
 
   return {
     products,
@@ -57,6 +70,7 @@ export const useProductCatalog = (categoryId: string) => {
     refreshing,
     hasMore,
     error,
+    totalCount,
     fetchProducts,
   };
 };

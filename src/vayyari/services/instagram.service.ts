@@ -26,6 +26,7 @@ export interface InstagramProfile {
   isPinned?: boolean;
   lastSyncedAt?: string;
   isInWatchlist?: boolean;
+  storiesPostedLast24h?: number;
 }
 
 export interface InstagramPost {
@@ -53,6 +54,7 @@ export interface InstagramPost {
   rightSwipes?: number;
   leftSwipes?: number;
   shareCount?: number;
+  sharedAt?: string;
 }
 
 export interface ProfileMetrics {
@@ -158,6 +160,8 @@ export const normalizeProfile = (data: any): InstagramProfile => {
       profilePictureUrl: data.profilePictureUrl || data.ProfilePictureUrl,
       storagePath: data.storagePath || data.StoragePath,
       isPinned: data.isPinned !== undefined ? data.isPinned : data.IsPinned,
+      lastSyncedAt: data.lastSyncedAt || data.LastSyncedAt || data.lastScrapedAt || data.LastScrapedAt,
+      storiesPostedLast24h: data.storiesPostedLast24h !== undefined ? data.storiesPostedLast24h : (data.StoriesPostedLast24h || 0),
   };
 };
 
@@ -209,7 +213,13 @@ class InstagramService {
   // ── Watchlist Management ────────────────────────────────────────────────────
 
   getWatchlist = async (): Promise<InstagramProfile[]> => {
-    return searchApiClient.get<InstagramProfile[]>('/api/v1/Insta');
+    const raw = await searchApiClient.get<any[]>('/api/v1/Insta');
+    return raw ? raw.map(normalizeProfile) : [];
+  };
+
+  getRecentStories = async (profileId: string): Promise<InstagramPost[]> => {
+    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/watchlist/${profileId}/recent-stories`);
+    return raw ? raw.map(normalizeData) : [];
   };
 
   getProfileDetails = async (username: string, sortBy = 'date', sortOrder = 'desc', fromDate?: string, toDate?: string, limit = 100, offset = 0): Promise<ProfileDetailsResponse> => {
@@ -472,13 +482,14 @@ class InstagramService {
     return searchApiClient.post('/api/v1/Insta/story-groups/swipes', swipes);
   };
 
-  suggestGroupMetadata = async (postIds: string[]): Promise<{ title: string; hashtags: string[] }> => {
+  suggestGroupMetadata = async (postIds: string[]): Promise<{ title: string; keywords: string }> => {
     return searchApiClient.post('/api/v1/Insta/suggest-group-metadata', { postIds });
   };
 
-  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string): Promise<{ items: UnifiedPlannerItem[]; totalCount: number; groupCount: number }> => {
+  getStoryPlannerFeed = async (limit = 100, offset = 0, search?: string, sortAsc = false): Promise<{ items: UnifiedPlannerItem[]; totalCount: number; groupCount: number }> => {
     const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
-    const raw = await searchApiClient.get<{ items: any[]; totalCount: number; groupCount: number }>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}`);
+    const sortParam = `&sortAsc=${sortAsc}`;
+    const raw = await searchApiClient.get<{ items: any[]; totalCount: number; groupCount: number }>(`/api/v1/Insta/story-planner/feed?limit=${limit}&offset=${offset}${searchParam}${sortParam}`);
     const items = ((raw && raw.items) || []).map(item => {
       if (item.type === 'post' && item.post) {
         return {
@@ -537,6 +548,7 @@ export interface StoryGroup {
   rightSwipes?: number;
   leftSwipes?: number;
   shareCount?: number;
+  lastPostedAt?: string;
 }
 
 export interface CreateStoryGroupPayload {

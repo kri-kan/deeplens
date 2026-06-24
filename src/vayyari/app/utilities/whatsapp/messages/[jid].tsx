@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Image, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Image, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
 import {
   Text,
   useTheme,
@@ -29,7 +29,18 @@ type MediaGroup = {
 
 export default function FullMessageBrowser() {
   const theme = useTheme();
-  const { jid, name } = useLocalSearchParams<{ jid: string, name?: string }>();
+  const { jid, name, highlightGroupId } = useLocalSearchParams<{ jid: string, name?: string, highlightGroupId?: string }>();
+  const [pulseActive, setPulseActive] = useState(true);
+
+  useEffect(() => {
+    if (highlightGroupId) {
+      setPulseActive(true);
+      const timer = setTimeout(() => {
+        setPulseActive(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightGroupId]);
   const router = useRouter();
   
   const [messages, setMessages] = useState<Message[]>([]);
@@ -54,34 +65,75 @@ export default function FullMessageBrowser() {
   const PAGE_SIZE = 50;
   const flatListRef = useRef<FlatList>(null);
 
-  const fetchData = useCallback(async (isInitial = true) => {
+  const fetchData = useCallback(async (isInitial = true, showSpinner = true) => {
     if (!jid) return;
     const currentOffset = isInitial ? 0 : offset;
     
-    if (isInitial) setLoading(true);
-    else setLoadingMore(true);
+    if (isInitial) {
+      if (showSpinner) setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
 
     try {
       const cleanJid = jid; 
       
       const [statsData, msgData, groupsData] = await Promise.all([
         isInitial ? waProcessorService.fetchConversationStats(cleanJid) : Promise.resolve(stats),
-        waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, currentOffset),
+        waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, currentOffset, isInitial ? (highlightGroupId || undefined) : undefined),
         waProcessorService.fetchGroupsReview(cleanJid)
       ]);
       
       if (isInitial) {
         setStats(statsData);
-        setMessages([...msgData.messages].reverse());
+        let allMessages = [...msgData.messages];
+        let nextOffset = PAGE_SIZE;
+        let targetFound = allMessages.some(m => m.groupId === highlightGroupId);
+        let localHasMore = msgData.messages.length >= PAGE_SIZE;
+        const MAX_PRE_LOAD_LIMIT = 500;
+
+        while (highlightGroupId && !targetFound && localHasMore && allMessages.length < MAX_PRE_LOAD_LIMIT) {
+          const nextBatch = await waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, nextOffset);
+          if (nextBatch.messages.length === 0) {
+            break;
+          }
+          allMessages = [...nextBatch.messages, ...allMessages];
+          targetFound = nextBatch.messages.some(m => m.groupId === highlightGroupId);
+          localHasMore = nextBatch.messages.length >= PAGE_SIZE;
+          nextOffset += PAGE_SIZE;
+        }
+
+        // Deduplicate messages to prevent duplicate keys in FlatList
+        const seenIds = new Set<string>();
+        const uniqueMessages: Message[] = [];
+        for (const m of allMessages) {
+          if (!seenIds.has(m.messageId)) {
+            seenIds.add(m.messageId);
+            uniqueMessages.push(m);
+          }
+        }
+
+        setMessages([...uniqueMessages].reverse());
         setGroups(groupsData);
-        setOffset(PAGE_SIZE);
+        setOffset(nextOffset);
+        setHasMore(localHasMore);
       } else {
-        setMessages(prev => [...prev, ...([...msgData.messages].reverse())]);
+        // Deduplicate new messages against existing messages by using functional update to get the non-stale state of messages
         setGroups(groupsData);
         setOffset(prev => prev + PAGE_SIZE);
+        setHasMore(msgData.messages.length >= PAGE_SIZE);
+        setMessages(prev => {
+          const seenIds = new Set<string>(prev.map(m => m.messageId));
+          const newUniqueMessages: Message[] = [];
+          for (const m of msgData.messages) {
+            if (!seenIds.has(m.messageId)) {
+              seenIds.add(m.messageId);
+              newUniqueMessages.push(m);
+            }
+          }
+          return [...prev, ...([...newUniqueMessages].reverse())];
+        });
       }
-      
-      setHasMore(msgData.messages.length >= PAGE_SIZE);
     } catch (err: any) {
       console.error('Fetch error:', err);
       Alert.alert('Error', err?.message ?? 'Failed to fetch messages');
@@ -90,15 +142,17 @@ export default function FullMessageBrowser() {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [jid, offset, stats]);
+  }, [jid, offset, stats, highlightGroupId]);
 
   useEffect(() => {
     fetchData(true);
   }, [jid]);
 
+
+
   const onRefresh = () => {
     setRefreshing(true);
-    fetchData(true);
+    fetchData(true, false);
   };
 
   const handleLoadMore = () => {
@@ -134,6 +188,9 @@ export default function FullMessageBrowser() {
       return { label: 'Error', color: '#D32F2F', bgColor: 'rgba(211, 47, 47, 0.1)' };
     }
     if (group.status === 'product_created') {
+      if (group.hasPendingMedia) {
+        return { label: 'Product Created (Downloading Media...)', color: '#EF6C00', bgColor: 'rgba(239, 108, 0, 0.1)' };
+      }
       return { label: 'Product Created', color: '#2E7D32', bgColor: 'rgba(46, 125, 50, 0.1)' };
     }
     if (group.status === 'product_create_sent') {
@@ -147,38 +204,38 @@ export default function FullMessageBrowser() {
 
   const handleToggleFlag = async (groupId: string, currentVal: boolean) => {
     try {
-      setLoading(true);
+      setRefreshing(true);
       await waProcessorService.toggleGroupProcessProduct(groupId, !currentVal);
       Alert.alert('Success', `Process flag toggled to ${!currentVal ? 'ON' : 'OFF'}`);
-      await fetchData(true);
+      await fetchData(true, false);
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to toggle flag');
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const handleToggleIgnore = async (groupId: string, status: string) => {
     const isIgnored = status === 'ignored';
     try {
-      setLoading(true);
+      setRefreshing(true);
       await waProcessorService.ignoreGroup(groupId, !isIgnored);
       Alert.alert('Success', `Group is now ${!isIgnored ? 'ignored' : 'active'}`);
-      await fetchData(true);
+      await fetchData(true, false);
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to toggle ignore');
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const handleForcePublish = async (groupId: string) => {
     try {
-      setLoading(true);
+      setRefreshing(true);
       await waProcessorService.forcePublishGroup(groupId);
       Alert.alert('Success', 'Force publish triggered. The product will be created shortly.');
-      await fetchData(true);
+      await fetchData(true, false);
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to force publish');
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -205,13 +262,13 @@ export default function FullMessageBrowser() {
 
     const triggerSplit = async () => {
       try {
-        setLoading(true);
+        setRefreshing(true);
         await waProcessorService.splitGroupZone(groupId, msgId);
         Alert.alert('Success', 'Group split successfully');
-        await fetchData(true);
+        await fetchData(true, false);
       } catch (err: any) {
         Alert.alert('Error', err?.message ?? 'Failed to split group');
-        setLoading(false);
+        setRefreshing(false);
       }
     };
 
@@ -248,13 +305,13 @@ export default function FullMessageBrowser() {
     }
 
     try {
-      setLoading(true);
+      setRefreshing(true);
       await waProcessorService.reassignGroupMessage(groupId, msgId, targetGroupId);
       Alert.alert('Success', 'Message reassigned successfully');
-      await fetchData(true);
+      await fetchData(true, false);
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to move message');
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -265,13 +322,13 @@ export default function FullMessageBrowser() {
 
     const triggerMerge = async () => {
       try {
-        setLoading(true);
+        setRefreshing(true);
         await waProcessorService.mergeGroupZones(groupId, prevGroup.groupId);
         Alert.alert('Success', 'Groups merged successfully');
-        await fetchData(true);
+        await fetchData(true, false);
       } catch (err: any) {
         Alert.alert('Error', err?.message ?? 'Failed to merge groups');
-        setLoading(false);
+        setRefreshing(false);
       }
     };
 
@@ -334,6 +391,29 @@ export default function FullMessageBrowser() {
     return result;
   }, [messages]);
 
+  const hasScrolledRef = useRef(false);
+
+  useEffect(() => {
+    if (loading || messages.length === 0 || !highlightGroupId || hasScrolledRef.current) return;
+
+    const targetIndex = groupedMessages.findIndex(item => item.groupId === highlightGroupId);
+    if (targetIndex !== -1) {
+      const scrollTimer = setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToIndex({
+            index: targetIndex,
+            animated: true,
+            viewPosition: 0.5,
+          });
+          hasScrolledRef.current = true;
+        } catch (e) {
+          console.warn("Scroll to index failed", e);
+        }
+      }, 600);
+      return () => clearTimeout(scrollTimer);
+    }
+  }, [loading, messages, highlightGroupId, groupedMessages]);
+
   const renderZoneCard = (groupId: string) => {
     const group = groupsMap.get(groupId);
     if (!group) return null;
@@ -343,8 +423,15 @@ export default function FullMessageBrowser() {
     const formattedShipping = group.detectedShipping ? `(${group.detectedShipping} shipping)` : '';
     const hasProduct = group.status === 'product_created';
 
+    const isHighlighted = highlightGroupId && group.groupId === highlightGroupId;
+    const highlightedStyle = isHighlighted && pulseActive ? {
+      borderColor: '#E0A900',
+      borderWidth: 2,
+      backgroundColor: 'rgba(224, 169, 0, 0.08)' as any,
+    } : null;
+
     return (
-      <Surface style={styles.zoneHeaderCard} elevation={1}>
+      <Surface style={[styles.zoneHeaderCard, highlightedStyle]} elevation={1}>
         <View style={styles.zoneCardHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
             <Chip 
@@ -442,7 +529,16 @@ export default function FullMessageBrowser() {
     );
   };
 
-  const renderMessage = ({ item, index }: { item: Message | MediaGroup; index: number }) => {
+  const getItemLayout = useCallback((data: any, index: number) => {
+    const ESTIMATED_HEIGHT = 135;
+    return {
+      length: ESTIMATED_HEIGHT,
+      offset: ESTIMATED_HEIGHT * index,
+      index,
+    };
+  }, []);
+
+  const renderMessage = useCallback(({ item, index }: { item: Message | MediaGroup; index: number }) => {
     const isFromMe = item.isFromMe;
     const nextMsg = groupedMessages[index + 1];
     const showDateDivider = !nextMsg || !isSameDay(new Date(item.timestamp * 1000), new Date(nextMsg.timestamp * 1000));
@@ -501,7 +597,15 @@ export default function FullMessageBrowser() {
               style={[
                 styles.bubble, 
                 isFromMe ? styles.myBubble : styles.theirBubble,
-                { padding: 4 } 
+                { padding: 4 },
+                (() => {
+                  const isGroupHighlighted = highlightGroupId && group.groupId === highlightGroupId;
+                  return isGroupHighlighted && pulseActive ? {
+                    borderColor: '#E0A900',
+                    borderWidth: 1.5,
+                    backgroundColor: 'rgba(224, 169, 0, 0.04)' as any,
+                  } : null;
+                })()
               ]} 
               elevation={1}
             >
@@ -577,7 +681,15 @@ export default function FullMessageBrowser() {
               style={[
                 styles.bubble, 
                 isFromMe ? styles.myBubble : styles.theirBubble,
-                zoningMode && hoveredMessageId === msg.messageId && styles.selectedBubble
+                zoningMode && hoveredMessageId === msg.messageId && styles.selectedBubble,
+                (() => {
+                  const isMsgHighlighted = highlightGroupId && msg.groupId === highlightGroupId;
+                  return isMsgHighlighted && pulseActive ? {
+                    borderColor: '#E0A900',
+                    borderWidth: 1.5,
+                    backgroundColor: 'rgba(224, 169, 0, 0.04)' as any,
+                  } : null;
+                })()
               ]} 
               elevation={1}
             >
@@ -631,7 +743,7 @@ export default function FullMessageBrowser() {
         </View>
       </View>
     );
-  };
+  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme]);
 
   return (
     <ScreenWrapper 
@@ -688,6 +800,21 @@ export default function FullMessageBrowser() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: 10 }} /> : null}
             initialNumToRender={20}
+            maxToRenderPerBatch={10}
+            windowSize={11}
+            removeClippedSubviews={Platform.OS === 'android'}
+            getItemLayout={getItemLayout}
+            onScrollToIndexFailed={(info) => {
+              const wait = new Promise(resolve => setTimeout(resolve, 500));
+              wait.then(() => {
+                try {
+                  flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+                  hasScrolledRef.current = true;
+                } catch (e) {
+                  console.warn("Retry scroll failed", e);
+                }
+              });
+            }}
           />
         )}
       </View>

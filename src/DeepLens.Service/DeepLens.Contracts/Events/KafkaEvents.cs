@@ -529,6 +529,7 @@ public static class EventTypes
     public const string ProcessingCompleted = "processing.completed";
     public const string ProcessingFailed = "processing.failed";
     public const string ImageDeletionRequested = "image.deletion.requested";
+    public const string ProductEnrichmentRequested = "whatsapp.group.product.enrich";
 }
 
 /// <summary>
@@ -622,6 +623,26 @@ public static class KafkaTopics
     public const string GroupReprocess = "WhatsApp.group.reprocess";
 
     /// <summary>
+    /// WhatsApp group product enrichment async topic.
+    /// </summary>
+    public const string ProductEnrichmentRequested = "WhatsApp.group.product.enrich";
+
+    /// <summary>
+    /// WhatsApp group product deletion topic.
+    /// </summary>
+    public const string GroupProductDelete = "WhatsApp.group.product.delete";
+
+    /// <summary>
+    /// Product category changed topic.
+    /// </summary>
+    public const string ProductCategoryChanged = "deeplens.product.category.changed";
+
+    /// <summary>
+    /// Product merged topic.
+    /// </summary>
+    public const string ProductMerged = "deeplens.product.merged";
+
+    /// <summary>
     /// Array of all DeepLens Kafka topics for bulk operations.
     /// Used during setup, monitoring, and cleanup operations.
     /// </summary>
@@ -637,7 +658,11 @@ public static class KafkaTopics
         GroupProductCreate,
         GroupMediaAdded,
         GroupProductCreated,
-        GroupReprocess
+        GroupReprocess,
+        ProductEnrichmentRequested,
+        GroupProductDelete,
+        ProductCategoryChanged,
+        ProductMerged
     };
 }
 
@@ -783,6 +808,84 @@ public class WhatsAppGroupReprocessEvent
 
     [JsonPropertyName("targetGroupId")]
     public string? TargetGroupId { get; set; }
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
+public class ProductCategoryChangedEvent
+{
+    [JsonPropertyName("eventId")]
+    public Guid EventId { get; set; }
+
+    [JsonPropertyName("eventType")]
+    public string EventType { get; set; } = "product.category.changed";
+
+    [JsonPropertyName("productId")]
+    public Guid ProductId { get; set; }
+
+    [JsonPropertyName("newCategory")]
+    public string NewCategory { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
+public class WhatsAppGroupProductEnrichmentEvent
+{
+    [JsonPropertyName("eventId")]
+    public Guid EventId { get; set; }
+
+    [JsonPropertyName("eventType")]
+    public string EventType { get; set; } = "whatsapp.group.product.enrich";
+
+    [JsonPropertyName("groupId")]
+    public string GroupId { get; set; } = string.Empty;
+
+    [JsonPropertyName("productId")]
+    public Guid ProductId { get; set; }
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
+public class WhatsAppGroupProductDeleteEvent
+{
+    [JsonPropertyName("eventId")]
+    public Guid EventId { get; set; }
+
+    [JsonPropertyName("eventType")]
+    public string EventType { get; set; } = "whatsapp.group.product.delete";
+
+    [JsonPropertyName("groupId")]
+    public string GroupId { get; set; } = string.Empty;
+
+    [JsonPropertyName("jid")]
+    public string Jid { get; set; } = string.Empty;
+
+    [JsonPropertyName("tenantId")]
+    public string TenantId { get; set; } = string.Empty;
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
+}
+
+public class ProductMergedEvent
+{
+    [JsonPropertyName("eventId")]
+    public Guid EventId { get; set; }
+
+    [JsonPropertyName("eventType")]
+    public string EventType { get; set; } = "product.merged";
+
+    [JsonPropertyName("sourceProductId")]
+    public Guid SourceProductId { get; set; }
+
+    [JsonPropertyName("targetProductId")]
+    public Guid TargetProductId { get; set; }
 
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; set; }

@@ -1,14 +1,14 @@
-import { trace, Span, SpanStatusCode , diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
-import { WebTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-web';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
-import { registerInstrumentations } from '@opentelemetry/instrumentation';
-import { TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-base';
-
 let isInitialized = false;
 
-export const initOtel = () => {
+export const initOtel = async () => {
   if (isInitialized) return;
+
+  const { diag, DiagConsoleLogger, DiagLogLevel } = await import('@opentelemetry/api');
+  const { WebTracerProvider, BatchSpanProcessor } = await import('@opentelemetry/sdk-trace-web');
+  const { OTLPTraceExporter } = await import('@opentelemetry/exporter-trace-otlp-http');
+  const { FetchInstrumentation } = await import('@opentelemetry/instrumentation-fetch');
+  const { registerInstrumentations } = await import('@opentelemetry/instrumentation');
+  const { TraceIdRatioBasedSampler } = await import('@opentelemetry/sdk-trace-base');
 
   // Set internal OTel logger (INFO level for production stability)
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
@@ -46,9 +46,10 @@ export const initOtel = () => {
  * Tracks execution time, success, and any exceptions thrown.
  */
 export const wrapInSpan = async <T>(spanName: string, operation: () => Promise<T>): Promise<T> => {
+  const { trace, SpanStatusCode } = await import('@opentelemetry/api');
   const tracer = trace.getTracer('manual-instrumentation');
 
-  return tracer.startActiveSpan(spanName, async (span: Span) => {
+  return tracer.startActiveSpan(spanName, async (span) => {
     try {
       const result = await operation();
       span.setStatus({ code: SpanStatusCode.OK });

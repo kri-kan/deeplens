@@ -5,6 +5,7 @@ export interface AppCategory {
   name: string;
   slug: string;
   iconName?: string;
+  classificationKeywords?: string[];
 }
 
 export interface AppIcon {
