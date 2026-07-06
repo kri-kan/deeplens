@@ -40,6 +40,7 @@ services:
       - ${WORKER_SERVICE_HOSTING_PATH}:/app
     environment:
       - DOTNET_ENVIRONMENT=Development
+      - Services__ReasoningApiUrl=http://reasoning-api:8002
     working_dir: /app
     command: dotnet DeepLens.WorkerService.dll
     networks:

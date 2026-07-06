@@ -260,7 +260,7 @@ docker run -d \
 Since the container starts empty, you must "pull" the model into the persistent volume once:
 
 ```bash
-docker exec -it ollama-gpu ollama pull llama3
+docker exec -it ollama-gpu ollama pull phi3
 ```
 
 ### 4. Verification (The "Green Light" Check)
@@ -281,7 +281,7 @@ Your server is now ready. You can hit it from your C# DeepLens app or via curl:
 
 ```json
 {
-  "model": "llama3",
+  "model": "phi3",
   "prompt": "Analyze these files.",
   "stream": false
 }

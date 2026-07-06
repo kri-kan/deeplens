@@ -181,7 +181,7 @@ namespace DeepLens.Infrastructure.Services
             
             // AI Settings
             new() { Key = "Ai:OllamaBaseUrl", Section = "AI", Label = "Ollama Base URL", Description = "The API endpoint for the Ollama instance.", IsSecret = false, DataType = "string", Value = "http://localhost:11434" },
-            new() { Key = "Ai:OllamaModel", Section = "AI", Label = "Ollama Model", Description = "The model name to use for generation (e.g. llama3).", IsSecret = false, DataType = "string", Value = "llama3" }
+            new() { Key = "Ai:OllamaModel", Section = "AI", Label = "Ollama Model", Description = "The model name to use for generation (e.g. phi3).", IsSecret = false, DataType = "string", Value = "phi3" }
         };
     }
 }

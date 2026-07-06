@@ -146,7 +146,7 @@ If you want to bake a specific context constraint directly into a model variant 
 
 1.  **Extract the current model's settings:**
     ```bash
-    docker exec -it ollama-gpu ollama show --modelfile llama3.1:8b > /tmp/llama3.1.Modelfile
+    docker exec -it ollama-gpu ollama show --modelfile phi3 > /tmp/llama3.1.Modelfile
     ```
 2.  **Edit the file to inject the context size parameter:**
     Open `/tmp/llama3.1.Modelfile` and append:
@@ -155,9 +155,9 @@ If you want to bake a specific context constraint directly into a model variant 
     ```
 3.  **Create a new model tag from the Modelfile:**
     ```bash
-    docker exec -it ollama-gpu ollama create llama3.1:8b-4k -f /tmp/llama3.1.Modelfile
+    docker exec -it ollama-gpu ollama create phi3-4k -f /tmp/llama3.1.Modelfile
     ```
-4.  Use `llama3.1:8b-4k` in your client scripts.
+4.  Use `phi3-4k` in your client scripts.
 
 ### Option C: Request-Level / Programmatic Control
 Your agent code or API calls can dynamically adjust context window sizes depending on the complexity of the current task.
@@ -166,7 +166,7 @@ Your agent code or API calls can dynamically adjust context window sizes dependi
 Pass the `num_ctx` parameter within the `options` object:
 ```bash
 curl -X POST http://localhost:11434/api/chat -d '{
-  "model": "llama3.1:8b",
+  "model": "phi3",
   "messages": [
     { "role": "user", "content": "Analyze this codebase..." }
   ],
@@ -182,7 +182,7 @@ curl -X POST http://localhost:11434/api/chat -d '{
 If your backend services use Semantic Kernel, OllamaSharp, or direct HttpClient wrappers, pass the options in the payload:
 ```csharp
 var requestPayload = new {
-    model = "llama3.1:8b",
+    model = "phi3",
     messages = new[] {
         new { role = "user", content = "Explain quantum computing." }
     },
@@ -223,14 +223,14 @@ Use the following guidelines to balance context requirements with generation thr
 ```
 
 1.  **Low Latency / High Throughput Chat:**
-    *   **Model:** `llama3.2:3b` or `mistral:7b-instruct`
+    *   **Model:** `phi3` or `mistral:7b-instruct`
     *   **Context:** `num_ctx 2048` or `4096`
     *   **Result:** Extremely fast, leaving ~3GB VRAM headroom for multi-tenant concurrent requests.
 2.  **Complex Coding / Multi-Agent Loops:**
-    *   **Model:** `llama3.1:8b` or `granite3.2:8b`
+    *   **Model:** `phi3` or `granite3.2:8b`
     *   **Context:** `num_ctx 4096`
     *   **Result:** Native JSON schema capabilities and robust reasoning, fully accelerated on the GPU.
 3.  **Extended RAG / Repository Analysis:**
-    *   **Model:** `llama3.1:8b`
+    *   **Model:** `phi3`
     *   **Context:** `num_ctx 8192`
     *   **Result:** Safe limit for 8GB GPU, but prefill (prompt evaluation) time will scale up. Do not run concurrent requests.
