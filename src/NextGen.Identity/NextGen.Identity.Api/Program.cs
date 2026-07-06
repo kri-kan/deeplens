@@ -133,6 +133,14 @@ try
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = true,
+                ValidIssuers = new[] 
+                { 
+                    "http://192.168.0.170:5198", 
+                    "http://100.98.244.8:5198",
+                    "http://krikanserver.taild227d9.ts.net:5198",
+                    "http://localhost:5198",
+                    "https://localhost:5001"
+                },
                 ValidateAudience = true,
                 ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,

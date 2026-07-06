@@ -220,7 +220,8 @@ public class WhatsAppGroupWorker : BackgroundService
         {
             Category = category,
             SubCategory = "General",
-            ShippingInfo = "extra",
+            Title = "New Product",
+            IsPlusShipping = true,
             Fabric = "Unknown",
             StitchType = "Unknown",
             Color = "Unknown",
@@ -245,7 +246,8 @@ public class WhatsAppGroupWorker : BackgroundService
 
                 // Accept other AI fields when they add value
                 if (aiResult.Price.HasValue) extracted.Price = aiResult.Price;
-                if (!string.IsNullOrEmpty(aiResult.ShippingInfo)) extracted.ShippingInfo = aiResult.ShippingInfo;
+                if (!string.IsNullOrEmpty(aiResult.Title)) extracted.Title = aiResult.Title;
+                extracted.IsPlusShipping = aiResult.IsPlusShipping;
                 if (!string.Equals(aiResult.Fabric, "Unknown", StringComparison.OrdinalIgnoreCase))
                     extracted.Fabric = aiResult.Fabric;
                 if (!string.Equals(aiResult.StitchType, "Unknown", StringComparison.OrdinalIgnoreCase) &&
@@ -415,8 +417,8 @@ public class WhatsAppGroupWorker : BackgroundService
                     {
                         listingId = Guid.NewGuid();
                         const string listingSql = @"
-                            INSERT INTO public.vendor_listings (id, product_id, vendor_id, current_price, currency, shipping_info, description, is_active, updated_at, source_group_id)
-                            VALUES (@Id, @ProductId, @VendorId, @Price, @Currency, @Shipping, @Description, true, NOW(), @SourceGroupId)";
+                            INSERT INTO public.vendor_listings (id, product_id, vendor_id, current_price, currency, is_plus_shipping, description, is_active, updated_at, source_group_id)
+                            VALUES (@Id, @ProductId, @VendorId, @Price, @Currency, @IsPlusShipping, @Description, true, NOW(), @SourceGroupId)";
 
                         await conn.ExecuteAsync(listingSql, new
                         {
@@ -425,7 +427,7 @@ public class WhatsAppGroupWorker : BackgroundService
                             VendorId = evt.VendorId,
                             Price = extracted.Price,
                             Currency = "INR",
-                            Shipping = extracted.ShippingInfo == "free" ? "free shipping" : "plus shipping",
+                            IsPlusShipping = extracted.IsPlusShipping,
                             Description = evt.Description,
                             SourceGroupId = evt.GroupId
                         }, trans);
@@ -437,7 +439,7 @@ public class WhatsAppGroupWorker : BackgroundService
                         await conn.ExecuteAsync(
                             @"UPDATE wa.message_groups 
                               SET status = 'product_created', deeplens_product_id = @ProductId, deeplens_listing_id = @ListingId,
-                                  category = @Category, sub_category = @SubCategory, detected_price = @Price, detected_shipping = @Shipping,
+                                  category = @Category, sub_category = @SubCategory, detected_price = @Price, is_plus_shipping = @IsPlusShipping,
                                   product_created_at = NOW(), updated_at = NOW()
                               WHERE group_id = @GroupId",
                             new
@@ -447,7 +449,7 @@ public class WhatsAppGroupWorker : BackgroundService
                                 Category = extracted.Category,
                                 SubCategory = extracted.SubCategory,
                                 Price = extracted.Price,
-                                Shipping = extracted.ShippingInfo,
+                                IsPlusShipping = extracted.IsPlusShipping,
                                 GroupId = evt.GroupId
                             },
                             trans
@@ -457,8 +459,8 @@ public class WhatsAppGroupWorker : BackgroundService
                     {
                         await conn.ExecuteAsync(
                             @"INSERT INTO wa.message_groups 
-                              (group_id, jid, status, process_as_product, description, media_count, text_count, deeplens_product_id, deeplens_listing_id, category, sub_category, detected_price, detected_shipping, last_message_at, product_created_at, created_at, updated_at)
-                              VALUES (@GroupId, @Jid, 'product_created', true, @Description, @MediaCount, @TextCount, @ProductId, @ListingId, @Category, @SubCategory, @Price, @Shipping, NOW(), NOW(), NOW(), NOW())",
+                              (group_id, jid, status, process_as_product, description, media_count, text_count, deeplens_product_id, deeplens_listing_id, category, sub_category, detected_price, is_plus_shipping, last_message_at, product_created_at, created_at, updated_at)
+                              VALUES (@GroupId, @Jid, 'product_created', true, @Description, @MediaCount, @TextCount, @ProductId, @ListingId, @Category, @SubCategory, @Price, @IsPlusShipping, NOW(), NOW(), NOW(), NOW())",
                             new
                             {
                                 GroupId = evt.GroupId,
@@ -471,7 +473,7 @@ public class WhatsAppGroupWorker : BackgroundService
                                 Category = extracted.Category,
                                 SubCategory = extracted.SubCategory,
                                 Price = extracted.Price,
-                                Shipping = extracted.ShippingInfo
+                                IsPlusShipping = extracted.IsPlusShipping
                             },
                             trans
                         );
@@ -495,25 +497,27 @@ public class WhatsAppGroupWorker : BackgroundService
                     var nextVal = await conn.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, trans);
                     var sku = $"VF{nextVal:X3}";
 
-                    Guid? categoryId = await ResolveCategoryId(conn, "product", trans);
+                    Guid? categoryId = await ResolveCategoryId(conn, "general", trans);
 
                     var unifiedAttributes = JsonSerializer.Serialize(new
                     {
                         fabric = extracted.Fabric,
                         stitch_type = extracted.StitchType,
                         price = extracted.Price,
-                        shipping = extracted.ShippingInfo,
+                        is_plus_shipping = extracted.IsPlusShipping,
                         color = extracted.Color,
                         sizes = extracted.Sizes
                     });
 
                     // Build a clean title: strip emojis + collapse whitespace + trim
                     string cleanRawDesc = !string.IsNullOrEmpty(rawDesc) ? Regex.Replace(rawDesc, @"[*~_`]", "") : "";
-                    string title = !string.IsNullOrEmpty(cleanRawDesc)
-                        ? StripEmojis(cleanRawDesc).Replace("\n", " ").Replace("\r", " ")
-                              .Trim()
-                              .Substring(0, Math.Min(StripEmojis(cleanRawDesc).Replace("\n", " ").Replace("\r", " ").Trim().Length, 100))
-                        : "New Product";
+                    string title = !string.IsNullOrEmpty(extracted.Title) && extracted.Title != "New Product"
+                        ? extracted.Title
+                        : (!string.IsNullOrEmpty(cleanRawDesc)
+                            ? StripEmojis(cleanRawDesc).Replace("\n", " ").Replace("\r", " ")
+                                  .Trim()
+                                  .Substring(0, Math.Min(StripEmojis(cleanRawDesc).Replace("\n", " ").Replace("\r", " ").Trim().Length, 100))
+                            : "New Product");
 
                     // Strip placeholder-only titles
                     var placeholders = new[] { "[image]", "[video]", "[photo]", "[sticker]" };
@@ -541,8 +545,8 @@ public class WhatsAppGroupWorker : BackgroundService
 
                     listingId = Guid.NewGuid();
                     const string listingSql = @"
-                        INSERT INTO public.vendor_listings (id, product_id, vendor_id, current_price, currency, shipping_info, description, is_active, updated_at, source_group_id)
-                        VALUES (@Id, @ProductId, @VendorId, @Price, @Currency, @Shipping, @Description, true, NOW(), @SourceGroupId)";
+                        INSERT INTO public.vendor_listings (id, product_id, vendor_id, current_price, currency, is_plus_shipping, description, is_active, updated_at, source_group_id)
+                        VALUES (@Id, @ProductId, @VendorId, @Price, @Currency, @IsPlusShipping, @Description, true, NOW(), @SourceGroupId)";
 
                     await conn.ExecuteAsync(listingSql, new
                     {
@@ -551,7 +555,7 @@ public class WhatsAppGroupWorker : BackgroundService
                         VendorId = evt.VendorId,
                         Price = extracted.Price,
                         Currency = "INR",
-                        Shipping = extracted.ShippingInfo == "free" ? "free shipping" : "plus shipping",
+                        IsPlusShipping = extracted.IsPlusShipping,
                         Description = evt.Description,
                         SourceGroupId = evt.GroupId
                     }, trans);
@@ -561,17 +565,17 @@ public class WhatsAppGroupWorker : BackgroundService
                         await conn.ExecuteAsync(
                             @"UPDATE wa.message_groups 
                               SET status = 'product_created', deeplens_product_id = @ProductId, deeplens_listing_id = @ListingId,
-                                  category = @Category, sub_category = @SubCategory, detected_price = @Price, detected_shipping = @Shipping,
+                                  category = @Category, sub_category = @SubCategory, detected_price = @Price, is_plus_shipping = @IsPlusShipping,
                                   product_created_at = NOW(), updated_at = NOW()
                               WHERE group_id = @GroupId",
                             new
                             {
                                 ProductId = productId,
                                 ListingId = listingId,
-                                Category = "product",
+                                Category = "general",
                                 SubCategory = "General",
                                 Price = extracted.Price,
-                                Shipping = extracted.ShippingInfo,
+                                IsPlusShipping = extracted.IsPlusShipping,
                                 GroupId = evt.GroupId
                             },
                             trans
@@ -581,8 +585,8 @@ public class WhatsAppGroupWorker : BackgroundService
                     {
                         await conn.ExecuteAsync(
                             @"INSERT INTO wa.message_groups 
-                              (group_id, jid, status, process_as_product, description, media_count, text_count, deeplens_product_id, deeplens_listing_id, category, sub_category, detected_price, detected_shipping, last_message_at, product_created_at, created_at, updated_at)
-                              VALUES (@GroupId, @Jid, 'product_created', true, @Description, @MediaCount, @TextCount, @ProductId, @ListingId, @Category, @SubCategory, @Price, @Shipping, NOW(), NOW(), NOW(), NOW())",
+                              (group_id, jid, status, process_as_product, description, media_count, text_count, deeplens_product_id, deeplens_listing_id, category, sub_category, detected_price, is_plus_shipping, last_message_at, product_created_at, created_at, updated_at)
+                              VALUES (@GroupId, @Jid, 'product_created', true, @Description, @MediaCount, @TextCount, @ProductId, @ListingId, @Category, @SubCategory, @Price, @IsPlusShipping, NOW(), NOW(), NOW(), NOW())",
                             new
                             {
                                 GroupId = evt.GroupId,
@@ -592,10 +596,10 @@ public class WhatsAppGroupWorker : BackgroundService
                                 TextCount = 1,
                                 ProductId = productId,
                                 ListingId = listingId,
-                                Category = "product",
+                                Category = "general",
                                 SubCategory = "General",
                                 Price = extracted.Price,
-                                Shipping = extracted.ShippingInfo
+                                IsPlusShipping = extracted.IsPlusShipping
                             },
                             trans
                         );
@@ -625,7 +629,7 @@ public class WhatsAppGroupWorker : BackgroundService
             // 3. Process Media Files (idempotent migration)
             if (!isAutoMerge)
             {
-                string cleanCategory = "product";
+                string cleanCategory = "general";
 
                 foreach (var mediaFile in evt.MediaFiles)
                 {
@@ -835,7 +839,7 @@ public class WhatsAppGroupWorker : BackgroundService
             Guid listingId = group.deeplens_listing_id;
             string category = group.category ?? "Others";
             string subCategory = group.sub_category ?? "General";
-            string cleanCategory = "product";
+            string cleanCategory = "general";
 
             foreach (var mediaFile in evt.MediaFiles)
             {
@@ -1484,28 +1488,41 @@ public class WhatsAppGroupWorker : BackgroundService
             if (mediaFile.MediaType == "video") continue;
             if (string.Equals(mediaFile.MimeType, "image/webp", StringComparison.OrdinalIgnoreCase)) continue;
 
-            try
+            int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                string sourcePath = mediaFile.MediaUrl;
-                if (sourcePath.StartsWith("minio://"))
+                try
                 {
-                    sourcePath = sourcePath.Substring(8);
-                    var parts = sourcePath.Split('/', 2);
-                    if (parts.Length > 1)
-                        sourcePath = parts[0] + "/" + parts[1];
+                    string sourcePath = mediaFile.MediaUrl;
+                    if (sourcePath.StartsWith("minio://"))
+                    {
+                        sourcePath = sourcePath.Substring(8);
+                        var parts = sourcePath.Split('/', 2);
+                        if (parts.Length > 1)
+                            sourcePath = parts[0] + "/" + parts[1];
+                    }
+
+                    using var stream = await storage.GetFileAsync(sourcePath);
+                    using var memStream = new MemoryStream();
+                    await stream.CopyToAsync(memStream, ct);
+                    memStream.Position = 0;
+
+                    string phash = PerceptualHashHelper.ComputeDHash(memStream);
+                    phashes.Add(phash);
+                    break; // Success, exit retry loop
                 }
-
-                using var stream = await storage.GetFileAsync(sourcePath);
-                using var memStream = new MemoryStream();
-                await stream.CopyToAsync(memStream, ct);
-                memStream.Position = 0;
-
-                string phash = PerceptualHashHelper.ComputeDHash(memStream);
-                phashes.Add(phash);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not compute phash for media {MediaUrl}", mediaFile.MediaUrl);
+                catch (Exception ex)
+                {
+                    if (attempt == maxRetries)
+                    {
+                        _logger.LogWarning(ex, "Could not compute phash for media {MediaUrl} after {Retries} attempts", mediaFile.MediaUrl, maxRetries);
+                    }
+                    else
+                    {
+                        _logger.LogDebug(ex, "Transient error fetching {MediaUrl}. Retrying in 1s...", mediaFile.MediaUrl);
+                        await Task.Delay(1000, ct);
+                    }
+                }
             }
         }
 
@@ -1658,16 +1675,24 @@ public class WhatsAppGroupWorker : BackgroundService
             {
                 _logger.LogInformation("Category change re-eval: Found match between {ProductA} and {ProductB} with dist {Dist}", candidateProductId, evt.ProductId, closestDistance);
 
-                await conn.ExecuteAsync(@"
-                    INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                    VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                    ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                    new
-                    {
-                        ProductAId = candidateProductId,
-                        ProductBId = evt.ProductId,
-                        SimilarityScore = (double)closestDistance
-                    });
+                if (closestDistance <= 2)
+                {
+                    _logger.LogInformation("Distance <= 2, executing delayed auto-merge.");
+                    await ExecuteAutoMergeAsync(conn, candidateProductId, evt.ProductId, ct);
+                }
+                else
+                {
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                        new
+                        {
+                            ProductAId = candidateProductId,
+                            ProductBId = evt.ProductId,
+                            SimilarityScore = (double)closestDistance
+                        });
+                }
             }
         }
     }
@@ -1692,5 +1717,102 @@ public class WhatsAppGroupWorker : BackgroundService
         }
 
         await Task.CompletedTask;
+    }
+
+    private async Task ExecuteAutoMergeAsync(NpgsqlConnection conn, Guid targetProductId, Guid sourceProductId, CancellationToken ct)
+    {
+        using var trans = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            var sourceListingId = await conn.QuerySingleOrDefaultAsync<Guid?>(
+                new CommandDefinition("SELECT id FROM public.vendor_listings WHERE product_id = @SourceProductId LIMIT 1",
+                new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct)
+            );
+
+            var targetListingId = await conn.QuerySingleOrDefaultAsync<Guid?>(
+                new CommandDefinition("SELECT id FROM public.vendor_listings WHERE product_id = @TargetProductId LIMIT 1",
+                new { TargetProductId = targetProductId }, transaction: trans, cancellationToken: ct)
+            );
+
+            var sourceSku = await conn.QuerySingleOrDefaultAsync<string>(
+                new CommandDefinition("SELECT base_sku FROM public.products WHERE id = @SourceProductId",
+                new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct)
+            );
+
+            if (!string.IsNullOrEmpty(sourceSku))
+            {
+                await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products 
+                      SET tags = array_append(COALESCE(tags, ARRAY[]::text[]), @SourceSku) 
+                      WHERE id = @TargetProductId AND NOT (@SourceSku = ANY(COALESCE(tags, ARRAY[]::text[])))", 
+                      new { TargetProductId = targetProductId, SourceSku = sourceSku }, transaction: trans, cancellationToken: ct));
+            }
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
+                  SET entity_id = @TargetProductId 
+                  WHERE entity_id = @SourceProductId AND entity_type = 'product'
+                  ON CONFLICT DO NOTHING", new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links WHERE entity_id = @SourceProductId AND entity_type = 'product'", 
+                new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            if (sourceListingId.HasValue && targetListingId.HasValue)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
+                      SET entity_id = @TargetListingId 
+                      WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'
+                      ON CONFLICT DO NOTHING", new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+
+                await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'", 
+                    new { SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+            }
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.vendor_listings SET product_id = @TargetProductId, updated_at = NOW() WHERE product_id = @SourceProductId", 
+                new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products SET is_deleted = true, created_at = NOW() WHERE id = @SourceProductId", 
+                new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.product_merge_candidates 
+                  SET status = 'dismissed', resolved_at = NOW(), resolved_by = 'system' 
+                  WHERE (product_a_id = @SourceProductId OR product_b_id = @SourceProductId) AND status = 'pending'", 
+                  new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(@"INSERT INTO public.product_merges (source_id, target_id, merged_at, metadata)
+                  VALUES (@SourceId, @TargetId, NOW(), @Metadata::jsonb)", new { 
+                    SourceId = sourceProductId, 
+                    TargetId = targetProductId, 
+                    Metadata = $"{{\"reason\": \"delayed_auto_merge\"}}"
+                }, transaction: trans, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE wa.message_groups 
+                  SET deeplens_product_id = @TargetProductId, status = 'product_created', updated_at = NOW() 
+                  WHERE deeplens_product_id = @SourceProductId", 
+                  new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
+            await trans.CommitAsync(ct);
+
+            // Publish message to Kafka to keep cache synced across multiple worker instances
+            var _producer = _serviceProvider.GetRequiredService<IProducer<string, string>>();
+            var mergeEvent = new DeepLens.Contracts.Events.ProductMergedEvent
+            {
+                EventId = Guid.NewGuid(),
+                SourceProductId = sourceProductId,
+                TargetProductId = targetProductId,
+                Timestamp = DateTime.UtcNow
+            };
+            await _producer.ProduceAsync(DeepLens.Contracts.Events.KafkaTopics.ProductMerged, new Confluent.Kafka.Message<string, string>
+            {
+                Key = sourceProductId.ToString(),
+                Value = JsonSerializer.Serialize(mergeEvent)
+            }, ct);
+
+            _logger.LogInformation("Successfully executed delayed auto-merge of {SourceProductId} into {TargetProductId}", sourceProductId, targetProductId);
+        }
+        catch (Exception ex)
+        {
+            await trans.RollbackAsync(ct);
+            _logger.LogError(ex, "Failed to execute delayed auto-merge of {SourceProductId} into {TargetProductId}", sourceProductId, targetProductId);
+            throw;
+        }
     }
 }

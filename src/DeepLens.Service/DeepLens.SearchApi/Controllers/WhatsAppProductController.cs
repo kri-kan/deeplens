@@ -233,7 +233,7 @@ public class WhatsAppProductController : ControllerBase
                 mg.category AS ""category"",
                 mg.sub_category AS ""subCategory"",
                 mg.detected_price AS ""detectedPrice"",
-                mg.detected_shipping AS ""detectedShipping"",
+                mg.is_plus_shipping AS ""isPlusShipping"",
                 mg.product_created_at AS ""productCreatedAt"",
                 p.id AS ""productId"",
                 p.title AS ""title"",
@@ -337,7 +337,7 @@ public class WhatsAppProductController : ControllerBase
         var products = await conn.QueryAsync<dynamic>(
             new CommandDefinition(@"SELECT p.id as product_id, 
                      COALESCE(mg.group_id, p.id::text) as group_id, 
-                     p.description 
+                     COALESCE(mg.description, p.description) as description 
               FROM public.products p 
               LEFT JOIN wa.message_groups mg ON mg.deeplens_product_id = p.id
               WHERE p.id = ANY(@ProductIds)",
@@ -353,6 +353,7 @@ public class WhatsAppProductController : ControllerBase
                 GroupId = p.group_id,
                 ProductId = p.product_id,
                 Description = p.description ?? "",
+                IsManual = true,  // manual user-triggered re-evaluation → high priority
                 Timestamp = DateTime.UtcNow
             };
 
@@ -367,6 +368,91 @@ public class WhatsAppProductController : ControllerBase
 
         return Ok(new { success = true, count });
     }
+
+    /// <summary>
+    /// GET /api/v1/whatsapp/products/{productId}/similar-matches
+    /// Returns all pending or dismissed merge candidates for a specific product, ordered by similarity score DESC.
+    /// </summary>
+    [HttpGet("{productId}/similar-matches")]
+    public async Task<IActionResult> GetSimilarMatches(Guid productId, CancellationToken ct)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        const string sql = @"
+            SELECT 
+                pmc.id AS ""id"",
+                pmc.product_a_id AS ""productAId"",
+                pmc.product_b_id AS ""productBId"",
+                pmc.similarity_score AS ""similarityScore"",
+                pmc.status AS ""status"",
+                pmc.detected_at AS ""detectedAt"",
+                pa.title AS ""productATitle"",
+                pa.base_sku AS ""productASku"",
+                pa.created_at AS ""productACreatedAt"",
+                (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAImagePath"",
+                (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pa.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productAMediaId"",
+                pb.title AS ""productBTitle"",
+                pb.base_sku AS ""productBSku"",
+                pb.created_at AS ""productBCreatedAt"",
+                (SELECT m.storage_path FROM public.media_links ml JOIN public.media m ON ml.media_id = m.id WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBImagePath"",
+                (SELECT ml.media_id FROM public.media_links ml WHERE ml.entity_id = pb.id AND ml.entity_type = 'product' ORDER BY ml.is_primary DESC LIMIT 1) AS ""productBMediaId""
+            FROM public.product_merge_candidates pmc
+            JOIN public.products pa ON pmc.product_a_id = pa.id
+            JOIN public.products pb ON pmc.product_b_id = pb.id
+            WHERE (pmc.product_a_id = @ProductId OR pmc.product_b_id = @ProductId)
+              AND pmc.status IN ('pending', 'dismissed')
+            ORDER BY pmc.similarity_score DESC";
+
+        var candidates = await conn.QueryAsync<dynamic>(new CommandDefinition(sql, new { ProductId = productId }, cancellationToken: ct));
+        return Ok(candidates);
+    }
+
+    /// <summary>
+    /// POST /api/v1/whatsapp/products/{productId}/trigger-similarity-scan
+    /// Forces a fresh similarity scan for a product against the full catalog
+    /// by republishing the enrichment event with IsManual = true (the worker
+    /// runs perceptual-hash and vector similarity during enrichment).
+    /// </summary>
+    [HttpPost("{productId}/trigger-similarity-scan")]
+    public async Task<IActionResult> TriggerSimilarityScan(Guid productId, CancellationToken ct)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        var product = await conn.QuerySingleOrDefaultAsync<dynamic>(
+            new CommandDefinition(
+                @"SELECT p.id as product_id, 
+                         COALESCE(mg.group_id, p.id::text) as group_id, 
+                         COALESCE(mg.description, p.description) as description 
+                  FROM public.products p 
+                  LEFT JOIN wa.message_groups mg ON mg.deeplens_product_id = p.id
+                  WHERE p.id = @ProductId AND (p.is_deleted IS NULL OR p.is_deleted = false)
+                  LIMIT 1",
+                new { ProductId = productId }, cancellationToken: ct)
+        );
+
+        if (product == null) return NotFound("Product not found");
+
+        var enrichEvt = new WhatsAppGroupProductEnrichmentEvent
+        {
+            EventId = Guid.NewGuid(),
+            GroupId = product.group_id,
+            ProductId = (Guid)product.product_id,
+            Description = product.description ?? "",
+            IsManual = true,
+            Timestamp = DateTime.UtcNow
+        };
+
+        await _producer.ProduceAsync(KafkaTopics.ProductEnrichmentRequested, new Message<string, string>
+        {
+            Key = product.group_id,
+            Value = JsonSerializer.Serialize(enrichEvt, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+        }, ct);
+
+        _logger.LogInformation("Triggered similarity scan for Product {ProductId}", productId);
+        return Accepted(new { success = true, message = "Similarity scan queued" });
+    }
 }
 
 public record MergeProductsRequest(
@@ -376,3 +462,4 @@ public record MergeProductsRequest(
 );
 public record DismissMergeRequest([property: JsonPropertyName("candidateId")] Guid CandidateId);
 public record ReevaluateProductsRequest([property: JsonPropertyName("productIds")] List<Guid> ProductIds);
+

@@ -21,7 +21,10 @@ builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IMetaGraphService, MetaGraphService>();
 builder.Services.AddHttpClient<IInstagramSidecarService, InstagramSidecarService>();
 builder.Services.AddHttpClient<IVectorStoreService, VectorStoreService>();
-builder.Services.AddHttpClient<IAiService, AiService>();
+builder.Services.AddHttpClient<IAiService, AiService>(client => 
+{
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
 
 // MinIO Setup
 builder.Services.AddSingleton<IMinioClient>(sp => 
@@ -48,7 +51,7 @@ builder.Services.AddSingleton<IProducer<string, string>>(sp =>
 
 // Enterprise Layering
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddSingleton<PerceptualHashCache>(sp => 
 {

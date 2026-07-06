@@ -1808,15 +1808,16 @@ public class InstaController : ControllerBase
 
     [HttpPost("story-groups/{id}/finish")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult> FinishStoryGroup(Guid id, CancellationToken ct)
+    public async Task<ActionResult> FinishStoryGroup(Guid id, [FromQuery] Guid targetWatchlistId, CancellationToken ct)
     {
         try
         {
             using var conn = await _db.CreateConnectionAsync();
             var affected = await conn.ExecuteAsync(new CommandDefinition(@"
-                UPDATE story_groups 
-                SET status = 'suspend', suspend_until = now() + INTERVAL '24 hours', updated_at = now() 
-                WHERE id = @Id", new { Id = id }, cancellationToken: ct));
+                UPDATE story_group_eligibility 
+                SET suspend_until = now() + INTERVAL '24 hours'
+                WHERE group_id = @Id AND target_watchlist_id = @TargetWatchlistId", 
+                new { Id = id, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct));
 
             if (affected == 0) return NotFound();
             return Ok(new { success = true });
@@ -2046,6 +2047,7 @@ public class InstaController : ControllerBase
                     ) last_share ON true
                     WHERE sg.status != 'ignore'
                       AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
+                      AND (sge.suspend_until IS NULL OR sge.suspend_until < now())
 
                     UNION ALL
 
@@ -2097,6 +2099,7 @@ public class InstaController : ControllerBase
                     ) last_share ON true
                     WHERE sg.status != 'ignore'
                       AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
+                      AND (sge.suspend_until IS NULL OR sge.suspend_until < now())
 
                     UNION ALL
 
@@ -2154,7 +2157,7 @@ public class InstaController : ControllerBase
                         cw.username AS OwnerUsername,
                         cw.profile_pic_url AS OwnerProfilePictureUrl,
                         cw.profile_pic_storage_path AS OwnerProfilePicStoragePath,
-                        (SELECT MAX(sph2.posted_at) FROM story_posting_history sph2 WHERE sph2.post_id = cv.id) AS LastPostedAt,
+                        (SELECT MAX(sph2.posted_at) FROM story_posting_history sph2 WHERE sph2.post_id = cv.id AND sph2.target_watchlist_id = @TargetWatchlistId) AS LastPostedAt,
                         (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
                         COALESCE(SUM(CASE WHEN sph.swipe_status = 'right' THEN 1 ELSE 0 END), 0) AS RightSwipes,
                         COALESCE(SUM(CASE WHEN sph.swipe_status = 'left' THEN 1 ELSE 0 END), 0) AS LeftSwipes,
@@ -2165,7 +2168,7 @@ public class InstaController : ControllerBase
                     WHERE cv.id = ANY(@PostIds)
                     GROUP BY cv.id, cw.id, cw.username, cw.profile_pic_url, cw.profile_pic_storage_path";
                 var rawPosts = await conn.QueryAsync<MetaPost>(
-                    new CommandDefinition(postsSql, new { PostIds = postIds }, cancellationToken: ct)
+                    new CommandDefinition(postsSql, new { PostIds = postIds, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct)
                 );
                 foreach (var p in rawPosts)
                     if (p.Id != null) postsMap[p.Id] = p;
@@ -2215,12 +2218,33 @@ public class InstaController : ControllerBase
                         LastPostedAt = item.LastPostedAt
                     };
 
-                    var groupPostsSql = $@"{MetaPostWithStarredSelectSql}
+                    var groupPostsSql = @"
+                        SELECT 
+                            cv.id::text AS Id, 
+                            cv.platform_video_id AS PlatformId,
+                            cv.url AS Permalink, 
+                            cv.description AS Caption,
+                            cv.media_type AS MediaType, 
+                            cv.thumbnail_url AS ThumbnailUrl, 
+                            cv.media_url AS MediaUrl,
+                            cv.like_count AS LikeCount, 
+                            cv.comment_count AS CommentCount, 
+                            cv.posted_at AS Timestamp,
+                            cv.storage_path AS StoragePath,
+                            cv.youtube_video_id AS YoutubeVideoId,
+                            cv.youtube_url AS YoutubeUrl,
+                            cv.status AS Status,
+                            cv.suspend_until AS SuspendUntil,
+                            cv.last_reviewed_at AS LastReviewedAt,
+                            (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id AND sph.target_watchlist_id = @TargetWatchlistId) AS LastPostedAt,
+                            (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
+                            sgi.is_starred AS IsStarred
+                        FROM competitor_videos cv
                         JOIN story_group_items sgi ON sgi.post_id = cv.id
                         WHERE sgi.group_id = @GroupId
                         ORDER BY sgi.is_starred DESC, sgi.created_at ASC";
                     var groupPosts = await conn.QueryAsync<MetaPost>(
-                        new CommandDefinition(groupPostsSql, new { GroupId = g.Id }, cancellationToken: ct)
+                        new CommandDefinition(groupPostsSql, new { GroupId = g.Id, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct)
                     );
                     g.Posts = groupPosts.ToList();
 

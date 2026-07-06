@@ -848,6 +848,10 @@ public class WhatsAppGroupProductEnrichmentEvent
     [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
 
+    [JsonPropertyName("isManual")]
+    /// <summary>True when triggered by a user action (not bulk automation). Signals the reasoning service to use high priority.</summary>
+    public bool IsManual { get; set; } = false;
+
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; set; }
 }

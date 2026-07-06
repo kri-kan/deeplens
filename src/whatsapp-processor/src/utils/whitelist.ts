@@ -1,6 +1,6 @@
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { logger } from './logger';
-import { DEFAULT_TRACK_GROUPS, DEFAULT_TRACK_PRIVATE } from '../config';
+
 
 export interface ChatTrackingState {
     jid: string;
@@ -137,10 +137,10 @@ export async function getExclusionList(): Promise<string[]> {
  * Checks if a JID is excluded (should NOT be tracked)
  * Follows the blueprint: 
  * 1. If explicit state exists in DB, use it.
- * 2. Otherwise use global sync settings from processing_state.
- * 3. Finally fall back to defaults: 
- *    - Groups: Excluded by default (trackGroups=false)
- *    - Private: Included by default (trackPrivate=true)
+ * 2. Otherwise fall back to user defaults: 
+ *    - Groups: Included by default (isExcluded=false)
+ *    - Announcements/Communities: Included by default (isExcluded=false)
+ *    - Private Chats: Excluded by default (isExcluded=true)
  */
 export async function isExcluded(jid: string): Promise<boolean> {
     const client = getWhatsAppDbClient();
@@ -157,36 +157,16 @@ export async function isExcluded(jid: string): Promise<boolean> {
             return res.rows[0].is_excluded;
         }
 
-        // 2. Check Global Sync Settings
-        const stateRes = await client.query('SELECT track_chats, track_groups, track_announcements FROM wa.processing_state WHERE id = 1');
-        const globalState = stateRes.rows[0] || { track_chats: true, track_groups: true, track_announcements: true };
-
+        // 2. Default Rules
         const isGroup = jid.endsWith('@g.us');
         const isNewsletter = jid.endsWith('@newsletter');
 
-        if (isNewsletter) {
-            return !globalState.track_announcements;
-        }
-
-        if (isGroup) {
-            // Announcement channels in WhatsApp communities use @g.us JIDs (not @newsletter).
-            // We must check wa.chats.is_announcement to apply track_announcements, not track_groups.
-            const chatRes = await client.query(
-                'SELECT is_announcement FROM wa.chats WHERE jid = $1',
-                [jid]
-            );
-            const isAnnouncement = chatRes.rows.length > 0 && chatRes.rows[0].is_announcement;
-
-            if (isAnnouncement) {
-                // Apply track_announcements setting, not the group default
-                return !globalState.track_announcements;
-            }
-
-            if (globalState.track_groups === false) return true; // Section off
-            return !DEFAULT_TRACK_GROUPS; // Follow default for regular groups
+        if (isNewsletter || isGroup) {
+            // Groups and Announcements are tracked by default
+            return false;
         } else {
-            if (globalState.track_chats === false) return true; // Section off
-            return !DEFAULT_TRACK_PRIVATE; // Follow default
+            // Private chats are excluded by default
+            return true;
         }
     } catch (err) {
         logger.error({ err, jid }, 'Failed to check if chat is excluded');

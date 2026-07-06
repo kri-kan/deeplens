@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
 using Npgsql;
+using DeepLens.Contracts.Catalog;
 
 namespace DeepLens.SearchApi.Controllers;
 
@@ -12,10 +13,12 @@ namespace DeepLens.SearchApi.Controllers;
 public class FixDbController : ControllerBase
 {
     private readonly IConfiguration _configuration;
+    private readonly IProductService _productService;
 
-    public FixDbController(IConfiguration configuration)
+    public FixDbController(IConfiguration configuration, IProductService productService)
     {
         _configuration = configuration;
+        _productService = productService;
     }
 
     [HttpGet]
@@ -31,7 +34,8 @@ public class FixDbController : ControllerBase
             using var conn = new NpgsqlConnection(connString);
             await conn.OpenAsync();
             
-            await conn.ExecuteAsync("ALTER TABLE vendor_listings ADD COLUMN IF NOT EXISTS shipping_info VARCHAR(50) DEFAULT 'plus shipping'");
+            await conn.ExecuteAsync("ALTER TABLE vendor_listings ADD COLUMN IF NOT EXISTS is_plus_shipping BOOLEAN DEFAULT true");
+            await conn.ExecuteAsync("ALTER TABLE wa.message_groups ADD COLUMN IF NOT EXISTS is_plus_shipping BOOLEAN DEFAULT true");
             
             // Migrate images to media
             await conn.ExecuteAsync(@"
@@ -235,5 +239,17 @@ public class FixDbController : ControllerBase
         }
 
         return Ok(results);
+    }
+
+    /// <summary>
+    /// Returns the count of products with missing or unknown fabric values.
+    /// Useful for monitoring AI extraction quality and triggering backfills.
+    /// Admin/dev utility — not intended for production client use.
+    /// </summary>
+    [HttpGet("backfill-fabric-count")]
+    public async Task<IActionResult> GetBackfillFabricCount()
+    {
+        var count = await _productService.BackfillFabricAsync();
+        return Ok(new { pendingCount = count });
     }
 }

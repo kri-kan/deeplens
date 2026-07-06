@@ -53,7 +53,7 @@ export function createGroupReviewRoutes(): Router {
                     mg.category,
                     mg.sub_category as "subCategory",
                     mg.detected_price as "detectedPrice",
-                    mg.detected_shipping as "detectedShipping",
+                    CASE WHEN mg.is_plus_shipping = false THEN 'free' ELSE 'plus' END as "detectedShipping",
                     mg.last_message_at as "lastMessageAt",
                     mg.product_created_at as "productCreatedAt",
                     mg.error_detail as "errorDetail",

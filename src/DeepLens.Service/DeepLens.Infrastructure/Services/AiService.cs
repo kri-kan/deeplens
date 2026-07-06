@@ -84,14 +84,16 @@ Return ONLY the title text without any quotes or additional explanations.";
 
 
 
-    public async Task<ExtractedProductInfo> ExtractProductInfoAsync(string description)
+    public async Task<ExtractedProductInfo> ExtractProductInfoAsync(string description, bool isManual = false)
     {
         var baseUrl = _configuration["Services:ReasoningApiUrl"] ?? "http://localhost:8002";
+        // priority=0 → HIGH (manual user action); priority=1 → LOW (bulk automation)
+        var priorityParam = isManual ? 0 : 1;
 
         try
         {
-            _logger.LogInformation("Requesting fast product info extraction from ReasoningService at {BaseUrl}", baseUrl);
-            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/extract-product", new { description });
+            _logger.LogInformation("Requesting fast product info extraction from ReasoningService at {BaseUrl} (isManual={IsManual})", baseUrl, isManual);
+            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/extract-product?priority={priorityParam}", new { description });
             
             if (!response.IsSuccessStatusCode)
             {
@@ -123,7 +125,11 @@ Return ONLY the title text without any quotes or additional explanations.";
             {
                 extractedInfo.SubCategory = extractedInfo.SubCategory.Substring(0, 100);
             }
-            extractedInfo.ShippingInfo = (extractedInfo.ShippingInfo ?? "extra").Trim().ToLower();
+            extractedInfo.Title = (extractedInfo.Title ?? "New Product").Trim();
+            if (extractedInfo.Title.Length > 200)
+            {
+                extractedInfo.Title = extractedInfo.Title.Substring(0, 200);
+            }
             extractedInfo.Fabric = (extractedInfo.Fabric ?? "Unknown").Trim();
             extractedInfo.StitchType = (extractedInfo.StitchType ?? "Unstitched").Trim();
             extractedInfo.Color = (extractedInfo.Color ?? "Unknown").Trim();

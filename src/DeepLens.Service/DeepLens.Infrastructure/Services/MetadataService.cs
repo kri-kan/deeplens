@@ -94,7 +94,7 @@ public class MetadataService : IMetadataService
                 OriginalFilename = request.File.FileName,
                 FileSize = fileSize,
                 MimeType = contentType,
-                Category = request.Category.ToString().ToLowerInvariant() ?? "product",
+                Category = request.Category.ToString().ToLowerInvariant() ?? "general",
                 SubCategory = request.SubCategory?.ToLowerInvariant(),
                 Color = request.Color
             }, transaction);
@@ -384,11 +384,11 @@ public class MetadataService : IMetadataService
 
             await db.ExecuteAsync(@"
                 UPDATE vendor_listings 
-                SET current_price = @Price, shipping_info = @Shipping, description = @Desc, updated_at = NOW() 
+                SET current_price = @Price, is_plus_shipping = @IsPlusShipping, description = @Desc, updated_at = NOW() 
                 WHERE id = @Id",
                 new { 
                     Price = request.Price, 
-                    Shipping = request.AdditionalMetadata?.GetValueOrDefault("shipping")?.ToString() ?? "plus shipping",
+                    IsPlusShipping = !string.Equals(request.AdditionalMetadata?.GetValueOrDefault("isPlusShipping"), "false", StringComparison.OrdinalIgnoreCase),
                     Desc = request.Description,
                     Id = existingId 
                 }, trans);
@@ -398,8 +398,8 @@ public class MetadataService : IMetadataService
         {
             var newId = Guid.NewGuid();
             await db.ExecuteAsync(@"
-                INSERT INTO vendor_listings (id, product_id, vendor_id, external_id, current_price, currency, shipping_info, description)
-                VALUES (@Id, @ProductId, @VendorId, @ExtId, @Price, @Currency, @Shipping, @Description)",
+                INSERT INTO vendor_listings (id, product_id, vendor_id, external_id, current_price, currency, is_plus_shipping, description)
+                VALUES (@Id, @ProductId, @VendorId, @ExtId, @Price, @Currency, @IsPlusShipping, @Description)",
                 new {
                     Id = newId,
                     ProductId = productId,
@@ -407,7 +407,7 @@ public class MetadataService : IMetadataService
                     ExtId = request.ExternalId,
                     Price = request.Price,
                     Currency = request.Currency ?? "INR",
-                    Shipping = request.AdditionalMetadata?.GetValueOrDefault("shipping")?.ToString() ?? "plus shipping",
+                    IsPlusShipping = !string.Equals(request.AdditionalMetadata?.GetValueOrDefault("isPlusShipping"), "false", StringComparison.OrdinalIgnoreCase),
                     Description = request.Description
                 }, trans);
             return newId;

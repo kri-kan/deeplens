@@ -101,7 +101,7 @@ public class ProductEnrichmentWorker : BackgroundService
         ExtractedProductInfo extracted;
         try
         {
-            extracted = await aiService.ExtractProductInfoAsync(@event.Description);
+            extracted = await aiService.ExtractProductInfoAsync(@event.Description, @event.IsManual);
         }
         catch (Exception ex)
         {
@@ -135,13 +135,15 @@ public class ProductEnrichmentWorker : BackgroundService
                 fabric = extracted.Fabric,
                 stitch_type = extracted.StitchType,
                 price = extracted.Price,
-                shipping = extracted.ShippingInfo
+                is_plus_shipping = extracted.IsPlusShipping
             });
 
-            string cleanDesc = !string.IsNullOrEmpty(@event.Description) ? Regex.Replace(@event.Description, @"[\*\~\_\`]", "") : "";
-            string title = !string.IsNullOrEmpty(cleanDesc) 
-                ? cleanDesc.Substring(0, Math.Min(cleanDesc.Length, 100)).Replace("\n", " ").Trim() 
-                : "New Product";
+            string cleanDesc = !string.IsNullOrEmpty(@event.Description) ? Regex.Replace(@event.Description, @"[*~_`]", "") : "";
+            string title = !string.IsNullOrEmpty(extracted.Title) && extracted.Title != "New Product"
+                ? extracted.Title
+                : (!string.IsNullOrEmpty(cleanDesc) 
+                    ? cleanDesc.Substring(0, Math.Min(cleanDesc.Length, 100)).Replace("\n", " ").Trim() 
+                    : "New Product");
 
             // Strip placeholder-only titles
             var placeholders = new[] { "[image]", "[video]", "[photo]", "[sticker]" };
@@ -176,13 +178,13 @@ public class ProductEnrichmentWorker : BackgroundService
             const string updateListingSql = @"
                 UPDATE public.vendor_listings
                 SET current_price = @Price,
-                    shipping_info = @Shipping
+                    is_plus_shipping = @IsPlusShipping
                 WHERE product_id = @Id";
 
             await conn.ExecuteAsync(updateListingSql, new
             {
                 Price = extracted.Price,
-                Shipping = extracted.ShippingInfo == "free" ? "free shipping" : "plus shipping",
+                IsPlusShipping = extracted.IsPlusShipping,
                 Id = @event.ProductId
             }, trans);
 
@@ -192,7 +194,7 @@ public class ProductEnrichmentWorker : BackgroundService
                 SET category = @Category, 
                     sub_category = @SubCategory, 
                     detected_price = @Price, 
-                    detected_shipping = @Shipping,
+                    is_plus_shipping = @IsPlusShipping,
                     updated_at = NOW()
                 WHERE group_id = @GroupId";
 
@@ -201,7 +203,7 @@ public class ProductEnrichmentWorker : BackgroundService
                 Category = mappedCategory,
                 SubCategory = extracted.SubCategory,
                 Price = extracted.Price,
-                Shipping = extracted.ShippingInfo,
+                IsPlusShipping = extracted.IsPlusShipping,
                 GroupId = @event.GroupId
             }, trans);
 

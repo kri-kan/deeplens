@@ -42,7 +42,7 @@ public class AiController : ControllerBase
             return Ok(new GenerateTitleResponse
             {
                 Title = title,
-                Model = _configuration["Ollama:Model"] ?? "llama3"
+                Model = _configuration["Ollama:Model"] ?? "phi3"
             });
         }
         catch (Exception ex)

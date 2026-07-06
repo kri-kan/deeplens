@@ -63,6 +63,9 @@ public class VendorProduct
     /// <summary>Number of active vendor listings associated with this product.</summary>
     [JsonPropertyName("listingCount")]
     public int ListingCount { get; set; }
+
+    [JsonPropertyName("isStarred")]
+    public bool IsStarred { get; set; } = false;
 }
 
 public class MediaEntry
@@ -104,8 +107,8 @@ public class VendorListingDto
     [JsonPropertyName("currency")]
     public string Currency { get; set; } = "INR";
 
-    [JsonPropertyName("shippingInfo")]
-    public string? ShippingInfo { get; set; }
+    [JsonPropertyName("isPlusShipping")]
+    public bool IsPlusShipping { get; set; } = true;
 
     [JsonPropertyName("description")]
     public string? Description { get; set; }

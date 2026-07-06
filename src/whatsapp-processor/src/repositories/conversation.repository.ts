@@ -68,7 +68,7 @@ export class ConversationRepository {
                 sub.profile_pic_id as "profilePicId",
                 sub.profile_pic_url as "profilePicUrl",
                 sub.deep_sync_enabled as "deepSyncEnabled",
-                COALESCE(sub.is_excluded, false) as "isExcluded",
+                COALESCE(sub.is_excluded, CASE WHEN sub.is_group = false AND sub.is_announcement = false THEN true ELSE false END) as "isExcluded",
                 p.name as "communityName"
             FROM (
                 SELECT DISTINCT ON (c.canonical_jid)
@@ -115,9 +115,9 @@ export class ConversationRepository {
         // Build exclusion clause
         let exclusionClause: string;
         if (excluded === true) {
-            exclusionClause = 't.is_excluded = true';
+            exclusionClause = '(t.is_excluded = true OR t.is_excluded IS NULL)';
         } else if (excluded === false) {
-            exclusionClause = '(t.is_excluded = false OR t.is_excluded IS NULL)';
+            exclusionClause = 't.is_excluded = false';
         } else {
             exclusionClause = 'TRUE'; // no filter — show all
         }
@@ -150,7 +150,7 @@ export class ConversationRepository {
                     c.last_message_text, c.last_message_timestamp, c.last_message_from_me,
                     c.is_pinned, c.is_archived, c.is_muted, c.canonical_jid, c.pin_order,
                     c.profile_pic_id, c.profile_pic_url,
-                    COALESCE(t.is_excluded, false) as is_excluded,
+                    COALESCE(t.is_excluded, true) as is_excluded,
                     c.deep_sync_enabled
                 FROM wa.chats c
                 LEFT JOIN wa.chat_tracking_state t ON c.jid = t.jid
@@ -256,7 +256,7 @@ export class ConversationRepository {
     async countChats(filters: { excluded?: boolean; search?: string } = {}): Promise<number> {
         const { excluded, search } = filters;
         const params: any[] = [];
-        const exclusionClause = excluded === true ? 't.is_excluded = true' : excluded === false ? '(t.is_excluded = false OR t.is_excluded IS NULL)' : 'TRUE';
+        const exclusionClause = excluded === true ? '(t.is_excluded = true OR t.is_excluded IS NULL)' : excluded === false ? 't.is_excluded = false' : 'TRUE';
         let searchClause = '';
         if (search) { params.push(`%${search}%`); searchClause = `AND c.name ILIKE $${params.length}`; }
         const result = await this.client.query(
@@ -297,7 +297,11 @@ export class ConversationRepository {
         return result.rows[0] || null;
     }
 
-    async findMessages(jid: string, limit: number, offset: number, aroundGroupId?: string): Promise<any[]> {
+    async findMessages(jid: string, limit: number, offset: number, aroundGroupId?: string, searchQuery?: string): Promise<any[]> {
+        let searchCondition = "";
+        if (searchQuery) {
+            searchCondition = `AND content ILIKE '%${searchQuery.replace(/'/g, "''")}%'`;
+        }
         const params: any[] = [jid, limit, offset];
         let query: string;
 
@@ -342,7 +346,7 @@ export class ConversationRepository {
                     metadata,
                     group_id as "groupId"
                 FROM wa.messages
-                WHERE jid IN (SELECT jid FROM chat_jids)
+                WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                 ORDER BY timestamp DESC
                 LIMIT CASE 
                     WHEN (SELECT min_ts FROM target_msg) IS NOT NULL THEN GREATEST($2, (SELECT cnt FROM count_newer) + 20)
@@ -371,9 +375,7 @@ export class ConversationRepository {
                     metadata,
                     group_id as "groupId"
                 FROM wa.messages
-                WHERE jid = $1 
-                   OR jid = (SELECT base_jid FROM chat_info)
-                   OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))
+                WHERE (jid = $1 OR jid = (SELECT base_jid FROM chat_info) OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))) ${searchCondition}
                 ORDER BY timestamp DESC
                 LIMIT $2 OFFSET $3
             `;

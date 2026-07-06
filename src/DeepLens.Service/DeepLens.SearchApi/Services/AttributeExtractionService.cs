@@ -72,14 +72,13 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
                     };
                 }
             }
-            
             _logger.LogWarning("Reasoning Service failed with status {Status}.", response.StatusCode);
-            throw new Exception($"Reasoning Service failed with status {response.StatusCode}");
+            return new ExtractedAttributes();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to call Reasoning Service.");
-            throw;
+            return new ExtractedAttributes();
         }
     }
 
@@ -105,14 +104,13 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
                     };
                 }
             }
-            
             _logger.LogWarning("Reasoning Service failed with status {Status} for suggestion.", response.StatusCode);
-            throw new Exception($"Reasoning Service failed with status {response.StatusCode}");
+            return new SuggestedMetadata { Title = string.Empty, Keywords = string.Empty };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to call Reasoning Service for metadata suggestion.");
-            throw;
+            return new SuggestedMetadata { Title = string.Empty, Keywords = string.Empty };
         }
     }
 

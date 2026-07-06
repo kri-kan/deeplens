@@ -49,10 +49,11 @@ public class PerceptualHashCache
             // Exclude image/webp (stickers) — they appear in every group and would
             // produce false-positive duplicate matches across unrelated products.
             const string sql = @"
-                SELECT m.id AS MediaId, ml.entity_id AS ProductId, m.phash AS Phash, COALESCE(m.category, 'Others') AS Category
+                SELECT m.id AS MediaId, ml.entity_id AS ProductId, m.phash AS Phash, COALESCE(c.name, m.category, 'Others') AS Category
                 FROM public.media m
                 INNER JOIN public.media_links ml ON m.id = ml.media_id
                 INNER JOIN public.products p ON ml.entity_id = p.id
+                LEFT JOIN public.categories c ON p.category_id = c.id
                 WHERE m.phash IS NOT NULL
                   AND ml.entity_type = 'product'
                   AND p.is_deleted = false

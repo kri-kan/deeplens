@@ -85,9 +85,10 @@ export class ConversationController {
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
         const highlightGroupId = req.query.highlightGroupId as string | undefined;
+        const searchQuery = req.query.searchQuery as string | undefined;
 
         try {
-            const result = await this.service.getMessages(jid, limit, offset, highlightGroupId);
+            const result = await this.service.getMessages(jid, limit, offset, highlightGroupId, searchQuery);
             res.json(result);
         } catch (err: any) {
             logger.error({ err, jid }, 'Failed to get messages');

@@ -66,8 +66,8 @@ export class ConversationService {
         return chat;
     }
 
-    async getMessages(jid: string, limit: number, offset: number, aroundGroupId?: string) {
-        const messages = await this.repository.findMessages(jid, limit, offset, aroundGroupId);
+    async getMessages(jid: string, limit: number, offset: number, aroundGroupId?: string, searchQuery?: string) {
+        const messages = await this.repository.findMessages(jid, limit, offset, aroundGroupId, searchQuery);
         const total = await this.repository.countMessages(jid);
 
         const resolvedMessages = await Promise.all(messages.map(async msg => {

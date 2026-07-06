@@ -159,7 +159,11 @@ export class GroupReadinessService {
 
                 if (msg.content && msg.content.trim() !== '') {
                     const contentTrimmed = msg.content.trim();
-                    if (!['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase())) {
+                    const isPlaceholder = ['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase());
+                    const isPlainText = !msg.media_type || msg.media_type === 'text';
+                    const isMediaCaption = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type) && !isPlaceholder;
+
+                    if (isPlainText || isMediaCaption) {
                         textCount++;
                         descriptionParts.push(contentTrimmed);
                     }
@@ -420,7 +424,11 @@ export class GroupReadinessService {
             }
             if (msg.content && msg.content.trim() !== '') {
                 const contentTrimmed = msg.content.trim();
-                if (!['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase())) {
+                const isPlaceholder = ['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase());
+                const isPlainText = !msg.media_type || msg.media_type === 'text';
+                const isMediaCaption = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type) && !isPlaceholder;
+
+                if (isPlainText || isMediaCaption) {
                     descriptionParts.push(contentTrimmed);
                 }
             }
@@ -556,7 +564,11 @@ export class GroupReadinessService {
 
                         if (msg.content && msg.content.trim() !== '') {
                             const contentTrimmed = msg.content.trim();
-                            if (!['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase())) {
+                            const isPlaceholder = ['[image]', '[video]', '[photo]', '[sticker]'].includes(contentTrimmed.toLowerCase());
+                            const isPlainText = !msg.media_type || msg.media_type === 'text';
+                            const isMediaCaption = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type) && !isPlaceholder;
+
+                            if (isPlainText || isMediaCaption) {
                                 textCount++;
                                 descriptionParts.push(contentTrimmed);
                             }

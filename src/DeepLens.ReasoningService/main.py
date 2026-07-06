@@ -1,7 +1,11 @@
 import os
 import json
+import asyncio
+import threading
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+import psycopg2
+import time
 from pydantic import BaseModel
 
 app = FastAPI(
@@ -12,10 +16,80 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# ---------------------------------------------------------------------------
+# Priority Queue for Ollama calls
+# Priority 0 = HIGH  (manual / interactive requests)
+# Priority 1 = LOW   (bulk / automated background requests)
+# A single asyncio worker processes one Ollama call at a time so that a
+# high-priority request always jumps ahead of queued low-priority ones.
+# ---------------------------------------------------------------------------
+_ollama_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+_queue_counter = 0   # tie-breaker so equal priorities preserve insertion order
+
+async def _ollama_worker():
+    """Single async worker that drains the priority queue sequentially."""
+    while True:
+        priority, _seq, prompt, system, future = await _ollama_queue.get()
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, _call_ollama_sync, prompt, system
+            )
+            future.set_result(result)
+        except Exception as exc:
+            future.set_exception(exc)
+        finally:
+            _ollama_queue.task_done()
+
+@app.on_event("startup")
+async def _start_worker():
+    asyncio.create_task(_ollama_worker())
+
+
 @app.get("/", include_in_schema=False)
 async def root():
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
+
+# Database configurations for logging
+DB_CONNECTION_STRING_RAW = os.getenv("DB_CONNECTION_STRING")
+
+def get_pg_conn_string():
+    if not DB_CONNECTION_STRING_RAW:
+        return None
+    # Parse C# Host=...;Database=...;Username=...;Password=...
+    parts = DB_CONNECTION_STRING_RAW.split(';')
+    params = {}
+    for part in parts:
+        if '=' in part:
+            k, v = part.split('=', 1)
+            k_lower = k.lower().strip()
+            v = v.strip()
+            if k_lower == 'host':
+                params['host'] = v
+            elif k_lower in ('database', 'db'):
+                params['dbname'] = v
+            elif k_lower in ('username', 'user', 'uid'):
+                params['user'] = v
+            elif k_lower in ('password', 'pwd'):
+                params['password'] = v
+    return " ".join(f"{k}={v}" for k, v in params.items())
+
+def log_llm_call(endpoint: str, prompt: str, response: str, latency_ms: int):
+    conn_str = get_pg_conn_string()
+    if not conn_str:
+        return
+    try:
+        conn = psycopg2.connect(conn_str)
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO public.llm_logs (endpoint, prompt, response, latency_ms) VALUES (%s, %s, %s, %s)",
+            (endpoint, prompt, response, latency_ms)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error logging LLM call to DB: {e}", flush=True)
 
 # Model configuration
 MODEL_ID = os.getenv("MODEL_ID", "phi4-mini:latest")
@@ -47,10 +121,11 @@ class ProductExtractionRequest(BaseModel):
     description: str
 
 class ProductExtractionResponse(BaseModel):
-    category: str | None = "others"
+    category: str | None = "general"
     subCategory: str | None = "General"
     price: float | None = None
-    shippingInfo: str | None = "extra"
+    isPlusShipping: bool = True
+    title: str | None = None
     fabric: str | None = "Unknown"
     stitchType: str | None = "Unstitched"
     color: str | None = None
@@ -126,28 +201,36 @@ SYSTEM_PROMPT_PRODUCT_EXTRACT = (
     f"- Fabrics: {', '.join(INDIAN_FASHION_GLOSSARY['fabrics'])}\n"
     f"- Styles: {', '.join(INDIAN_FASHION_GLOSSARY['styles'])}\n"
     f"- Work/Crafts: {', '.join(INDIAN_FASHION_GLOSSARY['work_types'])}\n\n"
-    "Extract and populate these fields in the JSON response:\n"
-    "1. \"category\": Main product category. MUST be EXACTLY ONE of: \"saree\", \"dress\", \"lehanga\", \"kids\", or \"others\". Do not use any other category names.\n"
+    "Analyze the following clothing product description and extract the details strictly into JSON format.\n\n"
+    "Output Requirements:\n"
+    "1. \"category\": Main product category. MUST be EXACTLY ONE of: \"saree\", \"dress\", \"lehanga\", \"kids\", or \"general\". Do not use any other category names.\n"
     "   CRITICAL CATEGORIZATION RULES:\n"
-    "   - 'kids': This is an umbrella category for ANY children's clothing (e.g. kids dress, kids kurti, kids frock, kids gown, kids lehenga). If 'kids', 'boys', 'girls', or children's sizes are mentioned, it MUST be 'kids'.\n"
-    "   - 'lehanga': Exclusively for adult lehengas. If it mentions kids, use 'kids' instead.\n"
-    "   - 'dress': Exclusively for adult dresses. Includes 'cord set', 'co-ord set', 'skirt with top', 'kurti dress', 'gown'. If it mentions kids, use 'kids' instead.\n"
+    "   - 'kids': This is an umbrella category for ANY children's clothing. If 'kids', 'boys', 'girls', children's sizes (e.g., 'size 14y', '10y', '12y'), OR any age 16 years or below (e.g., '1-16 years', '6 months', '16 yrs') is mentioned, it MUST be 'kids' (even if it's a dress or lehenga).\n"
+    "   - 'lehanga': Exclusively for adult lehengas. If it mentions kids, boys, girls, children's sizes, or age <= 16, use 'kids' instead.\n"
+    "   - 'dress': Exclusively for adult dresses. Includes 'cord set', 'co-ord set', 'skirt with top', 'kurti dress', 'gown'. If it mentions kids, boys, girls, children's sizes (e.g., '14y'), or age <= 16, use 'kids' instead.\n"
     "   - 'saree': Any mention of 'saree', 'sari', or related hashtags like '#partywearsaree' MUST be categorized as 'saree'.\n"
     "2. \"subCategory\": Subcategory or type (e.g. Silk Saree, Cotton Kurti, Georgette Dress, Semi-Stitched Lehenga).\n"
-    "3. \"price\": The base price as a decimal number. If no price is mentioned, use null. Ignore formatting characters like Currency symbols.\n"
-    "4. \"shippingInfo\": Use \"free\" if free shipping or delivery is mentioned. Use \"extra\" if shipping is extra, plus, or not free. Otherwise, use \"extra\" as default.\n"
-    "5. \"fabric\": The material/fabric (e.g. Silk, Georgette, Cotton). MUST be a single string, NOT an array. If multiple, combine them (e.g. \"Cotton Silk\"). If unknown, use \"Unknown\".\n"
+    "3. \"price\": The base selling price of the product (excluding shipping charges). Treat the money as a pure number directly from the text regardless of currency symbols (like $, €, Rs, INR, /-, etc.). Do NOT perform currency conversion or scaling (e.g. do NOT convert $25 to 2500; extract the exact value 25). Do NOT sum up or calculate total price with shipping. Output ONLY the numeric value (e.g., 1450, 599.50). If no price is mentioned, use null.\n"
+    "4. \"isPlusShipping\": A boolean (true or false). Set to false ONLY IF 'free shipping', 'shipping free', 'free ship', or similar is explicitly mentioned. Set to true if shipping is extra, 'plus shipping', '+ $', '+ shipping', or if shipping is NOT mentioned at all.\n"
+    "5. \"title\": A concise, clean, and professional product title in English of MAXIMUM 5 WORDS summarizing the core product. Do NOT include vendor codes, price, emojis, or marketing fluff (like 'New Design', 'Grab it', 'Full Stock'). Example: 'Red Banarasi Silk Saree', 'Girls Cotton Floral Frock', 'Velvet Maggam Work Gown'.\n"
+    "6. \"fabric\": The material/fabric (e.g. Silk, Georgette, Cotton). MUST be a single string, NOT an array. If multiple, combine them (e.g. \"Cotton Silk\"). If unknown, use \"Unknown\".\n"
     "6. \"stitchType\": The stitch type (e.g. Unstitched, Semi-Stitched, Stitched, Free Size). MUST be a single string, NOT an array.\n"
     "7. \"color\": The color of the product as a single string (e.g. \"Red\", \"Navy Blue\"). MUST be a single string, NOT an array. Use null if unknown.\n"
     "8. \"sizes\": An array of available sizes (e.g. [\"M\", \"L\", \"XL\"]). If no sizes are mentioned, use an empty array [].\n"
     "9. \"tags\": An array of relevant search tags/keywords (e.g. [\"partywear\", \"wedding\", \"zari border\"]).\n\n"
     "FEW-SHOT EXAMPLES:\n"
     "Example 1 Input: \"Beautiful Georgette saree in navy blue with heavy zari border. Price 1200 + free shipping.\"\n"
-    "Example 1 Output: { \"category\": \"saree\", \"subCategory\": \"Georgette Saree\", \"price\": 1200.0, \"shippingInfo\": \"free\", \"fabric\": \"Georgette\", \"stitchType\": \"Unstitched\", \"color\": \"Navy Blue\", \"sizes\": [], \"tags\": [\"zari border\", \"partywear\"] }\n\n"
+    "Example 1 Output: { \"category\": \"saree\", \"subCategory\": \"Georgette Saree\", \"price\": 1200.0, \"isPlusShipping\": false, \"title\": \"Navy Blue Georgette Zari Saree\", \"fabric\": \"Georgette\", \"stitchType\": \"Unstitched\", \"color\": \"Navy Blue\", \"sizes\": [], \"tags\": [\"zari border\", \"partywear\"] }\n\n"
     "Example 2 Input: \"Kids cotton frocks, sizes 2-6 years. Rs 450 + shipping.\"\n"
-    "Example 2 Output: { \"category\": \"kids\", \"subCategory\": \"Frocks\", \"price\": 450.0, \"shippingInfo\": \"extra\", \"fabric\": \"Cotton\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"2 years\", \"3 years\", \"4 years\", \"5 years\", \"6 years\"], \"tags\": [\"kids wear\", \"frock\"] }\n\n"
+    "Example 2 Output: { \"category\": \"kids\", \"subCategory\": \"Frocks\", \"price\": 450.0, \"isPlusShipping\": true, \"title\": \"Kids Cotton Frock\", \"fabric\": \"Cotton\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"2 years\", \"3 years\", \"4 years\", \"5 years\", \"6 years\"], \"tags\": [\"kids wear\", \"frock\"] }\n\n"
     "Example 3 Input: \"Trending cord set with top and bottom. Size M L XL. Rs 800\"\n"
-    "Example 3 Output: { \"category\": \"dress\", \"subCategory\": \"Co-ord Set\", \"price\": 800.0, \"shippingInfo\": \"extra\", \"fabric\": \"Unknown\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"M\", \"L\", \"XL\"], \"tags\": [\"cord set\", \"co-ord set\"] }\n\n"
+    "Example 3 Output: { \"category\": \"dress\", \"subCategory\": \"Co-ord Set\", \"price\": 800.0, \"isPlusShipping\": true, \"title\": \"Women's Co-ord Cord Set\", \"fabric\": \"Unknown\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"M\", \"L\", \"XL\"], \"tags\": [\"cord set\", \"co-ord set\"] }\n\n"
+    "Example 4 Input: \"Beautiful party wear frock for girls (size 12-14y). Price 950 shipping free\"\n"
+    "Example 4 Output: { \"category\": \"kids\", \"subCategory\": \"Frock\", \"price\": 950.0, \"isPlusShipping\": false, \"title\": \"Girls Party Wear Frock\", \"fabric\": \"Unknown\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"12 years\", \"13 years\", \"14 years\"], \"tags\": [\"partywear\", \"frock\"] }\n\n"
+    "Example 5 Input: \"Designer soft silk saree. Price 2500 + 100 shipping charge.\"\n"
+    "Example 5 Output: { \"category\": \"saree\", \"subCategory\": \"Silk Saree\", \"price\": 2500.0, \"isPlusShipping\": true, \"title\": \"Designer Soft Silk Saree\", \"fabric\": \"Silk\", \"stitchType\": \"Unstitched\", \"color\": null, \"sizes\": [], \"tags\": [\"designer\", \"partywear\"] }\n\n"
+    "Example 6 Input: \"To ,\n\nNew design launching \n\nPure soft georgette saree with zari weaving border and gota patti work. Rate /- 1250 fs\n\nFull stock ready grab it\"\n"
+    "Example 6 Output: { \"category\": \"saree\", \"subCategory\": \"Georgette Saree\", \"price\": 1250.0, \"isPlusShipping\": false, \"title\": \"Pure Georgette Saree with Gota Patti Work\", \"fabric\": \"Georgette\", \"stitchType\": \"Unstitched\", \"color\": null, \"sizes\": [], \"tags\": [\"zari weaving\", \"gota patti\"] }\n\n"
     "Output ONLY the JSON object. Do not wrap in markdown or add explanations."
 )
 
@@ -166,28 +249,69 @@ SYSTEM_PROMPT_YOUTUBE_TITLE = (
     "Do not include markdown blocks or any other text."
 )
 
-def call_ollama(prompt: str, system: str = "") -> str:
+def _call_ollama_sync(prompt: str, system: str = "", cancel_event: threading.Event = None) -> str:
+    """Synchronous Ollama call — runs inside a thread executor via the worker."""
     url = f"{OLLAMA_BASE_URL}/api/generate"
     payload = {
         "model": MODEL_ID,
         "prompt": prompt,
         "system": system,
         "format": "json",
-        "stream": False,
+        "stream": True,
         "options": {
             "num_ctx": 4096,
             "temperature": 0.1
         }
     }
-    
     try:
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("response", "")
+        full_response = []
+        with requests.post(url, json=payload, stream=True, timeout=120) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if cancel_event and cancel_event.is_set():
+                    # Sever the TCP connection forcefully to abort generation
+                    response.close()
+                    raise Exception("Client cancelled the request.")
+                if line:
+                    chunk = json.loads(line)
+                    full_response.append(chunk.get("response", ""))
+                    if chunk.get("done"):
+                        break
+        return "".join(full_response)
     except Exception as e:
         print(f"Error calling Ollama API: {e}")
         raise HTTPException(status_code=502, detail=f"Failed to communicate with LLM: {str(e)}")
+
+from fastapi import Request
+async def enqueue_ollama(prompt: str, system: str, priority: int, req: Request = None) -> str:
+    """
+    Submit an Ollama call to the priority queue and await its result.
+    priority=0  → HIGH (manual / interactive, jumps ahead of bulk jobs)
+    priority=1  → LOW  (bulk / automated background processing)
+    """
+    global _queue_counter
+    loop = asyncio.get_event_loop()
+    future: asyncio.Future = loop.create_future()
+    cancel_event = threading.Event()
+    _queue_counter += 1
+    
+    await _ollama_queue.put((priority, _queue_counter, prompt, system, future, cancel_event))
+    
+    if req is None:
+        return await future
+
+    while not future.done():
+        if await req.is_disconnected():
+            cancel_event.set()
+            if not future.done():
+                future.cancel()
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+        await asyncio.sleep(0.5)
+        
+    if future.cancelled() or cancel_event.is_set():
+        raise HTTPException(status_code=499, detail="Client Closed Request")
+        
+    return future.result()
 
 @app.get("/health")
 async def health():
@@ -201,10 +325,14 @@ async def health():
         return {"status": "error", "model": MODEL_ID, "ready": False, "error": str(e)}
 
 @app.post("/extract", response_model=ExtractionResponse)
-async def extract_metadata(request: ExtractionRequest):
+async def extract_metadata(req: Request, request: ExtractionRequest, background_tasks: BackgroundTasks):
     prompt = f"Description: {request.text}\nExtract metadata according to the system prompt rules."
+
+    start_time = time.time()
+    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_EXTRACT, priority=0)
+    latency_ms = int((time.time() - start_time) * 1000)
     
-    raw_text = call_ollama(prompt=prompt, system=SYSTEM_PROMPT_EXTRACT)
+    background_tasks.add_task(log_llm_call, "/extract", prompt, raw_text, latency_ms)
     
     try:
         data = json.loads(raw_text)
@@ -213,11 +341,16 @@ async def extract_metadata(request: ExtractionRequest):
         return ExtractionResponse(raw_response=raw_text)
 
 @app.post("/suggest-group-metadata", response_model=SuggestResponse)
-async def suggest_group_metadata(request: SuggestRequest):
+async def suggest_group_metadata(req: Request, request: SuggestRequest, background_tasks: BackgroundTasks):
     combined_desc = "\n---\n".join(request.descriptions)
     prompt = f"Descriptions:\n{combined_desc}\n\nGenerate the title and keywords."
+
+    start_time = time.time()
+    # priority=0 → HIGH: manual curation request, always jumps ahead of bulk re-eval
+    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_SUGGEST, priority=0)
+    latency_ms = int((time.time() - start_time) * 1000)
     
-    raw_text = call_ollama(prompt=prompt, system=SYSTEM_PROMPT_SUGGEST)
+    background_tasks.add_task(log_llm_call, "/suggest-group-metadata", prompt, raw_text, latency_ms)
     
     try:
         data = json.loads(raw_text)
@@ -231,10 +364,29 @@ async def suggest_group_metadata(request: SuggestRequest):
         raise HTTPException(status_code=500, detail="Failed to parse LLM response into JSON")
 
 @app.post("/extract-product", response_model=ProductExtractionResponse)
-async def extract_product(request: ProductExtractionRequest):
+async def extract_product(req: Request, request: ProductExtractionRequest, background_tasks: BackgroundTasks, priority: int = 1):
+    if not request.description or len(request.description.strip()) < 5:
+        return ProductExtractionResponse(
+            category="general",
+            subCategory="General",
+            price=None,
+            isPlusShipping=True,
+            title="New Product",
+            fabric="Unknown",
+            stitchType="Unstitched",
+            color=None,
+            sizes=[],
+            tags=[],
+            raw_response="Empty or too short description provided"
+        )
     prompt = f"WhatsApp Description:\n{request.description}\n\nExtract metadata."
+
+    start_time = time.time()
+    # priority from query param: 0=HIGH (manual user action), 1=LOW (bulk automation, default)
+    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_PRODUCT_EXTRACT, priority=priority, req=req)
+    latency_ms = int((time.time() - start_time) * 1000)
     
-    raw_text = call_ollama(prompt=prompt, system=SYSTEM_PROMPT_PRODUCT_EXTRACT)
+    background_tasks.add_task(log_llm_call, "/extract-product", prompt, raw_text, latency_ms)
     
     try:
         raw_text_clean = raw_text.strip()
@@ -248,7 +400,7 @@ async def extract_product(request: ProductExtractionRequest):
         # Normalize snake_case keys to camelCase keys for Pydantic compatibility
         key_mapping = {
             "sub_category": "subCategory",
-            "shipping_info": "shippingInfo",
+            "is_plus_shipping": "isPlusShipping",
             "stitch_type": "stitchType",
         }
         for snake_key, camel_key in key_mapping.items():
@@ -269,17 +421,48 @@ async def extract_product(request: ProductExtractionRequest):
         if isinstance(data.get("sizes"), str):
             data["sizes"] = [data["sizes"]]
 
-        # Clean up price format if it's returned as a string (e.g. "Rs. 1200", "1200 + shipping")
+        # Clean and format product title
+        title_val = data.get("title")
+        if title_val:
+            fluff_patterns = [
+                r'\bnew design(s)?\b', r'\blaunching\b', r'\bgrab it\b', 
+                r'\bfull stock\b', r'\bready stock\b', r'\bread(y)? to dispatch\b',
+                r'\bto ,\b', r'\bx viewing\b', r'\bviewing with\b',
+                r'\bbeautifully rich\b', r'\ball occasional\b', r'\bfor wedding\b'
+            ]
+            for pattern in fluff_patterns:
+                title_val = re.sub(pattern, '', title_val, flags=re.IGNORECASE)
+            title_val = re.sub(r'\s+', ' ', title_val).strip()
+            data["title"] = title_val.title()
+        else:
+            data["title"] = "New Product"
+
+        # Clean up price format if it's returned as a string (e.g. "1200")
         price_val = data.get("price")
-        if isinstance(price_val, str):
-            # Find numbers (with optional decimals) in the string
-            numbers = re.findall(r'\d+(?:\.\d+)?', price_val)
-            if numbers:
-                data["price"] = float(numbers[0])
-            else:
+        if price_val is not None:
+            try:
+                if isinstance(price_val, str):
+                    price_val = re.sub(r'[^\d.]', '', price_val)
+                data["price"] = float(price_val)
+            except ValueError:
                 data["price"] = None
             
+        desc_lower = request.description.lower()
+        kids_indicators = [
+            r'\bkids?\b', r'\bboys?\b', r'\bgirls?\b', r'\bchildren\b', r'\bbab(y|ies)\b',
+            r'\btoddlers?\b', r'\binfants?\b',
+            r'\b\d{1,2}\s*(month|year|yr|y)\b',
+            r'\b(1[0-6]|[1-9])\s*(years?|yrs?|y)\b'
+        ]
+        is_kids = False
+        for pattern in kids_indicators:
+            if re.search(pattern, desc_lower):
+                is_kids = True
+                break
+            
         category_str = str(data.get("category", "")).lower().strip()
+        if is_kids:
+            category_str = "kids"
         fallback_str = category_str
 
         if "kid" in fallback_str or "child" in fallback_str or "baby" in fallback_str or "boy" in fallback_str or "girl" in fallback_str:
@@ -291,7 +474,7 @@ async def extract_product(request: ProductExtractionRequest):
         elif "saree" in fallback_str or "sari" in fallback_str or "banarasi" in fallback_str or "kanjivaram" in fallback_str:
             data["category"] = "saree"
         else:
-            data["category"] = "others"
+            data["category"] = "general"
             
         return ProductExtractionResponse(**data, raw_response=raw_text)
     except Exception as e:
@@ -299,10 +482,11 @@ async def extract_product(request: ProductExtractionRequest):
         raise HTTPException(status_code=500, detail=f"Failed to parse LLM response: {e}")
 
 @app.post("/generate-youtube-title", response_model=YoutubeTitleResponse)
-async def generate_youtube_title(request: YoutubeTitleRequest):
+async def generate_youtube_title(req: Request, request: YoutubeTitleRequest):
     prompt = f"Description:\n{request.description}\n\nGenerate the title."
-    
-    raw_text = call_ollama(prompt=prompt, system=SYSTEM_PROMPT_YOUTUBE_TITLE)
+
+    # priority=0 → HIGH: manual YouTube title generation
+    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_YOUTUBE_TITLE, priority=0, req=req)
     
     try:
         data = json.loads(raw_text)
