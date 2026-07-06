@@ -10,11 +10,13 @@ namespace DeepLens.SearchApi.Controllers;
 public class CatalogController : ControllerBase
 {
     private readonly IMetadataService _metadataService;
+    private readonly DeepLens.Contracts.Catalog.IProductService _productService;
     private readonly ILogger<CatalogController> _logger;
 
-    public CatalogController(IMetadataService metadataService, ILogger<CatalogController> logger)
+    public CatalogController(IMetadataService metadataService, DeepLens.Contracts.Catalog.IProductService productService, ILogger<CatalogController> logger)
     {
         _metadataService = metadataService;
+        _productService = productService;
         _logger = logger;
     }
 
@@ -58,5 +60,31 @@ public class CatalogController : ControllerBase
     {
         await _metadataService.SetFavoriteListingAsync(listingId, isFavorite);
         return Ok(new { message = "Listing favorite status updated" });
+    }
+
+    /// <summary>
+    /// Toggles the starred status of a product.
+    /// </summary>
+    [HttpPatch("products/{id}/star")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> StarProduct(Guid id, [FromBody] DeepLens.Contracts.Catalog.StarProductRequest request, CancellationToken ct)
+    {
+        var success = await _productService.StarProductAsync(id, request.IsStarred, ct);
+        if (!success) return NotFound();
+        return Ok();
+    }
+
+    /// <summary>
+    /// Sets a specific media item as the default (thumbnail cover) for the product.
+    /// </summary>
+    [HttpPatch("products/{id}/media/{mediaId}/set-default")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SetDefaultMedia(Guid id, Guid mediaId, CancellationToken ct)
+    {
+        var success = await _productService.SetDefaultMediaAsync(id, mediaId, ct);
+        if (!success) return NotFound();
+        return Ok();
     }
 }

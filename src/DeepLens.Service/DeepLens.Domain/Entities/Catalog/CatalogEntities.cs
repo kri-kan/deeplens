@@ -32,6 +32,8 @@ public class Product
     public string? UnifiedAttributes { get; set; } // JSONB
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
+    public bool IsStarred { get; set; } = false;
+    
     // Navigation
     public Category? Category { get; set; }
     public List<ProductVariant> Variants { get; set; } = new();

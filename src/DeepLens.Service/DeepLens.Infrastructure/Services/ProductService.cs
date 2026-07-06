@@ -11,6 +11,7 @@ using DeepLens.Contracts.Media;
 using DeepLens.Shared.Common;
 using Minio.DataModel.Tags;
 using DeepLens.Domain.Enums;
+using DeepLens.Shared.Telemetry;
 
 namespace DeepLens.Infrastructure.Services;
 
@@ -19,16 +20,22 @@ public class ProductService : IProductService
     private readonly IConfiguration _configuration;
     private readonly ILogger<ProductService> _logger;
     private readonly DeepLens.Infrastructure.Services.IStorageService _storageService;
+    private readonly DeepLens.Application.Abstractions.Repositories.IProductShareLogRepository _productShareLogRepository;
+    private readonly DeepLens.Application.Abstractions.Repositories.IProductRepository _productRepository;
     private readonly string _connectionString;
 
     public ProductService(
         IConfiguration configuration, 
         ILogger<ProductService> logger,
-        DeepLens.Infrastructure.Services.IStorageService storageService)
+        DeepLens.Infrastructure.Services.IStorageService storageService,
+        DeepLens.Application.Abstractions.Repositories.IProductShareLogRepository productShareLogRepository,
+        DeepLens.Application.Abstractions.Repositories.IProductRepository productRepository)
     {
         _configuration = configuration;
         _logger = logger;
         _storageService = storageService;
+        _productShareLogRepository = productShareLogRepository;
+        _productRepository = productRepository;
         _connectionString = _configuration.GetConnectionString("DefaultConnection") 
                          ?? throw new InvalidOperationException("DefaultConnection string not found");
     }
@@ -246,6 +253,7 @@ public class ProductService : IProductService
                 p.stitch_type as ""StitchType"",
                 p.work_heaviness as ""WorkHeaviness"",
                 p.created_at as ""CreatedAt"",
+                p.is_starred as ""IsStarred"",
                 p.description as ""Description"",
                 c.name as ""Category"",
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
@@ -302,12 +310,43 @@ public class ProductService : IProductService
             parameters.Add("EndDate", filter.EndDate.Value);
         }
 
+        if (filter.Fabrics != null && filter.Fabrics.Length > 0)
+        {
+            whereClause += " AND p.fabric = ANY(@Fabrics)";
+            parameters.Add("Fabrics", filter.Fabrics);
+        }
+
+        if (filter.VendorNames != null && filter.VendorNames.Length > 0)
+        {
+            whereClause += @" AND EXISTS (
+                SELECT 1 FROM vendor_listings vl
+                JOIN vendors v ON v.id = vl.vendor_id
+                WHERE vl.product_id = p.id AND v.vendor_name = ANY(@VendorNames)
+            )";
+            parameters.Add("VendorNames", filter.VendorNames);
+        }
+
+        if (filter.MinPrice.HasValue)
+        {
+            whereClause += " AND (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) >= @MinPrice";
+            parameters.Add("MinPrice", (decimal)filter.MinPrice.Value);
+        }
+
+        if (filter.MaxPrice.HasValue)
+        {
+            whereClause += " AND (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) <= @MaxPrice";
+            parameters.Add("MaxPrice", (decimal)filter.MaxPrice.Value);
+        }
+
         sql += whereClause;
 
         sql += filter.SortBy switch
         {
             "price_low" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) ASC NULLS LAST",
             "price_high" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) DESC NULLS LAST",
+            "oldest" => " ORDER BY p.created_at ASC",
+            "listings_most" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) DESC",
+            "listings_least" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) ASC",
             _ => " ORDER BY p.created_at DESC"
         };
 
@@ -330,7 +369,8 @@ public class ProductService : IProductService
                 StitchType = r.StitchType,
                 WorkHeaviness = r.WorkHeaviness,
                 Category = r.Category,
-                ListingCount = r.ListingCount
+                ListingCount = r.ListingCount,
+                IsStarred = r.IsStarred
             };
 
             if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
@@ -376,6 +416,34 @@ public class ProductService : IProductService
         } catch (Exception ex) {
             transaction.Rollback();
             _logger.LogError(ex, "Failed to delete product {Id}", productId);
+            return false;
+        }
+    }
+
+    public async Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default)
+    {
+        using var activity = DeepLensActivitySource.StartActivity("StarProductAsync");
+        try
+        {
+            return await _productRepository.UpdateProductStarredStatusAsync(productId, isStarred, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to star product {ProductId}", productId);
+            return false;
+        }
+    }
+
+    public async Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default)
+    {
+        using var activity = DeepLensActivitySource.StartActivity("SetDefaultMediaAsync");
+        try
+        {
+            return await _productRepository.SetDefaultMediaAsync(productId, mediaId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set default media {MediaId} for product {ProductId}", mediaId, productId);
             return false;
         }
     }
@@ -441,6 +509,7 @@ public class ProductService : IProductService
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 p.created_at as ""CreatedAt"",
+                p.is_starred as ""IsStarred"",
                 (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1) as ""SourceJid"",
                 (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1) as ""SourceGroupId"",
                 COALESCE((
@@ -456,7 +525,7 @@ public class ProductService : IProductService
                         'vendorName',    COALESCE(v.vendor_name, 'Unknown Vendor'),
                         'price',         vl.current_price,
                         'currency',      COALESCE(vl.currency, 'INR'),
-                        'shippingInfo',  vl.shipping_info,
+                        'isPlusShipping',  vl.is_plus_shipping,
                         'description',   vl.description,
                         'isActive',      vl.is_active,
                         'updatedAt',     vl.updated_at,
@@ -488,7 +557,8 @@ public class ProductService : IProductService
             WorkHeaviness = r.WorkHeaviness,
             Category = r.Category,
             SourceJid = r.SourceJid,
-            SourceGroupId = r.SourceGroupId
+            SourceGroupId = r.SourceGroupId,
+            IsStarred = r.IsStarred
         };
 
         if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
@@ -805,6 +875,53 @@ public class ProductService : IProductService
         return rowsAffected > 0;
     }
 
+    public async Task<ProductFilterOptions> GetFilterOptionsAsync()
+    {
+        using var db = GetConnection();
+
+        var fabrics = (await db.QueryAsync<string>(
+            @"SELECT DISTINCT fabric FROM products
+              WHERE is_deleted = FALSE
+              AND fabric IS NOT NULL
+              AND fabric != 'Unknown'
+              AND fabric != ''
+              ORDER BY fabric ASC"
+        )).ToList();
+
+        var vendors = (await db.QueryAsync<string>(
+            @"SELECT DISTINCT v.vendor_name FROM vendors v
+              JOIN vendor_listings vl ON vl.vendor_id = v.id
+              JOIN products p ON p.id = vl.product_id
+              WHERE p.is_deleted = FALSE
+              AND v.vendor_name IS NOT NULL
+              ORDER BY v.vendor_name ASC"
+        )).ToList();
+
+        var priceRange = await db.QueryFirstOrDefaultAsync(
+            @"SELECT
+                COALESCE(CAST(MIN(current_price) AS int), 0) as MinPrice,
+                COALESCE(CAST(PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY current_price) AS int), 20000) as MaxPrice
+              FROM vendor_listings
+              WHERE current_price > 0 AND current_price < 1000000"
+        );
+
+        return new ProductFilterOptions
+        {
+            Fabrics = fabrics,
+            Vendors = vendors,
+            MinPrice = (int)(priceRange?.MinPrice ?? 0),
+            MaxPrice = (int)(priceRange?.MaxPrice ?? 20000)
+        };
+    }
+
+    public async Task<int> BackfillFabricAsync()
+    {
+        using var db = GetConnection();
+        return await db.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM products WHERE is_deleted = FALSE AND (fabric IS NULL OR fabric = 'Unknown' OR fabric = '')"
+        );
+    }
+
     private record InstagramPostMetadata(string? StoragePath, string? Title, string? Description);
     private record InstagramProductLinkInfo(string LinkType);
     private class ProductCatalogQueryResult
@@ -817,6 +934,7 @@ public class ProductService : IProductService
         public string? StitchType { get; init; }
         public string? WorkHeaviness { get; init; }
         public DateTime CreatedAt { get; init; }
+        public bool IsStarred { get; init; }
         public string? Description { get; init; }
         public string? Category { get; init; }
         public decimal? VendorPrice { get; init; }
@@ -826,5 +944,62 @@ public class ProductService : IProductService
         public string? SourceJid { get; init; }
         public string? SourceGroupId { get; init; }
         public int ListingCount { get; init; }
+    }
+
+    public async Task<ProductShareLogDto> RecordShareAsync(Guid productId, string platform, string? descriptionUsed, CancellationToken ct = default)
+    {
+        using var activity = DeepLensActivitySource.StartActivity("ProductService.RecordShareAsync");
+        
+        try 
+        {
+            var log = new ProductShareLog
+            {
+                Id = Guid.NewGuid(),
+                ProductId = productId,
+                Platform = platform,
+                SharedAt = DateTimeOffset.UtcNow,
+                DescriptionUsed = descriptionUsed
+            };
+
+            await _productShareLogRepository.AddAsync(log, ct);
+
+            return new ProductShareLogDto
+            {
+                Id = log.Id,
+                ProductId = log.ProductId,
+                Platform = log.Platform,
+                SharedAt = log.SharedAt,
+                DescriptionUsed = log.DescriptionUsed
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to record product share for ProductId {ProductId}", productId);
+            throw;
+        }
+    }
+
+    public async Task<string> GenerateShareDescriptionAsync(Guid productId, string? targetPlatform, CancellationToken ct = default)
+    {
+        using var activity = DeepLensActivitySource.StartActivity("ProductService.GenerateShareDescriptionAsync");
+        
+        try
+        {
+            var product = await GetProductByIdAsync(productId);
+            if (product == null)
+            {
+                throw new InvalidOperationException($"Product {productId} not found");
+            }
+
+            // TODO: Integrate dynamic generation via AI reasoning service instead of mock.
+            // Mocking the AI service generation for now.
+            var platformText = targetPlatform ?? "social media";
+            return $"Check out our amazing {product.Title}! Available now for {product.VendorPrice} INR. Perfect for your {platformText} followers!";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate share description for ProductId {ProductId}", productId);
+            throw;
+        }
     }
 }

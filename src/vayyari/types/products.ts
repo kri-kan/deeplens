@@ -24,7 +24,7 @@ export interface VendorListing {
   vendorName?: string;
   price: number;
   currency: string;
-  shippingInfo?: string;
+  isPlusShipping?: boolean;
   description?: string;
   isActive: boolean;
   updatedAt?: string;
@@ -56,6 +56,8 @@ export interface VendorProduct {
   listings?: VendorListing[];
   /** Number of active vendor listings for this product */
   listingCount?: number;
+  /** Whether this product is starred by the user */
+  isStarred?: boolean;
 }
 
 export interface MediaEntry {
@@ -105,4 +107,21 @@ export interface CategoryDefinition {
   label: string;
   /** Relative path to the SVG asset used by CategoryIcon. */
   assetPath: any;
+}
+
+export interface ProductShareLog {
+  id: string;
+  productId: string;
+  platform: string;
+  sharedAt: string;
+  descriptionUsed?: string;
+}
+
+export interface RecordShareRequest {
+  platform: string;
+  descriptionUsed: string | null;
+}
+
+export interface GenerateShareDescriptionResponse {
+  description: string;
 }

@@ -48,6 +48,13 @@ public class ProductsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("catalog/filter-options")]
+    public async Task<IActionResult> GetFilterOptions()
+    {
+        var result = await _productService.GetFilterOptionsAsync();
+        return Ok(result);
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetProductById(Guid id)
     {
@@ -239,4 +246,19 @@ public class ProductsController : ControllerBase
         }
     }
 
+    [HttpPost("{id}/shares")]
+    [ProducesResponseType(typeof(ProductShareLogDto), 200)]
+    public async Task<IActionResult> RecordShare(Guid id, [FromBody] RecordShareRequest request, CancellationToken ct)
+    {
+        var result = await _productService.RecordShareAsync(id, request.Platform, request.DescriptionUsed, ct);
+        return Ok(result);
+    }
+
+    [HttpPost("{id}/generate-share-description")]
+    [ProducesResponseType(typeof(GenerateShareDescriptionResponse), 200)]
+    public async Task<IActionResult> GenerateShareDescription(Guid id, [FromBody] GenerateShareDescriptionRequest request, CancellationToken ct)
+    {
+        var description = await _productService.GenerateShareDescriptionAsync(id, request.TargetPlatform, ct);
+        return Ok(new GenerateShareDescriptionResponse(description));
+    }
 }

@@ -19,7 +19,9 @@ public interface IProductService
     Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20);
     Task<ProductCatalogResult> GetCatalogAsync(ProductCatalogFilter filter);
     Task<bool> DeleteProductAsync(Guid productId);
+    Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default);
     Task<bool> StarMediaAsync(Guid productId, Guid mediaId);
+    Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default);
     Task<bool> ReorderMediaAsync(Guid productId, List<Guid> mediaIds);
     Task<VendorProduct?> GetProductByIdAsync(Guid id);
     Task<MergePreviewDto> GetMergePreviewAsync(Guid sourceId, Guid targetId);
@@ -29,6 +31,10 @@ public interface IProductService
     Task<VendorProduct> CreateProductFromPostAsync(Guid postId, ProductIngestionDto data);
     Task<IEnumerable<CategoryDto>> GetCategoriesAsync();
     Task<bool> ChangeCategoryAsync(Guid productId, string categorySlug);
+    Task<ProductFilterOptions> GetFilterOptionsAsync();
+    Task<int> BackfillFabricAsync();
+    Task<ProductShareLogDto> RecordShareAsync(Guid productId, string platform, string? descriptionUsed, CancellationToken ct = default);
+    Task<string> GenerateShareDescriptionAsync(Guid productId, string? targetPlatform, CancellationToken ct = default);
 }
 
 public class CategoryDto
@@ -97,7 +103,7 @@ public class ProductCatalogFilter
     public string? Category { get; set; }
 
     [JsonPropertyName("sortBy")]
-    public string? SortBy { get; set; } // recent, price_low, price_high
+    public string? SortBy { get; set; } // recent, price_low, price_high, oldest
 
     [JsonPropertyName("startDate")]
     public DateTime? StartDate { get; set; }
@@ -110,6 +116,33 @@ public class ProductCatalogFilter
 
     [JsonPropertyName("take")]
     public int Take { get; set; } = 20;
+
+    [JsonPropertyName("fabrics")]
+    public string[]? Fabrics { get; set; }
+
+    [JsonPropertyName("vendorNames")]
+    public string[]? VendorNames { get; set; }
+
+    [JsonPropertyName("minPrice")]
+    public int? MinPrice { get; set; }
+
+    [JsonPropertyName("maxPrice")]
+    public int? MaxPrice { get; set; }
+}
+
+public class ProductFilterOptions
+{
+    [JsonPropertyName("fabrics")]
+    public List<string> Fabrics { get; set; } = new();
+
+    [JsonPropertyName("vendors")]
+    public List<string> Vendors { get; set; } = new();
+
+    [JsonPropertyName("minPrice")]
+    public int MinPrice { get; set; }
+
+    [JsonPropertyName("maxPrice")]
+    public int MaxPrice { get; set; }
 }
 
 public class ProductCatalogResult

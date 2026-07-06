@@ -91,3 +91,25 @@ public record InstaLinkRequest(
     [property: JsonPropertyName("productId")] Guid ProductId,
     [property: JsonPropertyName("linkType")] InstagramLinkType LinkType = InstagramLinkType.Is
 );
+
+/// <summary>
+/// Request body for recording a product share.
+/// </summary>
+public record RecordShareRequest(
+    [property: JsonPropertyName("platform")] string Platform,
+    [property: JsonPropertyName("descriptionUsed")] string? DescriptionUsed
+);
+
+/// <summary>
+/// Request body for generating a share description.
+/// </summary>
+public record GenerateShareDescriptionRequest(
+    [property: JsonPropertyName("targetPlatform")] string? TargetPlatform
+);
+
+/// <summary>
+/// Response body for generated share description.
+/// </summary>
+public record GenerateShareDescriptionResponse(
+    [property: JsonPropertyName("description")] string Description
+);
