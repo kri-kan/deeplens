@@ -6,7 +6,10 @@ import {
   Dimensions,
   TouchableOpacity,
   Alert,
-  Modal,
+  FlatList,
+  Modal as RNModal,
+  PanResponder,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import {
   Surface,
@@ -20,6 +23,8 @@ import {
   Dialog,
   Icon,
   Menu,
+  Modal,
+  Chip,
 } from 'react-native-paper';
 import { CompactChip } from '@/components/ui/CompactChip';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +32,7 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { productService } from '@/services/productService';
+import { useProductDetail } from '@/hooks/useProductDetail';
 import type { VendorProduct, MediaEntry, VendorListing } from '@/types/products';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 
@@ -117,49 +123,27 @@ export default function ProductDetailScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   
-  const [product, setProduct] = useState<VendorProduct | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: product, isLoading: loading, refetch: fetchProductDetails, setDefaultMedia } = useProductDetail(id);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [previewListing, setPreviewListing] = useState<any>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [shareProgress, setShareProgress] = useState<number | null>(null);
 
-  const fetchProductDetails = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (id) {
-        const prod = await productService.getProductById(id);
-        setProduct(prod);
-      }
-    } catch (error) {
-      console.error('Failed to fetch product:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchProductDetails();
-  }, [fetchProductDetails]);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dy > 50) {
+          setPreviewListing(null);
+        }
+      },
+    })
+  ).current;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const handleManualEnrich = async () => {
-    if (!product?.sourceGroupId) {
-      Alert.alert('Error', 'Cannot enrich: No Source Group ID found for this product.');
-      return;
-    }
-    try {
-      await productService.retryEnrichment(product.sourceGroupId);
-      Alert.alert('Success', 'Manual enrichment initiated successfully');
-      fetchProductDetails();
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'Failed to initiate manual enrichment');
-    }
-  };
 
   const handleReevaluateLLM = async () => {
     if (!product?.id) return;
@@ -222,9 +206,6 @@ export default function ProductDetailScreen() {
       <Appbar.Header style={{ backgroundColor: 'transparent', position: 'absolute', top: insets.top, left: 0, right: 0, zIndex: 10 }}>
         <Appbar.BackAction onPress={() => router.back()} color="white" style={styles.headerBtn} />
         <Appbar.Content title="" />
-        <Appbar.Action icon="star-outline" onPress={handleStarMedia} color="white" style={styles.headerBtn} />
-        <Appbar.Action icon="reorder-horizontal" onPress={() => {}} color="white" style={styles.headerBtn} />
-        <Appbar.Action icon="delete" onPress={() => setIsDeleteDialogOpen(true)} color="white" style={styles.headerBtn} />
         <Menu
           visible={isMenuOpen}
           onDismiss={() => setIsMenuOpen(false)}
@@ -232,21 +213,48 @@ export default function ProductDetailScreen() {
             <Appbar.Action icon="dots-vertical" onPress={() => setIsMenuOpen(true)} color="white" style={styles.headerBtn} />
           }
         >
-          <Menu.Item 
+          <Menu.Item
             onPress={() => {
               setIsMenuOpen(false);
-              handleManualEnrich();
-            }} 
-            title="Manual Enrich" 
-            leadingIcon="refresh"
+              router.push(`/product/${id}/share`);
+            }}
+            title="Share Product"
+            leadingIcon="share-variant"
           />
-          <Menu.Item 
+          <Menu.Item
+            onPress={() => {
+              setIsMenuOpen(false);
+              handleStarMedia();
+            }}
+            title="Star Current Image"
+            leadingIcon="star-outline"
+          />
+          <Menu.Item
             onPress={() => {
               setIsMenuOpen(false);
               handleReevaluateLLM();
-            }} 
-            title="Manual Re-evaluate with LLM" 
+            }}
+            title="Re-evaluate with LLM"
             leadingIcon="robot-outline"
+          />
+          <Menu.Item
+            onPress={() => {
+              setIsMenuOpen(false);
+              router.push({
+                pathname: '/utilities/product/product-similar-matches',
+                params: { productId: id, productTitle: product.title || '' },
+              } as any);
+            }}
+            title="Find Similar / Merge"
+            leadingIcon="call-merge"
+          />
+          <Menu.Item
+            onPress={() => {
+              setIsMenuOpen(false);
+              setIsDeleteDialogOpen(true);
+            }}
+            title="Delete Product"
+            leadingIcon="delete-outline"
           />
         </Menu>
       </Appbar.Header>
@@ -363,81 +371,113 @@ export default function ProductDetailScreen() {
                   <View style={styles.listingHeader}>
                     <View style={styles.listingVendorRow}>
                       <Icon source="store" size={16} color={theme.colors.primary} />
-                      <Text variant="titleSmall" style={[styles.listingVendorName, { color: theme.colors.primary }]}>
+                      <Text variant="titleSmall" style={[styles.listingVendorName, { color: theme.colors.primary }]} numberOfLines={1}>
                         {listing.vendorName || 'Unknown Vendor'}
                       </Text>
                     </View>
-                    <CompactChip
-                      color={listing.isActive ? '#16a34a' : theme.colors.outline}
-                      outline={!listing.isActive}
-                    >
-                      {listing.isActive ? 'Active' : 'Inactive'}
-                    </CompactChip>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <IconButton
+                        icon="arrow-expand-all"
+                        size={16}
+                        iconColor={theme.colors.primary}
+                        style={{ margin: 0, padding: 0, width: 24, height: 24 }}
+                        onPress={() => setPreviewListing(listing)}
+                      />
+                      {listing.sourceGroupId && listing.sourceJid && (
+                        <IconButton
+                          icon="whatsapp"
+                          iconColor="#25D366"
+                          size={18}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/utilities/whatsapp/messages/[jid]',
+                              params: {
+                                jid: listing.sourceJid!,
+                                name: 'Source Chat',
+                                highlightGroupId: listing.sourceGroupId || ''
+                              },
+                            })
+                          }
+                          style={{ margin: 0, padding: 0, width: 24, height: 24 }}
+                        />
+                      )}
+                      <CompactChip
+                        color={listing.isActive ? '#16a34a' : theme.colors.outline}
+                        outline={!listing.isActive}
+                      >
+                        {listing.isActive ? 'Active' : 'Inactive'}
+                      </CompactChip>
+                    </View>
                   </View>
 
                   {/* Price + Shipping */}
-                  <View style={styles.listingPriceRow}>
-                    <Text variant="headlineSmall" style={[styles.listingPrice, { color: theme.colors.primary }]}>
-                      ₹{listing.price}
-                    </Text>
-                    {listing.currency && listing.currency !== 'INR' && (
-                      <Text variant="bodySmall" style={styles.listingMeta}>{listing.currency}</Text>
-                    )}
-                    {listing.shippingInfo && (
-                      <View style={styles.shippingBadge}>
-                        <Icon
-                          source={listing.shippingInfo.toLowerCase().includes('free') ? 'truck-check' : 'truck'}
-                          size={13}
-                          color={listing.shippingInfo.toLowerCase().includes('free') ? '#16a34a' : '#64748b'}
+                  <View style={[styles.listingPriceRow, { justifyContent: 'space-between' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text variant="headlineSmall" style={[styles.listingPrice, { color: theme.colors.primary }]}>
+                        ₹{listing.price}
+                      </Text>
+                      {listing.currency && listing.currency !== 'INR' && (
+                        <Text variant="bodySmall" style={styles.listingMeta}>{listing.currency}</Text>
+                      )}
+                      {listing.isPlusShipping !== undefined && (
+                        <View style={[styles.shippingBadge, { backgroundColor: !listing.isPlusShipping ? '#f0fdf4' : '#f8fafc' }]}>
+                          <Icon
+                            source={!listing.isPlusShipping ? 'truck-check' : 'truck'}
+                            size={13}
+                            color={!listing.isPlusShipping ? '#16a34a' : '#64748b'}
+                          />
+                          <Text
+                            variant="bodySmall"
+                            style={[
+                              styles.shippingText,
+                              { color: !listing.isPlusShipping ? '#16a34a' : '#64748b' },
+                            ]}
+                          >
+                            {!listing.isPlusShipping ? 'FS' : '+$'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      {(() => {
+                        let dateObj = listing.updatedAt ? new Date(listing.updatedAt) : null;
+                        if (listing.sourceGroupId) {
+                          const parts = listing.sourceGroupId.split('_');
+                          if (parts.length > 1) {
+                            const ts = parseInt(parts[parts.length - 1], 10);
+                            if (!isNaN(ts) && ts > 1000000000) {
+                              dateObj = new Date(ts * 1000);
+                            }
+                          }
+                        }
+                        return dateObj ? (
+                          <Text variant="bodySmall" style={styles.listingMeta}>
+                            {dateObj.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </Text>
+                        ) : null;
+                      })()}
+                      {listing.description && (
+                        <IconButton 
+                          icon="content-copy" 
+                          size={16} 
+                          onPress={() => {
+                            import('expo-clipboard').then(Clipboard => {
+                                Clipboard.setStringAsync(listing.description || '');
+                                Alert.alert('Copied', 'Vendor listing description copied to clipboard', [], { cancelable: true });
+                            });
+                          }}
+                          style={{ margin: 0, padding: 0 }}
                         />
-                        <Text
-                          variant="bodySmall"
-                          style={[
-                            styles.shippingText,
-                            { color: listing.shippingInfo.toLowerCase().includes('free') ? '#16a34a' : '#64748b' },
-                          ]}
-                        >
-                          {listing.shippingInfo.toLowerCase().includes('free') ? 'Free shipping' : 'Plus shipping'}
-                        </Text>
-                      </View>
-                    )}
+                      )}
+                    </View>
                   </View>
 
                   {/* Description */}
                   {listing.description && (
-                    <Text variant="bodySmall" style={styles.listingDescription} numberOfLines={3}>
-                      {listing.description}
+                    <Text variant="bodySmall" style={styles.listingDescription}>
+                      {listing.description.replace(/\s+/g, ' ').trim()}
                     </Text>
                   )}
-
-                  {/* Footer: last updated + source chat link */}
-                  <View style={styles.listingFooter}>
-                    {listing.updatedAt && (
-                      <Text variant="bodySmall" style={styles.listingMeta}>
-                        Updated {new Date(listing.updatedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </Text>
-                    )}
-                    {listing.sourceGroupId && listing.sourceJid && (
-                      <Button
-                        compact
-                        mode="text"
-                        icon="whatsapp"
-                        textColor="#25D366"
-                        onPress={() =>
-                          router.push({
-                            pathname: '/utilities/whatsapp/messages/[jid]',
-                            params: { 
-                              jid: listing.sourceJid!, 
-                              name: 'Source Chat',
-                              highlightGroupId: listing.sourceGroupId || ''
-                            },
-                          })
-                        }
-                      >
-                        View Chat
-                      </Button>
-                    )}
-                  </View>
                 </Surface>
               ))}
             </View>
@@ -458,6 +498,110 @@ export default function ProductDetailScreen() {
         </View>
       </ScrollView>
 
+      {/* Vendor Preview Modal */}
+      <RNModal
+        visible={!!previewListing}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPreviewListing(null)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <TouchableWithoutFeedback onPress={() => setPreviewListing(null)}>
+            <View style={{ flex: 1 }} />
+          </TouchableWithoutFeedback>
+          
+          <View style={{ 
+            height: '95%', 
+            backgroundColor: 'white', 
+            borderTopLeftRadius: 20, 
+            borderTopRightRadius: 20,
+            paddingBottom: insets.bottom,
+            elevation: 10,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 10
+          }}>
+            <View {...panResponder.panHandlers} style={{ alignItems: 'center', paddingVertical: 12 }}>
+               <View style={{ width: 40, height: 5, backgroundColor: '#ddd', borderRadius: 3 }} />
+            </View>
+            
+            {previewListing && (
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+                  <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{previewListing.vendorName || 'Vendor Listing'}</Text>
+                  <IconButton icon="close" size={20} onPress={() => setPreviewListing(null)} style={{ margin: 0 }} />
+                </View>
+                <ScrollView style={{ padding: 16 }}>
+                  {(() => {
+                    const mediaList = product?.media?.filter(m => m.storagePath?.includes(previewListing.sourceGroupId?.split('@')[0])) || [];
+                    return mediaList.length > 0 ? (
+                      <FlatList
+                        horizontal
+                        data={mediaList}
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        keyExtractor={(item: any, index: number) => `${item.id}-${index}`}
+                        renderItem={({ item }: { item: any }) => {
+                          const uri = item.id && item.id !== '00000000-0000-0000-0000-000000000000'
+                            ? productService.getThumbnailUrl(item.id, 'large')
+                            : (item.storagePath ? productService.getThumbnailUrlByPath(item.storagePath, 'large') : 'https://via.placeholder.com/400');
+                          return (
+                            <View style={{ width: Dimensions.get('window').width - 32, height: Dimensions.get('window').width - 32, marginRight: 8, borderRadius: 8, overflow: 'hidden' }}>
+                              <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                            </View>
+                          );
+                        }}
+                        style={{ marginBottom: 16 }}
+                      />
+                    ) : (
+                      <View style={{ height: 200, backgroundColor: '#f5f5f5', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                        <Text style={{ opacity: 0.5 }}>No specific media found</Text>
+                      </View>
+                    );
+                  })()}
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>₹{previewListing.price}</Text>
+                    {previewListing.isPlusShipping !== undefined && (
+                      <Chip compact style={{ backgroundColor: !previewListing.isPlusShipping ? '#f0fdf4' : '#f8fafc' }} textStyle={{ color: !previewListing.isPlusShipping ? '#16a34a' : '#64748b', fontSize: 12 }}>
+                        {!previewListing.isPlusShipping ? 'Free shipping' : 'Plus shipping'}
+                      </Chip>
+                    )}
+                  </View>
+
+                  <Text variant="bodyMedium" style={{ lineHeight: 22, opacity: 0.8, marginBottom: 24 }}>
+                    {previewListing.description}
+                  </Text>
+
+                  {previewListing.sourceGroupId && previewListing.sourceJid && (
+                    <Button
+                      mode="contained"
+                      icon="whatsapp"
+                      buttonColor="#25D366"
+                      onPress={() => {
+                        setPreviewListing(null);
+                        router.push({
+                          pathname: '/utilities/whatsapp/messages/[jid]',
+                          params: {
+                            jid: previewListing.sourceJid!,
+                            name: 'Source Chat',
+                            highlightGroupId: previewListing.sourceGroupId || ''
+                          },
+                        });
+                      }}
+                      style={{ marginBottom: 40 }}
+                    >
+                      View Source Chat
+                    </Button>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        </View>
+      </RNModal>
+
       {/* Confirmation Dialog */}
       <Portal>
         <Dialog visible={isDeleteDialogOpen} onDismiss={() => setIsDeleteDialogOpen(false)}>
@@ -473,7 +617,7 @@ export default function ProductDetailScreen() {
       </Portal>
 
       {/* High Quality Preview Modal */}
-      <Modal visible={isPreviewOpen} transparent animationType="fade">
+      <RNModal visible={isPreviewOpen} transparent animationType="fade">
         <View style={styles.modalBg}>
             <IconButton 
                 icon="close" 
@@ -551,11 +695,29 @@ export default function ProductDetailScreen() {
                         >
                             {shareProgress !== null ? `Preparing (${Math.round(shareProgress * 100)}%)` : 'Share'}
                         </Button>
+                        <Button
+                          mode="contained"
+                          icon="image-outline"
+                          onPress={async () => {
+                            try {
+                              const m = mediaList[activeMediaIndex];
+                              if (m && m.id) {
+                                await setDefaultMedia(m.id);
+                                Alert.alert('Success', 'Media set as cover successfully');
+                              }
+                            } catch (err) {
+                              Alert.alert('Error', 'Failed to set cover media');
+                            }
+                          }}
+                          style={styles.modalActionBtn}
+                        >
+                          Cover
+                        </Button>
                     </View>
                 </>
             )}
         </View>
-      </Modal>
+      </RNModal>
 
     </Surface>
   );

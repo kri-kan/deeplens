@@ -13,6 +13,8 @@ import { instagramService, StoryGroup, InstagramPost, InstagramProfile, Instagra
 import { wrapInSpan } from '@/utils/telemetry';
 import { getMediaUri } from '@/utils/instagram-helpers';
 import { UnifiedPlannerItem } from '@/services/instagram.service';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -67,7 +69,7 @@ const formatRelativeTime = (dateStr?: string) => {
 const getProfilePicUri = (p: InstagramProfile) => {
   if (!p) return null;
   const path = p.storagePath;
-  const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+  const baseUrl = getSearchApiUrl() || '';
   const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   if (path) {
     return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
@@ -869,7 +871,7 @@ export default function StorySharingScreen() {
           contentContainerStyle={{ gap: 16, paddingHorizontal: 4 }}
           renderItem={({ item: p }) => {
             const isSelected = selectedProfile?.id === p.id;
-            const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+            const baseUrl = getSearchApiUrl() || '';
             const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
             const avatarUri = p.storagePath
               ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(p.storagePath)}`

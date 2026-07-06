@@ -8,6 +8,8 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { instagramService, StoryGroup, InstagramPost, InstagramProfile, InstagramMediaType } from '@/services/instagram.service';
 import { wrapInSpan } from '@/utils/telemetry';
 import { getMediaUri } from '@/utils/instagram-helpers';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -218,13 +220,17 @@ function MergeModalInner({
     setSuggesting(true);
     try {
       const res = await instagramService.suggestGroupMetadata(postIds);
-      if (res.title) {
-        setGroupName(res.title);
+      if (!res.title && !res.keywords) {
+        Alert.alert('AI Error', 'Failed to generate suggestions. The AI service may be unavailable.');
+      } else {
+        if (res.title) {
+          setGroupName(res.title);
+        }
+        if (res.keywords) {
+          setKeywords(res.keywords);
+        }
+        Alert.alert('AI Suggestions Applied', 'Suggested title and keywords have been filled!');
       }
-      if (res.keywords) {
-        setKeywords(res.keywords);
-      }
-      Alert.alert('AI Suggestions Applied', 'Suggested title and keywords have been filled!');
     } catch (err: any) {
       console.error(err);
       Alert.alert('AI Error', 'Failed to generate suggestions.');
@@ -325,7 +331,7 @@ function MergeModalInner({
 
         <Button
           mode="outlined"
-          icon="sparkles"
+          icon="auto-fix"
           loading={suggesting}
           disabled={suggesting}
           onPress={handleSuggestMetadata}
@@ -358,7 +364,7 @@ function MergeModalInner({
             <View style={styles.eligibilityRow}>
               {ownProfiles.map(p => {
                 const isChecked = targets.has(p.id);
-                const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+                const baseUrl = getSearchApiUrl() || '';
                 const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
                 const avatarUri = p.storagePath
                   ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(p.storagePath)}`
@@ -426,126 +432,7 @@ function MergeModalInner({
   );
 }
 
-interface EditDialogInnerProps {
-  activeGroup: StoryGroup;
-  theme: any;
-  onCancel: () => void;
-  onSaveDetails: (name: string, keywords: string) => void;
-  onRenew: (groupId: string) => void;
-  onUpdateStatus: (status: 'active' | 'suspend' | 'ignore', suspendDays: string) => void;
-  onDelete: (groupId: string) => void;
-}
 
-function EditDialogInner({
-  activeGroup,
-  theme,
-  onCancel,
-  onSaveDetails,
-  onRenew,
-  onUpdateStatus,
-  onDelete
-}: EditDialogInnerProps) {
-  const [groupName, setGroupName] = useState(activeGroup.name);
-  const [keywords, setKeywords] = useState(activeGroup.keywords || '');
-  const [suspendDays, setSuspendDays] = useState('7');
-
-  return (
-    <>
-      <Dialog.Title>Edit Group: {activeGroup.name}</Dialog.Title>
-      <ScrollView style={{ maxHeight: 400 }}>
-        <Dialog.Content style={{ gap: 12 }}>
-          <TextInput
-            label="Group Name"
-            value={groupName}
-            onChangeText={setGroupName}
-            mode="outlined"
-            placeholder="e.g. Summer Silks"
-          />
-
-          <TextInput
-            label="Keywords (comma-separated)"
-            value={keywords}
-            onChangeText={setKeywords}
-            mode="outlined"
-            placeholder="e.g. summer, silks, floral"
-          />
-
-          <Button 
-            mode="contained" 
-            icon="content-save-outline" 
-            onPress={() => onSaveDetails(groupName, keywords)}
-            style={{ marginVertical: 4 }}
-          >
-            Save Details
-          </Button>
-
-          <Divider style={{ marginVertical: 4 }} />
-
-          <Text variant="labelMedium">Manage status, renew eligibility, or delete group:</Text>
-          
-          {activeGroup.needsReview && (
-            <View style={{ backgroundColor: theme.colors.errorContainer, padding: 12, borderRadius: 8, marginVertical: 4 }}>
-              <Text style={{ color: theme.colors.onErrorContainer, fontWeight: 'bold' }}>⚠️ Needs Review / Renew</Text>
-              <Text style={{ color: theme.colors.onErrorContainer, fontSize: 11, marginTop: 2 }}>
-                Suspension ended or posts are older than 15 days.
-              </Text>
-            </View>
-          )}
-
-          <View style={{ flexDirection: 'row', gap: 8, marginVertical: 4 }}>
-            <Button 
-              mode={activeGroup.status === 'active' ? 'contained' : 'contained-tonal'} 
-              icon="check-circle-outline" 
-              style={{ flex: 1, backgroundColor: activeGroup.status === 'active' ? 'green' : undefined }} 
-              onPress={() => onRenew(activeGroup.id)}
-            >
-              Renew (Active)
-            </Button>
-            <Button 
-              mode={activeGroup.status === 'ignore' ? 'contained' : 'contained-tonal'} 
-              icon="eye-off-outline" 
-              style={{ flex: 1, backgroundColor: activeGroup.status === 'ignore' ? 'green' : undefined }} 
-              onPress={() => onUpdateStatus('ignore', suspendDays)}
-            >
-              Inactive
-            </Button>
-          </View>
-
-          <Divider style={{ marginVertical: 4 }} />
-
-          <Text variant="labelMedium">Suspend Group:</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <TextInput
-              label="Days"
-              value={suspendDays}
-              onChangeText={setSuspendDays}
-              keyboardType="numeric"
-              mode="outlined"
-              style={{ width: 80, height: 42 }}
-            />
-            <Button 
-              mode={activeGroup.status === 'suspend' ? 'contained' : 'contained-tonal'} 
-              icon="clock-alert-outline" 
-              style={{ backgroundColor: activeGroup.status === 'suspend' ? 'green' : undefined }}
-              onPress={() => onUpdateStatus('suspend', suspendDays)}
-            >
-              Suspend
-            </Button>
-          </View>
-
-          <Divider style={{ marginVertical: 4 }} />
-
-          <Button mode="outlined" icon="delete-outline" textColor={theme.colors.error} style={{ borderColor: theme.colors.error }} onPress={() => onDelete(activeGroup.id)}>
-            Delete Group
-          </Button>
-        </Dialog.Content>
-      </ScrollView>
-      <Dialog.Actions>
-        <Button onPress={onCancel}>Close</Button>
-      </Dialog.Actions>
-    </>
-  );
-}
 
 export default function StoryPlannerDashboard() {
   const theme = useTheme();
@@ -574,17 +461,15 @@ export default function StoryPlannerDashboard() {
   // Merge Preview Dialog State
   const [mergeDialogVisible, setMergeDialogVisible] = useState(false);
 
-  // Edit Group Dialog State
-  const [editDialogVisible, setEditDialogVisible] = useState(false);
-  const [activeGroup, setActiveGroup] = useState<StoryGroup | null>(null);
-
+  // Post Preview State
+  const [previewPost, setPreviewPost] = useState<InstagramPost | null>(null);
   // Search Filter State
   const [searchQuery, setSearchQuery] = useState('');
 
   const getProfilePicUri = (p: any) => {
     if (!p) return null;
     const path = p.storagePath;
-    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+    const baseUrl = getSearchApiUrl() || '';
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     if (path) {
       return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
@@ -667,7 +552,7 @@ export default function StoryPlannerDashboard() {
         instagramService.getStoryPlannerFeed(LIMIT, 0, search, sort)
       );
       
-      const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+      const baseUrl = getSearchApiUrl() || '';
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
       
       const normalizedFeed = feedItems.map(item => {
@@ -732,7 +617,7 @@ export default function StoryPlannerDashboard() {
         instagramService.getStoryPlannerFeed(LIMIT, nextOffset, searchQuery, sortAsc)
       );
       
-      const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+      const baseUrl = getSearchApiUrl() || '';
       const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
       
       const normalizedFeed = feedItems.map(item => {
@@ -955,93 +840,7 @@ export default function StoryPlannerDashboard() {
     }
   };
 
-  const handleUpdateStatus = async (status: 'active' | 'suspend' | 'ignore', targetSuspendDays: string) => {
-    if (!activeGroup) return;
 
-    try {
-      setLoading(true);
-      const payload: any = { status };
-      if (status === 'suspend') {
-        payload.suspendDays = parseInt(targetSuspendDays, 10) || 7;
-      }
-      await wrapInSpan('StoryPlannerDashboard: updateStatus', () => 
-        instagramService.updateStoryGroup(activeGroup.id, payload)
-      );
-      setEditDialogVisible(false);
-      loadData();
-      Alert.alert('Success', 'Status updated.');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to update status.');
-      setLoading(false);
-    }
-  };
-
-  const handleUpdateGroupDetails = async (groupName: string, keywords: string) => {
-    if (!activeGroup) return;
-
-    try {
-      setLoading(true);
-      await wrapInSpan('StoryPlannerDashboard: updateGroupDetails', () => 
-        instagramService.updateStoryGroup(activeGroup.id, {
-          name: groupName.trim(),
-          keywords: keywords.trim()
-        })
-      );
-      setEditDialogVisible(false);
-      loadData();
-      Alert.alert('Success', 'Group details updated.');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to update group details.');
-      setLoading(false);
-    }
-  };
-
-  const handleRenew = async (groupId: string) => {
-    try {
-      setLoading(true);
-      await wrapInSpan('StoryPlannerDashboard: renewGroup', () => 
-        instagramService.renewStoryGroup(groupId)
-      );
-      setEditDialogVisible(false);
-      loadData();
-      Alert.alert('Success', 'Eligibility renewed.');
-    } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Failed to renew.');
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteGroup = async (groupId: string) => {
-    Alert.alert(
-      'Delete Group',
-      'Are you sure you want to delete this story group?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await wrapInSpan('StoryPlannerDashboard: deleteGroup', () => 
-                instagramService.deleteStoryGroup(groupId)
-              );
-              setEditDialogVisible(false);
-              loadData();
-              Alert.alert('Success', 'Group deleted.');
-            } catch (error) {
-              console.error(error);
-              Alert.alert('Error', 'Failed to delete group.');
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  };
 
   // Render Unified Grid Item
   const renderUnifiedGridItem = ({ item }: { item: UnifiedItem }) => {
@@ -1054,7 +853,7 @@ export default function StoryPlannerDashboard() {
         <TouchableOpacity 
           style={[styles.gridCell, isSelected && styles.gridCellSelected]}
           onPress={() => handleItemSelect(item)}
-          onLongPress={() => handleItemSelect(item)}
+          onLongPress={() => setPreviewPost(post)}
           delayLongPress={300}
           activeOpacity={0.8}
         >
@@ -1111,15 +910,13 @@ export default function StoryPlannerDashboard() {
             isSelected && styles.gridCellSelected,
             group.needsReview && !isSelected && { borderColor: theme.colors.error, borderWidth: 1 }
           ]}
-          onPress={() => {
-            if (selectionMode) {
-              handleItemSelect(item);
-            } else {
-              setActiveGroup(group);
-              setEditDialogVisible(true);
-            }
+          onPress={() => handleItemSelect(item)}
+          onLongPress={() => {
+            router.push({
+              pathname: '/utilities/instagram/story-planner/[groupId]',
+              params: { groupId: group.id }
+            });
           }}
-          onLongPress={() => handleItemSelect(item)}
           delayLongPress={300}
           activeOpacity={0.8}
         >
@@ -1338,20 +1135,91 @@ export default function StoryPlannerDashboard() {
           )}
         </Modal>
 
-        {/* Edit Group Options Dialog */}
-        <Dialog visible={editDialogVisible} onDismiss={() => setEditDialogVisible(false)}>
-          {editDialogVisible && activeGroup && (
-            <EditDialogInner
-              activeGroup={activeGroup}
-              theme={theme}
-              onCancel={() => setEditDialogVisible(false)}
-              onSaveDetails={handleUpdateGroupDetails}
-              onRenew={handleRenew}
-              onUpdateStatus={handleUpdateStatus}
-              onDelete={handleDeleteGroup}
-            />
-          )}
-        </Dialog>
+        {/* Post Preview Modal */}
+        {previewPost && (
+          <Modal visible={true} onDismiss={() => setPreviewPost(null)} contentContainerStyle={styles.previewDialog}>
+            <View style={styles.previewDialogInner}>
+              <View style={styles.previewHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {previewPost.ownerProfilePictureUrl && (
+                    <Image source={{ uri: previewPost.ownerProfilePictureUrl }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+                  )}
+                  <Text style={{ fontWeight: 'bold' }}>
+                    @{previewPost.ownerUsername || 'Post'}
+                  </Text>
+                </View>
+                <IconButton icon="close" size={20} onPress={() => setPreviewPost(null)} />
+              </View>
+
+              <ScrollView style={{ flex: 1 }}>
+                <View style={styles.previewMediaContainer}>
+                  <Image 
+                    source={{ uri: getMediaUri(previewPost, 'large') }} 
+                    style={styles.previewMediaImage} 
+                    contentFit="contain"
+                  />
+                </View>
+
+                <View style={styles.previewStatsRow}>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatValue}>👍 {previewPost.rightSwipes || 0}</Text>
+                  </View>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatValue}>👎 {previewPost.leftSwipes || 0}</Text>
+                  </View>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatValue}>🔁 {previewPost.shareCount || 0}</Text>
+                  </View>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatValue}>❤️ {previewPost.likeCount || 0}</Text>
+                  </View>
+                  <View style={styles.modalStatItem}>
+                    <Text style={styles.modalStatValue}>💬 {previewPost.commentCount || 0}</Text>
+                  </View>
+                </View>
+
+                {previewPost.caption ? (
+                  <View style={styles.previewCaptionContainer}>
+                    <Text variant="bodySmall" style={styles.previewCaptionText}>
+                      {previewPost.caption}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.statusChipsContainer}>
+                  {(['active', 'ignore', 'suspend'] as const).map(s => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[
+                        styles.statusChip,
+                        previewPost.status === s && styles.statusChipActive
+                      ]}
+                      onPress={async () => {
+                        try {
+                          await instagramService.updateVideoStatus(previewPost.id, {
+                            status: s,
+                            suspendDays: s === 'suspend' ? 7 : 0
+                          });
+                          setPreviewPost(p => p ? { ...p, status: s } : p);
+                          loadData(false, searchQuery, sortAsc);
+                        } catch (err) {
+                          Alert.alert('Error', 'Failed to update post status');
+                        }
+                      }}
+                    >
+                      <Text style={[
+                        styles.statusChipText,
+                        previewPost.status === s && styles.statusChipTextActive
+                      ]}>
+                        {s.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
+        )}
       </Portal>
     </ScreenWrapper>
   );
@@ -1407,6 +1275,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'white',
+  },
+  previewDialog: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  previewMediaImage: {
+    width: '100%',
+    height: 240,
+    borderRadius: 8,
+    backgroundColor: '#000000',
+    marginBottom: 12,
+  },
+  previewStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  previewCaptionText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#333333',
+  },
+  previewDialogInner: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    flex: 1,
+  },
+  previewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  previewMediaContainer: {
+    width: '100%',
+  },
+  modalStatItem: {
+    alignItems: 'center',
+  },
+  modalStatValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  previewCaptionContainer: {
+    padding: 12,
+  },
+  statusChipsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  statusChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  statusChipActive: {
+    backgroundColor: '#6200ee',
+    borderColor: '#6200ee',
+  },
+  statusChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555',
+  },
+  statusChipTextActive: {
+    color: '#ffffff',
   },
   headerLinkButton: {
     borderRadius: 8,

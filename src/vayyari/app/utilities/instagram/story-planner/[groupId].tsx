@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Dimensions, DeviceEventEmitter } from 'react-native';
-import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon } from 'react-native-paper';
+import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon, Menu } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
@@ -9,6 +9,8 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { instagramService, StoryGroup, InstagramPost, InstagramProfile } from '@/services/instagram.service';
 import { wrapInSpan } from '@/utils/telemetry';
 import { getMediaUri } from '@/utils/instagram-helpers';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -23,6 +25,18 @@ export default function GroupDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<StoryGroup | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<InstagramProfile | null>(null);
+  
+  // Selection State
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPosts, setSelectedPosts] = useState<Set<string>>(new Set());
+
+  // Edit Mode State
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editKeywords, setEditKeywords] = useState('');
+  const [editTargetProfiles, setEditTargetProfiles] = useState<Set<string>>(new Set());
+  const [ownProfiles, setOwnProfiles] = useState<InstagramProfile[]>([]);
   
   // Dialog States
   const [postToShare, setPostToShare] = useState<InstagramPost | null>(null);
@@ -41,11 +55,14 @@ export default function GroupDetailScreen() {
       );
       setGroup(fetchedGroup);
 
-      // 2. Fetch profile if profileId provided
+      // 2. Fetch profiles
+      const watchlist = await wrapInSpan('GroupDetailScreen: getWatchlist', () => 
+        instagramService.getWatchlist()
+      );
+      const own = watchlist.filter(p => p.isOwnAccount);
+      setOwnProfiles(own);
+
       if (profileId) {
-        const watchlist = await wrapInSpan('GroupDetailScreen: getWatchlist', () => 
-          instagramService.getWatchlist()
-        );
         const profile = watchlist.find(p => p.id === profileId);
         if (profile) {
           setSelectedProfile(profile);
@@ -62,7 +79,7 @@ export default function GroupDetailScreen() {
   const getProfilePicUri = (p: InstagramProfile) => {
     if (!p) return null;
     const path = p.storagePath;
-    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+    const baseUrl = getSearchApiUrl() || '';
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     if (path) {
       return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
@@ -158,12 +175,45 @@ export default function GroupDetailScreen() {
       setConfirmShareVisible(false);
       setPostToShare(null);
       
-      Alert.alert('Success', 'Story posting recorded.');
-      // Reload data to reflect updated lastPostedAt
-      loadData();
+      if (group.posts && group.posts.length === 1) {
+        await wrapInSpan('GroupDetailScreen: finishStoryGroup', () => 
+          instagramService.finishStoryGroup(group.id, selectedProfile.id)
+        );
+        DeviceEventEmitter.emit('GroupFinished', { groupId: group.id });
+        router.back();
+        Alert.alert('Success', 'Story posting recorded and group marked as finished.');
+      } else {
+        Alert.alert('Success', 'Story posting recorded.');
+        // Reload data to reflect updated lastPostedAt
+        loadData();
+      }
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'Failed to record story post');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmAndFinishGroup = async () => {
+    if (!group || !selectedProfile || !postToShare) return;
+    try {
+      setLoading(true);
+      await wrapInSpan('GroupDetailScreen: markPostPosted', () => 
+        instagramService.markPostPosted(postToShare.id, selectedProfile.id, group.id)
+      );
+      setConfirmShareVisible(false);
+      setPostToShare(null);
+      
+      await wrapInSpan('GroupDetailScreen: finishStoryGroup', () => 
+        instagramService.finishStoryGroup(group.id, selectedProfile.id)
+      );
+      DeviceEventEmitter.emit('GroupFinished', { groupId: group.id });
+      router.back();
+      Alert.alert('Success', 'Story posting recorded and group marked as finished.');
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert('Error', error.message || 'Failed to record story post and finish group');
     } finally {
       setLoading(false);
     }
@@ -206,8 +256,8 @@ export default function GroupDetailScreen() {
     }
     try {
       setLoading(true);
-      await wrapInSpan('GroupDetailScreen: markGroupPosted', () => 
-        instagramService.markGroupPosted(group.id, selectedProfile.id)
+      await wrapInSpan('GroupDetailScreen: finishStoryGroup', () => 
+        instagramService.finishStoryGroup(group.id, selectedProfile.id)
       );
       DeviceEventEmitter.emit('GroupFinished', { groupId: group.id });
       router.back();
@@ -224,6 +274,65 @@ export default function GroupDetailScreen() {
     const days = parseInt(suspendDays, 10) || 7;
     setSuspendDialogVisible(false);
     updateGroupStatusDirect('suspend', days);
+  };
+
+  const handleSaveChanges = async () => {
+    if (!group) return;
+    try {
+      setLoading(true);
+      await wrapInSpan('GroupDetailScreen: updateStoryGroup', () => 
+        instagramService.updateStoryGroup(group.id, {
+          name: editName.trim(),
+          keywords: editKeywords.trim(),
+          targetWatchlistIds: Array.from(editTargetProfiles),
+        })
+      );
+      setEditModalVisible(false);
+      loadData();
+      Alert.alert('Success', 'Group updated successfully.');
+    } catch (error: any) {
+      console.error('Failed to update group', error);
+      Alert.alert('Error', error.message || 'Failed to update group.');
+      setLoading(false);
+    }
+  };
+
+  const handleUnlinkSelected = async () => {
+    if (!group || selectedPosts.size === 0) return;
+    
+    const remainingPosts = group.posts.filter(p => !selectedPosts.has(p.id));
+    setGroup({
+      ...group,
+      posts: remainingPosts
+    });
+    
+    try {
+      await wrapInSpan('GroupDetailScreen: updateStoryGroupUnlink', () => 
+        instagramService.updateStoryGroup(group.id, {
+          postIds: remainingPosts.map(p => p.id)
+        })
+      );
+      setSelectionMode(false);
+      setSelectedPosts(new Set());
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to unlink posts.');
+      loadData(); // Revert to database state
+    }
+  };
+
+  const openEditModal = () => {
+    setMenuVisible(false);
+    if (group) {
+      setEditName(group.name || '');
+      setEditKeywords(group.keywords || '');
+      const targets = new Set<string>();
+      if (group.eligibleAccounts) {
+        group.eligibleAccounts.forEach(id => targets.add(id));
+      }
+      setEditTargetProfiles(targets);
+    }
+    setEditModalVisible(true);
   };
 
   if (loading && !group) {
@@ -247,10 +356,33 @@ export default function GroupDetailScreen() {
   const postCount = group.posts?.length || 0;
 
   return (
-    <ScreenWrapper title={group.name} subtitle={`${postCount} posts in group`} withScrollView={false}>
-      <Stack.Screen options={{ headerTitle: group.name }} />
+    <ScreenWrapper 
+      title={selectionMode ? `${selectedPosts.size} Selected` : group.name} 
+      subtitle={selectionMode ? '' : `${postCount} posts in group`} 
+      withScrollView={false}
+      actions={
+        selectionMode ? (
+          <Button 
+            onPress={handleUnlinkSelected} 
+            textColor={theme.colors.error}
+            disabled={selectedPosts.size === 0}
+          >
+            Unlink
+          </Button>
+        ) : (
+          <Menu
+            visible={menuVisible}
+            onDismiss={() => setMenuVisible(false)}
+            anchor={<IconButton icon="dots-vertical" onPress={() => setMenuVisible(true)} />}
+          >
+            <Menu.Item onPress={openEditModal} title="Edit Details" />
+          </Menu>
+        )
+      }
+    >
 
       <View style={{ flex: 1 }}>
+
         {/* Status controls */}
         <View style={styles.statusControlBar}>
           <Text variant="labelMedium" style={{ marginRight: 8, opacity: 0.7 }}>Group Status:</Text>
@@ -307,9 +439,25 @@ export default function GroupDetailScreen() {
                 const isShared = isSharedRecently(post);
                 const opacityStyle = isShared ? { opacity: 0.4 } : {};
                 return (
-                  <View
+                  <TouchableOpacity
                     key={post.id || index}
                     style={[styles.gridCell, opacityStyle]}
+                    activeOpacity={0.8}
+                    onLongPress={() => {
+                      setSelectionMode(true);
+                      setSelectedPosts(new Set([post.id]));
+                    }}
+                    onPress={() => {
+                      if (selectionMode) {
+                        const next = new Set(selectedPosts);
+                        if (next.has(post.id)) next.delete(post.id);
+                        else next.add(post.id);
+                        setSelectedPosts(next);
+                        if (next.size === 0) {
+                          setSelectionMode(false);
+                        }
+                      }
+                    }}
                   >
                   <Image
                     source={{ uri: getMediaUri(post, 'medium') }}
@@ -318,35 +466,51 @@ export default function GroupDetailScreen() {
                   />
                   
                   {/* Share button overlay */}
-                  <TouchableOpacity
-                    style={styles.shareIconBadge}
-                    activeOpacity={0.7}
-                    onPress={() => handleSharePostDirectly(post)}
-                  >
-                    <Icon source="instagram" size={16} color="white" />
-                  </TouchableOpacity>
+                  {!selectionMode && (
+                    <TouchableOpacity
+                      style={styles.shareIconBadge}
+                      activeOpacity={0.7}
+                      onPress={() => handleSharePostDirectly(post)}
+                    >
+                      <Icon source="instagram" size={16} color="white" />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Selection overlay */}
+                  {selectionMode && (
+                    <View style={styles.selectionOverlay}>
+                      <View style={[
+                        styles.checkboxCircle,
+                        selectedPosts.has(post.id) && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                      ]}>
+                        {selectedPosts.has(post.id) && <Icon source="check" size={16} color="white" />}
+                      </View>
+                    </View>
+                  )}
 
                   {/* Star/Unstar button overlay */}
-                  <TouchableOpacity
-                    style={[
-                      styles.starIconBadge,
-                      post.isStarred && styles.starIconBadgeStarred
-                    ]}
-                    activeOpacity={0.7}
-                    onPress={() => handleToggleStar(post)}
-                  >
-                    <Icon 
-                      source={post.isStarred ? "star" : "star-outline"} 
-                      size={16} 
-                      color={post.isStarred ? "#FFD700" : "white"} 
-                    />
-                  </TouchableOpacity>
+                  {!selectionMode && (
+                    <TouchableOpacity
+                      style={[
+                        styles.starIconBadge,
+                        post.isStarred && styles.starIconBadgeStarred
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => handleToggleStar(post)}
+                    >
+                      <Icon 
+                        source={post.isStarred ? "star" : "star-outline"} 
+                        size={16} 
+                        color={post.isStarred ? "#FFD700" : "white"} 
+                      />
+                    </TouchableOpacity>
+                  )}
                   
                   {/* Index badge */}
                   <View style={styles.itemIndexBadge}>
                     <Text style={styles.itemIndexText}>#{index + 1}</Text>
                   </View>
-                  </View>
+                  </TouchableOpacity>
               );
             });
           })()}
@@ -354,21 +518,96 @@ export default function GroupDetailScreen() {
         </ScrollView>
 
         {/* Finished button at the bottom */}
-        <View style={styles.finishButtonContainer}>
-          <Button
-            mode="contained"
-            buttonColor={theme.colors.error}
-            icon="check-circle"
-            style={styles.finishButton}
-            labelStyle={{ fontWeight: 'bold' }}
-            loading={loading}
-            disabled={loading}
-            onPress={handleFinishGroup}
-          >
-            Mark Group as Finished (suspend 24h)
-          </Button>
-        </View>
+        {!selectionMode && (
+          <View style={styles.finishButtonContainer}>
+            <Button
+              mode="contained"
+              buttonColor={theme.colors.error}
+              icon="check-circle"
+              style={styles.finishButton}
+              labelStyle={{ fontWeight: 'bold' }}
+              loading={loading}
+              disabled={loading}
+              onPress={handleFinishGroup}
+            >
+              Mark Group as Finished (suspend 24h)
+            </Button>
+          </View>
+        )}
       </View>
+
+      {/* Edit Details Dialog */}
+      <Portal>
+        <Dialog visible={editModalVisible} onDismiss={() => setEditModalVisible(false)} style={{ backgroundColor: theme.colors.surface }}>
+          <Dialog.Title>Edit Group Details</Dialog.Title>
+          <Dialog.Content>
+            <TextInput 
+              label="Group Name" 
+              value={editName} 
+              onChangeText={setEditName} 
+              mode="outlined" 
+              style={{ marginBottom: 12 }} 
+              dense 
+            />
+            <TextInput 
+              label="Keywords" 
+              value={editKeywords} 
+              onChangeText={setEditKeywords} 
+              mode="outlined" 
+              style={{ marginBottom: 16 }} 
+              dense 
+            />
+            <Text variant="labelMedium" style={{ marginBottom: 8 }}>Target Profiles:</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {ownProfiles.map(p => {
+                const isSelected = editTargetProfiles.has(p.id);
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => {
+                      const next = new Set(editTargetProfiles);
+                      if (isSelected) next.delete(p.id);
+                      else next.add(p.id);
+                      setEditTargetProfiles(next);
+                    }}
+                    style={{ position: 'relative' }}
+                  >
+                    <Image 
+                      source={{ uri: getProfilePicUri(p) || undefined }} 
+                      style={{ 
+                        width: 44, 
+                        height: 44, 
+                        borderRadius: 22, 
+                        borderWidth: isSelected ? 2 : 0, 
+                        borderColor: theme.colors.primary,
+                        backgroundColor: '#e0e0e0'
+                      }} 
+                    />
+                    {isSelected && (
+                      <View style={{ 
+                        position: 'absolute', 
+                        bottom: -2, 
+                        right: -2, 
+                        backgroundColor: theme.colors.primary, 
+                        borderRadius: 10, 
+                        padding: 2,
+                        borderWidth: 1.5,
+                        borderColor: theme.colors.surface
+                      }}>
+                        <Icon source="check" size={12} color="white" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setEditModalVisible(false)}>Cancel</Button>
+            <Button mode="contained" onPress={handleSaveChanges}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* Suspend Sub-Dialog */}
       <Portal>
@@ -426,6 +665,15 @@ export default function GroupDetailScreen() {
             )}
           </Dialog.Content>
           <Dialog.Actions>
+            {group?.posts && group.posts.length > 1 && (
+              <Button 
+                textColor={theme.colors.error}
+                onPress={handleConfirmAndFinishGroup}
+                style={{ marginRight: 'auto' }}
+              >
+                Confirm Group
+              </Button>
+            )}
             <Button onPress={() => setConfirmShareVisible(false)}>Cancel</Button>
             <Button mode="contained" onPress={handleConfirmDirectPost}>Confirm</Button>
           </Dialog.Actions>
@@ -578,5 +826,54 @@ const styles = StyleSheet.create({
   confirmationAccountName: {
     fontWeight: 'bold',
     color: '#333333',
+  },
+  editInput: {
+    marginBottom: 12,
+  },
+  editLabel: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  targetProfilesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  targetProfileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 6,
+    paddingRight: 10,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    gap: 6,
+  },
+  targetProfileChipSelected: {
+    backgroundColor: '#6200ee',
+    borderColor: '#6200ee',
+  },
+  targetProfileAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  selectionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'white',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
