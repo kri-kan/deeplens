@@ -54,7 +54,7 @@ export function WhatsAppAdminList({ type, title }: WhatsAppAdminProps) {
       const s = await waProcessorService.fetchProcessingState();
       setProcessingState(s);
     } catch (err) {
-      console.error('Failed to fetch processing state', err);
+      console.warn('Failed to fetch processing state', err);
     }
   }, []);
 

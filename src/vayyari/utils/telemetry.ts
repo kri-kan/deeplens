@@ -1,3 +1,4 @@
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 let isInitialized = false;
 
 export const initOtel = async () => {
@@ -13,7 +14,7 @@ export const initOtel = async () => {
   // Set internal OTel logger (INFO level for production stability)
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
-  const otelEndpoint = process.env.EXPO_PUBLIC_OTEL_ENDPOINT || "http://192.168.0.170:4318/v1/traces";
+  const otelEndpoint = getOtelEndpointUrl() || "http://192.168.0.170:4318/v1/traces";
   
   const exporter = new OTLPTraceExporter({
     url: otelEndpoint,

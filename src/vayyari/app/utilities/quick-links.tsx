@@ -77,14 +77,7 @@ export default function QuickLinksScreen() {
       url: '/utilities/whatsapp/today',
       color: '#075E54'
     },
-    {
-      id: 'wa-merge-candidates',
-      title: 'WhatsApp Merge Candidates',
-      description: 'Review similarity candidates and merge redundant products.',
-      icon: 'call-merge',
-      url: '/utilities/product/merge-candidates',
-      color: '#075E54'
-    },
+    // wa-merge-candidates removed: use "Find Similar / Merge" from product detail menu (⋮)
     {
       id: 'category-master-data',
       title: 'Category Master Data',

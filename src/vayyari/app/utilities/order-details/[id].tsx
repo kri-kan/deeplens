@@ -14,6 +14,8 @@ import { API_ROUTES } from '@/constants/api-routes';
 import { OrderIdEntry, OrderItem, OrderComment, OrderUpdateRequest } from '@/types/orders';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
 import { PlatformHandle } from '@/components/ui/PlatformHandle';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 export default function OrderFormScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -98,7 +100,7 @@ export default function OrderFormScreen() {
             // Extract screenshot from attachments (tag: receipt)
             const receipt = data.attachments?.find((a: any) => a.tag === 'receipt');
             if (receipt) {
-                const downloadUrl = `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(receipt.key)}`;
+                const downloadUrl = `${getSearchApiUrl()}${API_ROUTES.ATTACHMENTS.DOWNLOAD(receipt.key)}`;
                 setScreenshotUrl(downloadUrl);
             } else {
                 setScreenshotUrl('');
@@ -218,7 +220,7 @@ export default function OrderFormScreen() {
         });
 
         const uploadUrl = API_ROUTES.ATTACHMENTS?.UPLOAD || '/api/v1/Attachment/upload';
-        const fullUrl = `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${uploadUrl}?entityType=order&entityId=${id}&tag=note_attachment`;
+        const fullUrl = `${getSearchApiUrl()}${uploadUrl}?entityType=order&entityId=${id}&tag=note_attachment`;
         
         const response = await fetch(fullUrl, {
             method: 'POST',
@@ -341,7 +343,7 @@ export default function OrderFormScreen() {
             const existing = comment.attachments.map((att: any) => ({
                 id: att.id,
                 name: att.name,
-                uri: `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`,
+                uri: `${getSearchApiUrl()}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`,
                 mimeType: att.mimeType || att.contentType,
                 isExisting: true,
                 key: att.key
@@ -403,7 +405,7 @@ export default function OrderFormScreen() {
 
             const uploadUrl = `${API_ROUTES.ATTACHMENTS?.UPLOAD || '/api/v1/Attachment/upload'}`;
             // Manual fetch for multipart because searchApiClient might not handle FormData yet
-            const response = await fetch(`${process.env.EXPO_PUBLIC_SEARCH_API_URL}${uploadUrl}?entityType=order&entityId=${id}&tag=receipt`, {
+            const response = await fetch(`${getSearchApiUrl()}${uploadUrl}?entityType=order&entityId=${id}&tag=receipt`, {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -1265,7 +1267,7 @@ function ScrollableImageRow({ attachments, onPreview, theme }: { attachments: an
             >
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     {attachments.map((att: any) => {
-                        const downloadUrl = `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`;
+                        const downloadUrl = `${getSearchApiUrl()}${API_ROUTES.ATTACHMENTS.DOWNLOAD(att.key)}`;
                         const isImg = att.contentType?.startsWith('image/') || att.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                         
                         return (

@@ -438,8 +438,8 @@ class InstagramService {
     return searchApiClient.post(`/api/v1/Insta/story-posts/${id}/post?targetWatchlistId=${targetWatchlistId}${groupParam}`, {});
   };
 
-  finishStoryGroup = async (id: string): Promise<{ success: boolean }> => {
-    return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/finish`, {});
+  finishStoryGroup = async (id: string, targetWatchlistId: string): Promise<{ success: boolean }> => {
+    return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/finish?targetWatchlistId=${targetWatchlistId}`, {});
   };
 
   getEligibleShares = async (targetWatchlistId: string, limit = 50, offset = 0): Promise<{ items: UnifiedPlannerItem[]; totalCount: number }> => {

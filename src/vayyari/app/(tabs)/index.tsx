@@ -24,7 +24,7 @@ const OPERATIONAL_UTILITIES: UtilityItem[] = [
 const PRODUCT_UTILITIES: UtilityItem[] = [
   { id: 'view-catalog', title: 'Catalog', icon: 'format-list-bulleted', route: '/utilities/product-list', color: '#6200ee' },
   { id: 'create-product', title: 'Create', icon: 'plus-box', route: '/utilities/create-product', color: '#00a86b' },
-  { id: 'merge-products', title: 'Merge', icon: 'call-merge', route: '/utilities/product/merge-candidates', color: '#E91E63' },
+  // merge-candidates removed: use "Find Similar / Merge" from product detail menu (⋮)
 ];
 
 const SYSTEM_UTILITIES: UtilityItem[] = [

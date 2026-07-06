@@ -44,7 +44,7 @@ export default function WhatsAppChatListScreen() {
       setConversations(convs);
       setFailedCount(failedList?.length || 0);
     } catch (err: any) {
-      console.error('Failed to fetch WhatsApp data:', err);
+      console.warn('Failed to fetch WhatsApp data:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);

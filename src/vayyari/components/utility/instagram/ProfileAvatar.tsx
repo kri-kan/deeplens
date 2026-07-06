@@ -5,6 +5,8 @@ import { Avatar, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { normalizeProfile } from '@/utils/instagram-helpers';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 interface ProfileAvatarProps {
   profile: any;
@@ -26,7 +28,7 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
     if (!p) return null;
     const path = p.storagePath;
     if (path) {
-      const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL;
+      const baseUrl = getSearchApiUrl();
       return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
     }
     return p.profilePictureUrl;

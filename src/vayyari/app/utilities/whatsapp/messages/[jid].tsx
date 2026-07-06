@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Image, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Image, TouchableOpacity, Alert, ActivityIndicator, Platform, Dimensions } from 'react-native';
 import {
   Text,
   useTheme,
@@ -11,6 +11,7 @@ import {
   Button,
   Chip,
   Switch,
+  Searchbar,
 } from 'react-native-paper';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { waProcessorService, Message, ConversationStats } from '@/services/wa-processor.service';
@@ -47,6 +48,9 @@ export default function FullMessageBrowser() {
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [groups, setGroups] = useState<any[]>([]);
   const [zoningMode, setZoningMode] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -80,7 +84,7 @@ export default function FullMessageBrowser() {
       
       const [statsData, msgData, groupsData] = await Promise.all([
         isInitial ? waProcessorService.fetchConversationStats(cleanJid) : Promise.resolve(stats),
-        waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, currentOffset, isInitial ? (highlightGroupId || undefined) : undefined),
+        waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, currentOffset, isInitial ? (highlightGroupId || undefined) : undefined, activeSearchQuery),
         waProcessorService.fetchGroupsReview(cleanJid)
       ]);
       
@@ -142,11 +146,11 @@ export default function FullMessageBrowser() {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [jid, offset, stats, highlightGroupId]);
+  }, [jid, offset, stats, highlightGroupId, activeSearchQuery]);
 
   useEffect(() => {
     fetchData(true);
-  }, [jid]);
+  }, [jid, activeSearchQuery]);
 
 
 
@@ -396,20 +400,23 @@ export default function FullMessageBrowser() {
   useEffect(() => {
     if (loading || messages.length === 0 || !highlightGroupId || hasScrolledRef.current) return;
 
+    if (!highlightGroupId || groupedMessages.length === 0) return;
     const targetIndex = groupedMessages.findIndex(item => item.groupId === highlightGroupId);
-    if (targetIndex !== -1) {
+    console.log("[DEBUG] Scroll Effect triggered. highlightGroupId:", highlightGroupId, "targetIndex:", targetIndex, "totalItems:", groupedMessages.length);
+    if (targetIndex !== -1 && !hasScrolledRef.current) {
       const scrollTimer = setTimeout(() => {
         try {
+          console.log("[DEBUG] Executing scrollToIndex to targetIndex:", targetIndex);
           flatListRef.current?.scrollToIndex({
             index: targetIndex,
-            animated: true,
+            animated: false,
             viewPosition: 0.5,
           });
           hasScrolledRef.current = true;
         } catch (e) {
-          console.warn("Scroll to index failed", e);
+          console.warn("[DEBUG] Scroll to index failed", e);
         }
-      }, 600);
+      }, 500); // reduced timeout
       return () => clearTimeout(scrollTimer);
     }
   }, [loading, messages, highlightGroupId, groupedMessages]);
@@ -529,14 +536,7 @@ export default function FullMessageBrowser() {
     );
   };
 
-  const getItemLayout = useCallback((data: any, index: number) => {
-    const ESTIMATED_HEIGHT = 135;
-    return {
-      length: ESTIMATED_HEIGHT,
-      offset: ESTIMATED_HEIGHT * index,
-      index,
-    };
-  }, []);
+  
 
   const renderMessage = useCallback(({ item, index }: { item: Message | MediaGroup; index: number }) => {
     const isFromMe = item.isFromMe;
@@ -573,7 +573,14 @@ export default function FullMessageBrowser() {
     if (isGroup) {
       const group = item as MediaGroup;
       return (
-        <View>
+        <View
+          onLayout={(highlightGroupId && group.groupId === highlightGroupId) ? (e) => {
+            if (!hasScrolledRef.current) {
+              flatListRef.current?.scrollToOffset({ offset: e.nativeEvent.layout.y, animated: true });
+              hasScrolledRef.current = true;
+            }
+          } : undefined}
+        >
           {showGroupDivider && group.groupId && (
             zoningMode ? renderZoneCard(group.groupId) : (
               <View style={styles.groupDivider}>
@@ -646,7 +653,9 @@ export default function FullMessageBrowser() {
     const text = cleanMessageText(msg);
 
     return (
-      <View>
+      <View
+
+      >
         {showGroupDivider && msg.groupId && (
           zoningMode ? renderZoneCard(msg.groupId) : (
             <View style={styles.groupDivider}>
@@ -747,9 +756,23 @@ export default function FullMessageBrowser() {
 
   return (
     <ScreenWrapper 
-      title={stats?.name || name || 'Messages'} 
+      title={isSearching ? "" : (stats?.name || name || "Messages")} 
       withScrollView={false}
       actions={
+        isSearching ? (
+          <Searchbar
+            placeholder="Search..."
+            onChangeText={setSearchInput}
+            value={searchInput}
+            style={{ width: Dimensions.get('window').width - 80, height: 40, elevation: 0 }}
+            inputStyle={{ minHeight: 0 }}
+            icon="arrow-left"
+            onIconPress={() => { setIsSearching(false); setSearchInput(''); setActiveSearchQuery(''); }}
+            clearIcon="close"
+            onClearIconPress={() => { setSearchInput(''); setActiveSearchQuery(''); }}
+            onSubmitEditing={() => setActiveSearchQuery(searchInput)}
+          />
+        ) : (
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {stats?.enableMessageGrouping && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 4 }}>
@@ -766,6 +789,11 @@ export default function FullMessageBrowser() {
             </View>
           )}
           <IconButton 
+            icon="magnify" 
+            iconColor={theme.colors.primary} 
+            onPress={() => setIsSearching(true)} 
+          />
+          <IconButton 
             icon="cog-outline" 
             iconColor={theme.colors.primary} 
             onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(jid)}`)} 
@@ -776,6 +804,7 @@ export default function FullMessageBrowser() {
             onPress={onRefresh} 
           />
         </View>
+        )
       }
     >
       <View style={styles.container}>
@@ -790,6 +819,7 @@ export default function FullMessageBrowser() {
         ) : (
           <FlatList
             ref={flatListRef}
+
             data={groupedMessages}
             renderItem={renderMessage}
             keyExtractor={item => 'type' in item ? item.id : item.messageId}
@@ -803,17 +833,18 @@ export default function FullMessageBrowser() {
             maxToRenderPerBatch={10}
             windowSize={11}
             removeClippedSubviews={Platform.OS === 'android'}
-            getItemLayout={getItemLayout}
+            
             onScrollToIndexFailed={(info) => {
-              const wait = new Promise(resolve => setTimeout(resolve, 500));
-              wait.then(() => {
+              console.log("[DEBUG] onScrollToIndexFailed triggered. Target:", info.index, "Average Length:", info.averageItemLength);
+              flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+              setTimeout(() => {
                 try {
                   flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
                   hasScrolledRef.current = true;
                 } catch (e) {
-                  console.warn("Retry scroll failed", e);
+                  console.warn("[DEBUG] Retry scroll failed", e);
                 }
-              });
+              }, 250);
             }}
           />
         )}

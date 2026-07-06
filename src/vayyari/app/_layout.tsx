@@ -65,7 +65,7 @@ function InnerRootLayout() {
       } catch (err) {
         console.warn('Failed to initialize OpenTelemetry', err);
       }
-    }, Number(process.env.EXPO_PUBLIC_OTEL_LAZY_LOAD_DELAY_MS || 1000));
+    }, 1000);
   }, []);
 
 

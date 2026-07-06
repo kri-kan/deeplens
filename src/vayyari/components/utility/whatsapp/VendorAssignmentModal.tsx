@@ -41,7 +41,7 @@ export function VendorAssignmentModal({ visible, onDismiss, jid, chatName, onSuc
       const res = await vendorService.listVendors(1, 100, true);
       setVendors(res.vendors);
     } catch (err: any) {
-      console.error('Failed to fetch vendors:', err);
+      console.warn('Failed to fetch vendors:', err);
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export function VendorAssignmentModal({ visible, onDismiss, jid, chatName, onSuc
         setCurrentVendor(null);
       }
     } catch (err) {
-      console.error('Failed to fetch current vendor:', err);
+      console.warn('Failed to fetch current vendor:', err);
     }
   }, [jid]);
 

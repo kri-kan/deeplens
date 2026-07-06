@@ -3,8 +3,10 @@ import { ApiClient } from '../api/base';
 import { TokenResponse, UserProfile } from '../types/auth';
 import { API_ROUTES } from '../constants/api-routes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
-const identityApiUrl = process.env.EXPO_PUBLIC_IDENTITY_API_URL!;
+
+const identityApiUrl = getIdentityApiUrl();
 export const TOKEN_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 export const TOKEN_EXPIRY_KEY = 'auth_token_expiry'; // unix ms

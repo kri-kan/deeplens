@@ -4,6 +4,8 @@ import {
     normalizeProfile,
 } from '@/services/instagram.service';
 import type { MediaEntry } from '@/types/products';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 export interface InstagramLink {
     id: string;
@@ -31,7 +33,7 @@ export const getMediaUri = (m: any, spec?: 'icon' | 'medium' | 'large'): string 
 
     let path = normalized.storagePath;
     if (path) {
-        const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL || '';
+        const baseUrl = getSearchApiUrl() || '';
         const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 
         if (spec && (path.toLowerCase().endsWith('.mp4') || path.toLowerCase().endsWith('.mov'))) {

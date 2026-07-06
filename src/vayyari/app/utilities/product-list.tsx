@@ -1,20 +1,23 @@
-import React, { useState, useRef } from 'react';
-import { View, FlatList, Dimensions, RefreshControl } from 'react-native';
-import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Menu, Button, Portal, Dialog, List } from 'react-native-paper';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useRouter } from 'expo-router';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  View, FlatList, Dimensions, RefreshControl, StyleSheet,
+  PanResponder, GestureResponderEvent,
+} from 'react-native';
+import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button } from 'react-native-paper';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ProductCategoryPicker } from '@/components/utility/product/ProductCategoryPicker';
 import { ProductTile } from '@/components/utility/product/ProductTile';
-import { CATEGORY_REGISTRY } from '@/components/CategoryIcons';
+import { FilterDrawer, FilterState, DEFAULT_FILTER_STATE } from '@/components/utility/product/FilterDrawer';
 
-import { useProductCatalog } from '@/hooks/useProductCatalog';
+import { useProductCatalog, ProductCatalogFilters } from '@/hooks/useProductCatalog';
 import { styles } from '@/styles/screens/product-list.styles';
 import { productService } from '@/services/productService';
 import type { VendorProduct } from '@/types/products';
 
 const { width } = Dimensions.get('window');
+const TILE_SIZE = width / 3;
 
 const CATEGORIES = [
   { id: 'all', label: 'All', iconName: 'apps' },
@@ -27,12 +30,13 @@ const CATEGORIES = [
 
 export default function ProductCatalogScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState(0);
   const pagerRef = useRef<FlatList>(null);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   const currentCategoryCount = categoryCounts[CATEGORIES[activeTab]?.id] ?? null;
-  
+
   const handleTabPress = (index: number) => {
     setActiveTab(index);
     pagerRef.current?.scrollToIndex({ index, animated: true });
@@ -48,15 +52,17 @@ export default function ProductCatalogScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  
-  const [sortMenuVisible, setSortMenuVisible] = useState(false);
-  const [sortBy, setSortBy] = useState('recent');
-  
-  const [showFilters, setShowFilters] = useState(false);
-  const [fromDate, setFromDate] = useState<string | null>(null);
-  const [toDate, setToDate] = useState<string | null>(null);
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
+
+  // Filter drawer state
+  const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
+
+  const activeFilterCount =
+    (activeFilters.sortBy !== 'recent' ? 1 : 0) +
+    (activeFilters.category !== 'all' ? 1 : 0) +
+    activeFilters.fabrics.length +
+    activeFilters.vendorNames.length +
+    (activeFilters.minPrice > 0 ? 1 : 0);
 
   const [selectedProductForCategory, setSelectedProductForCategory] = useState<VendorProduct | null>(null);
   const [changingCategory, setChangingCategory] = useState(false);
@@ -65,14 +71,37 @@ export default function ProductCatalogScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectionMode = selectedIds.size > 0;
 
-  const toggleSelection = (id: string) => {
+  const toggleSelection = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // Keep a ref so the BackHandler never needs to be re-registered on selection changes
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+  const clearSelectionRef = useRef(clearSelection);
+
+  // Register once on focus, read latest state via refs — no re-registration on every toggle
+  useFocusEffect(
+    useCallback(() => {
+      const { BackHandler } = require('react-native');
+      const onBackPress = () => {
+        if (selectedIdsRef.current.size > 0) {
+          clearSelectionRef.current();
+          return true;
+        }
+        return false;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, []) // stable — never re-registers
+  );
 
   const [isReevaluating, setIsReevaluating] = useState(false);
   const handleBulkReevaluate = async () => {
@@ -80,8 +109,7 @@ export default function ProductCatalogScreen() {
     setIsReevaluating(true);
     try {
       await productService.reevaluateProducts(Array.from(selectedIds));
-      setSelectedIds(new Set());
-      // optionally refresh
+      clearSelection();
     } catch (e) {
       console.error(e);
     } finally {
@@ -94,7 +122,6 @@ export default function ProductCatalogScreen() {
     setChangingCategory(true);
     try {
       await productService.changeCategory(selectedProductForCategory.id, slug);
-      // We rely on the refresh control to update the lists, or we could optimistically update
     } catch (e) {
       console.error(e);
     } finally {
@@ -103,15 +130,27 @@ export default function ProductCatalogScreen() {
     }
   };
 
-  const formatDateDisplay = (dateString: string | null) => {
-    if (!dateString) return 'Select Date';
-    const d = new Date(dateString);
-    return `${d.getDate()}-${d.getMonth() + 1}-${d.getFullYear().toString().slice(-2)}`;
+  const handleApplyFilters = (filters: FilterState) => {
+    setActiveFilters(filters);
+    if (filters.category !== 'all') {
+      const idx = CATEGORIES.findIndex(c => c.id === filters.category);
+      if (idx !== -1 && idx !== activeTab) handleTabPress(idx);
+    }
   };
 
+  // Custom onBack for ScreenWrapper: clear selection if active, else go back
+  const handleBack = useCallback(() => {
+    if (selectionMode) {
+      clearSelection();
+    } else {
+      router.back();
+    }
+  }, [selectionMode, clearSelection, router]);
+
   return (
-    <ScreenWrapper 
-      title={`Product Catalog${currentCategoryCount !== null ? ` (${currentCategoryCount})` : ''}`} 
+    <ScreenWrapper
+      title={`Product Catalog${currentCategoryCount !== null ? ` (${currentCategoryCount})` : ''}`}
+      onBack={router.canGoBack() ? handleBack : undefined}
       actions={
         isSearching ? (
           <Searchbar
@@ -128,62 +167,34 @@ export default function ProductCatalogScreen() {
         ) : (
           <View style={styles.headerActions}>
             <IconButton icon="magnify" onPress={() => setIsSearching(true)} />
-            <IconButton icon={showFilters ? "filter-variant-remove" : "filter-variant"} onPress={() => setShowFilters(!showFilters)} />
+            <View>
+              <IconButton
+                icon={activeFilterCount > 0 ? 'filter' : 'filter-outline'}
+                iconColor={activeFilterCount > 0 ? theme.colors.primary : undefined}
+                onPress={() => setFilterDrawerVisible(true)}
+              />
+              {activeFilterCount > 0 && (
+                <View style={{
+                  position: 'absolute', top: 6, right: 6,
+                  backgroundColor: theme.colors.primary,
+                  borderRadius: 8, minWidth: 16, height: 16,
+                  alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
         )
       }
       withScrollView={false}
     >
-      {showFilters && (
-        <View style={{ padding: 10, backgroundColor: theme.colors.surfaceVariant, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-           <Menu
-             visible={sortMenuVisible}
-             onDismiss={() => setSortMenuVisible(false)}
-             anchor={
-               <Button mode="outlined" compact onPress={() => setSortMenuVisible(true)}>
-                 Sort: {sortBy.replace('_', ' ')}
-               </Button>
-             }
-           >
-             <Menu.Item onPress={() => { setSortBy('recent'); setSortMenuVisible(false); }} title="Recent" />
-             <Menu.Item onPress={() => { setSortBy('price_low'); setSortMenuVisible(false); }} title="Price: Low to High" />
-             <Menu.Item onPress={() => { setSortBy('price_high'); setSortMenuVisible(false); }} title="Price: High to Low" />
-           </Menu>
-
-           <Button mode="outlined" compact onPress={() => setShowFromPicker(true)}>
-             From: {formatDateDisplay(fromDate)}
-           </Button>
-           <Button mode="outlined" compact onPress={() => setShowToPicker(true)}>
-             To: {formatDateDisplay(toDate)}
-           </Button>
-
-           {(fromDate || toDate) && (
-             <IconButton icon="close-circle" size={20} onPress={() => { setFromDate(null); setToDate(null); }} />
-           )}
-
-           {showFromPicker && (
-             <DateTimePicker
-               value={fromDate ? new Date(fromDate) : new Date()}
-               mode="date"
-               onChange={(event, date) => {
-                 setShowFromPicker(false);
-                 if (date) setFromDate(date.toISOString().split('T')[0]);
-               }}
-             />
-           )}
-
-           {showToPicker && (
-             <DateTimePicker
-               value={toDate ? new Date(toDate) : new Date()}
-               mode="date"
-               onChange={(event, date) => {
-                 setShowToPicker(false);
-                 if (date) setToDate(date.toISOString().split('T')[0]);
-               }}
-             />
-           )}
-        </View>
-      )}
+      <FilterDrawer
+        visible={filterDrawerVisible}
+        onClose={() => setFilterDrawerVisible(false)}
+        current={activeFilters}
+        onApply={handleApplyFilters}
+      />
 
       <Portal>
         <Dialog visible={!!selectedProductForCategory} onDismiss={() => setSelectedProductForCategory(null)}>
@@ -209,7 +220,7 @@ export default function ProductCatalogScreen() {
       </Portal>
 
       <View style={styles.tabContainer}>
-        <ProductCategoryPicker 
+        <ProductCategoryPicker
           showAll
           categories={CATEGORIES}
           selectedCategory={CATEGORIES[activeTab].id as any}
@@ -224,17 +235,16 @@ export default function ProductCatalogScreen() {
         ref={pagerRef}
         data={CATEGORIES}
         horizontal
+        scrollEnabled={selectedIds.size === 0}
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScroll}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <CategoryPage 
+        renderItem={({ item }) => (
+          <CategoryPage
             categoryId={item.id}
             query={searchQuery}
-            sortBy={sortBy}
-            startDate={fromDate || undefined}
-            endDate={toDate || undefined}
+            filters={activeFilters}
             onCountChange={(count) => {
               setCategoryCounts(prev => {
                 if (prev[item.id] === count) return prev;
@@ -250,14 +260,14 @@ export default function ProductCatalogScreen() {
 
       {selectionMode && (
         <View style={{
-          position: 'absolute', bottom: 20, left: 20, right: 20, 
-          backgroundColor: theme.colors.elevation.level3, 
+          position: 'absolute', bottom: 20, left: 20, right: 20,
+          backgroundColor: theme.colors.elevation.level3,
           padding: 16, borderRadius: 12, elevation: 4,
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
         }}>
           <Text style={{ fontWeight: 'bold' }}>{selectedIds.size} Selected</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button mode="text" onPress={() => setSelectedIds(new Set())}>Cancel</Button>
+            <Button mode="text" onPress={clearSelection}>Cancel</Button>
             <Button mode="contained" loading={isReevaluating} onPress={handleBulkReevaluate}>
               Re-evaluate AI
             </Button>
@@ -268,39 +278,94 @@ export default function ProductCatalogScreen() {
   );
 }
 
-function CategoryPage({ 
+// ---------------------------------------------------------------------------
+// Swipe-to-select grid page
+// ---------------------------------------------------------------------------
+
+/**
+ * Given absolute (pageX, pageY) touch coordinates and the container's measured
+ * screen-space top/left, returns the item index in a 3-column grid.
+ */
+function indexFromPosition(
+  pageX: number,
+  pageY: number,
+  containerLeft: number,
+  containerTop: number,
+  scrollOffset: number
+): number | null {
+  const COLS = 3;
+  const ROW_H = TILE_SIZE * 1.3;
+  const relX = pageX - containerLeft;
+  const relY = pageY - containerTop + scrollOffset;
+  const col = Math.floor((relX / width) * COLS);
+  const row = Math.floor(relY / ROW_H);
+  if (col < 0 || col >= COLS || row < 0 || relX < 0 || relX > width) return null;
+  return row * COLS + col;
+}
+
+function CategoryPage({
   categoryId,
   query,
-  sortBy,
-  startDate,
-  endDate,
+  filters,
   onCountChange,
-  onChangeCategoryRequested,
   selectedIds,
   onSelect,
-  selectionMode
-}: { 
+  selectionMode,
+}: {
   categoryId: string;
   query?: string;
-  sortBy?: string;
-  startDate?: string;
-  endDate?: string;
+  filters: FilterState;
   onCountChange?: (count: number) => void;
-  onChangeCategoryRequested?: (productId: string) => void;
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   selectionMode: boolean;
 }) {
   const router = useRouter();
-  const { 
-    products, 
-    loading, 
-    refreshing, 
-    hasMore, 
-    error, 
+  const scrollOffsetRef = useRef(0);
+  // Container screen-position — measured on layout so pageX/pageY can be made relative
+  const containerRef = useRef<View>(null);
+  const containerTopRef = useRef(0);
+  const containerLeftRef = useRef(0);
+  const containerHeightRef = useRef(0);
+  const swipedIdsRef = useRef<Set<string>>(new Set());
+  const swipeActionRef = useRef<'add' | 'remove'>('add');
+  
+  const isDragSelectingRef = useRef(false);
+  const flatListRef = useRef<FlatList>(null);
+  const autoScrollTimerRef = useRef<number | null>(null);
+
+  // Keep live refs so PanResponder closure (created once) can read latest values
+  const selectionModeRef = useRef(selectionMode);
+  const selectedIdsRef = useRef(selectedIds);
+  const productsRef = useRef<typeof products>([]);
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { selectionModeRef.current = selectionMode; }, [selectionMode]);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+
+  const catalogFilters: ProductCatalogFilters = {
+    categoryId,
+    query,
+    sortBy: filters.sortBy,
+    fabrics: filters.fabrics.length > 0 ? filters.fabrics : undefined,
+    vendorNames: filters.vendorNames.length > 0 ? filters.vendorNames : undefined,
+    minPrice: filters.minPrice > 0 ? filters.minPrice : undefined,
+    maxPrice: filters.maxPrice > 0 ? filters.maxPrice : undefined,
+  };
+
+  const {
+    products,
+    loading,
+    refreshing,
+    hasMore,
+    error,
     totalCount,
-    fetchProducts 
-  } = useProductCatalog(categoryId, query, sortBy, startDate, endDate);
+    fetchProducts,
+    toggleStar,
+  } = useProductCatalog(catalogFilters);
+
+  // Keep productsRef in sync after products are loaded/updated
+  useEffect(() => { productsRef.current = products; }, [products]);
 
   React.useEffect(() => {
     if (onCountChange) {
@@ -309,32 +374,139 @@ function CategoryPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalCount]);
 
+  const stopAutoScroll = () => {
+    if (autoScrollTimerRef.current !== null) {
+      cancelAnimationFrame(autoScrollTimerRef.current);
+      autoScrollTimerRef.current = null;
+    }
+  };
+
+  const startAutoScroll = (delta: number) => {
+    if (autoScrollTimerRef.current !== null) return;
+    const scrollStep = () => {
+      if (flatListRef.current) {
+        scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current + delta);
+        flatListRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
+        // After scrolling, we should ideally re-calculate the selection based on the new offset,
+        // but since the user's finger will likely still be sending move events, the next move event will handle it.
+      }
+      autoScrollTimerRef.current = requestAnimationFrame(scrollStep);
+    };
+    autoScrollTimerRef.current = requestAnimationFrame(scrollStep);
+  };
+
+  /**
+   * PanResponder attached to the container. It dynamically intercepts touches 
+   * ONLY if `isDragSelectingRef.current` is true (triggered by a long press).
+   */
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => false, // Let Pressables handle touch starts
+      onMoveShouldSetPanResponderCapture: () => isDragSelectingRef.current,
+      onMoveShouldSetPanResponder: () => isDragSelectingRef.current,
+      onPanResponderGrant: () => {
+        swipedIdsRef.current = new Set();
+      },
+      onPanResponderMove: (evt: GestureResponderEvent) => {
+        const { pageX, pageY } = evt.nativeEvent;
+        
+        // Edge detection for auto-scroll
+        const topEdge = containerTopRef.current;
+        const bottomEdge = topEdge + containerHeightRef.current;
+        
+        if (pageY < topEdge + 80) {
+          startAutoScroll(-10); // Scroll up faster
+        } else if (pageY > bottomEdge - 80) {
+          startAutoScroll(10); // Scroll down faster
+        } else {
+          stopAutoScroll();
+        }
+
+        const idx = indexFromPosition(
+          pageX, pageY,
+          containerLeftRef.current, containerTopRef.current,
+          scrollOffsetRef.current
+        );
+        
+        const prods = productsRef.current;
+        if (idx === null || idx >= prods.length) return;
+        
+        const id = prods[idx].id;
+        if (!swipedIdsRef.current.has(id)) {
+          const isSelected = selectedIdsRef.current.has(id);
+          if (swipeActionRef.current === 'add' && !isSelected) {
+            swipedIdsRef.current.add(id);
+            onSelectRef.current(id);
+          } else if (swipeActionRef.current === 'remove' && isSelected) {
+            swipedIdsRef.current.add(id);
+            onSelectRef.current(id);
+          }
+        }
+      },
+      onPanResponderRelease: () => {
+        isDragSelectingRef.current = false;
+        swipedIdsRef.current = new Set();
+        stopAutoScroll();
+      },
+      onPanResponderTerminate: () => {
+        isDragSelectingRef.current = false;
+        swipedIdsRef.current = new Set();
+        stopAutoScroll();
+      },
+    })
+  ).current;
+
   return (
-    <View style={{ width: width }}>
+    <View
+      ref={containerRef}
+      style={{ width, flex: 1 }}
+      onLayout={() => {
+        containerRef.current?.measure((_x, _y, _w, h, pageX, pageY) => {
+          containerLeftRef.current = pageX;
+          containerTopRef.current = pageY;
+          containerHeightRef.current = h;
+        });
+      }}
+      {...panResponder.panHandlers}
+    >
       <FlatList
+        ref={flatListRef}
         data={products}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <ProductTile 
-            item={item} 
+          <ProductTile
+            item={item}
             selected={selectedIds.has(item.id)}
+            selectionMode={selectionMode}
             onPress={(p) => {
-              if (selectionMode) {
-                onSelect(p.id);
-              } else {
-                router.push(`/product/${p.id}`);
-              }
-            }} 
-            onLongPress={(p) => onSelect(p.id)}
+              if (selectionMode) onSelect(p.id);
+              else router.push(`/product/${p.id}`);
+            }}
+            onLongPress={(p) => {
+              // Toggle selection immediately
+              onSelect(p.id);
+            }}
+            onDragStart={() => {
+              isDragSelectingRef.current = true;
+              // If it WAS selected before the long press (thus unselecting it), action is remove. Else add.
+              swipeActionRef.current = selectedIds.has(item.id) ? 'remove' : 'add';
+            }}
+            onToggleStar={(p, isStarred) => toggleStar(p.id, isStarred)}
           />
         )}
         numColumns={3}
         contentContainerStyle={styles.gridContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchProducts(true)} />
+          // Disable pull-to-refresh in selection mode so it doesn't conflict
+          selectionMode ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={() => fetchProducts(true)} />
+          )
         }
+        scrollEnabled={true}
         onEndReached={() => hasMore && fetchProducts()}
         onEndReachedThreshold={0.5}
+        onScroll={(e) => { scrollOffsetRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
         ListFooterComponent={loading && !refreshing ? <ActivityIndicator style={{ margin: 20 }} /> : null}
         ListEmptyComponent={!loading ? (
           <View style={styles.emptyContainer}>

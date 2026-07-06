@@ -23,6 +23,8 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
 import { waProcessorService, WaProcessorStatus } from '@/services/wa-processor.service';
 import QRCode from 'react-native-qrcode-svg';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -331,7 +333,7 @@ export default function WhatsAppSessionScreen() {
               <Card.Content style={styles.infoContent}>
                 <InfoRow label="Session ID" value={effectiveSessionId ?? '—'} />
                 <InfoRow label="Label" value={label ?? '—'} />
-                <InfoRow label="Processor URL" value={process.env.EXPO_PUBLIC_WHATSAPP_PROCESSOR_URL ?? 'localhost:3000'} />
+                <InfoRow label="Processor URL" value={getWhatsappProcessorUrl() ?? 'localhost:3000'} />
               </Card.Content>
             </Card>
           </Section>

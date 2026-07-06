@@ -56,7 +56,7 @@ export default function WhatsAppProductsTodayScreen() {
       Alert.alert('Success', 'Manual enrichment initiated successfully');
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       Alert.alert('Error', 'Failed to initiate manual enrichment');
     }
   };
@@ -81,7 +81,7 @@ export default function WhatsAppProductsTodayScreen() {
       ) as string[];
       setCategories(uniqueCats);
     } catch (err: any) {
-      console.error(err);
+      console.warn(err);
       Alert.alert('Error', 'Failed to fetch dashboard data');
     } finally {
       setLoading(false);

@@ -7,6 +7,8 @@ import Constants from 'expo-constants';
 import { ThemedView } from '@/components/themed-view';
 import { useAppTheme } from '@/context/ThemeContext';
 import { appSettingsService, AppSetting, AppSettingsGrouped } from '@/services/app-settings.service';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 export default function ModalScreen() {
   const { themeMode, setThemeMode } = useAppTheme();
@@ -233,10 +235,10 @@ export default function ModalScreen() {
           <Text variant="bodyMedium" style={{ marginBottom: 12 }}>{Constants.expoConfig?.version || '1.0.0'}</Text>
           
           <Text variant="bodySmall" style={{ color: theme.colors.outline, marginBottom: 4 }}>Identity API Base</Text>
-          <Text variant="bodyMedium" style={{ marginBottom: 12 }}>{process.env.EXPO_PUBLIC_IDENTITY_API_URL}</Text>
+          <Text variant="bodyMedium" style={{ marginBottom: 12 }}>{getIdentityApiUrl()}</Text>
           
           <Text variant="bodySmall" style={{ color: theme.colors.outline, marginBottom: 4 }}>Search API Base</Text>
-          <Text variant="bodyMedium" style={{ marginBottom: 12 }}>{process.env.EXPO_PUBLIC_SEARCH_API_URL}</Text>
+          <Text variant="bodyMedium" style={{ marginBottom: 12 }}>{getSearchApiUrl()}</Text>
 
           <Text variant="bodySmall" style={{ color: theme.colors.outline, marginBottom: 4 }}>Competitor API Base</Text>
           <Text variant="bodyMedium">{process.env.EXPO_PUBLIC_COMPETITOR_API_URL}</Text>

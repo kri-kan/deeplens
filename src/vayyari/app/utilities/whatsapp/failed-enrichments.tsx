@@ -20,7 +20,7 @@ export default function FailedEnrichmentsScreen() {
       const items = await productService.fetchFailedEnrichments();
       setFailedItems(items || []);
     } catch (err: any) {
-      console.error(err);
+      console.warn(err);
       Alert.alert('Error', 'Failed to fetch failed enrichments');
     } finally {
       setLoading(false);
@@ -44,7 +44,7 @@ export default function FailedEnrichmentsScreen() {
       Alert.alert('Success', 'Enrichment retry initiated successfully');
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       Alert.alert('Error', 'Failed to retry enrichment');
     } finally {
       setRetryingIds(prev => {

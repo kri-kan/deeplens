@@ -7,6 +7,8 @@ import { ProductCreationForm } from '../product/ProductCreationForm';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import { getMediaUri } from '@/utils/instagram-helpers';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -248,7 +250,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                             {searchResults.map(p => {
                                 const existingLink = existingLinks.find(l => l.productId === p.masterProductId);
                                 const primaryMedia = p.media?.find((m: any) => m.isDefault) || p.media?.[0];
-                                const mediaUri = primaryMedia ? `${process.env.EXPO_PUBLIC_SEARCH_API_URL}${API_ROUTES.ATTACHMENTS.DOWNLOAD(primaryMedia.path)}` : null;
+                                const mediaUri = primaryMedia ? `${getSearchApiUrl()}${API_ROUTES.ATTACHMENTS.DOWNLOAD(primaryMedia.path)}` : null;
 
                                 return (
                                     <List.Item

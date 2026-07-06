@@ -1,6 +1,8 @@
 import { searchApiClient } from '../api/client';
 import { MediaDto, SearchFilters } from '../types/search';
 import { API_ROUTES } from '../constants/api-routes';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+
 
 /**
  * Service for interacting with the DeepLens Search API.
@@ -31,7 +33,7 @@ class SearchService {
    * Generates a fully qualified thumbnail URL for a given media ID.
    */
   getThumbnailUrl(mediaId: string, tenantId: string, spec: 'icon' | 'medium' | 'large' = 'medium'): string {
-    const baseUrl = process.env.EXPO_PUBLIC_SEARCH_API_URL!;
+    const baseUrl = getSearchApiUrl();
     return `${baseUrl}${API_ROUTES.CATALOG.THUMBNAIL(mediaId)}?tenant=${tenantId}&spec=${spec}`;
   }
 

@@ -7,8 +7,10 @@
  */
 
 import { identityService } from './identity.service';
+import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
-const BASE_URL = process.env.EXPO_PUBLIC_WHATSAPP_PROCESSOR_URL ?? 'http://localhost:3001';
+
+const BASE_URL = getWhatsappProcessorUrl() ?? 'http://localhost:3001';
 const PAGE_SIZE = 50;
 
 async function get<T>(path: string): Promise<T> {
@@ -315,10 +317,13 @@ export const waProcessorService = {
     };
   },
 
-  fetchMessages: async (jid: string, limit = 50, offset = 0, highlightGroupId?: string): Promise<{ messages: Message[]; total: number }> => {
+  fetchMessages: async (jid: string, limit = 50, offset = 0, highlightGroupId?: string, searchQuery?: string): Promise<{ messages: Message[]; total: number }> => {
     let url = `/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`;
     if (highlightGroupId) {
       url += `&highlightGroupId=${encodeURIComponent(highlightGroupId)}`;
+    }
+    if (searchQuery) {
+      url += `&searchQuery=${encodeURIComponent(searchQuery)}`;
     }
     const res = await get<{ messages: any[]; total: number }>(url);
     return {
