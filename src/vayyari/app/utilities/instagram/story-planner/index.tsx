@@ -544,7 +544,7 @@ export default function StoryPlannerDashboard() {
       const watchlist = await wrapInSpan('StoryPlannerDashboard: getWatchlist', () => 
         instagramService.getWatchlist()
       );
-      const own = watchlist.filter(p => p.isOwnAccount);
+      const own = watchlist.filter(p => p.profileCategory === 'My Business');
       setOwnProfiles(own);
  
       // 2. Fetch unified planner feed

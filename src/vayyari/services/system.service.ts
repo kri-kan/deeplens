@@ -21,6 +21,9 @@ export const systemService = {
   getAvailableIcons: async (): Promise<AppIcon[]> => {
     return searchApiClient.get<AppIcon[]>('/api/v1/MasterData/icons');
   },
+  getProfileCategories: async (): Promise<{id: string, name: string}[]> => {
+    return searchApiClient.get<{id: string, name: string}[]>('/api/v1/MasterData/profile-categories');
+  },
 
   upsertCategory: async (category: Partial<AppCategory>): Promise<void> => {
     return searchApiClient.post('/api/v1/MasterData/categories', category);

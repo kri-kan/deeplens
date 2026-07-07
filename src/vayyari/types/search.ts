@@ -48,7 +48,7 @@ export interface InstagramProfileDto {
   profilePictureUrl: string;
   storagePath?: string;
   isActive: boolean;
-  isOwnAccount: boolean;
+  profileCategory: string;
   isDataDeleted: boolean;
   lastSyncedAt?: string;
 }

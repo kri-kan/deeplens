@@ -59,7 +59,7 @@ export default function GroupDetailScreen() {
       const watchlist = await wrapInSpan('GroupDetailScreen: getWatchlist', () => 
         instagramService.getWatchlist()
       );
-      const own = watchlist.filter(p => p.isOwnAccount);
+      const own = watchlist.filter(p => p.profileCategory === 'My Business');
       setOwnProfiles(own);
 
       if (profileId) {

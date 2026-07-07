@@ -150,7 +150,7 @@ export default function WhatsAppProductsTodayScreen() {
           </Surface>
 
           <Surface style={[styles.bentoCard, { backgroundColor: theme.colors.secondaryContainer }]} elevation={1}>
-            <TouchableOpacity onPress={() => router.push('/utilities/product/merge-candidates')}>
+            <TouchableOpacity onPress={() => router.push('/utilities/product/merge-candidates' as any)}>
               <IconButton icon="call-merge" iconColor={theme.colors.onSecondaryContainer} size={24} style={{ margin: 0 }} />
               <Text variant="displaySmall" style={[styles.bentoNumber, { color: theme.colors.onSecondaryContainer }]}>
                 {candidatesCount}

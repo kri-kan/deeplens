@@ -431,7 +431,7 @@ namespace DeepLens.Infrastructure.Services
                 IsVerified = false, // Not available in business_discovery
                 IsBusiness = true, // discovery only works for business accounts
                 ExternalId = discovery.IgId.ToString(),
-                IsOwnAccount = false
+                ProfileCategory = ""
             };
 
             await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(profile), new DistributedCacheEntryOptions {

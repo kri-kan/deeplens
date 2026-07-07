@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme } from 'react-native-paper';
+import { Text, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme, Menu, TouchableRipple } from 'react-native-paper';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
@@ -19,10 +19,13 @@ export default function ProfileSettingsScreen() {
         manualSync,
         deleteProfileData,
         toggleWatch,
-        toggleOwn,
+        setCategory,
         loading,
         selectProfile,
+        profileCategories,
     } = useInstagramExplorer();
+
+    const [menuVisible, setMenuVisible] = React.useState(false);
 
     React.useEffect(() => {
         if (username) {
@@ -70,17 +73,28 @@ export default function ProfileSettingsScreen() {
                     />
                 </View>
 
-                <View style={styles.toggleRow}>
-                    <View>
-                        <Text variant="labelLarge" style={styles.bold}>My Account</Text>
-                        <Text variant="labelSmall" style={styles.helperText}>
-                            {profile.isOwnAccount ? 'Flagged as Mine' : 'Competitor Account'}
-                        </Text>
-                    </View>
-                    <Switch 
-                        value={profile.isOwnAccount} 
-                        onValueChange={() => toggleOwn(profile.username, profile.isOwnAccount)} 
-                    />
+                <View style={[styles.toggleRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                    <Text variant="labelLarge" style={[styles.bold, { marginBottom: 8 }]}>Profile Category</Text>
+                    <Menu
+                        visible={menuVisible}
+                        onDismiss={() => setMenuVisible(false)}
+                        anchor={
+                            <TouchableRipple onPress={() => setMenuVisible(true)} style={{ borderWidth: 1, borderColor: theme.colors.outline, borderRadius: 8, padding: 12 }}>
+                                <Text>{profile.profileCategory || 'Select Category'}</Text>
+                            </TouchableRipple>
+                        }
+                    >
+                        {profileCategories.map((cat) => (
+                            <Menu.Item 
+                                key={cat.id} 
+                                onPress={() => {
+                                    setCategory(profile.username, cat.id);
+                                    setMenuVisible(false);
+                                }} 
+                                title={cat.name} 
+                            />
+                        ))}
+                    </Menu>
                 </View>
 
                 <Divider style={styles.divider} />

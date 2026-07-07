@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { instagramService, InstagramProfile, ScraperJob, MetaQuotaInfo, ProfileDetailsResponse } from '../services/instagram.service';
+import { systemService } from '../services/system.service';
 import { useAuth } from '../context/AuthContext';
 
 export const useInstagramExplorer = () => {
@@ -13,6 +14,7 @@ export const useInstagramExplorer = () => {
   const [jobHistory, setJobHistory] = useState<ScraperJob[]>([]);
   const [quota, setQuota] = useState<MetaQuotaInfo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileCategories, setProfileCategories] = useState<{id: string, name: string}[]>([]);
   
   // Pagination State
   const offsetRef = useRef(0);
@@ -40,6 +42,15 @@ export const useInstagramExplorer = () => {
     }
   }, []);
 
+  const fetchProfileCategories = useCallback(async () => {
+    try {
+      const data = await systemService.getProfileCategories();
+      setProfileCategories(data);
+    } catch (error) {
+      console.error('Failed to fetch profile categories', error);
+    }
+  }, []);
+
   const fetchQueue = useCallback(async () => {
     try {
       const [active, history] = await Promise.all([
@@ -62,10 +73,20 @@ export const useInstagramExplorer = () => {
     }
   }, []);
 
+  const initialLoad = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([
+      fetchWatchlist(),
+      fetchQueue(),
+      fetchQuota(),
+      fetchProfileCategories()
+    ]);
+    setLoading(false);
+  }, [fetchWatchlist, fetchQueue, fetchQuota, fetchProfileCategories]);
+
   useEffect(() => {
-    fetchWatchlist();
-    fetchQuota();
-  }, [fetchWatchlist, fetchQuota]);
+    initialLoad();
+  }, [initialLoad]);
 
   // fetchQueue is now handled by the queue screen
 
@@ -224,22 +245,20 @@ export const useInstagramExplorer = () => {
     }
   };
 
-  const toggleOwn = async (username: string, currentStatus: boolean) => {
-    const newStatus = !currentStatus;
-    
+  const setCategory = async (username: string, newCategory: string) => {
     // Optimistic Update for profileData if it matches the current user
     if (profileData?.profile.username === username) {
       setProfileData({
         ...profileData,
         profile: {
           ...profileData.profile,
-          isOwnAccount: newStatus
+          profileCategory: newCategory
         }
       });
     }
 
     try {
-      await instagramService.toggleOwnAccount(username, newStatus);
+      await instagramService.setProfileCategory(username, newCategory);
       await fetchWatchlist();
       if (selectedProfile === username) {
         await selectProfile(username);
@@ -249,7 +268,7 @@ export const useInstagramExplorer = () => {
       if (selectedProfile === username) {
         await selectProfile(username);
       }
-      Alert.alert("Error", "Failed to update ownership status.");
+      Alert.alert("Error", "Failed to update profile category.");
     }
   };
 
@@ -259,10 +278,10 @@ export const useInstagramExplorer = () => {
     // Optimistic Update for watchlist sorting and status
     setWatchlist(prev => {
       const updated = prev.map(p => p.username === username ? { ...p, isPinned: newStatus } : p);
-      // Re-sort: isPinned first, then isOwnAccount, then alphabetical
+      // Re-sort: isPinned first, then profileCategory, then alphabetical
       return updated.sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        if (a.isOwnAccount !== b.isOwnAccount) return a.isOwnAccount ? -1 : 1;
+        if (a.profileCategory !== b.profileCategory) return a.profileCategory.localeCompare(b.profileCategory);
         return a.username.localeCompare(b.username);
       });
     });
@@ -305,12 +324,13 @@ export const useInstagramExplorer = () => {
     manualSync,
     deleteProfileData,
     toggleWatch,
-    toggleOwn,
+    setCategory,
     togglePin,
     fetchQueue,
     selectProfile,
     loadMorePosts,
     hasMore,
     loadingMore,
+    profileCategories,
   };
 };

@@ -42,7 +42,8 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
 
   const badgeConfig = {
     icon: (inWatchlist && active) ? "check-circle" : "minus-circle",
-    color: profile.isOwnAccount ? "#4CAF50" : "#2196F3"
+    color: profile.profileCategory === 'My Business' ? "#4CAF50" : 
+           profile.profileCategory === 'Competitors' ? "#F44336" : "#2196F3"
   };
 
   return (

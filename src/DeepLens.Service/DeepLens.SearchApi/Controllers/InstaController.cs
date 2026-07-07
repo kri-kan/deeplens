@@ -105,8 +105,8 @@ public class InstaController : ControllerBase
         public int MediaCount { get; set; }
         [JsonPropertyName("isActive")]
         public bool IsActive { get; set; }
-        [JsonPropertyName("isOwnAccount")]
-        public bool IsOwnAccount { get; set; }
+        [JsonPropertyName("profileCategory")]
+        public string ProfileCategory { get; set; } = string.Empty;
         [JsonPropertyName("isPinned")]
         public bool IsPinned { get; set; }
         [JsonPropertyName("lastSyncedAt")]
@@ -131,7 +131,7 @@ public class InstaController : ControllerBase
                 follower_count AS FollowersCount, 
                 post_count AS MediaCount, 
                 is_active AS IsActive, 
-                is_own_account AS IsOwnAccount, 
+                profile_category AS ProfileCategory, 
                 is_pinned AS IsPinned,
                 last_scraped_at AS LastSyncedAt,
                 COALESCE(
@@ -149,7 +149,7 @@ public class InstaController : ControllerBase
                 ) AS StoriesPostedLast24h
             FROM competitor_watchlist 
             WHERE platform = 'instagram' 
-            ORDER BY is_pinned DESC, is_own_account DESC, username ASC");
+            ORDER BY is_pinned DESC, profile_category ASC, username ASC");
 
         return Ok(watchlist);
     }
@@ -169,7 +169,7 @@ public class InstaController : ControllerBase
         var profileInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             SELECT id, username, display_name, profile_pic_url, profile_pic_storage_path, bio, 
                    follower_count, following_count, post_count, last_scraped_at, 
-                   external_id, is_active, is_data_deleted, is_own_account 
+                   external_id, is_active, is_data_deleted, profile_category 
             FROM competitor_watchlist 
             WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'", 
             new { username });
@@ -240,7 +240,7 @@ public class InstaController : ControllerBase
                 IsPrivate = false,
                 IsVerified = false,
                 IsActive = profileInfo.is_active ?? true,
-                IsOwnAccount = profileInfo.is_own_account ?? false,
+                ProfileCategory = (string?)profileInfo.profile_category ?? string.Empty,
                 IsDataDeleted = isDeleted,
                 LastSyncedAt = (DateTime?)profileInfo.last_scraped_at
             },
@@ -584,16 +584,16 @@ public class InstaController : ControllerBase
             return Ok(new { username, isActive = active });
         }
 
-    [HttpPost("profile/{username}/toggle-own")]
-    public async Task<IActionResult> ToggleOwnAccount(string username, [FromQuery] bool isOwn)
+    [HttpPost("profile/{username}/set-category")]
+    public async Task<IActionResult> SetProfileCategory(string username, [FromQuery] string category)
     {
             using var conn = await _db.CreateConnectionAsync();
             await conn.ExecuteAsync(@"
                 UPDATE competitor_watchlist 
-                SET is_own_account = @isOwn 
+                SET profile_category = @category 
                 WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
-                new { username, isOwn });
-            return Ok(new { username, isOwnAccount = isOwn });
+                new { username, category });
+            return Ok(new { username, profileCategory = category });
         }
 
     [HttpPost("profile/{username}/toggle-pin")]

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { View, FlatList, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
-import { Text, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button,  useTheme } from 'react-native-paper';
+import { Text, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, List, useTheme } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -53,6 +53,7 @@ export default function InstagramExplorer() {
     loadMorePosts,
     loadingMore,
     togglePin,
+    profileCategories,
   } = useInstagramExplorer();
 
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -61,6 +62,7 @@ export default function InstagramExplorer() {
   const [selectedPosts, setSelectedPosts] = useState<Map<string, any>>(new Map());
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const isNavigating = useRef(false);
 
   const selectionMode = selectedPosts.size > 0;
@@ -314,16 +316,14 @@ export default function InstagramExplorer() {
               flex: 1, 
               backgroundColor: theme.colors.surfaceVariant, 
               borderRadius: 16, 
-              padding: 16, 
-              justifyContent: 'space-between',
-              height: 100
+              padding: 8, 
+              aspectRatio: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <IconButton icon="calendar-edit" size={24} iconColor={theme.colors.secondary} style={{ margin: 0, padding: 0 }} />
-            <View>
-              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Curation Mode</Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Group & curate reels</Text>
-            </View>
+            <IconButton icon="calendar-edit" size={28} iconColor={theme.colors.secondary} style={{ margin: 0 }} />
+            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Curation</Text>
           </TouchableOpacity>
 
           {/* Sharing Card */}
@@ -334,20 +334,16 @@ export default function InstagramExplorer() {
               flex: 1, 
               backgroundColor: theme.colors.surfaceVariant, 
               borderRadius: 16, 
-              padding: 16, 
-              justifyContent: 'space-between',
-              height: 100
+              padding: 8, 
+              aspectRatio: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <IconButton icon="share-variant" size={24} iconColor={theme.colors.secondary} style={{ margin: 0, padding: 0 }} />
-            <View>
-              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Sharing Mode</Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Post stories to IG</Text>
-            </View>
+            <IconButton icon="share-variant" size={28} iconColor={theme.colors.secondary} style={{ margin: 0 }} />
+            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Sharing</Text>
           </TouchableOpacity>
-        </View>
 
-        <View style={{ flexDirection: 'row', gap: 12 }}>
           {/* Swipe Game Card */}
           <TouchableOpacity 
             onPress={() => router.push('/utilities/instagram/story-planner/swipe-game')}
@@ -356,16 +352,14 @@ export default function InstagramExplorer() {
               flex: 1, 
               backgroundColor: theme.colors.surfaceVariant, 
               borderRadius: 16, 
-              padding: 16, 
-              justifyContent: 'space-between',
-              height: 100
+              padding: 8, 
+              aspectRatio: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <IconButton icon="cards-heart" size={24} iconColor={theme.colors.secondary} style={{ margin: 0, padding: 0 }} />
-            <View>
-              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Swipe Game</Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Tinder swipes (24h+)</Text>
-            </View>
+            <IconButton icon="cards-heart" size={28} iconColor={theme.colors.secondary} style={{ margin: 0 }} />
+            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Swipes</Text>
           </TouchableOpacity>
 
           {/* Review List Card */}
@@ -376,59 +370,77 @@ export default function InstagramExplorer() {
               flex: 1, 
               backgroundColor: theme.colors.surfaceVariant, 
               borderRadius: 16, 
-              padding: 16, 
-              justifyContent: 'space-between',
-              height: 100
+              padding: 8, 
+              aspectRatio: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-              <IconButton icon="alert-decagram" size={24} iconColor={theme.colors.error} style={{ margin: 0, padding: 0 }} />
+            <View style={{ position: 'relative' }}>
+              <IconButton icon="alert-decagram" size={28} iconColor={theme.colors.error} style={{ margin: 0 }} />
               {needsReviewCount > 0 && (
-                <View style={{ backgroundColor: theme.colors.error, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 }}>
-                  <Text style={{ color: theme.colors.onError, fontSize: 10, fontWeight: 'bold' }}>{needsReviewCount}</Text>
+                <View style={{ position: 'absolute', top: 0, right: 0, backgroundColor: theme.colors.error, borderRadius: 10, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
+                  <Text style={{ color: theme.colors.onError, fontSize: 9, fontWeight: 'bold' }}>{needsReviewCount}</Text>
                 </View>
               )}
             </View>
-            <View>
-              <Text variant="labelLarge" style={{ fontWeight: 'bold' }}>Review Queue</Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, fontSize: 10 }}>Renew story eligibility</Text>
-            </View>
+            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Review</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.profileList}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>Active Profiles</Text>
-        <View style={styles.profileGrid}>
-          {watchlist.filter(Boolean).map(item => (
-            <TouchableOpacity 
-              key={item.id || item.username} 
-              onPress={() => selectProfile(item.username)}
-              onLongPress={(e) => {
-                const { pageX, pageY } = e.nativeEvent;
-                setMenuAnchor({ x: pageX, y: pageY });
-                setActiveMenu(item.username);
-              }}
-              activeOpacity={0.7}
-              style={styles.profileGridItem}
-            >
-              <View style={styles.profileCard}>
-                <ProfileAvatar 
-                  profile={{ ...item, isInWatchlist: true }} 
-                  size={60} 
-                  showBadge={true}
-                />
-              </View>
-              <Text 
-                variant="labelSmall" 
-                style={styles.profileUsername} 
-                numberOfLines={1}
+        <Text variant="titleLarge" style={[styles.sectionTitle, { marginBottom: 0, marginTop: -8 }]}>Active Profiles</Text>
+          {profileCategories.map((category) => {
+            const categoryProfiles = watchlist.filter(p => p.profileCategory === category.id);
+            if (categoryProfiles.length === 0) return null;
+            return (
+              <List.Accordion 
+                key={category.id} 
+                id={category.id}
+                title={`${category.name} (${categoryProfiles.length})`}
+                titleStyle={{ fontWeight: 'bold' }}
+                expanded={expandedCategories[category.id] !== false}
+                onPress={() => {
+                  setExpandedCategories(prev => ({
+                    ...prev,
+                    [category.id]: prev[category.id] === false ? true : false
+                  }));
+                }}
               >
-                {item.username}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <View style={styles.profileGrid}>
+                  {categoryProfiles.map(item => (
+                    <TouchableOpacity 
+                      key={item.id || item.username} 
+                      onPress={() => selectProfile(item.username)}
+                      onLongPress={(e) => {
+                        const { pageX, pageY } = e.nativeEvent;
+                        setMenuAnchor({ x: pageX, y: pageY });
+                        setActiveMenu(item.username);
+                      }}
+                      activeOpacity={0.7}
+                      style={styles.profileGridItem}
+                    >
+                      <View style={styles.profileCard}>
+                        <ProfileAvatar 
+                          profile={{ ...item, isInWatchlist: true }} 
+                          size={60} 
+                          showBadge={true}
+                        />
+                      </View>
+                      <Text 
+                        variant="labelSmall" 
+                        style={styles.profileUsername} 
+                        numberOfLines={1}
+                      >
+                        {item.username}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </List.Accordion>
+            );
+          })}
 
         <Menu
           visible={!!activeMenu}

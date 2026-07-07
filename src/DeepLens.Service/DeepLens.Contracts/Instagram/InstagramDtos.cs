@@ -41,8 +41,8 @@ public class InstagramProfileDto
     [JsonPropertyName("isActive")]
     public bool IsActive { get; set; }
 
-    [JsonPropertyName("isOwnAccount")]
-    public bool IsOwnAccount { get; set; }
+    [JsonPropertyName("profileCategory")]
+    public string ProfileCategory { get; set; } = string.Empty;
 
     [JsonPropertyName("isDataDeleted")]
     public bool IsDataDeleted { get; set; }

@@ -21,7 +21,7 @@ export interface InstagramProfile {
   profilePictureUrl?: string;
   storagePath?: string;
   isActive: boolean;
-  isOwnAccount: boolean;
+  profileCategory: string;
   isDataDeleted: boolean;
   isPinned?: boolean;
   lastSyncedAt?: string;
@@ -78,7 +78,7 @@ export interface ProfileDetailsResponse {
     isActive: boolean;
     isVerified: boolean;
     isBusiness: boolean;
-    isOwnAccount: boolean;
+    profileCategory: string;
     lastSyncedAt?: string;
     isDataDeleted: boolean;
   };
@@ -313,8 +313,8 @@ class InstagramService {
     return searchApiClient.post(`/api/v1/Insta/watchlist/toggle?username=${username}&active=${active}`, {});
   };
 
-  toggleOwnAccount = async (username: string, isOwn: boolean): Promise<any> => {
-    return searchApiClient.post(`/api/v1/Insta/profile/${username}/toggle-own?isOwn=${isOwn}`, {});
+  setProfileCategory = async (username: string, category: string): Promise<any> => {
+    return searchApiClient.post(`/api/v1/Insta/profile/${username}/set-category?category=${encodeURIComponent(category)}`, {});
   };
 
   togglePinStatus = async (username: string, isPinned: boolean): Promise<any> => {

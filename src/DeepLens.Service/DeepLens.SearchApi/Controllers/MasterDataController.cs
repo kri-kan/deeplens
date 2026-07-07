@@ -33,6 +33,17 @@ public class MasterDataController : ControllerBase
         return Ok(icons);
     }
 
+    [HttpGet("profile-categories")]
+    public async Task<IActionResult> GetProfileCategories()
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var categories = await conn.QueryAsync(@"
+            SELECT id, name 
+            FROM master_profile_categories 
+            ORDER BY display_order ASC");
+        return Ok(categories);
+    }
+
     [HttpGet("categories")]
     public async Task<IActionResult> GetCategories()
     {

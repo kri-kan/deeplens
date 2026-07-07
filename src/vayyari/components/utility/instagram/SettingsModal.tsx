@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Surface, Text, IconButton, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme } from 'react-native-paper';
+import { Surface, Text, IconButton, Switch, SegmentedButtons, TextInput, Button, Divider, useTheme, Menu, TouchableRipple } from 'react-native-paper';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -13,8 +13,9 @@ interface SettingsModalProps {
   onSync: () => void;
   onDeleteData: () => void;
   onToggleWatch: () => void;
-  onToggleOwn: () => void;
+  onSetCategory: (category: string) => void;
   loading: boolean;
+  profileCategories: {id: string, name: string}[];
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -28,10 +29,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSync,
   onDeleteData,
   onToggleWatch,
-  onToggleOwn,
+  onSetCategory,
   loading,
+  profileCategories,
 }) => {
   const theme = useTheme();
+  const [menuVisible, setMenuVisible] = React.useState(false);
 
   if (!visible || !profile) return null;
 
@@ -52,14 +55,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <Switch value={profile.isActive} onValueChange={onToggleWatch} />
       </View>
 
-      <View style={styles.toggleRow}>
-        <View>
-          <Text variant="labelLarge" style={styles.bold}>My Account</Text>
-          <Text variant="labelSmall" style={styles.helperText}>
-            {profile.isOwnAccount ? 'Flagged as Mine' : 'Competitor Account'}
-          </Text>
-        </View>
-        <Switch value={profile.isOwnAccount} onValueChange={onToggleOwn} />
+      <View style={[styles.toggleRow, { flexDirection: 'column', alignItems: 'stretch' }]}>
+        <Text variant="labelLarge" style={[styles.bold, { marginBottom: 8 }]}>Profile Category</Text>
+        <Menu
+            visible={menuVisible}
+            onDismiss={() => setMenuVisible(false)}
+            anchor={
+                <TouchableRipple onPress={() => setMenuVisible(true)} style={{ borderWidth: 1, borderColor: theme.colors.outline, borderRadius: 8, padding: 12 }}>
+                    <Text>{profile.profileCategory || 'Select Category'}</Text>
+                </TouchableRipple>
+            }
+        >
+            {profileCategories.map((cat) => (
+                <Menu.Item 
+                    key={cat.id} 
+                    onPress={() => {
+                        onSetCategory(cat.id);
+                        setMenuVisible(false);
+                    }} 
+                    title={cat.name} 
+                />
+            ))}
+        </Menu>
       </View>
 
       <Divider style={styles.divider} />

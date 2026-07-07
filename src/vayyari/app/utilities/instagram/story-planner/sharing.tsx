@@ -483,7 +483,7 @@ export default function StorySharingScreen() {
       const watchlist = await wrapInSpan('StorySharingScreen: getWatchlist', () => 
         instagramService.getWatchlist()
       );
-      const own = watchlist.filter(p => p.isOwnAccount);
+      const own = watchlist.filter(p => p.profileCategory === 'My Business');
       setOwnProfiles(own);
       if (own.length > 0) {
         setSelectedProfile(own[0]);

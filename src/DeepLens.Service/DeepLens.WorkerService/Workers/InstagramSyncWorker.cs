@@ -96,16 +96,17 @@ namespace DeepLens.WorkerService.Workers
             // Using a transaction with FOR UPDATE SKIP LOCKED to strictly ensure 
             // only one worker can pick up a specific job at a time.
             using var tx = await conn.BeginTransactionAsync(ct);
-            var job = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
-                SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username, w.is_own_account
-                FROM scraper_queue j
+            var jobSql = @"
+                SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username, w.profile_category
+                FROM scraper_jobs j
                 JOIN competitor_watchlist w ON j.watchlist_id = w.id
                 WHERE j.status = 'pending' 
                   AND w.is_active = true
                   AND (j.next_run_at IS NULL OR j.next_run_at <= NOW())
                 ORDER BY j.priority DESC, j.created_at ASC
                 LIMIT 1
-                FOR UPDATE SKIP LOCKED", transaction: tx);
+                FOR UPDATE SKIP LOCKED";
+            var job = await conn.QueryFirstOrDefaultAsync<dynamic>(jobSql, transaction: tx);
 
             if (job == null)
             {
@@ -167,7 +168,8 @@ namespace DeepLens.WorkerService.Workers
                 var httpClient = serviceScope.ServiceProvider.GetRequiredService<HttpClient>();
                 var instaMedia = serviceScope.ServiceProvider.GetRequiredService<IInstagramMediaService>();
 
-                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, job.is_own_account ?? false, ct);
+                // 3. Update Database (Ingest Posts)
+                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, (string?)job.profile_category ?? "", ct);
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
@@ -360,7 +362,7 @@ namespace DeepLens.WorkerService.Workers
             }
         }
 
-        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, bool isOwnAccount, CancellationToken ct)
+        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, string profileCategory, CancellationToken ct)
         {
             var existingPosts = (await conn.QueryAsync<dynamic>("SELECT platform_video_id, storage_path FROM competitor_videos WHERE watchlist_id = @Id", new { Id = watchlistId }))
                                 .ToDictionary(x => (string)x.platform_video_id, x => (string?)x.storage_path);
@@ -441,8 +443,8 @@ namespace DeepLens.WorkerService.Workers
                             await EmitImageUploadedEvent(mediaId, newStoragePath, $"{p.Id}.jpg", "image/jpeg", "instagram", "thumbnail", ct);
                         }
 
-                        // Full Media Download for Own Accounts
-                        if (isOwnAccount)
+                        // Full Media Download for My Business
+                        if (profileCategory == "My Business")
                         {
                             await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId, ct);
                         }
