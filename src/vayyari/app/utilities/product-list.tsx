@@ -271,6 +271,7 @@ export default function ProductCatalogScreen() {
         data={CATEGORIES}
         horizontal
         pagingEnabled
+        scrollEnabled={!selectionMode}
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScroll}
         keyExtractor={(item) => item.id}
