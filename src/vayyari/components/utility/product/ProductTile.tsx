@@ -85,7 +85,6 @@ const ProductTileComponent: React.FC<ProductTileProps> = ({ item, onPress, onLon
         onLongPress?.(item);
         onDragStart?.();
       }}
-      delayLongPress={150}
       // Allow parent to hijack touches when drag selecting starts
       onStartShouldSetResponder={() => true}
       android_ripple={selectionMode ? null : { color: 'rgba(255,255,255,0.2)' }}

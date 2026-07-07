@@ -114,7 +114,9 @@ public class WhatsAppProductController : ControllerBase
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
                   SET entity_id = @ProductAId 
                   WHERE entity_id = @ProductBId AND entity_type = 'product'
-                  ON CONFLICT DO NOTHING", new { ProductAId = request.ProductAId, ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct));
+                  AND media_id NOT IN (
+                      SELECT media_id FROM public.media_links WHERE entity_id = @ProductAId AND entity_type = 'product'
+                  )", new { ProductAId = request.ProductAId, ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct));
 
             await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links WHERE entity_id = @ProductBId AND entity_type = 'product'", new { ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct));
 
@@ -124,7 +126,9 @@ public class WhatsAppProductController : ControllerBase
                 await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
                       SET entity_id = @TargetListingId 
                       WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'
-                      ON CONFLICT DO NOTHING", new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+                      AND media_id NOT IN (
+                          SELECT media_id FROM public.media_links WHERE entity_id = @TargetListingId AND entity_type = 'vendor_listing'
+                      )", new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
 
                 await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'", new { SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
             }

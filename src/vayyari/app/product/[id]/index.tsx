@@ -27,7 +27,7 @@ import {
   Chip,
 } from 'react-native-paper';
 import { CompactChip } from '@/components/ui/CompactChip';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -35,6 +35,7 @@ import { productService } from '@/services/productService';
 import { useProductDetail } from '@/hooks/useProductDetail';
 import type { VendorProduct, MediaEntry, VendorListing } from '@/types/products';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -67,7 +68,7 @@ function ActiveVideoPlayer({ videoUrl, isPlaying, style }: {
 }
 
 // ── Inline video slide rendered in the carousel ──────────────────────────────
-function VideoSlide({ media, isActive, onFullscreen }: { media: MediaEntry; isActive: boolean; onFullscreen: () => void }) {
+function VideoSlide({ media, isActive, onFullscreen, style }: { media: MediaEntry; isActive: boolean; onFullscreen: () => void; style?: any }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const videoUrl = media.id && media.id !== '00000000-0000-0000-0000-000000000000'
     ? productService.getRawMediaUrl(media.id)
@@ -84,9 +85,11 @@ function VideoSlide({ media, isActive, onFullscreen }: { media: MediaEntry; isAc
     }
   }, [isActive]);
 
+  const containerStyle = style || styles.carouselImage;
+
   if (!videoUrl) {
     return (
-      <View style={[styles.carouselImage, styles.center, { backgroundColor: '#111' }]}>
+      <View style={[containerStyle, styles.center, { backgroundColor: '#111' }]}>
         <Icon source="video-off" size={48} color="#555" />
         <Text style={{ color: '#555', marginTop: 8 }}>Video unavailable</Text>
       </View>
@@ -94,13 +97,13 @@ function VideoSlide({ media, isActive, onFullscreen }: { media: MediaEntry; isAc
   }
 
   return (
-    <View style={styles.carouselImage}>
+    <View style={containerStyle}>
       {isActive && isPlaying ? (
-        <TouchableOpacity activeOpacity={0.9} onPress={() => setIsPlaying(false)} style={styles.carouselImage}>
-          <ActiveVideoPlayer videoUrl={videoUrl} isPlaying={isPlaying} style={styles.carouselImage} />
+        <TouchableOpacity activeOpacity={0.9} onPress={() => setIsPlaying(false)} style={containerStyle}>
+          <ActiveVideoPlayer videoUrl={videoUrl} isPlaying={isPlaying} style={containerStyle} />
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity activeOpacity={0.9} onPress={() => setIsPlaying(true)} style={styles.carouselImage}>
+        <TouchableOpacity activeOpacity={0.9} onPress={() => setIsPlaying(true)} style={containerStyle}>
           {thumbnailUrl ? (
             <Image source={{ uri: thumbnailUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
           ) : (
@@ -108,7 +111,7 @@ function VideoSlide({ media, isActive, onFullscreen }: { media: MediaEntry; isAc
           )}
           <View style={styles.videoOverlay}>
             <View style={styles.playBtn}>
-              <Icon source="play-circle" size={72} color="rgba(255,255,255,0.95)" />
+              <Icon source="play-circle" size={48} color="rgba(255,255,255,0.95)" />
             </View>
           </View>
         </TouchableOpacity>
@@ -131,6 +134,26 @@ export default function ProductDetailScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [shareProgress, setShareProgress] = useState<number | null>(null);
+
+  const [viewMode, setViewMode] = useState<'carousel' | 'gallery'>('carousel');
+
+  useEffect(() => {
+    AsyncStorage.getItem('product-view-preference').then(val => {
+      if (val === 'gallery' || val === 'carousel') setViewMode(val as any);
+    });
+  }, []);
+
+  const toggleViewMode = () => {
+    const nextMode = viewMode === 'gallery' ? 'carousel' : 'gallery';
+    setViewMode(nextMode);
+    AsyncStorage.setItem('product-view-preference', nextMode);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProductDetails();
+    }, [fetchProductDetails])
+  );
 
   const panResponder = useRef(
     PanResponder.create({
@@ -206,6 +229,23 @@ export default function ProductDetailScreen() {
       <Appbar.Header style={{ backgroundColor: 'transparent', position: 'absolute', top: insets.top, left: 0, right: 0, zIndex: 10 }}>
         <Appbar.BackAction onPress={() => router.back()} color="white" style={styles.headerBtn} />
         <Appbar.Content title="" />
+        <Appbar.Action 
+          icon="call-merge" 
+          color="white" 
+          style={styles.headerBtn}
+          onPress={() => {
+            router.push({
+              pathname: '/utilities/product/product-similar-matches',
+              params: { productId: id, productTitle: product.title || '' },
+            } as any);
+          }} 
+        />
+        <Appbar.Action 
+          icon={viewMode === 'gallery' ? 'view-carousel' : 'view-grid'} 
+          color="white" 
+          style={styles.headerBtn}
+          onPress={toggleViewMode} 
+        />
         <Menu
           visible={isMenuOpen}
           onDismiss={() => setIsMenuOpen(false)}
@@ -240,17 +280,6 @@ export default function ProductDetailScreen() {
           <Menu.Item
             onPress={() => {
               setIsMenuOpen(false);
-              router.push({
-                pathname: '/utilities/product/product-similar-matches',
-                params: { productId: id, productTitle: product.title || '' },
-              } as any);
-            }}
-            title="Find Similar / Merge"
-            leadingIcon="call-merge"
-          />
-          <Menu.Item
-            onPress={() => {
-              setIsMenuOpen(false);
               setIsDeleteDialogOpen(true);
             }}
             title="Delete Product"
@@ -260,29 +289,22 @@ export default function ProductDetailScreen() {
       </Appbar.Header>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Media Carousel */}
-        <View style={styles.carouselContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => {
-              const x = e.nativeEvent.contentOffset.x;
-              setActiveMediaIndex(Math.round(x / width));
-            }}
-            scrollEventThrottle={16}
-          >
+        {/* Media View */}
+        {viewMode === 'gallery' ? (
+          <View style={[styles.galleryContainer, { paddingTop: insets.top + 56 }]}>
             {mediaList.length > 0 ? (
               mediaList.map((m, idx) => {
-                const isWithinRange = Math.abs(idx - activeMediaIndex) <= 2;
-                
                 if (m.mediaType === 2) {
                   return (
                     <VideoSlide 
-                      key={m.id} 
+                      key={m.id}
                       media={m} 
-                      isActive={idx === activeMediaIndex} 
-                      onFullscreen={() => setIsPreviewOpen(true)} 
+                      isActive={true} 
+                      onFullscreen={() => {
+                        setActiveMediaIndex(idx);
+                        setIsPreviewOpen(true);
+                      }} 
+                      style={styles.galleryImageContainer}
                     />
                   );
                 }
@@ -291,44 +313,100 @@ export default function ProductDetailScreen() {
                   <TouchableOpacity
                     key={m.id}
                     activeOpacity={0.9}
-                    onPress={() => setIsPreviewOpen(true)}
-                    style={styles.carouselImage}
+                    onPress={() => {
+                      setActiveMediaIndex(idx);
+                      setIsPreviewOpen(true);
+                    }}
+                    style={styles.galleryImageContainer}
                   >
-                    {isWithinRange ? (
-                      <Image
-                        source={{
-                          uri: m.id && m.id !== '00000000-0000-0000-0000-000000000000'
-                            ? productService.getThumbnailUrl(m.id, 'large')
-                            : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/400')
-                        }}
-                        style={styles.carouselImage}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={[styles.carouselImage, { backgroundColor: '#111' }]} />
-                    )}
+                    <Image
+                      source={{
+                        uri: m.id && m.id !== '00000000-0000-0000-0000-000000000000'
+                          ? productService.getThumbnailUrl(m.id, 'large')
+                          : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/400')
+                      }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                    />
                   </TouchableOpacity>
                 );
               })
             ) : (
-                <View style={[styles.carouselImage, styles.center, { backgroundColor: '#eee' }]}>
+                <View style={[styles.galleryImageContainer, styles.center, { backgroundColor: '#eee', width: width, aspectRatio: 1 }]}>
                     <Icon source="image-off" size={64} color="#ccc" />
                 </View>
             )}
-          </ScrollView>
-          
-          <View style={styles.mediaPaging}>
-            {mediaList.map((_, i) => (
-              <View 
-                key={i} 
-                style={[
-                  styles.pagingDot, 
-                  { backgroundColor: i === activeMediaIndex ? 'white' : 'rgba(255,255,255,0.5)' }
-                ]} 
-              />
-            ))}
           </View>
-        </View>
+        ) : (
+          <View style={styles.carouselContainer}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={(e) => {
+                const x = e.nativeEvent.contentOffset.x;
+                setActiveMediaIndex(Math.round(x / width));
+              }}
+              scrollEventThrottle={16}
+            >
+              {mediaList.length > 0 ? (
+                mediaList.map((m, idx) => {
+                  const isWithinRange = Math.abs(idx - activeMediaIndex) <= 2;
+                  
+                  if (m.mediaType === 2) {
+                    return (
+                      <VideoSlide 
+                        key={m.id} 
+                        media={m} 
+                        isActive={idx === activeMediaIndex} 
+                        onFullscreen={() => setIsPreviewOpen(true)} 
+                      />
+                    );
+                  }
+                  
+                  return (
+                    <TouchableOpacity
+                      key={m.id}
+                      activeOpacity={0.9}
+                      onPress={() => setIsPreviewOpen(true)}
+                      style={styles.carouselImage}
+                    >
+                      {isWithinRange ? (
+                        <Image
+                          source={{
+                            uri: m.id && m.id !== '00000000-0000-0000-0000-000000000000'
+                              ? productService.getThumbnailUrl(m.id, 'large')
+                              : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/400')
+                          }}
+                          style={styles.carouselImage}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={[styles.carouselImage, { backgroundColor: '#111' }]} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                  <View style={[styles.carouselImage, styles.center, { backgroundColor: '#eee' }]}>
+                      <Icon source="image-off" size={64} color="#ccc" />
+                  </View>
+              )}
+            </ScrollView>
+            
+            <View style={styles.mediaPaging}>
+              {mediaList.map((_, i) => (
+                <View 
+                  key={i} 
+                  style={[
+                    styles.pagingDot, 
+                    { backgroundColor: i === activeMediaIndex ? 'white' : 'rgba(255,255,255,0.5)' }
+                  ]} 
+                />
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Product Details */}
         <View style={styles.detailsContent}>
@@ -628,15 +706,53 @@ export default function ProductDetailScreen() {
             />
             {mediaList[activeMediaIndex] && (
                 <>
-                    <Image
-                        source={{ 
-                        uri: mediaList[activeMediaIndex].id && mediaList[activeMediaIndex].id !== '00000000-0000-0000-0000-000000000000' 
-                            ? productService.getThumbnailUrl(mediaList[activeMediaIndex].id, 'large') 
-                            : (mediaList[activeMediaIndex].storagePath ? productService.getThumbnailUrlByPath(mediaList[activeMediaIndex].storagePath, 'large') : 'https://via.placeholder.com/800')
+                    <View style={{ width, height: '70%' }}>
+                      <FlatList
+                        data={Array(50).fill(mediaList).flat()}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        getItemLayout={(_, index) => ({
+                          length: width,
+                          offset: width * index,
+                          index,
+                        })}
+                        initialScrollIndex={25 * mediaList.length + activeMediaIndex}
+                        onMomentumScrollEnd={(e) => {
+                          const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                          if (mediaList.length > 0) {
+                            setActiveMediaIndex(index % mediaList.length);
+                          }
                         }}
-                        style={styles.previewImage}
-                        contentFit="contain"
-                    />
+                        keyExtractor={(_, index) => index.toString()}
+                        renderItem={({ item: m }) => (
+                          <View style={{ width, height: '100%', justifyContent: 'center' }}>
+                            <Image
+                                source={{ 
+                                uri: m.id && m.id !== '00000000-0000-0000-0000-000000000000' 
+                                    ? productService.getThumbnailUrl(m.id, 'large') 
+                                    : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/800')
+                                }}
+                                style={{ width: '100%', height: '100%' }}
+                                contentFit="contain"
+                            />
+                          </View>
+                        )}
+                      />
+                    </View>
+                    
+                    <View style={[styles.mediaPaging, { bottom: 120 }]}>
+                      {mediaList.map((_, i) => (
+                        <View 
+                          key={i} 
+                          style={[
+                            styles.pagingDot, 
+                            { backgroundColor: i === activeMediaIndex ? 'white' : 'rgba(255,255,255,0.5)' }
+                          ]} 
+                        />
+                      ))}
+                    </View>
+
                     <View style={styles.modalActions}>
                         <Button 
                             mode="contained" 
@@ -742,6 +858,18 @@ const styles = StyleSheet.create({
   carouselImage: {
     width: width,
     height: width * 1.3,
+  },
+  galleryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#000',
+    paddingBottom: 48,
+    gap: 2,
+  },
+  galleryImageContainer: {
+    width: Math.floor((width - 4) / 3),
+    height: Math.floor((width - 4) / 3) * 1.3,
+    backgroundColor: '#111',
   },
   videoOverlay: {
     ...StyleSheet.absoluteFillObject,

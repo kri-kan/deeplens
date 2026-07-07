@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet,
-  PanResponder, GestureResponderEvent,
+  PanResponder, GestureResponderEvent, BackHandler
 } from 'react-native';
 import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -90,7 +90,6 @@ export default function ProductCatalogScreen() {
   // Register once on focus, read latest state via refs — no re-registration on every toggle
   useFocusEffect(
     useCallback(() => {
-      const { BackHandler } = require('react-native');
       const onBackPress = () => {
         if (selectedIdsRef.current.size > 0) {
           clearSelectionRef.current();
@@ -235,13 +234,12 @@ export default function ProductCatalogScreen() {
         ref={pagerRef}
         data={CATEGORIES}
         horizontal
-        scrollEnabled={selectedIds.size === 0}
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScroll}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <CategoryPage
+        renderItem={({ item, index }) => (
+          <CategoryPageMemo
             categoryId={item.id}
             query={searchQuery}
             filters={activeFilters}
@@ -254,6 +252,7 @@ export default function ProductCatalogScreen() {
             selectedIds={selectedIds}
             onSelect={toggleSelection}
             selectionMode={selectionMode}
+            isActive={index === activeTab}
           />
         )}
       />
@@ -319,6 +318,7 @@ function CategoryPage({
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   selectionMode: boolean;
+  isActive: boolean;
 }) {
   const router = useRouter();
   const scrollOffsetRef = useRef(0);
@@ -405,7 +405,7 @@ function CategoryPage({
       onMoveShouldSetPanResponderCapture: () => isDragSelectingRef.current,
       onMoveShouldSetPanResponder: () => isDragSelectingRef.current,
       onPanResponderGrant: () => {
-        swipedIdsRef.current = new Set();
+        // Do not clear swipedIdsRef here because onDragStart populates it
       },
       onPanResponderMove: (evt: GestureResponderEvent) => {
         const { pageX, pageY } = evt.nativeEvent;
@@ -490,6 +490,7 @@ function CategoryPage({
               isDragSelectingRef.current = true;
               // If it WAS selected before the long press (thus unselecting it), action is remove. Else add.
               swipeActionRef.current = selectedIds.has(item.id) ? 'remove' : 'add';
+              swipedIdsRef.current = new Set([item.id]);
             }}
             onToggleStar={(p, isStarred) => toggleStar(p.id, isStarred)}
           />
@@ -519,3 +520,21 @@ function CategoryPage({
     </View>
   );
 }
+
+const CategoryPageMemo = React.memo(CategoryPage, (prev, next) => {
+  // If active state changed, we must re-render
+  if (prev.isActive !== next.isActive) return false;
+  
+  // If this tab is NOT active, we aggressively skip re-renders. 
+  // It will catch up with the latest state as soon as it becomes active again.
+  if (!next.isActive) return true;
+
+  // If this tab IS active, do a standard shallow equality check
+  return (
+    prev.categoryId === next.categoryId &&
+    prev.query === next.query &&
+    prev.filters === next.filters &&
+    prev.selectionMode === next.selectionMode &&
+    prev.selectedIds === next.selectedIds
+  );
+});
