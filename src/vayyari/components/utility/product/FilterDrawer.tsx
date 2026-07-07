@@ -9,7 +9,8 @@ import {
   Dimensions,
   StyleSheet,
 } from 'react-native';
-import { Text, Checkbox, ActivityIndicator, useTheme } from 'react-native-paper';
+import { Text, Checkbox, ActivityIndicator, useTheme, TextInput } from 'react-native-paper';
+import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import { productService } from '@/services/productService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,7 +38,7 @@ type SectionKey = typeof SECTIONS[number];
 
 export interface FilterState {
   sortBy: string;
-  category: string;
+  categories: string[];
   minPrice: number;
   maxPrice: number;
   fabrics: string[];
@@ -53,7 +54,7 @@ interface FilterDrawerProps {
 
 export const DEFAULT_FILTER_STATE: FilterState = {
   sortBy: 'recent',
-  category: 'all',
+  categories: [],
   minPrice: 0,
   maxPrice: 0,
   fabrics: [],
@@ -144,9 +145,16 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     }));
   };
 
+  const toggleCategory = (catId: string) => {
+    setDraft(d => ({
+      ...d,
+      categories: d.categories.includes(catId) ? d.categories.filter(c => c !== catId) : [...d.categories, catId],
+    }));
+  };
+
   const activeCount =
     (draft.sortBy !== 'recent' ? 1 : 0) +
-    (draft.category !== 'all' ? 1 : 0) +
+    (draft.categories.length > 0 ? 1 : 0) +
     draft.fabrics.length +
     draft.vendorNames.length +
     (draft.minPrice > 0 || draft.maxPrice > 0 ? 1 : 0);
@@ -178,25 +186,17 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     if (activeSection === 'Category') {
       return (
         <View style={styles.sectionContent}>
-          {/* "All" option */}
-          <TouchableOpacity
-            style={[styles.radioRow, draft.category === 'all' && { backgroundColor: theme.colors.primaryContainer }]}
-            onPress={() => setDraft(d => ({ ...d, category: 'all' }))}
-          >
-            <View style={[styles.radioCircle, { borderColor: theme.colors.primary }]}>
-              {draft.category === 'all' && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
-            </View>
-            <Text style={[styles.optionLabel, { color: textColor }]}>All</Text>
-          </TouchableOpacity>
           {CATEGORIES.map(cat => (
             <TouchableOpacity
               key={cat.id}
-              style={[styles.radioRow, draft.category === cat.id && { backgroundColor: theme.colors.primaryContainer }]}
-              onPress={() => setDraft(d => ({ ...d, category: cat.id }))}
+              style={styles.checkRow}
+              onPress={() => toggleCategory(cat.id)}
             >
-              <View style={[styles.radioCircle, { borderColor: theme.colors.primary }]}>
-                {draft.category === cat.id && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
-              </View>
+              <Checkbox
+                status={draft.categories.includes(cat.id) ? 'checked' : 'unchecked'}
+                onPress={() => toggleCategory(cat.id)}
+                color={theme.colors.primary}
+              />
               <Text style={[styles.optionLabel, { color: textColor }]}>{cat.label}</Text>
             </TouchableOpacity>
           ))}
@@ -212,41 +212,41 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
           <View style={styles.priceInputRow}>
             <View style={styles.priceInputBox}>
               <Text style={{ color: mutedColor, fontSize: 11 }}>Min</Text>
-              <Text style={[styles.priceValue, { color: textColor }]}>
-                ₹{parseInt(priceInput.min) || 0}
-              </Text>
+              <TextInput
+                style={[styles.priceValueInput, { color: textColor, backgroundColor: 'transparent' }]}
+                value={priceInput.min}
+                onChangeText={t => setPriceInput(p => ({ ...p, min: t }))}
+                keyboardType="numeric"
+                dense
+              />
             </View>
             <Text style={{ color: mutedColor }}>—</Text>
             <View style={styles.priceInputBox}>
               <Text style={{ color: mutedColor, fontSize: 11 }}>Max</Text>
-              <Text style={[styles.priceValue, { color: textColor }]}>
-                ₹{parseInt(priceInput.max) || maxPriceBound}
-              </Text>
+              <TextInput
+                style={[styles.priceValueInput, { color: textColor, backgroundColor: 'transparent' }]}
+                value={priceInput.max}
+                onChangeText={t => setPriceInput(p => ({ ...p, max: t }))}
+                keyboardType="numeric"
+                dense
+              />
             </View>
           </View>
 
-          {/* Dual range slider using track + two thumb positions */}
-          <View
-            style={styles.sliderTrack}
-            onLayout={e => { priceTrackWidth.current = e.nativeEvent.layout.width; }}
-          >
-            {(() => {
-              const total = maxPriceBound || 20000;
-              const minVal = Math.min(parseInt(priceInput.min) || 0, total);
-              const maxVal = Math.min(parseInt(priceInput.max) || total, total);
-              const minPct = minVal / total;
-              const maxPct = maxVal / total;
-              return (
-                <>
-                  <View style={[styles.sliderFill, { backgroundColor: theme.colors.surfaceVariant, left: 0, right: 0 }]} />
-                  <View style={[styles.sliderFill, {
-                    backgroundColor: theme.colors.primary,
-                    left: `${minPct * 100}%`,
-                    right: `${(1 - maxPct) * 100}%`,
-                  }]} />
-                </>
-              );
-            })()}
+          <View style={{ alignItems: 'center', marginVertical: 20 }}>
+            <MultiSlider
+              values={[parseInt(priceInput.min) || 0, parseInt(priceInput.max) || maxPriceBound]}
+              sliderLength={(SCREEN_WIDTH * 0.85) - 130}
+              onValuesChange={(values) => setPriceInput({ min: String(values[0]), max: String(values[1]) })}
+              min={0}
+              max={maxPriceBound}
+              step={100}
+              allowOverlap={false}
+              snapped
+              selectedStyle={{ backgroundColor: theme.colors.primary }}
+              unselectedStyle={{ backgroundColor: theme.colors.surfaceVariant }}
+              markerStyle={{ backgroundColor: theme.colors.primary, height: 20, width: 20, borderRadius: 10 }}
+            />
           </View>
 
           {/* Quick preset buttons */}
@@ -356,7 +356,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
                 const isActive = activeSection === section;
                 const sectionBadge =
                   section === 'Sort' && draft.sortBy !== 'recent' ? 1 :
-                  section === 'Category' && draft.category !== 'all' ? 1 :
+                  section === 'Category' && draft.categories.length > 0 ? draft.categories.length :
                   section === 'Fabric' ? draft.fabrics.length :
                   section === 'Vendor' ? draft.vendorNames.length :
                   section === 'Price' && (draft.minPrice > 0 || draft.maxPrice > 0) ? 1 : 0;
@@ -543,6 +543,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginTop: 2,
+  },
+  priceValueInput: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+    height: 40,
+    width: '100%',
   },
   sliderTrack: {
     height: 4,

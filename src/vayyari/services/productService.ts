@@ -58,6 +58,7 @@ class ProductService {
 
   async getCatalog(params: {
     category?: string;
+    categories?: string[];
     sortBy?: string;
     skip?: number;
     take?: number;
@@ -68,6 +69,7 @@ class ProductService {
     vendorNames?: string[];
     minPrice?: number;
     maxPrice?: number;
+    includeArchived?: boolean;
   }): Promise<{ products: VendorProduct[], totalCount: number }> {
     // Serialize arrays as repeated query params
     const searchParams = new URLSearchParams();
@@ -80,8 +82,10 @@ class ProductService {
     if (params.endDate) searchParams.append('endDate', params.endDate);
     if (params.minPrice !== undefined) searchParams.append('minPrice', String(params.minPrice));
     if (params.maxPrice !== undefined) searchParams.append('maxPrice', String(params.maxPrice));
+    if (params.includeArchived) searchParams.append('includeArchived', 'true');
     params.fabrics?.forEach(f => searchParams.append('fabrics', f));
     params.vendorNames?.forEach(v => searchParams.append('vendorNames', v));
+    params.categories?.forEach(c => searchParams.append('categories', c));
     return productMgmtApiClient.get<{ products: VendorProduct[], totalCount: number }>(
       API_ROUTES.PRODUCT_CATALOG.LIST + '/catalog?' + searchParams.toString()
     );
@@ -97,6 +101,14 @@ class ProductService {
 
   async deleteProduct(productId: string): Promise<void> {
     return productMgmtApiClient.delete(`${API_ROUTES.PRODUCT_CATALOG.LIST}/${productId}`);
+  }
+
+  async archiveProducts(productIds: string[]): Promise<{ count: number }> {
+    return productMgmtApiClient.post(`${API_ROUTES.PRODUCT_CATALOG.LIST}/archive`, productIds);
+  }
+
+  async unarchiveProducts(productIds: string[]): Promise<{ count: number }> {
+    return productMgmtApiClient.post(`${API_ROUTES.PRODUCT_CATALOG.LIST}/unarchive`, productIds);
   }
 
   async starMedia(productId: string, mediaId: string): Promise<void> {

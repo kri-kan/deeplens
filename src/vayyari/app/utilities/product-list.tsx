@@ -3,7 +3,7 @@ import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet,
   PanResponder, GestureResponderEvent, BackHandler
 } from 'react-native';
-import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button } from 'react-native-paper';
+import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -59,7 +59,7 @@ export default function ProductCatalogScreen() {
 
   const activeFilterCount =
     (activeFilters.sortBy !== 'recent' ? 1 : 0) +
-    (activeFilters.category !== 'all' ? 1 : 0) +
+    (activeFilters.categories && activeFilters.categories.length > 0 ? 1 : 0) +
     activeFilters.fabrics.length +
     activeFilters.vendorNames.length +
     (activeFilters.minPrice > 0 ? 1 : 0);
@@ -70,6 +70,7 @@ export default function ProductCatalogScreen() {
   // Multi-selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectionMode = selectedIds.size > 0;
+  const [selectionMenuVisible, setSelectionMenuVisible] = useState(false);
 
   const toggleSelection = useCallback((id: string) => {
     setSelectedIds(prev => {
@@ -166,6 +167,7 @@ export default function ProductCatalogScreen() {
         ) : (
           <View style={styles.headerActions}>
             <IconButton icon="magnify" onPress={() => setIsSearching(true)} />
+            <IconButton icon="archive-outline" onPress={() => router.push('/utilities/archived')} />
             <View>
               <IconButton
                 icon={activeFilterCount > 0 ? 'filter' : 'filter-outline'}
@@ -219,15 +221,49 @@ export default function ProductCatalogScreen() {
       </Portal>
 
       <View style={styles.tabContainer}>
-        <ProductCategoryPicker
-          showAll
-          categories={CATEGORIES}
-          selectedCategory={CATEGORIES[activeTab].id as any}
-          onSelect={(catId) => {
-            const index = CATEGORIES.findIndex(c => c.id.toLowerCase() === catId.toLowerCase());
-            if (index !== -1) handleTabPress(index);
-          }}
-        />
+        {selectionMode ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 48, backgroundColor: theme.colors.elevation.level2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <IconButton icon="close" size={20} onPress={clearSelection} style={{ margin: 0, marginRight: 8 }} />
+              <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>{selectedIds.size} Selected</Text>
+            </View>
+            <Menu
+              visible={selectionMenuVisible}
+              onDismiss={() => setSelectionMenuVisible(false)}
+              anchor={<IconButton icon="dots-vertical" onPress={() => setSelectionMenuVisible(true)} />}
+            >
+              <Menu.Item
+                leadingIcon="robot-outline"
+                onPress={() => {
+                  setSelectionMenuVisible(false);
+                  handleBulkReevaluate();
+                }}
+                title="Re-evaluate AI"
+              />
+              <Menu.Item
+                leadingIcon="archive-outline"
+                onPress={async () => {
+                  setSelectionMenuVisible(false);
+                  if (selectedIds.size > 0) {
+                    await productService.archiveProducts(Array.from(selectedIds));
+                    clearSelection();
+                  }
+                }}
+                title="Archive"
+              />
+            </Menu>
+          </View>
+        ) : (
+          <ProductCategoryPicker
+            showAll
+            categories={CATEGORIES}
+            selectedCategory={CATEGORIES[activeTab].id as any}
+            onSelect={(catId) => {
+              const index = CATEGORIES.findIndex(c => c.id.toLowerCase() === catId.toLowerCase());
+              if (index !== -1) handleTabPress(index);
+            }}
+          />
+        )}
       </View>
 
       <FlatList
@@ -238,7 +274,8 @@ export default function ProductCatalogScreen() {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScroll}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
+        extraData={{ searchQuery, activeFilters, selectedIds, selectionMode, activeTab }}
+        renderItem={useCallback(({ item, index }: any) => (
           <CategoryPageMemo
             categoryId={item.id}
             query={searchQuery}
@@ -250,29 +287,13 @@ export default function ProductCatalogScreen() {
               });
             }}
             selectedIds={selectedIds}
-            onSelect={toggleSelection}
             selectionMode={selectionMode}
+            onSelect={toggleSelection}
             isActive={index === activeTab}
           />
-        )}
+        ), [searchQuery, activeFilters, selectedIds, selectionMode, activeTab, toggleSelection])}
       />
 
-      {selectionMode && (
-        <View style={{
-          position: 'absolute', bottom: 20, left: 20, right: 20,
-          backgroundColor: theme.colors.elevation.level3,
-          padding: 16, borderRadius: 12, elevation: 4,
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
-        }}>
-          <Text style={{ fontWeight: 'bold' }}>{selectedIds.size} Selected</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button mode="text" onPress={clearSelection}>Cancel</Button>
-            <Button mode="contained" loading={isReevaluating} onPress={handleBulkReevaluate}>
-              Re-evaluate AI
-            </Button>
-          </View>
-        </View>
-      )}
     </ScreenWrapper>
   );
 }
@@ -351,6 +372,7 @@ function CategoryPage({
     vendorNames: filters.vendorNames.length > 0 ? filters.vendorNames : undefined,
     minPrice: filters.minPrice > 0 ? filters.minPrice : undefined,
     maxPrice: filters.maxPrice > 0 ? filters.maxPrice : undefined,
+    categories: filters.categories && filters.categories.length > 0 ? filters.categories : undefined,
   };
 
   const {
@@ -472,8 +494,9 @@ function CategoryPage({
       <FlatList
         ref={flatListRef}
         data={products}
+        extraData={selectedIds}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
+        renderItem={useCallback(({ item }: any) => (
           <ProductTile
             item={item}
             selected={selectedIds.has(item.id)}
@@ -494,7 +517,7 @@ function CategoryPage({
             }}
             onToggleStar={(p, isStarred) => toggleStar(p.id, isStarred)}
           />
-        )}
+        ), [selectedIds, selectionMode, onSelect, toggleStar])}
         numColumns={3}
         contentContainerStyle={styles.gridContent}
         refreshControl={

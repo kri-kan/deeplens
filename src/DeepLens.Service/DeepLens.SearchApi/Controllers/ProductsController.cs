@@ -69,6 +69,20 @@ public class ProductsController : ControllerBase
         return success ? Ok() : NotFound();
     }
 
+    [HttpPost("archive")]
+    public async Task<IActionResult> ArchiveProducts([FromBody] List<Guid> productIds)
+    {
+        var count = await _productService.ArchiveProductsAsync(productIds);
+        return Ok(new { count });
+    }
+
+    [HttpPost("unarchive")]
+    public async Task<IActionResult> UnarchiveProducts([FromBody] List<Guid> productIds)
+    {
+        var count = await _productService.UnarchiveProductsAsync(productIds);
+        return Ok(new { count });
+    }
+
     [HttpPost("{id}/star/{mediaId}")]
     public async Task<IActionResult> StarMedia(Guid id, Guid mediaId)
     {

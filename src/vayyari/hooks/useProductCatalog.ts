@@ -13,10 +13,12 @@ export interface ProductCatalogFilters {
   vendorNames?: string[];
   minPrice?: number;
   maxPrice?: number;
+  categories?: string[];
+  includeArchived?: boolean;
 }
 
 export const useProductCatalog = (filters: ProductCatalogFilters) => {
-  const { categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice } = filters;
+  const { categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, categories, includeArchived } = filters;
 
   const [products, setProducts] = useState<VendorProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,8 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
         vendorNames: vendorNames && vendorNames.length > 0 ? vendorNames : undefined,
         minPrice: minPrice,
         maxPrice: maxPrice,
+        categories: categories && categories.length > 0 ? categories : undefined,
+        includeArchived: includeArchived,
         skip: currentSkip,
         take: take,
       };
@@ -74,11 +78,12 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
 
   const fabricsKey = JSON.stringify(fabrics);
   const vendorNamesKey = JSON.stringify(vendorNames);
+  const categoriesKey = JSON.stringify(categories);
 
   useEffect(() => {
     fetchProducts(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, vendorNamesKey, minPrice, maxPrice]);
+  }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived]);
 
   const toggleStar = useCallback(async (productId: string, isStarred: boolean) => {
     try {

@@ -19,6 +19,8 @@ public interface IProductService
     Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20);
     Task<ProductCatalogResult> GetCatalogAsync(ProductCatalogFilter filter);
     Task<bool> DeleteProductAsync(Guid productId);
+    Task<int> ArchiveProductsAsync(List<Guid> productIds);
+    Task<int> UnarchiveProductsAsync(List<Guid> productIds);
     Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default);
     Task<bool> StarMediaAsync(Guid productId, Guid mediaId);
     Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default);
@@ -101,6 +103,12 @@ public class ProductCatalogFilter
 
     [JsonPropertyName("category")]
     public string? Category { get; set; }
+
+    [JsonPropertyName("categories")]
+    public string[]? Categories { get; set; }
+
+    [JsonPropertyName("includeArchived")]
+    public bool IncludeArchived { get; set; }
 
     [JsonPropertyName("sortBy")]
     public string? SortBy { get; set; } // recent, price_low, price_high, oldest

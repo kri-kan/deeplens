@@ -274,6 +274,15 @@ public class ProductService : IProductService
 
         var whereClause = " WHERE p.is_deleted = FALSE";
 
+        if (!filter.IncludeArchived)
+        {
+            whereClause += " AND p.is_archived = FALSE";
+        }
+        else
+        {
+            whereClause += " AND p.is_archived = TRUE";
+        }
+
         if (!string.IsNullOrEmpty(filter.Query))
         {
             whereClause += @" AND (
@@ -296,6 +305,12 @@ public class ProductService : IProductService
             // Match against formal category slug OR tags
             whereClause += " AND (c.slug = @Category OR c.name = @Category OR p.tags::text[] @> ARRAY[@Category]::text[])";
             parameters.Add("Category", filter.Category);
+        }
+
+        if (filter.Categories != null && filter.Categories.Length > 0)
+        {
+            whereClause += " AND (c.slug = ANY(@Categories) OR c.name = ANY(@Categories) OR p.tags::text[] && @Categories)";
+            parameters.Add("Categories", filter.Categories);
         }
 
         if (filter.StartDate.HasValue)
@@ -418,6 +433,22 @@ public class ProductService : IProductService
             _logger.LogError(ex, "Failed to delete product {Id}", productId);
             return false;
         }
+    }
+
+    public async Task<int> ArchiveProductsAsync(List<Guid> productIds)
+    {
+        if (productIds == null || productIds.Count == 0) return 0;
+        using var db = GetConnection();
+        var sql = "UPDATE products SET is_archived = TRUE WHERE id = ANY(@Ids)";
+        return await db.ExecuteAsync(sql, new { Ids = productIds.ToArray() });
+    }
+
+    public async Task<int> UnarchiveProductsAsync(List<Guid> productIds)
+    {
+        if (productIds == null || productIds.Count == 0) return 0;
+        using var db = GetConnection();
+        var sql = "UPDATE products SET is_archived = FALSE WHERE id = ANY(@Ids)";
+        return await db.ExecuteAsync(sql, new { Ids = productIds.ToArray() });
     }
 
     public async Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default)
