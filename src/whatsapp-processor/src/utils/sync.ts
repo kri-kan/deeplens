@@ -162,7 +162,7 @@ function getMediaType(msg: WAMessage): string | null {
     const message = msg.message;
     if (!message) return null;
 
-    if (message.imageMessage) return 'image';
+    if (message.imageMessage) return 'photo';
     if (message.videoMessage) return 'video';
     if (message.audioMessage) return 'audio';
     if (message.documentMessage) return 'document';

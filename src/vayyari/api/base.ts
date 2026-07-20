@@ -133,13 +133,17 @@ export class ApiClient {
                 headers: { ...options.headers, Authorization: `Bearer ${newToken}` },
               });
             } else {
-              const { authEvents, AUTH_UNAUTHORIZED_EVENT } = await import('./client');
+              const { authEvents, AUTH_UNAUTHORIZED_EVENT } = require('./events');
               authEvents.emit(AUTH_UNAUTHORIZED_EVENT);
               throw new ApiException({ code: 'UNAUTHORIZED', message: 'Session expired. Please sign in again.' }, 401);
             }
           }
 
           console.error(`[API Error] ${options.method || 'GET'} ${url} failed with status: ${response.status}`);
+          if (response.status === 401) {
+            const { authEvents, AUTH_UNAUTHORIZED_EVENT } = require('./events');
+            authEvents.emit(AUTH_UNAUTHORIZED_EVENT);
+          }
           await this.handleError(response);
         }
 

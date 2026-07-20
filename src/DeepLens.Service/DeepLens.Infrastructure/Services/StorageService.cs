@@ -154,9 +154,15 @@ public class MinioStorageService : IStorageService
         return $"{DefaultBucket}/{storagePath}";
     }
 
-    public async Task<Stream> GetFileAsync(string storagePath)
+    private async Task<(string BucketName, string ObjectName)> ResolveStoragePathAsync(string storagePath)
     {
-        // Handle paths that include the bucket prefix
+        // Auto-heal double prefix and minio:// scheme format
+        if (storagePath.Contains("minio://"))
+        {
+            var minioIndex = storagePath.IndexOf("minio://");
+            storagePath = storagePath.Substring(minioIndex + 8);
+        }
+
         var parts = storagePath.Split('/', 2);
         
         string bucketName = DefaultBucket;
@@ -172,6 +178,13 @@ public class MinioStorageService : IStorageService
                 }
             } catch { }
         }
+
+        return (bucketName, objectName);
+    }
+
+    public async Task<Stream> GetFileAsync(string storagePath)
+    {
+        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
 
         // Use a piped stream to avoid loading the entire file into memory
         // This is crucial for large video files
@@ -197,20 +210,7 @@ public class MinioStorageService : IStorageService
 
     public async Task<Stream> GetFileRangeAsync(string storagePath, long offset, long length)
     {
-        var parts = storagePath.Split('/', 2);
-        string bucketName = DefaultBucket;
-        string objectName = storagePath;
-
-        if (parts.Length > 1)
-        {
-            try {
-                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
-                {
-                    bucketName = parts[0];
-                    objectName = parts[1];
-                }
-            } catch { }
-        }
+        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
 
         var memoryStream = new MemoryStream();
         var getArgs = new GetObjectArgs()
@@ -228,20 +228,7 @@ public class MinioStorageService : IStorageService
 
     public async Task<long> GetFileLengthAsync(string storagePath)
     {
-        var parts = storagePath.Split('/', 2);
-        string bucketName = DefaultBucket;
-        string objectName = storagePath;
-
-        if (parts.Length > 1)
-        {
-            try {
-                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
-                {
-                    bucketName = parts[0];
-                    objectName = parts[1];
-                }
-            } catch { }
-        }
+        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
 
         var statArgs = new StatObjectArgs()
             .WithBucket(bucketName)
@@ -253,20 +240,7 @@ public class MinioStorageService : IStorageService
 
     public async Task DeleteFileAsync(string storagePath)
     {
-        var parts = storagePath.Split('/', 2);
-        string bucketName = DefaultBucket;
-        string objectName = storagePath;
-
-        if (parts.Length > 1)
-        {
-            try {
-                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
-                {
-                    bucketName = parts[0];
-                    objectName = parts[1];
-                }
-            } catch { }
-        }
+        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
 
         var rmArgs = new RemoveObjectArgs()
             .WithBucket(bucketName)

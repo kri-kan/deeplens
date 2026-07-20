@@ -482,7 +482,7 @@ export class ConversationRepository {
         const mediaStats = await this.client.query(`
             SELECT 
                 COUNT(*) as total,
-                COUNT(*) FILTER (WHERE media_type = 'image') as photos,
+                COUNT(*) FILTER (WHERE media_type = 'photo' OR media_type = 'image') as photos,
                 COUNT(*) FILTER (WHERE media_type = 'video') as videos,
                 COUNT(*) FILTER (WHERE media_type = 'audio' OR media_type = 'ptt') as audio,
                 COUNT(*) FILTER (WHERE media_type = 'document') as documents,

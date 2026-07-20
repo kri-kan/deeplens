@@ -1,5 +1,7 @@
 import Constants from 'expo-constants';
 
+import { Platform } from 'react-native';
+
 export const getApiBaseHost = () => {
   if (__DEV__ && Constants.expoConfig?.hostUri) {
     const host = Constants.expoConfig.hostUri.split(':')[0];
@@ -7,9 +9,12 @@ export const getApiBaseHost = () => {
       return host;
     }
   }
-  // Fallback to Tailscale IP (100.98.244.8) rather than 127.0.0.1
-  // since loopback is unreachable from Android devices/emulators.
-  return '100.98.244.8';
+  
+  if (Platform.OS === 'android') {
+    return '10.0.2.2';
+  }
+  
+  return '127.0.0.1';
 };
 
 export const getIdentityApiUrl = () => `http://${getApiBaseHost()}:5198`;

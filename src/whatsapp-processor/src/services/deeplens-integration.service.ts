@@ -230,7 +230,7 @@ export class DeepLensIntegrationService {
             const imageMessages = await client.query<WhatsAppMessage>(
                 `SELECT message_id, jid, media_type, media_url, timestamp, sender, is_from_me, group_id
                  FROM wa.messages
-                 WHERE media_type IN ('image', 'sticker')
+                 WHERE media_type IN ('photo', 'image', 'sticker')
                    AND media_url IS NOT NULL
                    AND deeplens_processed = false
                  ORDER BY timestamp ASC
@@ -254,15 +254,24 @@ export class DeepLensIntegrationService {
 
     /**
      * Save media metadata to DeepLens core database
+     * Returns the imageId to use (either the existing one or the new one)
      */
-    private async saveMediaToDeepLens(imageId: string, storagePath: string, fileName: string, mimeType: string, message: WhatsAppMessage) {
+    private async saveMediaToDeepLens(imageId: string, storagePath: string, fileName: string, mimeType: string, message: WhatsAppMessage): Promise<string> {
         const client = getDeepLensDbClient();
         if (!client) {
             logger.warn('DeepLens DB client not available, skipping metadata persistence');
-            return;
+            return imageId;
         }
 
         try {
+            // Check if storage path already exists to avoid unique constraint violation on idx_media_storage_path
+            const existing = await client.query('SELECT id FROM media WHERE storage_path = $1', [storagePath]);
+            if (existing.rows.length > 0) {
+                const existingId = existing.rows[0].id;
+                logger.debug({ storagePath, existingId }, 'Media with storage path already exists, reusing existing ID');
+                return existingId;
+            }
+
             const mediaType = mimeType.startsWith('video/') ? 2 : 1;
             const category = 'whatsapp';
             const subCategory = 'general';
@@ -287,6 +296,7 @@ export class DeepLensIntegrationService {
             ]);
 
             logger.debug({ imageId, storagePath }, 'Saved media metadata to DeepLens core DB');
+            return imageId;
         } catch (err) {
             logger.error({ err, imageId }, 'Failed to save media metadata to DeepLens core DB');
             throw err; // Re-throw to prevent sending Kafka event if DB fails
@@ -309,10 +319,12 @@ export class DeepLensIntegrationService {
             const mimeType = message.media_type === 'sticker' ? 'image/webp' : 'image/jpeg';
             
             // Format storage path to include bucket name as expected by DeepLens
-            const fullStoragePath = `${MINIO_CONFIG.bucket}/${message.media_url}`;
+            const fullStoragePath = message.media_url!.startsWith('minio://')
+                ? message.media_url!.replace(/^minio:\/\//, '')
+                : `${MINIO_CONFIG.bucket}/${message.media_url}`;
 
             // Step 1: Persist metadata in DeepLens core DB
-            await this.saveMediaToDeepLens(imageId, fullStoragePath, fileName, mimeType, message);
+            const finalImageId = await this.saveMediaToDeepLens(imageId, fullStoragePath, fileName, mimeType, message);
 
             // Step 2: Create DeepLens image event (matching ImageUploadedEvent structure)
             const uploadEvent: ImageUploadedEvent = {
@@ -322,7 +334,7 @@ export class DeepLensIntegrationService {
                 timestamp: new Date().toISOString(),
                 tenantId: this.TENANT_ID,
                 data: {
-                    imageId: imageId,
+                    imageId: finalImageId,
                     fileName: fileName,
                     filePath: fullStoragePath,
                     fileSize: 0,
@@ -409,7 +421,7 @@ export class DeepLensIntegrationService {
             [messageId]
         );
 
-        if (result.rows.length > 0 && result.rows[0].media_type === 'image') {
+        if (result.rows.length > 0 && (result.rows[0].media_type === 'image' || result.rows[0].media_type === 'photo')) {
             await this.sendImageToDeepLens(result.rows[0]);
             logger.info({ messageId }, 'Manually processed image');
         }
