@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, FlatList, TouchableOpacity, Alert, Dimensions, RefreshControl, BackHandler, Switch } from 'react-native';
-import { Text, Button, IconButton, Checkbox, TextInput, useTheme, Card, Portal, Dialog, Modal, ActivityIndicator, Divider, Icon } from 'react-native-paper';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { Text, Button, IconButton, Checkbox, TextInput, useTheme, Card, Portal, Dialog, Modal, ActivityIndicator, Divider, Icon, Menu } from 'react-native-paper';
+import { useRouter, Stack, useFocusEffect, useNavigation } from 'expo-router';
 import { Image } from 'expo-image';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -437,6 +437,7 @@ function MergeModalInner({
 export default function StoryPlannerDashboard() {
   const theme = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
 
   // State
   const [loading, setLoading] = useState(true);
@@ -460,6 +461,7 @@ export default function StoryPlannerDashboard() {
 
   // Merge Preview Dialog State
   const [mergeDialogVisible, setMergeDialogVisible] = useState(false);
+  const [selectionMenuVisible, setSelectionMenuVisible] = useState(false);
 
   // Post Preview State
   const [previewPost, setPreviewPost] = useState<InstagramPost | null>(null);
@@ -697,20 +699,29 @@ export default function StoryPlannerDashboard() {
   }, [sortAsc]);
 
   // Back handler for clearing selection
-  useFocusEffect(
-    React.useCallback(() => {
-      const backAction = () => {
-        if (selectedItems.size > 0) {
-          setSelectedItems(new Map());
-          return true;
-        }
-        return false;
-      };
+  const selectionMode = selectedItems.size > 0;
 
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-      return () => backHandler.remove();
-    }, [selectedItems.size])
-  );
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (selectionMode) {
+        e.preventDefault();
+        setSelectedItems(new Map());
+      }
+    });
+    return unsubscribe;
+  }, [navigation, selectionMode]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectionMode) {
+        setSelectedItems(new Map());
+        return true;
+      }
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [selectionMode]);
 
   // Toggle selection
   const handleItemSelect = (item: UnifiedItem) => {
@@ -946,10 +957,10 @@ export default function StoryPlannerDashboard() {
           </View>
 
           {selectionMode && (
-            <View style={styles.selectionIndicator}>
+            <View style={[styles.selectionIndicator, { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: 0 }]}>
               <Icon 
                 source={isSelected ? "check-circle" : "circle-outline"} 
-                size={22} 
+                size={24} 
                 color={isSelected ? theme.colors.primary : "white"} 
               />
             </View>
@@ -969,6 +980,45 @@ export default function StoryPlannerDashboard() {
 
   const displayCount = hideGroups ? Math.max(0, totalCount - groupCount) : totalCount;
 
+  const handleQueueForStory = async () => {
+    setSelectionMenuVisible(false);
+    if (selectedItems.size === 0) return;
+    
+    const targetProfile = ownProfiles[0];
+    if (!targetProfile) {
+      Alert.alert('Error', 'No profile available to queue for.');
+      return;
+    }
+
+    try {
+      const items = Array.from(selectedItems.values());
+      let queuedCount = 0;
+      
+      for (const item of items) {
+        if (item.type === 'post' && item.post) {
+          await instagramService.queueForStory(item.post.id, targetProfile.id);
+          queuedCount++;
+        } else if (item.type === 'group' && item.group) {
+          // If group, queue 1 or 2 starred items, or the first one if none starred
+          const starred = item.group.posts?.filter(p => (p as any).isStarred) || [];
+          const toQueue = starred.length > 0 ? starred.slice(0, 2) : (item.group.posts?.slice(0, 1) || []);
+          
+          for (const p of toQueue) {
+            await instagramService.queueForStory(p.id, targetProfile.id, item.group.id);
+            queuedCount++;
+          }
+        }
+      }
+      
+      setSelectedItems(new Map());
+      Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}`);
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to queue items');
+    }
+  };
+
+  // Render Header Actions
   const renderHeaderTitle = () => {
     if (selectedItems.size === 0) {
       return (
@@ -1016,22 +1066,30 @@ export default function StoryPlannerDashboard() {
           })}
         </ScrollView>
 
-        <Button
-          mode="contained"
-          compact
-          icon="link"
-          style={styles.headerLinkButton}
-          labelStyle={{ fontSize: 11, marginHorizontal: 8 }}
-          onPress={openMergeDialog}
+        <Menu
+          visible={selectionMenuVisible}
+          onDismiss={() => setSelectionMenuVisible(false)}
+          anchor={
+            <IconButton
+              icon="dots-vertical"
+              onPress={() => setSelectionMenuVisible(true)}
+            />
+          }
         >
-          Link
-        </Button>
+          <Menu.Item onPress={() => { setSelectionMenuVisible(false); openMergeDialog(); }} title="Link / Merge" />
+          <Menu.Item onPress={handleQueueForStory} title="Queue for story posting" />
+        </Menu>
       </View>
     );
   };
 
   return (
-    <ScreenWrapper title={renderHeaderTitle()} subtitle={`Curation Dashboard • ${displayCount} Available Item${displayCount === 1 ? '' : 's'}`} withScrollView={false}>
+    <ScreenWrapper 
+      title={renderHeaderTitle()} 
+      subtitle={`Curation Dashboard • ${displayCount} Available Item${displayCount === 1 ? '' : 's'}`} 
+      withScrollView={false}
+      onBack={selectedItems.size > 0 ? () => setSelectedItems(new Map()) : undefined}
+    >
       <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : `Story Planner (${displayCount})` }} />
 
       {loading ? (

@@ -55,6 +55,7 @@ export interface InstagramPost {
   leftSwipes?: number;
   shareCount?: number;
   sharedAt?: string;
+  historyId?: string;
 }
 
 export interface ProfileMetrics {
@@ -194,6 +195,7 @@ export const normalizeData = (data: any): InstagramPost => {
       rightSwipes: data.rightSwipes ?? data.RightSwipes ?? 0,
       leftSwipes: data.leftSwipes ?? data.LeftSwipes ?? 0,
       shareCount: data.shareCount ?? data.ShareCount ?? 0,
+      historyId: data.historyId || data.HistoryId,
   };
 };
 
@@ -436,6 +438,20 @@ class InstagramService {
   markPostPosted = async (id: string, targetWatchlistId: string, groupId?: string): Promise<{ success: boolean; historyId: string }> => {
     const groupParam = groupId ? `&groupId=${groupId}` : '';
     return searchApiClient.post(`/api/v1/Insta/story-posts/${id}/post?targetWatchlistId=${targetWatchlistId}${groupParam}`, {});
+  };
+
+  queueForStory = async (id: string, targetWatchlistId: string, groupId?: string): Promise<{ success: boolean; historyId: string; duplicate?: boolean }> => {
+    const groupParam = groupId ? `&groupId=${groupId}` : '';
+    return searchApiClient.post(`/api/v1/Insta/story-posts/${id}/queue?targetWatchlistId=${targetWatchlistId}${groupParam}`, {});
+  };
+
+  removeFromStoryQueue = async (historyId: string): Promise<{ success: boolean }> => {
+    return searchApiClient.delete(`/api/v1/Insta/story-queue/${historyId}`);
+  };
+
+  getStoryQueue = async (targetWatchlistId: string): Promise<InstagramPost[]> => {
+    const raw = await searchApiClient.get<any[]>(`/api/v1/Insta/story-queue/${targetWatchlistId}`);
+    return raw ? raw.map(normalizeData) : [];
   };
 
   finishStoryGroup = async (id: string, targetWatchlistId: string): Promise<{ success: boolean }> => {

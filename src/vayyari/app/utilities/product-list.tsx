@@ -149,7 +149,7 @@ export default function ProductCatalogScreen() {
 
   return (
     <ScreenWrapper
-      title={`Product Catalog${currentCategoryCount !== null ? ` (${currentCategoryCount})` : ''}`}
+      title={`${CATEGORIES[activeTab]?.label || ''}${currentCategoryCount !== null ? ` (${currentCategoryCount})` : ''}`}
       onBack={router.canGoBack() ? handleBack : undefined}
       actions={
         isSearching ? (

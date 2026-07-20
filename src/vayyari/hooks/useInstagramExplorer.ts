@@ -109,9 +109,11 @@ export const useInstagramExplorer = () => {
       setProfileData(data);
       offsetRef.current = data.videos.length;
       setHasMore(data.videos.length === 100);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch profile details', error);
-      Alert.alert("Error", "Could not load profile data.");
+      if (error?.status !== 401) {
+        Alert.alert("Error", "Could not load profile data.");
+      }
     } finally {
       setLoading(false);
     }

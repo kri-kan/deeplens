@@ -46,7 +46,7 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
       />
       
       {selectionMode && (
-        <View style={styles.selectionIndicator}>
+        <View style={[styles.selectionIndicator, { backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: 0 }]}>
           <Icon 
             source={isSelected ? "check-circle" : "circle-outline"} 
             size={24} 

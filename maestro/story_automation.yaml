@@ -1,0 +1,204 @@
+appId: com.anonymous.vayyari
+---
+# Start the app. It might open the Expo Dev Launcher.
+- launchApp:
+    appId: com.anonymous.vayyari
+
+# Handle Expo Developer Launcher if it appears
+- runFlow:
+    when:
+      visible: "http://10.0.2.2:8081"
+    commands:
+      - tapOn: "http://10.0.2.2:8081"
+
+# Navigate directly to the story queue screen and set the profile
+- openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
+
+# Wait dynamically for either the queue to load or the login fallback
+- evalScript: ${output.screen_loaded = 'false'}
+- evalScript: ${output.wait_counter = 0}
+- repeat:
+    while:
+      true: ${output.screen_loaded == 'false' && output.wait_counter < 30}
+    commands:
+      - runFlow:
+          when:
+            visible: "Sign In"
+          commands:
+            - evalScript: ${output.screen_loaded = 'login'}
+      - runFlow:
+          when:
+            visible:
+              id: "share-queue-item-0"
+          commands:
+            - evalScript: ${output.screen_loaded = 'queue'}
+      - runFlow:
+          when:
+            visible: "Queue is empty"
+          commands:
+            - evalScript: ${output.screen_loaded = 'queue'}
+      - runFlow:
+          when:
+            visible: "System Dashboard"
+          commands:
+            - openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
+      - runFlow:
+          when:
+            true: ${output.screen_loaded == 'false'}
+          commands:
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 500);
+            - evalScript: ${output.wait_counter = output.wait_counter + 1}
+
+# Handle potential stale session fallback to login
+- runFlow:
+    when:
+      true: ${output.screen_loaded == 'login'}
+    commands:
+      - tapOn: "Sign In"
+      - extendedWaitUntil:
+          visible: "System Dashboard"
+          timeout: 10000
+      - openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
+      - extendedWaitUntil:
+          visible:
+            id: "share-queue-item-0"
+          timeout: 10000
+
+# Find the next item in the queue and click its Share button
+- tapOn:
+    id: "share-queue-item-0"
+
+# Wait dynamically for either the Reel or Post share button to load
+- evalScript: ${output.insta_loaded = 'false'}
+- evalScript: ${output.insta_wait = 0}
+- repeat:
+    while:
+      true: ${output.insta_loaded == 'false' && output.insta_wait < 20}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/direct_share_button"
+          commands:
+            - evalScript: ${output.insta_loaded = 'reel'}
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/row_feed_button_share"
+          commands:
+            - evalScript: ${output.insta_loaded = 'post'}
+      - runFlow:
+          when:
+            true: ${output.insta_loaded == 'false'}
+          commands:
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 500);
+            - evalScript: ${output.insta_wait = output.insta_wait + 1}
+
+# Add 1 second gap after share button appears before interacting
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1000);
+
+# REEL path: tap the floating right-side direct share button (paper plane)
+- runFlow:
+    when:
+      true: ${output.insta_loaded == 'reel'}
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/direct_share_button"
+          waitToSettleTimeoutMs: 0
+      # Wait for share sheet animation to complete; prevents the post fallback
+      # below from double-firing on the now-hidden reel share button.
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+
+# POST path: tap the bottom action bar Share icon if the reel button wasn't present.
+# Resource ID confirmed from UI hierarchy dump: row_feed_button_share (accessibilityText="Send post")
+- runFlow:
+    when:
+      true: ${output.insta_loaded == 'post'}
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/row_feed_button_share"
+          waitToSettleTimeoutMs: 0
+      # Wait for share sheet animation to complete
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+
+
+
+# Wait explicitly for the button to appear and then sleep an extra second 
+# to guarantee the slide-up animation is completely finished. If we tap 
+# while it's still animating upwards, Maestro clicks the wrong coordinate!
+- extendedWaitUntil:
+    visible: "Add to story"
+    timeout: 10000
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1500);
+
+# Tap Add to story
+- tapOn: "Add to story"
+
+# First stage wait: ensure the Share Sheet actually closed within 10 seconds.
+# If it didn't close, the tap failed, and we want to fail fast rather than waiting 90s.
+- extendedWaitUntil:
+    notVisible: "Add to story"
+    timeout: 10000
+
+# Wait for Story editor to load (waiting for "Close Friends" to appear).
+# NOTE: The video/reel can take 30-60s to render inside the editor before
+# the bottom bar (Your stories / Close Friends) becomes visible.
+# extendedWaitUntil starts counting from when the tapOn begins, and the tap
+# itself can take 10-15s to settle — so 90s total gives ~75s of actual wait.
+- extendedWaitUntil:
+    visible: "Close Friends"
+    timeout: 90000
+
+# Enforce a 1 second gap after elements appear before interacting
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1000);
+
+# Tap "Your story" to post directly, bypassing the multi-step share sheet.
+# For accounts linked to Facebook (like vayyari_fashions), the button says "Your stories".
+- tapOn: 
+    text: "Your stor.*"
+
+# Wait a brief moment for Done button to appear (if applicable)
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+
+# Enforce a 1 second gap after posting
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1000);
+
+# ── Return to Vayyari ─────────────────────────────────────────────────────────
+# Use the deep link (not launchApp) to guarantee we land on the queue page
+# regardless of the app's navigation stack state.
+- openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
+
+# Wait for the mark-shared button to appear
+- extendedWaitUntil:
+    visible:
+      id: "mark-shared-queue-item-0"
+    timeout: 10000
+
+# Human-like delay before returning to the next item
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1000);
+
+# Mark as shared in Vayyari
+- tapOn:
+    id: "mark-shared-queue-item-0"

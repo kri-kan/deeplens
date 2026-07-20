@@ -37,6 +37,12 @@ MANDATORY_TOPICS=(
     "deeplens.processing.completed"
     "deeplens.processing.failed"
     "deeplens.images.maintenance"
+    "WhatsApp.group.product.create"
+    "WhatsApp.group.media.added"
+    "WhatsApp.group.product.created"
+    "WhatsApp.group.reprocess"
+    "WhatsApp.group.product.enrich"
+    "WhatsApp.group.product.delete"
 )
 
 case $ACTION in

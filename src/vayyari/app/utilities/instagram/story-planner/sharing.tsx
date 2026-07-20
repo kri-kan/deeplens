@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, TouchableWithoutFeedback, Alert, Dimensions, Linking, ScrollView, DeviceEventEmitter, Modal, Animated } from 'react-native';
-import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon } from 'react-native-paper';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { View, StyleSheet, FlatList, TouchableOpacity, TouchableWithoutFeedback, Alert, Dimensions, Linking, ScrollView, DeviceEventEmitter, Modal, Animated, BackHandler } from 'react-native';
+import { Text, Button, Divider, useTheme, ActivityIndicator, Portal, Dialog, IconButton, TextInput, Icon, Menu, Checkbox } from 'react-native-paper';
+import { useRouter, Stack, useFocusEffect, useNavigation } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
 import Svg, { Circle } from 'react-native-svg';
@@ -458,6 +458,7 @@ function StoryViewerModal({ visible, profile, onClose }: StoryViewerModalProps) 
 export default function StorySharingScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
 
   // State
   const [loading, setLoading] = useState(true);
@@ -474,8 +475,96 @@ export default function StorySharingScreen() {
   const [sharingPost, setSharingPost] = useState(false);
   const [confirmShareVisible, setConfirmShareVisible] = useState(false);
   const [postToShare, setPostToShare] = useState<InstagramPost | null>(null);
+  
+  const [selectedItems, setSelectedItems] = useState<Map<string, { item: UnifiedPlannerItem; order: number }>>(new Map());
+  const selectionCounter = useRef(0);
+  const [selectionMenuVisible, setSelectionMenuVisible] = useState(false);
+  const selectionMode = selectedItems.size > 0;
+
+  const toggleSelection = (plannerItem: UnifiedPlannerItem) => {
+    setSelectedItems(prev => {
+      const next = new Map(prev);
+      if (next.has(plannerItem.id)) {
+        next.delete(plannerItem.id);
+      } else {
+        selectionCounter.current += 1;
+        next.set(plannerItem.id, { item: plannerItem, order: selectionCounter.current });
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedItems(new Map());
+    selectionCounter.current = 0;
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (selectionMode) {
+        e.preventDefault();
+        clearSelection();
+      }
+    });
+    return unsubscribe;
+  }, [navigation, selectionMode]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectionMode) {
+        clearSelection();
+        return true;
+      }
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [selectionMode]);
+
   const offsetRef = useRef(0);
   const PAGE_SIZE = 100;
+
+  const handleQueueForStory = async () => {
+    setSelectionMenuVisible(false);
+    if (selectedItems.size === 0) return;
+    
+    const targetProfile = selectedProfile || ownProfiles[0];
+    if (!targetProfile) {
+      Alert.alert('Error', 'No profile available to queue for.');
+      return;
+    }
+
+    try {
+      // Sort entries by selection order so first-selected gets the lowest queue index
+      const orderedEntries = Array.from(selectedItems.values())
+        .sort((a, b) => a.order - b.order);
+
+      let queuedCount = 0;
+      let skippedCount = 0;
+      
+      for (const { item } of orderedEntries) {
+        if (item.type === 'post' && item.post) {
+          const result = await instagramService.queueForStory(item.post.id, targetProfile.id);
+          if (result.duplicate) skippedCount++; else queuedCount++;
+        } else if (item.type === 'group' && item.group) {
+          const starred = item.group.posts?.filter(p => (p as any).isStarred) || [];
+          const toQueue = starred.length > 0 ? starred.slice(0, 2) : (item.group.posts?.slice(0, 1) || []);
+          
+          for (const p of toQueue) {
+            const result = await instagramService.queueForStory(p.id, targetProfile.id, item.group.id);
+            if (result.duplicate) skippedCount++; else queuedCount++;
+          }
+        }
+      }
+      
+      clearSelection();
+      const skipMsg = skippedCount > 0 ? ` (${skippedCount} already in queue, skipped)` : '';
+      Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}${skipMsg}`);
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to queue items');
+    }
+  };
 
   // Load Watchlist (Own Accounts)
   const loadProfiles = async () => {
@@ -738,11 +827,16 @@ export default function StorySharingScreen() {
           style={[styles.gridCell, opacityStyle]}
           activeOpacity={0.8}
           onPress={() => {
-            router.push({
-              pathname: '/utilities/instagram/story-planner/[groupId]',
-              params: { groupId: group.id, profileId: selectedProfile?.id }
-            });
+            if (selectionMode) {
+              toggleSelection(item);
+            } else {
+              router.push({
+                pathname: '/utilities/instagram/story-planner/[groupId]',
+                params: { groupId: group.id, profileId: selectedProfile?.id }
+              });
+            }
           }}
+          onLongPress={() => toggleSelection(item)}
         >
           <Image
             source={{ uri: starredPost ? getMediaUri(starredPost, 'medium') : '' }}
@@ -750,6 +844,18 @@ export default function StorySharingScreen() {
             contentFit="cover"
             transition={200}
           />
+          {selectionMode && (() => {
+            const entry = selectedItems.get(item.id);
+            return (
+              <View style={styles.selectionOrderBadge}>
+                {entry ? (
+                  <Text style={styles.selectionOrderText}>{entry.order}</Text>
+                ) : (
+                  <Icon source="checkbox-blank-circle-outline" size={20} color={theme.colors.primary} />
+                )}
+              </View>
+            );
+          })()}
           <View style={styles.groupTopInfo}>
             {renderGroupAvatars(group)}
             <View style={styles.groupPostCountBadge}>
@@ -776,7 +882,14 @@ export default function StorySharingScreen() {
           key={`post-${post.id}`}
           style={[styles.gridCell, opacityStyle]}
           activeOpacity={0.8}
-          onPress={() => setPreviewPost(post)}
+          onPress={() => {
+            if (selectionMode) {
+              toggleSelection(item);
+            } else {
+              setPreviewPost(post);
+            }
+          }}
+          onLongPress={() => toggleSelection(item)}
         >
           <Image
             source={{ uri: getMediaUri(post, 'medium') }}
@@ -784,15 +897,29 @@ export default function StorySharingScreen() {
             contentFit="cover"
             transition={200}
           />
+          {selectionMode && (() => {
+            const entry = selectedItems.get(item.id);
+            return (
+              <View style={styles.selectionOrderBadge}>
+                {entry ? (
+                  <Text style={styles.selectionOrderText}>{entry.order}</Text>
+                ) : (
+                  <Icon source="checkbox-blank-circle-outline" size={20} color={theme.colors.primary} />
+                )}
+              </View>
+            );
+          })()}
 
           {/* Share button overlay */}
-          <TouchableOpacity
-            style={styles.shareIconBadge}
-            activeOpacity={0.7}
-            onPress={() => handleSharePostDirectly(post)}
-          >
-            <Icon source="instagram" size={16} color="white" />
-          </TouchableOpacity>
+          {!selectionMode && (
+            <TouchableOpacity
+              style={styles.shareIconBadge}
+              activeOpacity={0.7}
+              onPress={() => handleSharePostDirectly(post)}
+            >
+              <Icon source="instagram" size={16} color="white" />
+            </TouchableOpacity>
+          )}
 
           <View style={styles.groupBottomOverlay}>
             <Text style={styles.groupBottomTitle} numberOfLines={1}>
@@ -856,8 +983,34 @@ export default function StorySharingScreen() {
   };
 
   return (
-    <ScreenWrapper title="Story Sharing" subtitle="Share Curation to Stories" withScrollView={false}>
-      <Stack.Screen options={{ headerTitle: 'Story Sharing' }} />
+    <ScreenWrapper 
+      title={selectedItems.size > 0 ? `${selectedItems.size} Selected` : 'Story Sharing'} 
+      subtitle="Share Curation to Stories" 
+      withScrollView={false}
+      onBack={selectionMode ? () => clearSelection() : undefined}
+      actions={
+        selectionMode ? (
+          <Menu
+            visible={selectionMenuVisible}
+            onDismiss={() => setSelectionMenuVisible(false)}
+            anchor={
+              <IconButton
+                icon="dots-vertical"
+                onPress={() => setSelectionMenuVisible(true)}
+              />
+            }
+          >
+            <Menu.Item onPress={handleQueueForStory} title="Queue for story posting" />
+          </Menu>
+        ) : (
+          <IconButton 
+            icon="clipboard-list-outline" 
+            onPress={() => router.push('/utilities/instagram/story-queue')} 
+          />
+        )
+      }
+    >
+      <Stack.Screen options={{ headerTitle: selectedItems.size > 0 ? `${selectedItems.size} Selected` : 'Story Sharing' }} />
 
       {/* Target Account Selector */}
       <View style={styles.accountSelectorContainer}>
@@ -884,6 +1037,7 @@ export default function StorySharingScreen() {
               <TouchableOpacity
                 key={p.id}
                 onPress={() => setSelectedProfile(p)}
+                disabled={selectionMode}
                 onLongPress={() => {
                   if (hasStories) {
                     setStoryViewerProfile(p);
@@ -892,7 +1046,10 @@ export default function StorySharingScreen() {
                 }}
                 delayLongPress={300}
                 activeOpacity={0.8}
-                style={styles.avatarWrapper}
+                style={[
+                  styles.avatarWrapper,
+                  selectionMode && !isSelected && { opacity: 0.4 }
+                ]}
               >
                 <View style={[
                   styles.avatarBorder,
@@ -1248,6 +1405,24 @@ const styles = StyleSheet.create({
   cellImage: {
     width: '100%',
     height: '100%'
+  },
+  selectionOrderBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(98, 0, 238, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionOrderText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    lineHeight: 14,
   },
   groupTopInfo: {
     position: 'absolute',

@@ -1,0 +1,36 @@
+appId: com.instagram.android
+---
+# Stop the app first so it performs a fresh launch.
+# This guarantees Instagram opens on the Home feed with the navigation bar visible,
+# rather than being stuck on a full-screen Reel or Post.
+- stopApp:
+    appId: com.instagram.android
+    
+- launchApp:
+    appId: com.instagram.android
+
+# Wait for Instagram to fully load
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 4000);
+
+# Always long press the profile icon to open account switcher.
+# We cannot conditionally skip this because the profile name might be
+# randomly visible in the Home feed (e.g. from a post), leading to a false positive.
+- longPressOn:
+    text: "Profile"
+    waitToSettleTimeoutMs: 0
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 2000);
+
+# Wait for the account switcher bottom sheet to appear and show the profile.
+# This is safe to use the profile name here because we ALWAYS open the switcher
+# unconditionally above — so by this point the sheet is open and any match on
+# ${PROFILE_NAME} is guaranteed to be inside the switcher, not the background feed.
+- extendedWaitUntil:
+    visible: "${PROFILE_NAME}"
+    timeout: 8000
+
+# Tap the requested profile username to switch accounts
+- tapOn: "${PROFILE_NAME}"

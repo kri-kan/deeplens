@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, FlatList, TouchableOpacity, BackHandler, RefreshControl } from 'react-native';
+import { View, FlatList, TouchableOpacity, BackHandler, RefreshControl, Alert } from 'react-native';
 import { Text, IconButton, Surface, ActivityIndicator, Appbar, Menu, Button, List, useTheme } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -11,11 +11,12 @@ import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 
 export default function InstagramExplorer() {
   const theme = useTheme();
   const router = useRouter();
+  const navigation = useNavigation();
   const [needsReviewCount, setNeedsReviewCount] = useState(0);
 
   useFocusEffect(
@@ -62,6 +63,7 @@ export default function InstagramExplorer() {
   const [selectedPosts, setSelectedPosts] = useState<Map<string, any>>(new Map());
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<{ x: number, y: number }>({ x: 0, y: 0 });
+  const [selectionMenuVisible, setSelectionMenuVisible] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const isNavigating = useRef(false);
 
@@ -97,6 +99,22 @@ export default function InstagramExplorer() {
     />
   ), [selectionMode, selectedPosts, selectedProfile, sortBy, sortOrder, profileData?.videos]);
 
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (selectionMode) {
+        e.preventDefault();
+        setSelectedPosts(new Map());
+      } else if (selectedProfile) {
+        // Stop exiting explorer entirely if there's a selected profile 
+        // Wait, the stack is only for the explorer page, so going back normally 
+        // exits explorer. If selectedProfile is set, we want to clear it instead!
+        e.preventDefault();
+        setSelectedProfile(null);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, selectionMode, selectedProfile, setSelectedProfile]);
+
   useFocusEffect(
     React.useCallback(() => {
       const backAction = () => {
@@ -128,6 +146,37 @@ export default function InstagramExplorer() {
     });
   };
 
+  const handleQueueItems = async () => {
+    setSelectionMenuVisible(false);
+    if (!selectedProfile) return;
+    try {
+      const posts = Array.from(selectedPosts.values());
+      
+      // Need a target profile. For now, use the first ownProfile or we could fetch it.
+      // Assuming instagram-explorer has access to ownProfiles? 
+      // Actually, explorer might be viewing competitor profiles, so we need a target profile.
+      const watchlist = await instagramService.getWatchlist();
+      const ownProfiles = watchlist.filter(p => p.profileCategory?.toLowerCase() === 'mybusiness');
+      const targetProfile = ownProfiles[0];
+      
+      if (!targetProfile) {
+        Alert.alert('Error', 'No business profile found to queue to.');
+        return;
+      }
+
+      let queuedCount = 0;
+      for (const post of posts) {
+        await instagramService.queueForStory(post.id, targetProfile.id);
+        queuedCount++;
+      }
+      
+      setSelectedPosts(new Map());
+      Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}`);
+    } catch (err) {
+      Alert.alert('Error', 'Failed to queue items');
+    }
+  };
+
   const formatDateDisplay = (dateString: string | null) => {
     if (!dateString) return 'Select';
     const d = new Date(dateString);
@@ -146,13 +195,22 @@ export default function InstagramExplorer() {
                 pathname: '/utilities/instagram/bulk-create',
                 params: { posts: JSON.stringify(Array.from(selectedPosts.values())) }
               } as any)} />
+              <Menu
+                visible={selectionMenuVisible}
+                onDismiss={() => setSelectionMenuVisible(false)}
+                anchor={
+                  <Appbar.Action icon="dots-vertical" onPress={() => setSelectionMenuVisible(true)} />
+                }
+              >
+                <Menu.Item onPress={handleQueueItems} title="Queue for story posting" />
+              </Menu>
             </>
           ) : (
             <>
               <Appbar.BackAction onPress={() => { setSelectedProfile(null); }} />
               <Appbar.Content title={`@${selectedProfile}`} titleStyle={styles.bold} />
               <Appbar.Action icon="cloud-sync" onPress={() => router.push('/utilities/instagram-scraper')} />
-              <Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/queue')} />
+              <Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/story-queue')} />
             </>
           )}
         </Appbar.Header>

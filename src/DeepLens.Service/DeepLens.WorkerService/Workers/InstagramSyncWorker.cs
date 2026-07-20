@@ -98,7 +98,7 @@ namespace DeepLens.WorkerService.Workers
             using var tx = await conn.BeginTransactionAsync(ct);
             var jobSql = @"
                 SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username, w.profile_category
-                FROM scraper_jobs j
+                FROM scraper_queue j
                 JOIN competitor_watchlist w ON j.watchlist_id = w.id
                 WHERE j.status = 'pending' 
                   AND w.is_active = true

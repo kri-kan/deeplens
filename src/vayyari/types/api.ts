@@ -13,7 +13,9 @@ export interface ApiError {
 
 export class ApiException extends Error {
   constructor(public error: ApiError, public status: number) {
-    super(error.message);
+    super(error?.message || 'Unknown Error');
     this.name = 'ApiException';
+    // Fix prototype chain for instanceof checks when extending Error in TS
+    Object.setPrototypeOf(this, ApiException.prototype);
   }
 }

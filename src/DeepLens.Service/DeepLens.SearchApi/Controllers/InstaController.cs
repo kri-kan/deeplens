@@ -705,7 +705,7 @@ public class InstaController : ControllerBase
                     cw.username AS OwnerUsername
                 FROM competitor_videos cv
                 JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-                WHERE cv.status = 'suspend' AND cw.is_own_account = true AND cw.is_data_deleted = false
+                WHERE cv.status = 'suspend' AND cw.profile_category = 'My Business' AND cw.is_data_deleted = false
                 ORDER BY cv.suspend_until ASC";
             var videos = await conn.QueryAsync<MetaPost>(sql);
             return Ok(videos.ToList());
@@ -747,7 +747,7 @@ public class InstaController : ControllerBase
                     cw.username AS OwnerUsername
                 FROM competitor_videos cv
                 JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-                WHERE cv.status = 'ignore' AND cw.is_own_account = true AND cw.is_data_deleted = false
+                WHERE cv.status = 'ignore' AND cw.profile_category = 'My Business' AND cw.is_data_deleted = false
                 ORDER BY cv.posted_at DESC";
             var videos = await conn.QueryAsync<MetaPost>(sql);
             return Ok(videos.ToList());
@@ -809,7 +809,7 @@ public class InstaController : ControllerBase
                     (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
                 FROM competitor_videos cv
                 JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-                WHERE cw.is_own_account = true AND cw.platform = 'instagram'
+                WHERE cw.profile_category = 'My Business' AND cw.platform = 'instagram'
                   AND cw.is_data_deleted = false
                   {searchFilter}
                 ORDER BY {orderBy} {direction}
@@ -1064,7 +1064,7 @@ public class InstaController : ControllerBase
                         cv.posted_at AS sort_timestamp
                     FROM competitor_videos cv
                     JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-                    WHERE cw.is_own_account = true 
+                    WHERE cw.profile_category = 'My Business' 
                       AND cw.platform = 'instagram'
                       AND cw.is_data_deleted = false
                       AND NOT EXISTS (
@@ -1102,7 +1102,7 @@ public class InstaController : ControllerBase
                         cv.posted_at AS sort_timestamp
                     FROM competitor_videos cv
                     JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-                    WHERE cw.is_own_account = true 
+                    WHERE cw.profile_category = 'My Business' 
                       AND cw.platform = 'instagram'
                       AND cw.is_data_deleted = false
                       AND NOT EXISTS (
@@ -1973,8 +1973,17 @@ public class InstaController : ControllerBase
             using var conn = await _db.CreateConnectionAsync();
             var historyId = Guid.NewGuid();
             await conn.ExecuteAsync(new CommandDefinition(@"
+                WITH updated AS (
+                    UPDATE story_posting_history 
+                    SET posted_at = now(), group_id = COALESCE(@GroupId, group_id)
+                    WHERE post_id = @PostId 
+                      AND target_watchlist_id = @TargetWatchlistId 
+                      AND posted_at IS NULL 
+                    RETURNING id
+                )
                 INSERT INTO story_posting_history (id, post_id, group_id, target_watchlist_id, posted_at, swipe_status)
-                VALUES (@Id, @PostId, @GroupId, @TargetWatchlistId, now(), 'pending')",
+                SELECT @Id, @PostId, @GroupId, @TargetWatchlistId, now(), 'pending'
+                WHERE NOT EXISTS (SELECT 1 FROM updated)",
                 new { Id = historyId, PostId = id, GroupId = groupId, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct));
 
             return Ok(new { success = true, historyId });
@@ -1982,6 +1991,109 @@ public class InstaController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to mark post as posted to story");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("story-posts/{id}/queue")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> QueuePost(Guid id, [FromQuery] Guid targetWatchlistId, [FromQuery] Guid? groupId, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+
+            // Check if this post is already in the pending queue for this target account.
+            // If so, return the existing history record without creating a duplicate.
+            var existingHistoryId = await conn.QueryFirstOrDefaultAsync<Guid?>(@"
+                SELECT id FROM story_posting_history
+                WHERE post_id = @PostId
+                  AND target_watchlist_id = @TargetWatchlistId
+                  AND posted_at IS NULL
+                LIMIT 1",
+                new { PostId = id, TargetWatchlistId = targetWatchlistId });
+
+            if (existingHistoryId.HasValue)
+                return Ok(new { success = true, historyId = existingHistoryId.Value, duplicate = true });
+
+            var historyId = Guid.NewGuid();
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                INSERT INTO story_posting_history (id, post_id, group_id, target_watchlist_id, posted_at, swipe_status)
+                VALUES (@Id, @PostId, @GroupId, @TargetWatchlistId, NULL, 'pending')",
+                new { Id = historyId, PostId = id, GroupId = groupId, TargetWatchlistId = targetWatchlistId }, cancellationToken: ct));
+
+            return Ok(new { success = true, historyId, duplicate = false });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to queue post for story");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("story-queue/{targetWatchlistId}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> GetStoryQueue(Guid targetWatchlistId, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = @"
+                SELECT 
+                    cv.id::text AS Id, 
+                    cv.platform_video_id AS PlatformId,
+                    cv.url AS Permalink, 
+                    cv.description AS Caption,
+                    cv.media_type AS MediaType, 
+                    cv.thumbnail_url AS ThumbnailUrl, 
+                    cv.media_url AS MediaUrl,
+                    cv.like_count AS LikeCount, 
+                    cv.comment_count AS CommentCount, 
+                    cv.posted_at AS Timestamp,
+                    cv.storage_path AS StoragePath,
+                    cv.youtube_video_id AS YoutubeVideoId,
+                    cv.youtube_url AS YoutubeUrl,
+                    cv.status AS Status,
+                    cv.suspend_until AS SuspendUntil,
+                    cv.last_reviewed_at AS LastReviewedAt,
+                    sph.id AS HistoryId
+                FROM story_posting_history sph
+                JOIN competitor_videos cv ON cv.id = sph.post_id
+                WHERE sph.target_watchlist_id = @TargetWatchlistId
+                  AND sph.posted_at IS NULL
+                ORDER BY sph.id ASC";
+
+            var queue = (await conn.QueryAsync<dynamic>(sql, new { TargetWatchlistId = targetWatchlistId })).ToList();
+            return Ok(queue);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get story queue");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("story-queue/{historyId}")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult> RemoveFromStoryQueue(Guid historyId, CancellationToken ct)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var rowsAffected = await conn.ExecuteAsync(new CommandDefinition(@"
+                DELETE FROM story_posting_history
+                WHERE id = @HistoryId
+                  AND posted_at IS NULL",
+                new { HistoryId = historyId }, cancellationToken: ct));
+
+            if (rowsAffected == 0)
+                return NotFound(new { error = "Queue item not found or already posted" });
+
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove story queue item");
             return StatusCode(500, new { error = ex.Message });
         }
     }
@@ -2064,7 +2176,7 @@ public class InstaController : ControllerBase
                         WHERE sph.post_id = cv.id
                           AND sph.target_watchlist_id = @TargetWatchlistId
                     ) last_share ON true
-                    WHERE cw.is_own_account = true
+                    WHERE cw.profile_category = 'My Business'
                       AND cw.platform = 'instagram'
                       AND cw.is_data_deleted = false
                       AND cv.status != 'ignore'
@@ -2111,7 +2223,7 @@ public class InstaController : ControllerBase
                         FROM story_posting_history sph
                         WHERE sph.post_id = cv.id AND sph.target_watchlist_id = @TargetWatchlistId
                     ) last_share ON true
-                    WHERE cw.is_own_account = true
+                    WHERE cw.profile_category = 'My Business'
                       AND cw.platform = 'instagram'
                       AND cw.is_data_deleted = false
                       AND cv.status != 'ignore'

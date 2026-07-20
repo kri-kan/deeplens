@@ -1,6 +1,6 @@
 # Kafka Topics Reference
 
-**Last Updated**: 2026-01-14
+**Last Updated**: 2026-07-20
 
 This document provides comprehensive documentation for all Kafka topics used in the DeepLens platform.
 
@@ -20,10 +20,11 @@ This document provides comprehensive documentation for all Kafka topics used in 
 
 ## Overview
 
-DeepLens uses Apache Kafka as the backbone for event-driven processing across multiple services. The platform currently uses **8 topics** divided into two domains:
+DeepLens uses Apache Kafka as the backbone for event-driven processing across multiple services. The platform currently uses **9 topics** divided into two domains:
 
 - **DeepLens Core**: 7 topics for image/video processing pipeline
-- **WhatsApp Processor**: 1 topic for message processing
+- **WhatsApp Processor**: 8 topics for message processing and group pipeline
+- **Instagram Story Queue**: 1 topic for story automation events
 
 ### Architecture Principles
 
@@ -326,6 +327,72 @@ These topics orchestrate the complete image and video processing pipeline.
 
 ---
 
+### 2. `WhatsApp.newproduct.received`
+**Purpose**: Image upload notifications for DeepLens pipeline (also known as `deeplens.images.uploaded`).
+**Producer**: WhatsAppProcessor / SearchAPI
+**Consumer**: DeepLens WorkerService (Image processing)
+
+### 3. `WhatsApp.group.product.create`
+**Purpose**: Triggers a new product creation from a WhatsApp group message.
+
+### 4. `WhatsApp.group.media.added`
+**Purpose**: Triggers media addition to an existing WhatsApp group product.
+
+### 5. `WhatsApp.group.product.created`
+**Purpose**: Write-back notification that a product has been successfully created.
+
+### 6. `WhatsApp.group.reprocess`
+**Purpose**: Request to reprocess, split, or merge WhatsApp group products.
+
+### 7. `WhatsApp.group.product.enrich`
+**Purpose**: Triggers asynchronous LLM enrichment for a WhatsApp group product.
+
+### 8. `WhatsApp.group.product.delete`
+**Purpose**: Request to delete a WhatsApp group product due to user request or ineligibility.
+
+---
+
+## Instagram Story Queue Topics
+
+### 1. `story.queue.updated`
+
+**Purpose**: Notifies that the pending story post queue for a specific Instagram account has changed (item queued, posted, or removed). Used to keep the Maestro automation runner and any listening clients in sync without polling.
+
+**Producer**: `SearchAPI` (`InstaController`)
+- Triggered on: A post is queued via `POST /api/insta/story-posts/{id}/queue` or marked as posted via `POST /api/insta/story-posts/{id}/mark-posted`
+- Event Type: `StoryQueueUpdatedEvent`
+
+**Consumer**: Future — story automation orchestration service or dashboard push notification
+- Action: Refresh pending queue count for the affected target watchlist
+
+**Payload Example**:
+```json
+{
+  "targetWatchlistId": "a3f1bc22-1234-4567-abcd-000000000001",
+  "postId": "d9e2fa11-aaaa-bbbb-cccc-111111111111",
+  "action": "queued",
+  "pendingCount": 12,
+  "occurredAt": "2026-07-20T17:00:00Z"
+}
+```
+
+**Fields**:
+| Field | Type | Description |
+|---|---|---|
+| `targetWatchlistId` | UUID | The own-profile Instagram account receiving the story |
+| `postId` | UUID | The competitor video post being queued or marked posted |
+| `action` | string | `"queued"` or `"posted"` |
+| `pendingCount` | int | Total pending items in the queue after this action |
+| `occurredAt` | ISO8601 | Timestamp of the event |
+
+**Configuration**:
+- Partitions: 1
+- Replication Factor: 1
+- Retention: 1 day (transient notification, not for replay)
+- Topic name (docker-compose): `story.queue.updated`
+
+---
+
 ## Topic Configuration
 
 ### Default Settings
@@ -558,5 +625,5 @@ podman exec deeplens-kafka kafka-console-consumer \
 
 ---
 
-**Last Updated**: 2026-01-14  
+**Last Updated**: 2026-07-20  
 **Maintained By**: DeepLens Team

@@ -12,8 +12,6 @@
  *   API_BASE_URL   - Base URL of the DeepLens Search API (default: http://localhost:5000)
  */
 import { Client } from 'pg';
-// @ts-ignore
-import fetch from 'node-fetch';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:5000';

@@ -137,6 +137,7 @@ try
                 { 
                     "http://192.168.0.170:5198", 
                     "http://100.98.244.8:5198",
+                    "http://10.0.2.2:5198",
                     "http://krikanserver.taild227d9.ts.net:5198",
                     "http://localhost:5198",
                     "https://localhost:5001"

@@ -30,7 +30,7 @@ type MediaGroup = {
 
 export default function FullMessageBrowser() {
   const theme = useTheme();
-  const { jid, name, highlightGroupId } = useLocalSearchParams<{ jid: string, name?: string, highlightGroupId?: string }>();
+  const { jid, name, highlightGroupId, initialZoningMode } = useLocalSearchParams<{ jid: string, name?: string, highlightGroupId?: string, initialZoningMode?: string }>();
   const [pulseActive, setPulseActive] = useState(true);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function FullMessageBrowser() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [groups, setGroups] = useState<any[]>([]);
-  const [zoningMode, setZoningMode] = useState(false);
+  const [zoningMode, setZoningMode] = useState(initialZoningMode === 'true');
   const [searchInput, setSearchInput] = useState('');
   const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
