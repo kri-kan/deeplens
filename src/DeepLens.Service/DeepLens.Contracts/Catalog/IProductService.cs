@@ -37,6 +37,7 @@ public interface IProductService
     Task<int> BackfillFabricAsync();
     Task<ProductShareLogDto> RecordShareAsync(Guid productId, string platform, string? descriptionUsed, CancellationToken ct = default);
     Task<string> GenerateShareDescriptionAsync(Guid productId, string? targetPlatform, CancellationToken ct = default);
+    Task<bool> UpdateProductMetadataAsync(Guid productId, ProductCorrectionDto dto);
 }
 
 public class CategoryDto

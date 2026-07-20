@@ -25,6 +25,8 @@ import {
   Menu,
   Modal,
   Chip,
+  Checkbox,
+  TextInput,
 } from 'react-native-paper';
 import { CompactChip } from '@/components/ui/CompactChip';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -167,6 +169,11 @@ export default function ProductDetailScreen() {
   ).current;
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isEditMetadataOpen, setIsEditMetadataOpen] = useState(false);
+  const [editCategory, setEditCategory] = useState('');
+  const [editFabric, setEditFabric] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [useForTraining, setUseForTraining] = useState(true);
 
   const handleReevaluateLLM = async () => {
     if (!product?.id) return;
@@ -179,6 +186,24 @@ export default function ProductDetailScreen() {
       Alert.alert('Error', 'Failed to initiate LLM re-evaluation');
     }
   };
+
+  const handleUpdateMetadata = async () => {
+    try {
+      await productService.updateProductMetadata(id, {
+        categoryName: editCategory || undefined,
+        fabric: editFabric || undefined,
+        price: editPrice ? parseFloat(editPrice) : undefined,
+        useForTraining
+      });
+      setIsEditMetadataOpen(false);
+      fetchProductDetails();
+      Alert.alert('Success', 'Metadata updated successfully');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to update metadata');
+    }
+  };
+
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -260,6 +285,18 @@ export default function ProductDetailScreen() {
             }}
             title="Share Product"
             leadingIcon="share-variant"
+          />
+          <Menu.Item
+            onPress={() => {
+              setIsMenuOpen(false);
+              setEditCategory(product?.category?.name || '');
+              setEditFabric(product?.fabric || '');
+              setEditPrice(product?.vendorPrice?.toString() || '');
+              setUseForTraining(true);
+              setIsEditMetadataOpen(true);
+            }}
+            title="Edit Metadata"
+            leadingIcon="pencil"
           />
           <Menu.Item
             onPress={() => {
@@ -472,7 +509,8 @@ export default function ProductDetailScreen() {
                               params: {
                                 jid: listing.sourceJid!,
                                 name: 'Source Chat',
-                                highlightGroupId: listing.sourceGroupId || ''
+                                highlightGroupId: listing.sourceGroupId || '',
+                                initialZoningMode: 'true',
                               },
                             })
                           }
@@ -664,7 +702,8 @@ export default function ProductDetailScreen() {
                           params: {
                             jid: previewListing.sourceJid!,
                             name: 'Source Chat',
-                            highlightGroupId: previewListing.sourceGroupId || ''
+                            highlightGroupId: previewListing.sourceGroupId || '',
+                            initialZoningMode: 'true',
                           },
                         });
                       }}
@@ -834,6 +873,44 @@ export default function ProductDetailScreen() {
             )}
         </View>
       </RNModal>
+
+      <Portal>
+        <Dialog visible={isEditMetadataOpen} onDismiss={() => setIsEditMetadataOpen(false)}>
+          <Dialog.Title>Edit Metadata</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Category"
+              value={editCategory}
+              onChangeText={setEditCategory}
+              style={{ marginBottom: 12 }}
+            />
+            <TextInput
+              label="Fabric"
+              value={editFabric}
+              onChangeText={setEditFabric}
+              style={{ marginBottom: 12 }}
+            />
+            <TextInput
+              label="Price (INR)"
+              value={editPrice}
+              onChangeText={setEditPrice}
+              keyboardType="numeric"
+              style={{ marginBottom: 12 }}
+            />
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Checkbox
+                status={useForTraining ? 'checked' : 'unchecked'}
+                onPress={() => setUseForTraining(!useForTraining)}
+              />
+              <Text>Use for AI Training</Text>
+            </View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setIsEditMetadataOpen(false)}>Cancel</Button>
+            <Button onPress={handleUpdateMetadata}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
     </Surface>
   );

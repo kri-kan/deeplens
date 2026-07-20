@@ -906,6 +906,71 @@ public class ProductService : IProductService
         return rowsAffected > 0;
     }
 
+    public async Task<bool> UpdateProductMetadataAsync(Guid productId, ProductCorrectionDto dto)
+    {
+        using var connection = GetConnection();
+        
+        var product = await connection.QueryFirstOrDefaultAsync<dynamic>(
+            @"SELECT p.id, p.fabric, c.name as category_name, 
+                     (SELECT min(current_price) FROM seller_listings WHERE product_id = p.id AND is_active = true) as vendor_price
+              FROM products p
+              LEFT JOIN categories c ON c.id = p.category_id
+              WHERE p.id = @ProductId", new { ProductId = productId });
+              
+        if (product == null) return false;
+
+        Guid? newCategoryId = null;
+        if (!string.IsNullOrWhiteSpace(dto.CategoryName))
+        {
+            newCategoryId = await connection.QueryFirstOrDefaultAsync<Guid?>(
+                "SELECT id FROM public.categories WHERE slug = @slug OR name = @slug",
+                new { slug = dto.CategoryName });
+        }
+
+        if (newCategoryId.HasValue || dto.Fabric != null)
+        {
+            var updateSql = "UPDATE products SET ";
+            var sets = new System.Collections.Generic.List<string>();
+            if (newCategoryId.HasValue) sets.Add("category_id = @CategoryId");
+            if (dto.Fabric != null) sets.Add("fabric = @Fabric");
+            updateSql += string.Join(", ", sets) + " WHERE id = @ProductId";
+            await connection.ExecuteAsync(updateSql, new { CategoryId = newCategoryId, Fabric = dto.Fabric, ProductId = productId });
+        }
+
+        if (dto.Price.HasValue)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE seller_listings SET current_price = @Price, updated_at = NOW() WHERE product_id = @ProductId AND is_active = true",
+                new { Price = dto.Price.Value, ProductId = productId });
+        }
+
+        if (dto.UseForTraining)
+        {
+            var sourceText = await connection.QueryFirstOrDefaultAsync<string>(
+                "SELECT description FROM seller_listings WHERE product_id = @ProductId ORDER BY created_at ASC LIMIT 1",
+                new { ProductId = productId });
+
+            var previousState = System.Text.Json.JsonSerializer.Serialize(new { 
+                category = (string)product.category_name, 
+                fabric = (string)product.fabric, 
+                price = (decimal?)product.vendor_price 
+            });
+
+            var newState = System.Text.Json.JsonSerializer.Serialize(new { 
+                category = dto.CategoryName ?? (string)product.category_name, 
+                fabric = dto.Fabric ?? (string)product.fabric, 
+                price = dto.Price ?? (decimal?)product.vendor_price 
+            });
+
+            await connection.ExecuteAsync(@"
+                INSERT INTO llm_corrections (product_id, source_text, previous_state, new_state, use_for_training)
+                VALUES (@ProductId, @SourceText, @PreviousState::jsonb, @NewState::jsonb, @UseForTraining)",
+                new { ProductId = productId, SourceText = sourceText, PreviousState = previousState, NewState = newState, UseForTraining = true });
+        }
+
+        return true;
+    }
+
     public async Task<ProductFilterOptions> GetFilterOptionsAsync()
     {
         using var db = GetConnection();

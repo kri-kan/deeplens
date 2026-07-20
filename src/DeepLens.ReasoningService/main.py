@@ -29,10 +29,10 @@ _queue_counter = 0   # tie-breaker so equal priorities preserve insertion order
 async def _ollama_worker():
     """Single async worker that drains the priority queue sequentially."""
     while True:
-        priority, _seq, prompt, system, future = await _ollama_queue.get()
+        priority, _seq, prompt, system, future, cancel_event = await _ollama_queue.get()
         try:
             result = await asyncio.get_event_loop().run_in_executor(
-                None, _call_ollama_sync, prompt, system
+                None, _call_ollama_sync, prompt, system, cancel_event
             )
             future.set_result(result)
         except Exception as exc:
@@ -142,15 +142,23 @@ class YoutubeTitleResponse(BaseModel):
 
 INDIAN_FASHION_GLOSSARY = {
     "fabrics": [
-        "Cotton", "Silk", "Georgette", "Organza", "Crepe", "Dola Silk", "Kota Checks", 
-        "Tissue Silk", "Chinnon", "Chiffon", "Velvet", "Paithani", "Tussar", "Bandhani", 
-        "Banarasi", "Chiniya Silk", "Kanjivaram", "Linen"
+        "Cotton", "Silk", "Georgette", "Organza", "Crepe (crape, creap)", "Dola Silk",
+        "Tissue Silk", "Chinon (chinnon)", "Chiffon", "Velvet", "Paithani", "Tussar (tasar)",
+        "Bandhani", "Banarasi (bnarasi)", "Kanjivaram (kanchipuram)", "Linen",
+        "Viscose", "Satin (sartin, sattin)", "Chanderi", "Khadi", "Net", "Vichitra",
+        "Gajji", "Mysore", "Mul"
     ],
     "styles": [
-        "Saree", "Lehenga", "Gown", "Frock", "Kurti", "Anarkali", "Salwar Suit", "Plazo Set", "Crop Top Lehenga"
+        "Saree (sari)", "Lehenga (lehanga)", "Lehenga Choli", "Dupatta", "Blouse",
+        "Gown", "Frock", "Kurti (kurta)", "Anarkali", "Salwar Suit", "Palazzo Set (plazo)",
+        "Crop Top Lehenga", "Co-ord Set (cord set)", "Half Saree"
     ],
     "work_types": [
-        "Zari Weaving", "Embroidery", "Mirror Work", "Ajrakh Print", "Gota Patti", "Sequence Work", "Hand Work", "Cut Work"
+        "Zari Weaving (jari)", "Embroidery (emrodairy)", "Mirror Work", "Ajrakh Print",
+        "Gota Patti (patti)", "Sequence Work (sequins, sequnce)", "Hand Work (handwork)",
+        "Cut Work (cutdana)", "Jacquard (jequrd)", "Kalamkari", "Coding", "Butti (butta)",
+        "Crush", "Beads", "Latkan", "Floral (flower)", "Foil Print", "Maggam", "Moti (pearl)",
+        "Aari", "Meenakari (minakari)", "Thread Work", "Digital Print", "Lace"
     ]
 }
 
@@ -205,32 +213,32 @@ SYSTEM_PROMPT_PRODUCT_EXTRACT = (
     "Output Requirements:\n"
     "1. \"category\": Main product category. MUST be EXACTLY ONE of: \"saree\", \"dress\", \"lehanga\", \"kids\", or \"general\". Do not use any other category names.\n"
     "   CRITICAL CATEGORIZATION RULES:\n"
-    "   - 'kids': This is an umbrella category for ANY children's clothing. If 'kids', 'boys', 'girls', children's sizes (e.g., 'size 14y', '10y', '12y'), OR any age 16 years or below (e.g., '1-16 years', '6 months', '16 yrs') is mentioned, it MUST be 'kids' (even if it's a dress or lehenga).\n"
-    "   - 'lehanga': Exclusively for adult lehengas. If it mentions kids, boys, girls, children's sizes, or age <= 16, use 'kids' instead.\n"
-    "   - 'dress': Exclusively for adult dresses. Includes 'cord set', 'co-ord set', 'skirt with top', 'kurti dress', 'gown'. If it mentions kids, boys, girls, children's sizes (e.g., '14y'), or age <= 16, use 'kids' instead.\n"
-    "   - 'saree': Any mention of 'saree', 'sari', or related hashtags like '#partywearsaree' MUST be categorized as 'saree'.\n"
-    "2. \"subCategory\": Subcategory or type (e.g. Silk Saree, Cotton Kurti, Georgette Dress, Semi-Stitched Lehenga).\n"
+    "   - IGNORE EMOJIS (like 👗) when determining the category. Base your decision STRICTLY on the text keywords.\n"
+    "   - 'kids': This is an umbrella category for ANY children's clothing. If 'kids', 'kidwear', 'boys', 'girls', 'baby', 'infant', 'toddler', children's sizes (e.g., 'size 14y', '10y', '12y'), OR any age 16 years or below (e.g., '1-16 years', '6 months', '16 yrs') is mentioned, it MUST be 'kids' (even if it's a dress, saree, or lehenga).\n"
+    "   - 'lehanga': Any explicit mention of 'lehenga', 'lehanga', 'lehnga', 'lahenga', 'choli', 'ghagra', 'chaniya choli', 'pavadai', 'half saree', or 'voni' MUST be categorized as 'lehanga' (unless it's for kids).\n"
+    "   - 'saree': Any explicit mention of 'saree', 'sari', 'sarees', or related hashtags like '#partywearsaree' MUST be categorized as 'saree'.\n"
+    "   - 'dress': Exclusively for adult dresses. Includes 'cord set', 'co-ord set', 'coord', 'skirt with top', 'kurti', 'kurthi', 'kurta', 'gown', 'maxi', 'frock', 'suit', 'salwar', 'churidar', 'palazzo', 'plazo', 'sharara', 'dress'. Use ONLY if one of these keywords is explicitly present.\n"
+    "   - 'general': Use this as the DEFAULT FALLBACK category if the text does not contain any specific keywords for lehanga, saree, dress, or kids. Do NOT assume 'dress' if the actual garment type is unclear or not mentioned.\n"
+    "2. \"subCategory\": Subcategory or type (e.g. Silk Saree, Cotton Kurti, Georgette Dress, Semi-Stitched Lehenga). Try to determine this from the text, otherwise use 'Unspecified'.\n"
     "3. \"price\": The base selling price of the product (excluding shipping charges). Treat the money as a pure number directly from the text regardless of currency symbols (like $, €, Rs, INR, /-, etc.). Do NOT perform currency conversion or scaling (e.g. do NOT convert $25 to 2500; extract the exact value 25). Do NOT sum up or calculate total price with shipping. Output ONLY the numeric value (e.g., 1450, 599.50). If no price is mentioned, use null.\n"
     "4. \"isPlusShipping\": A boolean (true or false). Set to false ONLY IF 'free shipping', 'shipping free', 'free ship', or similar is explicitly mentioned. Set to true if shipping is extra, 'plus shipping', '+ $', '+ shipping', or if shipping is NOT mentioned at all.\n"
-    "5. \"title\": A concise, clean, and professional product title in English of MAXIMUM 5 WORDS summarizing the core product. Do NOT include vendor codes, price, emojis, or marketing fluff (like 'New Design', 'Grab it', 'Full Stock'). Example: 'Red Banarasi Silk Saree', 'Girls Cotton Floral Frock', 'Velvet Maggam Work Gown'.\n"
+    "5. \"title\": A concise, clean, and professional product title in English of MAXIMUM 5 WORDS summarizing the core product. CRITICAL: Base the title ONLY on the explicitly mentioned fabric, work, and item type. Do NOT append words like 'Dress', 'Saree', or 'Lehenga' to the title if they are not explicitly present in the text. Do NOT include vendor codes, price, emojis, or marketing fluff (like 'New Design', 'Grab it', 'Full Stock'). Example: 'Red Banarasi Silk Saree', 'Girls Cotton Floral Frock', 'Velvet Maggam Work Gown'.\n"
     "6. \"fabric\": The material/fabric (e.g. Silk, Georgette, Cotton). MUST be a single string, NOT an array. If multiple, combine them (e.g. \"Cotton Silk\"). If unknown, use \"Unknown\".\n"
-    "6. \"stitchType\": The stitch type (e.g. Unstitched, Semi-Stitched, Stitched, Free Size). MUST be a single string, NOT an array.\n"
-    "7. \"color\": The color of the product as a single string (e.g. \"Red\", \"Navy Blue\"). MUST be a single string, NOT an array. Use null if unknown.\n"
-    "8. \"sizes\": An array of available sizes (e.g. [\"M\", \"L\", \"XL\"]). If no sizes are mentioned, use an empty array [].\n"
-    "9. \"tags\": An array of relevant search tags/keywords (e.g. [\"partywear\", \"wedding\", \"zari border\"]).\n\n"
+    "7. \"stitchType\": The stitch type (e.g. Unstitched, Semi-Stitched, Stitched, Free Size). MUST be a single string, NOT an array. If unknown, use \"Unknown\".\n"
+    "8. \"color\": The color of the product as a single string (e.g. \"Red\", \"Navy Blue\"). MUST be a single string, NOT an array. Use null if unknown.\n"
+    "9. \"sizes\": An array of available sizes (e.g. [\"M\", \"L\", \"XL\"]). If no sizes are mentioned, use an empty array [].\n"
+    "10. \"tags\": An array of relevant search tags/keywords (e.g. [\"partywear\", \"wedding\", \"zari border\"]).\n\n"
     "FEW-SHOT EXAMPLES:\n"
     "Example 1 Input: \"Beautiful Georgette saree in navy blue with heavy zari border. Price 1200 + free shipping.\"\n"
     "Example 1 Output: { \"category\": \"saree\", \"subCategory\": \"Georgette Saree\", \"price\": 1200.0, \"isPlusShipping\": false, \"title\": \"Navy Blue Georgette Zari Saree\", \"fabric\": \"Georgette\", \"stitchType\": \"Unstitched\", \"color\": \"Navy Blue\", \"sizes\": [], \"tags\": [\"zari border\", \"partywear\"] }\n\n"
     "Example 2 Input: \"Kids cotton frocks, sizes 2-6 years. Rs 450 + shipping.\"\n"
     "Example 2 Output: { \"category\": \"kids\", \"subCategory\": \"Frocks\", \"price\": 450.0, \"isPlusShipping\": true, \"title\": \"Kids Cotton Frock\", \"fabric\": \"Cotton\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"2 years\", \"3 years\", \"4 years\", \"5 years\", \"6 years\"], \"tags\": [\"kids wear\", \"frock\"] }\n\n"
-    "Example 3 Input: \"Trending cord set with top and bottom. Size M L XL. Rs 800\"\n"
-    "Example 3 Output: { \"category\": \"dress\", \"subCategory\": \"Co-ord Set\", \"price\": 800.0, \"isPlusShipping\": true, \"title\": \"Women's Co-ord Cord Set\", \"fabric\": \"Unknown\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"M\", \"L\", \"XL\"], \"tags\": [\"cord set\", \"co-ord set\"] }\n\n"
-    "Example 4 Input: \"Beautiful party wear frock for girls (size 12-14y). Price 950 shipping free\"\n"
-    "Example 4 Output: { \"category\": \"kids\", \"subCategory\": \"Frock\", \"price\": 950.0, \"isPlusShipping\": false, \"title\": \"Girls Party Wear Frock\", \"fabric\": \"Unknown\", \"stitchType\": \"Stitched\", \"color\": null, \"sizes\": [\"12 years\", \"13 years\", \"14 years\"], \"tags\": [\"partywear\", \"frock\"] }\n\n"
-    "Example 5 Input: \"Designer soft silk saree. Price 2500 + 100 shipping charge.\"\n"
-    "Example 5 Output: { \"category\": \"saree\", \"subCategory\": \"Silk Saree\", \"price\": 2500.0, \"isPlusShipping\": true, \"title\": \"Designer Soft Silk Saree\", \"fabric\": \"Silk\", \"stitchType\": \"Unstitched\", \"color\": null, \"sizes\": [], \"tags\": [\"designer\", \"partywear\"] }\n\n"
-    "Example 6 Input: \"To ,\n\nNew design launching \n\nPure soft georgette saree with zari weaving border and gota patti work. Rate /- 1250 fs\n\nFull stock ready grab it\"\n"
-    "Example 6 Output: { \"category\": \"saree\", \"subCategory\": \"Georgette Saree\", \"price\": 1250.0, \"isPlusShipping\": false, \"title\": \"Pure Georgette Saree with Gota Patti Work\", \"fabric\": \"Georgette\", \"stitchType\": \"Unstitched\", \"color\": null, \"sizes\": [], \"tags\": [\"zari weaving\", \"gota patti\"] }\n\n"
+    "Example 3 Input: \"👗Choli👗\\nFabric:- Chinon\\n👗Lehenga👗\\nInner:- Micro Cotton\\nRate:-1449/- free shipping\"\n"
+    "Example 3 Output: { \"category\": \"lehanga\", \"subCategory\": \"Lehenga Choli\", \"price\": 1449.0, \"isPlusShipping\": false, \"title\": \"Chinon Lehenga Choli\", \"fabric\": \"Chinon\", \"stitchType\": \"Unknown\", \"color\": null, \"sizes\": [], \"tags\": [\"lehenga choli\"] }\n\n"
+    "Example 4 Input: \"Designer soft silk material. Top 2.5m, bottom 2m. Price 2500 + 100 shipping charge.\"\n"
+    "Example 4 Output: { \"category\": \"general\", \"subCategory\": \"Unstitched Material\", \"price\": 2500.0, \"isPlusShipping\": true, \"title\": \"Designer Soft Silk Material\", \"fabric\": \"Silk\", \"stitchType\": \"Unstitched\", \"color\": null, \"sizes\": [], \"tags\": [\"designer\", \"soft silk\"] }\n\n"
+    "Example 5 Input: \"To ,\\n\\nNew design launching \\n\\nPure soft georgette saree with zari weaving border and gota patti work. Rate /- 1250 fs\\n\\nFull stock ready grab it\"\n"
+    "Example 5 Output: { \"category\": \"saree\", \"subCategory\": \"Georgette Saree\", \"price\": 1250.0, \"isPlusShipping\": false, \"title\": \"Pure Georgette Saree with Gota Patti Work\", \"fabric\": \"Georgette\", \"stitchType\": \"Unstitched\", \"color\": null, \"sizes\": [], \"tags\": [\"zari weaving\", \"gota patti\"] }\n\n"
     "Output ONLY the JSON object. Do not wrap in markdown or add explanations."
 )
 

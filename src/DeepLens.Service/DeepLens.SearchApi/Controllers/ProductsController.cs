@@ -251,12 +251,28 @@ public class ProductsController : ControllerBase
                 _logger.LogInformation("Published ProductCategoryChanged event for Product {ProductId}", id);
             }
 
-            return Ok(new { success = true });
+            return Ok();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to change category for product {ProductId}", id);
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpPatch("{id}/metadata")]
+    public async Task<IActionResult> UpdateMetadata(Guid id, [FromBody] ProductCorrectionDto request)
+    {
+        try
+        {
+            var success = await _productService.UpdateProductMetadataAsync(id, request);
+            if (!success) return NotFound("Product not found");
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update product metadata for {ProductId}", id);
+            return BadRequest(ex.Message);
         }
     }
 

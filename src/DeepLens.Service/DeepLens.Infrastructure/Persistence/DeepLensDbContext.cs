@@ -13,6 +13,7 @@ public class DeepLensDbContext : DbContext
 
     public DbSet<ProductShareLog> ProductShareLogs { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
+    public DbSet<LlmCorrection> LlmCorrections { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

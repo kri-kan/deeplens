@@ -161,6 +161,9 @@ class ProductService {
   async unlinkInstagramPost(postId: string, productId: string): Promise<void> {
     return productMgmtApiClient.delete(API_ROUTES.INSTAGRAM.UNLINK(postId, productId));
   }
+  async updateProductMetadata(productId: string, data: { categoryName?: string; fabric?: string; price?: number; useForTraining: boolean }): Promise<void> {
+    return productMgmtApiClient.patch(`/api/v1/products/${productId}/metadata`, data);
+  }
 
   async fetchMergeCandidates(skip: number = 0, take: number = 100): Promise<any[]> {
     return productMgmtApiClient.get<any[]>('/api/v1/whatsapp/products/merge-candidates', {
