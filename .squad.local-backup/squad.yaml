@@ -1,0 +1,73 @@
+squad:
+  name: "DeepLens Mahabharata Squad"
+  description: "12-agent Mahabharata-themed squad for the DeepLens visual search platform"
+  version: "1.0.0"
+  context_files:
+    - .gemini/CONTEXT.md
+    - .gemini/INDEX.md
+    - PROJECT_GUIDELINES.md
+    - docs/technical/KAFKA_TOPICS.md
+    - docs/technical/current_schema_dump.txt
+    - docs/technical/OBSERVABILITY.md
+
+  agents:
+    - id: krishna
+      name: "Krishna — Squad Lead"
+      file: .squad/agents/krishna-lead.md
+      triggers: ["build feature", "implement", "orchestrate", "plan", "roadmap"]
+      default: true
+
+    - id: yudhishthira
+      name: "Yudhishthira — Functional SME"
+      file: .squad/agents/yudhishthira-sme.md
+      triggers: ["business rule", "tenant isolation", "rbac", "auth", "vendor assignment"]
+
+    - id: bhishma
+      name: "Bhishma — Architect"
+      file: .squad/agents/bhishma-architect.md
+      triggers: ["architecture", "adr", "review architecture", "layer violation", "arch test"]
+
+    - id: arjuna
+      name: "Arjuna — Code Builder"
+      file: .squad/agents/arjuna-investigator.md
+      triggers: ["add endpoint", "new route", "new screen", "new page", "implement code", "add api", "scaffold", "new feature", "new component"]
+
+    - id: sanjaya
+      name: "Sanjaya — Observability"
+      file: .squad/agents/sanjaya-intelligence.md
+      triggers: ["observability", "telemetry", "trace", "metrics", "grafana", "jaeger", "kafka topic", "otel", "monitor", "alert"]
+
+    - id: naga
+      name: "Naga — Data Layer"
+      file: .squad/agents/naga-sql-data.md
+      triggers: ["database", "migration", "sql", "schema", "qdrant", "vector", "redis", "minio", "postgres", "query", "dapper", "ef core"]
+
+    - id: nakula
+      name: "Nakula — Debugger"
+      file: .squad/agents/nakula-debugger.md
+      triggers: ["debug", "error", "crash", "broken", "failing", "exception", "fix bug", "investigate", "diagnose", "not working", "session", "disconnect"]
+
+    - id: vidura
+      name: "Vidura — Governance"
+      file: .squad/agents/vidura-governance.md
+      triggers: ["governance", "compliance", "git history", "migration safety", "adr", "breaking change", "review pr", "audit"]
+
+    - id: vyasa
+      name: "Vyasa — Documentation"
+      file: .squad/agents/vyasa-documentation.md
+      triggers: ["documentation", "docs", "update readme", "skill.md", "kafka_topics", "schema dump", "guide", "api reference"]
+
+    - id: abhimanyu
+      name: "Abhimanyu — Testing"
+      file: .squad/agents/abhimanyu-testing.md
+      triggers: ["test", "e2e", "maestro", "unit test", "integration test", "coverage", "arch test", "validate", "xunit", "pytest"]
+
+    - id: sahadeva
+      name: "Sahadeva — Release"
+      file: .squad/agents/sahadeva-release.md
+      triggers: ["deploy", "release", "build", "publish", "docker", "infrastructure", "provision", "environment", "makefile", "rollout"]
+
+    - id: ashwatthama
+      name: "Ashwatthama — AI/ML"
+      file: .squad/agents/ashwatthama-ai-ml.md
+      triggers: ["ai", "ml", "model", "clip", "embedding", "vector extraction", "llm", "reasoning", "whisper", "fastapi", "python", "scraper", "feature extraction"]

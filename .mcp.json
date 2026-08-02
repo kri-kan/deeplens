@@ -1,0 +1,5 @@
+{
+  "notes": "Pointer to canonical squad_state hosted in the sibling workspace.",
+  "canonical_squad_path": "/home/krikan/productivity/deplensSquad/.mcp.json",
+  "usage": "This file signals that DeepLens should use the external Mahabharata squad located at /home/krikan/productivity/deplensSquad. CI or local tooling may need to pass --additional-mcp-config @/home/krikan/productivity/deplens/.mcp.json when invoking copilot/squad CLI if required. Do not edit without coordination with Krishna (squad lead)."
+}
