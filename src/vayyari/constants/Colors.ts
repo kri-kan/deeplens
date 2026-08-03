@@ -16,6 +16,7 @@ export const Colors = {
     onSurfaceVariant: '#5f5f5f',
     surfaceContainerLowest: '#ffffff',
     surfaceContainerLow: '#f6f3f2',
+    surfaceContainer: '#f4f1f0',
     surfaceContainerHigh: '#eae8e7',
     error: '#9f403d',
     outline: '#7b7b7a',

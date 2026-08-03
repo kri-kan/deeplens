@@ -2,14 +2,12 @@ import { MD3LightTheme as DefaultLightTheme, MD3DarkTheme as DefaultDarkTheme } 
 import { Platform } from 'react-native';
 import { Colors } from './Colors';
 
-declare global {
-  namespace ReactNativePaper {
-    interface MD3Colors {
-      surfaceContainerLowest: string;
-      surfaceContainerLow: string;
-      surfaceContainer: string;
-      surfaceContainerHigh: string;
-    }
+declare module 'react-native-paper' {
+  export interface MD3Colors {
+    surfaceContainerLowest: string;
+    surfaceContainerLow: string;
+    surfaceContainer: string;
+    surfaceContainerHigh: string;
   }
 }
 
@@ -31,6 +29,10 @@ export const VayyariEmeraldTheme = {
     onSurface: Colors.light.onSurface,
     surfaceVariant: Colors.light.surfaceVariant,
     onSurfaceVariant: Colors.light.onSurfaceVariant,
+    surfaceContainerLowest: Colors.light.surfaceContainerLowest,
+    surfaceContainerLow: Colors.light.surfaceContainerLow,
+    surfaceContainer: Colors.light.surfaceContainer,
+    surfaceContainerHigh: Colors.light.surfaceContainerHigh,
     background: Colors.light.background,
     onBackground: Colors.light.onBackground,
     error: Colors.light.error,
@@ -64,6 +66,10 @@ export const VayyariEmeraldNocturneTheme = {
     onSurface: Colors.dark.onSurface,
     surfaceVariant: Colors.dark.surfaceVariant,
     onSurfaceVariant: Colors.dark.onSurfaceVariant,
+    surfaceContainerLowest: Colors.dark.surfaceContainerLowest,
+    surfaceContainerLow: Colors.dark.surfaceContainerLow,
+    surfaceContainer: Colors.dark.surfaceContainer,
+    surfaceContainerHigh: Colors.dark.surfaceContainerHigh,
     background: Colors.dark.background,
     onBackground: Colors.dark.onBackground,
     error: Colors.dark.error,

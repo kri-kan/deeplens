@@ -10,6 +10,9 @@ import { ThemeProvider, useAppTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import * as SplashScreen from 'expo-splash-screen';
 
+import { ShareIntentProvider } from '../context/ShareIntentContext';
+import { useShareIntent } from '../hooks/useShareIntent';
+
 console.log('[RootLayout] Global execution started');
 
 // Keep the splash screen visible while we fetch resources
@@ -24,7 +27,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <InnerRootLayout />
+        <ShareIntentProvider>
+          <InnerRootLayout />
+        </ShareIntentProvider>
       </AuthProvider>
     </ThemeProvider>
   );
@@ -33,6 +38,7 @@ export default function RootLayout() {
 function InnerRootLayout() {
   const { colorScheme } = useAppTheme();
   const { token, isLoading } = useAuth();
+  useShareIntent();
 
   console.log('[RootLayout] InnerRootLayout render:', { colorScheme, isLoading, hasToken: !!token });
 
