@@ -8,10 +8,13 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./rules:/etc/prometheus/rules
-      - ${PROMETHEUS_DATA_PATH}:/prometheus
+      # - ${PROMETHEUS_DATA_PATH}:/prometheus  # disabled for local run to avoid mmap permission issues; use named volume or set correct permissions if persistence is required
+    # Ensure prometheus can resolve the host machine when targets use host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.path=/tmp/prometheus'  # use tmp path inside container to avoid host volume/mount permission issues (ephemeral)
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     networks:
