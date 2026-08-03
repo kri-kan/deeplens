@@ -60,7 +60,8 @@ class MainActivity : ReactActivity() {
 
       if (uris.isNotEmpty()) {
         val encodedUris = uris.joinToString(",") { Uri.encode(it) }
-        intent.data = Uri.parse("vayyari://share?media=$encodedUris")
+        intent.action = Intent.ACTION_VIEW
+        intent.data = Uri.parse("vayyari://new?media=$encodedUris")
       }
     }
   }

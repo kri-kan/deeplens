@@ -28,7 +28,7 @@ export function useShareIntent() {
   const parseAndNavigate = (urlStr: string) => {
     try {
       const parsed = Linking.parse(urlStr);
-      if (parsed.path === 'share' || parsed.hostname === 'share') {
+      if (parsed.path === 'share' || parsed.hostname === 'share' || parsed.path === 'new' || parsed.hostname === 'new') {
         const mediaParams = parsed.queryParams?.media;
         if (typeof mediaParams === 'string') {
           const uris = mediaParams.split(',').filter(Boolean);
