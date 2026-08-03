@@ -19,6 +19,7 @@ import {
     Organization24Regular,
     SignOut24Regular,
     ArrowEnterLeft24Regular,
+    Warning24Regular,
 } from '@fluentui/react-icons';
 import { useState, useEffect } from 'react';
 import { fetchChats, fetchAnnouncements, fetchGroups } from '../services/conversation.service';
@@ -384,6 +385,15 @@ export default function Navigation({ isCollapsed, onToggle }: NavigationProps) {
                                     style={{ width: '100%' }}
                                 >
                                     Groups
+                                </Button>
+
+                                <Button
+                                    appearance="transparent"
+                                    onClick={() => navigate('/admin/pipeline-failures')}
+                                    className={mergeClasses(styles.subNavButton, location.pathname === '/admin/pipeline-failures' && styles.subNavButtonActive)}
+                                    style={{ width: '100%', color: '#ef4444' }}
+                                >
+                                    ⚠️ Pipeline Failures
                                 </Button>
                             </>
                         )}

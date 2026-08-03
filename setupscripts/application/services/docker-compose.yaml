@@ -44,6 +44,7 @@ services:
       - Services__ReasoningApiUrl=http://reasoning-api:8002
       - ConnectionStrings__FeatureExtractionService=http://feature-extraction:8001
       - ConnectionStrings__Qdrant=http://qdrant:6333
+      - ConnectionStrings__Kafka=kafka-prod:29093
     working_dir: /app
     command: dotnet DeepLens.WorkerService.dll
     networks:

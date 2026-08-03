@@ -596,5 +596,82 @@ export function createGroupReviewRoutes(): Router {
         }
     });
 
+    /**
+     * GET /api/group-review/failed-items
+     * Returns all message groups that failed processing
+     */
+    router.get('/group-review/failed-items', async (req: Request, res: Response) => {
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+
+        try {
+            const failedRes = await client.query(
+                `SELECT 
+                    mg.group_id as "groupId",
+                    mg.jid,
+                    mg.status,
+                    mg.error_detail as "errorDetail",
+                    mg.media_count as "mediaCount",
+                    mg.text_count as "textCount",
+                    mg.updated_at as "updatedAt",
+                    mg.created_at as "createdAt",
+                    c.name as "chatName"
+                 FROM wa.message_groups mg
+                 LEFT JOIN wa.chats c ON mg.jid = c.jid
+                 WHERE mg.status IN ('error', 'enrichment_failed')
+                 ORDER BY mg.updated_at DESC`
+            );
+            res.json(failedRes.rows);
+        } catch (err: any) {
+            logger.error({ err: err.message }, 'Failed to fetch failed items');
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
+
+    /**
+     * POST /api/group-review/:groupId/retry
+     * Retries a failed group by resetting its status to staging
+     */
+    router.post('/group-review/:groupId/retry', async (req: Request, res: Response) => {
+        const { groupId } = req.params;
+        const client = getWhatsAppDbClient();
+
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+
+        try {
+            // Update database
+            await client.query(
+                `UPDATE wa.message_groups 
+                 SET status = 'staging', error_detail = NULL, updated_at = NOW() 
+                 WHERE group_id = $1`,
+                [groupId]
+            );
+
+            await logAudit(
+                groupId, 
+                'manual_retry', 
+                'operator', 
+                null, 
+                { status: 'staging' }
+            );
+
+            // Give the database a moment to commit, then trigger re-evaluation
+            setTimeout(() => {
+                groupReadinessService.checkAndEmitGroupEvent(groupId).catch(err => {
+                    logger.error({ err: err.message, groupId }, 'Failed during background retry re-evaluation');
+                });
+            }, 500);
+
+            res.json({ success: true, message: `Group ${groupId} has been sent back to staging for retry.` });
+        } catch (err: any) {
+            logger.error({ err: err.message, groupId }, 'Failed to retry group');
+            res.status(500).json({ success: false, message: err.message });
+        }
+    });
+
     return router;
 }

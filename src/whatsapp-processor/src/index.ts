@@ -83,6 +83,9 @@ async function initializeServices() {
     const { createGroupReviewRoutes } = await import('./routes/group-review.routes');
     apiRouter.use('/', createGroupReviewRoutes());
 
+    const { createPipelineFailuresRoutes } = await import('./routes/pipeline-failures.routes');
+    apiRouter.use('/admin', createPipelineFailuresRoutes());
+
     app.use('/api', apiRouter);
 
     // Verify DB Sync

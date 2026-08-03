@@ -264,7 +264,7 @@ export class GroupReadinessService {
             }
 
             // 6. Check Qualification & Emit Event
-            const qualifies = mediaCount >= 1 && isValidDescription(description);
+            const qualifies = mediaCount >= 2 && isValidDescription(description);
             const enabled = processAsProduct || autoProcess;
 
             if (qualifies && enabled) {
@@ -488,7 +488,7 @@ export class GroupReadinessService {
 
     /**
      * Poller to check for qualifying groups in staging and promote them to products after a delay.
-     * Checks eligibility (mediaCount >= 1 and textCount >= 1) and ensures no media download is pending.
+     * Checks eligibility (mediaCount >= 2 and textCount >= 1) and ensures no media download is pending.
      */
     public startStagingPoller(debounceSeconds: number = 45): void {
         if (this.stagingInterval) return;
@@ -579,7 +579,7 @@ export class GroupReadinessService {
                     const description = rawDescription
                         .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
                         .trim();
-                    const qualifies = mediaCount >= 1 && isValidDescription(description);
+                    const qualifies = mediaCount >= 2 && isValidDescription(description);
 
                     if (qualifies) {
                         logger.info({ groupId: group_id, mediaCount, descriptionWords: description.split(/\s+/).length }, 'Staged group qualifies, promoting to product...');
@@ -625,7 +625,77 @@ export class GroupReadinessService {
             } catch (err: any) {
                 logger.error({ err: err.message }, 'Error in WhatsApp Group Staging Buffer Poller');
             }
+
+            // Run self-healing scan pass
+            try {
+                await this.runSelfHealingScan();
+            } catch (err: any) {
+                logger.error({ err: err.message }, 'Error during poller self-healing scan');
+            }
         }, 10000); // Run every 10 seconds
+    }
+
+    /**
+     * Runs an automated self-healing scan across all message groups and messages.
+     * Recovers:
+     * 1. Groups stuck in 'product_create_sent' > 10m without deeplens_product_id.
+     * 2. Groups in 'error' where vendor has since been assigned.
+     * 3. Messages with stalled media downloads > 15m.
+     */
+    public async runSelfHealingScan(): Promise<{ recoveredStuckSent: number; recoveredVendorErrors: number; recoveredStaleMedia: number }> {
+        const client = getWhatsAppDbClient();
+        if (!client) return { recoveredStuckSent: 0, recoveredVendorErrors: 0, recoveredStaleMedia: 0 };
+
+        let recoveredStuckSent = 0;
+        let recoveredVendorErrors = 0;
+        let recoveredStaleMedia = 0;
+
+        try {
+            // 1. Recover stuck product_create_sent events (> 10 mins old)
+            const stuckRes = await client.query(
+                `SELECT group_id FROM wa.message_groups 
+                 WHERE status = 'product_create_sent' 
+                   AND deeplens_product_id IS NULL 
+                   AND updated_at < NOW() - INTERVAL '10 minutes'`
+            );
+            for (const row of stuckRes.rows) {
+                await client.query(`UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`, [row.group_id]);
+                await this.checkAndEmitGroupEvent(row.group_id);
+                recoveredStuckSent++;
+            }
+
+            // 2. Auto-recover vendor assignment error groups where chat now has vendor_id
+            const vendorErrRes = await client.query(
+                `SELECT mg.group_id 
+                 FROM wa.message_groups mg
+                 JOIN wa.chats c ON mg.jid = c.jid
+                 WHERE mg.status = 'error' 
+                   AND mg.error_detail LIKE 'Vendor not assigned%'
+                   AND c.vendor_id IS NOT NULL`
+            );
+            for (const row of vendorErrRes.rows) {
+                await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL WHERE group_id = $1`, [row.group_id]);
+                await this.checkAndEmitGroupEvent(row.group_id);
+                recoveredVendorErrors++;
+            }
+
+            // 3. Mark stale media downloads (> 15 mins) as failed so poller isn't blocked forever
+            const mediaRes = await client.query(
+                `UPDATE wa.messages 
+                 SET processing_status = 'failed', processing_error = 'Download timeout'
+                 WHERE processing_status IN ('queued', 'processing')
+                   AND (processing_last_attempt IS NULL OR processing_last_attempt < NOW() - INTERVAL '15 minutes')`
+            );
+            recoveredStaleMedia = mediaRes.rowCount || 0;
+
+            if (recoveredStuckSent > 0 || recoveredVendorErrors > 0 || recoveredStaleMedia > 0) {
+                logger.info({ recoveredStuckSent, recoveredVendorErrors, recoveredStaleMedia }, 'Self-healing scan completed recovery pass');
+            }
+        } catch (err: any) {
+            logger.error({ err: err.message }, 'Error running self-healing scan');
+        }
+
+        return { recoveredStuckSent, recoveredVendorErrors, recoveredStaleMedia };
     }
 
     /**

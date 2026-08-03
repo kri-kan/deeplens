@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Image, Alert } from 'react-native';
-import { Text, Card, Button, useTheme, ActivityIndicator, Surface, Chip } from 'react-native-paper';
+import { Text, Card, Button, useTheme, ActivityIndicator, Surface, Chip, Checkbox } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { productService } from '@/services/productService';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -14,6 +14,8 @@ export default function FailedEnrichmentsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkRetrying, setIsBulkRetrying] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -42,7 +44,7 @@ export default function FailedEnrichmentsScreen() {
       setRetryingIds(prev => new Set(prev).add(groupId));
       await productService.retryEnrichment(groupId);
       Alert.alert('Success', 'Enrichment retry initiated successfully');
-      fetchData();
+      setFailedItems(prev => prev.filter(item => item.groupId !== groupId));
     } catch (err) {
       console.warn(err);
       Alert.alert('Error', 'Failed to retry enrichment');
@@ -53,6 +55,54 @@ export default function FailedEnrichmentsScreen() {
         return next;
       });
     }
+  };
+
+  const handleToggleSelect = (groupId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkRetry = () => {
+    const isRetryAll = selectedIds.size === 0;
+    const count = isRetryAll ? failedItems.length : selectedIds.size;
+    const actionText = isRetryAll ? 'Retry All' : 'Retry Selected';
+
+    Alert.alert(
+      'Confirm Bulk Retry',
+      `Are you sure you want to queue ${count} items for retry?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: actionText, 
+          onPress: async () => {
+            try {
+              setIsBulkRetrying(true);
+              const groupIds = isRetryAll ? undefined : Array.from(selectedIds);
+              await productService.retryEnrichmentBulk(groupIds);
+              
+              if (isRetryAll) {
+                setFailedItems([]);
+              } else {
+                setFailedItems(prev => prev.filter(item => !selectedIds.has(item.groupId)));
+              }
+              setSelectedIds(new Set());
+            } catch (err) {
+              console.warn(err);
+              Alert.alert('Error', 'Failed to perform bulk retry');
+            } finally {
+              setIsBulkRetrying(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const getImageUrl = (imagePath: string) => {
@@ -75,12 +125,30 @@ export default function FailedEnrichmentsScreen() {
       onRefresh={onRefresh}
       contentContainerStyle={styles.container}
     >
-      <Text variant="titleMedium" style={styles.sectionHeader}>
-        Review Queue ({failedItems.length})
-      </Text>
-      <Text variant="bodySmall" style={styles.helperText}>
-        These products failed automatic LLM categorization and require manual review or retry.
-      </Text>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text variant="titleMedium" style={styles.sectionHeader}>
+            Review Queue ({failedItems.length})
+          </Text>
+          <Text variant="bodySmall" style={styles.helperText}>
+            These products failed automatic LLM categorization and require manual review or retry.
+          </Text>
+        </View>
+      </View>
+
+      {failedItems.length > 0 && (
+        <View style={styles.bulkActionBar}>
+          <Button
+            mode="contained"
+            icon="refresh"
+            loading={isBulkRetrying}
+            disabled={isBulkRetrying}
+            onPress={handleBulkRetry}
+          >
+            {selectedIds.size > 0 ? `Retry Selected (${selectedIds.size})` : `Retry All (${failedItems.length})`}
+          </Button>
+        </View>
+      )}
 
       {failedItems.length === 0 ? (
         <Surface style={styles.emptyCard} elevation={1}>
@@ -88,8 +156,18 @@ export default function FailedEnrichmentsScreen() {
         </Surface>
       ) : (
         failedItems.map((item) => (
-          <Card key={item.groupId} style={styles.productCard}>
+          <Card 
+            key={item.groupId} 
+            style={[styles.productCard, selectedIds.has(item.groupId) && styles.selectedCard]}
+            onPress={() => handleToggleSelect(item.groupId)}
+          >
             <View style={styles.cardRow}>
+              <View style={styles.checkboxContainer}>
+                <Checkbox
+                  status={selectedIds.has(item.groupId) ? 'checked' : 'unchecked'}
+                  onPress={() => handleToggleSelect(item.groupId)}
+                />
+              </View>
               <Image source={{ uri: getImageUrl(item.imagePath) }} style={styles.productImage} />
               <View style={styles.productDetails}>
                 <Text variant="titleMedium" style={styles.productTitle} numberOfLines={2}>
@@ -143,6 +221,22 @@ const styles = StyleSheet.create({
   helperText: {
     opacity: 0.6,
     marginBottom: 8,
+  },
+  headerRow: {
+    marginBottom: 8,
+  },
+  bulkActionBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  checkboxContainer: {
+    justifyContent: 'center',
+    marginRight: -4,
+  },
+  selectedCard: {
+    borderColor: '#6750A4',
+    borderWidth: 1,
   },
   emptyCard: {
     padding: 24,

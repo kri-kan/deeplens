@@ -5,24 +5,28 @@ import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
 import { systemJobsService, SystemJob } from '@/services/system-jobs.service';
+import { fetchFailedItems } from '@/services/error-queue.service';
 
 export default function SystemDashboard() {
   const theme = useTheme();
   const router = useRouter();
   const [jobs, setJobs] = useState<SystemJob[]>([]);
   const [orphanedCount, setOrphanedCount] = useState<number>(0);
+  const [failedCount, setFailedCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cleaning, setCleaning] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [jobsData, count] = await Promise.all([
+      const [jobsData, count, failedItems] = await Promise.all([
         systemJobsService.getJobs(),
-        systemJobsService.getOrphanedMediaCount()
+        systemJobsService.getOrphanedMediaCount(),
+        fetchFailedItems().catch(() => [])
       ]);
       setJobs(jobsData);
       setOrphanedCount(count);
+      setFailedCount(failedItems.length);
     } catch (error) {
       console.error('Failed to fetch system data', error);
     } finally {
@@ -68,6 +72,33 @@ export default function SystemDashboard() {
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />
         }
       >
+        <Section title="Processor Error Queue" style={styles.section}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <View style={styles.row}>
+                <View>
+                  <Text variant="titleMedium">Failed Items</Text>
+                  <Text variant="bodySmall" style={{ opacity: 0.6 }}>WhatsApp processor error queue</Text>
+                </View>
+                <Text variant="headlineMedium" style={{ color: failedCount > 0 ? theme.colors.error : theme.colors.primary }}>
+                  {failedCount}
+                </Text>
+              </View>
+              
+              <Divider style={styles.divider} />
+              
+              <Button 
+                mode="contained" 
+                icon="alert-circle-outline" 
+                buttonColor={theme.colors.error}
+                onPress={() => router.push('/system/error-queue')}
+                style={styles.actionButton}
+              >
+                Open Error Queue
+              </Button>
+            </Card.Content>
+          </Card>
+        </Section>
         <Section title="Media Integrity" style={styles.section}>
           <Card style={styles.card}>
             <Card.Content>

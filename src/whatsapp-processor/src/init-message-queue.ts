@@ -32,13 +32,16 @@ export async function initializeMessageQueue() {
             if (stuckGroupsRes.rows.length > 0) {
                 const { groupReadinessService } = await import('./services/group-readiness.service');
                 for (const row of stuckGroupsRes.rows) {
-                    logger.info({ groupId: row.group_id }, 'Re-emitting stuck product creation');
-                    // Reset status to staging so checkAndEmitGroupEvent triggers re-emission
-                    await client.query(
-                        `UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`,
-                        [row.group_id]
-                    );
-                    await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
+                    try {
+                        logger.info({ groupId: row.group_id }, 'Re-emitting stuck product creation');
+                        await client.query(
+                            `UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`,
+                            [row.group_id]
+                        );
+                        await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
+                    } catch (rowErr: any) {
+                        logger.warn({ err: rowErr.message, groupId: row.group_id }, 'Could not re-emit stuck product creation during startup');
+                    }
                 }
             }
         }
@@ -82,25 +85,20 @@ export async function initializeMessageQueue() {
         let isNewGroup = true;
 
         if (prevMsg) {
-            const strategy = grouping_config?.strategy || 'sticker';
-            const isPrevSticker = prevMsg.media_type === 'sticker';
+            const strategy = grouping_config?.strategy || 'hybrid';
+            const isPrevSticker = prevMsg.media_type === 'sticker' || (prevMsg.group_id && prevMsg.group_id.startsWith('sticker_'));
             const isCurSticker = message.media_type === 'sticker';
 
-            if (!isPrevSticker && !isCurSticker && prevMsg.group_id) {
+            // STICKER SEPARATOR PRIORITY RULE:
+            // If the current message is NOT a sticker AND the previous message was NOT a sticker,
+            // we evaluate whether to join the previous non-sticker product group.
+            if (!isPrevSticker && !isCurSticker && prevMsg.group_id && !prevMsg.group_id.startsWith('sticker_')) {
                 if (strategy === 'sticker') {
-                    // Sticker Separator Logic
+                    // Under sticker-only strategy, join previous group unless a sticker intervened
                     groupId = prevMsg.group_id;
                     isNewGroup = false;
-                } else if (strategy === 'time_gap') {
-                    // Time Gap Logic
-                    const threshold = (grouping_config?.timeGapSeconds || 300); // Default 5 mins
-                    const diff = message.timestamp - prevMsg.timestamp;
-                    if (diff <= threshold) {
-                        groupId = prevMsg.group_id;
-                        isNewGroup = false;
-                    }
-                } else if (strategy === 'hybrid') {
-                    // Hybrid Logic: Sticker Separator + Time Gap
+                } else {
+                    // Under time_gap or hybrid strategy, join previous group ONLY IF within time threshold
                     const threshold = (grouping_config?.timeGapSeconds || 300); // Default 5 mins
                     const diff = message.timestamp - prevMsg.timestamp;
                     if (diff <= threshold) {

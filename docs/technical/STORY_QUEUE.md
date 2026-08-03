@@ -143,6 +143,7 @@ The script:
 3. Loops `story_automation.yaml` until the queue is empty or 50 items are processed
 4. Retries up to 3 times per item on transient ADB/gRPC failures
 5. Applies random delays between actions (500–2500ms) to simulate natural usage
+6. Automatically restarts the Android AVD after every 20 story shares across the session to keep RAM usage in check, automatically reconnecting ADB and re-switching Instagram to the active account when continuing.
 
 ### Stopping Early
 

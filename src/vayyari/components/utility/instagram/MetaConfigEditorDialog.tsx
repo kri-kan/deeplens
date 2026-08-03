@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Portal, Dialog, TextInput, Button, useTheme, Text, IconButton, Switch } from 'react-native-paper';
+import { instagramService } from '../../../services/instagram.service';
 
 interface MetaConfigEditorDialogProps {
   visible: boolean;
@@ -24,6 +25,11 @@ export const MetaConfigEditorDialog: React.FC<MetaConfigEditorDialogProps> = ({
   const [longAccessToken, setLongAccessToken] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
+
+  // Exchange dialog state
+  const [exchangeVisible, setExchangeVisible] = useState(false);
+  const [shortToken, setShortToken] = useState('');
+  const [exchangeLoading, setExchangeLoading] = useState(false);
 
   useEffect(() => {
     if (editingConfig) {
@@ -63,10 +69,49 @@ export const MetaConfigEditorDialog: React.FC<MetaConfigEditorDialogProps> = ({
     }
   };
 
+  const handleExchange = async () => {
+    const cleanAppId = appId.trim();
+    const cleanAppSecret = appSecret.trim();
+    const cleanToken = shortToken.trim();
+
+    if (!cleanAppId || !cleanAppSecret || !cleanToken) {
+      Alert.alert('Missing Fields', 'Please ensure App ID and App Secret are filled in the main form, and Short Token is provided.');
+      return;
+    }
+    setExchangeLoading(true);
+    try {
+      const data = await instagramService.exchangeToken(cleanToken, cleanAppId, cleanAppSecret);
+      if (data.token) {
+        setLongAccessToken(data.token);
+        setExchangeVisible(false);
+        setShortToken('');
+      } else {
+        Alert.alert('Exchange Failed', data.message || 'Unknown error');
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error.message || 'Exchange failed';
+      Alert.alert('Error', msg);
+    } finally {
+      setExchangeLoading(false);
+    }
+  };
+
   return (
     <Portal>
       <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-        <Dialog.Title>{editingConfig ? 'Edit Meta Account' : 'Add Meta Account'}</Dialog.Title>
+        <View style={styles.titleRow}>
+          <Dialog.Title style={styles.titleText}>
+            {editingConfig ? 'Edit Meta Account' : 'Add Meta Account'}
+          </Dialog.Title>
+          <Button 
+            mode="text" 
+            onPress={() => setExchangeVisible(true)}
+            disabled={!appId || !appSecret}
+            compact
+          >
+            Exchange
+          </Button>
+        </View>
         <Dialog.ScrollArea style={styles.scrollArea}>
           <ScrollView contentContainerStyle={styles.content}>
             <TextInput
@@ -141,6 +186,35 @@ export const MetaConfigEditorDialog: React.FC<MetaConfigEditorDialogProps> = ({
           </Button>
         </Dialog.Actions>
       </Dialog>
+
+      {/* Exchange Token Dialog */}
+      <Dialog visible={exchangeVisible} onDismiss={() => setExchangeVisible(false)} style={styles.exchangeDialog}>
+        <Dialog.Title>Exchange Token</Dialog.Title>
+        <Dialog.Content>
+          <Text variant="bodySmall" style={{ marginBottom: 12, opacity: 0.7 }}>
+            Ensure App ID and App Secret are filled in the main form. Paste your short-lived token below to get a 60-day token.
+          </Text>
+          <TextInput
+            label="Short-Lived Token"
+            value={shortToken}
+            onChangeText={setShortToken}
+            mode="outlined"
+            multiline
+            numberOfLines={3}
+          />
+        </Dialog.Content>
+        <Dialog.Actions>
+          <Button onPress={() => setExchangeVisible(false)}>Cancel</Button>
+          <Button 
+            mode="contained" 
+            onPress={handleExchange} 
+            loading={exchangeLoading}
+            disabled={!shortToken}
+          >
+            Exchange
+          </Button>
+        </Dialog.Actions>
+      </Dialog>
     </Portal>
   );
 };
@@ -149,6 +223,18 @@ const styles = StyleSheet.create({
   dialog: {
     maxHeight: '80%',
     borderRadius: 24,
+  },
+  exchangeDialog: {
+    borderRadius: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 16,
+  },
+  titleText: {
+    flex: 1,
   },
   scrollArea: {
     paddingHorizontal: 0,

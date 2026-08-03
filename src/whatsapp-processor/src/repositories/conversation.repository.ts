@@ -297,35 +297,165 @@ export class ConversationRepository {
         return result.rows[0] || null;
     }
 
-    async findMessages(jid: string, limit: number, offset: number, aroundGroupId?: string, searchQuery?: string): Promise<any[]> {
+    async findMessages(
+        jid: string, 
+        limit: number, 
+        offset: number, 
+        aroundGroupId?: string, 
+        searchQuery?: string,
+        beforeTimestamp?: number,
+        afterTimestamp?: number,
+        targetMessageId?: string,
+        targetTimestamp?: number,
+        fromTimestamp?: number,
+        toTimestamp?: number
+    ): Promise<any[]> {
         let searchCondition = "";
         if (searchQuery) {
             searchCondition = `AND content ILIKE '%${searchQuery.replace(/'/g, "''")}%'`;
         }
+
+        const chatJidSubquery = `
+            WITH chat_info AS (
+                SELECT COALESCE(canonical_jid, jid) as base_jid 
+                FROM wa.chats 
+                WHERE jid = $1 
+                LIMIT 1
+            ),
+            chat_jids AS (
+                SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info)
+                UNION
+                SELECT (SELECT base_jid FROM chat_info)
+                UNION
+                SELECT $1
+            )
+        `;
+
+        const selectFields = `
+            message_id as "messageId",
+            jid as "chatJid",
+            sender as "senderJid",
+            content as "messageText",
+            message_type as "messageType",
+            media_type as "mediaType",
+            media_url as "mediaUrl",
+            timestamp,
+            is_from_me as "isFromMe",
+            metadata,
+            group_id as "groupId"
+        `;
+
+        // 1. Target Message / Target Timestamp Anchoring
+        if (targetMessageId || targetTimestamp) {
+            let targetTs = targetTimestamp;
+            if (targetMessageId && !targetTs) {
+                const tsRes = await this.client.query(`
+                    ${chatJidSubquery}
+                    SELECT timestamp FROM wa.messages 
+                    WHERE jid IN (SELECT jid FROM chat_jids) AND message_id = $2
+                    LIMIT 1
+                `, [jid, targetMessageId]);
+                if (tsRes.rows.length > 0) {
+                    targetTs = parseInt(tsRes.rows[0].timestamp);
+                }
+            }
+
+            if (targetTs) {
+                const halfLimit = Math.max(10, Math.floor(limit / 2));
+                const res = await this.client.query(`
+                    ${chatJidSubquery},
+                    older_msgs AS (
+                        SELECT ${selectFields}
+                        FROM wa.messages
+                        WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                          AND timestamp <= $2
+                        ORDER BY timestamp DESC
+                        LIMIT $3
+                    ),
+                    newer_msgs AS (
+                        SELECT ${selectFields}
+                        FROM wa.messages
+                        WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                          AND timestamp > $2
+                        ORDER BY timestamp ASC
+                        LIMIT $3
+                    )
+                    SELECT * FROM older_msgs
+                    UNION ALL
+                    SELECT * FROM newer_msgs
+                    ORDER BY timestamp DESC
+                `, [jid, targetTs, halfLimit]);
+                return res.rows;
+            }
+        }
+
+        // 2. Gap filling range query: fromTimestamp < timestamp < toTimestamp
+        if (fromTimestamp !== undefined && toTimestamp !== undefined) {
+            const res = await this.client.query(`
+                ${chatJidSubquery}
+                SELECT ${selectFields}
+                FROM wa.messages
+                WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                  AND timestamp >= $2 AND timestamp <= $3
+                ORDER BY timestamp DESC
+                LIMIT $4
+            `, [jid, fromTimestamp, toTimestamp, limit]);
+            return res.rows;
+        }
+
+        // 3. Paging older: beforeTimestamp
+        if (beforeTimestamp !== undefined) {
+            const res = await this.client.query(`
+                ${chatJidSubquery}
+                SELECT ${selectFields}
+                FROM wa.messages
+                WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                  AND timestamp < $2
+                ORDER BY timestamp DESC
+                LIMIT $3
+            `, [jid, beforeTimestamp, limit]);
+            return res.rows;
+        }
+
+        // 4. Paging newer: afterTimestamp
+        if (afterTimestamp !== undefined) {
+            const res = await this.client.query(`
+                ${chatJidSubquery}
+                SELECT ${selectFields}
+                FROM wa.messages
+                WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                  AND timestamp > $2
+                ORDER BY timestamp ASC
+                LIMIT $3
+            `, [jid, afterTimestamp, limit]);
+            // Reverse so rows are DESC ordered (matching default findMessages contract)
+            return res.rows.reverse();
+        }
+
+        // 5. Default Group-based or offset-based query
         const params: any[] = [jid, limit, offset];
         let query: string;
 
         if (aroundGroupId) {
             params.push(aroundGroupId);
             query = `
-                WITH chat_info AS (
-                    SELECT COALESCE(canonical_jid, jid) as base_jid 
-                    FROM wa.chats 
-                    WHERE jid = $1 
-                    LIMIT 1
-                ),
-                chat_jids AS (
-                    SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info)
-                    UNION
-                    SELECT (SELECT base_jid FROM chat_info)
-                    UNION
-                    SELECT $1
+                ${chatJidSubquery},
+                target_ts_lookup AS (
+                    SELECT MIN(timestamp) as ts
+                    FROM wa.messages
+                    WHERE jid IN (SELECT jid FROM chat_jids) AND group_id = $4
+                    UNION ALL
+                    SELECT EXTRACT(EPOCH FROM last_message_at)::bigint as ts
+                    FROM wa.message_groups
+                    WHERE group_id = $4
+                    UNION ALL
+                    SELECT CASE 
+                        WHEN $4 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($4, '_', 2)::bigint 
+                        ELSE NULL 
+                    END as ts
                 ),
                 target_msg AS (
-                    SELECT MIN(timestamp) as min_ts
-                    FROM wa.messages
-                    WHERE jid IN (SELECT jid FROM chat_jids)
-                      AND group_id = $4
+                    SELECT MIN(ts) as min_ts FROM target_ts_lookup WHERE ts IS NOT NULL AND ts > 0
                 ),
                 count_newer AS (
                     SELECT COUNT(*) as cnt
@@ -333,18 +463,7 @@ export class ConversationRepository {
                     WHERE jid IN (SELECT jid FROM chat_jids)
                       AND timestamp >= (SELECT min_ts FROM target_msg)
                 )
-                SELECT 
-                    message_id as "messageId",
-                    jid as "chatJid",
-                    sender as "senderJid",
-                    content as "messageText",
-                    message_type as "messageType",
-                    media_type as "mediaType",
-                    media_url as "mediaUrl",
-                    timestamp,
-                    is_from_me as "isFromMe",
-                    metadata,
-                    group_id as "groupId"
+                SELECT ${selectFields}
                 FROM wa.messages
                 WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                 ORDER BY timestamp DESC
@@ -356,26 +475,10 @@ export class ConversationRepository {
             `;
         } else {
             query = `
-                WITH chat_info AS (
-                    SELECT COALESCE(canonical_jid, jid) as base_jid 
-                    FROM wa.chats 
-                    WHERE jid = $1 
-                    LIMIT 1
-                )
-                SELECT 
-                    message_id as "messageId",
-                    jid as "chatJid",
-                    sender as "senderJid",
-                    content as "messageText",
-                    message_type as "messageType",
-                    media_type as "mediaType",
-                    media_url as "mediaUrl",
-                    timestamp,
-                    is_from_me as "isFromMe",
-                    metadata,
-                    group_id as "groupId"
+                ${chatJidSubquery}
+                SELECT ${selectFields}
                 FROM wa.messages
-                WHERE (jid = $1 OR jid = (SELECT base_jid FROM chat_info) OR jid IN (SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info))) ${searchCondition}
+                WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                 ORDER BY timestamp DESC
                 LIMIT $2 OFFSET $3
             `;

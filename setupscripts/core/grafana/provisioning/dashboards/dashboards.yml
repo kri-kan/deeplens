@@ -7,7 +7,7 @@ providers:
   - name: "DeepLens Infrastructure"
     type: file
     options:
-      path: /var/lib/grafana/dashboards
+      path: /etc/grafana/provisioning/dashboards
     updateIntervalSeconds: 30
     allowUiUpdates: true
     foldersFromFilesStructure: true

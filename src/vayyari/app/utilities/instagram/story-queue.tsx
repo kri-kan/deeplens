@@ -4,7 +4,7 @@ import { useTheme, Text, Button, ActivityIndicator, IconButton, Menu } from 'rea
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { instagramService, InstagramPost, InstagramProfile } from '@/services/instagram.service';
-import { getSearchApiUrl } from '@/utils/api-config';
+import { getMediaUri } from '@/utils/instagram-helpers';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 const { width } = Dimensions.get('window');
@@ -126,15 +126,6 @@ export default function StoryQueueScreen() {
     ]);
   };
 
-  const getMediaUri = (post: InstagramPost) => {
-    const baseUrl = getSearchApiUrl() || '';
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    if (post.storagePath) {
-      return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(post.storagePath)}`;
-    }
-    return post.thumbnailUrl || post.mediaUrl || '';
-  };
-
   const renderQueueItem = ({ item, index }: { item: InstagramPost, index: number }) => {
     const tileSize = selectionMode ? TILE_SELECTION : ITEM_SIZE;
     const tileMargin = selectionMode ? TILE_SELECTION_GAP / 2 : 1;
@@ -151,7 +142,7 @@ export default function StoryQueueScreen() {
       >
         <View style={[styles.tileInner, selectionMode && styles.tileInnerSelection]}>
           <Image
-            source={{ uri: getMediaUri(item) }}
+            source={{ uri: getMediaUri(item, 'medium') }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
           />

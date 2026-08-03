@@ -176,3 +176,29 @@ export async function logout(): Promise<void> {
         method: 'POST'
     });
 }
+
+/**
+ * Pipeline Failure Management APIs
+ */
+export async function getPipelineFailures(): Promise<any> {
+    const response = await fetch('/api/admin/pipeline-failures');
+    return response.json();
+}
+
+export async function retryPipelineFailures(groupIds?: string[], type?: string): Promise<any> {
+    const response = await fetch('/api/admin/pipeline-failures/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupIds, type })
+    });
+    return response.json();
+}
+
+export async function autoFixPipelineFailures(enableAutoProcessForAssigned: boolean = true): Promise<any> {
+    const response = await fetch('/api/admin/pipeline-failures/auto-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enableAutoProcessForAssigned })
+    });
+    return response.json();
+}

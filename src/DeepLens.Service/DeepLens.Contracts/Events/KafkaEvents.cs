@@ -529,7 +529,7 @@ public static class EventTypes
     public const string ProcessingCompleted = "processing.completed";
     public const string ProcessingFailed = "processing.failed";
     public const string ImageDeletionRequested = "image.deletion.requested";
-    public const string ProductEnrichmentRequested = "whatsapp.group.product.enrich";
+    // ProductEnrichmentRequested removed — use KafkaTopics.ProductEnrichmentRequested ("WhatsApp.group.product.enrich")
 }
 
 /// <summary>

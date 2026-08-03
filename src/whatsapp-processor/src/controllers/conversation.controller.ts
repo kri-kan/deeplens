@@ -86,9 +86,19 @@ export class ConversationController {
         const offset = parseInt(req.query.offset as string) || 0;
         const highlightGroupId = req.query.highlightGroupId as string | undefined;
         const searchQuery = req.query.searchQuery as string | undefined;
+        const beforeTimestamp = req.query.beforeTimestamp ? parseInt(req.query.beforeTimestamp as string) : undefined;
+        const afterTimestamp = req.query.afterTimestamp ? parseInt(req.query.afterTimestamp as string) : undefined;
+        const targetMessageId = req.query.targetMessageId as string | undefined;
+        const targetTimestamp = req.query.targetTimestamp ? parseInt(req.query.targetTimestamp as string) : undefined;
+        const fromTimestamp = req.query.fromTimestamp ? parseInt(req.query.fromTimestamp as string) : undefined;
+        const toTimestamp = req.query.toTimestamp ? parseInt(req.query.toTimestamp as string) : undefined;
 
         try {
-            const result = await this.service.getMessages(jid, limit, offset, highlightGroupId, searchQuery);
+            const result = await this.service.getMessages(
+                jid, limit, offset, highlightGroupId, searchQuery,
+                beforeTimestamp, afterTimestamp, targetMessageId, targetTimestamp,
+                fromTimestamp, toTimestamp
+            );
             res.json(result);
         } catch (err: any) {
             logger.error({ err, jid }, 'Failed to get messages');

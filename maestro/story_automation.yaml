@@ -1,15 +1,35 @@
 appId: com.anonymous.vayyari
 ---
 # Start the app. It might open the Expo Dev Launcher.
+- stopApp:
+    appId: com.anonymous.vayyari
 - launchApp:
     appId: com.anonymous.vayyari
 
-# Handle Expo Developer Launcher if it appears
+# Allow app splash screen / initial launcher transition to settle
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 3000);
+
+# Handle Expo Developer Launcher if it appears (check both URL pattern and Recently Opened card)
 - runFlow:
     when:
       visible: "http://10.0.2.2:8081"
     commands:
       - tapOn: "http://10.0.2.2:8081"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 8000);
+- runFlow:
+    when:
+      visible: "RECENTLY OPENED"
+    commands:
+      - tapOn:
+          text: "vayyari"
+          below: "RECENTLY OPENED"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 8000);
 
 # Navigate directly to the story queue screen and set the profile
 - openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
@@ -19,8 +39,29 @@ appId: com.anonymous.vayyari
 - evalScript: ${output.wait_counter = 0}
 - repeat:
     while:
-      true: ${output.screen_loaded == 'false' && output.wait_counter < 30}
+      true: ${output.screen_loaded == 'false' && output.wait_counter < 60}
     commands:
+      # If the app got stuck on Expo Dev Launcher or returned to it, tap dev server / recently opened card and reload deep link
+      - runFlow:
+          when:
+            visible: "http://10.0.2.2:8081"
+          commands:
+            - tapOn: "http://10.0.2.2:8081"
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 8000);
+            - openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
+      - runFlow:
+          when:
+            visible: "RECENTLY OPENED"
+          commands:
+            - tapOn:
+                text: "vayyari"
+                below: "RECENTLY OPENED"
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 8000);
+            - openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
       - runFlow:
           when:
             visible: "Sign In"
@@ -34,9 +75,9 @@ appId: com.anonymous.vayyari
             - evalScript: ${output.screen_loaded = 'queue'}
       - runFlow:
           when:
-            visible: "Queue is empty"
+            visible: "Queue is empty."
           commands:
-            - evalScript: ${output.screen_loaded = 'queue'}
+            - evalScript: ${output.screen_loaded = 'empty'}
       - runFlow:
           when:
             visible: "System Dashboard"
@@ -48,8 +89,26 @@ appId: com.anonymous.vayyari
           commands:
             - evalScript: |
                 var start = new Date().getTime();
-                while (new Date().getTime() < start + 500);
+                while (new Date().getTime() < start + 1000);
             - evalScript: ${output.wait_counter = output.wait_counter + 1}
+
+# Handle genuinely empty queue without attempting to share items
+- runFlow:
+    when:
+      true: ${output.screen_loaded == 'empty'}
+    commands:
+      # Tapping this intentional signal ID halts the flow immediately with a distinct error
+      # so the bash runner knows the queue is genuinely empty and not a loading timeout or crash.
+      - tapOn:
+          id: "SIGNAL_QUEUE_IS_EMPTY"
+
+# If screen failed to load after full timeout, abort cleanly so retry logic can trigger
+- runFlow:
+    when:
+      true: ${output.screen_loaded == 'false'}
+    commands:
+      - tapOn:
+          id: "ERROR_APP_LOADING_TIMEOUT"
 
 # Handle potential stale session fallback to login
 - runFlow:
@@ -64,7 +123,16 @@ appId: com.anonymous.vayyari
       - extendedWaitUntil:
           visible:
             id: "share-queue-item-0"
-          timeout: 10000
+          timeout: 15000
+
+# Stop Instagram background process to force a cold start when opening the link
+- stopApp:
+    appId: com.instagram.android
+
+# Small pause to ensure process termination completes
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 500);
 
 # Find the next item in the queue and click its Share button
 - tapOn:
@@ -133,33 +201,86 @@ appId: com.anonymous.vayyari
 
 
 
-# Wait explicitly for the button to appear and then sleep an extra second 
-# to guarantee the slide-up animation is completely finished. If we tap 
-# while it's still animating upwards, Maestro clicks the wrong coordinate!
-- extendedWaitUntil:
-    visible: "Add to story"
+# Wait explicitly for the button to appear (and scroll right if it's hidden)
+- scrollUntilVisible:
+    element:
+      text: "Add to story"
+    direction: RIGHT
     timeout: 10000
+    centerElement: true
 - evalScript: |
     var start = new Date().getTime();
     while (new Date().getTime() < start + 1500);
 
-# Tap Add to story
-- tapOn: "Add to story"
+# Tap Add to story text label directly with zero settle delay
+- tapOn:
+    text: "Add to story"
+    waitToSettleTimeoutMs: 0
 
-# First stage wait: ensure the Share Sheet actually closed within 10 seconds.
-# If it didn't close, the tap failed, and we want to fail fast rather than waiting 90s.
-- extendedWaitUntil:
-    notVisible: "Add to story"
-    timeout: 10000
+# Dynamic wait loop: handles instant transitions, slow loading labels, and retry clicks
+- evalScript: ${output.story_added = 'false'}
+- evalScript: ${output.story_wait = 0}
+- repeat:
+    while:
+      true: ${output.story_added == 'false' && output.story_wait < 30}
+    commands:
+      # Check 1: Story editor loaded ("Close Friends" or "Your story" visible)
+      - runFlow:
+          when:
+            visible: "Close Friends"
+          commands:
+            - evalScript: ${output.story_added = 'editor'}
+      - runFlow:
+          when:
+            visible: "Your stor.*"
+          commands:
+            - evalScript: ${output.story_added = 'editor'}
+      # Check 2: "Add to story" button disappeared from view
+      - runFlow:
+          when:
+            notVisible:
+              text: "Add to story"
+          commands:
+            - evalScript: ${output.story_added = 'disappeared'}
+      # Check 3: Loading label / spinner on screen (keep waiting while loading)
+      - runFlow:
+          when:
+            visible:
+              text: "Loading.*"
+          commands:
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 1000);
+      # Check 4: Smart retry tap if "Add to story" is STILL visible after 3s and no loading indicator/editor has opened
+      - runFlow:
+          when:
+            true: ${output.story_added == 'false' && output.story_wait > 3 && output.story_wait % 4 == 0}
+          commands:
+            - runFlow:
+                when:
+                  visible:
+                    text: "Add to story"
+                commands:
+                  - tapOn:
+                      text: "Add to story"
+                      waitToSettleTimeoutMs: 0
+      - runFlow:
+          when:
+            true: ${output.story_added == 'false'}
+          commands:
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 1000);
+            - evalScript: ${output.story_wait = output.story_wait + 1}
 
-# Wait for Story editor to load (waiting for "Close Friends" to appear).
-# NOTE: The video/reel can take 30-60s to render inside the editor before
-# the bottom bar (Your stories / Close Friends) becomes visible.
-# extendedWaitUntil starts counting from when the tapOn begins, and the tap
-# itself can take 10-15s to settle — so 90s total gives ~75s of actual wait.
-- extendedWaitUntil:
-    visible: "Close Friends"
-    timeout: 90000
+# Wait for Story editor to finish rendering ("Close Friends" or "Your story" bottom bar)
+- runFlow:
+    when:
+      notVisible: "Close Friends"
+    commands:
+      - extendedWaitUntil:
+          visible: "Your stor.*"
+          timeout: 90000
 
 # Enforce a 1 second gap after elements appear before interacting
 - evalScript: |

@@ -312,8 +312,8 @@ public class MetadataService : IMetadataService
 
         var productId = Guid.NewGuid();
         const string sql = @"
-            INSERT INTO products (id, base_sku, title, tags, sequence_id, fabric, stitch_type, work_heaviness)
-            VALUES (@Id, @Sku, @Title, @Tags, @SeqId, @Fabric, @Stitch, @Work)
+            INSERT INTO products (id, base_sku, title, tags, sequence_id, fabric, stitch_type, work_heaviness, created_at)
+            VALUES (@Id, @Sku, @Title, @Tags, @SeqId, @Fabric, @Stitch, @Work, NOW())
             RETURNING id";
         
         var tags = request.Tags ?? new List<string>();

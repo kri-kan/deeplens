@@ -355,14 +355,14 @@ public class ProductService : IProductService
 
         sql += whereClause;
 
-        sql += filter.SortBy switch
+        sql += filter.SortBy?.Trim().ToLowerInvariant() switch
         {
-            "price_low" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) ASC NULLS LAST",
-            "price_high" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) DESC NULLS LAST",
-            "oldest" => " ORDER BY p.created_at ASC",
-            "listings_most" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) DESC",
-            "listings_least" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) ASC",
-            _ => " ORDER BY p.created_at DESC"
+            "price_low" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) ASC NULLS LAST, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC",
+            "price_high" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) DESC NULLS LAST, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC",
+            "oldest" => " ORDER BY COALESCE(p.created_at, '1970-01-01'::timestamptz) ASC, p.sequence_id ASC, p.id ASC",
+            "listings_most" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) DESC, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC",
+            "listings_least" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) ASC, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC",
+            _ => " ORDER BY COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC"
         };
 
         sql += " LIMIT @Take OFFSET @Skip";
@@ -541,8 +541,8 @@ public class ProductService : IProductService
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 p.created_at as ""CreatedAt"",
                 p.is_starred as ""IsStarred"",
-                (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1) as ""SourceJid"",
-                (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1) as ""SourceGroupId"",
+                COALESCE((SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT jid FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1)) as ""SourceJid"",
+                COALESCE((SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT source_group_id FROM vendor_listings WHERE product_id = p.id AND source_group_id IS NOT NULL LIMIT 1)) as ""SourceGroupId"",
                 COALESCE((
                     SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary, 'mediaType', m.media_type))
                     FROM media m 
@@ -560,8 +560,8 @@ public class ProductService : IProductService
                         'description',   vl.description,
                         'isActive',      vl.is_active,
                         'updatedAt',     vl.updated_at,
-                        'sourceGroupId', vl.source_group_id,
-                        'sourceJid',     (SELECT jid FROM wa.message_groups WHERE group_id = vl.source_group_id LIMIT 1)
+                        'sourceGroupId', COALESCE(vl.source_group_id, (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1)),
+                        'sourceJid',     COALESCE((SELECT jid FROM wa.message_groups WHERE group_id = vl.source_group_id LIMIT 1), (SELECT jid FROM wa.messages WHERE group_id = vl.source_group_id LIMIT 1), (SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1))
                     ) ORDER BY vl.is_active DESC, vl.updated_at DESC)
                     FROM vendor_listings vl
                     LEFT JOIN vendors v ON v.id = vl.vendor_id

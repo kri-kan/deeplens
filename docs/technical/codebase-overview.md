@@ -43,7 +43,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
 | `/api/auth/login` | POST     | Authenticate and get JWT.             |
 | `/api/tenants`    | GET/POST | List and provision new organizations. |
 
-### Search & Ingestion Service (Port 5002)
+### Search & Ingestion Service (Port 5000)
 | Endpoint                              | Method   | Purpose                                            |
 | :------------------------------------ | :------- | :------------------------------------------------- |
 | `/api/v1/ingest/upload`               | POST     | Single image upload with metadata.                 |

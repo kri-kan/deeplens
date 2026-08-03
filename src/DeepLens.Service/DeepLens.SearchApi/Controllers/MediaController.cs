@@ -95,9 +95,6 @@ public class MediaController : ControllerBase
         try
         {
             var thumbStream = await _storageService.GetFileAsync(thumbPath);
-            using var ms = new MemoryStream();
-            await thumbStream.CopyToAsync(ms);
-            byte[] data = ms.ToArray();
 
             var allSettings = await _settings.GetAllAsync();
             var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
@@ -105,7 +102,7 @@ public class MediaController : ControllerBase
             int maxAgeSeconds = expiryHours * 3600;
 
             Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for thumbnails
-            return File(data, MediaConstants.Formats.WebP);
+            return File(thumbStream, MediaConstants.Formats.WebP);
         }
         catch (Exception ex)
         {
@@ -163,9 +160,8 @@ public class MediaController : ControllerBase
                         Mode = ResizeMode.Max
                     }));
 
-                    using var outMs = new MemoryStream();
+                    var outMs = new MemoryStream();
                     await imageObj.SaveAsWebpAsync(outMs);
-                    byte[] outData = outMs.ToArray();
 
                     // Proactively upload to MinIO
                     try {
@@ -175,7 +171,8 @@ public class MediaController : ControllerBase
                         _logger.LogWarning("Failed to proactively upload generated thumbnail for {Path}: {Msg}", sourcePath, uploadEx.Message);
                     }
 
-                    return File(outData, MediaConstants.Formats.WebP);
+                    outMs.Position = 0;
+                    return File(outMs, MediaConstants.Formats.WebP);
                 }
             } catch (Exception genEx) {
                 _logger.LogError(genEx, "Failed to generate thumbnail on-demand for {Path} from source {SourcePath}", item.StoragePath, sourcePath);
@@ -233,18 +230,13 @@ public class MediaController : ControllerBase
                 }
             }
 
-            using var streamToDispose = previewStream;
-            using var ms = new MemoryStream();
-            await previewStream.CopyToAsync(ms);
-            byte[] data = ms.ToArray();
-
             var allSettings = await _settings.GetAllAsync();
             var expirySetting = allSettings.FirstOrDefault(s => s.Key == "Media:CacheExpiryHours")?.Value;
             int expiryHours = int.TryParse(expirySetting, out var h) ? h : 6;
             int maxAgeSeconds = expiryHours * 3600;
 
             Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for previews
-            return File(data, "image/gif");
+            return File(previewStream, "image/gif");
         }
         catch (Exception ex)
         {

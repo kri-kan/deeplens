@@ -34,9 +34,11 @@ async def _ollama_worker():
             result = await asyncio.get_event_loop().run_in_executor(
                 None, _call_ollama_sync, prompt, system, cancel_event
             )
-            future.set_result(result)
+            if not future.done():
+                future.set_result(result)
         except Exception as exc:
-            future.set_exception(exc)
+            if not future.done():
+                future.set_exception(exc)
         finally:
             _ollama_queue.task_done()
 

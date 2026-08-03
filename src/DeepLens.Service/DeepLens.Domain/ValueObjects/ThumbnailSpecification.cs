@@ -50,6 +50,7 @@ public class ThumbnailSpecification
 /// <summary>
 /// Supported thumbnail formats
 /// </summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
 public enum ThumbnailFormat
 {
     Jpeg,

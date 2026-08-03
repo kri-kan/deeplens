@@ -1,6 +1,10 @@
 using DeepLens.Infrastructure.Services;
+using DeepLens.Shared.Telemetry;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure OpenTelemetry Tracing & Metrics
+builder.Services.AddDeepLensTelemetry(builder.Configuration, "DeepLens.AdminApi");
 
 // Add services to the container
 builder.Services.AddControllers();

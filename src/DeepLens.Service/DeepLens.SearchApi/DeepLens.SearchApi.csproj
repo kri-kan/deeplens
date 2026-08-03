@@ -1,9 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-  <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVM>false</RetainVM>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,6 +34,7 @@
     <ProjectReference Include="..\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
     <ProjectReference Include="..\DeepLens.Shared.Common\DeepLens.Shared.Common.csproj" />
     <ProjectReference Include="..\DeepLens.Application\DeepLens.Application.csproj" />
+    <ProjectReference Include="..\DeepLens.Shared.Telemetry\DeepLens.Shared.Telemetry.csproj" />
   </ItemGroup>
 
 </Project>

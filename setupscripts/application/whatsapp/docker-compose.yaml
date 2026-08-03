@@ -19,7 +19,7 @@ services:
       VAYYARI_WA_DB_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD:-Krikank1%24}@${INFRA_HOST:-192.168.0.170}:${POSTGRES_PORT:-5432}/deeplens_platform
       
       # Kafka Configuration
-      KAFKA_BROKERS: ${INFRA_HOST:-192.168.0.170}:9092
+      KAFKA_BROKERS: kafka-prod:29093
 
       # Redis Configuration
       REDIS_HOST: ${INFRA_HOST:-192.168.0.170}
@@ -49,7 +49,7 @@ services:
     
     ports:
       # Managed dynamic port mapping
-      - "${WHATSAPP_PROCESSOR_PORT:-3001}:3000"
+      - "${WHATSAPP_PROCESSOR_PORT:-3005}:3000"
 
 networks:
   deeplens-network:

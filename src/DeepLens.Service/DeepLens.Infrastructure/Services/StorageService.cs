@@ -19,6 +19,7 @@ public interface IStorageService
     Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null);
     Task<Stream> GetFileAsync(string storagePath);
     Task<Stream> GetFileRangeAsync(string storagePath, long offset, long length);
+    Task<int> ReadRangeToBufferAsync(string storagePath, long offset, byte[] buffer, int bufferOffset, int count, CancellationToken ct = default);
     Task<long> GetFileLengthAsync(string storagePath);
     Task DeleteFileAsync(string storagePath);
 }
@@ -184,46 +185,37 @@ public class MinioStorageService : IStorageService
 
     public async Task<Stream> GetFileAsync(string storagePath)
     {
-        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
-
-        // Use a piped stream to avoid loading the entire file into memory
-        // This is crucial for large video files
-        var outputStream = new MemoryStream(); 
-        
-        // Note: For true high-performance streaming with seeking, 
-        // we'd want a custom stream that fetches from MinIO on demand.
-        // For now, we will use a more efficient way to copy or use a temp file if needed.
-        // But the immediate fix is to ensure we don't block the whole thread.
-        
-        var getArgs = new GetObjectArgs()
-            .WithBucket(bucketName)
-            .WithObject(objectName)
-            .WithCallbackStream(async (stream, ct) => {
-                await stream.CopyToAsync(outputStream, ct);
-            });
-
-        await _minioClient.GetObjectAsync(getArgs);
-        outputStream.Position = 0;
-        return outputStream;
+        long length = await GetFileLengthAsync(storagePath);
+        return new MinioSeekableStream(this, storagePath, length);
     }
-
 
     public async Task<Stream> GetFileRangeAsync(string storagePath, long offset, long length)
     {
-        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
+        long totalLength = await GetFileLengthAsync(storagePath);
+        long endPosition = Math.Min(offset + length, totalLength);
+        return new MinioSeekableStream(this, storagePath, endPosition) { Position = offset };
+    }
 
-        var memoryStream = new MemoryStream();
+    public async Task<int> ReadRangeToBufferAsync(string storagePath, long offset, byte[] buffer, int bufferOffset, int count, CancellationToken ct = default)
+    {
+        var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
+        int totalRead = 0;
+
         var getArgs = new GetObjectArgs()
             .WithBucket(bucketName)
             .WithObject(objectName)
-            .WithOffsetAndLength(offset, length)
-            .WithCallbackStream(async (stream, ct) => {
-                await stream.CopyToAsync(memoryStream, ct);
+            .WithOffsetAndLength(offset, count)
+            .WithCallbackStream(async (stream, cancellationToken) =>
+            {
+                int bytesRead;
+                while (totalRead < count && (bytesRead = await stream.ReadAsync(buffer, bufferOffset + totalRead, count - totalRead, cancellationToken)) > 0)
+                {
+                    totalRead += bytesRead;
+                }
             });
 
-        await _minioClient.GetObjectAsync(getArgs);
-        memoryStream.Position = 0;
-        return memoryStream;
+        await _minioClient.GetObjectAsync(getArgs, ct);
+        return totalRead;
     }
 
     public async Task<long> GetFileLengthAsync(string storagePath)
@@ -284,10 +276,9 @@ public class MinioSeekableStream : Stream
         if (_position >= _length) return 0;
         
         long remaining = _length - _position;
-        long toRead = Math.Min(count, remaining);
+        int toRead = (int)Math.Min(count, remaining);
         
-        using var rangeStream = await _storageService.GetFileRangeAsync(_storagePath, _position, toRead);
-        int read = await rangeStream.ReadAsync(buffer, offset, (int)toRead, cancellationToken);
+        int read = await _storageService.ReadRangeToBufferAsync(_storagePath, _position, buffer, offset, toRead, cancellationToken);
         _position += read;
         return read;
     }

@@ -14,6 +14,7 @@ using OpenTelemetry.Trace;
 using OpenTelemetry.Metrics;
 using Serilog;
 using Duende.IdentityServer.Services;
+using Npgsql;
 
 
 // Configure Serilog
@@ -150,15 +151,21 @@ try
         });
 
     // Configure OpenTelemetry
+    var isIdentityContainer = string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.OrdinalIgnoreCase);
+    var identityOtlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT")
+        ?? builder.Configuration["OpenTelemetry:OtlpEndpoint"]
+        ?? (isIdentityContainer ? "http://otel-collector:4317" : "http://localhost:4317");
+
     builder.Services.AddOpenTelemetry()
         .ConfigureResource(resource => resource
             .AddService("NextGen.Identity.Api"))
         .WithTracing(tracing => tracing
-            .AddAspNetCoreInstrumentation()
-            .AddHttpClientInstrumentation()
+            .AddAspNetCoreInstrumentation(opts => opts.RecordException = true)
+            .AddHttpClientInstrumentation(opts => opts.RecordException = true)
+            .AddNpgsql()
             .AddOtlpExporter(options =>
             {
-                options.Endpoint = new Uri("http://localhost:4317");
+                options.Endpoint = new Uri(identityOtlpEndpoint);
             }))
         .WithMetrics(metrics => metrics
             .AddAspNetCoreInstrumentation()

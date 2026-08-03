@@ -16,6 +16,7 @@ import ChatsPage from './pages/ChatsPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
 import GroupsPage from './pages/GroupsPage';
 import ConversationDetailPage from './pages/ConversationDetailPage';
+import PipelineFailuresPage from './pages/PipelineFailuresPage';
 import { useStore } from './store/useStore';
 import { fetchChats } from './services/conversation.service';
 import ToastContainer from './components/ToastContainer';
@@ -249,7 +250,8 @@ function AppContent({
                         <Routes>
                             {/* Dashboard Landing Page */}
                             <Route path="/" element={<DashboardPage />} />
-
+                            
+                            {/* Error Queue */}
                             {/* Conversation Routes */}
                             <Route path="/conversations/chats" element={<ChatsPage />} />
                             <Route path="/conversations/announcements" element={<AnnouncementsPage />} />
@@ -259,6 +261,7 @@ function AppContent({
                             <Route path="/admin/chats" element={<ChatsAdminPage />} />
                             <Route path="/admin/announcements" element={<AnnouncementsAdminPage />} />
                             <Route path="/admin/groups" element={<GroupsAdminPage />} />
+                            <Route path="/admin/pipeline-failures" element={<PipelineFailuresPage />} />
 
                             {/* Conversation Detail Page */}
                             <Route path="/admin/conversation/:jid" element={<ConversationDetailPage />} />

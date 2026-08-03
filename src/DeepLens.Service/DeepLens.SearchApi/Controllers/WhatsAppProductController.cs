@@ -137,7 +137,7 @@ public class WhatsAppProductController : ControllerBase
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.vendor_listings SET product_id = @ProductAId, updated_at = NOW() WHERE product_id = @ProductBId", new { ProductAId = request.ProductAId, ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct));
 
             // 5. Mark Source Product as deleted
-            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products SET is_deleted = true, created_at = NOW() WHERE id = @ProductBId", new { ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct));
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products SET is_deleted = true, updated_at = NOW() WHERE id = @ProductBId", new { ProductBId = request.ProductBId }, transaction: trans, cancellationToken: ct));
 
             // 6. Update the specific candidate pair to merged
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.product_merge_candidates 
@@ -326,6 +326,59 @@ public class WhatsAppProductController : ControllerBase
     }
 
     /// <summary>
+    /// POST /api/v1/whatsapp/products/retry-enrichment/bulk
+    /// Retries LLM enrichment for multiple groups or all failed groups
+    /// </summary>
+    [HttpPost("retry-enrichment/bulk")]
+    public async Task<IActionResult> RetryEnrichmentBulk([FromBody] BulkRetryRequest? request, CancellationToken ct)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        IEnumerable<dynamic> groups;
+
+        if (request?.GroupIds != null && request.GroupIds.Any())
+        {
+            groups = await conn.QueryAsync<dynamic>(
+                new CommandDefinition("SELECT group_id, deeplens_product_id, description FROM wa.message_groups WHERE group_id = ANY(@GroupIds) AND status = 'enrichment_failed'",
+                new { GroupIds = request.GroupIds.ToArray() }, cancellationToken: ct)
+            );
+        }
+        else
+        {
+            groups = await conn.QueryAsync<dynamic>(
+                new CommandDefinition("SELECT group_id, deeplens_product_id, description FROM wa.message_groups WHERE status = 'enrichment_failed'",
+                cancellationToken: ct)
+            );
+        }
+
+        int count = 0;
+        foreach (var group in groups)
+        {
+            var enrichEvt = new WhatsAppGroupProductEnrichmentEvent
+            {
+                EventId = Guid.NewGuid(),
+                GroupId = group.group_id,
+                ProductId = (Guid)group.deeplens_product_id,
+                Description = group.description ?? "",
+                Timestamp = DateTime.UtcNow
+            };
+
+            await _producer.ProduceAsync(KafkaTopics.ProductEnrichmentRequested, new Message<string, string>
+            {
+                Key = group.group_id,
+                Value = JsonSerializer.Serialize(enrichEvt, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+            }, ct);
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE wa.message_groups SET status = 'product_created', updated_at = NOW() WHERE group_id = @GroupId", new { GroupId = group.group_id }, cancellationToken: ct));
+            
+            count++;
+        }
+
+        return Ok(new { success = true, count });
+    }
+
+    /// <summary>
     /// POST /api/v1/whatsapp/products/reevaluate
     /// Re-evaluates multiple products using LLM by republishing the enrichment event
     /// </summary>
@@ -466,4 +519,4 @@ public record MergeProductsRequest(
 );
 public record DismissMergeRequest([property: JsonPropertyName("candidateId")] Guid CandidateId);
 public record ReevaluateProductsRequest([property: JsonPropertyName("productIds")] List<Guid> ProductIds);
-
+public record BulkRetryRequest([property: JsonPropertyName("groupIds")] List<string>? GroupIds);

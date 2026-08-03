@@ -205,6 +205,10 @@ class ProductService {
     return productMgmtApiClient.post<any>(`/api/v1/whatsapp/products/retry-enrichment/${encodeURIComponent(groupId)}`);
   }
 
+  async retryEnrichmentBulk(groupIds?: string[]): Promise<{ count: number }> {
+    return productMgmtApiClient.post<{ count: number }>(`/api/v1/whatsapp/products/retry-enrichment/bulk`, { groupIds });
+  }
+
   async changeCategory(productId: string, categorySlug: string): Promise<any> {
     return productMgmtApiClient.post<any>(`/api/v1/products/${productId}/category`, { categorySlug });
   }

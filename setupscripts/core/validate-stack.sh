@@ -1,70 +1,128 @@
-#!/bin/bash
- 
-# --- DeepLens Infrastructure Validator ---
-# Verifies container health and network responsiveness
- 
-# Colors
+#!/usr/bin/env bash
+# validate-stack.sh
+# Validates core infrastructure & observability stack (Docker containers, ports, OTEL pipeline)
+
+set -euo pipefail
+
+# ANSI Color Codes
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
- 
-echo -e "${CYAN}==================================================${NC}"
-echo -e "${CYAN}    DeepLens Infrastructure Health Validator      ${NC}"
-echo -e "${CYAN}==================================================${NC}"
- 
-# 1. Container Status Check
-echo -e "\n${YELLOW}[1/3] Checking Container States...${NC}"
-SERVICES=("krikanpg" "pgadmin" "kafka-prod" "kafka-test" "kafka-ui" "minio" "redis" "qdrant" "influxdb" "grafana" "prometheus" "loki" "jaeger" "ollama-gpu" "open-webui" "otel-collector" "gateway")
- 
-for service in "${SERVICES[@]}"; do
-    STATE=$(docker inspect -f '{{.State.Status}}' "$service" 2>/dev/null)
-    if [ "$STATE" == "running" ]; then
-        echo -e "  [${GREEN}PASS${NC}] $service is $STATE"
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[FAIL]${NC} $1"
+}
+
+FAILED_CHECKS=0
+
+echo "=================================================="
+echo "      DeepLens Stack Validation & Health Check     "
+echo "=================================================="
+
+# 1. Check Docker Daemon
+log_info "1. Checking Docker Daemon..."
+if docker info >/dev/null 2>&1; then
+    log_success "Docker daemon is running."
+else
+    log_error "Docker daemon is not running or current user lacks permissions."
+    exit 1
+fi
+
+# 2. Check Docker Container Health
+log_info "2. Checking Observability Stack Containers..."
+
+CONTAINERS=("otel-collector" "prometheus" "jaeger" "grafana")
+
+for c in "${CONTAINERS[@]}"; do
+    CID=$(docker ps --filter "name=${c}" --format "{{.ID}} {{.Names}} {{.Status}}" | head -n 1)
+    if [ -n "$CID" ]; then
+        log_success "Container matching '$c' is running: $CID"
     else
-        echo -e "  [${RED}FAIL${NC}] $service is ${STATE:-NOT FOUND}"
+        log_warn "Container matching '$c' was not found in 'docker ps'."
+        ((FAILED_CHECKS++))
     fi
 done
- 
-# 2. Port & Network Responsiveness
-echo -e "\n${YELLOW}[2/3] Checking Service Responsiveness (HTTP/TCP)...${NC}"
- 
-check_http() {
-    NAME=$1
-    URL=$2
-    CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
-    if [[ "$CODE" =~ ^(200|301|302|401)$ ]]; then
-        echo -e "  [${GREEN}OK${NC}] $NAME responded with HTTP $CODE"
-    else
-        echo -e "  [${RED}ERR${NC}] $NAME failed (HTTP $CODE)"
-    fi
-}
- 
+
+# 3. Check Port Readiness
+log_info "3. Verifying Port Readiness..."
+
 check_port() {
-    NAME=$1
-    PORT=$2
-    (echo > /dev/tcp/localhost/$PORT) >/dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        echo -e "  [${GREEN}OK${NC}] $NAME is listening on port $PORT"
+    local name="$1"
+    local host="$2"
+    local port="$3"
+
+    if timeout 2 bash -c "</dev/tcp/${host}/${port}" 2>/dev/null; then
+        log_success "Port $port ($name) is READY on $host."
     else
-        echo -e "  [${RED}ERR${NC}] $NAME port $PORT is unreachable"
+        log_error "Port $port ($name) on $host is NOT responding."
+        ((FAILED_CHECKS++))
     fi
 }
- 
-check_http "Gateway Console" "http://localhost/"
-check_http "Grafana" "http://localhost:3000/api/health"
-check_http "MinIO API" "http://localhost:9000/minio/health/live"
-check_http "InfluxDB" "http://localhost:8086/health"
-check_http "Prometheus" "http://localhost:9090/-/healthy"
-check_port "PostgreSQL" 5432
-check_port "Redis" 6379
-check_port "Kafka" 9092
- 
-# 3. Gateway Routing Check
-echo -e "\n${YELLOW}[3/3] Checking Gateway Proxy Routing...${NC}"
-check_http "Proxy -> Grafana" "http://localhost/grafana/"
-check_http "Proxy -> MinIO" "http://localhost/minio/"
-check_http "Proxy -> pgAdmin" "http://localhost/pgadmin/"
- 
-echo -e "\n${CYAN}Validation Complete.${NC}"
+
+check_port "OTEL Collector OTLP gRPC" "127.0.0.1" 4317
+check_port "OTEL Collector OTLP HTTP" "127.0.0.1" 4318
+check_port "Prometheus Metrics Server" "127.0.0.1" 9090
+check_port "Grafana Dashboard UI" "127.0.0.1" 3000
+check_port "Jaeger Tracing UI" "127.0.0.1" 16686
+
+# 4. OTEL & Observability Pipeline Validation
+log_info "4. Validating Observability Pipeline Endpoints..."
+
+# Check OTEL HTTP receiver /v1/traces POST ingestion
+OTEL_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:4318/v1/traces -H "Content-Type: application/json" -d "{}" || echo "000")
+if [ "$OTEL_HTTP_CODE" -eq 200 ]; then
+    log_success "OTEL Pipeline (Port 4318 /v1/traces OTLP ingestion) is operational (HTTP $OTEL_HTTP_CODE)."
+else
+    log_error "OTEL Pipeline OTLP ingestion test failed (HTTP status: $OTEL_HTTP_CODE)."
+    ((FAILED_CHECKS++))
+fi
+
+# Check Prometheus health endpoint
+PROM_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:9090/-/healthy || echo "000")
+if [ "$PROM_HTTP_CODE" -eq 200 ]; then
+    log_success "Prometheus health check passed (HTTP $PROM_HTTP_CODE)."
+else
+    log_error "Prometheus health check failed (HTTP status: $PROM_HTTP_CODE)."
+    ((FAILED_CHECKS++))
+fi
+
+# Check Grafana health endpoint
+GRAF_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/health || echo "000")
+if [ "$GRAF_HTTP_CODE" -eq 200 ]; then
+    log_success "Grafana API health check passed (HTTP $GRAF_HTTP_CODE)."
+else
+    log_error "Grafana API health check failed (HTTP status: $GRAF_HTTP_CODE)."
+    ((FAILED_CHECKS++))
+fi
+
+# Check Jaeger UI endpoint
+JAEGER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:16686/api/services || echo "000")
+if [ "$JAEGER_HTTP_CODE" -eq 200 ]; then
+    log_success "Jaeger API health check passed (HTTP $JAEGER_HTTP_CODE)."
+else
+    log_error "Jaeger API health check failed (HTTP status: $JAEGER_HTTP_CODE)."
+    ((FAILED_CHECKS++))
+fi
+
+echo "=================================================="
+if [ "$FAILED_CHECKS" -eq 0 ]; then
+    log_success "ALL OBSERVABILITY & STACK VALIDATION CHECKS PASSED!"
+    exit 0
+else
+    log_error "$FAILED_CHECKS validation check(s) failed."
+    exit 1
+fi

@@ -101,7 +101,7 @@ namespace DeepLens.WorkerService.Workers
                 FROM scraper_queue j
                 JOIN competitor_watchlist w ON j.watchlist_id = w.id
                 WHERE j.status = 'pending' 
-                  AND w.is_active = true
+                  AND (w.is_active = true OR j.job_type = 'manual')
                   AND (j.next_run_at IS NULL OR j.next_run_at <= NOW())
                 ORDER BY j.priority DESC, j.created_at ASC
                 LIMIT 1

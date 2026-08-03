@@ -160,9 +160,15 @@ public class FeatureExtractionWorker : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var storageService = scope.ServiceProvider.GetRequiredService<IStorageService>();
         using var stream = await storageService.GetFileAsync(imagePath);
-        using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream, cancellationToken);
-        return memoryStream.ToArray();
+        var bytes = new byte[stream.Length];
+        int offset = 0;
+        while (offset < bytes.Length)
+        {
+            int read = await stream.ReadAsync(bytes, offset, bytes.Length - offset, cancellationToken);
+            if (read == 0) break;
+            offset += read;
+        }
+        return bytes;
     }
 
     private async Task<ExtractFeaturesResponse?> CallFeatureExtractionService(byte[] imageBytes, string imageId, string imagePath, CancellationToken cancellationToken)

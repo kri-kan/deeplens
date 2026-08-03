@@ -210,7 +210,7 @@ export default function InstagramExplorer() {
               <Appbar.BackAction onPress={() => { setSelectedProfile(null); }} />
               <Appbar.Content title={`@${selectedProfile}`} titleStyle={styles.bold} />
               <Appbar.Action icon="cloud-sync" onPress={() => router.push('/utilities/instagram-scraper')} />
-              <Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/story-queue')} />
+              <Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/queue')} />
             </>
           )}
         </Appbar.Header>

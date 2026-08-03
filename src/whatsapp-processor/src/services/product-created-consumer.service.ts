@@ -108,6 +108,16 @@ export class ProductCreatedConsumerService {
                 [productId, listingId || null, category || null, subCategory || null, groupId]
             );
 
+            // Propagate source_group_id to public.vendor_listings for seamless navigation
+            if (productId || listingId) {
+                await client.query(
+                    `UPDATE public.vendor_listings 
+                     SET source_group_id = $1, updated_at = NOW()
+                     WHERE product_id = $2 OR id = $3`,
+                    [groupId, productId || null, listingId || null]
+                );
+            }
+
             // Log to wa.group_audit_log
             await client.query(
                 `INSERT INTO wa.group_audit_log (group_id, event, actor, old_value, new_value, occurred_at)

@@ -18,6 +18,7 @@ import { waProcessorService, Message, ConversationStats } from '@/services/wa-pr
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { format, isSameDay } from 'date-fns';
 import { ImagePreviewModal } from '@/components/ui/ImagePreviewModal';
+import { useIntelligentChatTimeline } from '@/hooks/useIntelligentChatTimeline';
 
 type MediaGroup = {
   type: 'media_group';
@@ -30,7 +31,21 @@ type MediaGroup = {
 
 export default function FullMessageBrowser() {
   const theme = useTheme();
-  const { jid, name, highlightGroupId, initialZoningMode } = useLocalSearchParams<{ jid: string, name?: string, highlightGroupId?: string, initialZoningMode?: string }>();
+  const { 
+    jid, 
+    name, 
+    highlightGroupId, 
+    initialZoningMode,
+    targetMessageId,
+    targetTimestamp 
+  } = useLocalSearchParams<{ 
+    jid: string, 
+    name?: string, 
+    highlightGroupId?: string, 
+    initialZoningMode?: string,
+    targetMessageId?: string,
+    targetTimestamp?: string
+  }>();
   const [pulseActive, setPulseActive] = useState(true);
 
   useEffect(() => {
@@ -44,19 +59,34 @@ export default function FullMessageBrowser() {
   }, [highlightGroupId]);
   const router = useRouter();
   
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [stats, setStats] = useState<ConversationStats | null>(null);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [zoningMode, setZoningMode] = useState(initialZoningMode === 'true');
   const [searchInput, setSearchInput] = useState('');
   const [activeSearchQuery, setActiveSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+
+  const {
+    messages,
+    loading: timelineLoading,
+    loadingOlder,
+    loadingNewer,
+    isLatestLoaded,
+    loadOlder,
+    loadNewer,
+    jumpToLatest,
+    refresh: refreshTimeline
+  } = useIntelligentChatTimeline({
+    jid: jid ? decodeURIComponent(jid) : null,
+    targetMessageId,
+    targetTimestamp: targetTimestamp ? parseInt(targetTimestamp) : undefined,
+    highlightGroupId,
+    searchQuery: activeSearchQuery,
+  });
+
+  const [stats, setStats] = useState<ConversationStats | null>(null);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [zoningMode, setZoningMode] = useState(initialZoningMode === 'true');
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [offset, setOffset] = useState(0);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<{ urls: string[], index: number } | null>(null);
   
@@ -66,103 +96,31 @@ export default function FullMessageBrowser() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   
-  const PAGE_SIZE = 50;
   const flatListRef = useRef<FlatList>(null);
 
-  const fetchData = useCallback(async (isInitial = true, showSpinner = true) => {
+  const fetchMeta = useCallback(async () => {
     if (!jid) return;
-    const currentOffset = isInitial ? 0 : offset;
-    
-    if (isInitial) {
-      if (showSpinner) setLoading(true);
-    } else {
-      setLoadingMore(true);
-    }
-
     try {
-      const cleanJid = jid; 
-      
-      const [statsData, msgData, groupsData] = await Promise.all([
-        isInitial ? waProcessorService.fetchConversationStats(cleanJid) : Promise.resolve(stats),
-        waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, currentOffset, isInitial ? (highlightGroupId || undefined) : undefined, activeSearchQuery),
+      const cleanJid = decodeURIComponent(jid);
+      const [statsData, groupsData] = await Promise.all([
+        waProcessorService.fetchConversationStats(cleanJid),
         waProcessorService.fetchGroupsReview(cleanJid)
       ]);
-      
-      if (isInitial) {
-        setStats(statsData);
-        let allMessages = [...msgData.messages];
-        let nextOffset = PAGE_SIZE;
-        let targetFound = allMessages.some(m => m.groupId === highlightGroupId);
-        let localHasMore = msgData.messages.length >= PAGE_SIZE;
-        const MAX_PRE_LOAD_LIMIT = 500;
-
-        while (highlightGroupId && !targetFound && localHasMore && allMessages.length < MAX_PRE_LOAD_LIMIT) {
-          const nextBatch = await waProcessorService.fetchMessages(cleanJid, PAGE_SIZE, nextOffset);
-          if (nextBatch.messages.length === 0) {
-            break;
-          }
-          allMessages = [...nextBatch.messages, ...allMessages];
-          targetFound = nextBatch.messages.some(m => m.groupId === highlightGroupId);
-          localHasMore = nextBatch.messages.length >= PAGE_SIZE;
-          nextOffset += PAGE_SIZE;
-        }
-
-        // Deduplicate messages to prevent duplicate keys in FlatList
-        const seenIds = new Set<string>();
-        const uniqueMessages: Message[] = [];
-        for (const m of allMessages) {
-          if (!seenIds.has(m.messageId)) {
-            seenIds.add(m.messageId);
-            uniqueMessages.push(m);
-          }
-        }
-
-        setMessages([...uniqueMessages].reverse());
-        setGroups(groupsData);
-        setOffset(nextOffset);
-        setHasMore(localHasMore);
-      } else {
-        // Deduplicate new messages against existing messages by using functional update to get the non-stale state of messages
-        setGroups(groupsData);
-        setOffset(prev => prev + PAGE_SIZE);
-        setHasMore(msgData.messages.length >= PAGE_SIZE);
-        setMessages(prev => {
-          const seenIds = new Set<string>(prev.map(m => m.messageId));
-          const newUniqueMessages: Message[] = [];
-          for (const m of msgData.messages) {
-            if (!seenIds.has(m.messageId)) {
-              seenIds.add(m.messageId);
-              newUniqueMessages.push(m);
-            }
-          }
-          return [...prev, ...([...newUniqueMessages].reverse())];
-        });
-      }
+      setStats(statsData);
+      setGroups(groupsData);
     } catch (err: any) {
-      console.error('Fetch error:', err);
-      Alert.alert('Error', err?.message ?? 'Failed to fetch messages');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
+      console.error('Fetch meta error:', err);
     }
-  }, [jid, offset, stats, highlightGroupId, activeSearchQuery]);
+  }, [jid]);
 
   useEffect(() => {
-    fetchData(true);
-  }, [jid, activeSearchQuery]);
+    fetchMeta();
+  }, [fetchMeta]);
 
-
-
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchData(true, false);
-  };
-
-  const handleLoadMore = () => {
-    if (hasMore && !loadingMore && !loading) {
-      fetchData(false);
-    }
+    await Promise.all([refreshTimeline(), fetchMeta()]);
+    setRefreshing(false);
   };
 
   const groupsMap = useMemo(() => {
@@ -211,7 +169,7 @@ export default function FullMessageBrowser() {
       setRefreshing(true);
       await waProcessorService.toggleGroupProcessProduct(groupId, !currentVal);
       Alert.alert('Success', `Process flag toggled to ${!currentVal ? 'ON' : 'OFF'}`);
-      await fetchData(true, false);
+      await onRefresh();
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to toggle flag');
       setRefreshing(false);
@@ -224,7 +182,7 @@ export default function FullMessageBrowser() {
       setRefreshing(true);
       await waProcessorService.ignoreGroup(groupId, !isIgnored);
       Alert.alert('Success', `Group is now ${!isIgnored ? 'ignored' : 'active'}`);
-      await fetchData(true, false);
+      await onRefresh();
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to toggle ignore');
       setRefreshing(false);
@@ -236,7 +194,7 @@ export default function FullMessageBrowser() {
       setRefreshing(true);
       await waProcessorService.forcePublishGroup(groupId);
       Alert.alert('Success', 'Force publish triggered. The product will be created shortly.');
-      await fetchData(true, false);
+      await onRefresh();
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to force publish');
       setRefreshing(false);
@@ -269,7 +227,7 @@ export default function FullMessageBrowser() {
         setRefreshing(true);
         await waProcessorService.splitGroupZone(groupId, msgId);
         Alert.alert('Success', 'Group split successfully');
-        await fetchData(true, false);
+        await onRefresh();
       } catch (err: any) {
         Alert.alert('Error', err?.message ?? 'Failed to split group');
         setRefreshing(false);
@@ -312,7 +270,7 @@ export default function FullMessageBrowser() {
       setRefreshing(true);
       await waProcessorService.reassignGroupMessage(groupId, msgId, targetGroupId);
       Alert.alert('Success', 'Message reassigned successfully');
-      await fetchData(true, false);
+      await onRefresh();
     } catch (err: any) {
       Alert.alert('Error', err?.message ?? 'Failed to move message');
       setRefreshing(false);
@@ -329,7 +287,7 @@ export default function FullMessageBrowser() {
         setRefreshing(true);
         await waProcessorService.mergeGroupZones(groupId, prevGroup.groupId);
         Alert.alert('Success', 'Groups merged successfully');
-        await fetchData(true, false);
+        await onRefresh();
       } catch (err: any) {
         Alert.alert('Error', err?.message ?? 'Failed to merge groups');
         setRefreshing(false);
@@ -395,31 +353,82 @@ export default function FullMessageBrowser() {
     return result;
   }, [messages]);
 
-  const hasScrolledRef = useRef(false);
+  const matchesGroupId = (itemGroupId?: string, targetGroupId?: string, itemTs?: number) => {
+    if (!targetGroupId) return false;
+    if (itemGroupId && (itemGroupId === targetGroupId || itemGroupId.endsWith(targetGroupId) || targetGroupId.endsWith(itemGroupId) || itemGroupId.includes(targetGroupId) || targetGroupId.includes(itemGroupId))) {
+      return true;
+    }
+    const tsMatch = targetGroupId.match(/_(\d{9,11})$/);
+    if (tsMatch && itemTs) {
+      const targetTs = parseInt(tsMatch[1], 10);
+      if (Math.abs(itemTs - targetTs) <= 30) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const scrolledToTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (loading || messages.length === 0 || !highlightGroupId || hasScrolledRef.current) return;
+    if (timelineLoading || messages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
+    const targetKey = (highlightGroupId || '') + '_' + (targetMessageId || '');
+    if (scrolledToTargetRef.current === targetKey) return;
 
-    if (!highlightGroupId || groupedMessages.length === 0) return;
-    const targetIndex = groupedMessages.findIndex(item => item.groupId === highlightGroupId);
-    console.log("[DEBUG] Scroll Effect triggered. highlightGroupId:", highlightGroupId, "targetIndex:", targetIndex, "totalItems:", groupedMessages.length);
-    if (targetIndex !== -1 && !hasScrolledRef.current) {
+    const targetIndex = groupedMessages.findIndex(item => {
+      if (targetMessageId && 'messageId' in item && item.messageId === targetMessageId) return true;
+      if (highlightGroupId && matchesGroupId(item.groupId, highlightGroupId, item.timestamp)) return true;
+      if ('messages' in item && Array.isArray(item.messages)) {
+        return item.messages.some((m: any) => 
+          (targetMessageId && m.messageId === targetMessageId) ||
+          (highlightGroupId && matchesGroupId(m.groupId, highlightGroupId, m.timestamp))
+        );
+      }
+      return false;
+    });
+
+    if (targetIndex !== -1) {
       const scrollTimer = setTimeout(() => {
         try {
-          console.log("[DEBUG] Executing scrollToIndex to targetIndex:", targetIndex);
           flatListRef.current?.scrollToIndex({
             index: targetIndex,
-            animated: false,
+            animated: true,
             viewPosition: 0.5,
           });
-          hasScrolledRef.current = true;
+          scrolledToTargetRef.current = targetKey;
         } catch (e) {
-          console.warn("[DEBUG] Scroll to index failed", e);
+          console.warn("Scroll to index failed", e);
         }
-      }, 500); // reduced timeout
+      }, 200);
       return () => clearTimeout(scrollTimer);
     }
-  }, [loading, messages, highlightGroupId, groupedMessages]);
+  }, [timelineLoading, messages, highlightGroupId, targetMessageId, groupedMessages]);
+
+  useEffect(() => {
+    if (highlightGroupId || targetMessageId) {
+      setPulseActive(true);
+      const timer = setTimeout(() => {
+        setPulseActive(false);
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightGroupId, targetMessageId]);
+
+  const isItemHighlighted = (groupId?: string, msgId?: string, timestamp?: number) => {
+    if (!pulseActive) return false;
+    if (targetMessageId && msgId === targetMessageId) return true;
+    if (highlightGroupId && matchesGroupId(groupId, highlightGroupId, timestamp)) return true;
+    return false;
+  };
+
+  const getHighlightedStyle = (groupId?: string, msgId?: string, timestamp?: number) => {
+    if (!isItemHighlighted(groupId, msgId, timestamp)) return null;
+    return {
+      borderColor: '#F59E0B',
+      borderWidth: 2.5,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)' as any,
+    };
+  };
 
   const renderZoneCard = (groupId: string) => {
     const group = groupsMap.get(groupId);
@@ -430,15 +439,11 @@ export default function FullMessageBrowser() {
     const formattedShipping = group.detectedShipping ? `(${group.detectedShipping} shipping)` : '';
     const hasProduct = group.status === 'product_created';
 
-    const isHighlighted = highlightGroupId && group.groupId === highlightGroupId;
-    const highlightedStyle = isHighlighted && pulseActive ? {
-      borderColor: '#E0A900',
-      borderWidth: 2,
-      backgroundColor: 'rgba(224, 169, 0, 0.08)' as any,
-    } : null;
+    const highlightedStyle = getHighlightedStyle(group.groupId, undefined, group.timestamp);
+    const isHighlighted = !!highlightedStyle;
 
     return (
-      <Surface style={[styles.zoneHeaderCard, highlightedStyle]} elevation={1}>
+      <Surface style={[styles.zoneHeaderCard, highlightedStyle]} elevation={isHighlighted ? 4 : 1}>
         <View style={styles.zoneCardHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
             <Chip 
@@ -448,6 +453,16 @@ export default function FullMessageBrowser() {
             >
               {statusConfig.label}
             </Chip>
+            {isHighlighted && (
+              <Chip 
+                style={{ backgroundColor: '#F59E0B', height: 24, justifyContent: 'center' }} 
+                textStyle={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}
+                compact
+                icon="target"
+              >
+                TARGET PRODUCT
+              </Chip>
+            )}
             <Text style={styles.zoneCardTitle} numberOfLines={1}>Zone {group.groupId.substring(0, 8)}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -573,14 +588,7 @@ export default function FullMessageBrowser() {
     if (isGroup) {
       const group = item as MediaGroup;
       return (
-        <View
-          onLayout={(highlightGroupId && group.groupId === highlightGroupId) ? (e) => {
-            if (!hasScrolledRef.current) {
-              flatListRef.current?.scrollToOffset({ offset: e.nativeEvent.layout.y, animated: true });
-              hasScrolledRef.current = true;
-            }
-          } : undefined}
-        >
+        <View>
           {showGroupDivider && group.groupId && (
             zoningMode ? renderZoneCard(group.groupId) : (
               <View style={styles.groupDivider}>
@@ -605,16 +613,9 @@ export default function FullMessageBrowser() {
                 styles.bubble, 
                 isFromMe ? styles.myBubble : styles.theirBubble,
                 { padding: 4 },
-                (() => {
-                  const isGroupHighlighted = highlightGroupId && group.groupId === highlightGroupId;
-                  return isGroupHighlighted && pulseActive ? {
-                    borderColor: '#E0A900',
-                    borderWidth: 1.5,
-                    backgroundColor: 'rgba(224, 169, 0, 0.04)' as any,
-                  } : null;
-                })()
+                getHighlightedStyle(group.groupId, undefined, group.timestamp)
               ]} 
-              elevation={1}
+              elevation={isItemHighlighted(group.groupId, undefined, group.timestamp) ? 3 : 1}
             >
               {group.groupId && <Text style={styles.groupIdLabel}>{group.groupId.substring(0, 8)}</Text>}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', maxWidth: 250, justifyContent: 'center' }}>
@@ -653,9 +654,7 @@ export default function FullMessageBrowser() {
     const text = cleanMessageText(msg);
 
     return (
-      <View
-
-      >
+      <View>
         {showGroupDivider && msg.groupId && (
           zoningMode ? renderZoneCard(msg.groupId) : (
             <View style={styles.groupDivider}>
@@ -691,16 +690,9 @@ export default function FullMessageBrowser() {
                 styles.bubble, 
                 isFromMe ? styles.myBubble : styles.theirBubble,
                 zoningMode && hoveredMessageId === msg.messageId && styles.selectedBubble,
-                (() => {
-                  const isMsgHighlighted = highlightGroupId && msg.groupId === highlightGroupId;
-                  return isMsgHighlighted && pulseActive ? {
-                    borderColor: '#E0A900',
-                    borderWidth: 1.5,
-                    backgroundColor: 'rgba(224, 169, 0, 0.04)' as any,
-                  } : null;
-                })()
+                getHighlightedStyle(msg.groupId, msg.messageId, msg.timestamp)
               ]} 
-              elevation={1}
+              elevation={isItemHighlighted(msg.groupId, msg.messageId, msg.timestamp) ? 3 : 1}
             >
               {msg.groupId && (
                 <Text style={styles.groupIdLabel}>{msg.groupId.substring(0, 8)}</Text>
@@ -814,39 +806,68 @@ export default function FullMessageBrowser() {
           resizeMode="repeat"
         />
         
-        {loading ? (
+        {timelineLoading ? (
           <ActivityIndicator style={{ flex: 1 }} color="#25D366" />
         ) : (
-          <FlatList
-            ref={flatListRef}
-
-            data={groupedMessages}
-            renderItem={renderMessage}
-            keyExtractor={item => 'type' in item ? item.id : item.messageId}
-            contentContainerStyle={styles.listContent}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
-            inverted
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: 10 }} /> : null}
-            initialNumToRender={20}
-            maxToRenderPerBatch={10}
-            windowSize={11}
-            removeClippedSubviews={Platform.OS === 'android'}
-            
-            onScrollToIndexFailed={(info) => {
-              console.log("[DEBUG] onScrollToIndexFailed triggered. Target:", info.index, "Average Length:", info.averageItemLength);
-              flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-              setTimeout(() => {
-                try {
-                  flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
-                  hasScrolledRef.current = true;
-                } catch (e) {
-                  console.warn("[DEBUG] Retry scroll failed", e);
+          <View style={{ flex: 1 }}>
+            <FlatList
+              ref={flatListRef}
+              data={groupedMessages}
+              renderItem={renderMessage}
+              keyExtractor={item => 'type' in item ? item.id : item.messageId}
+              contentContainerStyle={styles.listContent}
+              onEndReached={loadOlder}
+              onEndReachedThreshold={0.4}
+              inverted
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              ListFooterComponent={loadingOlder ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
+              ListHeaderComponent={loadingNewer ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
+              initialNumToRender={(highlightGroupId || targetMessageId) && groupedMessages.length > 0 ? Math.max(100, groupedMessages.length) : 20}
+              maxToRenderPerBatch={20}
+              windowSize={11}
+              removeClippedSubviews={Platform.OS === 'android'}
+              onScroll={(e) => {
+                const y = e.nativeEvent.contentOffset.y;
+                if (y > 200 || !isLatestLoaded) {
+                  setShowScrollToBottom(true);
+                } else {
+                  setShowScrollToBottom(false);
                 }
-              }, 250);
-            }}
-          />
+                if (y < 50 && !isLatestLoaded && !loadingNewer) {
+                  loadNewer();
+                }
+              }}
+              onScrollToIndexFailed={(info) => {
+                console.log("[DEBUG] onScrollToIndexFailed triggered. Target:", info.index, "Average Length:", info.averageItemLength);
+                flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+                setTimeout(() => {
+                  try {
+                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+                  } catch (e) {
+                    console.warn("[DEBUG] Retry scroll failed", e);
+                  }
+                }, 250);
+              }}
+            />
+
+            {showScrollToBottom && (
+              <Surface style={styles.scrollToBottomFab} elevation={4}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={async () => {
+                    if (!isLatestLoaded) {
+                      await jumpToLatest();
+                    }
+                    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                  }}
+                  style={styles.fabInner}
+                >
+                  <IconButton icon="chevron-down" iconColor="#fff" size={24} style={{ margin: 0 }} />
+                  {!isLatestLoaded && <Text style={styles.fabText}>Latest</Text>}
+                </TouchableOpacity>
+              </Surface>
+            )}
+          </View>
         )}
       </View>
 
@@ -1143,5 +1164,25 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     marginTop: 2,
+  },
+  scrollToBottomFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    backgroundColor: '#075E54',
+    borderRadius: 28,
+    overflow: 'hidden',
+  },
+  fabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  fabText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginRight: 6,
   },
 });

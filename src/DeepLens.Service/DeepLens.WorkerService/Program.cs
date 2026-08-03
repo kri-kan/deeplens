@@ -6,8 +6,12 @@ using DeepLens.Application;
 using DeepLens.Infrastructure;
 using Minio;
 using Confluent.Kafka;
+using DeepLens.Shared.Telemetry;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Configure OpenTelemetry Tracing & Metrics
+builder.Services.AddDeepLensTelemetry(builder.Configuration, "DeepLens.WorkerService");
 
 // External Services
 builder.Services.AddMemoryCache();

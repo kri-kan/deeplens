@@ -175,53 +175,48 @@ public class WhatsAppGroupWorker : BackgroundService
         string category = "Others";
         bool matched = false;
 
-        // Priority-based check: Kids -> Lehanga -> Saree -> Dress -> Others
-        var priorityOrder = new[] { "Kids", "Lehanga", "Saree", "Dress", "Others" };
-        foreach (var categoryName in priorityOrder)
+        string lowerDesc = rawDesc.ToLower();
+        if (lowerDesc.Contains("kid") || lowerDesc.Contains("girl") || lowerDesc.Contains("boy") || lowerDesc.Contains("baby") || lowerDesc.Contains("child"))
         {
-            var dbCat = dbCategories.FirstOrDefault(c => c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
-            if (dbCat.Keywords == null || dbCat.Keywords.Length == 0) continue;
+            category = "Kids";
+            matched = true;
+        }
+        else if (lowerDesc.Contains("lehenga") || lowerDesc.Contains("lehanga") || lowerDesc.Contains("choli") || lowerDesc.Contains("skirt"))
+        {
+            category = "Lehanga";
+            matched = true;
+        }
+        else if (lowerDesc.Contains("saree") || lowerDesc.Contains("sari") || lowerDesc.Contains("pallu"))
+        {
+            category = "Saree";
+            matched = true;
+        }
+        else if (lowerDesc.Contains("kurti") || lowerDesc.Contains("dress") || lowerDesc.Contains("gown") || lowerDesc.Contains("top") || lowerDesc.Contains("maxi") || lowerDesc.Contains("suit") || lowerDesc.Contains("kaftan") || lowerDesc.Contains("peplum"))
+        {
+            category = "Dress";
+            matched = true;
+        }
 
-            foreach (var token in tokens)
-            {
-                foreach (var kw in dbCat.Keywords)
-                {
-                    string kwNorm = kw.Trim().ToLowerInvariant();
-                    int dist = LevenshteinDistance(token, kwNorm);
-                    
-                    // Fuzzy threshold rules:
-                    // - Length <= 4: exact match only (distance 0)
-                    // - Length <= 6: distance <= 1
-                    // - Length > 6: distance <= 2
-                    int allowedDistance = kwNorm.Length <= 4 ? 0 : (kwNorm.Length <= 6 ? 1 : 2);
-                    
-                    if (dist <= allowedDistance)
-                    {
-                        category = dbCat.Name;
-                        matched = true;
-                        break;
-                    }
-                }
-                if (matched) break;
-            }
-            if (matched) break;
+        decimal? fastPrice = null;
+        var priceMatch = Regex.Match(rawDesc, @"(?:price|rate|pp|mrp|rs\.?|₹)[\s:-]*([0-9]{3,5})", RegexOptions.IgnoreCase);
+        if (priceMatch.Success && decimal.TryParse(priceMatch.Groups[1].Value, out var parsedPrice))
+        {
+            fastPrice = parsedPrice;
         }
 
         int bestScore = matched ? 1 : 0;
 
         _logger.LogInformation(
-            "Static category detection: GroupId={GroupId} → Category={Category} (score={Score})",
-            evt.GroupId, category, bestScore);
+            "Static category detection: GroupId={GroupId} → Category={Category} (score={Score}, price={Price})",
+            evt.GroupId, category, bestScore, fastPrice);
 
-        // 2. AI fallback — only fires when no keyword matched (score == 0).
-        //    The AI result is also remapped to the same 5 buckets so it cannot
-        //    invent new categories outside our taxonomy.
         var extracted = new ExtractedProductInfo
         {
             Category = category,
             SubCategory = "General",
-            Title = "New Product",
-            IsPlusShipping = true,
+            Title = !string.IsNullOrWhiteSpace(rawDesc) ? (rawDesc.Split('\n').FirstOrDefault(s => !string.IsNullOrWhiteSpace(s) && !s.StartsWith("["))?.Trim() ?? "New Product") : "New Product",
+            Price = fastPrice,
+            IsPlusShipping = !lowerDesc.Contains("free ship") && !lowerDesc.Contains("freeship") && !lowerDesc.Contains("free shipping"),
             Fabric = "Unknown",
             StitchType = "Unknown",
             Color = "Unknown",
@@ -229,12 +224,17 @@ public class WhatsAppGroupWorker : BackgroundService
             Tags = Array.Empty<string>()
         };
 
-        if (bestScore == 0 && !string.IsNullOrWhiteSpace(rawDesc))
+        if (extracted.Title.Length > 200) extracted.Title = extracted.Title.Substring(0, 200);
+
+        if (bestScore == 0 && !string.IsNullOrWhiteSpace(rawDesc) && rawDesc.Trim().Length > 15)
         {
             try
             {
                 _logger.LogInformation(
                     "Static match missed — falling back to AI extraction for GroupId={GroupId}", evt.GroupId);
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(3));
+
                 var aiResult = await aiService.ExtractProductInfoAsync(rawDesc);
 
                 // Remap whatever the AI returned → our 5 buckets
@@ -261,7 +261,7 @@ public class WhatsAppGroupWorker : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "AI fallback failed for GroupId={GroupId}; staying with category=Others", evt.GroupId);
+                    "AI fallback timed out or failed for GroupId={GroupId}; staying with category=Others", evt.GroupId);
             }
         }
 
@@ -299,7 +299,7 @@ public class WhatsAppGroupWorker : BackgroundService
                 // Compute phashes for all images in the incoming group, then vote across
                 // products in the cache. A product needs ≥ MATCH_VOTE_THRESHOLD matching
                 // pairs to be treated as a duplicate.
-                const int MATCH_VOTE_THRESHOLD = 3;
+                const int MATCH_VOTE_THRESHOLD = 2;
                 var incomingPhashes = await ComputeIncomingPhashesAsync(evt.MediaFiles, storage, ct);
 
                 if (incomingPhashes.Count > 0)
@@ -387,7 +387,7 @@ public class WhatsAppGroupWorker : BackgroundService
                     _logger.LogInformation("Auto-merging incoming listing with existing Product {ProductId}.", productId);
 
                     // Check if listing already exists for this vendor and product
-                    var existingListing = await conn.QuerySingleOrDefaultAsync<dynamic>(
+                    var existingListing = await conn.QueryFirstOrDefaultAsync<dynamic>(
                         "SELECT id, current_price, currency FROM public.vendor_listings WHERE product_id = @ProductId AND vendor_id = @VendorId",
                         new { ProductId = productId, VendorId = evt.VendorId },
                         trans
@@ -400,9 +400,9 @@ public class WhatsAppGroupWorker : BackgroundService
                         if (oldPrice != extracted.Price)
                         {
                             await conn.ExecuteAsync(@"
-                                INSERT INTO public.price_history (listing_id, price, currency) 
-                                VALUES (@ListingId, @Price, @Currency)", 
-                                new { ListingId = listingId, Price = oldPrice ?? 0m, Currency = (string)existingListing.currency }, trans);
+                                INSERT INTO public.price_history (id, listing_id, price, currency, effective_date) 
+                                VALUES (@Id, @ListingId, @Price, @Currency, @EffectiveDate)", 
+                                new { Id = Guid.NewGuid(), ListingId = listingId, Price = oldPrice ?? 0m, Currency = (string)existingListing.currency, EffectiveDate = DateTime.UtcNow }, trans);
                         }
 
                         await conn.ExecuteAsync(
@@ -432,6 +432,13 @@ public class WhatsAppGroupWorker : BackgroundService
                             SourceGroupId = evt.GroupId
                         }, trans);
                     }
+
+                    // Touch target product updated_at timestamp when auto-merged listing is added
+                    await conn.ExecuteAsync(
+                        "UPDATE public.products SET updated_at = NOW() WHERE id = @ProductId",
+                        new { ProductId = productId },
+                        trans
+                    );
 
                     // Update wa.message_groups
                     if (existingGroup != null)
@@ -764,8 +771,11 @@ public class WhatsAppGroupWorker : BackgroundService
             // 4. Emit write-back event
             await EmitProductCreatedWriteBack(evt.GroupId, productId, listingId, extracted.Category, extracted.SubCategory, ct);
 
-            // 5. Emit async enrichment event (only if newly created)
-            if ((existingGroup == null || existingGroup.deeplens_product_id == null) && !isAutoMerge)
+            // 5. Post-commit: cross-product any-to-any check for the newly created product
+            bool didAutoMerge = await CheckAndEnqueueCrossProductCandidatesAsync(productId, extracted.Category, conn, ct);
+
+            // 6. Emit async enrichment event (only if newly created and not auto-merged)
+            if (!didAutoMerge && (existingGroup == null || existingGroup.deeplens_product_id == null) && !isAutoMerge)
             {
                 var enrichEvt = new WhatsAppGroupProductEnrichmentEvent
                 {
@@ -1055,32 +1065,32 @@ public class WhatsAppGroupWorker : BackgroundService
                     _logger.LogInformation("Merging media links from source product {Source} to target product {Target}", sourceProductId, targetProductId);
 
                     await conn.ExecuteAsync(
-                        @"UPDATE public.media_links 
-                          SET entity_id = @TargetProductId 
-                          WHERE entity_id = @SourceProductId AND entity_type = 'product'
-                          ON CONFLICT DO NOTHING",
+                        @"DELETE FROM public.media_links WHERE entity_id = @SourceProductId AND entity_type = 'product'
+                          AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetProductId AND entity_type = 'product')",
                         new { TargetProductId = targetProductId, SourceProductId = sourceProductId },
                         trans
                     );
-                    
+
                     await conn.ExecuteAsync(
-                        "DELETE FROM public.media_links WHERE entity_id = @SourceProductId AND entity_type = 'product'",
-                        new { SourceProductId = sourceProductId },
+                        @"UPDATE public.media_links 
+                          SET entity_id = @TargetProductId 
+                          WHERE entity_id = @SourceProductId AND entity_type = 'product'",
+                        new { TargetProductId = targetProductId, SourceProductId = sourceProductId },
+                        trans
+                    );
+
+                    await conn.ExecuteAsync(
+                        @"DELETE FROM public.media_links WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'
+                          AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetListingId AND entity_type = 'vendor_listing')",
+                        new { TargetListingId = targetListingId, SourceListingId = sourceListingId },
                         trans
                     );
 
                     await conn.ExecuteAsync(
                         @"UPDATE public.media_links 
                           SET entity_id = @TargetListingId 
-                          WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'
-                          ON CONFLICT DO NOTHING",
+                          WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'",
                         new { TargetListingId = targetListingId, SourceListingId = sourceListingId },
-                        trans
-                    );
-                    
-                    await conn.ExecuteAsync(
-                        "DELETE FROM public.media_links WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'",
-                        new { SourceListingId = sourceListingId },
                         trans
                     );
 
@@ -1289,6 +1299,7 @@ public class WhatsAppGroupWorker : BackgroundService
             return "Kids";
 
         if (s.Contains("lehenga") || s.Contains("lehnga") || s.Contains("lahenga") ||
+            s.Contains("lehanga") ||
             s.Contains("ghagra") || s.Contains("chaniya") || s.Contains("half saree"))
             return "Lehanga";
 
@@ -1534,7 +1545,7 @@ public class WhatsAppGroupWorker : BackgroundService
     /// <paramref name="thisProductId"/> now produces ≥2 matching pairs against any other
     /// product in the cache. If so, inserts a pending merge candidate for human review.
     /// </summary>
-    private async Task CheckAndEnqueueCrossProductCandidatesAsync(
+    private async Task<bool> CheckAndEnqueueCrossProductCandidatesAsync(
         Guid thisProductId,
         string thisCategory,
         NpgsqlConnection conn,
@@ -1550,11 +1561,11 @@ public class WhatsAppGroupWorker : BackgroundService
                 .Select(e => e.Phash)
                 .ToList();
 
-            if (thisProductHashes.Count == 0) return;
+            if (thisProductHashes.Count == 0) return false;
 
-            // Group all OTHER products
+            // Group all OTHER products in the same category
             var otherProducts = _hashCache.GetAll()
-                .Where(e => e.ProductId != thisProductId)
+                .Where(e => e.ProductId != thisProductId && e.Category.Equals(thisCategory, StringComparison.OrdinalIgnoreCase))
                 .GroupBy(e => e.ProductId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
@@ -1579,26 +1590,35 @@ public class WhatsAppGroupWorker : BackgroundService
                     }
                 }
 
-                if (votes >= MATCH_VOTE_THRESHOLD)
+                if (votes >= 1)
                 {
                     _logger.LogInformation(
                         "Cross-product match after media add: Product {ThisId} vs {CandidateId}, votes={Votes}, bestDist={Distance}",
                         thisProductId, candidateId, votes, closestDistance);
 
-                    // Always use canonical ordering (lower GUID first) to avoid duplicates
-                    Guid productAId = thisProductId < candidateId ? thisProductId : candidateId;
-                    Guid productBId = thisProductId < candidateId ? candidateId : thisProductId;
+                    if (votes >= MATCH_VOTE_THRESHOLD && closestDistance <= 2)
+                    {
+                        _logger.LogInformation("Distance <= 2, executing delayed auto-merge.");
+                        await ExecuteAutoMergeAsync(conn, candidateId, thisProductId, ct);
+                        return true;
+                    }
+                    else
+                    {
+                        // Always use canonical ordering (lower GUID first) to avoid duplicates
+                        Guid productAId = thisProductId < candidateId ? thisProductId : candidateId;
+                        Guid productBId = thisProductId < candidateId ? candidateId : thisProductId;
 
-                    await conn.ExecuteAsync(@"
-                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                        new
-                        {
-                            ProductAId = productAId,
-                            ProductBId = productBId,
-                            SimilarityScore = (double)closestDistance
-                        });
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                            VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                            ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                            new
+                            {
+                                ProductAId = productAId,
+                                ProductBId = productBId,
+                                SimilarityScore = (double)closestDistance
+                            });
+                    }
                 }
             }
         }
@@ -1606,6 +1626,8 @@ public class WhatsAppGroupWorker : BackgroundService
         {
             _logger.LogError(ex, "Failed cross-product candidate check for Product {ProductId}", thisProductId);
         }
+
+        return false;
     }
 
     public override void Dispose()
@@ -1648,7 +1670,7 @@ public class WhatsAppGroupWorker : BackgroundService
             .GroupBy(e => e.ProductId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        const int MATCH_VOTE_THRESHOLD = 3;
+        const int MATCH_VOTE_THRESHOLD = 2;
 
         foreach (var (candidateProductId, candidateEntries) in candidateEntriesByProduct)
         {
@@ -1671,11 +1693,11 @@ public class WhatsAppGroupWorker : BackgroundService
                 }
             }
 
-            if (votes >= MATCH_VOTE_THRESHOLD)
+            if (votes >= 1)
             {
-                _logger.LogInformation("Category change re-eval: Found match between {ProductA} and {ProductB} with dist {Dist}", candidateProductId, evt.ProductId, closestDistance);
+                _logger.LogInformation("Category change re-eval: Found match between {ProductA} and {ProductB} with dist {Dist} and votes {Votes}", candidateProductId, evt.ProductId, closestDistance, votes);
 
-                if (closestDistance <= 2)
+                if (votes >= MATCH_VOTE_THRESHOLD && closestDistance <= 2)
                 {
                     _logger.LogInformation("Distance <= 2, executing delayed auto-merge.");
                     await ExecuteAutoMergeAsync(conn, candidateProductId, evt.ProductId, ct);
@@ -1747,29 +1769,37 @@ public class WhatsAppGroupWorker : BackgroundService
                       new { TargetProductId = targetProductId, SourceSku = sourceSku }, transaction: trans, cancellationToken: ct));
             }
 
+            await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links 
+                  WHERE entity_id = @SourceProductId AND entity_type = 'product' 
+                  AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetProductId AND entity_type = 'product')", 
+                  new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
                   SET entity_id = @TargetProductId 
-                  WHERE entity_id = @SourceProductId AND entity_type = 'product'
-                  ON CONFLICT DO NOTHING", new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
-
-            await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links WHERE entity_id = @SourceProductId AND entity_type = 'product'", 
-                new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+                  WHERE entity_id = @SourceProductId AND entity_type = 'product'", 
+                  new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
 
             if (sourceListingId.HasValue && targetListingId.HasValue)
             {
+                await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links 
+                      WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing' 
+                      AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetListingId AND entity_type = 'vendor_listing')", 
+                      new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+
                 await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
                       SET entity_id = @TargetListingId 
-                      WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'
-                      ON CONFLICT DO NOTHING", new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
-
-                await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'", 
-                    new { SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+                      WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'", 
+                      new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
             }
 
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.vendor_listings SET product_id = @TargetProductId, updated_at = NOW() WHERE product_id = @SourceProductId", 
                 new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
 
-            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products SET is_deleted = true, created_at = NOW() WHERE id = @SourceProductId", 
+            // Touch target product updated_at timestamp when delayed auto-merged listing is added
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products SET updated_at = NOW() WHERE id = @TargetProductId", 
+                new { TargetProductId = targetProductId }, transaction: trans, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.products SET is_deleted = true, updated_at = NOW() WHERE id = @SourceProductId", 
                 new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
 
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.product_merge_candidates 

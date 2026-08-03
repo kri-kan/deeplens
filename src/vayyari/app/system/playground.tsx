@@ -54,6 +54,10 @@ export default function SystemPlaygroundScreen() {
   const [simResult, setSimResult] = useState<TestSimilarityResponse | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
 
+  // Admin States
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminResult, setAdminResult] = useState<string | null>(null);
+
   const testDescriptions = [
     {
       label: 'VF45E (Taby/Baby Fuzzy Fix)',
@@ -112,6 +116,20 @@ export default function SystemPlaygroundScreen() {
     }
   };
 
+  const handleTriggerAutoMerge = async () => {
+    setAdminLoading(true);
+    setAdminResult(null);
+    try {
+      const response = await searchApiClient.post<{ message: string }>('/api/test/fix-db/trigger-automerge', {});
+      setAdminResult(response.message || 'Auto-merge triggered successfully');
+    } catch (err: any) {
+      console.error('Auto-merge trigger failed:', err);
+      setAdminResult('Failed to trigger auto-merge: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
   const getMethodBadge = (method: string) => {
     switch (method) {
       case 'static':
@@ -142,6 +160,7 @@ export default function SystemPlaygroundScreen() {
           buttons={[
             { value: 'categorization', label: 'Categorisation', icon: 'tag-outline' },
             { value: 'similarity', label: 'Visual Similarity', icon: 'image-multiple-outline' },
+            { value: 'admin', label: 'Admin', icon: 'shield-account-outline' },
           ]}
           style={styles.segmentedButtons}
         />
@@ -300,7 +319,7 @@ export default function SystemPlaygroundScreen() {
               </Card>
             )}
           </View>
-        ) : (
+        ) : activeTab === 'similarity' ? (
           <View>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Test Image Similarity
@@ -429,7 +448,47 @@ export default function SystemPlaygroundScreen() {
               </View>
             )}
           </View>
-        )}
+        ) : activeTab === 'admin' ? (
+          <View>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Administrative Actions
+            </Text>
+            <Text variant="bodySmall" style={styles.sectionSubtitle}>
+              Run system-wide tasks and catalog maintenance.
+            </Text>
+
+            <Card style={styles.resultCard} mode="outlined">
+              <Card.Content>
+                <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                  Trigger Catalog Auto-Merge
+                </Text>
+                <Text variant="bodySmall" style={{ opacity: 0.7, marginBottom: 16 }}>
+                  Scans the entire product catalog and forces an immediate cache comparison against existing products to deduplicate and auto-merge duplicate media/SKUs.
+                </Text>
+                
+                <Button
+                  mode="contained"
+                  icon="merge"
+                  loading={adminLoading}
+                  disabled={adminLoading}
+                  onPress={handleTriggerAutoMerge}
+                  style={styles.actionBtn}
+                  buttonColor={theme.colors.error}
+                >
+                  Force Catalog Deduplication
+                </Button>
+
+                {adminResult && (
+                  <Surface style={[styles.cleanedTextSurface, { marginTop: 12 }]} elevation={0}>
+                    <Text variant="bodySmall" style={styles.cleanedText}>
+                      {adminResult}
+                    </Text>
+                  </Surface>
+                )}
+              </Card.Content>
+            </Card>
+          </View>
+        ) : null}
       </ScrollView>
     </ScreenWrapper>
   );

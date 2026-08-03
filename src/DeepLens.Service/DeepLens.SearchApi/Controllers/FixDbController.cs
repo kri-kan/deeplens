@@ -252,4 +252,46 @@ public class FixDbController : ControllerBase
         var count = await _productService.BackfillFabricAsync();
         return Ok(new { pendingCount = count });
     }
+
+    /// <summary>
+    /// Triggers an auto-merge check across the entire catalog by emitting a ProductCategoryChangedEvent
+    /// for every active product, causing the worker to evaluate it against the cache.
+    /// </summary>
+    [HttpPost("trigger-automerge")]
+    public async Task<IActionResult> TriggerAutoMerge([FromServices] Confluent.Kafka.IProducer<string, string> producer)
+    {
+        var connString = _configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrEmpty(connString)) return BadRequest("DefaultConnection not found");
+        
+        using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+        
+        var products = await conn.QueryAsync<dynamic>(@"
+            SELECT p.id, COALESCE(c.name, 'Others') AS category
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.is_deleted = false
+        ");
+        
+        int count = 0;
+        foreach(var p in products)
+        {
+            var evt = new DeepLens.Contracts.Events.ProductCategoryChangedEvent
+            {
+                EventId = Guid.NewGuid(),
+                ProductId = p.id,
+                NewCategory = p.category,
+                Timestamp = DateTime.UtcNow
+            };
+            
+            await producer.ProduceAsync(DeepLens.Contracts.Events.KafkaTopics.ProductCategoryChanged, new Confluent.Kafka.Message<string, string>
+            {
+                Key = p.id.ToString(),
+                Value = System.Text.Json.JsonSerializer.Serialize(evt, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })
+            });
+            count++;
+        }
+        
+        return Ok(new { message = $"Triggered {count} auto-merge checks" });
+    }
 }

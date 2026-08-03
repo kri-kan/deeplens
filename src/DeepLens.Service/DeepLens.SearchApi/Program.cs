@@ -10,10 +10,14 @@ using DeepLens.Application.Abstractions.Services;
 using Minio;
 using Confluent.Kafka;
 using DeepLens.Contracts.Catalog;
+using DeepLens.Shared.Telemetry;
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure OpenTelemetry Tracing & Metrics
+builder.Services.AddDeepLensTelemetry(builder.Configuration, "DeepLens.SearchApi");
 
 // Add services to the container.
 builder.Services.AddControllers()

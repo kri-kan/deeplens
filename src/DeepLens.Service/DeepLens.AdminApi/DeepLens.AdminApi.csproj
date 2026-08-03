@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DeepLens.Contracts\DeepLens.Contracts.csproj" />
     <ProjectReference Include="..\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
+    <ProjectReference Include="..\DeepLens.Shared.Telemetry\DeepLens.Shared.Telemetry.csproj" />
   </ItemGroup>
 
 </Project>

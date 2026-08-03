@@ -1010,30 +1010,59 @@ namespace DeepLens.Infrastructure.Services
         {
             using var conn = await _db.CreateConnectionAsync();
 
+            var oldToken = await conn.ExecuteScalarAsync<string>("SELECT long_access_token FROM meta_configurations WHERE id = @Id", new { config.Id });
+            bool tokenChanged = (oldToken != config.LongAccessToken);
+
             if (config.IsDefault)
             {
                 await conn.ExecuteAsync("UPDATE meta_configurations SET is_default = FALSE WHERE id <> @Id", new { config.Id });
             }
 
-            await conn.ExecuteAsync(@"
-                UPDATE meta_configurations
-                SET name = @Name,
-                    app_id = @AppId,
-                    app_secret = @AppSecret,
-                    ig_biz_id = @IgBizId,
-                    long_access_token = @LongAccessToken,
-                    is_default = @IsDefault,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = @Id",
-                new {
-                    config.Id,
-                    config.Name,
-                    config.AppId,
-                    config.AppSecret,
-                    config.IgBizId,
-                    config.LongAccessToken,
-                    config.IsDefault
-                });
+            if (tokenChanged)
+            {
+                await conn.ExecuteAsync(@"
+                    UPDATE meta_configurations
+                    SET name = @Name,
+                        app_id = @AppId,
+                        app_secret = @AppSecret,
+                        ig_biz_id = @IgBizId,
+                        long_access_token = @LongAccessToken,
+                        is_default = @IsDefault,
+                        last_refreshed_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = @Id",
+                    new {
+                        config.Id,
+                        config.Name,
+                        config.AppId,
+                        config.AppSecret,
+                        config.IgBizId,
+                        config.LongAccessToken,
+                        config.IsDefault
+                    });
+            }
+            else
+            {
+                await conn.ExecuteAsync(@"
+                    UPDATE meta_configurations
+                    SET name = @Name,
+                        app_id = @AppId,
+                        app_secret = @AppSecret,
+                        ig_biz_id = @IgBizId,
+                        long_access_token = @LongAccessToken,
+                        is_default = @IsDefault,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = @Id",
+                    new {
+                        config.Id,
+                        config.Name,
+                        config.AppId,
+                        config.AppSecret,
+                        config.IgBizId,
+                        config.LongAccessToken,
+                        config.IsDefault
+                    });
+            }
 
             if (config.IsDefault) await ReloadFromDbAsync();
         }

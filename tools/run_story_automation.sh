@@ -13,32 +13,88 @@ cd "$REPO_ROOT" || exit 1
 # Exit cleanly on Ctrl+C so that the retry logic doesn't misfire
 trap 'echo ""; echo "Interrupted. Exiting."; exit 130' INT TERM
 
-# Make sure ADB is running and emulator is connected
-echo "Checking adb status and emulator..."
-adb start-server
+start_avd() {
+    echo "Checking adb status and emulator..."
+    adb start-server
 
-if ! adb devices | grep -q "emulator"; then
-    echo "No emulator running. Starting Pixel8a AVD..."
-    # Run emulator in headless mode so it works over SSH without a display
-    nohup emulator -avd Pixel8a -no-window -no-audio > /dev/null 2>&1 &
+    if ! adb devices | grep -q "emulator"; then
+        echo "No emulator running. Starting Pixel8a AVD..."
+        # Run emulator in headless mode so it works over SSH without a display
+        nohup emulator -avd Pixel8a -no-window -no-audio > /dev/null 2>&1 &
+        
+        echo "Waiting for emulator to boot..."
+        adb wait-for-device
+        
+        while [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
+            sleep 2
+        done
+        echo "Emulator booted successfully."
+        sleep 5
+    else
+        echo "Emulator is already running."
+    fi
+
+    adb devices
+
+    echo "Ensuring device is awake and screen stays on..."
+    adb shell input keyevent KEYCODE_WAKEUP
+    adb shell input keyevent 82 # Unlock screen if swipable
+    adb shell svc power stayon true
+}
+
+restart_avd() {
+    echo "=================================================="
+    echo "Restarting AVD to keep RAM usage in check..."
+    echo "=================================================="
+    echo "Stopping emulator..."
+    adb emu kill 2>/dev/null || true
     
-    echo "Waiting for emulator to boot..."
-    adb wait-for-device
-    
-    while [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
-        sleep 2
+    # Wait up to 15 seconds for emulator to gracefully shutdown
+    local wait_time=0
+    while adb devices 2>/dev/null | grep -q "emulator" && [ $wait_time -lt 15 ]; do
+        sleep 1
+        wait_time=$((wait_time + 1))
     done
-    echo "Emulator booted successfully."
-else
-    echo "Emulator is already running."
-fi
+    
+    # Force kill any remaining emulator processes if still running
+    if adb devices 2>/dev/null | grep -q "emulator" || pgrep -f "emulator.*-avd" > /dev/null 2>&1; then
+        echo "Force killing remaining emulator processes..."
+        pkill -9 -f "emulator.*-avd" 2>/dev/null || true
+        adb kill-server 2>/dev/null || true
+        sleep 2
+        adb start-server 2>/dev/null || true
+    fi
+    
+    start_avd
+}
 
-adb devices
+switch_profile_with_retries() {
+    local prof="$1"
+    echo "Switching Instagram and Vayyari to profile: $prof"
+    local switch_ok=0
+    for attempt in 1 2; do
+        MAESTRO_CLI_NO_ANALYTICS=true maestro test -e PROFILE_NAME="$prof" maestro/switch_profile.yaml
+        local sw_exit=$?
+        # Propagate Ctrl+C immediately
+        [ $sw_exit -eq 130 ] && exit 130
+        if [ $sw_exit -eq 0 ]; then
+            switch_ok=1
+            break
+        fi
+        if [ $attempt -eq 1 ]; then
+            echo "Switch attempt $attempt failed (possible ADB drop). Restarting ADB and retrying..."
+            adb kill-server && sleep 3 && adb start-server && sleep 3
+        fi
+    done
 
-echo "Ensuring device is awake and screen stays on..."
-adb shell input keyevent KEYCODE_WAKEUP
-adb shell input keyevent 82 # Unlock screen if swipable
-adb shell svc power stayon true
+    if [ $switch_ok -eq 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Ensure AVD is started initially
+start_avd
 
 echo "Fetching active profiles with pending queues from database..."
 # Run postgres query inside the container, fetch unique usernames with pending items
@@ -60,30 +116,15 @@ fi
 
 echo "Found ${#PROFILES[@]} active profiles to process."
 
+total_shares=0
+RESTART_THRESHOLD=20
+
 for profile in "${PROFILES[@]}"; do
     echo "=================================================="
     echo "Starting automation for profile: $profile"
     echo "=================================================="
 
-    echo "Switching Instagram and Vayyari to profile: $profile"
-    # Switch profile in Instagram – retry once if ADB/gRPC drops
-    switch_ok=0
-    for attempt in 1 2; do
-        MAESTRO_CLI_NO_ANALYTICS=true maestro test -e PROFILE_NAME="$profile" maestro/switch_profile.yaml
-        sw_exit=$?
-        # Propagate Ctrl+C immediately
-        [ $sw_exit -eq 130 ] && exit 130
-        if [ $sw_exit -eq 0 ]; then
-            switch_ok=1
-            break
-        fi
-        if [ $attempt -eq 1 ]; then
-            echo "Switch attempt $attempt failed (possible ADB drop). Restarting ADB and retrying..."
-            adb kill-server && sleep 3 && adb start-server && sleep 3
-        fi
-    done
-
-    if [ $switch_ok -eq 0 ]; then
+    if ! switch_profile_with_retries "$profile"; then
         echo "Failed to switch Instagram to profile $profile after 2 attempts. Skipping..."
         continue
     fi
@@ -127,37 +168,58 @@ for profile in "${PROFILES[@]}"; do
             sleep 1
             last_log=$(ls -t ~/.maestro/tests/*/maestro.log 2>/dev/null | head -1)
             
-            # If the queue is genuinely empty (no share-queue-item-0 ever found at
-            # the start of the run), stop processing this profile. We check for the
-            # specific failure of the tapOn command rather than just 'Queue is empty'
-            # because Maestro logs every evaluated runFlow condition.
-            if [ -n "$last_log" ] && grep -q "Element not found.*share-queue-item-0" "$last_log" 2>/dev/null; then
-                echo "Queue is empty for $profile. Moving to next profile."
-                run_ok=0
+            # Check if the queue was genuinely empty (indicated by execution of SIGNAL_QUEUE_IS_EMPTY
+            # which Maestro only attempts to tap when 'Queue is empty.' is explicitly visible on screen).
+            if [ -n "$last_log" ] && grep -q "SIGNAL_QUEUE_IS_EMPTY FAILED\|Id matching regex: SIGNAL_QUEUE_IS_EMPTY" "$last_log" 2>/dev/null; then
+                echo "Queue is genuinely empty for $profile."
+                run_ok=2
                 break
             fi
             if [ -n "$last_log" ] && grep -q "UNAVAILABLE\|Command failed.*closed" "$last_log" 2>/dev/null; then
                 echo "ADB connection drop detected on attempt $attempt. Restarting ADB and retrying..."
                 adb kill-server && sleep 3 && adb start-server && sleep 3
             else
-                # Transient UI failure (e.g. Close Friends timeout, animation race)
-                # Retry up to 3 times before giving up
+                # Transient UI failure or slow app load (e.g. Expo bundle compiling, Close Friends timeout)
+                # Give it sufficient wait time and retry up to 3 times before giving up
                 consecutive_failures=$((consecutive_failures + 1))
-                echo "Transient flow failure on attempt $attempt for $profile. Retrying..."
-                sleep 3
+                echo "Flow failure or slow loading on attempt $attempt for $profile. Waiting 5 seconds before retry..."
+                sleep 5
             fi
         done
 
-        if [ $run_ok -eq 0 ]; then
-            echo "Maestro script failed or queue is empty for $profile."
-            break
+        if [ $run_ok -ne 1 ]; then
+            if [ $run_ok -eq 2 ]; then
+                echo "Finished active queue for $profile. Moving to next profile."
+                break
+            else
+                echo "Maestro script failed to load or process story for $profile after 3 attempts."
+                echo "Since the app or automation is encountering persistent errors/loading delays, halting execution instead of skipping to the next profile."
+                exit 1
+            fi
         fi
         
         post_count=$((post_count + 1))
+        total_shares=$((total_shares + 1))
         # Random sleep between 1 to 2 seconds
         BASH_SLEEP=$((RANDOM % 2 + 1))
-        echo "Item $((post_count)) marked as shared. Cooling down for $BASH_SLEEP seconds..."
+        echo "Item $((post_count)) marked as shared (Total shares in session: $total_shares). Cooling down for $BASH_SLEEP seconds..."
         sleep $BASH_SLEEP
+
+        # Restart AVD every 20 shared stories to keep RAM usage in check
+        if [ $((total_shares % RESTART_THRESHOLD)) -eq 0 ]; then
+            echo ""
+            echo "[RAM Preservation] Reached $total_shares story shares in this session."
+            restart_avd
+            
+            # If we still have items remaining in the queue limit for this profile, switch back to it
+            if [ $post_count -lt $MAX_POSTS ]; then
+                echo "Re-switching Instagram to $profile after AVD restart..."
+                if ! switch_profile_with_retries "$profile"; then
+                    echo "Failed to switch Instagram to profile $profile after AVD restart. Halting execution."
+                    exit 1
+                fi
+            fi
+        fi
     done
 
     echo "Finished processing $profile. Processed $post_count items."

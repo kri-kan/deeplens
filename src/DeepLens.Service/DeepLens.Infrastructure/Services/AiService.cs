@@ -93,7 +93,10 @@ Return ONLY the title text without any quotes or additional explanations.";
         try
         {
             _logger.LogInformation("Requesting fast product info extraction from ReasoningService at {BaseUrl} (isManual={IsManual})", baseUrl, isManual);
-            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/extract-product?priority={priorityParam}", new { description });
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            
+            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/extract-product?priority={priorityParam}", new { description }, combinedCts.Token);
             
             if (!response.IsSuccessStatusCode)
             {

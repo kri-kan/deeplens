@@ -10,7 +10,7 @@ import { identityService } from './identity.service';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
 
-const BASE_URL = getWhatsappProcessorUrl() ?? 'http://localhost:3001';
+const BASE_URL = getWhatsappProcessorUrl() ?? 'http://localhost:3005';
 const PAGE_SIZE = 50;
 
 async function get<T>(path: string): Promise<T> {
@@ -317,7 +317,21 @@ export const waProcessorService = {
     };
   },
 
-  fetchMessages: async (jid: string, limit = 50, offset = 0, highlightGroupId?: string, searchQuery?: string): Promise<{ messages: Message[]; total: number }> => {
+  fetchMessages: async (
+    jid: string, 
+    limit = 50, 
+    offset = 0, 
+    highlightGroupId?: string, 
+    searchQuery?: string,
+    options?: {
+      beforeTimestamp?: number;
+      afterTimestamp?: number;
+      targetMessageId?: string;
+      targetTimestamp?: number;
+      fromTimestamp?: number;
+      toTimestamp?: number;
+    }
+  ): Promise<{ messages: Message[]; total: number }> => {
     let url = `/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`;
     if (highlightGroupId) {
       url += `&highlightGroupId=${encodeURIComponent(highlightGroupId)}`;
@@ -325,6 +339,25 @@ export const waProcessorService = {
     if (searchQuery) {
       url += `&searchQuery=${encodeURIComponent(searchQuery)}`;
     }
+    if (options?.beforeTimestamp !== undefined) {
+      url += `&beforeTimestamp=${options.beforeTimestamp}`;
+    }
+    if (options?.afterTimestamp !== undefined) {
+      url += `&afterTimestamp=${options.afterTimestamp}`;
+    }
+    if (options?.targetMessageId) {
+      url += `&targetMessageId=${encodeURIComponent(options.targetMessageId)}`;
+    }
+    if (options?.targetTimestamp !== undefined) {
+      url += `&targetTimestamp=${options.targetTimestamp}`;
+    }
+    if (options?.fromTimestamp !== undefined) {
+      url += `&fromTimestamp=${options.fromTimestamp}`;
+    }
+    if (options?.toTimestamp !== undefined) {
+      url += `&toTimestamp=${options.toTimestamp}`;
+    }
+
     const res = await get<{ messages: any[]; total: number }>(url);
     return {
       total: res.total ?? 0,
@@ -335,7 +368,7 @@ export const waProcessorService = {
         messageText: m.messageText ?? m.message_text ?? '',
         messageType: m.messageType ?? m.message_type ?? 'chat',
         mediaType: m.mediaType ?? m.media_type ?? null,
-        timestamp: m.timestamp,
+        timestamp: typeof m.timestamp === 'string' ? parseInt(m.timestamp) : m.timestamp,
         isFromMe: m.isFromMe ?? m.is_from_me ?? false,
         mediaUrl: m.mediaUrl ?? m.media_url ?? null,
         metadata: m.metadata,

@@ -195,6 +195,7 @@ public class ProductEnrichmentWorker : BackgroundService
                     sub_category = @SubCategory, 
                     detected_price = @Price, 
                     is_plus_shipping = @IsPlusShipping,
+                    status = 'enriched',
                     updated_at = NOW()
                 WHERE group_id = @GroupId";
 
