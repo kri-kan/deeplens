@@ -433,8 +433,7 @@ deploy/
 src/whatsapp-processor/scripts/
 src/whatsapp-processor/reprocess_products.js
 src/whatsapp-processor/reprocess_products.ts
-# Squad: local config and agent rosters (never commit to project repo)
-.squad/
+# Squad: local machine config and temporary backups (never commit)
+.squad/config.json
 .squad.local-backup/
-.agy/
 .agy/
