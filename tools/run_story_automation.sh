@@ -18,9 +18,8 @@ start_avd() {
     adb start-server
 
     if ! adb devices | grep -q "emulator"; then
-        echo "No emulator running. Starting Pixel8a AVD..."
-        # Run emulator in headless mode so it works over SSH without a display
-        nohup emulator -avd Pixel8a -no-window -no-audio > /dev/null 2>&1 &
+        echo "No emulator running. Starting Pixel8a AVD in visual mode..."
+        nohup emulator -avd Pixel8a > /dev/null 2>&1 &
         
         echo "Waiting for emulator to boot..."
         adb wait-for-device
