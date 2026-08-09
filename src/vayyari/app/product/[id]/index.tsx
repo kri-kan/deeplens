@@ -289,7 +289,7 @@ export default function ProductDetailScreen() {
           <Menu.Item
             onPress={() => {
               setIsMenuOpen(false);
-              setEditCategory(product?.category?.name || '');
+              setEditCategory(product?.category || '');
               setEditFabric(product?.fabric || '');
               setEditPrice(product?.vendorPrice?.toString() || '');
               setUseForTraining(true);
@@ -452,13 +452,45 @@ export default function ProductDetailScreen() {
             <CompactChip outline color={theme.colors.outline}>{product.productCode || 'N/A'}</CompactChip>
           </View>
           
-          <Text variant="headlineSmall" style={[styles.price, { color: theme.colors.primary }]}>₹{product.vendorPrice}</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onLongPress={() => {
+              setEditCategory(product?.category || '');
+              setEditFabric(product?.fabric || '');
+              setEditPrice(product?.vendorPrice?.toString() || '');
+              setUseForTraining(true);
+              setIsEditMetadataOpen(true);
+            }}
+            delayLongPress={300}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+              <Text variant="headlineSmall" style={[styles.price, { color: theme.colors.primary }]}>₹{product.vendorPrice}</Text>
+              <Icon source="pencil-outline" size={16} color={theme.colors.primary} />
+            </View>
+          </TouchableOpacity>
           
-          <View style={styles.tagRow}>
-            {product.category && (
-              <CompactChip icon="tag">{product.category}</CompactChip>
-            )}
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onLongPress={() => {
+              setEditCategory(product?.category || '');
+              setEditFabric(product?.fabric || '');
+              setEditPrice(product?.vendorPrice?.toString() || '');
+              setUseForTraining(true);
+              setIsEditMetadataOpen(true);
+            }}
+            delayLongPress={300}
+          >
+            <View style={styles.tagRow}>
+              {product.category ? (
+                <CompactChip icon="tag">{product.category}</CompactChip>
+              ) : (
+                <CompactChip icon="tag-plus-outline" outline color={theme.colors.outline}>Add Category</CompactChip>
+              )}
+              <Text variant="labelSmall" style={{ color: theme.colors.outline, alignSelf: 'center', marginLeft: 4 }}>
+                (Long press to edit price / category)
+              </Text>
+            </View>
+          </TouchableOpacity>
 
           <View style={styles.section}>
             <Text variant="titleMedium" style={styles.sectionTitle}>Description</Text>

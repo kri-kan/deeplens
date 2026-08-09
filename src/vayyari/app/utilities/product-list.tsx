@@ -3,7 +3,7 @@ import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet,
   PanResponder, GestureResponderEvent, BackHandler
 } from 'react-native';
-import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu } from 'react-native-paper';
+import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -52,6 +52,38 @@ export default function ProductCatalogScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+
+  // Quick edit price & category tag state
+  const [quickEditProduct, setQuickEditProduct] = useState<VendorProduct | null>(null);
+  const [quickEditPrice, setQuickEditPrice] = useState('');
+  const [quickEditCategory, setQuickEditCategory] = useState('');
+  const [isSavingQuickEdit, setIsSavingQuickEdit] = useState(false);
+
+  const handleOpenQuickEdit = useCallback((product: VendorProduct) => {
+    setQuickEditProduct(product);
+    setQuickEditPrice(product.vendorPrice?.toString() || '');
+    setQuickEditCategory(product.category || '');
+  }, []);
+
+  const handleSaveQuickEdit = async () => {
+    if (!quickEditProduct) return;
+    setIsSavingQuickEdit(true);
+    try {
+      const priceNum = parseFloat(quickEditPrice);
+      await productService.updateProductMetadata(quickEditProduct.id, {
+        price: isNaN(priceNum) ? undefined : priceNum,
+        categoryName: quickEditCategory || undefined,
+        useForTraining: true,
+      });
+      setQuickEditProduct(null);
+      // Trigger list refresh
+      setActiveFilters(prev => ({ ...prev }));
+    } catch (error) {
+      console.error('Failed to save quick edit:', error);
+    } finally {
+      setIsSavingQuickEdit(false);
+    }
+  };
 
   // Filter drawer state
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
@@ -132,8 +164,9 @@ export default function ProductCatalogScreen() {
 
   const handleApplyFilters = (filters: FilterState) => {
     setActiveFilters(filters);
-    if (filters.category !== 'all') {
-      const idx = CATEGORIES.findIndex(c => c.id === filters.category);
+    const primaryCat = filters.categories?.[0];
+    if (primaryCat && primaryCat !== 'all') {
+      const idx = CATEGORIES.findIndex(c => c.id === primaryCat);
       if (idx !== -1 && idx !== activeTab) handleTabPress(idx);
     }
   };
@@ -218,6 +251,42 @@ export default function ProductCatalogScreen() {
             <Button onPress={() => setSelectedProductForCategory(null)}>Cancel</Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* Quick Edit Price & Category Tag Dialog (Triggered on long press) */}
+        <Dialog visible={!!quickEditProduct} onDismiss={() => setQuickEditProduct(null)}>
+          <Dialog.Title>Quick Edit Price & Category</Dialog.Title>
+          <Dialog.Content>
+            {isSavingQuickEdit ? (
+              <ActivityIndicator size="large" />
+            ) : (
+              <View style={{ gap: 12 }}>
+                <Text variant="labelMedium" style={{ color: theme.colors.outline }}>
+                  Product Code: {quickEditProduct?.productCode || '---'}
+                </Text>
+                <TextInput
+                  label="Price (INR)"
+                  value={quickEditPrice}
+                  onChangeText={setQuickEditPrice}
+                  keyboardType="numeric"
+                  mode="outlined"
+                />
+                <TextInput
+                  label="Category Tag"
+                  value={quickEditCategory}
+                  onChangeText={setQuickEditCategory}
+                  placeholder="e.g. Saree, Dress, Lehanga..."
+                  mode="outlined"
+                />
+              </View>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setQuickEditProduct(null)}>Cancel</Button>
+            <Button onPress={handleSaveQuickEdit} loading={isSavingQuickEdit} mode="contained">
+              Save
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
 
       <View style={styles.tabContainer}>
@@ -290,9 +359,10 @@ export default function ProductCatalogScreen() {
             selectedIds={selectedIds}
             selectionMode={selectionMode}
             onSelect={toggleSelection}
+            onLongPressPriceCategory={handleOpenQuickEdit}
             isActive={index === activeTab}
           />
-        ), [searchQuery, activeFilters, selectedIds, selectionMode, activeTab, toggleSelection])}
+        ), [searchQuery, activeFilters, selectedIds, selectionMode, activeTab, toggleSelection, handleOpenQuickEdit])}
       />
 
     </ScreenWrapper>
@@ -331,6 +401,7 @@ function CategoryPage({
   onCountChange,
   selectedIds,
   onSelect,
+  onLongPressPriceCategory,
   selectionMode,
 }: {
   categoryId: string;
@@ -339,6 +410,7 @@ function CategoryPage({
   onCountChange?: (count: number) => void;
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
+  onLongPressPriceCategory?: (product: VendorProduct) => void;
   selectionMode: boolean;
   isActive: boolean;
 }) {
@@ -510,6 +582,7 @@ function CategoryPage({
               // Toggle selection immediately
               onSelect(p.id);
             }}
+            onLongPressPriceCategory={onLongPressPriceCategory}
             onDragStart={() => {
               isDragSelectingRef.current = true;
               // If it WAS selected before the long press (thus unselecting it), action is remove. Else add.
@@ -559,6 +632,7 @@ const CategoryPageMemo = React.memo(CategoryPage, (prev, next) => {
     prev.query === next.query &&
     prev.filters === next.filters &&
     prev.selectionMode === next.selectionMode &&
-    prev.selectedIds === next.selectedIds
+    prev.selectedIds === next.selectedIds &&
+    prev.onLongPressPriceCategory === next.onLongPressPriceCategory
   );
 });

@@ -12,6 +12,7 @@ interface ProductTileProps {
   item: VendorProduct;
   onPress: (item: VendorProduct) => void;
   onLongPress?: (item: VendorProduct) => void;
+  onLongPressPriceCategory?: (item: VendorProduct) => void;
   onDragStart?: () => void;
   onToggleStar?: (item: VendorProduct, isStarred: boolean) => void;
   selected?: boolean;
@@ -19,7 +20,7 @@ interface ProductTileProps {
   sizeRatio?: number;
 }
 
-const ProductTileComponent: React.FC<ProductTileProps> = ({ item, onPress, onLongPress, onDragStart, onToggleStar, selected, selectionMode = false, sizeRatio = 1 }) => {
+const ProductTileComponent: React.FC<ProductTileProps> = ({ item, onPress, onLongPress, onLongPressPriceCategory, onDragStart, onToggleStar, selected, selectionMode = false, sizeRatio = 1 }) => {
   const theme = useTheme();
 
   // Animated value for selection overlay — drives opacity instantly for snappy feel
@@ -141,7 +142,17 @@ const ProductTileComponent: React.FC<ProductTileProps> = ({ item, onPress, onLon
 
           <View style={styles.overlay}>
             <Text style={styles.code}>{productCode} • {listingCount} listings</Text>
-            <Text style={styles.price}>₹{vendorPrice}</Text>
+            <Pressable
+              onLongPress={() => {
+                if (onLongPressPriceCategory) {
+                  onLongPressPriceCategory(item);
+                }
+              }}
+              delayLongPress={300}
+              hitSlop={6}
+            >
+              <Text style={styles.price}>₹{vendorPrice} <Text style={{ fontSize: 9, opacity: 0.8 }}>✎</Text></Text>
+            </Pressable>
           </View>
         </>
       )}
