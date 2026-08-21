@@ -6,12 +6,18 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { ThemedView } from '@/components/themed-view';
 import { useAppTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PERMISSIONS } from '@/types/authorization';
 import { appSettingsService, AppSetting, AppSettingsGrouped } from '@/services/app-settings.service';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+import { Avatar, Chip } from 'react-native-paper';
 
 
 export default function ModalScreen() {
   const { themeMode, setThemeMode } = useAppTheme();
+  const { user, signOut } = useAuth();
+  const { roles, permissions, isSuperAdmin, hasPermission } = usePermissions();
   const theme = useTheme();
   const router = useRouter();
 
@@ -188,9 +194,88 @@ export default function ModalScreen() {
     );
   };
 
+  const userInitials = user
+    ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U'
+    : 'U';
+
+  const userRoles = roles.length > 0 ? roles : (user?.role ? [user.role] : ['staff_readonly']);
+
   return (
     <ThemedView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView>
+        {/* User Account & Security Capabilities Profile Card */}
+        <Surface style={[styles.card, { backgroundColor: (theme.colors as any).surfaceContainerLowest, marginBottom: 16 }]} elevation={0}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Avatar.Text
+              size={50}
+              label={userInitials}
+              style={{ backgroundColor: theme.colors.primaryContainer, marginRight: 14 }}
+              color={theme.colors.onPrimaryContainer}
+            />
+            <View style={{ flex: 1 }}>
+              <Text variant="titleMedium" style={{ fontWeight: 'bold' }}>
+                {user?.firstName ? `${user.firstName} ${user.lastName}` : (user?.email || 'Authenticated User')}
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                {user?.email || 'user@deeplens.ai'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Active Roles & Capability Count */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {userRoles.map(r => (
+              <Chip key={r} icon="shield-check" compact style={{ backgroundColor: '#EDE9FE' }} textStyle={{ color: '#6D28D9', fontWeight: '600', fontSize: 11 }}>
+                {r.replace('_', ' ').toUpperCase()}
+              </Chip>
+            ))}
+            <Chip icon="key-variant" compact style={{ backgroundColor: '#E0F2FE' }} textStyle={{ color: '#0369A1', fontWeight: '600', fontSize: 11 }}>
+              {isSuperAdmin ? 'Full Super Admin Access' : `${permissions.length} Active Permissions`}
+            </Chip>
+          </View>
+
+          {/* Quick Admin Links if authorized */}
+          {(isSuperAdmin || hasPermission(PERMISSIONS.USERS_VIEW) || hasPermission(PERMISSIONS.ROLES_MANAGE)) && (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              {(isSuperAdmin || hasPermission(PERMISSIONS.USERS_VIEW)) && (
+                <Button
+                  mode="outlined"
+                  icon="account-multiple"
+                  compact
+                  onPress={() => router.push('/system/users')}
+                  style={{ flex: 1, borderRadius: 8 }}
+                >
+                  User Directory
+                </Button>
+              )}
+              {(isSuperAdmin || hasPermission(PERMISSIONS.ROLES_MANAGE)) && (
+                <Button
+                  mode="outlined"
+                  icon="shield-account"
+                  compact
+                  onPress={() => router.push('/system/roles')}
+                  style={{ flex: 1, borderRadius: 8 }}
+                >
+                  Roles & Access
+                </Button>
+              )}
+            </View>
+          )}
+
+          <Button
+            mode="text"
+            icon="logout"
+            textColor={theme.colors.error}
+            onPress={async () => {
+              await signOut();
+              router.replace('/login');
+            }}
+            style={{ marginTop: 8, alignSelf: 'flex-start' }}
+          >
+            Sign Out
+          </Button>
+        </Surface>
+
         {/* Appearance Section */}
         <Surface style={[styles.card, { backgroundColor: (theme.colors as any).surfaceContainerLowest }]} elevation={0}>
           <Text variant="titleMedium" style={[styles.title, { color: theme.colors.onSurface }]}>Appearance</Text>

@@ -26,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<DeepLens.Contracts.Marketing.IWhatsAppService, DeepLens.Infrastructure.Services.WhatsAppService>();
         services.AddScoped<DeepLens.Contracts.Marketing.ICommunicationBroadcastService, DeepLens.Infrastructure.Services.CommunicationBroadcastService>();
         services.AddScoped<DeepLens.Application.Abstractions.Services.IAppSettingsService, DeepLens.Infrastructure.Services.AppSettingsService>();
+        services.AddScoped<DeepLens.Infrastructure.Services.IPermissionCacheService, DeepLens.Infrastructure.Services.PermissionCacheService>();
+        services.AddScoped<Microsoft.AspNetCore.Authentication.IClaimsTransformation, DeepLens.Infrastructure.Services.VayyariClaimsTransformation>();
 
         return services;
     }

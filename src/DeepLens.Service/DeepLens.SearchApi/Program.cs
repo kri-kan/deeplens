@@ -11,6 +11,8 @@ using Minio;
 using Confluent.Kafka;
 using DeepLens.Contracts.Catalog;
 using DeepLens.Shared.Telemetry;
+using Microsoft.AspNetCore.Authorization;
+using DeepLens.SearchApi.Auth;
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
@@ -28,6 +30,11 @@ builder.Services.AddControllers()
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();
+
+// Dynamic RBAC Permission Authorization
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 // --- ENTERPRISE LAYERING REGISTRATIONS ---
 builder.Services.AddApplication();

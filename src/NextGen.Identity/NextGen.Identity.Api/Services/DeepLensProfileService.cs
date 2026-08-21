@@ -51,7 +51,7 @@ public class DeepLensProfileService : IProfileService
             return;
         }
 
-        // Add custom claims
+        // Add essential identity claims only (lightweight JWT < 450 bytes)
         var claims = new List<Claim>
         {
             new Claim("sub", user.Id.ToString()),
@@ -60,18 +60,8 @@ public class DeepLensProfileService : IProfileService
             new Claim("name", $"{user.FirstName} {user.LastName}"),
             new Claim("given_name", user.FirstName),
             new Claim("family_name", user.LastName),
-            new Claim("role", user.Role.ToString()),
-            new Claim("tenant_id", user.TenantId.ToString()),
-            new Claim("is_active", user.IsActive.ToString().ToLower())
+            new Claim("tenant_id", user.TenantId.ToString())
         };
-
-        // Add tenant slug if available
-        if (user.Tenant != null)
-        {
-            claims.Add(new Claim("tenant_slug", user.Tenant.Slug));
-            claims.Add(new Claim("tenant_name", user.Tenant.Name));
-            claims.Add(new Claim("tenant_tier", user.Tenant.Tier.ToString()));
-        }
 
         // Handle Administrative Impersonation claims if present in the Subject principal
         var impersonatorId = context.Subject.FindFirst("act_as")?.Value;
