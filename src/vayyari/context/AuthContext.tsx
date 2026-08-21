@@ -10,9 +10,22 @@ import { router } from 'expo-router';
 const USER_KEY = 'auth_user';
 
 
+export const ALL_AUTH_STORAGE_KEYS = [
+  TOKEN_KEY,
+  USER_KEY,
+  REFRESH_TOKEN_KEY,
+  TOKEN_EXPIRY_KEY,
+  LAST_ACTIVITY_KEY,
+  'auth_capabilities',
+  'auth_permissions',
+  'auth_roles',
+  'auth_capabilities_version',
+];
+
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const handleUnauthorized = async () => {
       console.warn('[AuthContext] Session expired (401). Signing out...');
-      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRY_KEY, LAST_ACTIVITY_KEY]);
+      await AsyncStorage.multiRemove(ALL_AUTH_STORAGE_KEYS);
       setState({ token: null, user: null, isLoading: false });
       router.replace('/login');
     };
@@ -104,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     return wrapInSpan('AuthContext: signOut', async () => {
-      await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY, REFRESH_TOKEN_KEY, TOKEN_EXPIRY_KEY, LAST_ACTIVITY_KEY]);
+      await AsyncStorage.multiRemove(ALL_AUTH_STORAGE_KEYS);
       setState({
         token: null,
         user: null,
@@ -114,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, signIn, signOut }}>
+    <AuthContext.Provider value={{ ...state, signIn, signOut, logout: signOut }}>
       {children}
     </AuthContext.Provider>
   );
