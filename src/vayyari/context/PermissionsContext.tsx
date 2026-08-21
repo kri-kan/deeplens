@@ -21,6 +21,7 @@ export interface PermissionsContextType {
   hasAllPermissions: (permissions: string[]) => boolean;
   hasRole: (role: string) => boolean;
   refreshCapabilities: () => Promise<void>;
+  resetPermissions: () => Promise<void>;
 }
 
 const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
@@ -163,6 +164,19 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return roles.some(r => r.toLowerCase() === role.toLowerCase());
   }, [isSuperAdmin, roles]);
 
+  const resetPermissions = useCallback(async () => {
+    setCapabilities(null);
+    setRoles([]);
+    setPermissions([]);
+    setIsSuperAdmin(false);
+    await AsyncStorage.multiRemove([
+      CAPABILITIES_STORAGE_KEY,
+      PERMISSIONS_STORAGE_KEY,
+      ROLES_STORAGE_KEY,
+      CAPABILITIES_VERSION_STORAGE_KEY,
+    ]);
+  }, []);
+
   return (
     <PermissionsContext.Provider
       value={{
@@ -176,6 +190,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         hasAllPermissions,
         hasRole,
         refreshCapabilities,
+        resetPermissions,
       }}
     >
       {children}

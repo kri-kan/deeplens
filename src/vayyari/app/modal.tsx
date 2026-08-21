@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, ScrollView, View, Alert } from 'react-native';
 import { Surface, Text, SegmentedButtons, useTheme, List, TextInput, Button, IconButton, ActivityIndicator } from 'react-native-paper';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Constants from 'expo-constants';
 import { ThemedView } from '@/components/themed-view';
@@ -16,8 +18,8 @@ import { Avatar, Chip } from 'react-native-paper';
 
 export default function ModalScreen() {
   const { themeMode, setThemeMode } = useAppTheme();
-  const { user, signOut } = useAuth();
-  const { roles, permissions, isSuperAdmin, hasPermission } = usePermissions();
+  const { user, signOut, logout } = useAuth();
+  const { roles, permissions, isSuperAdmin, hasPermission, resetPermissions } = usePermissions();
   const theme = useTheme();
   const router = useRouter();
 
@@ -194,6 +196,45 @@ export default function ModalScreen() {
     );
   };
 
+  const handleLogout = async () => {
+    try {
+      if (logout) {
+        await logout();
+      } else if (signOut) {
+        await signOut();
+      }
+      if (resetPermissions) {
+        await resetPermissions();
+      }
+      await AsyncStorage.multiRemove([
+        'auth_token',
+        'refresh_token',
+        'auth_capabilities',
+        'auth_permissions',
+        'auth_roles',
+        'auth_capabilities_version',
+        'auth_user',
+        'auth_token_expiry',
+        'auth_last_refresh_at',
+      ]);
+      router.replace('/login');
+    } catch (err) {
+      console.error('[SettingsModal] Failed to log out:', err);
+      router.replace('/login');
+    }
+  };
+
+  const confirmLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out of Vayyari?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log Out', style: 'destructive', onPress: handleLogout },
+      ]
+    );
+  };
+
   const userInitials = user
     ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U'
     : 'U';
@@ -263,16 +304,13 @@ export default function ModalScreen() {
           )}
 
           <Button
-            mode="text"
-            icon="logout"
+            mode="outlined"
+            icon={({ size }) => <Ionicons name="log-out-outline" size={size || 18} color={theme.colors.error} />}
             textColor={theme.colors.error}
-            onPress={async () => {
-              await signOut();
-              router.replace('/login');
-            }}
-            style={{ marginTop: 8, alignSelf: 'flex-start' }}
+            onPress={confirmLogout}
+            style={{ marginTop: 12, borderColor: 'rgba(239, 68, 68, 0.4)', borderRadius: 8 }}
           >
-            Sign Out
+            Log Out
           </Button>
         </Surface>
 
@@ -314,7 +352,7 @@ export default function ModalScreen() {
         )}
 
         {/* About Section */}
-        <Surface style={[styles.card, { marginTop: 16, marginBottom: 40, backgroundColor: (theme.colors as any).surfaceContainerLowest }]} elevation={0}>
+        <Surface style={[styles.card, { marginTop: 16, backgroundColor: (theme.colors as any).surfaceContainerLowest }]} elevation={0}>
           <Text variant="titleMedium" style={[styles.title, { color: theme.colors.onSurface, marginBottom: 16 }]}>About System</Text>
           <Text variant="bodySmall" style={{ color: theme.colors.outline, marginBottom: 4 }}>App Version</Text>
           <Text variant="bodyMedium" style={{ marginBottom: 12 }}>{Constants.expoConfig?.version || '1.0.0'}</Text>
@@ -327,6 +365,28 @@ export default function ModalScreen() {
 
           <Text variant="bodySmall" style={{ color: theme.colors.outline, marginBottom: 4 }}>Competitor API Base</Text>
           <Text variant="bodyMedium">{process.env.EXPO_PUBLIC_COMPETITOR_API_URL}</Text>
+        </Surface>
+
+        {/* Account & Session Management */}
+        <Surface style={[styles.card, styles.logoutCard, { backgroundColor: (theme.colors as any).surfaceContainerLowest, marginTop: 16, marginBottom: 40 }]} elevation={0}>
+          <Text variant="titleMedium" style={[styles.title, { color: theme.colors.onSurface, marginBottom: 4 }]}>Account & Session</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.outline, marginBottom: 14 }}>
+            Sign out of your active session. This will purge all cached tokens, roles, and authorization capabilities from this device.
+          </Text>
+          <Button
+            mode="contained"
+            icon={({ size, color }) => (
+              <Ionicons name="log-out-outline" size={size || 20} color={color} />
+            )}
+            buttonColor={theme.colors.error}
+            textColor="#FFFFFF"
+            onPress={confirmLogout}
+            style={styles.logoutButton}
+            contentStyle={styles.logoutButtonContent}
+            labelStyle={styles.logoutButtonLabel}
+          >
+            Log Out
+          </Button>
         </Surface>
       </ScrollView>
     </ThemedView>
@@ -350,5 +410,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#ccc',
-  }
+  },
+  logoutCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  logoutButton: {
+    borderRadius: 12,
+  },
+  logoutButtonContent: {
+    height: 48,
+  },
+  logoutButtonLabel: {
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
 });
