@@ -19,6 +19,7 @@ public interface IProductService
     Task<IEnumerable<VendorProduct>> GetProductsAsync(int skip = 0, int take = 20);
     Task<ProductCatalogResult> GetCatalogAsync(ProductCatalogFilter filter);
     Task<bool> DeleteProductAsync(Guid productId);
+    Task<int> DeleteProductsBulkAsync(List<Guid> productIds);
     Task<int> ArchiveProductsAsync(List<Guid> productIds);
     Task<int> UnarchiveProductsAsync(List<Guid> productIds);
     Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default);

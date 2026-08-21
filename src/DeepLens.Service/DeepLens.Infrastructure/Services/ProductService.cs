@@ -420,27 +420,116 @@ public class ProductService : IProductService
 
     public async Task<bool> DeleteProductAsync(Guid productId)
     {
+        var count = await DeleteProductsBulkAsync(new List<Guid> { productId });
+        return count > 0;
+    }
+
+    public async Task<int> DeleteProductsBulkAsync(List<Guid> productIds)
+    {
+        if (productIds == null || productIds.Count == 0) return 0;
+
         using var db = GetConnection();
         db.Open();
         using var transaction = db.BeginTransaction();
-        
-        try {
-            // 1. Unlink media (don't delete files, as per manual review requirement)
-            await db.ExecuteAsync(@"
-                DELETE FROM media_links 
-                WHERE entity_id = @Id
-                AND entity_type = 'product'", 
-                new { Id = productId }, transaction);
 
-            // 2. Mark product as deleted (Soft Delete)
-            var result = await db.ExecuteAsync("UPDATE products SET is_deleted = TRUE WHERE id = @Id", new { Id = productId }, transaction) > 0;
-            
+        try
+        {
+            var idArray = productIds.ToArray();
+
+            // 1. Query source_group_id and jid to record tombstones in wa.product_tombstones
+            var tombstoneCandidates = (await db.QueryAsync<(string GroupId, string? Jid, Guid ProductId)>(@"
+                SELECT DISTINCT vl.source_group_id AS GroupId, mg.jid AS Jid, vl.product_id AS ProductId
+                FROM vendor_listings vl
+                LEFT JOIN wa.message_groups mg ON mg.group_id = vl.source_group_id
+                WHERE vl.product_id = ANY(@Ids) AND vl.source_group_id IS NOT NULL
+                UNION
+                SELECT mg.group_id AS GroupId, mg.jid AS Jid, mg.deeplens_product_id AS ProductId
+                FROM wa.message_groups mg
+                WHERE mg.deeplens_product_id = ANY(@Ids) AND mg.group_id IS NOT NULL",
+                new { Ids = idArray }, transaction)).ToList();
+
+            if (tombstoneCandidates.Count > 0)
+            {
+                foreach (var t in tombstoneCandidates)
+                {
+                    await db.ExecuteAsync(@"
+                        INSERT INTO wa.product_tombstones (source_group_id, jid, original_product_id, deleted_at)
+                        VALUES (@GroupId, @Jid, @ProductId, NOW())
+                        ON CONFLICT (source_group_id) DO NOTHING",
+                        new { GroupId = t.GroupId, Jid = t.Jid, ProductId = t.ProductId }, transaction);
+                }
+
+                var groupIds = tombstoneCandidates.Select(t => t.GroupId).ToArray();
+                await db.ExecuteAsync(@"
+                    UPDATE wa.message_groups 
+                    SET status = 'ignored', process_as_product = FALSE, updated_at = NOW() 
+                    WHERE deeplens_product_id = ANY(@Ids) OR group_id = ANY(@GroupIds)",
+                    new { Ids = idArray, GroupIds = groupIds }, transaction);
+            }
+
+            // 2. Fetch all media linked to these products for MinIO hard-purge
+            var mediaRows = (await db.QueryAsync<(Guid MediaId, string StoragePath)>(@"
+                SELECT m.id AS MediaId, m.storage_path AS StoragePath
+                FROM media m
+                JOIN media_links ml ON ml.media_id = m.id
+                WHERE ml.entity_id = ANY(@Ids) AND ml.entity_type = 'product'",
+                new { Ids = idArray }, transaction)).ToList();
+
+            // 3. Delete files from MinIO
+            foreach (var media in mediaRows)
+            {
+                if (!string.IsNullOrEmpty(media.StoragePath))
+                {
+                    try
+                    {
+                        await _storageService.DeleteFileAsync(media.StoragePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete product media from MinIO: {Path}", media.StoragePath);
+                    }
+                }
+            }
+
+            // 4. Delete dependent/child records to prevent foreign key errors
+            var mediaIds = mediaRows.Select(m => m.MediaId).Distinct().ToArray();
+            if (mediaIds.Length > 0)
+            {
+                await db.ExecuteAsync(
+                    "DELETE FROM media_links WHERE (entity_id = ANY(@Ids) AND entity_type = 'product') OR media_id = ANY(@MediaIds)",
+                    new { Ids = idArray, MediaIds = mediaIds }, transaction);
+
+                await db.ExecuteAsync(
+                    "DELETE FROM media WHERE id = ANY(@MediaIds)",
+                    new { MediaIds = mediaIds }, transaction);
+            }
+            else
+            {
+                await db.ExecuteAsync(
+                    "DELETE FROM media_links WHERE entity_id = ANY(@Ids) AND entity_type = 'product'",
+                    new { Ids = idArray }, transaction);
+            }
+
+            await db.ExecuteAsync("DELETE FROM instagram_product_links WHERE product_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+            await db.ExecuteAsync("DELETE FROM product_variants WHERE product_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+            await db.ExecuteAsync("DELETE FROM vendor_listings WHERE product_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+            await db.ExecuteAsync("DELETE FROM product_merges WHERE target_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+            await db.ExecuteAsync("DELETE FROM competitor_videos WHERE product_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+            await db.ExecuteAsync("DELETE FROM product_merge_candidates WHERE product_a_id = ANY(@Ids) OR product_b_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+            await db.ExecuteAsync("DELETE FROM llm_corrections WHERE product_id = ANY(@Ids)", new { Ids = idArray }, transaction);
+
+            // 5. Hard delete products
+            var deletedCount = await db.ExecuteAsync("DELETE FROM products WHERE id = ANY(@Ids)", new { Ids = idArray }, transaction);
+
             transaction.Commit();
-            return result;
-        } catch (Exception ex) {
+            _logger.LogInformation("Successfully bulk hard-deleted {Count} products with tombstone protection and MinIO media purge.", deletedCount);
+            return deletedCount;
+        }
+        catch (Exception ex)
+        {
             transaction.Rollback();
-            _logger.LogError(ex, "Failed to delete product {Id}", productId);
-            return false;
+            _logger.LogError(ex, "Failed to bulk delete products: {@ProductIds}", productIds);
+            throw;
         }
     }
 

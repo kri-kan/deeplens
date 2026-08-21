@@ -797,9 +797,9 @@ export default function ProductDetailScreen() {
       {/* Confirmation Dialog */}
       <Portal>
         <Dialog visible={isDeleteDialogOpen} onDismiss={() => setIsDeleteDialogOpen(false)}>
-          <Dialog.Title>Delete Product?</Dialog.Title>
+          <Dialog.Title>Permanently Delete Product?</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodyMedium">This action cannot be undone. Are you sure you want to remove this product from the catalog?</Text>
+            <Text variant="bodyMedium">This action is permanent and cannot be undone. All WhatsApp source media will be purged from storage and anti-resurrection tombstones registered. Are you sure you want to permanently delete this product?</Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
