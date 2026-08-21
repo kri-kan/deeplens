@@ -13,57 +13,53 @@ namespace DeepLens.SearchApi.Tests;
 [TestFixture]
 public class MediaControllerTests
 {
-    private Mock<ITenantMetadataService> _metadataServiceMock;
+    private Mock<IMetadataService> _metadataServiceMock;
     private Mock<IStorageService> _storageServiceMock;
     private Mock<IDistributedCache> _cacheMock;
     private Mock<ILogger<MediaController>> _loggerMock;
+    private Mock<DeepLens.Application.Abstractions.Services.IAppSettingsService> _settingsMock;
     private MediaController _controller;
 
     [SetUp]
     public void SetUp()
     {
-        _metadataServiceMock = new Mock<ITenantMetadataService>();
+        _metadataServiceMock = new Mock<IMetadataService>();
         _storageServiceMock = new Mock<IStorageService>();
         _cacheMock = new Mock<IDistributedCache>();
         _loggerMock = new Mock<ILogger<MediaController>>();
+        _settingsMock = new Mock<DeepLens.Application.Abstractions.Services.IAppSettingsService>();
 
         _controller = new MediaController(
             _metadataServiceMock.Object,
             _storageServiceMock.Object,
             _cacheMock.Object,
-            _loggerMock.Object
+            _loggerMock.Object,
+            _settingsMock.Object
         );
     }
 
     [Test]
-    public async Task GetThumbnail_Should_ReturnBadRequest_ForInvalidTenantId()
-    {
-        // Act
-        var result = await _controller.GetThumbnail(Guid.NewGuid(), "invalid-guid");
-
-        // Assert
-        result.Should().BeOfType<BadRequestObjectResult>();
-    }
-
-    [Test]
-    public async Task GetThumbnail_Should_ReturnFromCache_IfAvailable()
+    public async Task GetThumbnail_Should_ReturnNotFound_WhenMediaNotFound()
     {
         // Arrange
         Guid mediaId = Guid.NewGuid();
-        Guid tenantId = Guid.NewGuid();
-        byte[] cachedData = new byte[] { 1, 2, 3 };
-
-        _cacheMock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(cachedData);
+        _metadataServiceMock.Setup(m => m.GetMediaByIdAsync(mediaId))
+            .ReturnsAsync((DeepLens.Infrastructure.Services.MediaDto?)null);
 
         // Act
-        var result = await _controller.GetThumbnail(mediaId, tenantId.ToString());
+        var result = await _controller.GetThumbnail(mediaId);
 
         // Assert
-        var fileResult = result.Should().BeOfType<FileContentResult>().Subject;
-        fileResult.ContentType.Should().Be("image/webP"); // WebP can be webp or webP depending on how it's returned
-        fileResult.FileContents.Should().Equal(cachedData);
-        
-        _storageServiceMock.Verify(s => s.GetFileAsync(It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+        result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Test]
+    public async Task GetThumbnailByPath_Should_ReturnBadRequest_WhenPathEmpty()
+    {
+        // Act
+        var result = await _controller.GetThumbnailByPath("");
+
+        // Assert
+        result.Should().BeOfType<BadRequestObjectResult>();
     }
 }

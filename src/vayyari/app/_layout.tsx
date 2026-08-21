@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { VayyariEmeraldTheme, VayyariEmeraldNocturneTheme } from '../constants/theme';
 import { ThemeProvider, useAppTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { PermissionsProvider } from '../context/PermissionsContext';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { ShareIntentProvider } from '../context/ShareIntentContext';
@@ -27,9 +28,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ShareIntentProvider>
-          <InnerRootLayout />
-        </ShareIntentProvider>
+        <PermissionsProvider>
+          <ShareIntentProvider>
+            <InnerRootLayout />
+          </ShareIntentProvider>
+        </PermissionsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

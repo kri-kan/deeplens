@@ -20,9 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DeepLens.Contracts\DeepLens.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\DeepLens.SearchApi\DeepLens.SearchApi.csproj" />
-    <ProjectReference Include="..\..\src\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.Contracts\DeepLens.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.SearchApi\DeepLens.SearchApi.csproj" />
+    <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.Application\DeepLens.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

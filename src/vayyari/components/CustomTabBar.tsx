@@ -16,6 +16,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     >
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
+        if ((options as any).href === null) {
+          return null;
+        }
         const label =
           options.tabBarLabel !== undefined
             ? options.tabBarLabel

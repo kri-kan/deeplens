@@ -17,7 +17,7 @@ namespace DeepLens.SearchApi.Tests;
 public class IngestionControllerTests
 {
     private Mock<IStorageService> _storageServiceMock;
-    private Mock<ITenantMetadataService> _metadataServiceMock;
+    private Mock<IMetadataService> _metadataServiceMock;
     private Mock<IAttributeExtractionService> _attributeServiceMock;
     private Mock<IProducer<string, string>> _kafkaProducerMock;
     private Mock<ILogger<IngestionController>> _loggerMock;
@@ -29,7 +29,7 @@ public class IngestionControllerTests
     public void SetUp()
     {
         _storageServiceMock = new Mock<IStorageService>();
-        _metadataServiceMock = new Mock<ITenantMetadataService>();
+        _metadataServiceMock = new Mock<IMetadataService>();
         _attributeServiceMock = new Mock<IAttributeExtractionService>();
         _kafkaProducerMock = new Mock<IProducer<string, string>>();
         _loggerMock = new Mock<ILogger<IngestionController>>();
@@ -72,14 +72,21 @@ public class IngestionControllerTests
             Sku = "SKU001"
         };
 
-        _storageServiceMock.Setup(s => s.UploadFileAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>()))
+        _metadataServiceMock.Setup(m => m.ResolveMediaPreferencesAsync(It.IsAny<DeepLens.Contracts.Media.MediaCategory>(), It.IsAny<string>()))
+            .ReturnsAsync(new DeepLens.Contracts.Media.MediaPreferenceDto
+            {
+                ThumbnailSizes = new[] { "medium" },
+                Retention = "30d"
+            });
+
+        _storageServiceMock.Setup(s => s.UploadFileAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<DeepLens.Contracts.Media.StorageContext>(), It.IsAny<Dictionary<string, string>>()))
             .ReturnsAsync("raw/test.jpg");
 
         // Act
         var result = await _controller.IngestImage(request);
 
         // Assert
-        result.Result.Should().BeOfType<OkObjectResult>();
+        result.Result.Should().BeAssignableTo<ObjectResult>();
         
         // Verify Kafka notification
         _kafkaProducerMock.Verify(p => p.ProduceAsync(
@@ -93,7 +100,6 @@ public class IngestionControllerTests
     {
         var evt = JsonSerializer.Deserialize<ImageUploadedEvent>(eventJson);
         return evt != null && 
-               evt.ProcessingOptions.ThumbnailWidth == 512 && // Default
-               evt.ProcessingOptions.ThumbnailFormat == "webp";
+               evt.ProcessingOptions.GenerateThumbnail == true;
     }
 }

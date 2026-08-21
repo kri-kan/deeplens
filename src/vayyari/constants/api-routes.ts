@@ -7,6 +7,20 @@ export const API_ROUTES = {
   AUTH: {
     LOGIN: '/connect/token',
     PROFILE: '/api/auth/me',
+    CAPABILITIES: '/api/v1/auth/capabilities',
+  },
+
+  // Administration & RBAC/PBAC
+  ADMIN: {
+    USERS: '/api/v1/admin/users',
+    USER_DETAIL: (id: string) => `/api/v1/admin/users/${id}`,
+    USER_STATUS: (id: string) => `/api/v1/admin/users/${id}/status`,
+    USER_ROLES: (id: string) => `/api/v1/admin/users/${id}/roles`,
+    USER_PERMISSIONS: (id: string) => `/api/v1/admin/users/${id}/permissions`,
+    ROLES: '/api/v1/admin/roles',
+    ROLE_DETAIL: (id: string) => `/api/v1/admin/roles/${id}`,
+    ROLE_PERMISSIONS: (id: string) => `/api/v1/admin/roles/${id}/permissions`,
+    PERMISSIONS: '/api/v1/admin/permissions',
   },
 
   // Attachment management
