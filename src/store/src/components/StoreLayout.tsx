@@ -54,6 +54,10 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  const isPreviewEnabled =
+    import.meta.env.DEV ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('preview'));
+
   const effectiveWidth =
     viewportMode === 'mobile'
       ? 375
@@ -80,14 +84,16 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({
         flexDirection: 'column',
       }}
     >
-      <PreviewBar
-        theme={theme}
-        onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-        viewportMode={viewportMode}
-        onChangeViewportMode={setViewportMode}
-        actualWidth={effectiveWidth}
-        activeBreakpoint={activeBreakpointName}
-      />
+      {isPreviewEnabled && (
+        <PreviewBar
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          viewportMode={viewportMode}
+          onChangeViewportMode={setViewportMode}
+          actualWidth={effectiveWidth}
+          activeBreakpoint={activeBreakpointName}
+        />
+      )}
 
       <div
         style={{
@@ -107,7 +113,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({
             minHeight: viewportMode !== 'auto' ? '820px' : '100vh',
             borderRadius: viewportMode !== 'auto' ? 'var(--border-radius-lg)' : 0,
             overflow: 'hidden',
-            boxShadow: viewportMode !== 'auto' ? 'var(--shadow-lg), var(--shadow-emerald)' : 'none',
+            boxShadow: viewportMode !== 'auto' ? 'var(--shadow-lg), var(--shadow-accent)' : 'none',
             background: 'var(--bg-base)',
             display: 'flex',
             position: 'relative',

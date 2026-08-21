@@ -34,7 +34,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 position: 'absolute',
                 top: '8px',
                 left: '8px',
-                background: 'linear-gradient(135deg, var(--emerald-600), var(--emerald-500))',
+                background: 'linear-gradient(135deg, var(--pink-600), var(--pink-500))',
                 color: '#ffffff',
                 fontSize: 'var(--fz-3xs)',
                 fontWeight: 700,
@@ -112,7 +112,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
             <button
               onClick={() => onAddToCart(product)}
-              className={isInCart ? 'btn-secondary' : 'btn-emerald'}
+              className={isInCart ? 'btn-secondary' : 'btn-pink'}
               style={{
                 padding: '0.45rem 0.85rem',
                 fontSize: 'var(--fz-2xs)',
@@ -120,7 +120,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             >
               {isInCart ? (
                 <>
-                  <CheckCircle2 size={14} color="var(--emerald-600)" />
+                  <CheckCircle2 size={14} color="var(--pink-600)" />
                   <span>Added</span>
                 </>
               ) : (

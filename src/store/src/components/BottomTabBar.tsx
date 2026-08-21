@@ -115,7 +115,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
                 position: 'absolute',
                 top: '-2px',
                 right: '4px',
-                background: 'linear-gradient(135deg, var(--emerald-600), var(--emerald-400))',
+                background: 'linear-gradient(135deg, var(--pink-600), var(--pink-400))',
                 color: '#ffffff',
                 fontSize: '10px',
                 fontWeight: 800,
@@ -125,7 +125,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: 'var(--shadow-emerald)',
+                boxShadow: 'var(--shadow-accent)',
               }}
             >
               {cartCount}

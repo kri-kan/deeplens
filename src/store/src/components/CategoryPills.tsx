@@ -34,13 +34,13 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({
           padding: '0.45rem 1rem',
           borderRadius: 'var(--border-radius-pill)',
           border: 'none',
-          background: activeCategory === 'all' ? 'var(--emerald-600)' : 'var(--bg-surface-2)',
+          background: activeCategory === 'all' ? 'var(--pink-600)' : 'var(--bg-surface-2)',
           color: activeCategory === 'all' ? '#ffffff' : 'var(--text-primary)',
           fontWeight: activeCategory === 'all' ? 700 : 500,
           fontSize: 'var(--fz-xs)',
           whiteSpace: 'nowrap',
           cursor: 'pointer',
-          boxShadow: activeCategory === 'all' ? 'var(--shadow-emerald)' : 'var(--shadow-sm)',
+          boxShadow: activeCategory === 'all' ? 'var(--shadow-accent)' : 'var(--shadow-sm)',
           transition: 'all var(--transition-bounce)',
         }}
       >
@@ -61,13 +61,13 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({
               padding: '0.45rem 1rem',
               borderRadius: 'var(--border-radius-pill)',
               border: 'none',
-              background: isActive ? 'var(--emerald-600)' : 'var(--bg-surface-2)',
+              background: isActive ? 'var(--pink-600)' : 'var(--bg-surface-2)',
               color: isActive ? '#ffffff' : 'var(--text-primary)',
               fontWeight: isActive ? 700 : 500,
               fontSize: 'var(--fz-xs)',
               whiteSpace: 'nowrap',
               cursor: 'pointer',
-              boxShadow: isActive ? 'var(--shadow-emerald)' : 'var(--shadow-sm)',
+              boxShadow: isActive ? 'var(--shadow-accent)' : 'var(--shadow-sm)',
               transition: 'all var(--transition-bounce)',
             }}
           >

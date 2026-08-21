@@ -12,7 +12,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? 'github' : 'html',
+  reporter: process.env.CI ? 'github' : [['list'], ['html', { open: 'never' }]],
 
   use: {
     baseURL: 'http://localhost:4173',
@@ -23,18 +23,10 @@ export default defineConfig({
 
   projects: [
     {
-      name: 'Mobile Small',
+      name: 'Mobile',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 360, height: 640 },
-        isMobile: true,
-      },
-    },
-    {
-      name: 'Mobile Large',
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 430, height: 932 },
+        viewport: { width: 375, height: 667 },
         isMobile: true,
       },
     },
@@ -46,17 +38,25 @@ export default defineConfig({
       },
     },
     {
-      name: 'Desktop Small',
+      name: 'Desktop',
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
       },
     },
     {
-      name: 'Desktop Large',
+      name: 'Large Desktop',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 1440, height: 900 },
+        viewport: { width: 1920, height: 1080 },
+      },
+    },
+    {
+      name: 'Mobile Landscape',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 667, height: 375 },
+        isMobile: true,
       },
     },
   ],
