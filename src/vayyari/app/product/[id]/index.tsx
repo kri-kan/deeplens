@@ -448,6 +448,45 @@ export default function ProductDetailScreen() {
 
         {/* Product Details */}
         <View style={styles.detailsContent}>
+          {/* Archived banner */}
+          {product.isArchived && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: theme.dark ? '#2a2010' : '#fff8e1',
+              borderLeftWidth: 4,
+              borderLeftColor: '#f59e0b',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              marginBottom: 8,
+              borderRadius: 6,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 18 }}>🗄️</Text>
+                <Text variant="bodyMedium" style={{ color: theme.dark ? '#fcd34d' : '#92400e', fontWeight: '600' }}>
+                  This product is archived
+                </Text>
+              </View>
+              <Button
+                mode="outlined"
+                compact
+                textColor={theme.dark ? '#fcd34d' : '#92400e'}
+                style={{ borderColor: theme.dark ? '#fcd34d' : '#92400e', marginLeft: 8 }}
+                onPress={async () => {
+                  try {
+                    await productService.unarchiveProducts([id]);
+                    router.back();
+                  } catch (e) {
+                    Alert.alert('Error', 'Failed to unarchive product.');
+                  }
+                }}
+              >
+                Unarchive Product
+              </Button>
+            </View>
+          )}
+
           <View style={styles.row}>
             <Text variant="headlineMedium" style={styles.title}>{product.title || 'Product'}</Text>
             <CompactChip outline color={theme.colors.outline}>{product.productCode || 'N/A'}</CompactChip>

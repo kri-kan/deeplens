@@ -39,7 +39,7 @@ const STARRED_OPTIONS: { id: string; label: string; value: boolean | null }[] = 
   { id: 'unstarred', label: 'Unstarred Only', value: false },
 ];
 
-const SECTIONS = ['Sort', 'Starred', 'Category', 'Price', 'Fabric', 'Vendor'] as const;
+const SECTIONS = ['Sort', 'Starred', 'Category', 'Price', 'Fabric', 'Vendor', 'Archived'] as const;
 type SectionKey = typeof SECTIONS[number];
 
 export interface FilterState {
@@ -50,6 +50,7 @@ export interface FilterState {
   fabrics: string[];
   vendorNames: string[];
   isStarred?: boolean | null;
+  includeArchived?: boolean | null;
 }
 
 interface FilterDrawerProps {
@@ -67,6 +68,7 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   fabrics: [],
   vendorNames: [],
   isStarred: null,
+  includeArchived: null,
 };
 
 export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawerProps) {
@@ -166,7 +168,8 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     (draft.categories.length > 0 ? 1 : 0) +
     draft.fabrics.length +
     draft.vendorNames.length +
-    (draft.minPrice > 0 || draft.maxPrice > 0 ? 1 : 0);
+    (draft.minPrice > 0 || draft.maxPrice > 0 ? 1 : 0) +
+    (draft.includeArchived !== null && draft.includeArchived !== undefined ? 1 : 0);
 
   const renderContent = () => {
     const sectionBg = theme.dark ? '#1e1e2e' : '#fff';
@@ -350,6 +353,35 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
       );
     }
 
+    if (activeSection === 'Archived') {
+      const ARCHIVED_OPTIONS: { id: string; label: string; value: boolean | null }[] = [
+        { id: 'active', label: 'Active Only', value: null },
+        { id: 'archived', label: 'Archived Only', value: true },
+      ];
+      return (
+        <View style={styles.sectionContent}>
+          {ARCHIVED_OPTIONS.map(opt => {
+            const isSelected =
+              opt.value === true
+                ? draft.includeArchived === true
+                : (draft.includeArchived === null || draft.includeArchived === undefined || draft.includeArchived === false);
+            return (
+              <TouchableOpacity
+                key={opt.id}
+                style={[styles.radioRow, isSelected && { backgroundColor: theme.colors.primaryContainer }]}
+                onPress={() => setDraft(d => ({ ...d, includeArchived: opt.value }))}
+              >
+                <View style={[styles.radioCircle, { borderColor: theme.colors.primary }]}>
+                  {isSelected && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
+                </View>
+                <Text style={[styles.optionLabel, { color: textColor }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      );
+    }
+
     return null;
   };
 
@@ -391,7 +423,8 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
                   section === 'Category' && draft.categories.length > 0 ? draft.categories.length :
                   section === 'Fabric' ? draft.fabrics.length :
                   section === 'Vendor' ? draft.vendorNames.length :
-                  section === 'Price' && (draft.minPrice > 0 || draft.maxPrice > 0) ? 1 : 0;
+                  section === 'Price' && (draft.minPrice > 0 || draft.maxPrice > 0) ? 1 :
+                  section === 'Archived' && (draft.includeArchived !== null && draft.includeArchived !== undefined) ? 1 : 0;
 
                 return (
                   <TouchableOpacity
