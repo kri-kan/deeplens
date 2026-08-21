@@ -148,6 +148,23 @@ public class WhatsAppGroupWorker : BackgroundService
 
         _logger.LogInformation("Processing group product creation for GroupId: {GroupId}, Jid: {Jid}", evt.GroupId, evt.Jid);
 
+        using (var tombConn = new NpgsqlConnection(_connectionString))
+        {
+            await tombConn.OpenAsync(ct);
+            var isTombstoned = await tombConn.ExecuteScalarAsync<bool>(
+                "SELECT EXISTS(SELECT 1 FROM wa.product_tombstones WHERE source_group_id = @GroupId)",
+                new { GroupId = evt.GroupId });
+
+            if (isTombstoned)
+            {
+                _logger.LogWarning("GroupId {GroupId} is tombstoned. Ignoring product creation event and marking group ignored.", evt.GroupId);
+                await tombConn.ExecuteAsync(
+                    "UPDATE wa.message_groups SET status = 'ignored', process_as_product = FALSE, updated_at = NOW() WHERE group_id = @GroupId",
+                    new { GroupId = evt.GroupId });
+                return;
+            }
+        }
+
         using var scope = _serviceProvider.CreateScope();
         var aiService = scope.ServiceProvider.GetRequiredService<IAiService>();
         var storage = scope.ServiceProvider.GetRequiredService<IStorageService>();
@@ -833,6 +850,17 @@ public class WhatsAppGroupWorker : BackgroundService
 
         try
         {
+            var isTombstoned = await conn.ExecuteScalarAsync<bool>(
+                "SELECT EXISTS(SELECT 1 FROM wa.product_tombstones WHERE source_group_id = @GroupId)",
+                new { GroupId = evt.GroupId },
+                trans);
+
+            if (isTombstoned)
+            {
+                _logger.LogWarning("GroupId {GroupId} is tombstoned. Ignoring media addition event.", evt.GroupId);
+                return;
+            }
+
             var group = await conn.QuerySingleOrDefaultAsync<dynamic>(
                 "SELECT deeplens_product_id, deeplens_listing_id, category, sub_category FROM wa.message_groups WHERE group_id = @GroupId",
                 new { GroupId = evt.GroupId },

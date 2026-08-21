@@ -105,6 +105,10 @@ class ProductService {
     return productMgmtApiClient.delete(`${API_ROUTES.PRODUCT_CATALOG.LIST}/${productId}`);
   }
 
+  async deleteProductsBulk(productIds: string[]): Promise<void> {
+    return productMgmtApiClient.delete(API_ROUTES.PRODUCT_CATALOG.BULK, productIds);
+  }
+
   async archiveProducts(productIds: string[]): Promise<{ count: number }> {
     return productMgmtApiClient.post(`${API_ROUTES.PRODUCT_CATALOG.LIST}/archive`, productIds);
   }
@@ -229,3 +233,5 @@ class ProductService {
 }
 
 export const productService = new ProductService();
+export const deleteProductsBulk = (productIds: string[]) => productService.deleteProductsBulk(productIds);
+export const deleteProduct = (productId: string) => productService.deleteProduct(productId);

@@ -73,6 +73,13 @@ public class ProductsController : ControllerBase
         return success ? Ok() : NotFound();
     }
 
+    [HttpDelete("bulk")]
+    public async Task<IActionResult> DeleteProductsBulk([FromBody] List<Guid> productIds)
+    {
+        var count = await _productService.DeleteProductsBulkAsync(productIds);
+        return Ok(new { count });
+    }
+
     [HttpPost("archive")]
     public async Task<IActionResult> ArchiveProducts([FromBody] List<Guid> productIds)
     {

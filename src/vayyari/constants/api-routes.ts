@@ -33,6 +33,7 @@ export const API_ROUTES = {
   // Product catalog CRUD (backed by ProductsController)
   PRODUCT_CATALOG: {
     LIST:   '/api/v1/products',
+    BULK:   '/api/v1/products/bulk',
     CREATE: '/api/v1/products',
     MERGE:  '/api/v1/products/merge',
     GET_BY_ID: (id: string) => `/api/v1/products/${id}`,

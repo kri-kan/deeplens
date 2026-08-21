@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, FlatList, Dimensions, RefreshControl, StyleSheet, PanResponder, BackHandler, GestureResponderEvent } from 'react-native';
+import { View, FlatList, Dimensions, RefreshControl, StyleSheet, PanResponder, BackHandler, GestureResponderEvent, Alert } from 'react-native';
 import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Button } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -73,11 +73,31 @@ export default function ArchivedProductsScreen() {
     }
   };
 
-  const handleDelete = async () => {
-    if (selectedIds.size > 0) {
-      // Stub for delete functionality as requested
-      console.log('Delete stub');
-    }
+  const handleDelete = () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    Alert.alert(
+      'Permanent Delete',
+      `Are you sure you want to permanently delete ${ids.length} archived product(s)? This will purge all associated WhatsApp media and cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await productService.deleteProductsBulk(ids);
+              clearSelection();
+              fetchProducts(true);
+              Alert.alert('Deleted', 'Selected archived products permanently deleted.');
+            } catch (e) {
+              console.error('Failed to permanently delete archived products:', e);
+              Alert.alert('Error', 'Failed to permanently delete selected products.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const isDragSelectingRef = useRef(false);

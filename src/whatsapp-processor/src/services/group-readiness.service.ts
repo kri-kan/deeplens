@@ -508,7 +508,8 @@ export class GroupReadinessService {
                      JOIN wa.chats c ON mg.jid = c.jid
                      WHERE mg.status = 'staging'
                        AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
-                       AND c.vendor_id IS NOT NULL`,
+                       AND c.vendor_id IS NOT NULL
+                       AND NOT EXISTS (SELECT 1 FROM wa.product_tombstones pt WHERE pt.source_group_id = mg.group_id)`,
                     [debounceSeconds]
                 );
 

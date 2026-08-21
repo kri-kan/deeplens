@@ -151,6 +151,33 @@ export default function ProductCatalogScreen() {
     }
   };
 
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    Alert.alert(
+      'Permanent Delete',
+      `Are you sure you want to permanently delete ${ids.length} product(s)? This will purge all associated WhatsApp media and cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await productService.deleteProductsBulk(ids);
+              clearSelection();
+              setActiveFilters(prev => ({ ...prev }));
+              Alert.alert('Deleted', 'Selected products and media permanently deleted.');
+            } catch (e) {
+              console.error('Failed to permanently delete products:', e);
+              Alert.alert('Error', 'Failed to permanently delete selected products.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleChangeCategory = async (slug: string) => {
     if (!selectedProductForCategory) return;
     setChangingCategory(true);
@@ -352,7 +379,23 @@ export default function ProductCatalogScreen() {
                   title="Unarchive"
                 />
               )}
+              {/* Delete — permanent deletion with WhatsApp media purge */}
+              <Menu.Item
+                leadingIcon="delete-outline"
+                onPress={() => {
+                  setSelectionMenuVisible(false);
+                  handleBulkDelete();
+                }}
+                title="Delete"
+                titleStyle={{ color: theme.colors.error }}
+              />
             </Menu>
+            <IconButton
+              icon="delete-outline"
+              iconColor={theme.colors.error}
+              onPress={handleBulkDelete}
+              style={{ margin: 0 }}
+            />
           </View>
         ) : (
           <ProductCategoryPicker
