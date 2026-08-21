@@ -148,7 +148,7 @@ for profile in "${PROFILES[@]}"; do
         run_ok=0
         consecutive_failures=0
         for attempt in 1 2 3; do
-            MAESTRO_CLI_NO_ANALYTICS=true maestro test \
+            MAESTRO_CLI_NO_ANALYTICS=true timeout 180 maestro test \
                 -e PROFILE_NAME="$profile" \
                 -e DELAY_SHARE=$DELAY_SHARE \
                 -e DELAY_SHEET=$DELAY_SHEET \
@@ -159,9 +159,13 @@ for profile in "${PROFILES[@]}"; do
             exit_code=$?
             # Propagate Ctrl+C immediately
             [ $exit_code -eq 130 ] && exit 130
+            # timeout returns 124 if the command times out
             if [ $exit_code -eq 0 ]; then
                 run_ok=1
                 break
+            fi
+            if [ $exit_code -eq 124 ]; then
+                echo "Maestro process hung and was killed by timeout on attempt $attempt."
             fi
             # Wait 1 second to ensure Maestro JVM has fully flushed the log to disk
             sleep 1

@@ -210,12 +210,11 @@ appId: com.anonymous.vayyari
     centerElement: true
 - evalScript: |
     var start = new Date().getTime();
-    while (new Date().getTime() < start + 1500);
+    while (new Date().getTime() < start + 3000);
 
-# Tap Add to story text label directly with zero settle delay
+# Tap Add to story text label directly
 - tapOn:
     text: "Add to story"
-    waitToSettleTimeoutMs: 0
 
 # Dynamic wait loop: handles instant transitions, slow loading labels, and retry clicks
 - evalScript: ${output.story_added = 'false'}
@@ -263,7 +262,6 @@ appId: com.anonymous.vayyari
                 commands:
                   - tapOn:
                       text: "Add to story"
-                      waitToSettleTimeoutMs: 0
       - runFlow:
           when:
             true: ${output.story_added == 'false'}
