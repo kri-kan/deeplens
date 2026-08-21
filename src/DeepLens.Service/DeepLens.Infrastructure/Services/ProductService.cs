@@ -22,6 +22,7 @@ public class ProductService : IProductService
     private readonly DeepLens.Infrastructure.Services.IStorageService _storageService;
     private readonly DeepLens.Application.Abstractions.Repositories.IProductShareLogRepository _productShareLogRepository;
     private readonly DeepLens.Application.Abstractions.Repositories.IProductRepository _productRepository;
+    private readonly DeepLens.Application.Abstractions.Services.IAiService _aiService;
     private readonly string _connectionString;
 
     public ProductService(
@@ -29,13 +30,15 @@ public class ProductService : IProductService
         ILogger<ProductService> logger,
         DeepLens.Infrastructure.Services.IStorageService storageService,
         DeepLens.Application.Abstractions.Repositories.IProductShareLogRepository productShareLogRepository,
-        DeepLens.Application.Abstractions.Repositories.IProductRepository productRepository)
+        DeepLens.Application.Abstractions.Repositories.IProductRepository productRepository,
+        DeepLens.Application.Abstractions.Services.IAiService aiService)
     {
         _configuration = configuration;
         _logger = logger;
         _storageService = storageService;
         _productShareLogRepository = productShareLogRepository;
         _productRepository = productRepository;
+        _aiService = aiService;
         _connectionString = _configuration.GetConnectionString("DefaultConnection") 
                          ?? throw new InvalidOperationException("DefaultConnection string not found");
     }
@@ -1285,15 +1288,92 @@ public class ProductService : IProductService
                 throw new InvalidOperationException($"Product {productId} not found");
             }
 
-            // TODO: Integrate dynamic generation via AI reasoning service instead of mock.
-            // Mocking the AI service generation for now.
-            var platformText = targetPlatform ?? "social media";
-            return $"Check out our amazing {product.Title}! Available now for {product.VendorPrice} INR. Perfect for your {platformText} followers!";
+            var aiDto = new DeepLens.Application.Abstractions.Services.ProductShareDescriptionDto
+            {
+                ProductId = product.Id.ToString(),
+                BaseSku = product.ProductCode ?? product.Id.ToString(),
+                Title = product.Title,
+                VendorPrice = product.VendorPrice,
+                TargetPlatform = targetPlatform ?? "instagram",
+                RawDescription = product.Description,
+                Category = product.Category,
+                Fabric = product.Fabric,
+                StitchType = product.StitchType,
+                Color = product.Media.FirstOrDefault(m => !string.IsNullOrEmpty(m.Color))?.Color
+            };
+
+            return await _aiService.GenerateShareDescriptionAsync(aiDto, ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to generate share description for ProductId {ProductId}", productId);
             throw;
         }
+    }
+
+    public async Task<ProductPublishEventDto> RecordPublishEventAsync(ProductPublishEventDto dto, CancellationToken ct = default)
+    {
+        using var db = GetConnection();
+        db.Open();
+
+        var sql = @"
+            INSERT INTO public.product_publishing_events (
+                id, product_id, platform, account_id, account_name, 
+                published_url, external_post_id, description_used, status, published_at, created_at
+            ) VALUES (
+                COALESCE(@Id, gen_random_uuid()), @ProductId, @Platform, @AccountId, @AccountName,
+                @PublishedUrl, @ExternalPostId, @DescriptionUsed, @Status, @PublishedAt, @CreatedAt
+            )
+            RETURNING id, product_id AS ProductId, platform, account_id AS AccountId, account_name AS AccountName,
+                      published_url AS PublishedUrl, external_post_id AS ExternalPostId, description_used AS DescriptionUsed,
+                      status, published_at AS PublishedAt, created_at AS CreatedAt";
+
+        var result = await db.QuerySingleAsync<ProductPublishEventDto>(sql, new
+        {
+            Id = dto.Id ?? Guid.NewGuid(),
+            ProductId = dto.ProductId,
+            Platform = dto.Platform ?? "instagram",
+            AccountId = dto.AccountId,
+            AccountName = dto.AccountName,
+            PublishedUrl = dto.PublishedUrl,
+            ExternalPostId = dto.ExternalPostId,
+            DescriptionUsed = dto.DescriptionUsed,
+            Status = dto.Status ?? "published",
+            PublishedAt = dto.PublishedAt == default ? DateTime.UtcNow : dto.PublishedAt,
+            CreatedAt = dto.CreatedAt == default ? DateTime.UtcNow : dto.CreatedAt
+        });
+
+        _logger.LogInformation("Recorded product publish event for ProductId {ProductId}, Platform {Platform}, Account {Account}", 
+            dto.ProductId, dto.Platform, dto.AccountName);
+        return result;
+    }
+
+    public async Task<IEnumerable<ProductPublishEventDto>> GetPublishEventsAsync(Guid productId, CancellationToken ct = default)
+    {
+        using var db = GetConnection();
+        db.Open();
+
+        var sql = @"
+            SELECT id, product_id AS ProductId, platform, account_id AS AccountId, account_name AS AccountName,
+                   published_url AS PublishedUrl, external_post_id AS ExternalPostId, description_used AS DescriptionUsed,
+                   status, published_at AS PublishedAt, created_at AS CreatedAt
+            FROM public.product_publishing_events
+            WHERE product_id = @ProductId
+            ORDER BY published_at DESC";
+
+        return await db.QueryAsync<ProductPublishEventDto>(sql, new { ProductId = productId });
+    }
+
+    public async Task<IEnumerable<InstagramAccountOptionDto>> GetPublishingInstagramAccountsAsync(CancellationToken ct = default)
+    {
+        using var db = GetConnection();
+        db.Open();
+
+        var sql = @"
+            SELECT id, COALESCE(username, '') AS Username, full_name AS FullName, profile_picture_url AS ProfilePictureUrl, is_primary AS IsPrimary
+            FROM public.instagram_accounts
+            ORDER BY is_primary DESC, username ASC";
+
+        return await db.QueryAsync<InstagramAccountOptionDto>(sql);
     }
 }

@@ -1,6 +1,14 @@
 import { productMgmtApiClient } from '../api/client';
 import { API_ROUTES } from '../constants/api-routes';
-import type { VendorProduct, ProductIngestionRequest, ProductShareLog, RecordShareRequest, GenerateShareDescriptionResponse } from '../types/products';
+import type { 
+  VendorProduct, 
+  ProductIngestionRequest, 
+  ProductShareLog, 
+  RecordShareRequest, 
+  GenerateShareDescriptionResponse,
+  ProductPublishEvent,
+  InstagramAccountOption 
+} from '../types/products';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
 
@@ -227,8 +235,22 @@ class ProductService {
     return productMgmtApiClient.post<ProductShareLog>(`/api/v1/products/${productId}/shares`, request);
   }
 
-  async generateShareDescription(productId: string): Promise<GenerateShareDescriptionResponse> {
-    return productMgmtApiClient.post<GenerateShareDescriptionResponse>(`/api/v1/products/${productId}/generate-share-description`, {});
+  async generateShareDescription(productId: string, targetPlatform?: string): Promise<GenerateShareDescriptionResponse> {
+    return productMgmtApiClient.post<GenerateShareDescriptionResponse>(`/api/v1/products/${productId}/generate-share-description`, {
+      targetPlatform: targetPlatform ?? 'instagram'
+    });
+  }
+
+  async recordPublishEvent(productId: string, event: ProductPublishEvent): Promise<ProductPublishEvent> {
+    return productMgmtApiClient.post<ProductPublishEvent>(`/api/v1/products/${productId}/publish-events`, event);
+  }
+
+  async getPublishEvents(productId: string): Promise<ProductPublishEvent[]> {
+    return productMgmtApiClient.get<ProductPublishEvent[]>(`/api/v1/products/${productId}/publish-events`);
+  }
+
+  async getPublishingInstagramAccounts(): Promise<InstagramAccountOption[]> {
+    return productMgmtApiClient.get<InstagramAccountOption[]>('/api/v1/products/instagram-accounts');
   }
 }
 

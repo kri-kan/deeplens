@@ -37,6 +37,8 @@ export const API_ROUTES = {
     CREATE: '/api/v1/products',
     MERGE:  '/api/v1/products/merge',
     GET_BY_ID: (id: string) => `/api/v1/products/${id}`,
+    PUBLISH_EVENTS: (id: string) => `/api/v1/products/${id}/publish-events`,
+    INSTAGRAM_ACCOUNTS: '/api/v1/products/instagram-accounts',
   },
 
   // Catalog & Media (legacy search/ingest flow)

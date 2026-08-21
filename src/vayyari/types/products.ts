@@ -127,3 +127,25 @@ export interface RecordShareRequest {
 export interface GenerateShareDescriptionResponse {
   description: string;
 }
+
+export interface ProductPublishEvent {
+  id?: string;
+  productId: string;
+  platform: string;
+  accountId?: string;
+  accountName?: string;
+  publishedUrl?: string;
+  externalPostId?: string;
+  descriptionUsed?: string | null;
+  status: string;
+  publishedAt?: string;
+  createdAt?: string;
+}
+
+export interface InstagramAccountOption {
+  id: string;
+  username: string;
+  fullName?: string;
+  profilePictureUrl?: string;
+  isPrimary: boolean;
+}

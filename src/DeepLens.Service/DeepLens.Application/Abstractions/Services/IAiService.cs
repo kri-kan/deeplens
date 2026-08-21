@@ -32,4 +32,23 @@ public interface IAiService
     /// <param name="isManual">When true, the request is treated as high-priority in the reasoning service queue.</param>
     /// <returns>Extracted product details containing category, sub-category, price, shipping, fabric, stitch type, and tags.</returns>
     Task<ExtractedProductInfo> ExtractProductInfoAsync(string description, bool isManual = false);
+
+    /// <summary>
+    /// Generates high-converting social media share caption with Product ID enforcement from ReasoningService.
+    /// </summary>
+    Task<string> GenerateShareDescriptionAsync(ProductShareDescriptionDto dto, System.Threading.CancellationToken ct = default);
+}
+
+public class ProductShareDescriptionDto
+{
+    public string? ProductId { get; set; }
+    public string? BaseSku { get; set; }
+    public string? Title { get; set; }
+    public decimal? VendorPrice { get; set; }
+    public string? TargetPlatform { get; set; }
+    public string? RawDescription { get; set; }
+    public string? Category { get; set; }
+    public string? Fabric { get; set; }
+    public string? StitchType { get; set; }
+    public string? Color { get; set; }
 }
