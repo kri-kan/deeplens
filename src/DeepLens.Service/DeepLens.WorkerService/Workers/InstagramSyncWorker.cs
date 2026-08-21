@@ -90,7 +90,7 @@ namespace DeepLens.WorkerService.Workers
         {
             using var conn = new NpgsqlConnection(_connectionString);
             await conn.OpenAsync(ct);
-            _logger.LogInformation("Database connection opened for queue processing.");
+            _logger.LogDebug("Database connection opened for queue processing.");
 
             // Fetch highest priority pending job that is due
             // Using a transaction with FOR UPDATE SKIP LOCKED to strictly ensure 

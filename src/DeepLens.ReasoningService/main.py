@@ -29,18 +29,30 @@ _queue_counter = 0   # tie-breaker so equal priorities preserve insertion order
 async def _ollama_worker():
     """Single async worker that drains the priority queue sequentially."""
     while True:
-        priority, _seq, prompt, system, future, cancel_event = await _ollama_queue.get()
         try:
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, _call_ollama_sync, prompt, system, cancel_event
-            )
-            if not future.done():
-                future.set_result(result)
-        except Exception as exc:
-            if not future.done():
-                future.set_exception(exc)
-        finally:
-            _ollama_queue.task_done()
+            priority, _seq, prompt, system, future, cancel_event = await _ollama_queue.get()
+            try:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None, _call_ollama_sync, prompt, system, cancel_event
+                )
+                if not future.done() and not future.cancelled():
+                    try:
+                        future.set_result(result)
+                    except (asyncio.InvalidStateError, Exception):
+                        pass
+            except Exception as exc:
+                if not future.done() and not future.cancelled():
+                    try:
+                        future.set_exception(exc)
+                    except (asyncio.InvalidStateError, Exception):
+                        pass
+            finally:
+                _ollama_queue.task_done()
+        except asyncio.CancelledError:
+            break
+        except Exception as queue_err:
+            print(f"Error in _ollama_worker loop: {queue_err}", flush=True)
+            await asyncio.sleep(1)
 
 @app.on_event("startup")
 async def _start_worker():

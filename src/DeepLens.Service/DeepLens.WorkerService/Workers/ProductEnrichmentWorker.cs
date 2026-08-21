@@ -33,7 +33,7 @@ public class ProductEnrichmentWorker : BackgroundService
 
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             GroupId = "deeplens-product-enrichment-workers",
             ClientId = Environment.MachineName + "-product-enrichment-worker",
             AutoOffsetReset = AutoOffsetReset.Earliest,
@@ -87,6 +87,7 @@ public class ProductEnrichmentWorker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing enrichment message");
+            try { _consumer.Commit(consumeResult); } catch { }
         }
     }
 

@@ -56,7 +56,7 @@ public class WhatsAppGroupWorker : BackgroundService
 
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             GroupId = "deeplens-whatsapp-group-workers",
             ClientId = Environment.MachineName + "-whatsapp-group-worker",
             AutoOffsetReset = AutoOffsetReset.Earliest,
@@ -138,6 +138,7 @@ public class WhatsAppGroupWorker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing WhatsApp Group Kafka message from topic: {Topic}", consumeResult.Topic);
+            try { _consumer.Commit(consumeResult); } catch { }
         }
     }
 

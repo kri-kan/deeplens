@@ -35,7 +35,7 @@ public class VideoProcessingWorker : BackgroundService
 
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "127.0.0.1:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             GroupId = "deeplens-video-processing-workers",
             ClientId = Environment.MachineName + "-video-processor",
             AutoOffsetReset = AutoOffsetReset.Earliest,

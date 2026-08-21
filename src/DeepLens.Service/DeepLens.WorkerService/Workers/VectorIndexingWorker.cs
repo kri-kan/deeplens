@@ -31,7 +31,7 @@ public class VectorIndexingWorker : BackgroundService
 
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             GroupId = "deeplens-vector-indexing-workers",
             ClientId = Environment.MachineName + "-vector-indexer",
             AutoOffsetReset = AutoOffsetReset.Earliest,
@@ -40,7 +40,7 @@ public class VectorIndexingWorker : BackgroundService
 
         var producerConfig = new ProducerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             ClientId = Environment.MachineName + "-vector-indexer-producer",
             Acks = Acks.All
         };

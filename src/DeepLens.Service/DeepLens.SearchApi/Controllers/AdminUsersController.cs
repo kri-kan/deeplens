@@ -182,10 +182,12 @@ public class AdminUsersController : ControllerBase
     /// <summary>
     /// Get user details and assigned roles/permissions
     /// </summary>
-    [HttpGet("{id:guid}")]
+    [HttpGet("{id}")]
     [HasPermission("users:view")]
-    public async Task<IActionResult> GetUserById(Guid id)
+    public async Task<IActionResult> GetUserById(string id)
     {
+        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+
         var tenantId = await ResolveTenantIdAsync();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
@@ -194,7 +196,7 @@ public class AdminUsersController : ControllerBase
             FROM public.users
             WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
 
-        var user = await connection.QueryFirstOrDefaultAsync(userSql, new { Id = id, TenantId = tenantId });
+        var user = await connection.QueryFirstOrDefaultAsync(userSql, new { Id = userGuid, TenantId = tenantId });
         if (user == null) return NotFound(new { message = "User not found." });
 
         // Query assigned roles
@@ -204,10 +206,10 @@ public class AdminUsersController : ControllerBase
             JOIN public.roles r ON ur.role_id = r.id
             WHERE ur.user_id = @UserId AND ur.tenant_id = @TenantId;";
 
-        var assignedRoles = (await connection.QueryAsync<RoleDto>(rolesSql, new { UserId = id, TenantId = tenantId })).ToList();
+        var assignedRoles = (await connection.QueryAsync<RoleDto>(rolesSql, new { UserId = userGuid, TenantId = tenantId })).ToList();
 
         // Effective permissions from cache/db
-        var auth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, id);
+        var auth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userGuid);
 
         // Custom permissions
         const string customPermSql = @"
@@ -216,7 +218,7 @@ public class AdminUsersController : ControllerBase
             JOIN public.permissions p ON up.permission_id = p.id
             WHERE up.user_id = @UserId AND up.tenant_id = @TenantId;";
 
-        var customPerms = (await connection.QueryAsync<string>(customPermSql, new { UserId = id, TenantId = tenantId })).ToList();
+        var customPerms = (await connection.QueryAsync<string>(customPermSql, new { UserId = userGuid, TenantId = tenantId })).ToList();
 
         var dto = new UserAdminDto
         {
@@ -241,10 +243,12 @@ public class AdminUsersController : ControllerBase
     /// <summary>
     /// Toggle or update user active status
     /// </summary>
-    [HttpPatch("{id:guid}/status")]
+    [HttpPatch("{id}/status")]
     [HasPermission("users:manage")]
-    public async Task<IActionResult> UpdateUserStatus(Guid id, [FromBody] UpdateUserStatusRequest request)
+    public async Task<IActionResult> UpdateUserStatus(string id, [FromBody] UpdateUserStatusRequest request)
     {
+        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+
         var tenantId = await ResolveTenantIdAsync();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
@@ -253,27 +257,29 @@ public class AdminUsersController : ControllerBase
             SET is_active = @IsActive, updated_at = CURRENT_TIMESTAMP 
             WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
 
-        var affected = await connection.ExecuteAsync(sql, new { Id = id, TenantId = tenantId, IsActive = request.IsActive });
+        var affected = await connection.ExecuteAsync(sql, new { Id = userGuid, TenantId = tenantId, IsActive = request.IsActive });
         if (affected == 0) return NotFound(new { message = "User not found." });
 
-        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, id);
+        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
         return Ok(new { success = true, isActive = request.IsActive });
     }
 
     /// <summary>
     /// Assign/update roles for user
     /// </summary>
-    [HttpPut("{id:guid}/roles")]
+    [HttpPut("{id}/roles")]
     [HasPermission("users:manage")]
-    public async Task<IActionResult> UpdateUserRoles(Guid id, [FromBody] UpdateUserRolesRequest request)
+    public async Task<IActionResult> UpdateUserRoles(string id, [FromBody] UpdateUserRolesRequest request)
     {
+        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+
         var tenantId = await ResolveTenantIdAsync();
         var currentUserId = GetCurrentUserId();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
         // Check user exists
         const string checkUserSql = "SELECT id FROM public.users WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
-        var userExists = await connection.ExecuteScalarAsync<Guid?>(checkUserSql, new { Id = id, TenantId = tenantId });
+        var userExists = await connection.ExecuteScalarAsync<Guid?>(checkUserSql, new { Id = userGuid, TenantId = tenantId });
         if (!userExists.HasValue) return NotFound(new { message = "User not found." });
 
         // Resolve role IDs to assign
@@ -299,7 +305,7 @@ public class AdminUsersController : ControllerBase
         {
             // Remove existing user roles
             const string deleteSql = "DELETE FROM public.user_roles WHERE user_id = @UserId AND tenant_id = @TenantId;";
-            await connection.ExecuteAsync(deleteSql, new { UserId = id, TenantId = tenantId }, transaction);
+            await connection.ExecuteAsync(deleteSql, new { UserId = userGuid, TenantId = tenantId }, transaction);
 
             // Insert new user roles
             if (targetRoleIds.Any())
@@ -313,7 +319,7 @@ public class AdminUsersController : ControllerBase
                 {
                     await connection.ExecuteAsync(insertSql, new
                     {
-                        UserId = id,
+                        UserId = userGuid,
                         RoleId = roleId,
                         TenantId = tenantId,
                         AssignedBy = currentUserId != Guid.Empty ? currentUserId : (Guid?)null
@@ -330,13 +336,13 @@ public class AdminUsersController : ControllerBase
         }
 
         // Invalidate cache immediately
-        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, id);
+        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
 
-        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, id);
+        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userGuid);
         return Ok(new
         {
             success = true,
-            userId = id,
+            userId = userGuid,
             roles = updatedAuth.Roles,
             permissions = updatedAuth.Permissions
         });
@@ -345,17 +351,19 @@ public class AdminUsersController : ControllerBase
     /// <summary>
     /// Override custom permissions for user
     /// </summary>
-    [HttpPut("{id:guid}/permissions")]
+    [HttpPut("{id}/permissions")]
     [HasPermission("users:manage")]
-    public async Task<IActionResult> UpdateUserPermissions(Guid id, [FromBody] UpdateUserPermissionsRequest request)
+    public async Task<IActionResult> UpdateUserPermissions(string id, [FromBody] UpdateUserPermissionsRequest request)
     {
+        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+
         var tenantId = await ResolveTenantIdAsync();
         var currentUserId = GetCurrentUserId();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
         // Check user exists
         const string checkUserSql = "SELECT id FROM public.users WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
-        var userExists = await connection.ExecuteScalarAsync<Guid?>(checkUserSql, new { Id = id, TenantId = tenantId });
+        var userExists = await connection.ExecuteScalarAsync<Guid?>(checkUserSql, new { Id = userGuid, TenantId = tenantId });
         if (!userExists.HasValue) return NotFound(new { message = "User not found." });
 
         // Resolve permission IDs
@@ -377,7 +385,7 @@ public class AdminUsersController : ControllerBase
         {
             // Remove existing user permission overrides
             const string deleteSql = "DELETE FROM public.user_permissions WHERE user_id = @UserId AND tenant_id = @TenantId;";
-            await connection.ExecuteAsync(deleteSql, new { UserId = id, TenantId = tenantId }, transaction);
+            await connection.ExecuteAsync(deleteSql, new { UserId = userGuid, TenantId = tenantId }, transaction);
 
             // Insert new overrides
             if (targetPermissionIds.Any())
@@ -391,7 +399,7 @@ public class AdminUsersController : ControllerBase
                 {
                     await connection.ExecuteAsync(insertSql, new
                     {
-                        UserId = id,
+                        UserId = userGuid,
                         PermissionId = permId,
                         TenantId = tenantId,
                         GrantedBy = currentUserId != Guid.Empty ? currentUserId : (Guid?)null
@@ -408,13 +416,13 @@ public class AdminUsersController : ControllerBase
         }
 
         // Invalidate cache immediately
-        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, id);
+        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
 
-        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, id);
+        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userGuid);
         return Ok(new
         {
             success = true,
-            userId = id,
+            userId = userGuid,
             roles = updatedAuth.Roles,
             permissions = updatedAuth.Permissions
         });
