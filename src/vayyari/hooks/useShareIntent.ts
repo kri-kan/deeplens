@@ -7,23 +7,13 @@ export function useShareIntent() {
   const { setSharedMedia } = useShareIntentContext();
   const router = useRouter();
 
+  const urlStr = Linking.useURL();
+
   useEffect(() => {
-    // Process initial launch URL if opened via deep link / share scheme
-    Linking.getInitialURL().then(url => {
-      if (url) {
-        parseAndNavigate(url);
-      }
-    });
-
-    // Process incoming URLs while app is open / warm start
-    const subscription = Linking.addEventListener('url', event => {
-      if (event.url) {
-        parseAndNavigate(event.url);
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
+    if (urlStr) {
+      parseAndNavigate(urlStr);
+    }
+  }, [urlStr]);
 
   const parseAndNavigate = (urlStr: string) => {
     try {
