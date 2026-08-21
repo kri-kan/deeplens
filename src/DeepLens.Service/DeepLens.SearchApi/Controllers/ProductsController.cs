@@ -42,8 +42,12 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet("catalog")]
-    public async Task<IActionResult> GetCatalog([FromQuery] ProductCatalogFilter filter)
+    public async Task<IActionResult> GetCatalog([FromQuery] ProductCatalogFilter filter, [FromQuery] bool? isStarred = null)
     {
+        if (isStarred.HasValue)
+        {
+            filter.IsStarred = isStarred;
+        }
         var result = await _productService.GetCatalogAsync(filter);
         return Ok(result);
     }

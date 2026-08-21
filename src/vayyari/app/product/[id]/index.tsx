@@ -37,6 +37,7 @@ import { productService } from '@/services/productService';
 import { useProductDetail } from '@/hooks/useProductDetail';
 import type { VendorProduct, MediaEntry, VendorListing } from '@/types/products';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
+import { formatISTTimestamp } from '@/utils/date-format';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -451,6 +452,18 @@ export default function ProductDetailScreen() {
             <Text variant="headlineMedium" style={styles.title}>{product.title || 'Product'}</Text>
             <CompactChip outline color={theme.colors.outline}>{product.productCode || 'N/A'}</CompactChip>
           </View>
+
+          {(() => {
+            const senderTimestamp = formatISTTimestamp(product.createdAt, product.sourceGroupId);
+            return senderTimestamp ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <Icon source="clock-outline" size={14} color={theme.colors.outline} />
+                <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
+                  Received {senderTimestamp} (IST)
+                </Text>
+              </View>
+            ) : null;
+          })()}
           
           <TouchableOpacity
             activeOpacity={0.7}
@@ -588,19 +601,10 @@ export default function ProductDetailScreen() {
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       {(() => {
-                        let dateObj = listing.updatedAt ? new Date(listing.updatedAt) : null;
-                        if (listing.sourceGroupId) {
-                          const parts = listing.sourceGroupId.split('_');
-                          if (parts.length > 1) {
-                            const ts = parseInt(parts[parts.length - 1], 10);
-                            if (!isNaN(ts) && ts > 1000000000) {
-                              dateObj = new Date(ts * 1000);
-                            }
-                          }
-                        }
-                        return dateObj ? (
+                        const listingTime = formatISTTimestamp(listing.updatedAt, listing.sourceGroupId);
+                        return listingTime ? (
                           <Text variant="bodySmall" style={styles.listingMeta}>
-                            {dateObj.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {listingTime}
                           </Text>
                         ) : null;
                       })()}

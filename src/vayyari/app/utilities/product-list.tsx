@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet,
-  PanResponder, GestureResponderEvent, BackHandler
+  PanResponder, GestureResponderEvent, BackHandler, ScrollView, TouchableOpacity
 } from 'react-native';
-import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput } from 'react-native-paper';
+import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput, Icon } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -91,6 +91,7 @@ export default function ProductCatalogScreen() {
 
   const activeFilterCount =
     (activeFilters.sortBy !== 'recent' ? 1 : 0) +
+    (activeFilters.isStarred !== null && activeFilters.isStarred !== undefined ? 1 : 0) +
     (activeFilters.categories && activeFilters.categories.length > 0 ? 1 : 0) +
     activeFilters.fabrics.length +
     activeFilters.vendorNames.length +
@@ -335,6 +336,91 @@ export default function ProductCatalogScreen() {
         )}
       </View>
 
+      {/* Quick filter chip row */}
+      {!selectionMode && (
+        <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  gap: 5,
+                },
+                activeFilters.isStarred === true
+                  ? {
+                      backgroundColor: theme.colors.primaryContainer,
+                      borderColor: theme.colors.primary,
+                    }
+                  : {
+                      backgroundColor: theme.dark ? '#1e1e2e' : '#f4f4f5',
+                      borderColor: theme.dark ? '#333' : '#e4e4e7',
+                    },
+              ]}
+              onPress={() => {
+                setActiveFilters(prev => ({
+                  ...prev,
+                  isStarred: prev.isStarred === true ? null : true,
+                }));
+              }}
+            >
+              <Icon
+                source={activeFilters.isStarred === true ? 'star' : 'star-outline'}
+                size={15}
+                color={activeFilters.isStarred === true ? theme.colors.primary : theme.colors.outline}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: activeFilters.isStarred === true ? '700' : '500',
+                  color: activeFilters.isStarred === true ? theme.colors.primary : (theme.dark ? '#e0e0e0' : '#333'),
+                }}
+              >
+                ⭐ Starred
+              </Text>
+            </TouchableOpacity>
+
+            {activeFilters.isStarred === false && (
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  backgroundColor: theme.colors.primaryContainer,
+                  borderColor: theme.colors.primary,
+                  gap: 4,
+                }}
+                onPress={() => setActiveFilters(prev => ({ ...prev, isStarred: null }))}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.primary }}>Unstarred Only</Text>
+                <Icon source="close" size={14} color={theme.colors.primary} />
+              </TouchableOpacity>
+            )}
+
+            {activeFilterCount > 0 && (
+              <TouchableOpacity
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 16,
+                  backgroundColor: 'transparent',
+                }}
+                onPress={() => setActiveFilters(DEFAULT_FILTER_STATE)}
+              >
+                <Text style={{ fontSize: 12, color: theme.colors.outline }}>Clear ({activeFilterCount})</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
       <FlatList
         ref={pagerRef}
         data={CATEGORIES}
@@ -446,6 +532,7 @@ function CategoryPage({
     minPrice: filters.minPrice > 0 ? filters.minPrice : undefined,
     maxPrice: filters.maxPrice > 0 ? filters.maxPrice : undefined,
     categories: filters.categories && filters.categories.length > 0 ? filters.categories : undefined,
+    isStarred: filters.isStarred,
   };
 
   const {

@@ -252,7 +252,7 @@ public class ProductService : IProductService
                 p.fabric as ""Fabric"",
                 p.stitch_type as ""StitchType"",
                 p.work_heaviness as ""WorkHeaviness"",
-                p.created_at as ""CreatedAt"",
+                COALESCE((SELECT last_message_at FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT to_timestamp(m.timestamp) AT TIME ZONE 'UTC' FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1), p.created_at) as ""CreatedAt"",
                 p.is_starred as ""IsStarred"",
                 p.description as ""Description"",
                 c.name as ""Category"",
@@ -281,6 +281,15 @@ public class ProductService : IProductService
         else
         {
             whereClause += " AND p.is_archived = TRUE";
+        }
+
+        if (filter.IsStarred == true)
+        {
+            whereClause += " AND p.is_starred = true";
+        }
+        else if (filter.IsStarred == false)
+        {
+            whereClause += " AND (p.is_starred = false OR p.is_starred IS NULL)";
         }
 
         if (!string.IsNullOrEmpty(filter.Query))
@@ -539,7 +548,7 @@ public class ProductService : IProductService
                 c.name as ""Category"",
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
-                p.created_at as ""CreatedAt"",
+                COALESCE((SELECT last_message_at FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT to_timestamp(m.timestamp) AT TIME ZONE 'UTC' FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1), p.created_at) as ""CreatedAt"",
                 p.is_starred as ""IsStarred"",
                 COALESCE((SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT jid FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1)) as ""SourceJid"",
                 COALESCE((SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT source_group_id FROM vendor_listings WHERE product_id = p.id AND source_group_id IS NOT NULL LIMIT 1)) as ""SourceGroupId"",
