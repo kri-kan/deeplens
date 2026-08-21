@@ -148,6 +148,61 @@ Return ONLY the title text without any quotes or additional explanations.";
         }
     }
 
+    public async Task<string> GenerateShareDescriptionAsync(ProductShareDescriptionDto dto, System.Threading.CancellationToken ct = default)
+    {
+        var baseUrl = _configuration["Services:ReasoningApiUrl"] ?? "http://localhost:8002";
+
+        try
+        {
+            _logger.LogInformation("Requesting social share description generation from ReasoningService at {BaseUrl} for ProductCode {Code}", baseUrl, dto.BaseSku ?? dto.ProductId);
+            
+            var payload = new
+            {
+                product_id = dto.ProductId,
+                base_sku = dto.BaseSku,
+                title = dto.Title,
+                vendor_price = dto.VendorPrice,
+                target_platform = dto.TargetPlatform ?? "instagram",
+                raw_description = dto.RawDescription,
+                category = dto.Category,
+                fabric = dto.Fabric,
+                stitch_type = dto.StitchType,
+                color = dto.Color
+            };
+
+            var response = await _httpClient.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/generate-share-description", payload, ct);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogError("ReasoningService API returned error: {StatusCode}. Body: {Body}", response.StatusCode, errorContent);
+                throw new Exception($"Reasoning service returned error: {response.StatusCode}");
+            }
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var result = await response.Content.ReadFromJsonAsync<ShareDescriptionResponse>(options, ct);
+            var description = result?.Description?.Trim() ?? string.Empty;
+
+            _logger.LogInformation("Generated share description: {Length} characters", description.Length);
+            return description;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate share description via ReasoningService");
+            throw;
+        }
+    }
+
+    private class ShareDescriptionResponse
+    {
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+    }
+
     private class OllamaResponse
     {
         [JsonPropertyName("model")]

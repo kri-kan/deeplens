@@ -64,7 +64,7 @@ export default function ErrorQueueScreen() {
                     Reason: {item.errorReason || "Unknown"}
                 </Text>
                 
-                <View style={[styles.rawTextContainer, { backgroundColor: theme.colors.surfaceContainerLowest }]}>
+                <View style={[styles.rawTextContainer, { backgroundColor: theme.colors.surfaceVariant }]}>
                     <Text variant="bodySmall" numberOfLines={3} style={{ color: theme.colors.onSurface }}>
                         {item.rawText}
                     </Text>

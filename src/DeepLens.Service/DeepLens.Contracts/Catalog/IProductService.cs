@@ -38,6 +38,9 @@ public interface IProductService
     Task<int> BackfillFabricAsync();
     Task<ProductShareLogDto> RecordShareAsync(Guid productId, string platform, string? descriptionUsed, CancellationToken ct = default);
     Task<string> GenerateShareDescriptionAsync(Guid productId, string? targetPlatform, CancellationToken ct = default);
+    Task<ProductPublishEventDto> RecordPublishEventAsync(ProductPublishEventDto dto, CancellationToken ct = default);
+    Task<IEnumerable<ProductPublishEventDto>> GetPublishEventsAsync(Guid productId, CancellationToken ct = default);
+    Task<IEnumerable<InstagramAccountOptionDto>> GetPublishingInstagramAccountsAsync(CancellationToken ct = default);
     Task<bool> UpdateProductMetadataAsync(Guid productId, ProductCorrectionDto dto);
 }
 
@@ -243,4 +246,58 @@ public class MediaFileDto
 
     [JsonPropertyName("color")]
     public string? Color { get; set; }
+}
+
+public class ProductPublishEventDto
+{
+    [JsonPropertyName("id")]
+    public Guid? Id { get; set; }
+
+    [JsonPropertyName("productId")]
+    public Guid ProductId { get; set; }
+
+    [JsonPropertyName("platform")]
+    public string Platform { get; set; } = "instagram";
+
+    [JsonPropertyName("accountId")]
+    public string? AccountId { get; set; }
+
+    [JsonPropertyName("accountName")]
+    public string? AccountName { get; set; }
+
+    [JsonPropertyName("publishedUrl")]
+    public string? PublishedUrl { get; set; }
+
+    [JsonPropertyName("externalPostId")]
+    public string? ExternalPostId { get; set; }
+
+    [JsonPropertyName("descriptionUsed")]
+    public string? DescriptionUsed { get; set; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "published";
+
+    [JsonPropertyName("publishedAt")]
+    public DateTime PublishedAt { get; set; } = DateTime.UtcNow;
+
+    [JsonPropertyName("createdAt")]
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class InstagramAccountOptionDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("fullName")]
+    public string? FullName { get; set; }
+
+    [JsonPropertyName("profilePictureUrl")]
+    public string? ProfilePictureUrl { get; set; }
+
+    [JsonPropertyName("isPrimary")]
+    public bool IsPrimary { get; set; }
 }

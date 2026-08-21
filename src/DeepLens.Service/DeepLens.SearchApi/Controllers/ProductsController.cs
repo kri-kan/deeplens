@@ -302,4 +302,29 @@ public class ProductsController : ControllerBase
         var description = await _productService.GenerateShareDescriptionAsync(id, request.TargetPlatform, ct);
         return Ok(new GenerateShareDescriptionResponse(description));
     }
+
+    [HttpPost("{id}/publish-events")]
+    [ProducesResponseType(typeof(ProductPublishEventDto), 200)]
+    public async Task<IActionResult> RecordPublishEvent(Guid id, [FromBody] ProductPublishEventDto request, CancellationToken ct)
+    {
+        request.ProductId = id;
+        var result = await _productService.RecordPublishEventAsync(request, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}/publish-events")]
+    [ProducesResponseType(typeof(IEnumerable<ProductPublishEventDto>), 200)]
+    public async Task<IActionResult> GetPublishEvents(Guid id, CancellationToken ct)
+    {
+        var result = await _productService.GetPublishEventsAsync(id, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("instagram-accounts")]
+    [ProducesResponseType(typeof(IEnumerable<InstagramAccountOptionDto>), 200)]
+    public async Task<IActionResult> GetPublishingInstagramAccounts(CancellationToken ct)
+    {
+        var result = await _productService.GetPublishingInstagramAccountsAsync(ct);
+        return Ok(result);
+    }
 }

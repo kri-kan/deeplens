@@ -142,6 +142,22 @@ class YoutubeTitleResponse(BaseModel):
     title: str
     raw_response: str | None = None
 
+class ShareDescriptionRequest(BaseModel):
+    product_id: str | None = None
+    base_sku: str | None = None
+    title: str | None = None
+    vendor_price: float | None = None
+    target_platform: str | None = "instagram"
+    raw_description: str | None = None
+    category: str | None = None
+    fabric: str | None = None
+    stitch_type: str | None = None
+    color: str | None = None
+
+class ShareDescriptionResponse(BaseModel):
+    description: str
+    raw_response: str | None = None
+
 INDIAN_FASHION_GLOSSARY = {
     "fabrics": [
         "Cotton", "Silk", "Georgette", "Organza", "Crepe (crape, creap)", "Dola Silk",
@@ -255,6 +271,22 @@ SYSTEM_PROMPT_YOUTUBE_TITLE = (
     "Return ONLY a valid JSON object matching this schema:\n"
     "{\n"
     "  \"title\": \"String\"\n"
+    "}\n"
+    "Do not include markdown blocks or any other text."
+)
+
+SYSTEM_PROMPT_SHARE_DESCRIPTION = (
+    "You are an expert social media copywriter for an Indian ethnic fashion brand (Vayyari).\n"
+    "Generate high-converting, captivating captions tailored for social media (Instagram, WhatsApp, Facebook).\n\n"
+    "CRITICAL RULES:\n"
+    "1. You MUST ALWAYS include the Product Code/ID (e.g., 'Product ID: {base_sku}' or 'Code: {base_sku}'). NEVER omit it.\n"
+    "2. Mention the product price in INR (₹{vendor_price}) clearly.\n"
+    "3. Highlight key product features: Fabric, Category, Color, and Stitch Type if provided.\n"
+    "4. Add relevant, high-traffic ethnic fashion hashtags at the end (e.g. #vayyari #saree #lehenga #indianfashion #ethnicwear).\n"
+    "5. Keep the tone elegant, aspirational, and engaging with emojis.\n\n"
+    "Return ONLY a valid JSON object matching this schema:\n"
+    "{\n"
+    "  \"description\": \"Full formatted caption with emojis and hashtags\"\n"
     "}\n"
     "Do not include markdown blocks or any other text."
 )
@@ -507,6 +539,38 @@ async def generate_youtube_title(req: Request, request: YoutubeTitleRequest):
     except Exception as e:
         print(f"JSON Parse Error for Youtube Title: {e}\nRaw Text: {raw_text}")
         return YoutubeTitleResponse(title="", raw_response=raw_text)
+
+@app.post("/generate-share-description", response_model=ShareDescriptionResponse)
+async def generate_share_description(req: Request, request: ShareDescriptionRequest):
+    code = request.base_sku or request.product_id or "VAY-001"
+    prompt = (
+        f"Product Details:\n"
+        f"- Product Code / ID: {code}\n"
+        f"- Title: {request.title or 'Ethnic Wear'}\n"
+        f"- Category: {request.category or 'Ethnic Wear'}\n"
+        f"- Fabric: {request.fabric or 'Premium'}\n"
+        f"- Color: {request.color or 'As shown'}\n"
+        f"- Stitch Type: {request.stitch_type or 'Standard'}\n"
+        f"- Price: ₹{request.vendor_price or 'Best Price'}\n"
+        f"- Target Platform: {request.target_platform or 'Instagram'}\n"
+        f"- Additional Notes: {request.raw_description or ''}\n\n"
+        f"Generate the social media share caption ensuring Product ID '{code}' is prominently featured."
+    )
+    
+    # priority=0 → HIGH: interactive user share generation
+    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_SHARE_DESCRIPTION, priority=0, req=req)
+    try:
+        data = json.loads(raw_text)
+        desc = data.get("description", "").strip()
+        if not desc:
+            desc = raw_text.strip()
+        if code and code not in desc:
+            desc = f"✨ Product Code: {code}\n\n" + desc
+        return ShareDescriptionResponse(description=desc, raw_response=raw_text)
+    except Exception as e:
+        print(f"JSON Parse Error for Share Description: {e}\nRaw Text: {raw_text}")
+        fallback_desc = f"✨ Product Code: {code}\n🌟 {request.title or 'Exclusive Collection'}\n💰 Price: ₹{request.vendor_price or ''}\n\nDM to order! #vayyari #ethnicwear"
+        return ShareDescriptionResponse(description=fallback_desc, raw_response=raw_text)
 
 if __name__ == "__main__":
     import uvicorn

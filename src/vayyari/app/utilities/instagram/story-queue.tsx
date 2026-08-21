@@ -280,7 +280,6 @@ export default function StoryQueueScreen() {
                   <Text style={{ color: theme.colors.outline }}>Queue is empty.</Text>
                 </View>
               )}
-              onLongPress={undefined}
             />
 
             <View style={styles.footer}>

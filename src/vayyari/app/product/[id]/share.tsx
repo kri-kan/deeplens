@@ -27,7 +27,8 @@ import * as ExpoSharing from 'expo-sharing';
 import { useProductSharing } from '@/hooks/useProductSharing';
 import { useProductDetail } from '@/hooks/useProductDetail';
 import { productService } from '@/services/productService';
-import type { MediaEntry, VendorListing } from '@/types/products';
+import { InstagramAccountPicker } from '@/components/utility/instagram/InstagramAccountPicker';
+import type { MediaEntry, VendorListing, InstagramAccountOption } from '@/types/products';
 
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = Math.floor((width - 6) / 3);
@@ -85,15 +86,38 @@ export default function ShareProductScreen() {
   const insets = useSafeAreaInsets();
 
   const { data: product, isLoading } = useProductDetail(id);
-  const { isGenerating, generateShareDescription, recordShare } = useProductSharing(id);
+  const { isGenerating, generateShareDescription, recordShare, recordPublishEvent, getInstagramAccounts } = useProductSharing(id);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [description, setDescription] = useState('');
+  const [targetPlatform, setTargetPlatform] = useState<'instagram' | 'whatsapp' | 'generic'>('instagram');
+  const [accounts, setAccounts] = useState<InstagramAccountOption[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<InstagramAccountOption | null>(null);
+  const [isAccountPickerVisible, setIsAccountPickerVisible] = useState(false);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+
   const [isSharing, setIsSharing] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [progressLabel, setProgressLabel] = useState('');
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  useEffect(() => {
+    async function loadAccounts() {
+      setIsLoadingAccounts(true);
+      try {
+        const list = await getInstagramAccounts();
+        setAccounts(list);
+        const primary = list.find((a) => a.isPrimary) || list[0] || null;
+        setSelectedAccount(primary);
+      } catch (e) {
+        console.error('Failed to load Instagram accounts:', e);
+      } finally {
+        setIsLoadingAccounts(false);
+      }
+    }
+    loadAccounts();
+  }, [getInstagramAccounts]);
 
   useEffect(() => {
     if (product?.media) setSelectedIds(product.media.map((m) => m.id));
@@ -113,12 +137,13 @@ export default function ShareProductScreen() {
 
   const handleGenerate = useCallback(async () => {
     try {
-      setDescription(await generateShareDescription());
+      const generated = await generateShareDescription(targetPlatform);
+      setDescription(generated);
     } catch {
       setSnackbarMessage('Failed to generate AI description');
       setSnackbarVisible(true);
     }
-  }, [generateShareDescription]);
+  }, [generateShareDescription, targetPlatform]);
 
   const appendVendorDescription = useCallback((desc: string) => {
     setDescription((prev) => prev ? `${prev}\n\n${desc}` : desc);
@@ -170,8 +195,26 @@ export default function ShareProductScreen() {
       }
 
       if (shared) {
-        await recordShare({ platform: 'android_share', descriptionUsed: description || null });
-        setSnackbarMessage('Shared successfully!');
+        if (targetPlatform === 'instagram') {
+          await recordPublishEvent({
+            productId: id,
+            platform: 'instagram',
+            accountId: selectedAccount?.id,
+            accountName: selectedAccount?.username,
+            descriptionUsed: description || null,
+            status: 'published',
+          });
+        } else if (targetPlatform === 'whatsapp') {
+          await recordPublishEvent({
+            productId: id,
+            platform: 'whatsapp',
+            descriptionUsed: description || null,
+            status: 'published',
+          });
+        } else {
+          await recordShare({ platform: 'android_share', descriptionUsed: description || null });
+        }
+        setSnackbarMessage('Shared and published successfully!');
         setSnackbarVisible(true);
       }
     } catch (error: any) {
@@ -194,7 +237,7 @@ export default function ShareProductScreen() {
       setDownloadProgress(null);
       setProgressLabel('');
     }
-  }, [selectedIds, mediaList, description, recordShare, product]);
+  }, [selectedIds, mediaList, description, recordShare, recordPublishEvent, targetPlatform, selectedAccount, id]);
 
   if (isLoading || !product) {
     return (
@@ -210,7 +253,7 @@ export default function ShareProductScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header style={{ backgroundColor: theme.colors.surface }} elevated>
         <Appbar.BackAction onPress={() => router.back()} />
-        <Appbar.Content title="Share Product" subtitle={product.productCode} />
+        <Appbar.Content title="Share & Publish" subtitle={product.productCode} />
         {selectedIds.length > 0 && (
           <Text style={[styles.selectionCountText, { color: theme.colors.primary }]}>
             {selectedIds.length} selected
@@ -219,6 +262,57 @@ export default function ShareProductScreen() {
       </Appbar.Header>
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 140 }}>
+        {/* Platform Selection */}
+        <View style={styles.platformSection}>
+          <Text variant="titleSmall" style={{ opacity: 0.7, marginBottom: 8 }}>Target Platform:</Text>
+          <View style={styles.platformChipRow}>
+            <Chip
+              selected={targetPlatform === 'instagram'}
+              icon="instagram"
+              onPress={() => setTargetPlatform('instagram')}
+              style={styles.platformChip}
+            >
+              Instagram
+            </Chip>
+            <Chip
+              selected={targetPlatform === 'whatsapp'}
+              icon="whatsapp"
+              onPress={() => setTargetPlatform('whatsapp')}
+              style={styles.platformChip}
+            >
+              WhatsApp
+            </Chip>
+            <Chip
+              selected={targetPlatform === 'generic'}
+              icon="share-variant"
+              onPress={() => setTargetPlatform('generic')}
+              style={styles.platformChip}
+            >
+              Other
+            </Chip>
+          </View>
+
+          {/* Instagram Account Selection */}
+          {targetPlatform === 'instagram' && (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => setIsAccountPickerVisible(true)}
+              style={[styles.accountSelectorCard, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant + '40' }]}
+            >
+              <View style={styles.accountSelectorRow}>
+                <Chip icon="account-circle" compact style={{ backgroundColor: 'transparent' }}>
+                  {selectedAccount ? `@${selectedAccount.username}` : 'Select Account'}
+                </Chip>
+                <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: '700' }}>
+                  Change
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Divider style={styles.divider} />
+
         <View style={styles.sectionHeader}>
           <Text variant="titleSmall" style={{ opacity: 0.6 }}>Select media to share</Text>
           <TouchableOpacity onPress={toggleAll}>
@@ -246,7 +340,7 @@ export default function ShareProductScreen() {
           <Text variant="titleMedium" style={styles.sectionTitle}>Description</Text>
           <Button mode="contained-tonal" onPress={handleGenerate} loading={isGenerating}
             disabled={isGenerating} icon="creation" style={styles.generateBtn}>
-            Generate AI Description
+            Generate AI Description (With Product ID)
           </Button>
 
           {vendorDescriptions.length > 0 && (
@@ -288,12 +382,24 @@ export default function ShareProductScreen() {
           </>
         )}
         <Button mode="contained" onPress={handleShare} loading={isSharing}
-          disabled={isSharing || selectedIds.length === 0} icon="share-variant"
+          disabled={isSharing || selectedIds.length === 0} icon={targetPlatform === 'instagram' ? 'instagram' : 'share-variant'}
           style={styles.shareButton} contentStyle={styles.shareButtonContent}
           labelStyle={{ fontSize: 16 }}>
-          {isSharing ? 'Sharing…' : `Share${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+          {isSharing ? 'Publishing…' : `Publish & Share${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
         </Button>
       </Surface>
+
+      <InstagramAccountPicker
+        visible={isAccountPickerVisible}
+        onDismiss={() => setIsAccountPickerVisible(false)}
+        accounts={accounts}
+        selectedAccountId={selectedAccount?.id || null}
+        onSelectAccount={(acc) => {
+          setSelectedAccount(acc);
+          setIsAccountPickerVisible(false);
+        }}
+        loading={isLoadingAccounts}
+      />
 
       <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={3000}>
         {snackbarMessage}
@@ -333,4 +439,19 @@ const styles = StyleSheet.create({
   progressLabel: { textAlign: 'center', marginBottom: 6, fontSize: 12, opacity: 0.7 },
   shareButton: { borderRadius: 12 },
   shareButtonContent: { paddingVertical: 6 },
+  platformSection: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 },
+  platformChipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  platformChip: { height: 36 },
+  accountSelectorCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  accountSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 });
