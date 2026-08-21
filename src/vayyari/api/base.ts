@@ -1,5 +1,6 @@
 import { wrapInSpan } from '../utils/telemetry';
 import { ApiResponse, ApiError, ApiException } from '../types/api';
+import { authEvents, AUTH_UNAUTHORIZED_EVENT } from './events';
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
@@ -133,15 +134,18 @@ export class ApiClient {
                 headers: { ...options.headers, Authorization: `Bearer ${newToken}` },
               });
             } else {
-              const { authEvents, AUTH_UNAUTHORIZED_EVENT } = require('./events');
               authEvents.emit(AUTH_UNAUTHORIZED_EVENT);
               throw new ApiException({ code: 'UNAUTHORIZED', message: 'Session expired. Please sign in again.' }, 401);
             }
           }
 
-          console.error(`[API Error] ${options.method || 'GET'} ${url} failed with status: ${response.status}`);
+          if (response.status >= 500) {
+            console.error(`[API Error] ${options.method || 'GET'} ${url} failed with status: ${response.status}`);
+          } else {
+            console.warn(`[API Response] ${options.method || 'GET'} ${url} returned status: ${response.status}`);
+          }
+
           if (response.status === 401) {
-            const { authEvents, AUTH_UNAUTHORIZED_EVENT } = require('./events');
             authEvents.emit(AUTH_UNAUTHORIZED_EVENT);
           }
           await this.handleError(response);
@@ -191,7 +195,11 @@ export class ApiClient {
     
     try {
       const result: any = text ? JSON.parse(text) : {};
-      console.error('[API Error Detail]', { status: response.status, result });
+      if (response.status >= 500) {
+        console.error('[API Error Detail]', { status: response.status, result });
+      } else {
+        console.warn('[API Error Detail]', { status: response.status, result });
+      }
       
       if (typeof result.error === 'string') {
         error = {
@@ -205,7 +213,7 @@ export class ApiClient {
         };
       }
     } catch {
-      console.error('[API Error Detail] Raw response (non-JSON):', text);
+      console.warn('[API Error Detail] Raw response (non-JSON):', text);
       error = {
         code: `HTTP_${response.status}`,
         message: text.slice(0, 100) || response.statusText || 'Failed to parse error response',
