@@ -447,18 +447,118 @@ public class ProductService : IProductService
     public async Task<int> ArchiveProductsAsync(List<Guid> productIds)
     {
         if (productIds == null || productIds.Count == 0) return 0;
+
         using var db = GetConnection();
-        var sql = "UPDATE products SET is_archived = TRUE WHERE id = ANY(@Ids)";
-        return await db.ExecuteAsync(sql, new { Ids = productIds.ToArray() });
+        db.Open();
+        using var transaction = db.BeginTransaction();
+
+        try
+        {
+            // 1. Mark products as archived
+            var archivedCount = await db.ExecuteAsync(
+                "UPDATE products SET is_archived = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
+                new { Ids = productIds.ToArray() }, transaction);
+
+            // 2. Fetch all media linked to these products via media_links
+            var mediaRows = (await db.QueryAsync<ProductMediaRow>(@"
+                SELECT m.id          AS Id,
+                       ml.entity_id  AS ProductId,
+                       m.storage_path AS StoragePath,
+                       m.media_type  AS MediaType,
+                       COALESCE(m.file_size_bytes, 0) AS FileSize
+                FROM media m
+                JOIN media_links ml ON ml.media_id = m.id
+                WHERE ml.entity_id = ANY(@Ids)
+                  AND ml.entity_type = 'product'",
+                new { Ids = productIds.ToArray() }, transaction)).ToList();
+
+            if (mediaRows.Count > 0)
+            {
+                var retainedIds = new List<Guid>();
+                var deleteIds   = new List<Guid>();
+                var deletePaths = new List<string>();
+
+                // 3. Group by product; for each product retain top-2 non-video images
+                var byProduct = mediaRows.GroupBy(r => r.ProductId);
+                foreach (var grp in byProduct)
+                {
+                    // Videos (media_type = 2) are always purged
+                    var videos   = grp.Where(r => r.MediaType == 2).ToList();
+                    var nonVideo = grp.Where(r => r.MediaType != 2).ToList();
+
+                    // Top-2 largest non-video images → retained
+                    var retained = nonVideo
+                        .OrderByDescending(r => r.FileSize)
+                        .Take(2)
+                        .ToList();
+
+                    var toDelete = nonVideo.Except(retained).Concat(videos).ToList();
+
+                    retainedIds.AddRange(retained.Select(r => r.Id));
+                    deleteIds.AddRange(toDelete.Select(r => r.Id));
+                    deletePaths.AddRange(toDelete
+                        .Where(r => !string.IsNullOrEmpty(r.StoragePath))
+                        .Select(r => r.StoragePath!));
+                }
+
+                // 4. Hard-delete from MinIO (best-effort per file, log errors but don't fail)
+                foreach (var path in deletePaths)
+                {
+                    try
+                    {
+                        await _storageService.DeleteFileAsync(path);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete archived media from MinIO: {Path}", path);
+                    }
+                }
+
+                // 5. Remove media_links + media rows for deleted items
+                if (deleteIds.Count > 0)
+                {
+                    // media_links have ON DELETE CASCADE from media FK, but we remove them explicitly for clarity
+                    await db.ExecuteAsync(
+                        "DELETE FROM media_links WHERE media_id = ANY(@Ids) AND entity_type = 'product'",
+                        new { Ids = deleteIds.ToArray() }, transaction);
+
+                    await db.ExecuteAsync(
+                        "DELETE FROM media WHERE id = ANY(@Ids)",
+                        new { Ids = deleteIds.ToArray() }, transaction);
+                }
+
+                // 6. Mark retained images as compressed thumbnails
+                if (retainedIds.Count > 0)
+                {
+                    await db.ExecuteAsync(
+                        "UPDATE media SET is_compressed_thumbnail = TRUE WHERE id = ANY(@Ids)",
+                        new { Ids = retainedIds.ToArray() }, transaction);
+                }
+            }
+
+            transaction.Commit();
+            _logger.LogInformation("Archived {Count} products with MinIO image pruning", archivedCount);
+            return archivedCount;
+        }
+        catch (Exception ex)
+        {
+            transaction.Rollback();
+            _logger.LogError(ex, "Failed to archive products {Ids}", string.Join(", ", productIds));
+            throw;
+        }
     }
 
     public async Task<int> UnarchiveProductsAsync(List<Guid> productIds)
     {
         if (productIds == null || productIds.Count == 0) return 0;
         using var db = GetConnection();
-        var sql = "UPDATE products SET is_archived = FALSE WHERE id = ANY(@Ids)";
-        return await db.ExecuteAsync(sql, new { Ids = productIds.ToArray() });
+        return await db.ExecuteAsync(
+            "UPDATE products SET is_archived = FALSE, updated_at = NOW() WHERE id = ANY(@Ids)",
+            new { Ids = productIds.ToArray() });
     }
+
+    /// <summary>Internal projection for archive media queries.</summary>
+    private sealed record ProductMediaRow(Guid Id, Guid ProductId, string? StoragePath, short MediaType, long FileSize);
 
     public async Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default)
     {

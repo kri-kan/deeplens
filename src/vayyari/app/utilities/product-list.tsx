@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, FlatList, Dimensions, RefreshControl, StyleSheet,
+  View, FlatList, Dimensions, RefreshControl, StyleSheet, Alert,
   PanResponder, GestureResponderEvent, BackHandler, ScrollView, TouchableOpacity
 } from 'react-native';
 import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput, Icon } from 'react-native-paper';
@@ -95,7 +95,8 @@ export default function ProductCatalogScreen() {
     (activeFilters.categories && activeFilters.categories.length > 0 ? 1 : 0) +
     activeFilters.fabrics.length +
     activeFilters.vendorNames.length +
-    (activeFilters.minPrice > 0 ? 1 : 0);
+    (activeFilters.minPrice > 0 ? 1 : 0) +
+    (activeFilters.includeArchived !== null && activeFilters.includeArchived !== undefined ? 1 : 0);
 
   const [selectedProductForCategory, setSelectedProductForCategory] = useState<VendorProduct | null>(null);
   const [changingCategory, setChangingCategory] = useState(false);
@@ -310,17 +311,47 @@ export default function ProductCatalogScreen() {
                 }}
                 title="Re-evaluate AI"
               />
-              <Menu.Item
-                leadingIcon="archive-outline"
-                onPress={async () => {
-                  setSelectionMenuVisible(false);
-                  if (selectedIds.size > 0) {
-                    await productService.archiveProducts(Array.from(selectedIds));
-                    clearSelection();
-                  }
-                }}
-                title="Archive"
-              />
+              {/* Archive — only shown when NOT browsing archived products */}
+              {activeFilters.includeArchived !== true && (
+                <Menu.Item
+                  leadingIcon="archive-outline"
+                  onPress={async () => {
+                    setSelectionMenuVisible(false);
+                    if (selectedIds.size === 0) return;
+                    try {
+                      await productService.archiveProducts(Array.from(selectedIds));
+                      clearSelection();
+                      Alert.alert('Archived', 'Products archived and storage optimized.');
+                      // Trigger catalog refresh by producing a new filter reference
+                      setActiveFilters(prev => ({ ...prev }));
+                    } catch (e) {
+                      console.error(e);
+                      Alert.alert('Error', 'Failed to archive products.');
+                    }
+                  }}
+                  title="Archive"
+                />
+              )}
+              {/* Unarchive — only shown when browsing archived products */}
+              {activeFilters.includeArchived === true && (
+                <Menu.Item
+                  leadingIcon="archive-off-outline"
+                  onPress={async () => {
+                    setSelectionMenuVisible(false);
+                    if (selectedIds.size === 0) return;
+                    try {
+                      await productService.unarchiveProducts(Array.from(selectedIds));
+                      clearSelection();
+                      Alert.alert('Unarchived', 'Products restored to your active catalog.');
+                      setActiveFilters(prev => ({ ...prev }));
+                    } catch (e) {
+                      console.error(e);
+                      Alert.alert('Error', 'Failed to unarchive products.');
+                    }
+                  }}
+                  title="Unarchive"
+                />
+              )}
             </Menu>
           </View>
         ) : (
@@ -381,6 +412,51 @@ export default function ProductCatalogScreen() {
                 }}
               >
                 ⭐ Starred
+              </Text>
+            </TouchableOpacity>
+
+            {/* 📦 Archived quick chip */}
+            <TouchableOpacity
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  gap: 5,
+                },
+                activeFilters.includeArchived === true
+                  ? {
+                      backgroundColor: theme.colors.primaryContainer,
+                      borderColor: theme.colors.primary,
+                    }
+                  : {
+                      backgroundColor: theme.dark ? '#1e1e2e' : '#f4f4f5',
+                      borderColor: theme.dark ? '#333' : '#e4e4e7',
+                    },
+              ]}
+              onPress={() => {
+                setActiveFilters(prev => ({
+                  ...prev,
+                  includeArchived: prev.includeArchived === true ? null : true,
+                }));
+              }}
+            >
+              <Icon
+                source={activeFilters.includeArchived === true ? 'archive' : 'archive-outline'}
+                size={15}
+                color={activeFilters.includeArchived === true ? theme.colors.primary : theme.colors.outline}
+              />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: activeFilters.includeArchived === true ? '700' : '500',
+                  color: activeFilters.includeArchived === true ? theme.colors.primary : (theme.dark ? '#e0e0e0' : '#333'),
+                }}
+              >
+                📦 Archived
               </Text>
             </TouchableOpacity>
 
@@ -533,6 +609,7 @@ function CategoryPage({
     maxPrice: filters.maxPrice > 0 ? filters.maxPrice : undefined,
     categories: filters.categories && filters.categories.length > 0 ? filters.categories : undefined,
     isStarred: filters.isStarred,
+    includeArchived: filters.includeArchived ?? undefined,
   };
 
   const {

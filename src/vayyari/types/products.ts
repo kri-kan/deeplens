@@ -58,6 +58,8 @@ export interface VendorProduct {
   listingCount?: number;
   /** Whether this product is starred by the user */
   isStarred?: boolean;
+  /** Whether this product has been archived */
+  isArchived?: boolean;
 }
 
 export interface MediaEntry {

@@ -83,14 +83,14 @@ if [ "$SERVICE_NAME" == "whatsapp-processor" ]; then
 elif [ "$SERVICE_NAME" == "reasoning-api" ]; then
     echo -e "${CYAN}📂 Copying Python source files to $HOSTING_PATH...${NC}"
     mkdir -p "$HOSTING_PATH"
-    cp -r "$PROJECT_PATH"/* "$HOSTING_PATH/"
+    rsync -av --exclude '__pycache__' "$PROJECT_PATH/" "$HOSTING_PATH/"
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ File copy failed. Check permissions.${NC}"
         exit 1
     fi
 else
     echo -e "${CYAN}📦 Building and publishing project...${NC}"
-    dotnet publish "$PROJECT_PATH" -c Release -o "./publish/$SERVICE_NAME"
+    dotnet publish "$PROJECT_PATH" -c Release --no-restore -o "./publish/$SERVICE_NAME"
 
     if [ $? -ne 0 ]; then
         echo -e "${RED}❌ Build failed. Deployment aborted.${NC}"
