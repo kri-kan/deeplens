@@ -15,10 +15,11 @@ export interface ProductCatalogFilters {
   maxPrice?: number;
   categories?: string[];
   includeArchived?: boolean;
+  isStarred?: boolean | null;
 }
 
 export const useProductCatalog = (filters: ProductCatalogFilters) => {
-  const { categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, categories, includeArchived } = filters;
+  const { categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, categories, includeArchived, isStarred } = filters;
 
   const [products, setProducts] = useState<VendorProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,7 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
         maxPrice: maxPrice,
         categories: categories && categories.length > 0 ? categories : undefined,
         includeArchived: includeArchived,
+        isStarred: (isStarred !== undefined && isStarred !== null) ? isStarred : undefined,
         skip: currentSkip,
         take: take,
       };
@@ -74,7 +76,7 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, products.length, loading, refreshing, hasMore, error]);
+  }, [categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, categories, includeArchived, isStarred, products.length, loading, refreshing, hasMore, error]);
 
   const fabricsKey = JSON.stringify(fabrics);
   const vendorNamesKey = JSON.stringify(vendorNames);
@@ -83,7 +85,7 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
   useEffect(() => {
     fetchProducts(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived]);
+  }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived, isStarred]);
 
   const toggleStar = useCallback(async (productId: string, isStarred: boolean) => {
     try {

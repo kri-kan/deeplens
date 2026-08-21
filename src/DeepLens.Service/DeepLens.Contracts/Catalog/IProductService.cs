@@ -137,6 +137,9 @@ public class ProductCatalogFilter
 
     [JsonPropertyName("maxPrice")]
     public int? MaxPrice { get; set; }
+
+    [JsonPropertyName("isStarred")]
+    public bool? IsStarred { get; set; }
 }
 
 public class ProductFilterOptions

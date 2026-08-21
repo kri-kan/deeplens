@@ -33,7 +33,13 @@ const SORT_OPTIONS = [
   { id: 'listings_least', label: 'Fewest Listings' },
 ];
 
-const SECTIONS = ['Sort', 'Category', 'Price', 'Fabric', 'Vendor'] as const;
+const STARRED_OPTIONS: { id: string; label: string; value: boolean | null }[] = [
+  { id: 'all', label: 'All', value: null },
+  { id: 'starred', label: 'Starred Only', value: true },
+  { id: 'unstarred', label: 'Unstarred Only', value: false },
+];
+
+const SECTIONS = ['Sort', 'Starred', 'Category', 'Price', 'Fabric', 'Vendor'] as const;
 type SectionKey = typeof SECTIONS[number];
 
 export interface FilterState {
@@ -43,6 +49,7 @@ export interface FilterState {
   maxPrice: number;
   fabrics: string[];
   vendorNames: string[];
+  isStarred?: boolean | null;
 }
 
 interface FilterDrawerProps {
@@ -59,6 +66,7 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   maxPrice: 0,
   fabrics: [],
   vendorNames: [],
+  isStarred: null,
 };
 
 export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawerProps) {
@@ -154,6 +162,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
 
   const activeCount =
     (draft.sortBy !== 'recent' ? 1 : 0) +
+    (draft.isStarred !== null && draft.isStarred !== undefined ? 1 : 0) +
     (draft.categories.length > 0 ? 1 : 0) +
     draft.fabrics.length +
     draft.vendorNames.length +
@@ -179,6 +188,28 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
               <Text style={[styles.optionLabel, { color: textColor }]}>{opt.label}</Text>
             </TouchableOpacity>
           ))}
+        </View>
+      );
+    }
+
+    if (activeSection === 'Starred') {
+      return (
+        <View style={styles.sectionContent}>
+          {STARRED_OPTIONS.map(opt => {
+            const isSelected = draft.isStarred === opt.value || (opt.value === null && (draft.isStarred === undefined || draft.isStarred === null));
+            return (
+              <TouchableOpacity
+                key={opt.id}
+                style={[styles.radioRow, isSelected && { backgroundColor: theme.colors.primaryContainer }]}
+                onPress={() => setDraft(d => ({ ...d, isStarred: opt.value }))}
+              >
+                <View style={[styles.radioCircle, { borderColor: theme.colors.primary }]}>
+                  {isSelected && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
+                </View>
+                <Text style={[styles.optionLabel, { color: textColor }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       );
     }
@@ -356,6 +387,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
                 const isActive = activeSection === section;
                 const sectionBadge =
                   section === 'Sort' && draft.sortBy !== 'recent' ? 1 :
+                  section === 'Starred' && (draft.isStarred !== null && draft.isStarred !== undefined) ? 1 :
                   section === 'Category' && draft.categories.length > 0 ? draft.categories.length :
                   section === 'Fabric' ? draft.fabrics.length :
                   section === 'Vendor' ? draft.vendorNames.length :

@@ -4,6 +4,7 @@ import { Text, useTheme, IconButton } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { VendorProduct, MediaEntry } from '@/types/products';
 import { productService } from '@/services/productService';
+import { formatISTTimestamp } from '@/utils/date-format';
 
 const { width } = Dimensions.get('window');
 const TILE_SIZE = width / 3;
@@ -74,6 +75,9 @@ const ProductTileComponent: React.FC<ProductTileProps> = ({ item, onPress, onLon
   const productCode = getProp(item, 'productCode', 'ProductCode') || '---';
   const listingCount = getProp(item, 'listingCount', 'ListingCount') || 0;
   const vendorPrice = getProp(item, 'vendorPrice', 'VendorPrice');
+  const createdAt = getProp(item, 'createdAt', 'CreatedAt');
+  const sourceGroupId = getProp(item, 'sourceGroupId', 'SourceGroupId');
+  const formattedTime = formatISTTimestamp(createdAt, sourceGroupId);
 
   const overlayOpacity = selectionAnim;
   const circleScale = selectionAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] });
@@ -141,18 +145,27 @@ const ProductTileComponent: React.FC<ProductTileProps> = ({ item, onPress, onLon
           />
 
           <View style={styles.overlay}>
-            <Text style={styles.code}>{productCode} • {listingCount} listings</Text>
-            <Pressable
-              onLongPress={() => {
-                if (onLongPressPriceCategory) {
-                  onLongPressPriceCategory(item);
-                }
-              }}
-              delayLongPress={300}
-              hitSlop={6}
-            >
-              <Text style={styles.price}>₹{vendorPrice} <Text style={{ fontSize: 9, opacity: 0.8 }}>✎</Text></Text>
-            </Pressable>
+            <View style={styles.topOverlayRow}>
+              <Text style={styles.code} numberOfLines={1}>{productCode} • {listingCount}L</Text>
+            </View>
+            <View style={styles.bottomOverlayRow}>
+              <Pressable
+                onLongPress={() => {
+                  if (onLongPressPriceCategory) {
+                    onLongPressPriceCategory(item);
+                  }
+                }}
+                delayLongPress={300}
+                hitSlop={6}
+              >
+                <Text style={styles.price}>₹{vendorPrice} <Text style={{ fontSize: 9, opacity: 0.8 }}>✎</Text></Text>
+              </Pressable>
+              {formattedTime ? (
+                <Text style={styles.time} numberOfLines={1}>
+                  {formattedTime}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </>
       )}
@@ -210,8 +223,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 4,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  topOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bottomOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 1,
   },
   code: {
     color: 'white',
@@ -222,6 +247,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
   },
+  time: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 9,
+    fontWeight: '400',
+  },
 });
 
 export const ProductTile = React.memo(ProductTileComponent, (prev, next) => {
@@ -230,6 +260,8 @@ export const ProductTile = React.memo(ProductTileComponent, (prev, next) => {
     prev.selected === next.selected &&
     prev.selectionMode === next.selectionMode &&
     prev.item.isStarred === next.item.isStarred &&
+    prev.item.createdAt === next.item.createdAt &&
+    prev.item.vendorPrice === next.item.vendorPrice &&
     prev.sizeRatio === next.sizeRatio
   );
 });

@@ -70,6 +70,7 @@ class ProductService {
     minPrice?: number;
     maxPrice?: number;
     includeArchived?: boolean;
+    isStarred?: boolean;
   }): Promise<{ products: VendorProduct[], totalCount: number }> {
     // Serialize arrays as repeated query params
     const searchParams = new URLSearchParams();
@@ -83,6 +84,7 @@ class ProductService {
     if (params.minPrice !== undefined) searchParams.append('minPrice', String(params.minPrice));
     if (params.maxPrice !== undefined) searchParams.append('maxPrice', String(params.maxPrice));
     if (params.includeArchived) searchParams.append('includeArchived', 'true');
+    if (params.isStarred !== undefined) searchParams.append('isStarred', String(params.isStarred));
     params.fabrics?.forEach(f => searchParams.append('fabrics', f));
     params.vendorNames?.forEach(v => searchParams.append('vendorNames', v));
     params.categories?.forEach(c => searchParams.append('categories', c));
