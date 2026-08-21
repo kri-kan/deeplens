@@ -37,7 +37,7 @@ public class ImageMaintenanceWorker : BackgroundService
 
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             GroupId = "deeplens-maintenance-workers",
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false

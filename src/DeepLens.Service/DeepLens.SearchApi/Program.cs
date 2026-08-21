@@ -216,11 +216,31 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Seed App Settings on startup
+// Seed App Settings on startup with retry resilience
 using (var scope = app.Services.CreateScope())
 {
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var settingsService = scope.ServiceProvider.GetRequiredService<IAppSettingsService>();
-    await settingsService.SeedDefaultsAsync();
+    
+    int maxRetries = 5;
+    for (int retry = 1; retry <= maxRetries; retry++)
+    {
+        try
+        {
+            await settingsService.SeedDefaultsAsync();
+            logger.LogInformation("App settings seeded successfully on attempt {Attempt}.", retry);
+            break;
+        }
+        catch (Exception ex) when (retry < maxRetries)
+        {
+            logger.LogWarning(ex, "Database connection not ready for AppSettings seeding on attempt {Attempt}/{MaxRetries}. Retrying in 2 seconds...", retry, maxRetries);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to seed default app settings after {MaxRetries} attempts. Proceeding with application startup.", maxRetries);
+        }
+    }
 }
 
 app.Run();

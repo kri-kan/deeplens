@@ -39,7 +39,7 @@ public class FeatureExtractionWorker : BackgroundService
 
         var consumerConfig = new ConsumerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             GroupId = "deeplens-feature-extraction-workers",
             ClientId = Environment.MachineName + "-feature-extractor",
             AutoOffsetReset = AutoOffsetReset.Earliest,
@@ -48,7 +48,7 @@ public class FeatureExtractionWorker : BackgroundService
 
         var producerConfig = new ProducerConfig
         {
-            BootstrapServers = configuration.GetConnectionString("Kafka") ?? "localhost:9092",
+            BootstrapServers = configuration.GetConnectionString("Kafka") ?? configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
             ClientId = Environment.MachineName + "-feature-extractor-producer"
         };
 

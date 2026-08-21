@@ -91,6 +91,7 @@ try
         options.Events.RaiseInformationEvents = true;
         options.Events.RaiseFailureEvents = true;
         options.Events.RaiseSuccessEvents = true;
+        options.KeyManagement.Enabled = false;
         
         // Emit static log for user interaction
         options.UserInteraction.LoginUrl = "/api/auth/login";
@@ -174,25 +175,35 @@ try
 
     var app = builder.Build();
 
-    // Run database migrations and seeding
+    // Run database migrations and seeding with retry resilience
     using (var scope = app.Services.CreateScope())
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         var dbConnectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
         
-        try
+        int maxRetries = 5;
+        for (int retry = 1; retry <= maxRetries; retry++)
         {
-            // Run migrations
-            logger.LogInformation("Running database migrations...");
-            var migrationRunner = new MigrationRunner(dbConnectionString);
-            await migrationRunner.RunMigrationsAsync();
-            logger.LogInformation("Database migrations completed successfully");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "An error occurred while migrating or seeding the database");
-            throw;
+            try
+            {
+                // Run migrations
+                logger.LogInformation("Running database migrations (attempt {Attempt}/{MaxRetries})...", retry, maxRetries);
+                var migrationRunner = new MigrationRunner(dbConnectionString);
+                await migrationRunner.RunMigrationsAsync();
+                logger.LogInformation("Database migrations completed successfully");
+                break;
+            }
+            catch (Exception ex) when (retry < maxRetries)
+            {
+                logger.LogWarning(ex, "Database connection not ready for migrations on attempt {Attempt}/{MaxRetries}. Retrying in 2 seconds...", retry, maxRetries);
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred while migrating or seeding the database after {MaxRetries} attempts", maxRetries);
+                throw;
+            }
         }
     }
 

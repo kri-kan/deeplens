@@ -50,6 +50,9 @@ public class MediaController : ControllerBase
             }
 
             return await ServeThumbnail(item, spec);
+        } catch (Exception ex) when (ex is Minio.Exceptions.ObjectNotFoundException or FileNotFoundException || ex.InnerException is Minio.Exceptions.ObjectNotFoundException) {
+            _logger.LogWarning("Media asset not found in storage for {MediaId}: {Msg}", mediaId, ex.Message);
+            return NotFound("Media asset not found in storage.");
         } catch (Exception ex) {
             _logger.LogError(ex, "Error fetching thumbnail for {MediaId}", mediaId);
             return StatusCode(500, "Error processing thumbnail request.");
@@ -76,6 +79,9 @@ public class MediaController : ControllerBase
             };
 
             return await ServeThumbnail(item, spec);
+        } catch (Exception ex) when (ex is Minio.Exceptions.ObjectNotFoundException or FileNotFoundException || ex.InnerException is Minio.Exceptions.ObjectNotFoundException) {
+            _logger.LogWarning("Media asset not found in storage for path {Path}: {Msg}", path, ex.Message);
+            return NotFound("Media asset not found in storage.");
         } catch (Exception ex) {
             _logger.LogError(ex, "Error fetching thumbnail by path: {Path}", path);
             return StatusCode(500, "Error processing path-based thumbnail request.");
@@ -238,6 +244,11 @@ public class MediaController : ControllerBase
             Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for previews
             return File(previewStream, "image/gif");
         }
+        catch (Exception ex) when (ex is Minio.Exceptions.ObjectNotFoundException or FileNotFoundException || ex.InnerException is Minio.Exceptions.ObjectNotFoundException)
+        {
+            _logger.LogWarning("Preview file not found in storage for {MediaId}: {Msg}", mediaId, ex.Message);
+            return NotFound("Preview file not found in storage.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error serving preview for {MediaId}", mediaId);
@@ -301,6 +312,11 @@ public class MediaController : ControllerBase
 
             Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}"); // Dynamic for raw media
             return File(stream, contentType, enableRangeProcessing: true);
+        }
+        catch (Exception ex) when (ex is Minio.Exceptions.ObjectNotFoundException or FileNotFoundException || ex.InnerException is Minio.Exceptions.ObjectNotFoundException)
+        {
+            _logger.LogWarning("Raw media file not found in storage for {MediaId}: {Msg}", mediaId, ex.Message);
+            return NotFound("Raw media file not found in storage.");
         }
         catch (Exception ex)
         {
