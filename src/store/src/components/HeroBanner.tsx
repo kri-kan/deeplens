@@ -12,10 +12,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
         position: 'relative',
         borderRadius: 'var(--border-radius-lg)',
         overflow: 'hidden',
-        background: 'linear-gradient(135deg, var(--emerald-950) 0%, var(--emerald-900) 50%, #031b13 100%)',
+        background: 'linear-gradient(135deg, var(--pink-950) 0%, var(--pink-900) 50%, #1a0510 100%)',
         color: '#ffffff',
         padding: 'clamp(1.75rem, 3vw, 3rem)',
-        boxShadow: 'var(--shadow-lg), var(--shadow-emerald)',
+        boxShadow: 'var(--shadow-lg), var(--shadow-accent)',
         marginBottom: '2rem',
       }}
     >
@@ -28,7 +28,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
           width: '280px',
           height: '280px',
           borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(52, 211, 153, 0.25) 0%, rgba(5, 150, 105, 0) 70%)',
+          background: 'radial-gradient(circle, rgba(244, 114, 182, 0.25) 0%, rgba(219, 39, 119, 0) 70%)',
           pointerEvents: 'none',
           filter: 'blur(20px)',
         }}
@@ -43,9 +43,9 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
             gap: '0.4rem',
             padding: '0.35rem 0.85rem',
             borderRadius: 'var(--border-radius-pill)',
-            background: 'rgba(52, 211, 153, 0.15)',
-            border: '1px solid rgba(52, 211, 153, 0.3)',
-            color: 'var(--emerald-300)',
+            background: 'rgba(244, 114, 182, 0.15)',
+            border: '1px solid rgba(244, 114, 182, 0.3)',
+            color: 'var(--pink-300)',
             fontSize: 'var(--fz-2xs)',
             fontWeight: 700,
             letterSpacing: '0.04em',
@@ -53,7 +53,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
             marginBottom: '1rem',
           }}
         >
-          <Zap size={14} color="var(--emerald-400)" />
+          <Zap size={14} color="var(--pink-400)" />
           <span>Vayyari Optics Collection 2026</span>
         </div>
 
@@ -64,7 +64,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
             fontWeight: 800,
             lineHeight: 1.1,
             letterSpacing: '-0.03em',
-            color: '#ecfdf5',
+            color: '#fdf2f8',
             marginBottom: '1rem',
           }}
         >
@@ -75,7 +75,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
         <p
           style={{
             fontSize: 'var(--fz-base)',
-            color: 'var(--emerald-100)',
+            color: 'var(--pink-100)',
             opacity: 0.9,
             lineHeight: 1.6,
             marginBottom: '1.75rem',
@@ -87,14 +87,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreClick }) => {
 
         {/* Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <button onClick={onExploreClick} className="btn-emerald" style={{ padding: '0.85rem 1.6rem', fontSize: 'var(--fz-sm)' }}>
+          <button onClick={onExploreClick} className="btn-pink" style={{ padding: '0.85rem 1.6rem', fontSize: 'var(--fz-sm)' }}>
             <span>Explore Precision Optics</span>
             <ArrowRight size={18} />
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: 0.85 }}>
-            <Star size={16} fill="var(--emerald-400)" color="var(--emerald-400)" />
-            <span style={{ fontSize: 'var(--fz-xs)', fontWeight: 600, color: 'var(--emerald-200)' }}>
+            <Star size={16} fill="var(--pink-400)" color="var(--pink-400)" />
+            <span style={{ fontSize: 'var(--fz-xs)', fontWeight: 600, color: 'var(--pink-200)' }}>
               4.98 Rating from 12,400+ Practitioners
             </span>
           </div>

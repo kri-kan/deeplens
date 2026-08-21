@@ -437,3 +437,7 @@ src/whatsapp-processor/reprocess_products.ts
 .squad/config.json
 .squad.local-backup/
 .agy/
+
+# Playwright Test Artifacts
+playwright-report/
+test-results/

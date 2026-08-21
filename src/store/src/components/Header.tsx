@@ -39,12 +39,12 @@ export const Header: React.FC<HeaderProps> = ({
               width: '34px',
               height: '34px',
               borderRadius: 'var(--border-radius-sm)',
-              background: 'linear-gradient(135deg, var(--emerald-600), var(--emerald-400))',
+              background: 'linear-gradient(135deg, var(--pink-600), var(--pink-400))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: 'var(--shadow-emerald)',
+              boxShadow: 'var(--shadow-accent)',
             }}
           >
             <Sparkles size={18} />
@@ -125,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Cart Button */}
         <button
           onClick={onOpenCart}
-          className="btn-emerald"
+          className="btn-pink"
           style={{
             padding: '0.5rem 1rem',
             position: 'relative',
@@ -137,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span
               style={{
                 background: '#ffffff',
-                color: 'var(--emerald-700)',
+                color: 'var(--pink-700)',
                 fontSize: '11px',
                 fontWeight: 800,
                 padding: '0.1rem 0.45rem',

@@ -50,7 +50,7 @@ const MOCK_PRODUCTS: Product[] = [
     price: 4890.0,
     rating: 4.92,
     reviewsCount: 67,
-    description: '1.8x anamorphic squeeze ratio with oval bokeh and signature emerald lens flares. 12-blade aperture mechanism.',
+    description: '1.8x anamorphic squeeze ratio with oval bokeh and signature rose lens flares. 12-blade aperture mechanism.',
     image: 'https://images.unsplash.com/photo-1617575521317-d2974f3b56d2?auto=format&fit=crop&w=800&q=80',
     badge: 'Cinema Master',
     isNew: true,
@@ -201,7 +201,7 @@ export function App() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontSize: 'var(--fz-2xs)', color: 'var(--text-subtle)' }}>Surface Depth:</span>
-            <span className="emerald-badge">No-Line Active</span>
+            <span className="pink-badge">No-Line Active</span>
           </div>
         </div>
 
@@ -240,11 +240,11 @@ export function App() {
             bottom: '80px',
             right: '24px',
             zIndex: 3000,
-            background: 'var(--emerald-600)',
+            background: 'var(--pink-600)',
             color: '#ffffff',
             padding: '0.75rem 1.25rem',
             borderRadius: 'var(--border-radius-pill)',
-            boxShadow: 'var(--shadow-lg), var(--shadow-emerald)',
+            boxShadow: 'var(--shadow-lg), var(--shadow-accent)',
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',

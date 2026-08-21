@@ -51,12 +51,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               width: '42px',
               height: '42px',
               borderRadius: 'var(--border-radius-md)',
-              background: 'linear-gradient(135deg, var(--emerald-600), var(--emerald-400))',
+              background: 'linear-gradient(135deg, var(--pink-600), var(--pink-400))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: 'var(--shadow-emerald)',
+              boxShadow: 'var(--shadow-accent)',
             }}
           >
             <Sparkles size={22} />

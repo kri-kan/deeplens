@@ -44,22 +44,22 @@ export const PreviewBar: React.FC<PreviewBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            background: 'linear-gradient(135deg, var(--emerald-600), var(--emerald-500))',
+            background: 'linear-gradient(135deg, var(--pink-600), var(--pink-500))',
             color: '#fff',
             padding: '0.35rem 0.75rem',
             borderRadius: 'var(--border-radius-pill)',
             fontWeight: 700,
             fontSize: 'var(--fz-xs)',
             letterSpacing: '0.04em',
-            boxShadow: 'var(--shadow-emerald)',
+            boxShadow: 'var(--shadow-accent)',
           }}
         >
           <Sparkles size={15} />
-          <span>Vayyari Emerald</span>
+          <span>Vayyari Pink & Rose</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: 'var(--fz-2xs)', color: 'var(--text-muted)' }}>
-          <span className="emerald-badge" style={{ fontSize: 'var(--fz-3xs)' }}>
+          <span className="pink-badge" style={{ fontSize: 'var(--fz-3xs)' }}>
             <Layers size={12} style={{ marginRight: '0.2rem' }} /> No-Line Surface Shift
           </span>
           <span style={{ opacity: 0.6 }}>|</span>
@@ -190,7 +190,7 @@ export const PreviewBar: React.FC<PreviewBarProps> = ({
         }}
         title="Toggle Light / Dark Dual Palette"
       >
-        {theme === 'dark' ? <Sun size={15} color="var(--emerald-400)" /> : <Moon size={15} color="var(--emerald-600)" />}
+        {theme === 'dark' ? <Sun size={15} color="var(--pink-400)" /> : <Moon size={15} color="var(--pink-600)" />}
         <span>{theme === 'dark' ? 'Dark Palette' : 'Light Palette'}</span>
       </button>
     </div>

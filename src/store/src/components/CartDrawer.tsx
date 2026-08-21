@@ -238,7 +238,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
             <button
               onClick={onCheckout}
-              className="btn-emerald"
+              className="btn-pink"
               style={{
                 width: '100%',
                 padding: '0.85rem',
@@ -250,7 +250,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             </button>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', marginTop: '0.75rem', opacity: 0.7 }}>
-              <ShieldCheck size={14} color="var(--emerald-600)" />
+              <ShieldCheck size={14} color="var(--pink-600)" />
               <span style={{ fontSize: 'var(--fz-3xs)', color: 'var(--text-muted)' }}>
                 Encrypted 256-Bit Vayyari Checkout Guarantee
               </span>
