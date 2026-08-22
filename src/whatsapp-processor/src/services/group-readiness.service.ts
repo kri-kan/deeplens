@@ -94,6 +94,10 @@ export class GroupReadinessService {
      * Evaluates if a message group qualifies for product pipeline and emits Kafka events
      */
         public async checkAndEmitGroupEvent(groupId: string): Promise<void> {
+        if (!groupId || groupId.startsWith('sticker_')) {
+            return;
+        }
+
         const client = getWhatsAppDbClient();
         if (!client) {
             logger.error({ groupId }, 'Database not available in checkAndEmitGroupEvent');
@@ -501,12 +505,14 @@ export class GroupReadinessService {
 
             try {
                 // Find all groups in 'staging' where the last message was updated/received more than debounceSeconds ago
-                // and the group has vendor_id assigned in wa.chats.
+                // and the group has vendor_id assigned in wa.chats (ignore sticker groups).
                 const res = await client.query(
                     `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products
                      FROM wa.message_groups mg
                      JOIN wa.chats c ON mg.jid = c.jid
                      WHERE mg.status = 'staging'
+                       AND mg.group_id LIKE 'product_%'
+                       AND NOT (mg.group_id LIKE 'sticker_%')
                        AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
                        AND c.vendor_id IS NOT NULL
                        AND NOT EXISTS (SELECT 1 FROM wa.product_tombstones pt WHERE pt.source_group_id = mg.group_id)`,
@@ -580,7 +586,7 @@ export class GroupReadinessService {
                     const description = rawDescription
                         .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
                         .trim();
-                    const qualifies = mediaCount >= 2 && isValidDescription(description);
+                    const qualifies = mediaCount >= 2 && isValidDescription(description) && !hasUndownloadedMedia;
 
                     if (qualifies) {
                         logger.info({ groupId: group_id, mediaCount, descriptionWords: description.split(/\s+/).length }, 'Staged group qualifies, promoting to product...');

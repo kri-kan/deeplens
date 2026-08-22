@@ -656,6 +656,8 @@ public class ProductService : IProductService
                 FROM primary_groups pg
                 JOIN wa.message_groups adjacent_mg 
                   ON adjacent_mg.jid = pg.jid
+                 AND adjacent_mg.group_id LIKE 'product_%'
+                 AND NOT (adjacent_mg.group_id LIKE 'sticker_%')
                  AND (adjacent_mg.deeplens_product_id IS NULL OR adjacent_mg.deeplens_product_id = ANY(@Ids))
                  AND ABS(EXTRACT(EPOCH FROM (COALESCE(adjacent_mg.created_at, adjacent_mg.last_message_at) - pg.ref_time))) <= 120
                 WHERE adjacent_mg.group_id IS NOT NULL",

@@ -70,75 +70,29 @@ export async function initializeMessageQueue() {
             return;
         }
 
-        // 2. Get Previous Message
-        const prevRes = await client.query(
-            `SELECT group_id, timestamp, media_type, message_type 
-             FROM wa.messages 
-             WHERE jid = $1 AND (timestamp < $2 OR (timestamp = $2 AND id < $3)) 
-             ORDER BY timestamp DESC, id DESC LIMIT 1`,
-            [message.jid, message.timestamp, message.id]
-        );
-        const prevMsg = prevRes.rows[0];
-
-        // 3. Determine Group ID
-        let groupId = randomUUID();
-        let isNewGroup = true;
-
-        if (prevMsg) {
-            const strategy = grouping_config?.strategy || 'hybrid';
-            const isPrevSticker = prevMsg.media_type === 'sticker' || (prevMsg.group_id && prevMsg.group_id.startsWith('sticker_'));
-            const isCurSticker = message.media_type === 'sticker';
-
-            // STICKER SEPARATOR PRIORITY RULE:
-            // If the current message is NOT a sticker AND the previous message was NOT a sticker,
-            // we evaluate whether to join the previous non-sticker product group.
-            if (!isPrevSticker && !isCurSticker && prevMsg.group_id && !prevMsg.group_id.startsWith('sticker_')) {
-                if (strategy === 'sticker') {
-                    // Under sticker-only strategy, join previous group unless a sticker intervened
-                    groupId = prevMsg.group_id;
-                    isNewGroup = false;
-                } else {
-                    // Under time_gap or hybrid strategy, join previous group ONLY IF within time threshold
-                    const threshold = (grouping_config?.timeGapSeconds || 300); // Default 5 mins
-                    const diff = message.timestamp - prevMsg.timestamp;
-                    if (diff <= threshold) {
-                        groupId = prevMsg.group_id;
-                        isNewGroup = false;
-                    }
-                }
-            }
-        }
-
-        // Apply semantic prefix if creating a new group
-        if (isNewGroup) {
-            let prefix = 'chat_';
-            if (message.media_type === 'sticker') {
-                prefix = 'sticker_';
-            } else if (message.media_type && ['image', 'photo', 'video'].includes(message.media_type)) {
-                prefix = 'product_';
-            }
-            groupId = `${prefix}${randomUUID()}`;
-        }
-
-        // 4. Save Group ID
-        await client.query(
-            'UPDATE wa.messages SET group_id = $1 WHERE message_id = $2',
-            [groupId, message.message_id]
+        // 2. Assign message to product or sticker Zone using ZoningService (Sticker-First priority)
+        const { zoningService } = await import('./services/zoning.service');
+        const { groupId, isNewGroup, strategyUsed } = await zoningService.assignMessageToZone(
+            message,
+            grouping_config,
+            client
         );
 
         logger.info({
             msgId: message.message_id,
             groupId,
             isNewGroup,
-            strategy: grouping_config?.strategy
-        }, 'Message grouped');
+            strategy: strategyUsed
+        }, 'Message zoned');
 
-        // 5. Evaluate group readiness for products
-        try {
-            const { groupReadinessService } = await import('./services/group-readiness.service');
-            await groupReadinessService.checkAndEmitGroupEvent(groupId);
-        } catch (err: any) {
-            logger.error({ err: err.message, groupId }, 'Error invoking group readiness service');
+        // 3. Evaluate group readiness for products (skip pure sticker groups)
+        if (!groupId.startsWith('sticker_')) {
+            try {
+                const { groupReadinessService } = await import('./services/group-readiness.service');
+                await groupReadinessService.checkAndEmitGroupEvent(groupId);
+            } catch (err: any) {
+                logger.error({ err: err.message, groupId }, 'Error invoking group readiness service');
+            }
         }
     });
 
