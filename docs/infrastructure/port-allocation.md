@@ -30,6 +30,8 @@ This document tracks ports used by DeepLens services. Many core services are now
 | 8090 | OpenWhispr (V2T)   | HTTP     | Voice-to-Text Control Panel    |
 | 8091 | Handy (V2T)        | HTTP     | Voice-to-Text Parakeet/Whisper |
 | 8092 | whisper.cpp (V2T)  | HTTP     | Voice-to-Text Vulkan Server    |
+| 9749 | Codebase Memory MCP| HTTP     | Repository Graph & Knowledge UI|
+| 24282| Serena MCP         | HTTP     | Semantic Code & LSP Dashboard  |
 
 ## 🏢 Tenant Specific (Local)
 

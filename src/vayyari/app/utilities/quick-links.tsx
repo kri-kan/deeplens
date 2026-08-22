@@ -108,6 +108,22 @@ export default function QuickLinksScreen() {
 
 Reference for generating a long-lived access token from a short-lived one:
 https://graph.facebook.com/v25.0/oauth/access_token?grant_type=fb_exchange_token&client_id={app_id}&client_secret={app_secret}&fb_exchange_token={user_access_token}`
+    },
+    {
+      id: 'serena-mcp-dashboard',
+      title: 'Serena MCP Dashboard',
+      description: 'Semantic code intelligence, LSP symbol traversal, and project AST diagnostics.',
+      icon: 'code-json',
+      url: 'http://localhost:24282/dashboard/index.html',
+      color: '#00bcd4'
+    },
+    {
+      id: 'codebase-memory-mcp',
+      title: 'Codebase Memory Graph UI',
+      description: 'Repository structure, knowledge indexing, and visual architecture graphs.',
+      icon: 'graph-outline',
+      url: 'http://localhost:9749',
+      color: '#ff9800'
     }
   ];
 
