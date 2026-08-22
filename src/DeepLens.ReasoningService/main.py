@@ -1,68 +1,27 @@
 import os
 import json
 import asyncio
-import threading
-import requests
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-import psycopg2
+import re
 import time
+import requests
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi.responses import RedirectResponse
+import psycopg2
 from pydantic import BaseModel
+from openai import AsyncOpenAI
 
 app = FastAPI(
     title="DeepLens Reasoning Service",
-    description="AI-powered product metadata extraction using local Ollama instance.",
-    version="1.1.0",
+    description="AI-powered product metadata extraction using LiteLLM Gateway.",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# ---------------------------------------------------------------------------
-# Priority Queue for Ollama calls
-# Priority 0 = HIGH  (manual / interactive requests)
-# Priority 1 = LOW   (bulk / automated background requests)
-# A single asyncio worker processes one Ollama call at a time so that a
-# high-priority request always jumps ahead of queued low-priority ones.
-# ---------------------------------------------------------------------------
-_ollama_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
-_queue_counter = 0   # tie-breaker so equal priorities preserve insertion order
-
-async def _ollama_worker():
-    """Single async worker that drains the priority queue sequentially."""
-    while True:
-        try:
-            priority, _seq, prompt, system, future, cancel_event = await _ollama_queue.get()
-            try:
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None, _call_ollama_sync, prompt, system, cancel_event
-                )
-                if not future.done() and not future.cancelled():
-                    try:
-                        future.set_result(result)
-                    except (asyncio.InvalidStateError, Exception):
-                        pass
-            except Exception as exc:
-                if not future.done() and not future.cancelled():
-                    try:
-                        future.set_exception(exc)
-                    except (asyncio.InvalidStateError, Exception):
-                        pass
-            finally:
-                _ollama_queue.task_done()
-        except asyncio.CancelledError:
-            break
-        except Exception as queue_err:
-            print(f"Error in _ollama_worker loop: {queue_err}", flush=True)
-            await asyncio.sleep(1)
-
-@app.on_event("startup")
-async def _start_worker():
-    asyncio.create_task(_ollama_worker())
-
-
 @app.get("/", include_in_schema=False)
 async def root():
-    from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
+
 
 # Database configurations for logging
 DB_CONNECTION_STRING_RAW = os.getenv("DB_CONNECTION_STRING")
@@ -105,9 +64,43 @@ def log_llm_call(endpoint: str, prompt: str, response: str, latency_ms: int):
     except Exception as e:
         print(f"Error logging LLM call to DB: {e}", flush=True)
 
-# Model configuration
-MODEL_ID = os.getenv("MODEL_ID", "phi4-mini:latest")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# LiteLLM Gateway configuration
+LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://deeplens-litellm:4000/v1")
+LITELLM_API_KEY = os.getenv("LITELLM_API_KEY", "sk-deeplens-master-key")
+LITELLM_MODEL = os.getenv("LITELLM_MODEL", "deeplens-llm")
+
+# Initialize AsyncOpenAI client
+llm_client = AsyncOpenAI(
+    base_url=LITELLM_BASE_URL,
+    api_key=LITELLM_API_KEY,
+    timeout=120.0,
+    max_retries=2
+)
+
+async def call_llm(prompt: str, system: str = "", req: Request = None) -> str:
+    """Execute chat completion via LiteLLM OpenAI-compatible gateway in JSON mode."""
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    try:
+        if req and await req.is_disconnected():
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
+        completion = await llm_client.chat.completions.create(
+            model=LITELLM_MODEL,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.1
+        )
+        content = completion.choices[0].message.content or ""
+        return content
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error calling LiteLLM gateway: {e}", flush=True)
+        raise HTTPException(status_code=502, detail=f"Failed to communicate with LLM gateway: {str(e)}")
 
 class ExtractionRequest(BaseModel):
     text: str
@@ -303,87 +296,36 @@ SYSTEM_PROMPT_SHARE_DESCRIPTION = (
     "Do not include markdown blocks or any other text."
 )
 
-def _call_ollama_sync(prompt: str, system: str = "", cancel_event: threading.Event = None) -> str:
-    """Synchronous Ollama call — runs inside a thread executor via the worker."""
-    url = f"{OLLAMA_BASE_URL}/api/generate"
-    payload = {
-        "model": MODEL_ID,
-        "prompt": prompt,
-        "system": system,
-        "format": "json",
-        "stream": True,
-        "options": {
-            "num_ctx": 4096,
-            "temperature": 0.1
-        }
-    }
-    try:
-        full_response = []
-        with requests.post(url, json=payload, stream=True, timeout=120) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if cancel_event and cancel_event.is_set():
-                    # Sever the TCP connection forcefully to abort generation
-                    response.close()
-                    raise Exception("Client cancelled the request.")
-                if line:
-                    chunk = json.loads(line)
-                    full_response.append(chunk.get("response", ""))
-                    if chunk.get("done"):
-                        break
-        return "".join(full_response)
-    except Exception as e:
-        print(f"Error calling Ollama API: {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to communicate with LLM: {str(e)}")
-
-from fastapi import Request
-async def enqueue_ollama(prompt: str, system: str, priority: int, req: Request = None) -> str:
-    """
-    Submit an Ollama call to the priority queue and await its result.
-    priority=0  → HIGH (manual / interactive, jumps ahead of bulk jobs)
-    priority=1  → LOW  (bulk / automated background processing)
-    """
-    global _queue_counter
-    loop = asyncio.get_event_loop()
-    future: asyncio.Future = loop.create_future()
-    cancel_event = threading.Event()
-    _queue_counter += 1
-    
-    await _ollama_queue.put((priority, _queue_counter, prompt, system, future, cancel_event))
-    
-    if req is None:
-        return await future
-
-    while not future.done():
-        if await req.is_disconnected():
-            cancel_event.set()
-            if not future.done():
-                future.cancel()
-            raise HTTPException(status_code=499, detail="Client Closed Request")
-        await asyncio.sleep(0.5)
-        
-    if future.cancelled() or cancel_event.is_set():
-        raise HTTPException(status_code=499, detail="Client Closed Request")
-        
-    return future.result()
-
 @app.get("/health")
 async def health():
     try:
-        res = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
-        res.raise_for_status()
-        models = [m.get("name") for m in res.json().get("models", [])]
-        is_ready = MODEL_ID in models
-        return {"status": "ok", "model": MODEL_ID, "ready": is_ready, "backend": "ollama", "available_models": models}
+        models_response = await llm_client.models.list()
+        model_ids = [m.id for m in models_response.data] if hasattr(models_response, 'data') else []
+        is_ready = True
+        return {
+            "status": "ok",
+            "model": LITELLM_MODEL,
+            "ready": is_ready,
+            "backend": "litellm",
+            "gateway_url": LITELLM_BASE_URL,
+            "available_models": model_ids
+        }
     except Exception as e:
-        return {"status": "error", "model": MODEL_ID, "ready": False, "error": str(e)}
+        return {
+            "status": "error",
+            "model": LITELLM_MODEL,
+            "ready": False,
+            "backend": "litellm",
+            "gateway_url": LITELLM_BASE_URL,
+            "error": str(e)
+        }
 
 @app.post("/extract", response_model=ExtractionResponse)
 async def extract_metadata(req: Request, request: ExtractionRequest, background_tasks: BackgroundTasks):
     prompt = f"Description: {request.text}\nExtract metadata according to the system prompt rules."
 
     start_time = time.time()
-    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_EXTRACT, priority=0)
+    raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_EXTRACT, req=req)
     latency_ms = int((time.time() - start_time) * 1000)
     
     background_tasks.add_task(log_llm_call, "/extract", prompt, raw_text, latency_ms)
@@ -400,8 +342,7 @@ async def suggest_group_metadata(req: Request, request: SuggestRequest, backgrou
     prompt = f"Descriptions:\n{combined_desc}\n\nGenerate the title and keywords."
 
     start_time = time.time()
-    # priority=0 → HIGH: manual curation request, always jumps ahead of bulk re-eval
-    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_SUGGEST, priority=0)
+    raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_SUGGEST, req=req)
     latency_ms = int((time.time() - start_time) * 1000)
     
     background_tasks.add_task(log_llm_call, "/suggest-group-metadata", prompt, raw_text, latency_ms)
@@ -436,8 +377,7 @@ async def extract_product(req: Request, request: ProductExtractionRequest, backg
     prompt = f"WhatsApp Description:\n{request.description}\n\nExtract metadata."
 
     start_time = time.time()
-    # priority from query param: 0=HIGH (manual user action), 1=LOW (bulk automation, default)
-    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_PRODUCT_EXTRACT, priority=priority, req=req)
+    raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_PRODUCT_EXTRACT, req=req)
     latency_ms = int((time.time() - start_time) * 1000)
     
     background_tasks.add_task(log_llm_call, "/extract-product", prompt, raw_text, latency_ms)
@@ -539,8 +479,7 @@ async def extract_product(req: Request, request: ProductExtractionRequest, backg
 async def generate_youtube_title(req: Request, request: YoutubeTitleRequest):
     prompt = f"Description:\n{request.description}\n\nGenerate the title."
 
-    # priority=0 → HIGH: manual YouTube title generation
-    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_YOUTUBE_TITLE, priority=0, req=req)
+    raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_YOUTUBE_TITLE, req=req)
     
     try:
         data = json.loads(raw_text)
@@ -569,8 +508,7 @@ async def generate_share_description(req: Request, request: ShareDescriptionRequ
         f"Generate the social media share caption ensuring Product ID '{code}' is prominently featured."
     )
     
-    # priority=0 → HIGH: interactive user share generation
-    raw_text = await enqueue_ollama(prompt=prompt, system=SYSTEM_PROMPT_SHARE_DESCRIPTION, priority=0, req=req)
+    raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_SHARE_DESCRIPTION, req=req)
     try:
         data = json.loads(raw_text)
         desc = data.get("description", "").strip()

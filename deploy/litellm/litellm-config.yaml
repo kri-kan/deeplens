@@ -80,21 +80,21 @@ model_list:
       tpm: 1000000
 
   # ---------------------------------------------------------------------------
-  # Fallback Tier 1: Local Ollama Qwen 2.5 (7B)
-  # High capability reasoning fallback for quota exhaustion or network outage
-  # ---------------------------------------------------------------------------
-  - model_name: qwen2.5:7b
-    litellm_params:
-      model: ollama/qwen2.5:7b
-      api_base: http://ollama-gpu:11434
-
-  # ---------------------------------------------------------------------------
-  # Fallback Tier 2: Local Ollama Phi-4 Mini
+  # Fallback Tier 1: Local Ollama Phi-4 Mini
   # Ultra-fast local failover tier
   # ---------------------------------------------------------------------------
   - model_name: phi4-mini:latest
     litellm_params:
       model: ollama/phi4-mini:latest
+      api_base: http://ollama-gpu:11434
+
+  # ---------------------------------------------------------------------------
+  # Fallback Tier 2: Local Ollama Phi-3
+  # Stable local failover tier
+  # ---------------------------------------------------------------------------
+  - model_name: phi3:latest
+    litellm_params:
+      model: ollama/phi3:latest
       api_base: http://ollama-gpu:11434
 
 # -----------------------------------------------------------------------------
@@ -103,7 +103,7 @@ model_list:
 router_settings:
   routing_strategy: least-busy
   num_retries: 3
-  timeout: 60
+  timeout: 120
   retry_after: 5
   allowed_fails: 2
   cooldown_time: 30
@@ -115,16 +115,16 @@ litellm_settings:
   drop_params: true
   set_verbose: false
   num_retries: 3
-  request_timeout: 60
+  request_timeout: 120
   fallbacks:
     - deeplens-llm:
-        - qwen2.5:7b
+        - phi3:latest
         - phi4-mini:latest
     - deeplens-fast:
+        - phi3:latest
         - phi4-mini:latest
-        - qwen2.5:7b
     - gemini-2.5-flash:
-        - qwen2.5:7b
+        - phi3:latest
         - phi4-mini:latest
 
 # -----------------------------------------------------------------------------

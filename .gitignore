@@ -440,6 +440,7 @@ src/whatsapp-processor/reprocess_products.ts
 .squad/config.json
 .squad.local-backup/
 .agy/
+.codebase-memory/
 
 # Playwright Test Artifacts
 playwright-report/

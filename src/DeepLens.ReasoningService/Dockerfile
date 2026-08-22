@@ -14,7 +14,8 @@ COPY . .
 
 EXPOSE 8002
 
-ENV MOCK_MODE=true
-ENV MODEL_ID=microsoft/Phi-3-mini-4k-instruct
+ENV LITELLM_BASE_URL=http://litellm:4000/v1
+ENV LITELLM_MODEL=deeplens-llm
+ENV LITELLM_API_KEY=sk-deeplens-master-key
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

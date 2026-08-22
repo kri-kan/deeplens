@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<DeepLens.Infrastructure.Services.IPermissionCacheService, DeepLens.Infrastructure.Services.PermissionCacheService>();
         services.AddScoped<DeepLens.Contracts.Catalog.IProductService, DeepLens.Infrastructure.Services.ProductService>();
         services.AddScoped<Microsoft.AspNetCore.Authentication.IClaimsTransformation, DeepLens.Infrastructure.Services.VayyariClaimsTransformation>();
+        services.AddHttpClient<DeepLens.Application.Abstractions.Services.ILiteLlmService, DeepLens.Infrastructure.Services.LiteLlmService>();
 
         return services;
     }
