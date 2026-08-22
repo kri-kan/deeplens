@@ -1,0 +1,20 @@
+# Serena Semantic Code Intelligence Configuration
+version: 1
+project_name: deeplens
+languages:
+  csharp:
+    solution: src/DeepLens.Service/DeepLens.sln
+    additional_solutions:
+      - src/NextGen.Identity/NextGen.Identity.sln
+    lsp: csharp-ls
+  typescript:
+    projects:
+      - src/vayyari/tsconfig.json
+      - src/store/tsconfig.json
+      - tsconfig.json
+    lsp: typescript-language-server
+  python:
+    projects:
+      - src/DeepLens.ReasoningService
+      - src/DeepLens.FeatureExtractionService
+    lsp: pyright

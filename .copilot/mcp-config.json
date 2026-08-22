@@ -1,13 +1,50 @@
 {
   "mcpServers": {
-    "EXAMPLE-github": {
+    "squad_state": {
       "command": "npx",
       "args": [
         "-y",
-        "@anthropic/github-mcp-server"
+        "@bradygaster/squad-cli@0.11.0",
+        "state-mcp"
+      ],
+      "env": {}
+    },
+    "codebase_memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "codebase-memory-mcp"
       ],
       "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+        "CBM_PROJECT_DIR": "${DEEPLENS_ROOT:-/home/krikan/productivity/deeplens}"
+      }
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--project",
+        "${DEEPLENS_ROOT:-/home/krikan/productivity/deeplens}"
+      ],
+      "env": {}
+    },
+    "postgres": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--network=deeplens-network",
+        "-e",
+        "DATABASE_URI",
+        "crystaldba/postgres-mcp",
+        "--access-mode=restricted"
+      ],
+      "env": {
+        "DATABASE_URI": "${DATABASE_URI:-postgresql://postgres:postgres@localhost:5432/deeplens}"
       }
     }
   }
