@@ -50,6 +50,7 @@ export interface FilterState {
   fabrics: string[];
   vendorNames: string[];
   isStarred?: boolean | null;
+  status?: 'active' | 'archived' | 'all';
   includeArchived?: boolean | null;
 }
 
@@ -68,7 +69,8 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   fabrics: [],
   vendorNames: [],
   isStarred: null,
-  includeArchived: null,
+  status: 'active',
+  includeArchived: false,
 };
 
 export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawerProps) {
@@ -162,6 +164,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     }));
   };
 
+  const isStatusFiltered = (draft.status && draft.status !== 'active') || draft.includeArchived === true;
   const activeCount =
     (draft.sortBy !== 'recent' ? 1 : 0) +
     (draft.isStarred !== null && draft.isStarred !== undefined ? 1 : 0) +
@@ -169,7 +172,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     draft.fabrics.length +
     draft.vendorNames.length +
     (draft.minPrice > 0 || draft.maxPrice > 0 ? 1 : 0) +
-    (draft.includeArchived !== null && draft.includeArchived !== undefined ? 1 : 0);
+    (isStatusFiltered ? 1 : 0);
 
   const renderContent = () => {
     const sectionBg = theme.dark ? '#1e1e2e' : '#fff';
@@ -354,22 +357,25 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     }
 
     if (activeSection === 'Archived') {
-      const ARCHIVED_OPTIONS: { id: string; label: string; value: boolean | null }[] = [
-        { id: 'active', label: 'Active Only', value: null },
-        { id: 'archived', label: 'Archived Only', value: true },
+      const ARCHIVED_OPTIONS: { id: 'active' | 'archived' | 'all'; label: string }[] = [
+        { id: 'active', label: 'Active' },
+        { id: 'archived', label: 'Archived' },
+        { id: 'all', label: 'All' },
       ];
+      const currentStatus = draft.status ?? (draft.includeArchived === true ? 'archived' : 'active');
       return (
         <View style={styles.sectionContent}>
           {ARCHIVED_OPTIONS.map(opt => {
-            const isSelected =
-              opt.value === true
-                ? draft.includeArchived === true
-                : (draft.includeArchived === null || draft.includeArchived === undefined || draft.includeArchived === false);
+            const isSelected = currentStatus === opt.id;
             return (
               <TouchableOpacity
                 key={opt.id}
                 style={[styles.radioRow, isSelected && { backgroundColor: theme.colors.primaryContainer }]}
-                onPress={() => setDraft(d => ({ ...d, includeArchived: opt.value }))}
+                onPress={() => setDraft(d => ({
+                  ...d,
+                  status: opt.id,
+                  includeArchived: opt.id === 'archived' ? true : opt.id === 'active' ? false : null,
+                }))}
               >
                 <View style={[styles.radioCircle, { borderColor: theme.colors.primary }]}>
                   {isSelected && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
@@ -424,7 +430,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
                   section === 'Fabric' ? draft.fabrics.length :
                   section === 'Vendor' ? draft.vendorNames.length :
                   section === 'Price' && (draft.minPrice > 0 || draft.maxPrice > 0) ? 1 :
-                  section === 'Archived' && (draft.includeArchived !== null && draft.includeArchived !== undefined) ? 1 : 0;
+                  section === 'Archived' && isStatusFiltered ? 1 : 0;
 
                 return (
                   <TouchableOpacity

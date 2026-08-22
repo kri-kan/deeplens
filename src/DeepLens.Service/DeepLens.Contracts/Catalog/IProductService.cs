@@ -113,7 +113,10 @@ public class ProductCatalogFilter
     public string[]? Categories { get; set; }
 
     [JsonPropertyName("includeArchived")]
-    public bool IncludeArchived { get; set; }
+    public bool? IncludeArchived { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; } // active, archived, all
 
     [JsonPropertyName("sortBy")]
     public string? SortBy { get; set; } // recent, price_low, price_high, oldest
