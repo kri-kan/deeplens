@@ -118,12 +118,12 @@ class ProductService {
     return productMgmtApiClient.delete(`${API_ROUTES.PRODUCT_CATALOG.LIST}/${productId}`);
   }
 
-  async deleteProductsBulk(productIds: string[]): Promise<void> {
-    return productMgmtApiClient.delete(API_ROUTES.PRODUCT_CATALOG.BULK, productIds);
+  async deleteProductsBulk(productIds: string[]): Promise<{ status: string; batchId?: string; count: number; message?: string }> {
+    return productMgmtApiClient.delete<{ status: string; batchId?: string; count: number; message?: string }>(API_ROUTES.PRODUCT_CATALOG.BULK, productIds);
   }
 
-  async archiveProducts(productIds: string[]): Promise<{ count: number }> {
-    return productMgmtApiClient.post(`${API_ROUTES.PRODUCT_CATALOG.LIST}/archive`, productIds);
+  async archiveProducts(productIds: string[]): Promise<{ status: string; batchId?: string; count: number; message?: string }> {
+    return productMgmtApiClient.post<{ status: string; batchId?: string; count: number; message?: string }>(`${API_ROUTES.PRODUCT_CATALOG.LIST}/archive`, productIds);
   }
 
   async unarchiveProducts(productIds: string[]): Promise<{ count: number }> {

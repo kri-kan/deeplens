@@ -151,6 +151,20 @@ export default function ProductCatalogScreen() {
     }
   };
 
+  const handleBulkArchive = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      await productService.archiveProducts(ids);
+      clearSelection();
+      setActiveFilters(prev => ({ ...prev }));
+      Alert.alert('Archival Queued', `📦 Archival queued for ${ids.length} product(s). Storage pruning is processing in the background.`);
+    } catch (e) {
+      console.error('Failed to archive products:', e);
+      Alert.alert('Error', 'Failed to archive products.');
+    }
+  };
+
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -167,7 +181,7 @@ export default function ProductCatalogScreen() {
               await productService.deleteProductsBulk(ids);
               clearSelection();
               setActiveFilters(prev => ({ ...prev }));
-              Alert.alert('Deleted', 'Selected products and media permanently deleted.');
+              Alert.alert('Deletion Queued', `🗑️ Deletion queued for ${ids.length} product(s). Processing in the background.`);
             } catch (e) {
               console.error('Failed to permanently delete products:', e);
               Alert.alert('Error', 'Failed to permanently delete selected products.');
@@ -342,19 +356,9 @@ export default function ProductCatalogScreen() {
               {activeFilters.status !== 'archived' && activeFilters.includeArchived !== true && (
                 <Menu.Item
                   leadingIcon="archive-outline"
-                  onPress={async () => {
+                  onPress={() => {
                     setSelectionMenuVisible(false);
-                    if (selectedIds.size === 0) return;
-                    try {
-                      await productService.archiveProducts(Array.from(selectedIds));
-                      clearSelection();
-                      Alert.alert('Archived', 'Products archived and storage optimized.');
-                      // Trigger catalog refresh by producing a new filter reference
-                      setActiveFilters(prev => ({ ...prev }));
-                    } catch (e) {
-                      console.error(e);
-                      Alert.alert('Error', 'Failed to archive products.');
-                    }
+                    handleBulkArchive();
                   }}
                   title="Archive"
                 />
