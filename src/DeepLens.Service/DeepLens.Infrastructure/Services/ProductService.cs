@@ -8,10 +8,12 @@ using Npgsql;
 using System.Data;
 using System.Text.Json;
 using DeepLens.Contracts.Media;
+using DeepLens.Contracts.Events.Catalog;
 using DeepLens.Shared.Common;
 using Minio.DataModel.Tags;
 using DeepLens.Domain.Enums;
 using DeepLens.Shared.Telemetry;
+using Confluent.Kafka;
 
 namespace DeepLens.Infrastructure.Services;
 
@@ -23,6 +25,7 @@ public class ProductService : IProductService
     private readonly DeepLens.Application.Abstractions.Repositories.IProductShareLogRepository _productShareLogRepository;
     private readonly DeepLens.Application.Abstractions.Repositories.IProductRepository _productRepository;
     private readonly DeepLens.Application.Abstractions.Services.IAiService _aiService;
+    private readonly IProducer<string, string>? _producer;
     private readonly string _connectionString;
 
     public ProductService(
@@ -31,7 +34,8 @@ public class ProductService : IProductService
         DeepLens.Infrastructure.Services.IStorageService storageService,
         DeepLens.Application.Abstractions.Repositories.IProductShareLogRepository productShareLogRepository,
         DeepLens.Application.Abstractions.Repositories.IProductRepository productRepository,
-        DeepLens.Application.Abstractions.Services.IAiService aiService)
+        DeepLens.Application.Abstractions.Services.IAiService aiService,
+        IProducer<string, string>? producer = null)
     {
         _configuration = configuration;
         _logger = logger;
@@ -39,6 +43,7 @@ public class ProductService : IProductService
         _productShareLogRepository = productShareLogRepository;
         _productRepository = productRepository;
         _aiService = aiService;
+        _producer = producer;
         _connectionString = _configuration.GetConnectionString("DefaultConnection") 
                          ?? throw new InvalidOperationException("DefaultConnection string not found");
     }
@@ -433,11 +438,74 @@ public class ProductService : IProductService
 
     public async Task<bool> DeleteProductAsync(Guid productId)
     {
-        var count = await DeleteProductsBulkAsync(new List<Guid> { productId });
-        return count > 0;
+        var result = await EnqueueDeleteProductsBulkAsync(new List<Guid> { productId });
+        return result.Count > 0;
+    }
+
+    public async Task<ProductMaintenanceQueueResult> EnqueueDeleteProductsBulkAsync(List<Guid> productIds, string? requestedBy = null)
+    {
+        if (productIds == null || productIds.Count == 0)
+        {
+            return new ProductMaintenanceQueueResult
+            {
+                BatchId = Guid.NewGuid(),
+                Count = 0,
+                Status = "empty",
+                Message = "No product IDs provided."
+            };
+        }
+
+        using var db = GetConnection();
+        // 1. Immediately soft-delete in PostgreSQL
+        var idArray = productIds.ToArray();
+        await db.ExecuteAsync(
+            "UPDATE products SET is_deleted = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
+            new { Ids = idArray });
+
+        var batchId = Guid.NewGuid();
+        var cmd = new ProductDeleteBatchCommand
+        {
+            EventId = Guid.NewGuid(),
+            BatchId = batchId,
+            TenantId = "default",
+            ProductIds = productIds,
+            RequestedBy = requestedBy,
+            IsPermanent = true,
+            Timestamp = DateTime.UtcNow
+        };
+
+        if (_producer != null)
+        {
+            var json = JsonSerializer.Serialize(cmd, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            await _producer.ProduceAsync(ProductMaintenanceTopics.ProductDeleteCommand, new Message<string, string>
+            {
+                Key = batchId.ToString(),
+                Value = json
+            });
+            _logger.LogInformation("Enqueued {Count} products for background deletion with batchId {BatchId} (RequestedBy: {RequestedBy})",
+                productIds.Count, batchId, requestedBy ?? "system");
+        }
+        else
+        {
+            _logger.LogWarning("Kafka producer not available; executing delete synchronously for batch {BatchId}", batchId);
+            _ = Task.Run(() => ExecuteDeleteBatchInternalAsync(productIds, CancellationToken.None));
+        }
+
+        return new ProductMaintenanceQueueResult
+        {
+            BatchId = batchId,
+            Count = productIds.Count,
+            Status = "queued",
+            Message = $"Enqueued {productIds.Count} product(s) for background deletion."
+        };
     }
 
     public async Task<int> DeleteProductsBulkAsync(List<Guid> productIds)
+    {
+        return await ExecuteDeleteBatchInternalAsync(productIds, CancellationToken.None);
+    }
+
+    public async Task<int> ExecuteDeleteBatchInternalAsync(List<Guid> productIds, CancellationToken ct = default)
     {
         if (productIds == null || productIds.Count == 0) return 0;
 
@@ -491,6 +559,7 @@ public class ProductService : IProductService
             // 3. Delete files from MinIO
             foreach (var media in mediaRows)
             {
+                if (ct.IsCancellationRequested) break;
                 if (!string.IsNullOrEmpty(media.StoragePath))
                 {
                     try
@@ -546,7 +615,69 @@ public class ProductService : IProductService
         }
     }
 
+    public async Task<ProductMaintenanceQueueResult> EnqueueArchiveProductsAsync(List<Guid> productIds, string? requestedBy = null)
+    {
+        if (productIds == null || productIds.Count == 0)
+        {
+            return new ProductMaintenanceQueueResult
+            {
+                BatchId = Guid.NewGuid(),
+                Count = 0,
+                Status = "empty",
+                Message = "No product IDs provided."
+            };
+        }
+
+        using var db = GetConnection();
+        // 1. Immediately mark is_archived = TRUE in PostgreSQL
+        var idArray = productIds.ToArray();
+        await db.ExecuteAsync(
+            "UPDATE products SET is_archived = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
+            new { Ids = idArray });
+
+        var batchId = Guid.NewGuid();
+        var cmd = new ProductArchiveBatchCommand
+        {
+            EventId = Guid.NewGuid(),
+            BatchId = batchId,
+            TenantId = "default",
+            ProductIds = productIds,
+            RequestedBy = requestedBy,
+            Timestamp = DateTime.UtcNow
+        };
+
+        if (_producer != null)
+        {
+            var json = JsonSerializer.Serialize(cmd, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            await _producer.ProduceAsync(ProductMaintenanceTopics.ProductArchiveCommand, new Message<string, string>
+            {
+                Key = batchId.ToString(),
+                Value = json
+            });
+            _logger.LogInformation("Enqueued {Count} products for background archiving with batchId {BatchId} (RequestedBy: {RequestedBy})",
+                productIds.Count, batchId, requestedBy ?? "system");
+        }
+        else
+        {
+            _logger.LogWarning("Kafka producer not available; executing archive synchronously for batch {BatchId}", batchId);
+            _ = Task.Run(() => ExecuteArchiveBatchInternalAsync(productIds, CancellationToken.None));
+        }
+
+        return new ProductMaintenanceQueueResult
+        {
+            BatchId = batchId,
+            Count = productIds.Count,
+            Status = "queued",
+            Message = $"Enqueued {productIds.Count} product(s) for background media archiving."
+        };
+    }
+
     public async Task<int> ArchiveProductsAsync(List<Guid> productIds)
+    {
+        return await ExecuteArchiveBatchInternalAsync(productIds, CancellationToken.None);
+    }
+
+    public async Task<int> ExecuteArchiveBatchInternalAsync(List<Guid> productIds, CancellationToken ct = default)
     {
         if (productIds == null || productIds.Count == 0) return 0;
 
@@ -729,6 +860,7 @@ public class ProductService : IProductService
             // 5. Hard-delete all excess files from MinIO (best-effort per file, log errors)
             foreach (var path in deletePaths)
             {
+                if (ct.IsCancellationRequested) break;
                 if (string.IsNullOrWhiteSpace(path)) continue;
                 try
                 {

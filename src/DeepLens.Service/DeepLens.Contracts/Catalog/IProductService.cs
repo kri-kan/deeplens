@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using DeepLens.Domain.Entities.Catalog;
 using DeepLens.Contracts.Media;
+using DeepLens.Contracts.Events.Catalog;
 using DeepLens.Domain.Enums;
 using System.Text.Json.Serialization;
 
@@ -20,6 +22,10 @@ public interface IProductService
     Task<ProductCatalogResult> GetCatalogAsync(ProductCatalogFilter filter);
     Task<bool> DeleteProductAsync(Guid productId);
     Task<int> DeleteProductsBulkAsync(List<Guid> productIds);
+    Task<ProductMaintenanceQueueResult> EnqueueArchiveProductsAsync(List<Guid> productIds, string? requestedBy = null);
+    Task<ProductMaintenanceQueueResult> EnqueueDeleteProductsBulkAsync(List<Guid> productIds, string? requestedBy = null);
+    Task<int> ExecuteArchiveBatchInternalAsync(List<Guid> productIds, CancellationToken ct = default);
+    Task<int> ExecuteDeleteBatchInternalAsync(List<Guid> productIds, CancellationToken ct = default);
     Task<int> ArchiveProductsAsync(List<Guid> productIds);
     Task<int> UnarchiveProductsAsync(List<Guid> productIds);
     Task<int> PurgeAllArchivedProductsMediaAsync();

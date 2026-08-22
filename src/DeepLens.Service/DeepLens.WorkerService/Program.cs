@@ -81,6 +81,7 @@ builder.Services.AddHostedService<ImageMaintenanceWorker>();
 builder.Services.AddHostedService<InstagramSyncWorker>();
 builder.Services.AddHostedService<WhatsAppGroupWorker>();
 builder.Services.AddHostedService<ProductEnrichmentWorker>();
+builder.Services.AddHostedService<CatalogMaintenanceWorker>();
 
 var host = builder.Build();
 host.Run();

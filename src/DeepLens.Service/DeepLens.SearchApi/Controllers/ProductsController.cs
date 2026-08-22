@@ -69,22 +69,22 @@ public class ProductsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteProduct(Guid id)
     {
-        var success = await _productService.DeleteProductAsync(id);
-        return success ? Ok() : NotFound();
+        var result = await _productService.EnqueueDeleteProductsBulkAsync(new List<Guid> { id }, User?.Identity?.Name ?? "system");
+        return Accepted(result);
     }
 
     [HttpDelete("bulk")]
     public async Task<IActionResult> DeleteProductsBulk([FromBody] List<Guid> productIds)
     {
-        var count = await _productService.DeleteProductsBulkAsync(productIds);
-        return Ok(new { count });
+        var result = await _productService.EnqueueDeleteProductsBulkAsync(productIds, User?.Identity?.Name ?? "system");
+        return Accepted(result);
     }
 
     [HttpPost("archive")]
     public async Task<IActionResult> ArchiveProducts([FromBody] List<Guid> productIds)
     {
-        var count = await _productService.ArchiveProductsAsync(productIds);
-        return Ok(new { count });
+        var result = await _productService.EnqueueArchiveProductsAsync(productIds, User?.Identity?.Name ?? "system");
+        return Accepted(result);
     }
 
     [HttpPost("archive/purge-all")]

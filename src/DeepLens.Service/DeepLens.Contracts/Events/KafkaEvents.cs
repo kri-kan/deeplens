@@ -643,6 +643,16 @@ public static class KafkaTopics
     public const string ProductMerged = "deeplens.product.merged";
 
     /// <summary>
+    /// Product archive batch command topic.
+    /// </summary>
+    public const string ProductArchiveCommand = "deeplens.catalog.product.archive.command";
+
+    /// <summary>
+    /// Product delete batch command topic.
+    /// </summary>
+    public const string ProductDeleteCommand = "deeplens.catalog.product.delete.command";
+
+    /// <summary>
     /// Array of all DeepLens Kafka topics for bulk operations.
     /// Used during setup, monitoring, and cleanup operations.
     /// </summary>
@@ -662,7 +672,9 @@ public static class KafkaTopics
         ProductEnrichmentRequested,
         GroupProductDelete,
         ProductCategoryChanged,
-        ProductMerged
+        ProductMerged,
+        ProductArchiveCommand,
+        ProductDeleteCommand
     };
 }
 
