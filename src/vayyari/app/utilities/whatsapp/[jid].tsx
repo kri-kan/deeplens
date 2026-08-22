@@ -199,9 +199,10 @@ export default function ConversationDetailScreen() {
             title="Media Files" 
             value={stats.media.total.toString()}
             details={[
-              { label: 'Photos', value: stats.media.photos.toString() },
-              { label: 'Videos', value: stats.media.videos.toString() },
-              { label: 'Docs', value: stats.media.documents.toString() },
+              { label: 'Photos', value: (stats.media.photos ?? 0).toString() },
+              { label: 'Videos', value: (stats.media.videos ?? 0).toString() },
+              { label: 'Stickers', value: (stats.media.stickers ?? 0).toString() },
+              { label: 'Docs', value: (stats.media.documents ?? 0).toString() },
             ]}
           />
         </View>
@@ -349,8 +350,10 @@ export default function ConversationDetailScreen() {
                   title={msg.messageText || (msg.mediaType ? `[${msg.mediaType.toUpperCase()}]` : '(no text)')}
                   description={format(new Date(msg.timestamp * 1000), 'MMM d, HH:mm:ss')}
                   left={props => (
-                    msg.mediaType === 'image' ? <List.Icon {...props} icon="image" /> :
+                    msg.mediaType === 'image' || msg.mediaType === 'photo' ? <List.Icon {...props} icon="image" /> :
                     msg.mediaType === 'video' ? <List.Icon {...props} icon="video" /> :
+                    msg.mediaType === 'sticker' ? <List.Icon {...props} icon="sticker-emoji" /> :
+                    msg.mediaType === 'document' ? <List.Icon {...props} icon="file-document" /> :
                     <List.Icon {...props} icon="message-text" />
                   )}
                   titleStyle={{ fontSize: 14 }}

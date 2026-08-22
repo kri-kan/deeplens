@@ -335,6 +335,8 @@ export default function GroupZoneViewScreen() {
                             <View key={m.messageId} style={styles.thumbnailContainer}>
                               {m.mediaType === 'image' || m.mediaType === 'photo' ? (
                                 <Image source={{ uri: m.mediaUrl }} style={styles.thumbnail} />
+                              ) : m.mediaType === 'sticker' ? (
+                                <Image source={{ uri: m.mediaUrl }} style={[styles.thumbnail, { resizeMode: 'contain' }]} />
                               ) : (
                                 <View style={[styles.thumbnail, styles.videoPlaceholder]}>
                                   <IconButton icon="play-circle" size={24} iconColor="#fff" style={{ margin: 0 }} />

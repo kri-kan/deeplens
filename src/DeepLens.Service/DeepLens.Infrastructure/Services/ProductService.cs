@@ -682,10 +682,25 @@ public class ProductService : IProductService
 
                 foreach (var msg in waMessages)
                 {
+                    if (string.IsNullOrWhiteSpace(msg.MediaUrl)) continue;
+
+                    var isVideo = string.Equals(msg.MediaType, "video", StringComparison.OrdinalIgnoreCase);
+                    var isPhoto = string.Equals(msg.MediaType, "image", StringComparison.OrdinalIgnoreCase) 
+                               || string.Equals(msg.MediaType, "photo", StringComparison.OrdinalIgnoreCase)
+                               || (string.IsNullOrEmpty(msg.MediaType) && !msg.MediaUrl.Contains("/stickers/") && !msg.MediaUrl.Contains("/documents/") && !msg.MediaUrl.Contains("/audios/"));
+                    var isSticker = string.Equals(msg.MediaType, "sticker", StringComparison.OrdinalIgnoreCase) 
+                                 || msg.MediaUrl.Contains("/stickers/");
+
+                    // Purely archive photos and videos: Stickers, documents, audio, and text messages MUST NEVER be purged
+                    if (isSticker || (!isVideo && !isPhoto))
+                    {
+                        continue;
+                    }
+
                     var msgFn = System.IO.Path.GetFileName(msg.MediaUrl.TrimEnd('/'));
                     
-                    // If this WhatsApp message is not one of the retained product images (or is a video/sticker), prune it
-                    if (msg.MediaType == "video" || msg.MediaType == "sticker" || !retainedFilenames.Contains(msgFn))
+                    // If this WhatsApp message is not one of the retained product images (or is a video), prune it
+                    if (isVideo || !retainedFilenames.Contains(msgFn))
                     {
                         waMessageIdsToClean.Add(msg.Id);
                         deletePaths.Add(msg.MediaUrl);

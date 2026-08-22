@@ -31,17 +31,27 @@ type MediaGroup = {
 };
 
 // Helper functions for media status
-const isMediaMsg = (msg: Message) => {
+const isPhotoOrVideoMsg = (msg: Message) => {
   return (
     msg.mediaType === 'image' ||
     msg.mediaType === 'photo' ||
     msg.mediaType === 'video' ||
+    (!!msg.mediaUrl && msg.mediaType !== 'sticker' && msg.mediaType !== 'document' && msg.mediaType !== 'audio' && msg.mediaType !== 'ptt')
+  );
+};
+
+const isStickerMsg = (msg: Message) => {
+  return (
     msg.mediaType === 'sticker' ||
-    !!msg.mediaUrl
+    (!!msg.mediaUrl && msg.mediaUrl.includes('/stickers/'))
   );
 };
 
 const isMediaArchived = (msg: Message) => {
+  // Stickers, documents, audio, and text messages are NEVER archived
+  if (isStickerMsg(msg) || msg.mediaType === 'document' || msg.mediaType === 'audio' || (!msg.mediaType && !msg.mediaUrl)) {
+    return false;
+  }
   return (
     !msg.mediaUrl ||
     msg.metadata?.isArchived === true ||
@@ -68,7 +78,35 @@ const ChatMediaItem = React.memo(({
 }) => {
   const [loadFailed, setLoadFailed] = useState(false);
   const isVideo = msg.mediaType === 'video';
-  const isArchived = !msg.mediaUrl || loadFailed || isMediaArchived(msg);
+  const isSticker = isStickerMsg(msg);
+  const isArchived = !isSticker && (!msg.mediaUrl || loadFailed || isMediaArchived(msg));
+
+  if (isSticker && msg.mediaUrl && !loadFailed) {
+    return (
+      <TouchableOpacity 
+        activeOpacity={0.8} 
+        onPress={onPress}
+        style={{ 
+          width: size, 
+          height: size, 
+          margin: 2, 
+          backgroundColor: 'transparent', 
+          borderRadius: 8, 
+          overflow: 'hidden', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+        }}
+      >
+        <ExpoImage 
+          source={{ uri: msg.mediaUrl }} 
+          style={{ width: '100%', height: '100%' }} 
+          contentFit="contain" 
+          onError={() => setLoadFailed(true)}
+          transition={100}
+        />
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity 
@@ -96,7 +134,7 @@ const ChatMediaItem = React.memo(({
             style={{ margin: 0 }} 
           />
           <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#64748b', fontWeight: '600', textAlign: 'center', marginTop: 2 }}>
-            {loadFailed ? 'Load Failed' : 'Archived'}
+            {loadFailed ? 'Load Failed' : isVideo ? 'Video Archived' : 'Photo Archived'}
           </Text>
         </View>
       ) : isVideo ? (
@@ -113,7 +151,7 @@ const ChatMediaItem = React.memo(({
         <ExpoImage 
           source={{ uri: msg.mediaUrl! }} 
           style={{ width: '100%', height: '100%' }} 
-          contentFit={msg.mediaType === 'sticker' ? 'contain' : 'cover'} 
+          contentFit="cover" 
           onError={() => setLoadFailed(true)}
           transition={100}
         />
@@ -412,9 +450,11 @@ export default function FullMessageBrowser() {
     
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
-      const isMedia = isMediaMsg(msg);
+      // Only group photos and videos into albums.
+      // Stickers, text messages, documents, and audio remain standalone items.
+      const isGroupableMedia = isPhotoOrVideoMsg(msg);
       
-      if (isMedia) {
+      if (isGroupableMedia) {
         if (!currentGroup) {
           currentGroup = {
             type: 'media_group',
@@ -890,9 +930,11 @@ export default function FullMessageBrowser() {
 
     const msg = item as Message;
     const text = cleanMessageText(msg);
-    const isMedia = isMediaMsg(msg);
+    const isPhotoOrVideo = isPhotoOrVideoMsg(msg);
+    const isSticker = isStickerMsg(msg);
     const isArchived = isMediaArchived(msg);
     const hasActive = hasActiveMedia(msg);
+    const isOnlySticker = isSticker && !text && !msg.groupId;
 
     return (
       <View>
@@ -930,24 +972,29 @@ export default function FullMessageBrowser() {
               style={[
                 styles.bubble, 
                 isFromMe ? styles.myBubble : styles.theirBubble,
+                isOnlySticker && styles.stickerBubble,
                 zoningMode && hoveredMessageId === msg.messageId && styles.selectedBubble,
                 getHighlightedStyle(msg.groupId, msg.messageId, msg.timestamp)
               ]} 
-              elevation={isItemHighlighted(msg.groupId, msg.messageId, msg.timestamp) ? 3 : 1}
+              elevation={isOnlySticker ? 0 : (isItemHighlighted(msg.groupId, msg.messageId, msg.timestamp) ? 3 : 1)}
             >
               {msg.groupId && (
                 <Text style={styles.groupIdLabel}>{msg.groupId.substring(0, 8)}</Text>
               )}
               
-              {hasActive ? (
+              {isSticker && msg.mediaUrl ? (
+                <View style={styles.stickerContainer}>
+                  {renderMediaContent(msg, 140)}
+                </View>
+              ) : hasActive ? (
                 <View style={styles.mediaContainer}>
                   {renderMediaContent(msg, 240)}
                 </View>
-              ) : isMedia && isArchived ? (
+              ) : isPhotoOrVideo && isArchived ? (
                 <View style={styles.singleArchivedContainer}>
                   <IconButton icon={msg.mediaType === 'video' ? 'video-off-outline' : 'image-off-outline'} size={18} iconColor="#64748b" style={{ margin: 0, width: 22, height: 22 }} />
                   <Text style={styles.singleArchivedText}>
-                    {msg.mediaType === 'video' ? 'Video' : 'Media'} archived (storage pruned)
+                    {msg.mediaType === 'video' ? 'Video' : 'Photo'} archived (storage pruned)
                   </Text>
                 </View>
               ) : msg.mediaType === 'document' ? (
@@ -960,7 +1007,7 @@ export default function FullMessageBrowser() {
               ) : null}
 
               {text ? <Text style={styles.messageText}>{text}</Text> : null}
-              <Text style={styles.timestamp}>
+              <Text style={[styles.timestamp, isOnlySticker && styles.stickerTimestamp]}>
                 {msg.timestamp ? format(new Date(msg.timestamp * 1000), 'HH:mm') : ''}
               </Text>
             </Surface>
@@ -1363,6 +1410,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748b',
     marginLeft: 4,
+  },
+  stickerBubble: {
+    backgroundColor: 'transparent',
+    padding: 0,
+    elevation: 0,
+    minWidth: 0,
+  },
+  stickerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stickerTimestamp: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    color: '#fff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-end',
+    fontSize: 9,
+    marginTop: 2,
   },
   
   // Zoning Mode Styles
