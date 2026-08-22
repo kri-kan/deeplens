@@ -3,6 +3,7 @@ import json
 import asyncio
 import re
 import time
+from datetime import datetime, timezone
 import requests
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import RedirectResponse
@@ -163,6 +164,25 @@ class ShareDescriptionResponse(BaseModel):
     description: str
     raw_response: str | None = None
 
+class TestModelRequest(BaseModel):
+    model: str = "deeplens-llm"
+    prompt: str = "Pure Kanchi Pattu saree in navy blue. Price 4500."
+    system: str = "Extract JSON metadata: {\"category\": str, \"price\": float, \"fabric\": str}"
+
+class TestModelResponse(BaseModel):
+    model: str
+    status: str
+    latency_ms: int
+    raw_response: str | None = None
+    parsed_json: dict | list | None = None
+    error: str | None = None
+
+class RunAllModelsRequest(BaseModel):
+    prompt: str = "Pure Kanchi Pattu saree in navy blue with gold zari border. Price 4500."
+    system: str | None = None
+    models: list[str] | None = None
+
+
 INDIAN_FASHION_GLOSSARY = {
     "fabrics": [
         "Cotton", "Silk", "Georgette", "Organza", "Crepe (crape, creap)", "Dola Silk",
@@ -296,6 +316,55 @@ SYSTEM_PROMPT_SHARE_DESCRIPTION = (
     "Do not include markdown blocks or any other text."
 )
 
+def get_model_provider(model_name: str) -> str:
+    m = model_name.lower()
+    if "deeplens" in m:
+        return "gemini/ollama"
+    elif "gemini" in m:
+        return "gemini"
+    elif "phi" in m or "ollama" in m:
+        return "ollama"
+    return "openai"
+
+async def probe_single_model(model_name: str, timeout_sec: float = 25.0) -> dict:
+    start_time = time.time()
+    provider = get_model_provider(model_name)
+    try:
+        completion_coro = llm_client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": "Respond with valid JSON: {\"status\": \"ok\"}"},
+                {"role": "user", "content": "ping"}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1
+        )
+        completion = await asyncio.wait_for(completion_coro, timeout=timeout_sec)
+        latency_ms = int((time.time() - start_time) * 1000)
+        content = completion.choices[0].message.content or ""
+        return {
+            "status": "ok",
+            "latency_ms": latency_ms,
+            "provider": provider,
+            "probe_response": content
+        }
+    except asyncio.TimeoutError:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {
+            "status": "error",
+            "latency_ms": latency_ms,
+            "provider": provider,
+            "error": f"Timeout after {timeout_sec}s"
+        }
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {
+            "status": "error",
+            "latency_ms": latency_ms,
+            "provider": provider,
+            "error": str(e)
+        }
+
 @app.get("/health")
 async def health():
     try:
@@ -319,6 +388,212 @@ async def health():
             "gateway_url": LITELLM_BASE_URL,
             "error": str(e)
         }
+
+@app.get("/diagnostics/models")
+async def diagnostics_models():
+    target_models = ["deeplens-llm", "deeplens-fast", "gemini-2.5-flash", "phi3:latest", "phi4-mini:latest"]
+    try:
+        models_response = await asyncio.wait_for(llm_client.models.list(), timeout=5.0)
+        if hasattr(models_response, 'data') and models_response.data:
+            discovered = [m.id for m in models_response.data if hasattr(m, 'id')]
+            for d in discovered:
+                if d not in target_models:
+                    target_models.append(d)
+    except Exception as e:
+        print(f"Warning: Failed to fetch models list from gateway: {e}", flush=True)
+
+    probe_tasks = [probe_single_model(m, timeout_sec=25.0) for m in target_models]
+    probe_results = await asyncio.gather(*probe_tasks)
+
+    models_dict = {}
+    for model_name, result in zip(target_models, probe_results):
+        entry = {
+            "status": result["status"],
+            "latency_ms": result["latency_ms"],
+            "provider": result["provider"],
+        }
+        if "error" in result:
+            entry["error"] = result["error"]
+        models_dict[model_name] = entry
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "gateway_url": LITELLM_BASE_URL,
+        "models": models_dict
+    }
+
+@app.post("/test-model", response_model=TestModelResponse)
+async def test_model(req: Request, request: TestModelRequest, background_tasks: BackgroundTasks):
+    messages = []
+    if request.system:
+        messages.append({"role": "system", "content": request.system})
+    messages.append({"role": "user", "content": request.prompt})
+
+    start_time = time.time()
+    try:
+        if await req.is_disconnected():
+            raise HTTPException(status_code=499, detail="Client Closed Request")
+
+        completion_coro = llm_client.chat.completions.create(
+            model=request.model,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0.1
+        )
+        completion = await asyncio.wait_for(completion_coro, timeout=60.0)
+        latency_ms = int((time.time() - start_time) * 1000)
+        raw_text = completion.choices[0].message.content or ""
+        
+        background_tasks.add_task(log_llm_call, f"/test-model/{request.model}", request.prompt, raw_text, latency_ms)
+
+        parsed = None
+        try:
+            raw_clean = raw_text.strip()
+            match = re.search(r'```(?:json)?(.*?)```', raw_clean, re.DOTALL)
+            if match:
+                raw_clean = match.group(1).strip()
+            parsed = json.loads(raw_clean)
+        except Exception:
+            parsed = None
+
+        return TestModelResponse(
+            model=request.model,
+            status="ok",
+            latency_ms=latency_ms,
+            raw_response=raw_text,
+            parsed_json=parsed,
+            error=None
+        )
+    except asyncio.TimeoutError:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return TestModelResponse(
+            model=request.model,
+            status="error",
+            latency_ms=latency_ms,
+            raw_response=None,
+            parsed_json=None,
+            error="Request timed out after 60s"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return TestModelResponse(
+            model=request.model,
+            status="error",
+            latency_ms=latency_ms,
+            raw_response=None,
+            parsed_json=None,
+            error=str(e)
+        )
+
+@app.post("/diagnostics/run-all-models")
+async def run_all_models(req: Request, request: RunAllModelsRequest = None):
+    req_body = request or RunAllModelsRequest()
+    prompt = req_body.prompt
+    system_prompt = req_body.system or SYSTEM_PROMPT_PRODUCT_EXTRACT
+    
+    target_models = req_body.models
+    if not target_models:
+        target_models = ["deeplens-llm", "deeplens-fast", "gemini-2.5-flash", "phi3:latest", "phi4-mini:latest"]
+        try:
+            models_response = await asyncio.wait_for(llm_client.models.list(), timeout=5.0)
+            if hasattr(models_response, 'data') and models_response.data:
+                discovered = [m.id for m in models_response.data if hasattr(m, 'id')]
+                for d in discovered:
+                    if d not in target_models:
+                        target_models.append(d)
+        except Exception as e:
+            print(f"Warning: Failed to fetch models list in run-all-models: {e}", flush=True)
+
+    async def run_single_model_extraction(model_name: str) -> dict:
+        start_time = time.time()
+        provider = get_model_provider(model_name)
+        try:
+            completion_coro = llm_client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+            completion = await asyncio.wait_for(completion_coro, timeout=60.0)
+            latency_ms = int((time.time() - start_time) * 1000)
+            raw_text = completion.choices[0].message.content or ""
+            
+            parsed = None
+            try:
+                raw_clean = raw_text.strip()
+                match = re.search(r'```(?:json)?(.*?)```', raw_clean, re.DOTALL)
+                if match:
+                    raw_clean = match.group(1).strip()
+                parsed = json.loads(raw_clean)
+            except Exception:
+                parsed = None
+
+            return {
+                "status": "ok",
+                "latency_ms": latency_ms,
+                "provider": provider,
+                "extracted": parsed,
+                "raw_response": raw_text
+            }
+        except asyncio.TimeoutError:
+            latency_ms = int((time.time() - start_time) * 1000)
+            return {
+                "status": "error",
+                "latency_ms": latency_ms,
+                "provider": provider,
+                "extracted": None,
+                "raw_response": None,
+                "error": "Request timed out after 60s"
+            }
+        except Exception as e:
+            latency_ms = int((time.time() - start_time) * 1000)
+            return {
+                "status": "error",
+                "latency_ms": latency_ms,
+                "provider": provider,
+                "extracted": None,
+                "raw_response": None,
+                "error": str(e)
+            }
+
+    tasks = [run_single_model_extraction(m) for m in target_models]
+    results_list = await asyncio.gather(*tasks)
+
+    results_dict = {}
+    successful = 0
+    failed = 0
+    fastest_model = None
+    lowest_latency = float('inf')
+
+    for m, res in zip(target_models, results_list):
+        results_dict[m] = res
+        if res["status"] == "ok":
+            successful += 1
+            if res["latency_ms"] < lowest_latency:
+                lowest_latency = res["latency_ms"]
+                fastest_model = m
+        else:
+            failed += 1
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "gateway_url": LITELLM_BASE_URL,
+        "prompt": prompt,
+        "results": results_dict,
+        "summary": {
+            "total_models": len(target_models),
+            "successful_models": successful,
+            "failed_models": failed,
+            "fastest_model": fastest_model,
+            "lowest_latency_ms": lowest_latency if lowest_latency != float('inf') else None
+        }
+    }
+
 
 @app.post("/extract", response_model=ExtractionResponse)
 async def extract_metadata(req: Request, request: ExtractionRequest, background_tasks: BackgroundTasks):
