@@ -56,8 +56,8 @@ export function useIntelligentChatTimeline({
 
         setMessages(mergeMessages([], res.messages));
         setHasMoreOlder(true);
-        // If specific target message/timestamp requested without highlightGroupId, we might be in historical window
-        const isHistoricalTarget = !!(targetMessageId || targetTimestamp);
+        // If specific target message/timestamp or highlight group requested, we might be in historical window
+        const isHistoricalTarget = !!(targetMessageId || targetTimestamp || highlightGroupId);
         setIsLatestLoaded(!isHistoricalTarget);
 
         if (targetMessageId) {

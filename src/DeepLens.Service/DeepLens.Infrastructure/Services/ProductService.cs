@@ -556,36 +556,46 @@ public class ProductService : IProductService
 
         try
         {
+            var idArray = productIds.ToArray();
+
             // 1. Mark products as archived
             var archivedCount = await db.ExecuteAsync(
                 "UPDATE products SET is_archived = TRUE, updated_at = NOW() WHERE id = ANY(@Ids)",
-                new { Ids = productIds.ToArray() }, transaction);
+                new { Ids = idArray }, transaction);
 
-            // 2. Fetch all media linked to these products via media_links
+            // 2. Fetch all media linked to these products via media_links (both product & vendor_listing links)
             var mediaRows = (await db.QueryAsync<ProductMediaRow>(@"
-                SELECT m.id          AS Id,
-                       ml.entity_id  AS ProductId,
+                SELECT DISTINCT m.id AS Id,
+                       COALESCE(p_ml.entity_id, vl.product_id) AS ProductId,
                        m.storage_path AS StoragePath,
-                       m.media_type  AS MediaType,
+                       m.original_filename AS OriginalFilename,
+                       m.thumbnail_s AS ThumbnailS,
+                       m.thumbnail_m AS ThumbnailM,
+                       m.thumbnail_l AS ThumbnailL,
+                       m.thumbnail_path AS ThumbnailPath,
+                       m.preview_path AS PreviewPath,
+                       m.media_type AS MediaType,
                        COALESCE(m.file_size_bytes, 0) AS FileSize
                 FROM media m
-                JOIN media_links ml ON ml.media_id = m.id
-                WHERE ml.entity_id = ANY(@Ids)
-                  AND ml.entity_type = 'product'",
-                new { Ids = productIds.ToArray() }, transaction)).ToList();
+                LEFT JOIN media_links p_ml ON p_ml.media_id = m.id AND p_ml.entity_id = ANY(@Ids) AND p_ml.entity_type = 'product'
+                LEFT JOIN media_links vl_ml ON vl_ml.media_id = m.id AND vl_ml.entity_type = 'vendor_listing'
+                LEFT JOIN vendor_listings vl ON vl.id = vl_ml.entity_id AND vl.product_id = ANY(@Ids)
+                WHERE (p_ml.entity_id IS NOT NULL OR vl.product_id IS NOT NULL)",
+                new { Ids = idArray }, transaction)).ToList();
+
+            var retainedIds = new HashSet<Guid>();
+            var retainedFilenames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var deleteIds = new HashSet<Guid>();
+            var deletePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             if (mediaRows.Count > 0)
             {
-                var retainedIds = new List<Guid>();
-                var deleteIds   = new List<Guid>();
-                var deletePaths = new List<string>();
-
                 // 3. Group by product; for each product retain top-2 non-video images
                 var byProduct = mediaRows.GroupBy(r => r.ProductId);
                 foreach (var grp in byProduct)
                 {
                     // Videos (media_type = 2) are always purged
-                    var videos   = grp.Where(r => r.MediaType == 2).ToList();
+                    var videos = grp.Where(r => r.MediaType == 2).ToList();
                     var nonVideo = grp.Where(r => r.MediaType != 2).ToList();
 
                     // Top-2 largest non-video images → retained
@@ -596,50 +606,147 @@ public class ProductService : IProductService
 
                     var toDelete = nonVideo.Except(retained).Concat(videos).ToList();
 
-                    retainedIds.AddRange(retained.Select(r => r.Id));
-                    deleteIds.AddRange(toDelete.Select(r => r.Id));
-                    deletePaths.AddRange(toDelete
-                        .Where(r => !string.IsNullOrEmpty(r.StoragePath))
-                        .Select(r => r.StoragePath!));
-                }
-
-                // 4. Hard-delete from MinIO (best-effort per file, log errors but don't fail)
-                foreach (var path in deletePaths)
-                {
-                    try
+                    foreach (var r in retained)
                     {
-                        await _storageService.DeleteFileAsync(path);
+                        retainedIds.Add(r.Id);
+                        if (!string.IsNullOrEmpty(r.OriginalFilename))
+                            retainedFilenames.Add(r.OriginalFilename);
+                        if (!string.IsNullOrEmpty(r.StoragePath))
+                        {
+                            var fn = System.IO.Path.GetFileName(r.StoragePath);
+                            if (!string.IsNullOrEmpty(fn))
+                                retainedFilenames.Add(fn);
+                        }
                     }
-                    catch (Exception ex)
+
+                    foreach (var d in toDelete)
                     {
-                        _logger.LogWarning(ex, "Failed to delete archived media from MinIO: {Path}", path);
+                        deleteIds.Add(d.Id);
+                        if (!string.IsNullOrEmpty(d.StoragePath))
+                            deletePaths.Add(d.StoragePath);
+                        if (!string.IsNullOrEmpty(d.ThumbnailS))
+                            deletePaths.Add(d.ThumbnailS);
+                        if (!string.IsNullOrEmpty(d.ThumbnailM))
+                            deletePaths.Add(d.ThumbnailM);
+                        if (!string.IsNullOrEmpty(d.ThumbnailL))
+                            deletePaths.Add(d.ThumbnailL);
+                        if (!string.IsNullOrEmpty(d.ThumbnailPath))
+                            deletePaths.Add(d.ThumbnailPath);
+                        if (!string.IsNullOrEmpty(d.PreviewPath))
+                            deletePaths.Add(d.PreviewPath);
                     }
-                }
-
-                // 5. Remove media_links + media rows for deleted items
-                if (deleteIds.Count > 0)
-                {
-                    // media_links have ON DELETE CASCADE from media FK, but we remove them explicitly for clarity
-                    await db.ExecuteAsync(
-                        "DELETE FROM media_links WHERE media_id = ANY(@Ids) AND entity_type = 'product'",
-                        new { Ids = deleteIds.ToArray() }, transaction);
-
-                    await db.ExecuteAsync(
-                        "DELETE FROM media WHERE id = ANY(@Ids)",
-                        new { Ids = deleteIds.ToArray() }, transaction);
-                }
-
-                // 6. Mark retained images as compressed thumbnails
-                if (retainedIds.Count > 0)
-                {
-                    await db.ExecuteAsync(
-                        "UPDATE media SET is_compressed_thumbnail = TRUE WHERE id = ANY(@Ids)",
-                        new { Ids = retainedIds.ToArray() }, transaction);
                 }
             }
 
+            // 4. Query associated WhatsApp groups & messages to purge raw WhatsApp media
+            var associatedGroupIds = (await db.QueryAsync<string>(@"
+                SELECT DISTINCT group_id
+                FROM (
+                    SELECT mg.group_id
+                    FROM wa.message_groups mg
+                    WHERE mg.deeplens_product_id = ANY(@Ids) AND mg.group_id IS NOT NULL
+                    UNION
+                    SELECT vl.source_group_id AS group_id
+                    FROM vendor_listings vl
+                    WHERE vl.product_id = ANY(@Ids) AND vl.source_group_id IS NOT NULL
+                ) g
+                WHERE group_id IS NOT NULL",
+                new { Ids = idArray }, transaction)).ToList();
+
+            var waMessageIdsToClean = new List<long>();
+
+            if (associatedGroupIds.Count > 0)
+            {
+                var waMessages = (await db.QueryAsync<(long Id, string MessageId, string GroupId, string MediaUrl, string? MediaType, string? Content)>(@"
+                    SELECT id AS Id, message_id AS MessageId, group_id AS GroupId, media_url AS MediaUrl, media_type AS MediaType, content AS Content
+                    FROM wa.messages
+                    WHERE group_id = ANY(@GroupIds) AND media_url IS NOT NULL",
+                    new { GroupIds = associatedGroupIds.ToArray() }, transaction)).ToList();
+
+                foreach (var msg in waMessages)
+                {
+                    var msgFn = System.IO.Path.GetFileName(msg.MediaUrl.TrimEnd('/'));
+                    
+                    // If this WhatsApp message is not one of the retained product images (or is a video), prune it
+                    if (msg.MediaType == "video" || !retainedFilenames.Contains(msgFn))
+                    {
+                        waMessageIdsToClean.Add(msg.Id);
+                        deletePaths.Add(msg.MediaUrl);
+
+                        // Also find any matching orphan media record in public.media
+                        var orphanMediaIds = (await db.QueryAsync<Guid>(@"
+                            SELECT id FROM public.media 
+                            WHERE storage_path LIKE '%' || @Filename 
+                               OR storage_path = @MediaUrl 
+                               OR original_filename = @Filename",
+                            new { Filename = msgFn, MediaUrl = msg.MediaUrl }, transaction)).ToList();
+
+                        foreach (var omId in orphanMediaIds)
+                        {
+                            if (!retainedIds.Contains(omId))
+                            {
+                                deleteIds.Add(omId);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 5. Hard-delete all excess files from MinIO (best-effort per file, log errors)
+            foreach (var path in deletePaths)
+            {
+                if (string.IsNullOrWhiteSpace(path)) continue;
+                try
+                {
+                    await _storageService.DeleteFileAsync(path);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete archived media from MinIO: {Path}", path);
+                }
+            }
+
+            // 6. Clean wa.messages for pruned media (clear media_url, zero out size, strip large base64 thumbnails)
+            if (waMessageIdsToClean.Count > 0)
+            {
+                await db.ExecuteAsync(@"
+                    UPDATE wa.messages
+                    SET media_url = NULL,
+                        media_size = 0,
+                        content = COALESCE(NULLIF(content, ''), '[Media archived / deleted]'),
+                        metadata = CASE 
+                            WHEN metadata IS NOT NULL 
+                            THEN metadata - 'jpegThumbnail' - 'imageMessage' - 'videoMessage'
+                            ELSE NULL 
+                        END,
+                        updated_at = NOW()
+                    WHERE id = ANY(@WaIds)",
+                    new { WaIds = waMessageIdsToClean.ToArray() }, transaction);
+            }
+
+            // 7. Remove media_links + media rows for deleted items across all entity types
+            if (deleteIds.Count > 0)
+            {
+                var delArray = deleteIds.ToArray();
+                await db.ExecuteAsync(
+                    "DELETE FROM media_links WHERE media_id = ANY(@Ids)",
+                    new { Ids = delArray }, transaction);
+
+                await db.ExecuteAsync(
+                    "DELETE FROM media WHERE id = ANY(@Ids)",
+                    new { Ids = delArray }, transaction);
+            }
+
+            // 8. Mark retained images as compressed thumbnails
+            if (retainedIds.Count > 0)
+            {
+                await db.ExecuteAsync(
+                    "UPDATE media SET is_compressed_thumbnail = TRUE WHERE id = ANY(@Ids)",
+                    new { Ids = retainedIds.ToArray() }, transaction);
+            }
+
             transaction.Commit();
-            _logger.LogInformation("Archived {Count} products with MinIO image pruning", archivedCount);
+            _logger.LogInformation("Archived {Count} products with comprehensive WhatsApp/MinIO media purging", archivedCount);
             return archivedCount;
         }
         catch (Exception ex)
@@ -648,6 +755,17 @@ public class ProductService : IProductService
             _logger.LogError(ex, "Failed to archive products {Ids}", string.Join(", ", productIds));
             throw;
         }
+    }
+
+    public async Task<int> PurgeAllArchivedProductsMediaAsync()
+    {
+        using var db = GetConnection();
+        var archivedIds = (await db.QueryAsync<Guid>("SELECT id FROM products WHERE is_archived = TRUE")).ToList();
+        if (archivedIds.Count > 0)
+        {
+            return await ArchiveProductsAsync(archivedIds);
+        }
+        return 0;
     }
 
     public async Task<int> UnarchiveProductsAsync(List<Guid> productIds)
@@ -660,7 +778,18 @@ public class ProductService : IProductService
     }
 
     /// <summary>Internal projection for archive media queries.</summary>
-    private sealed record ProductMediaRow(Guid Id, Guid ProductId, string? StoragePath, short MediaType, long FileSize);
+    private sealed record ProductMediaRow(
+        Guid Id, 
+        Guid ProductId, 
+        string? StoragePath, 
+        string? OriginalFilename,
+        string? ThumbnailS,
+        string? ThumbnailM,
+        string? ThumbnailL,
+        string? ThumbnailPath,
+        string? PreviewPath,
+        short MediaType, 
+        long FileSize);
 
     public async Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default)
     {

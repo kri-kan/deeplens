@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Image, TouchableOpacity, Alert, ActivityIndicator, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Image as RNImage, TouchableOpacity, Alert, ActivityIndicator, Platform, Dimensions } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import {
   Text,
   useTheme,
@@ -29,6 +30,72 @@ type MediaGroup = {
   groupId: string | undefined;
 };
 
+// Component for rendering individual media items with robust archived / missing media fallback
+const ChatMediaItem = React.memo(({ 
+  msg, 
+  size, 
+  onPress,
+}: { 
+  msg: Message; 
+  size: number; 
+  onPress?: () => void;
+}) => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const isVideo = msg.mediaType === 'video';
+  const isArchived = !msg.mediaUrl || loadFailed || msg.metadata?.isArchived || msg.metadata?.deleted || msg.metadata?.isTombstone;
+
+  return (
+    <TouchableOpacity 
+      activeOpacity={0.8} 
+      onPress={isArchived ? undefined : onPress}
+      style={{ 
+        width: size, 
+        height: size, 
+        margin: 2, 
+        backgroundColor: isArchived ? '#f1f5f9' : 'rgba(0,0,0,0.05)', 
+        borderRadius: 8, 
+        overflow: 'hidden', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        borderWidth: isArchived ? 1 : 0,
+        borderColor: '#cbd5e1'
+      }}
+    >
+      {isArchived ? (
+        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+          <IconButton 
+            icon={isVideo ? "video-off-outline" : "image-off-outline"} 
+            size={size > 120 ? 28 : 20} 
+            iconColor="#94a3b8" 
+            style={{ margin: 0 }} 
+          />
+          <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#64748b', fontWeight: '600', textAlign: 'center', marginTop: 2 }}>
+            {msg.metadata?.isArchived ? 'Archived' : 'Media Unavailable'}
+          </Text>
+        </View>
+      ) : isVideo ? (
+        <View style={{ width: '100%', height: '100%', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+          <ExpoImage 
+            source={{ uri: msg.mediaUrl! }} 
+            style={StyleSheet.absoluteFill} 
+            contentFit="cover"
+            onError={() => setLoadFailed(true)}
+          />
+          <IconButton icon="play-circle" size={size > 100 ? 40 : 20} iconColor="#fff" style={{ margin: 0 }} />
+        </View>
+      ) : (
+        <ExpoImage 
+          source={{ uri: msg.mediaUrl! }} 
+          style={{ width: '100%', height: '100%' }} 
+          contentFit={msg.mediaType === 'sticker' ? 'contain' : 'cover'} 
+          onError={() => setLoadFailed(true)}
+          transition={100}
+        />
+      )}
+    </TouchableOpacity>
+  );
+});
+
 export default function FullMessageBrowser() {
   const theme = useTheme();
   const { 
@@ -49,14 +116,14 @@ export default function FullMessageBrowser() {
   const [pulseActive, setPulseActive] = useState(true);
 
   useEffect(() => {
-    if (highlightGroupId) {
+    if (highlightGroupId || targetMessageId) {
       setPulseActive(true);
       const timer = setTimeout(() => {
         setPulseActive(false);
-      }, 3000);
+      }, 7000);
       return () => clearTimeout(timer);
     }
-  }, [highlightGroupId]);
+  }, [highlightGroupId, targetMessageId]);
   const router = useRouter();
   
   const [searchInput, setSearchInput] = useState('');
@@ -83,6 +150,7 @@ export default function FullMessageBrowser() {
 
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [groups, setGroups] = useState<any[]>([]);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [zoningMode, setZoningMode] = useState(initialZoningMode === 'true');
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   
@@ -97,9 +165,11 @@ export default function FullMessageBrowser() {
   const [loadingAudit, setLoadingAudit] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
+  const hasScrolledToTargetRef = useRef(false);
 
   const fetchMeta = useCallback(async () => {
     if (!jid) return;
+    setMetaLoading(true);
     try {
       const cleanJid = decodeURIComponent(jid);
       const [statsData, groupsData] = await Promise.all([
@@ -107,9 +177,11 @@ export default function FullMessageBrowser() {
         waProcessorService.fetchGroupsReview(cleanJid)
       ]);
       setStats(statsData);
-      setGroups(groupsData);
+      setGroups(groupsData || []);
     } catch (err: any) {
       console.error('Fetch meta error:', err);
+    } finally {
+      setMetaLoading(false);
     }
   }, [jid]);
 
@@ -133,14 +205,14 @@ export default function FullMessageBrowser() {
     return map;
   }, [groups]);
 
-  const hasPreviousGroup = (groupId: string) => {
+  const hasPreviousGroup = useCallback((groupId: string) => {
     const idx = groups.findIndex(g => g.groupId === groupId);
     return idx !== -1 && idx < groups.length - 1;
-  };
+  }, [groups]);
 
-  const groupIndexForId = (groupId: string) => {
+  const groupIndexForId = useCallback((groupId: string) => {
     return groups.findIndex(g => g.groupId === groupId);
-  };
+  }, [groups]);
 
   const getGroupStatus = (group: any) => {
     if (group.status === 'ignored') {
@@ -314,7 +386,7 @@ export default function FullMessageBrowser() {
     
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
-      const isMedia = msg.mediaUrl && (msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'video');
+      const isMedia = (msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'video' || msg.mediaType === 'sticker') || !!msg.mediaUrl;
       
       if (isMedia) {
         if (!currentGroup) {
@@ -353,29 +425,46 @@ export default function FullMessageBrowser() {
     return result;
   }, [messages]);
 
-  const matchesGroupId = (itemGroupId?: string, targetGroupId?: string, itemTs?: number) => {
+  const matchesGroupId = useCallback((itemGroupId?: string, targetGroupId?: string, itemTs?: number) => {
     if (!targetGroupId) return false;
-    if (itemGroupId && (itemGroupId === targetGroupId || itemGroupId.endsWith(targetGroupId) || targetGroupId.endsWith(itemGroupId) || itemGroupId.includes(targetGroupId) || targetGroupId.includes(itemGroupId))) {
+    if (itemGroupId && (
+      itemGroupId === targetGroupId || 
+      itemGroupId.endsWith(targetGroupId) || 
+      targetGroupId.endsWith(itemGroupId) || 
+      itemGroupId.includes(targetGroupId) || 
+      targetGroupId.includes(itemGroupId)
+    )) {
       return true;
     }
-    const tsMatch = targetGroupId.match(/_(\d{9,11})$/);
+    const tsMatch = targetGroupId.match(/(?:_|^)(\d{9,11})$/);
     if (tsMatch && itemTs) {
       const targetTs = parseInt(tsMatch[1], 10);
-      if (Math.abs(itemTs - targetTs) <= 30) {
+      if (Math.abs(itemTs - targetTs) <= 60) {
         return true;
       }
     }
     return false;
-  };
+  }, []);
 
-  const scrolledToTargetRef = useRef<string | null>(null);
+  const isItemHighlighted = useCallback((groupId?: string, msgId?: string, timestamp?: number) => {
+    if (!pulseActive) return false;
+    if (targetMessageId && msgId === targetMessageId) return true;
+    if (highlightGroupId && matchesGroupId(groupId, highlightGroupId, timestamp)) return true;
+    return false;
+  }, [pulseActive, targetMessageId, highlightGroupId, matchesGroupId]);
 
-  useEffect(() => {
-    if (timelineLoading || messages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
-    const targetKey = (highlightGroupId || '') + '_' + (targetMessageId || '');
-    if (scrolledToTargetRef.current === targetKey) return;
+  const getHighlightedStyle = useCallback((groupId?: string, msgId?: string, timestamp?: number) => {
+    if (!isItemHighlighted(groupId, msgId, timestamp)) return null;
+    return {
+      borderColor: '#F59E0B',
+      borderWidth: 2.5,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)' as any,
+    };
+  }, [isItemHighlighted]);
 
-    const targetIndex = groupedMessages.findIndex(item => {
+  const findTargetIndex = useCallback(() => {
+    if (!highlightGroupId && !targetMessageId) return -1;
+    return groupedMessages.findIndex(item => {
       if (targetMessageId && 'messageId' in item && item.messageId === targetMessageId) return true;
       if (highlightGroupId && matchesGroupId(item.groupId, highlightGroupId, item.timestamp)) return true;
       if ('messages' in item && Array.isArray(item.messages)) {
@@ -386,61 +475,99 @@ export default function FullMessageBrowser() {
       }
       return false;
     });
+  }, [groupedMessages, highlightGroupId, targetMessageId, matchesGroupId]);
 
-    if (targetIndex !== -1) {
-      const scrollTimer = setTimeout(() => {
-        try {
-          flatListRef.current?.scrollToIndex({
-            index: targetIndex,
-            animated: true,
-            viewPosition: 0.5,
-          });
-          scrolledToTargetRef.current = targetKey;
-        } catch (e) {
-          console.warn("Scroll to index failed", e);
-        }
-      }, 200);
-      return () => clearTimeout(scrollTimer);
+  const scrollToTarget = useCallback((animated: boolean = false) => {
+    const targetIndex = findTargetIndex();
+    if (targetIndex === -1 || !flatListRef.current) return;
+
+    try {
+      flatListRef.current.scrollToIndex({
+        index: targetIndex,
+        animated,
+        viewPosition: 0.5,
+      });
+    } catch (e) {
+      console.warn("[FullMessageBrowser] scrollToIndex attempt failed:", e);
     }
-  }, [timelineLoading, messages, highlightGroupId, targetMessageId, groupedMessages]);
+  }, [findTargetIndex]);
+
+  const targetKey = useMemo(() => `${highlightGroupId || ''}_${targetMessageId || ''}`, [highlightGroupId, targetMessageId]);
 
   useEffect(() => {
-    if (highlightGroupId || targetMessageId) {
-      setPulseActive(true);
+    hasScrolledToTargetRef.current = false;
+  }, [targetKey]);
+
+  // Initial scroll anchoring to target message: Wait until BOTH messages and meta/groups are loaded
+  useEffect(() => {
+    if (timelineLoading || metaLoading || groupedMessages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
+    if (hasScrolledToTargetRef.current) return;
+
+    const targetIndex = findTargetIndex();
+    if (targetIndex !== -1) {
       const timer = setTimeout(() => {
-        setPulseActive(false);
-      }, 7000);
+        scrollToTarget(false);
+        hasScrolledToTargetRef.current = true;
+        // Secondary alignment after DOM/layout stabilizes
+        const secondaryTimer = setTimeout(() => {
+          scrollToTarget(false);
+        }, 100);
+        return () => clearTimeout(secondaryTimer);
+      }, 50);
       return () => clearTimeout(timer);
     }
-  }, [highlightGroupId, targetMessageId]);
+  }, [timelineLoading, metaLoading, groupedMessages, highlightGroupId, targetMessageId, findTargetIndex, scrollToTarget]);
 
-  const isItemHighlighted = (groupId?: string, msgId?: string, timestamp?: number) => {
-    if (!pulseActive) return false;
-    if (targetMessageId && msgId === targetMessageId) return true;
-    if (highlightGroupId && matchesGroupId(groupId, highlightGroupId, timestamp)) return true;
-    return false;
-  };
-
-  const getHighlightedStyle = (groupId?: string, msgId?: string, timestamp?: number) => {
-    if (!isItemHighlighted(groupId, msgId, timestamp)) return null;
-    return {
-      borderColor: '#F59E0B',
-      borderWidth: 2.5,
-      backgroundColor: 'rgba(245, 158, 11, 0.12)' as any,
-    };
-  };
+  // Re-anchor if zoningMode is toggled or groups change while targeting is active
+  useEffect(() => {
+    if ((highlightGroupId || targetMessageId) && !timelineLoading && !metaLoading && hasScrolledToTargetRef.current) {
+      const timer = setTimeout(() => {
+        scrollToTarget(false);
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [zoningMode, groups, highlightGroupId, targetMessageId, timelineLoading, metaLoading, scrollToTarget]);
 
   const renderZoneCard = (groupId: string) => {
     const group = groupsMap.get(groupId);
-    if (!group) return null;
+    const highlightedStyle = getHighlightedStyle(groupId, undefined, group?.timestamp);
+    const isHighlighted = !!highlightedStyle;
+
+    if (!group) {
+      return (
+        <Surface style={[styles.zoneHeaderCard, highlightedStyle]} elevation={isHighlighted ? 4 : 1}>
+          <View style={styles.zoneCardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+              <Chip 
+                style={{ backgroundColor: 'rgba(224, 169, 0, 0.15)', height: 26, justifyContent: 'center' }} 
+                textStyle={{ color: '#E0A900', fontSize: 10, fontWeight: 'bold' }}
+                compact
+              >
+                Zone
+              </Chip>
+              {isHighlighted && (
+                <Chip 
+                  style={{ backgroundColor: '#F59E0B', height: 24, justifyContent: 'center' }} 
+                  textStyle={{ color: '#FFFFFF', fontSize: 10, fontWeight: 'bold' }}
+                  compact
+                  icon="target"
+                >
+                  TARGET PRODUCT
+                </Chip>
+              )}
+              <Text style={styles.zoneCardTitle} numberOfLines={1}>
+                Zone {groupId.split('_').pop()?.substring(0, 8) || groupId.substring(0, 8)}
+              </Text>
+            </View>
+          </View>
+        </Surface>
+      );
+    }
 
     const statusConfig = getGroupStatus(group);
     const formattedPrice = group.detectedPrice ? `₹${group.detectedPrice}` : null;
     const formattedShipping = group.detectedShipping ? `(${group.detectedShipping} shipping)` : '';
     const hasProduct = group.status === 'product_created';
-
-    const highlightedStyle = getHighlightedStyle(group.groupId, undefined, group.timestamp);
-    const isHighlighted = !!highlightedStyle;
 
     return (
       <Surface style={[styles.zoneHeaderCard, highlightedStyle]} elevation={isHighlighted ? 4 : 1}>
@@ -463,7 +590,7 @@ export default function FullMessageBrowser() {
                 TARGET PRODUCT
               </Chip>
             )}
-            <Text style={styles.zoneCardTitle} numberOfLines={1}>Zone {group.groupId.substring(0, 8)}</Text>
+            <Text style={styles.zoneCardTitle} numberOfLines={1}>Zone {group.groupId.split('_').pop()?.substring(0, 8) || group.groupId.substring(0, 8)}</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <IconButton 
@@ -551,7 +678,26 @@ export default function FullMessageBrowser() {
     );
   };
 
-  
+  const renderMediaContent = useCallback((msg: Message, size: number, onPressOverride?: () => void) => (
+    <ChatMediaItem
+      key={msg.messageId}
+      msg={msg}
+      size={size}
+      onPress={onPressOverride || (() => {
+        if (msg.mediaUrl) {
+          setPreviewData({ urls: [msg.mediaUrl], index: 0 });
+        }
+      })}
+    />
+  ), []);
+
+  const cleanMessageText = useCallback((msg: Message) => {
+    let text = msg.messageText || (msg.mediaUrl || msg.mediaType ? '' : '[Media Unavailable]');
+    if (msg.mediaUrl || msg.mediaType === 'document' || msg.mediaType === 'image' || msg.mediaType === 'video') {
+      text = text.replace(/^\[(?:image|video|document)\]$/i, '').trim();
+    }
+    return text;
+  }, []);
 
   const renderMessage = useCallback(({ item, index }: { item: Message | MediaGroup; index: number }) => {
     const isFromMe = item.isFromMe;
@@ -561,32 +707,10 @@ export default function FullMessageBrowser() {
 
     const isGroup = 'type' in item && item.type === 'media_group';
 
-    const renderMediaContent = (msg: Message, size: number, onPressOverride?: () => void) => (
-      <TouchableOpacity 
-        activeOpacity={0.8} 
-        onPress={onPressOverride || (() => setPreviewData({ urls: [msg.mediaUrl || ''], index: 0 }))}
-        style={{ width: size, height: size, margin: 2, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}
-      >
-        {(msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'sticker') ? (
-          <Image source={{ uri: msg.mediaUrl || '' }} style={{ width: '100%', height: '100%' }} resizeMode={msg.mediaType === 'sticker' ? 'contain' : 'cover'} />
-        ) : msg.mediaType === 'video' ? (
-          <View style={{ width: '100%', height: '100%', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-            <IconButton icon="play-circle" size={size > 100 ? 40 : 20} iconColor="#fff" />
-          </View>
-        ) : null}
-      </TouchableOpacity>
-    );
-
-    const cleanMessageText = (msg: Message) => {
-      let text = msg.messageText || (msg.mediaUrl ? '' : '[Media Unavailable]');
-      if (msg.mediaUrl || msg.mediaType === 'document') {
-        text = text.replace(/^\[(?:image|video|document)\]$/i, '').trim();
-      }
-      return text;
-    };
-
     if (isGroup) {
       const group = item as MediaGroup;
+      const mediaUrls = group.messages.map(m => m.mediaUrl).filter(Boolean) as string[];
+
       return (
         <View>
           {showGroupDivider && group.groupId && (
@@ -626,13 +750,21 @@ export default function FullMessageBrowser() {
                       {renderMediaContent(
                         msg, 
                         group.messages.length > 1 ? 116 : 240, 
-                        () => setPreviewData({ urls: group.messages.map(m => m.mediaUrl || ''), index: idx })
+                        () => {
+                          if (mediaUrls.length > 0) {
+                            setPreviewData({ urls: mediaUrls, index: Math.min(idx, mediaUrls.length - 1) });
+                          }
+                        }
                       )}
                       {isFourthAndMore && (
                         <TouchableOpacity 
                           style={styles.moreOverlay} 
                           activeOpacity={0.8}
-                          onPress={() => setPreviewData({ urls: group.messages.map(m => m.mediaUrl || ''), index: 3 })}
+                          onPress={() => {
+                            if (mediaUrls.length > 0) {
+                              setPreviewData({ urls: mediaUrls, index: Math.min(3, mediaUrls.length - 1) });
+                            }
+                          }}
                         >
                           <Text style={styles.moreOverlayText}>+{group.messages.length - 4}</Text>
                         </TouchableOpacity>
@@ -652,6 +784,7 @@ export default function FullMessageBrowser() {
 
     const msg = item as Message;
     const text = cleanMessageText(msg);
+    const isMedia = (msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'video' || msg.mediaType === 'sticker') || !!msg.mediaUrl;
 
     return (
       <View>
@@ -698,20 +831,18 @@ export default function FullMessageBrowser() {
                 <Text style={styles.groupIdLabel}>{msg.groupId.substring(0, 8)}</Text>
               )}
               
-              {msg.mediaUrl && (
+              {isMedia ? (
                 <View style={styles.mediaContainer}>
-                  {(msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'video' || msg.mediaType === 'sticker') ? (
-                    renderMediaContent(msg, 240)
-                  ) : (
-                    <View style={styles.filePlaceholder}>
-                      <IconButton icon="file-document" size={30} />
-                      <Text variant="bodySmall" style={{ flex: 1 }} numberOfLines={2}>
-                        {msg.metadata?.fileName || msg.metadata?.documentMessage?.fileName || msg.metadata?.title || msg.metadata?.name || 'Document'}
-                      </Text>
-                    </View>
-                  )}
+                  {renderMediaContent(msg, 240)}
                 </View>
-              )}
+              ) : msg.mediaType === 'document' ? (
+                <View style={styles.filePlaceholder}>
+                  <IconButton icon="file-document" size={30} />
+                  <Text variant="bodySmall" style={{ flex: 1 }} numberOfLines={2}>
+                    {msg.metadata?.fileName || msg.metadata?.documentMessage?.fileName || msg.metadata?.title || msg.metadata?.name || 'Document'}
+                  </Text>
+                </View>
+              ) : null}
 
               {text ? <Text style={styles.messageText}>{text}</Text> : null}
               <Text style={styles.timestamp}>
@@ -744,7 +875,7 @@ export default function FullMessageBrowser() {
         </View>
       </View>
     );
-  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme]);
+  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, groupsMap, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme, renderMediaContent, cleanMessageText, getHighlightedStyle, isItemHighlighted]);
 
   return (
     <ScreenWrapper 
@@ -800,13 +931,13 @@ export default function FullMessageBrowser() {
       }
     >
       <View style={styles.container}>
-        <Image 
+        <RNImage 
           source={{ uri: 'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png' }} 
           style={[StyleSheet.absoluteFill, { opacity: 0.05 }]} 
           resizeMode="repeat"
         />
         
-        {timelineLoading ? (
+        {timelineLoading || metaLoading ? (
           <ActivityIndicator style={{ flex: 1 }} color="#25D366" />
         ) : (
           <View style={{ flex: 1 }}>
@@ -822,10 +953,11 @@ export default function FullMessageBrowser() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               ListFooterComponent={loadingOlder ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
               ListHeaderComponent={loadingNewer ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
-              initialNumToRender={(highlightGroupId || targetMessageId) && groupedMessages.length > 0 ? Math.max(100, groupedMessages.length) : 20}
-              maxToRenderPerBatch={20}
-              windowSize={11}
+              initialNumToRender={(highlightGroupId || targetMessageId) && groupedMessages.length > 0 ? Math.max(100, groupedMessages.length) : 25}
+              maxToRenderPerBatch={30}
+              windowSize={15}
               removeClippedSubviews={Platform.OS === 'android'}
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
               onScroll={(e) => {
                 const y = e.nativeEvent.contentOffset.y;
                 if (y > 200 || !isLatestLoaded) {
@@ -839,14 +971,14 @@ export default function FullMessageBrowser() {
               }}
               onScrollToIndexFailed={(info) => {
                 console.log("[DEBUG] onScrollToIndexFailed triggered. Target:", info.index, "Average Length:", info.averageItemLength);
-                flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+                flatListRef.current?.scrollToOffset({ offset: Math.max(0, info.averageItemLength * info.index), animated: false });
                 setTimeout(() => {
                   try {
-                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+                    flatListRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0.5 });
                   } catch (e) {
                     console.warn("[DEBUG] Retry scroll failed", e);
                   }
-                }, 250);
+                }, 100);
               }}
             />
 

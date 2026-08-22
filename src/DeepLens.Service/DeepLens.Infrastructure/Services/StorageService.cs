@@ -171,13 +171,21 @@ public class MinioStorageService : IStorageService
 
         if (parts.Length > 1)
         {
-            try {
-                if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
-                {
-                    bucketName = parts[0];
-                    objectName = parts[1];
-                }
-            } catch { }
+            if (parts[0] == "photos" || parts[0] == "videos" || parts[0] == "stickers" || parts[0] == "documents" || parts[0] == "audios")
+            {
+                bucketName = "whatsapp-data";
+                objectName = storagePath;
+            }
+            else
+            {
+                try {
+                    if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
+                    {
+                        bucketName = parts[0];
+                        objectName = parts[1];
+                    }
+                } catch { }
+            }
         }
 
         return (bucketName, objectName);

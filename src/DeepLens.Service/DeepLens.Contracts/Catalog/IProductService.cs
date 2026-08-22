@@ -22,6 +22,7 @@ public interface IProductService
     Task<int> DeleteProductsBulkAsync(List<Guid> productIds);
     Task<int> ArchiveProductsAsync(List<Guid> productIds);
     Task<int> UnarchiveProductsAsync(List<Guid> productIds);
+    Task<int> PurgeAllArchivedProductsMediaAsync();
     Task<bool> StarProductAsync(Guid productId, bool isStarred, CancellationToken ct = default);
     Task<bool> StarMediaAsync(Guid productId, Guid mediaId);
     Task<bool> SetDefaultMediaAsync(Guid productId, Guid mediaId, CancellationToken ct = default);

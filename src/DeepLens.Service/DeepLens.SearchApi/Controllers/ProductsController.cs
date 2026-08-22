@@ -87,6 +87,13 @@ public class ProductsController : ControllerBase
         return Ok(new { count });
     }
 
+    [HttpPost("archive/purge-all")]
+    public async Task<IActionResult> PurgeAllArchivedProducts()
+    {
+        var count = await _productService.PurgeAllArchivedProductsMediaAsync();
+        return Ok(new { count });
+    }
+
     [HttpPost("unarchive")]
     public async Task<IActionResult> UnarchiveProducts([FromBody] List<Guid> productIds)
     {
