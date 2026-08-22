@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet, Alert,
-  PanResponder, GestureResponderEvent, BackHandler, ScrollView, TouchableOpacity
+  PanResponder, GestureResponderEvent, BackHandler
 } from 'react-native';
-import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput, Icon } from 'react-native-paper';
+import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -96,7 +96,7 @@ export default function ProductCatalogScreen() {
     activeFilters.fabrics.length +
     activeFilters.vendorNames.length +
     (activeFilters.minPrice > 0 ? 1 : 0) +
-    (activeFilters.includeArchived !== null && activeFilters.includeArchived !== undefined ? 1 : 0);
+    ((activeFilters.status && activeFilters.status !== 'active') || activeFilters.includeArchived === true ? 1 : 0);
 
   const [selectedProductForCategory, setSelectedProductForCategory] = useState<VendorProduct | null>(null);
   const [changingCategory, setChangingCategory] = useState(false);
@@ -338,8 +338,8 @@ export default function ProductCatalogScreen() {
                 }}
                 title="Re-evaluate AI"
               />
-              {/* Archive — only shown when NOT browsing archived products */}
-              {activeFilters.includeArchived !== true && (
+              {/* Archive — only shown when NOT browsing strictly archived products */}
+              {activeFilters.status !== 'archived' && activeFilters.includeArchived !== true && (
                 <Menu.Item
                   leadingIcon="archive-outline"
                   onPress={async () => {
@@ -359,8 +359,8 @@ export default function ProductCatalogScreen() {
                   title="Archive"
                 />
               )}
-              {/* Unarchive — only shown when browsing archived products */}
-              {activeFilters.includeArchived === true && (
+              {/* Unarchive — only shown when browsing archived or all products */}
+              {(activeFilters.status === 'archived' || activeFilters.status === 'all' || activeFilters.includeArchived === true) && (
                 <Menu.Item
                   leadingIcon="archive-off-outline"
                   onPress={async () => {
@@ -409,136 +409,6 @@ export default function ProductCatalogScreen() {
           />
         )}
       </View>
-
-      {/* Quick filter chip row */}
-      {!selectionMode && (
-        <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity
-              style={[
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  gap: 5,
-                },
-                activeFilters.isStarred === true
-                  ? {
-                      backgroundColor: theme.colors.primaryContainer,
-                      borderColor: theme.colors.primary,
-                    }
-                  : {
-                      backgroundColor: theme.dark ? '#1e1e2e' : '#f4f4f5',
-                      borderColor: theme.dark ? '#333' : '#e4e4e7',
-                    },
-              ]}
-              onPress={() => {
-                setActiveFilters(prev => ({
-                  ...prev,
-                  isStarred: prev.isStarred === true ? null : true,
-                }));
-              }}
-            >
-              <Icon
-                source={activeFilters.isStarred === true ? 'star' : 'star-outline'}
-                size={15}
-                color={activeFilters.isStarred === true ? theme.colors.primary : theme.colors.outline}
-              />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: activeFilters.isStarred === true ? '700' : '500',
-                  color: activeFilters.isStarred === true ? theme.colors.primary : (theme.dark ? '#e0e0e0' : '#333'),
-                }}
-              >
-                ⭐ Starred
-              </Text>
-            </TouchableOpacity>
-
-            {/* 📦 Archived quick chip */}
-            <TouchableOpacity
-              style={[
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  gap: 5,
-                },
-                activeFilters.includeArchived === true
-                  ? {
-                      backgroundColor: theme.colors.primaryContainer,
-                      borderColor: theme.colors.primary,
-                    }
-                  : {
-                      backgroundColor: theme.dark ? '#1e1e2e' : '#f4f4f5',
-                      borderColor: theme.dark ? '#333' : '#e4e4e7',
-                    },
-              ]}
-              onPress={() => {
-                setActiveFilters(prev => ({
-                  ...prev,
-                  includeArchived: prev.includeArchived === true ? null : true,
-                }));
-              }}
-            >
-              <Icon
-                source={activeFilters.includeArchived === true ? 'archive' : 'archive-outline'}
-                size={15}
-                color={activeFilters.includeArchived === true ? theme.colors.primary : theme.colors.outline}
-              />
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: activeFilters.includeArchived === true ? '700' : '500',
-                  color: activeFilters.includeArchived === true ? theme.colors.primary : (theme.dark ? '#e0e0e0' : '#333'),
-                }}
-              >
-                📦 Archived
-              </Text>
-            </TouchableOpacity>
-
-            {activeFilters.isStarred === false && (
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  backgroundColor: theme.colors.primaryContainer,
-                  borderColor: theme.colors.primary,
-                  gap: 4,
-                }}
-                onPress={() => setActiveFilters(prev => ({ ...prev, isStarred: null }))}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.primary }}>Unstarred Only</Text>
-                <Icon source="close" size={14} color={theme.colors.primary} />
-              </TouchableOpacity>
-            )}
-
-            {activeFilterCount > 0 && (
-              <TouchableOpacity
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 16,
-                  backgroundColor: 'transparent',
-                }}
-                onPress={() => setActiveFilters(DEFAULT_FILTER_STATE)}
-              >
-                <Text style={{ fontSize: 12, color: theme.colors.outline }}>Clear ({activeFilterCount})</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      )}
 
       <FlatList
         ref={pagerRef}
@@ -652,7 +522,8 @@ function CategoryPage({
     maxPrice: filters.maxPrice > 0 ? filters.maxPrice : undefined,
     categories: filters.categories && filters.categories.length > 0 ? filters.categories : undefined,
     isStarred: filters.isStarred,
-    includeArchived: filters.includeArchived ?? undefined,
+    status: filters.status ?? (filters.includeArchived === true ? 'archived' : 'active'),
+    includeArchived: filters.status === 'archived' ? true : filters.status === 'all' ? undefined : (filters.includeArchived ?? undefined),
   };
 
   const {

@@ -77,7 +77,8 @@ class ProductService {
     vendorNames?: string[];
     minPrice?: number;
     maxPrice?: number;
-    includeArchived?: boolean;
+    includeArchived?: boolean | null;
+    status?: string;
     isStarred?: boolean;
   }): Promise<{ products: VendorProduct[], totalCount: number }> {
     // Serialize arrays as repeated query params
@@ -91,7 +92,11 @@ class ProductService {
     if (params.endDate) searchParams.append('endDate', params.endDate);
     if (params.minPrice !== undefined) searchParams.append('minPrice', String(params.minPrice));
     if (params.maxPrice !== undefined) searchParams.append('maxPrice', String(params.maxPrice));
-    if (params.includeArchived) searchParams.append('includeArchived', 'true');
+    if (params.status) {
+      searchParams.append('status', params.status);
+    } else if (params.includeArchived !== undefined && params.includeArchived !== null) {
+      searchParams.append('includeArchived', String(params.includeArchived));
+    }
     if (params.isStarred !== undefined) searchParams.append('isStarred', String(params.isStarred));
     params.fabrics?.forEach(f => searchParams.append('fabrics', f));
     params.vendorNames?.forEach(v => searchParams.append('vendorNames', v));

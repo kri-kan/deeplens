@@ -277,13 +277,23 @@ public class ProductService : IProductService
 
         var whereClause = " WHERE p.is_deleted = FALSE";
 
-        if (!filter.IncludeArchived)
+        var status = filter.Status?.Trim().ToLowerInvariant();
+        if (status == "all")
+        {
+            // Do not filter on p.is_archived - return all products
+        }
+        else if (status == "archived" || filter.IncludeArchived == true)
+        {
+            whereClause += " AND p.is_archived = TRUE";
+        }
+        else if (status == "active" || filter.IncludeArchived == false)
         {
             whereClause += " AND p.is_archived = FALSE";
         }
         else
         {
-            whereClause += " AND p.is_archived = TRUE";
+            // Default to active products
+            whereClause += " AND p.is_archived = FALSE";
         }
 
         if (filter.IsStarred == true)
