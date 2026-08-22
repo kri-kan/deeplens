@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/schema.json",
+  "project_name": "deeplens",
+  "languages": [
+    "csharp",
+    "typescript",
+    "javascript",
+    "python",
+    "sql",
+    "json",
+    "yaml",
+    "markdown",
+    "html",
+    "css",
+    "bash"
+  ],
+  "extra_extensions": {
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".mts": "typescript",
+    ".cts": "typescript",
+    ".cshtml": "html",
+    ".razor": "html",
+    ".props": "xml",
+    ".targets": "xml",
+    ".csproj": "xml",
+    ".config": "xml",
+    ".sln": "plaintext",
+    ".proto": "protobuf",
+    ".sql": "sql",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".ps1": "powershell"
+  },
+  "index": {
+    "auto_index": true,
+    "max_file_size_kb": 2048,
+    "follow_symlinks": false
+  }
+}

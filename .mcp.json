@@ -1,5 +1,63 @@
 {
-  "notes": "Pointer to canonical squad_state hosted in the sibling workspace.",
-  "canonical_squad_path": "/home/krikan/productivity/deplensSquad/.mcp.json",
-  "usage": "This file signals that DeepLens should use the external Mahabharata squad located at /home/krikan/productivity/deplensSquad. CI or local tooling may need to pass --additional-mcp-config @/home/krikan/productivity/deplens/.mcp.json when invoking copilot/squad CLI if required. Do not edit without coordination with Krishna (squad lead)."
+  "mcpServers": {
+    "squad_state": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@bradygaster/squad-cli@0.11.0",
+        "state-mcp"
+      ],
+      "env": {},
+      "tools": [
+        "*"
+      ]
+    },
+    "codebase_memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "codebase-memory-mcp"
+      ],
+      "env": {
+        "CBM_PROJECT_DIR": "${DEEPLENS_ROOT:-/home/krikan/productivity/deeplens}"
+      },
+      "tools": [
+        "*"
+      ]
+    },
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--project",
+        "${DEEPLENS_ROOT:-/home/krikan/productivity/deeplens}"
+      ],
+      "env": {},
+      "tools": [
+        "*"
+      ]
+    },
+    "postgres": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--network=deeplens-network",
+        "-e",
+        "DATABASE_URI",
+        "crystaldba/postgres-mcp",
+        "--access-mode=restricted"
+      ],
+      "env": {
+        "DATABASE_URI": "${DATABASE_URI:-postgresql://postgres:postgres@localhost:5432/deeplens}"
+      },
+      "tools": [
+        "*"
+      ]
+    }
+  }
 }

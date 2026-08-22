@@ -1,0 +1,116 @@
+# =============================================================================
+# Codebase Memory MCP Ignore Rules (.cbmignore)
+# Project: DeepLens Monorepo
+# =============================================================================
+
+# .NET / C# Build Outputs & Cache
+bin/
+obj/
+publish/
+artifacts/
+TestResults/
+*.dll
+*.pdb
+*.exe
+*.so
+*.dylib
+*.deps.json
+*.runtimeconfig.json
+*.runtimeconfig.dev.json
+*.nupkg
+*.snupkg
+.vs/
+*.DotSettings.user
+
+# Node.js / TypeScript / Web Artifacts
+node_modules/
+dist/
+build/
+out/
+.next/
+.turbo/
+.cache/
+.nyc_output/
+coverage/
+*.tsbuildinfo
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm/
+
+# Python Virtual Environments & Bytecode
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# Mobile / Expo / Android / iOS Artifacts
+.expo/
+android/app/build/
+android/.gradle/
+ios/Pods/
+ios/build/
+*.apk
+*.aab
+*.dex
+*.flat
+
+# Databases, Backups, and Persistent Runtime Data
+data/
+database_backups/
+setupscripts/core/ollama/data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.bak
+*.dump
+*.tar
+*.gz
+*.zip
+
+# Large Media / Binary Assets / ML Model Weights
+*.onnx
+*.tflite
+*.pt
+*.pth
+*.bin
+*.weights
+*.mp4
+*.mov
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+*.ico
+
+# Logs & Temp Files
+logs/
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Agent Sessions & Ephemeral State
+.gemini/
+.agy/
+.agents/
+.copilot/
+.ts-graph-mcp/
+.squad/decisions/inbox/
+.squad/orchestration-log/
+.serena/
