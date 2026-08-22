@@ -52,6 +52,8 @@ export interface FilterState {
   isStarred?: boolean | null;
   status?: 'active' | 'archived' | 'all';
   includeArchived?: boolean | null;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface FilterDrawerProps {
@@ -71,6 +73,8 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   isStarred: null,
   status: 'active',
   includeArchived: false,
+  startDate: undefined,
+  endDate: undefined,
 };
 
 export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawerProps) {
@@ -172,6 +176,7 @@ export function FilterDrawer({ visible, onClose, current, onApply }: FilterDrawe
     draft.fabrics.length +
     draft.vendorNames.length +
     (draft.minPrice > 0 || draft.maxPrice > 0 ? 1 : 0) +
+    (draft.startDate || draft.endDate ? 1 : 0) +
     (isStatusFiltered ? 1 : 0);
 
   const renderContent = () => {

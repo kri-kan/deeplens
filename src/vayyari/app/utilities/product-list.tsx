@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet, Alert,
-  PanResponder, GestureResponderEvent, BackHandler
+  PanResponder, GestureResponderEvent, BackHandler, ScrollView
 } from 'react-native';
-import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput } from 'react-native-paper';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput, Chip } from 'react-native-paper';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ProductCategoryPicker } from '@/components/utility/product/ProductCategoryPicker';
@@ -31,6 +31,18 @@ const CATEGORIES = [
 export default function ProductCatalogScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    startDate?: string;
+    endDate?: string;
+    category?: string;
+    categories?: string;
+    isStarred?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    status?: string;
+    includeArchived?: string;
+  }>();
+
   const [activeTab, setActiveTab] = useState(0);
   const pagerRef = useRef<FlatList>(null);
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
@@ -89,14 +101,124 @@ export default function ProductCatalogScreen() {
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
 
+  // Hydrate filters from route params (e.g. drilldowns from Insights)
+  useEffect(() => {
+    const hasIncomingParams =
+      Boolean(params.startDate) ||
+      Boolean(params.endDate) ||
+      Boolean(params.category) ||
+      Boolean(params.categories) ||
+      params.isStarred !== undefined ||
+      Boolean(params.minPrice) ||
+      Boolean(params.maxPrice) ||
+      Boolean(params.status) ||
+      params.includeArchived !== undefined;
+
+    if (!hasIncomingParams) return;
+
+    const minP = params.minPrice ? parseFloat(params.minPrice) : 0;
+    const maxP = params.maxPrice ? parseFloat(params.maxPrice) : 0;
+    const starred =
+      params.isStarred === 'true' ? true : params.isStarred === 'false' ? false : null;
+
+    let parsedCategories: string[] = [];
+    if (params.categories) {
+      parsedCategories = typeof params.categories === 'string'
+        ? params.categories.split(',').map(c => c.trim()).filter(Boolean)
+        : (params.categories as any);
+    }
+
+    setActiveFilters(prev => ({
+      ...prev,
+      startDate: params.startDate || prev.startDate,
+      endDate: params.endDate || prev.endDate,
+      minPrice: !isNaN(minP) && minP > 0 ? minP : prev.minPrice,
+      maxPrice: !isNaN(maxP) && maxP > 0 ? maxP : prev.maxPrice,
+      isStarred: starred !== null ? starred : prev.isStarred,
+      categories: parsedCategories.length > 0 ? parsedCategories : prev.categories,
+      status: (params.status as any) || prev.status,
+      includeArchived: params.includeArchived === 'true' ? true : prev.includeArchived,
+    }));
+
+    if (params.category) {
+      const targetCat = params.category.toLowerCase().trim();
+      const mappedSlug = (targetCat === 'others' || targetCat === 'uncategorized') ? 'general' : targetCat;
+      const idx = CATEGORIES.findIndex(c => c.id.toLowerCase() === mappedSlug);
+      if (idx !== -1) {
+        setActiveTab(idx);
+        setTimeout(() => {
+          pagerRef.current?.scrollToIndex({ index: idx, animated: true });
+        }, 100);
+      }
+    }
+  }, [
+    params.startDate,
+    params.endDate,
+    params.category,
+    params.categories,
+    params.isStarred,
+    params.minPrice,
+    params.maxPrice,
+    params.status,
+    params.includeArchived,
+  ]);
+
   const activeFilterCount =
     (activeFilters.sortBy !== 'recent' ? 1 : 0) +
     (activeFilters.isStarred !== null && activeFilters.isStarred !== undefined ? 1 : 0) +
     (activeFilters.categories && activeFilters.categories.length > 0 ? 1 : 0) +
     activeFilters.fabrics.length +
     activeFilters.vendorNames.length +
-    (activeFilters.minPrice > 0 ? 1 : 0) +
+    (activeFilters.minPrice > 0 || activeFilters.maxPrice > 0 ? 1 : 0) +
+    (activeFilters.startDate || activeFilters.endDate ? 1 : 0) +
     ((activeFilters.status && activeFilters.status !== 'active') || activeFilters.includeArchived === true ? 1 : 0);
+
+  const hasActiveFilters =
+    Boolean(activeFilters.startDate) ||
+    Boolean(activeFilters.endDate) ||
+    (activeFilters.isStarred !== null && activeFilters.isStarred !== undefined) ||
+    (activeFilters.categories && activeFilters.categories.length > 0) ||
+    activeFilters.fabrics.length > 0 ||
+    activeFilters.vendorNames.length > 0 ||
+    activeFilters.minPrice > 0 ||
+    activeFilters.maxPrice > 0 ||
+    (activeFilters.status && activeFilters.status !== 'active') ||
+    activeFilters.includeArchived === true;
+
+  const formatShortDate = (isoStr?: string) => {
+    if (!isoStr) return '';
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) {
+        return isoStr.split('T')[0];
+      }
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch {
+      return isoStr.split('T')[0];
+    }
+  };
+
+  const getDateRangeLabel = () => {
+    const s = activeFilters.startDate;
+    const e = activeFilters.endDate;
+    if (!s && !e) return '';
+    if (s && e) {
+      const sFmt = formatShortDate(s);
+      const eFmt = formatShortDate(e);
+      if (sFmt === eFmt) return `📅 ${sFmt}`;
+      return `📅 ${sFmt} - ${eFmt}`;
+    }
+    if (s) return `📅 From ${formatShortDate(s)}`;
+    return `📅 Until ${formatShortDate(e)}`;
+  };
+
+  const getPriceLabel = () => {
+    const { minPrice, maxPrice } = activeFilters;
+    if (minPrice > 0 && maxPrice > 0) return `💰 ₹${minPrice.toLocaleString('en-IN')} - ₹${maxPrice.toLocaleString('en-IN')}`;
+    if (minPrice > 0) return `💰 ≥ ₹${minPrice.toLocaleString('en-IN')}`;
+    if (maxPrice > 0) return `💰 ≤ ₹${maxPrice.toLocaleString('en-IN')}`;
+    return '';
+  };
 
   const [selectedProductForCategory, setSelectedProductForCategory] = useState<VendorProduct | null>(null);
   const [changingCategory, setChangingCategory] = useState(false);
@@ -414,6 +536,105 @@ export default function ProductCatalogScreen() {
         )}
       </View>
 
+      {/* Active Filters Ribbon */}
+      {hasActiveFilters && (
+        <View style={[styles.ribbonContainer, { backgroundColor: theme.colors.elevation.level1 }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.ribbonContent}
+          >
+            {(activeFilters.startDate || activeFilters.endDate) && (
+              <Chip
+                icon="calendar"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, startDate: undefined, endDate: undefined }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                {getDateRangeLabel()}
+              </Chip>
+            )}
+            {activeFilters.isStarred !== null && activeFilters.isStarred !== undefined && (
+              <Chip
+                icon="star"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, isStarred: null }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                {activeFilters.isStarred ? '⭐️ Starred Only' : 'Unstarred Only'}
+              </Chip>
+            )}
+            {activeFilters.categories && activeFilters.categories.length > 0 && (
+              <Chip
+                icon="tag"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, categories: [] }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                🏷️ {activeFilters.categories.map(c => CATEGORIES.find(cat => cat.id === c)?.label || c).join(', ')}
+              </Chip>
+            )}
+            {(activeFilters.minPrice > 0 || activeFilters.maxPrice > 0) && (
+              <Chip
+                icon="currency-inr"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, minPrice: 0, maxPrice: 0 }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                {getPriceLabel()}
+              </Chip>
+            )}
+            {activeFilters.fabrics && activeFilters.fabrics.length > 0 && (
+              <Chip
+                icon="tshirt-crew"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, fabrics: [] }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                🧵 {activeFilters.fabrics.join(', ')}
+              </Chip>
+            )}
+            {activeFilters.vendorNames && activeFilters.vendorNames.length > 0 && (
+              <Chip
+                icon="store"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, vendorNames: [] }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                🏪 {activeFilters.vendorNames.join(', ')}
+              </Chip>
+            )}
+            {((activeFilters.status && activeFilters.status !== 'active') || activeFilters.includeArchived === true) && (
+              <Chip
+                icon="archive"
+                compact
+                onClose={() => setActiveFilters(prev => ({ ...prev, status: 'active', includeArchived: false }))}
+                style={styles.filterChip}
+                textStyle={styles.filterChipText}
+              >
+                📦 {activeFilters.status === 'archived' || activeFilters.includeArchived === true ? 'Archived' : activeFilters.status}
+              </Chip>
+            )}
+            <Button
+              compact
+              mode="text"
+              textColor={theme.colors.error}
+              onPress={() => setActiveFilters(DEFAULT_FILTER_STATE)}
+              style={styles.clearRibbonBtn}
+              labelStyle={styles.clearRibbonBtnLabel}
+            >
+              Clear
+            </Button>
+          </ScrollView>
+        </View>
+      )}
+
       <FlatList
         ref={pagerRef}
         data={CATEGORIES}
@@ -520,6 +741,8 @@ function CategoryPage({
     categoryId,
     query,
     sortBy: filters.sortBy,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
     fabrics: filters.fabrics.length > 0 ? filters.fabrics : undefined,
     vendorNames: filters.vendorNames.length > 0 ? filters.vendorNames : undefined,
     minPrice: filters.minPrice > 0 ? filters.minPrice : undefined,

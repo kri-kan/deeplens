@@ -82,6 +82,21 @@ export default function InsightsScreen() {
     }
   };
 
+  const getTimeframeBounds = (tf: AnalyticsTimeframe) => {
+    if (tf === 'all') return { startDate: undefined, endDate: undefined };
+    const now = new Date();
+    const days = tf === '7d' ? 7 : tf === '30d' ? 30 : 90;
+    const start = new Date();
+    start.setDate(now.getDate() - days);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return {
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+    };
+  };
+
   const navigateToFilteredCatalog = (params: {
     startDate?: string;
     endDate?: string;
@@ -93,7 +108,11 @@ export default function InsightsScreen() {
     const queryParams = new URLSearchParams();
     if (params.startDate) queryParams.append('startDate', params.startDate);
     if (params.endDate) queryParams.append('endDate', params.endDate);
-    if (params.category) queryParams.append('category', params.category.toLowerCase());
+    if (params.category) {
+      const catLower = params.category.toLowerCase().trim();
+      const mappedCategory = (catLower === 'others' || catLower === 'uncategorized') ? 'general' : catLower;
+      queryParams.append('category', mappedCategory);
+    }
     if (params.isStarred !== undefined) queryParams.append('isStarred', String(params.isStarred));
     if (params.minPrice !== undefined) queryParams.append('minPrice', String(params.minPrice));
     if (params.maxPrice !== undefined) queryParams.append('maxPrice', String(params.maxPrice));
@@ -283,8 +302,8 @@ export default function InsightsScreen() {
                     compact
                     onPress={() =>
                       navigateToFilteredCatalog({
-                        startDate: selectedPoint.date,
-                        endDate: selectedPoint.date,
+                        startDate: `${selectedPoint.date}T00:00:00.000Z`,
+                        endDate: `${selectedPoint.date}T23:59:59.999Z`,
                       })
                     }
                     style={{ flex: 1 }}
@@ -297,8 +316,8 @@ export default function InsightsScreen() {
                       compact
                       onPress={() =>
                         navigateToFilteredCatalog({
-                          startDate: selectedPoint.date,
-                          endDate: selectedPoint.date,
+                          startDate: `${selectedPoint.date}T00:00:00.000Z`,
+                          endDate: `${selectedPoint.date}T23:59:59.999Z`,
                           isStarred: true,
                         })
                       }
@@ -338,7 +357,14 @@ export default function InsightsScreen() {
                     <TouchableOpacity
                       key={cat.category}
                       activeOpacity={0.7}
-                      onPress={() => navigateToFilteredCatalog({ category: cat.category })}
+                      onPress={() => {
+                        const { startDate, endDate } = getTimeframeBounds(timeframe);
+                        navigateToFilteredCatalog({
+                          category: cat.category,
+                          startDate,
+                          endDate,
+                        });
+                      }}
                       style={styles.categoryItem}
                     >
                       <View style={styles.categoryInfoRow}>
@@ -395,12 +421,15 @@ export default function InsightsScreen() {
                     <TouchableOpacity
                       key={tier.tier}
                       activeOpacity={0.7}
-                      onPress={() =>
+                      onPress={() => {
+                        const { startDate, endDate } = getTimeframeBounds(timeframe);
                         navigateToFilteredCatalog({
                           minPrice: tier.minPrice,
                           maxPrice: tier.maxPrice,
-                        })
-                      }
+                          startDate,
+                          endDate,
+                        });
+                      }}
                       style={styles.categoryItem}
                     >
                       <View style={styles.categoryInfoRow}>
