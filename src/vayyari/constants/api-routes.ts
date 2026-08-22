@@ -55,6 +55,11 @@ export const API_ROUTES = {
     INSTAGRAM_ACCOUNTS: '/api/v1/products/instagram-accounts',
   },
 
+  // Product Analytics & Insights
+  ANALYTICS: {
+    PRODUCTS_SUMMARY: '/api/v1/analytics/products-summary',
+  },
+
   // Catalog & Media (legacy search/ingest flow)
   CATALOG: {
     MEDIA: '/api/v1/catalog/media',
