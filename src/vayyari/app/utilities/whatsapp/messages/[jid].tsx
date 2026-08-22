@@ -30,7 +30,33 @@ type MediaGroup = {
   groupId: string | undefined;
 };
 
-// Component for rendering individual media items with robust archived / missing media fallback
+// Helper functions for media status
+const isMediaMsg = (msg: Message) => {
+  return (
+    msg.mediaType === 'image' ||
+    msg.mediaType === 'photo' ||
+    msg.mediaType === 'video' ||
+    msg.mediaType === 'sticker' ||
+    !!msg.mediaUrl
+  );
+};
+
+const isMediaArchived = (msg: Message) => {
+  return (
+    !msg.mediaUrl ||
+    msg.metadata?.isArchived === true ||
+    msg.metadata?.deleted === true ||
+    msg.metadata?.isTombstone === true ||
+    msg.messageText === '[Media archived / deleted]' ||
+    msg.messageText === '[Media Unavailable]'
+  );
+};
+
+const hasActiveMedia = (msg: Message) => {
+  return !!msg.mediaUrl && !isMediaArchived(msg);
+};
+
+// Component for rendering individual active media items
 const ChatMediaItem = React.memo(({ 
   msg, 
   size, 
@@ -42,7 +68,7 @@ const ChatMediaItem = React.memo(({
 }) => {
   const [loadFailed, setLoadFailed] = useState(false);
   const isVideo = msg.mediaType === 'video';
-  const isArchived = !msg.mediaUrl || loadFailed || msg.metadata?.isArchived || msg.metadata?.deleted || msg.metadata?.isTombstone;
+  const isArchived = !msg.mediaUrl || loadFailed || isMediaArchived(msg);
 
   return (
     <TouchableOpacity 
@@ -70,7 +96,7 @@ const ChatMediaItem = React.memo(({
             style={{ margin: 0 }} 
           />
           <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#64748b', fontWeight: '600', textAlign: 'center', marginTop: 2 }}>
-            {msg.metadata?.isArchived ? 'Archived' : 'Media Unavailable'}
+            {loadFailed ? 'Load Failed' : 'Archived'}
           </Text>
         </View>
       ) : isVideo ? (
@@ -386,7 +412,7 @@ export default function FullMessageBrowser() {
     
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i];
-      const isMedia = (msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'video' || msg.mediaType === 'sticker') || !!msg.mediaUrl;
+      const isMedia = isMediaMsg(msg);
       
       if (isMedia) {
         if (!currentGroup) {
@@ -398,7 +424,7 @@ export default function FullMessageBrowser() {
             timestamp: msg.timestamp,
             groupId: msg.groupId
           };
-        } else if (currentGroup.isFromMe === msg.isFromMe) {
+        } else if (currentGroup.isFromMe === msg.isFromMe && currentGroup.groupId === msg.groupId) {
           currentGroup.messages.push(msg);
         } else {
           result.push(currentGroup.messages.length === 1 ? currentGroup.messages[0] : currentGroup);
@@ -692,9 +718,12 @@ export default function FullMessageBrowser() {
   ), []);
 
   const cleanMessageText = useCallback((msg: Message) => {
-    let text = msg.messageText || (msg.mediaUrl || msg.mediaType ? '' : '[Media Unavailable]');
-    if (msg.mediaUrl || msg.mediaType === 'document' || msg.mediaType === 'image' || msg.mediaType === 'video') {
-      text = text.replace(/^\[(?:image|video|document)\]$/i, '').trim();
+    let text = msg.messageText || '';
+    if (text === '[Media archived / deleted]' || text === '[Media Unavailable]') {
+      return '';
+    }
+    if (msg.mediaUrl || msg.mediaType === 'document' || msg.mediaType === 'image' || msg.mediaType === 'video' || msg.mediaType === 'photo' || msg.mediaType === 'sticker') {
+      text = text.replace(/^\[(?:image|video|document|photo|sticker)\]$/i, '').trim();
     }
     return text;
   }, []);
@@ -709,7 +738,18 @@ export default function FullMessageBrowser() {
 
     if (isGroup) {
       const group = item as MediaGroup;
-      const mediaUrls = group.messages.map(m => m.mediaUrl).filter(Boolean) as string[];
+      const firstMsgId = group.messages[0]?.messageId;
+      const activeMessages = group.messages.filter(hasActiveMedia);
+      const archivedCount = group.messages.length - activeMessages.length;
+      const activeMediaUrls = activeMessages.map(m => m.mediaUrl).filter(Boolean) as string[];
+      
+      // Collect any unique non-empty caption text across messages in the group
+      const groupCaptions = Array.from(
+        new Set(group.messages.map(m => cleanMessageText(m)).filter(Boolean))
+      ).join('\n');
+
+      const isGroupHighlighted = isItemHighlighted(group.groupId, undefined, group.timestamp) ||
+        group.messages.some(m => isItemHighlighted(m.groupId, m.messageId, m.timestamp));
 
       return (
         <View>
@@ -732,51 +772,117 @@ export default function FullMessageBrowser() {
           )}
 
           <View style={[styles.messageRow, isFromMe ? styles.myMessageRow : styles.theirMessageRow]}>
-            <Surface 
-              style={[
-                styles.bubble, 
-                isFromMe ? styles.myBubble : styles.theirBubble,
-                { padding: 4 },
-                getHighlightedStyle(group.groupId, undefined, group.timestamp)
-              ]} 
-              elevation={isItemHighlighted(group.groupId, undefined, group.timestamp) ? 3 : 1}
+            <TouchableOpacity 
+              activeOpacity={0.9} 
+              onLongPress={() => zoningMode && firstMsgId && setHoveredMessageId(firstMsgId)}
+              onPress={() => {
+                if (zoningMode && firstMsgId) {
+                  setHoveredMessageId(hoveredMessageId === firstMsgId ? null : firstMsgId);
+                } else {
+                  setHoveredMessageId(null);
+                }
+              }}
             >
-              {group.groupId && <Text style={styles.groupIdLabel}>{group.groupId.substring(0, 8)}</Text>}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', maxWidth: 250, justifyContent: 'center' }}>
-                {group.messages.slice(0, 4).map((msg, idx) => {
-                  const isFourthAndMore = idx === 3 && group.messages.length > 4;
-                  return (
-                    <View key={msg.messageId} style={{ position: 'relative' }}>
-                      {renderMediaContent(
-                        msg, 
-                        group.messages.length > 1 ? 116 : 240, 
-                        () => {
-                          if (mediaUrls.length > 0) {
-                            setPreviewData({ urls: mediaUrls, index: Math.min(idx, mediaUrls.length - 1) });
-                          }
-                        }
-                      )}
-                      {isFourthAndMore && (
-                        <TouchableOpacity 
-                          style={styles.moreOverlay} 
-                          activeOpacity={0.8}
-                          onPress={() => {
-                            if (mediaUrls.length > 0) {
-                              setPreviewData({ urls: mediaUrls, index: Math.min(3, mediaUrls.length - 1) });
+              <Surface 
+                style={[
+                  styles.bubble, 
+                  isFromMe ? styles.myBubble : styles.theirBubble,
+                  zoningMode && firstMsgId && hoveredMessageId === firstMsgId && styles.selectedBubble,
+                  { padding: 4 },
+                  isGroupHighlighted ? {
+                    borderColor: '#F59E0B',
+                    borderWidth: 2.5,
+                    backgroundColor: 'rgba(245, 158, 11, 0.12)' as any,
+                  } : null
+                ]} 
+                elevation={isGroupHighlighted ? 3 : 1}
+              >
+                {group.groupId && <Text style={styles.groupIdLabel}>{group.groupId.substring(0, 8)}</Text>}
+                
+                {activeMessages.length > 0 ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', maxWidth: 250, justifyContent: 'center' }}>
+                    {activeMessages.slice(0, 4).map((msg, idx) => {
+                      const isFourthAndMore = idx === 3 && activeMessages.length > 4;
+                      return (
+                        <View key={msg.messageId} style={{ position: 'relative' }}>
+                          {renderMediaContent(
+                            msg, 
+                            activeMessages.length > 1 ? 116 : 240, 
+                            () => {
+                              if (activeMediaUrls.length > 0) {
+                                setPreviewData({ urls: activeMediaUrls, index: idx });
+                              }
                             }
-                          }}
-                        >
-                          <Text style={styles.moreOverlayText}>+{group.messages.length - 4}</Text>
-                        </TouchableOpacity>
-                      )}
+                          )}
+                          {isFourthAndMore && (
+                            <TouchableOpacity 
+                              style={styles.moreOverlay} 
+                              activeOpacity={0.8}
+                              onPress={() => {
+                                if (activeMediaUrls.length > 0) {
+                                  setPreviewData({ urls: activeMediaUrls, index: 3 });
+                                }
+                              }}
+                            >
+                              <Text style={styles.moreOverlayText}>+{activeMessages.length - 4}</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.allArchivedContainer}>
+                    <IconButton icon="archive-outline" size={20} iconColor="#64748b" style={{ margin: 0 }} />
+                    <View style={{ flex: 1, marginLeft: 4 }}>
+                      <Text style={styles.allArchivedTitle}>
+                        {group.messages.length} media {group.messages.length === 1 ? 'item' : 'items'} archived
+                      </Text>
+                      <Text style={styles.allArchivedSubtext}>
+                        Pruned during product archiving to optimize storage
+                      </Text>
                     </View>
-                  );
-                })}
+                  </View>
+                )}
+
+                {archivedCount > 0 && activeMessages.length > 0 && (
+                  <View style={styles.archivedMediaBadge}>
+                    <IconButton icon="archive-outline" size={14} iconColor="#475569" style={{ margin: 0, width: 16, height: 16 }} />
+                    <Text style={styles.archivedMediaBadgeText}>
+                      {archivedCount} excess {archivedCount === 1 ? 'media' : 'media items'} archived (pruned)
+                    </Text>
+                  </View>
+                )}
+
+                {groupCaptions ? <Text style={styles.messageText}>{groupCaptions}</Text> : null}
+
+                <Text style={styles.timestamp}>
+                  {group.timestamp ? format(new Date(group.timestamp * 1000), 'HH:mm') : ''}
+                </Text>
+              </Surface>
+            </TouchableOpacity>
+
+            {zoningMode && firstMsgId && hoveredMessageId === firstMsgId && (
+              <View style={[styles.controls, isFromMe ? styles.myControls : styles.theirControls]}>
+                <IconButton 
+                  icon="arrow-up-bold" 
+                  size={16} 
+                  onPress={() => handleMoveGroup(firstMsgId, group.groupId, 'prev')} 
+                  disabled={!hasPreviousGroup(group.groupId || '')}
+                />
+                <IconButton 
+                  icon="content-cut" 
+                  size={16} 
+                  onPress={() => handleSplitGroup(firstMsgId, group.groupId)} 
+                />
+                <IconButton 
+                  icon="arrow-down-bold" 
+                  size={16} 
+                  onPress={() => handleMoveGroup(firstMsgId, group.groupId, 'next')} 
+                  disabled={groupIndexForId(group.groupId || '') <= 0}
+                />
               </View>
-              <Text style={styles.timestamp}>
-                {group.timestamp ? format(new Date(group.timestamp * 1000), 'HH:mm') : ''}
-              </Text>
-            </Surface>
+            )}
           </View>
         </View>
       );
@@ -784,7 +890,9 @@ export default function FullMessageBrowser() {
 
     const msg = item as Message;
     const text = cleanMessageText(msg);
-    const isMedia = (msg.mediaType === 'image' || msg.mediaType === 'photo' || msg.mediaType === 'video' || msg.mediaType === 'sticker') || !!msg.mediaUrl;
+    const isMedia = isMediaMsg(msg);
+    const isArchived = isMediaArchived(msg);
+    const hasActive = hasActiveMedia(msg);
 
     return (
       <View>
@@ -831,9 +939,16 @@ export default function FullMessageBrowser() {
                 <Text style={styles.groupIdLabel}>{msg.groupId.substring(0, 8)}</Text>
               )}
               
-              {isMedia ? (
+              {hasActive ? (
                 <View style={styles.mediaContainer}>
                   {renderMediaContent(msg, 240)}
+                </View>
+              ) : isMedia && isArchived ? (
+                <View style={styles.singleArchivedContainer}>
+                  <IconButton icon={msg.mediaType === 'video' ? 'video-off-outline' : 'image-off-outline'} size={18} iconColor="#64748b" style={{ margin: 0, width: 22, height: 22 }} />
+                  <Text style={styles.singleArchivedText}>
+                    {msg.mediaType === 'video' ? 'Video' : 'Media'} archived (storage pruned)
+                  </Text>
                 </View>
               ) : msg.mediaType === 'document' ? (
                 <View style={styles.filePlaceholder}>
@@ -1193,6 +1308,61 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  archivedMediaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(100, 116, 139, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 4,
+    marginBottom: 2,
+    alignSelf: 'flex-start',
+  },
+  archivedMediaBadgeText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  allArchivedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 4,
+    minWidth: 220,
+  },
+  allArchivedTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#334155',
+  },
+  allArchivedSubtext: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  singleArchivedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 4,
+  },
+  singleArchivedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    marginLeft: 4,
   },
   
   // Zoning Mode Styles

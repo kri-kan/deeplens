@@ -638,37 +638,54 @@ public class ProductService : IProductService
                 }
             }
 
-            // 4. Query associated WhatsApp groups & messages to purge raw WhatsApp media
+            // 4. Query associated WhatsApp groups & messages to purge raw WhatsApp media (including adjacent staging bursts)
             var associatedGroupIds = (await db.QueryAsync<string>(@"
-                SELECT DISTINCT group_id
-                FROM (
-                    SELECT mg.group_id
+                WITH primary_groups AS (
+                    SELECT DISTINCT mg.group_id, mg.jid, COALESCE(mg.created_at, mg.last_message_at) AS ref_time
                     FROM wa.message_groups mg
                     WHERE mg.deeplens_product_id = ANY(@Ids) AND mg.group_id IS NOT NULL
                     UNION
-                    SELECT vl.source_group_id AS group_id
+                    SELECT DISTINCT vl.source_group_id AS group_id, mg.jid, COALESCE(mg.created_at, mg.last_message_at) AS ref_time
                     FROM vendor_listings vl
+                    LEFT JOIN wa.message_groups mg ON mg.group_id = vl.source_group_id
                     WHERE vl.product_id = ANY(@Ids) AND vl.source_group_id IS NOT NULL
-                ) g
-                WHERE group_id IS NOT NULL",
+                )
+                SELECT group_id FROM primary_groups WHERE group_id IS NOT NULL
+                UNION
+                SELECT DISTINCT adjacent_mg.group_id
+                FROM primary_groups pg
+                JOIN wa.message_groups adjacent_mg 
+                  ON adjacent_mg.jid = pg.jid
+                 AND (adjacent_mg.deeplens_product_id IS NULL OR adjacent_mg.deeplens_product_id = ANY(@Ids))
+                 AND ABS(EXTRACT(EPOCH FROM (COALESCE(adjacent_mg.created_at, adjacent_mg.last_message_at) - pg.ref_time))) <= 120
+                WHERE adjacent_mg.group_id IS NOT NULL",
                 new { Ids = idArray }, transaction)).ToList();
 
             var waMessageIdsToClean = new List<long>();
 
             if (associatedGroupIds.Count > 0)
             {
+                var groupArray = associatedGroupIds.ToArray();
+
+                // Update any adjacent staging groups to 'archived' status
+                await db.ExecuteAsync(@"
+                    UPDATE wa.message_groups
+                    SET status = 'archived', updated_at = NOW()
+                    WHERE group_id = ANY(@GroupIds) AND deeplens_product_id IS NULL",
+                    new { GroupIds = groupArray }, transaction);
+
                 var waMessages = (await db.QueryAsync<(long Id, string MessageId, string GroupId, string MediaUrl, string? MediaType, string? Content)>(@"
                     SELECT id AS Id, message_id AS MessageId, group_id AS GroupId, media_url AS MediaUrl, media_type AS MediaType, content AS Content
                     FROM wa.messages
                     WHERE group_id = ANY(@GroupIds) AND media_url IS NOT NULL",
-                    new { GroupIds = associatedGroupIds.ToArray() }, transaction)).ToList();
+                    new { GroupIds = groupArray }, transaction)).ToList();
 
                 foreach (var msg in waMessages)
                 {
                     var msgFn = System.IO.Path.GetFileName(msg.MediaUrl.TrimEnd('/'));
                     
-                    // If this WhatsApp message is not one of the retained product images (or is a video), prune it
-                    if (msg.MediaType == "video" || !retainedFilenames.Contains(msgFn))
+                    // If this WhatsApp message is not one of the retained product images (or is a video/sticker), prune it
+                    if (msg.MediaType == "video" || msg.MediaType == "sticker" || !retainedFilenames.Contains(msgFn))
                     {
                         waMessageIdsToClean.Add(msg.Id);
                         deletePaths.Add(msg.MediaUrl);
