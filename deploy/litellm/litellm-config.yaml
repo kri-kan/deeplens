@@ -1,0 +1,134 @@
+# =============================================================================
+# DeepLens LiteLLM Gateway Configuration
+# =============================================================================
+# Architecture: Multi-Gemini API Key Load Balancing with Local Ollama Fallback
+# Unified Endpoint: http://litellm:4000/v1
+# Virtual Model Aliases: deeplens-llm, deeplens-fast
+
+model_list:
+  # ---------------------------------------------------------------------------
+  # Primary Model Group: deeplens-llm (Google Gemini 2.5 Flash)
+  # Load balanced across multiple API keys using least-busy routing
+  # ---------------------------------------------------------------------------
+  - model_name: deeplens-llm
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_1
+      rpm: 15
+      tpm: 1000000
+
+  - model_name: deeplens-llm
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_2
+      rpm: 15
+      tpm: 1000000
+
+  - model_name: deeplens-llm
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_3
+      rpm: 15
+      tpm: 1000000
+
+  # ---------------------------------------------------------------------------
+  # Fast Tier Alias: deeplens-fast (Google Gemini 2.5 Flash / Fast Response)
+  # ---------------------------------------------------------------------------
+  - model_name: deeplens-fast
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_1
+      rpm: 15
+      tpm: 1000000
+
+  - model_name: deeplens-fast
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_2
+      rpm: 15
+      tpm: 1000000
+
+  - model_name: deeplens-fast
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_3
+      rpm: 15
+      tpm: 1000000
+
+  # ---------------------------------------------------------------------------
+  # Explicit Gemini Model Group: gemini-2.5-flash
+  # ---------------------------------------------------------------------------
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_1
+      rpm: 15
+      tpm: 1000000
+
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_2
+      rpm: 15
+      tpm: 1000000
+
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY_3
+      rpm: 15
+      tpm: 1000000
+
+  # ---------------------------------------------------------------------------
+  # Fallback Tier 1: Local Ollama Phi-4 Mini
+  # Ultra-fast local failover tier
+  # ---------------------------------------------------------------------------
+  - model_name: phi4-mini:latest
+    litellm_params:
+      model: ollama/phi4-mini:latest
+      api_base: http://ollama-gpu:11434
+
+  # ---------------------------------------------------------------------------
+  # Fallback Tier 2: Local Ollama Phi-3
+  # Stable local failover tier
+  # ---------------------------------------------------------------------------
+  - model_name: phi3:latest
+    litellm_params:
+      model: ollama/phi3:latest
+      api_base: http://ollama-gpu:11434
+
+# -----------------------------------------------------------------------------
+# Router Settings: Routing Strategy & High Availability
+# -----------------------------------------------------------------------------
+router_settings:
+  routing_strategy: least-busy
+  num_retries: 3
+  timeout: 120
+  retry_after: 5
+  allowed_fails: 2
+  cooldown_time: 30
+
+# -----------------------------------------------------------------------------
+# LiteLLM Core Settings: Fallback Mapping & Request Policies
+# -----------------------------------------------------------------------------
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  num_retries: 3
+  request_timeout: 120
+  fallbacks:
+    - deeplens-llm:
+        - phi3:latest
+        - phi4-mini:latest
+    - deeplens-fast:
+        - phi3:latest
+        - phi4-mini:latest
+    - gemini-2.5-flash:
+        - phi3:latest
+        - phi4-mini:latest
+
+# -----------------------------------------------------------------------------
+# General Settings: Proxy Security
+# -----------------------------------------------------------------------------
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -13,8 +13,9 @@ services:
     volumes:
       - ${REASONING_API_HOSTING_PATH:-/data/hosting/reasoning-api}:/app
     environment:
-      OLLAMA_BASE_URL: http://${INFRA_HOST:-192.168.0.170}:11434
-      MODEL_ID: phi4-mini:latest
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://deeplens-litellm:4000/v1}
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-deeplens-master-key}
+      LITELLM_MODEL: ${LITELLM_MODEL:-deeplens-llm}
       DB_CONNECTION_STRING: "Host=${INFRA_HOST:-192.168.0.170};Database=deeplens_platform;Username=postgres;Password=Krikank1$"
       PYTHONUNBUFFERED: "1"
     networks:

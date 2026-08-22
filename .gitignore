@@ -427,7 +427,10 @@ test_ollama.py
 
 # Local scratch scripts and deployment builds
 scratch/
-deploy/
+deploy/api/
+deploy/worker/
+!deploy/litellm/
+deploy/litellm/.env
 
 # WhatsApp processor local utility/reprocess scripts
 src/whatsapp-processor/scripts/
@@ -437,6 +440,7 @@ src/whatsapp-processor/reprocess_products.ts
 .squad/config.json
 .squad.local-backup/
 .agy/
+.codebase-memory/
 
 # Playwright Test Artifacts
 playwright-report/
