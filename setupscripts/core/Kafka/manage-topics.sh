@@ -5,9 +5,9 @@
 
 ACTION=${1:-List}
 TOPIC_NAME=$2
-BOOTSTRAP_SERVER=${3:-"192.168.0.170:9092,192.168.0.170:9093"}
+BOOTSTRAP_SERVER=${3:-"localhost:29092"}
 CONTAINER_NAME="kafka-prod"
-PARTITIONS=1
+PARTITIONS=3
 REPLICATION_FACTOR=1
 
 # Colors
@@ -43,6 +43,10 @@ MANDATORY_TOPICS=(
     "WhatsApp.group.reprocess"
     "WhatsApp.group.product.enrich"
     "WhatsApp.group.product.delete"
+    "deeplens.product.category.changed"
+    "deeplens.product.merged"
+    "deeplens.catalog.product.archive.command"
+    "deeplens.catalog.product.delete.command"
 )
 
 case $ACTION in
