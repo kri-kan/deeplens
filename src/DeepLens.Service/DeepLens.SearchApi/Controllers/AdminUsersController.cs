@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -33,6 +34,14 @@ public class AdminUsersController : ControllerBase
         _logger = logger;
     }
 
+    private bool IsSuperAdmin()
+    {
+        return User.IsInRole("super_admin") ||
+               User.HasClaim(c => c.Type == "is_super_admin" && c.Value == "true") ||
+               User.HasClaim(c => c.Type == "role" && string.Equals(c.Value, "super_admin", StringComparison.OrdinalIgnoreCase)) ||
+               User.HasClaim(c => c.Type == ClaimTypes.Role && string.Equals(c.Value, "super_admin", StringComparison.OrdinalIgnoreCase));
+    }
+
     private async Task<Guid> ResolveTenantIdAsync()
     {
         var tenantClaim = User.FindFirst("tenant_id")?.Value
@@ -63,6 +72,33 @@ public class AdminUsersController : ControllerBase
         return Guid.TryParse(sub, out var uid) ? uid : Guid.Empty;
     }
 
+    private async Task<dynamic?> FindUserRecordAsync(IDbConnection connection, string id, Guid callerTenantId, bool isSuperAdmin)
+    {
+        var isGuid = Guid.TryParse(id, out var userGuid);
+        var parsedGuid = isGuid ? userGuid : Guid.Empty;
+
+        string sql;
+        if (isSuperAdmin)
+        {
+            sql = @"
+                SELECT id, tenant_id, email, first_name, last_name, email_confirmed, is_active, created_at, last_login_at
+                FROM public.users
+                WHERE ((@IsGuid = true AND id = @UserGuid) OR LOWER(email) = LOWER(@Identifier))
+                  AND deleted_at IS NULL
+                LIMIT 1;";
+            return await connection.QueryFirstOrDefaultAsync(sql, new { IsGuid = isGuid, UserGuid = parsedGuid, Identifier = id.Trim() });
+        }
+
+        sql = @"
+            SELECT id, tenant_id, email, first_name, last_name, email_confirmed, is_active, created_at, last_login_at
+            FROM public.users
+            WHERE ((@IsGuid = true AND id = @UserGuid) OR LOWER(email) = LOWER(@Identifier))
+              AND (tenant_id = @TenantId OR @TenantId = '00000000-0000-0000-0000-000000000000'::uuid OR tenant_id IS NULL)
+              AND deleted_at IS NULL
+            LIMIT 1;";
+        return await connection.QueryFirstOrDefaultAsync(sql, new { IsGuid = isGuid, UserGuid = parsedGuid, Identifier = id.Trim(), TenantId = callerTenantId });
+    }
+
     /// <summary>
     /// List users with pagination, search, role filtering, and active status
     /// </summary>
@@ -75,8 +111,9 @@ public class AdminUsersController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        var isSuperAdmin = IsSuperAdmin();
         var tenantId = await ResolveTenantIdAsync();
-        if (tenantId == Guid.Empty) return BadRequest(new { message = "Invalid tenant context." });
+        if (tenantId == Guid.Empty && !isSuperAdmin) return BadRequest(new { message = "Invalid tenant context." });
 
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
@@ -85,11 +122,16 @@ public class AdminUsersController : ControllerBase
 
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
-        var conditions = new List<string> { "u.tenant_id = @TenantId", "u.deleted_at IS NULL" };
+        var conditions = new List<string> { "u.deleted_at IS NULL" };
         var parameters = new DynamicParameters();
-        parameters.Add("TenantId", tenantId);
         parameters.Add("Limit", pageSize);
         parameters.Add("Offset", offset);
+
+        if (!isSuperAdmin || tenantId != Guid.Empty)
+        {
+            conditions.Add("(u.tenant_id = @TenantId OR @TenantId = '00000000-0000-0000-0000-000000000000'::uuid)");
+            parameters.Add("TenantId", tenantId);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -106,16 +148,16 @@ public class AdminUsersController : ControllerBase
         if (!string.IsNullOrWhiteSpace(role))
         {
             conditions.Add(@"EXISTS (
-                SELECT 1 FROM public.user_roles ur 
-                JOIN public.roles r ON ur.role_id = r.id 
-                WHERE ur.user_id = u.id AND (r.code ILIKE @Role OR r.name ILIKE @Role)
+                SELECT 1 FROM public.user_roles ur2
+                JOIN public.roles r2 ON ur2.role_id = r2.id
+                WHERE ur2.user_id = u.id AND (r2.code = @RoleCode OR r2.name ILIKE @RoleCode)
             )");
-            parameters.Add("Role", role.Trim());
+            parameters.Add("RoleCode", role.Trim());
         }
 
         var whereClause = string.Join(" AND ", conditions);
 
-        var countSql = $"SELECT COUNT(*) FROM public.users u WHERE {whereClause};";
+        var countSql = $"SELECT COUNT(1) FROM public.users u WHERE {whereClause};";
         var totalCount = await connection.ExecuteScalarAsync<int>(countSql, parameters);
 
         var usersSql = $@"
@@ -126,23 +168,22 @@ public class AdminUsersController : ControllerBase
             LIMIT @Limit OFFSET @Offset;";
 
         var rawUsers = (await connection.QueryAsync(usersSql, parameters)).ToList();
-
         if (!rawUsers.Any())
         {
             return Ok(new PagedResult<UserAdminDto>
             {
-                Items = Array.Empty<UserAdminDto>(),
-                TotalCount = 0,
+                Items = new List<UserAdminDto>(),
+                TotalCount = totalCount,
                 Page = page,
                 PageSize = pageSize
             });
         }
 
-        var userIds = rawUsers.Select(u => (Guid)u.id).ToList();
+        var userIds = rawUsers.Select(u => (Guid)u.id).Distinct().ToList();
 
-        // Query roles for these users
+        // Fetch roles for retrieved users
         const string rolesSql = @"
-            SELECT ur.user_id, r.id as role_id, r.code, r.name, r.description, r.is_system
+            SELECT ur.user_id, r.code, r.name
             FROM public.user_roles ur
             JOIN public.roles r ON ur.role_id = r.id
             WHERE ur.user_id = ANY(@UserIds);";
@@ -186,44 +227,55 @@ public class AdminUsersController : ControllerBase
     [HasPermission("users:view")]
     public async Task<IActionResult> GetUserById(string id)
     {
-        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+        if (string.IsNullOrWhiteSpace(id)) return NotFound(new { message = "User not found." });
 
+        var isSuperAdmin = IsSuperAdmin();
         var tenantId = await ResolveTenantIdAsync();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
-        const string userSql = @"
-            SELECT id, tenant_id, email, first_name, last_name, email_confirmed, is_active, created_at, last_login_at
-            FROM public.users
-            WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
-
-        var user = await connection.QueryFirstOrDefaultAsync(userSql, new { Id = userGuid, TenantId = tenantId });
+        var user = await FindUserRecordAsync(connection, id, tenantId, isSuperAdmin);
         if (user == null) return NotFound(new { message = "User not found." });
+
+        var userGuid = (Guid)user.id;
+        var userTenantId = (Guid)user.tenant_id;
 
         // Query assigned roles
         const string rolesSql = @"
             SELECT r.id, r.tenant_id, r.code, r.name, r.description, r.is_system, r.created_at
             FROM public.user_roles ur
             JOIN public.roles r ON ur.role_id = r.id
-            WHERE ur.user_id = @UserId AND ur.tenant_id = @TenantId;";
+            WHERE ur.user_id = @UserId AND (ur.tenant_id = @TenantId OR ur.tenant_id = @UserTenantId OR @IsSuperAdmin = true);";
 
-        var assignedRoles = (await connection.QueryAsync<RoleDto>(rolesSql, new { UserId = userGuid, TenantId = tenantId })).ToList();
+        var assignedRoles = (await connection.QueryAsync<RoleDto>(rolesSql, new
+        {
+            UserId = userGuid,
+            TenantId = tenantId,
+            UserTenantId = userTenantId,
+            IsSuperAdmin = isSuperAdmin
+        })).ToList();
 
-        // Effective permissions from cache/db
-        var auth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userGuid);
+        // Effective permissions from cache/db using user's actual tenant
+        var auth = await _permissionCacheService.GetUserAuthorizationAsync(userTenantId, userGuid);
 
-        // Custom permissions
+        // Custom direct permissions
         const string customPermSql = @"
             SELECT p.code
             FROM public.user_permissions up
             JOIN public.permissions p ON up.permission_id = p.id
-            WHERE up.user_id = @UserId AND up.tenant_id = @TenantId;";
+            WHERE up.user_id = @UserId AND (up.tenant_id = @TenantId OR up.tenant_id = @UserTenantId OR @IsSuperAdmin = true);";
 
-        var customPerms = (await connection.QueryAsync<string>(customPermSql, new { UserId = userGuid, TenantId = tenantId })).ToList();
+        var customPerms = (await connection.QueryAsync<string>(customPermSql, new
+        {
+            UserId = userGuid,
+            TenantId = tenantId,
+            UserTenantId = userTenantId,
+            IsSuperAdmin = isSuperAdmin
+        })).ToList();
 
         var dto = new UserAdminDto
         {
-            Id = (Guid)user.id,
-            TenantId = (Guid)user.tenant_id,
+            Id = userGuid,
+            TenantId = userTenantId,
             Email = (string)user.email,
             FirstName = (string)user.first_name,
             LastName = (string)user.last_name,
@@ -247,20 +299,32 @@ public class AdminUsersController : ControllerBase
     [HasPermission("users:manage")]
     public async Task<IActionResult> UpdateUserStatus(string id, [FromBody] UpdateUserStatusRequest request)
     {
-        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+        if (string.IsNullOrWhiteSpace(id)) return NotFound(new { message = "User not found." });
 
+        var isSuperAdmin = IsSuperAdmin();
         var tenantId = await ResolveTenantIdAsync();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+
+        var user = await FindUserRecordAsync(connection, id, tenantId, isSuperAdmin);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        var userGuid = (Guid)user.id;
+        var userTenantId = (Guid)user.tenant_id;
 
         const string sql = @"
             UPDATE public.users 
             SET is_active = @IsActive, updated_at = CURRENT_TIMESTAMP 
-            WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
+            WHERE id = @Id;";
 
-        var affected = await connection.ExecuteAsync(sql, new { Id = userGuid, TenantId = tenantId, IsActive = request.IsActive });
+        var affected = await connection.ExecuteAsync(sql, new { Id = userGuid, IsActive = request.IsActive });
         if (affected == 0) return NotFound(new { message = "User not found." });
 
-        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
+        await _permissionCacheService.InvalidateUserCacheAsync(userTenantId, userGuid);
+        if (tenantId != userTenantId && tenantId != Guid.Empty)
+        {
+            await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
+        }
+
         return Ok(new { success = true, isActive = request.IsActive });
     }
 
@@ -271,16 +335,18 @@ public class AdminUsersController : ControllerBase
     [HasPermission("users:manage")]
     public async Task<IActionResult> UpdateUserRoles(string id, [FromBody] UpdateUserRolesRequest request)
     {
-        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+        if (string.IsNullOrWhiteSpace(id)) return NotFound(new { message = "User not found." });
 
+        var isSuperAdmin = IsSuperAdmin();
         var tenantId = await ResolveTenantIdAsync();
         var currentUserId = GetCurrentUserId();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
-        // Check user exists
-        const string checkUserSql = "SELECT id FROM public.users WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
-        var userExists = await connection.ExecuteScalarAsync<Guid?>(checkUserSql, new { Id = userGuid, TenantId = tenantId });
-        if (!userExists.HasValue) return NotFound(new { message = "User not found." });
+        var user = await FindUserRecordAsync(connection, id, tenantId, isSuperAdmin);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        var userGuid = (Guid)user.id;
+        var userTenantId = (Guid)user.tenant_id;
 
         // Resolve role IDs to assign
         var targetRoleIds = new HashSet<Guid>();
@@ -293,19 +359,24 @@ public class AdminUsersController : ControllerBase
         {
             const string lookupSql = @"
                 SELECT id FROM public.roles 
-                WHERE (tenant_id IS NULL OR tenant_id = @TenantId) 
+                WHERE (tenant_id IS NULL OR tenant_id = @UserTenantId OR tenant_id = @TenantId) 
                   AND (code = ANY(@Codes) OR name = ANY(@Codes));";
 
-            var matchedIds = await connection.QueryAsync<Guid>(lookupSql, new { TenantId = tenantId, Codes = request.Roles.ToArray() });
+            var matchedIds = await connection.QueryAsync<Guid>(lookupSql, new
+            {
+                UserTenantId = userTenantId,
+                TenantId = tenantId,
+                Codes = request.Roles.ToArray()
+            });
             foreach (var mid in matchedIds) targetRoleIds.Add(mid);
         }
 
         using var transaction = connection.BeginTransaction();
         try
         {
-            // Remove existing user roles
-            const string deleteSql = "DELETE FROM public.user_roles WHERE user_id = @UserId AND tenant_id = @TenantId;";
-            await connection.ExecuteAsync(deleteSql, new { UserId = userGuid, TenantId = tenantId }, transaction);
+            // Remove existing user roles for this user
+            const string deleteSql = "DELETE FROM public.user_roles WHERE user_id = @UserId;";
+            await connection.ExecuteAsync(deleteSql, new { UserId = userGuid }, transaction);
 
             // Insert new user roles
             if (targetRoleIds.Any())
@@ -321,7 +392,7 @@ public class AdminUsersController : ControllerBase
                     {
                         UserId = userGuid,
                         RoleId = roleId,
-                        TenantId = tenantId,
+                        TenantId = userTenantId,
                         AssignedBy = currentUserId != Guid.Empty ? currentUserId : (Guid?)null
                     }, transaction);
                 }
@@ -336,9 +407,13 @@ public class AdminUsersController : ControllerBase
         }
 
         // Invalidate cache immediately
-        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
+        await _permissionCacheService.InvalidateUserCacheAsync(userTenantId, userGuid);
+        if (tenantId != userTenantId && tenantId != Guid.Empty)
+        {
+            await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
+        }
 
-        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userGuid);
+        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(userTenantId, userGuid);
         return Ok(new
         {
             success = true,
@@ -355,16 +430,18 @@ public class AdminUsersController : ControllerBase
     [HasPermission("users:manage")]
     public async Task<IActionResult> UpdateUserPermissions(string id, [FromBody] UpdateUserPermissionsRequest request)
     {
-        if (!Guid.TryParse(id, out var userGuid)) return NotFound(new { message = "User not found." });
+        if (string.IsNullOrWhiteSpace(id)) return NotFound(new { message = "User not found." });
 
+        var isSuperAdmin = IsSuperAdmin();
         var tenantId = await ResolveTenantIdAsync();
         var currentUserId = GetCurrentUserId();
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
-        // Check user exists
-        const string checkUserSql = "SELECT id FROM public.users WHERE id = @Id AND tenant_id = @TenantId AND deleted_at IS NULL;";
-        var userExists = await connection.ExecuteScalarAsync<Guid?>(checkUserSql, new { Id = userGuid, TenantId = tenantId });
-        if (!userExists.HasValue) return NotFound(new { message = "User not found." });
+        var user = await FindUserRecordAsync(connection, id, tenantId, isSuperAdmin);
+        if (user == null) return NotFound(new { message = "User not found." });
+
+        var userGuid = (Guid)user.id;
+        var userTenantId = (Guid)user.tenant_id;
 
         // Resolve permission IDs
         var targetPermissionIds = new HashSet<Guid>();
@@ -384,8 +461,8 @@ public class AdminUsersController : ControllerBase
         try
         {
             // Remove existing user permission overrides
-            const string deleteSql = "DELETE FROM public.user_permissions WHERE user_id = @UserId AND tenant_id = @TenantId;";
-            await connection.ExecuteAsync(deleteSql, new { UserId = userGuid, TenantId = tenantId }, transaction);
+            const string deleteSql = "DELETE FROM public.user_permissions WHERE user_id = @UserId;";
+            await connection.ExecuteAsync(deleteSql, new { UserId = userGuid }, transaction);
 
             // Insert new overrides
             if (targetPermissionIds.Any())
@@ -401,7 +478,7 @@ public class AdminUsersController : ControllerBase
                     {
                         UserId = userGuid,
                         PermissionId = permId,
-                        TenantId = tenantId,
+                        TenantId = userTenantId,
                         GrantedBy = currentUserId != Guid.Empty ? currentUserId : (Guid?)null
                     }, transaction);
                 }
@@ -416,9 +493,13 @@ public class AdminUsersController : ControllerBase
         }
 
         // Invalidate cache immediately
-        await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
+        await _permissionCacheService.InvalidateUserCacheAsync(userTenantId, userGuid);
+        if (tenantId != userTenantId && tenantId != Guid.Empty)
+        {
+            await _permissionCacheService.InvalidateUserCacheAsync(tenantId, userGuid);
+        }
 
-        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userGuid);
+        var updatedAuth = await _permissionCacheService.GetUserAuthorizationAsync(userTenantId, userGuid);
         return Ok(new
         {
             success = true,
