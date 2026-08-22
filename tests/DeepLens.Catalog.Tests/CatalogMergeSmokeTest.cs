@@ -28,7 +28,8 @@ public class CatalogMergeSmokeTest
                 {"ConnectionStrings:DefaultConnection", _connectionString}
             }).Build();
 
-        _service = new MetadataService(config, logger, producer);
+        var memoryCache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        _service = new MetadataService(config, logger, memoryCache, producer);
 
         await EnsureSchemaAsync();
     }
