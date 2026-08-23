@@ -101,7 +101,6 @@ stages:
       - template: .azuredevops/pipelines/templates/jobs/job-docker-build-push.yml
         parameters:
           agentPool: ${{ parameters.agentPool }}
-          containerRegistryServiceConnection: 'DeepLens-ContainerRegistry'
           imageRepository: 'deeplens'
           tag: '$(Build.BuildId)'
 
