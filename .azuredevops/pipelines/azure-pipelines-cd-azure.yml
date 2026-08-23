@@ -18,6 +18,14 @@ trigger:
 
 pr: none
 
+resources:
+  repositories:
+    - repository: deeplens-github
+      type: github
+      name: kri-kan/deeplens
+      endpoint: DeepLens-GitHub-Connection
+      ref: refs/heads/main
+
 variables:
   - group: DeepLens-Azure-Secrets
   - name: AZURE_SUBSCRIPTION

@@ -109,11 +109,14 @@ All pipeline files are modularized under [`.azuredevops/`](file:///home/krikan/p
 
 ---
 
+---
+
 ## 6. Azure DevOps Service Connections & Secrets Setup
 
 ### 1. Service Connections Required in Azure DevOps (`Project Settings > Service connections`)
-1. **`DeepLens-Azure-Subscription`**: Azure Resource Manager (ARM) connection using Workload Identity Federation (recommended) or Service Principal for deploying Azure Container Apps and Azure Static Web Apps.
-2. **`DeepLens-ContainerRegistry`**: Docker Registry Service Connection pointing to Azure Container Registry (`deeplensregistry.azurecr.io`) or GitHub Packages (`ghcr.io`).
+1. **`DeepLens-GitHub-Connection`**: GitHub Service Connection (or Azure Pipelines GitHub App) connecting to `kri-kan/deeplens` (Grant access permission to all pipelines).
+2. **`DeepLens-Azure-Subscription`**: Azure Resource Manager (ARM) connection using Workload Identity Federation (recommended) or Service Principal for deploying Azure Container Apps and Azure Static Web Apps.
+3. **`DeepLens-ContainerRegistry`**: Docker Registry Service Connection pointing to Azure Container Registry (`deeplensregistry.azurecr.io`) or GitHub Packages (`ghcr.io`).
 
 ### 2. Variable Groups (`Pipelines > Library`)
 Create Variable Group **`DeepLens-Azure-Secrets`**:
@@ -127,7 +130,50 @@ Create Variable Group **`DeepLens-Global-Vars`**:
 
 ---
 
-## 7. Step-by-Step Migration & Installation Plan
+## 7. GitHub Integration, Status Badges & PR Annotations
+
+### 1. Repository Binding Models
+DeepLens supports two operational models for GitHub repository integration:
+1. **Direct GitHub App Binding (Primary)**:
+   - Pipeline source is configured as `GitHub` > `kri-kan/deeplens`.
+   - Azure Pipelines automatically provisions webhooks for push and PR events.
+   - PR runs execute against `refs/pull/{PR_ID}/merge`.
+   - Check runs and statuses are posted natively to the GitHub Checks API.
+2. **Multi-Repo Resource Binding (`resources.repositories`)**:
+   - Declared in YAML files pointing to `deeplens-github` with endpoint `DeepLens-GitHub-Connection`.
+   - Allows pipelines triggered from Azure Repos or external triggers to checkout and track `kri-kan/deeplens`.
+
+### 2. Trigger Strategy
+- **Pull Request Trigger (`pr`)**:
+  - Branches: `main`, `develop`
+  - Path Exclusions: `README.md`, `DEEPLENS_GUIDE.md`, `PROJECT_GUIDELINES.md`, `docs/**`, `.squad/**`
+  - Automatically triggers fast matrix test jobs (.NET, Python, Frontend, Mobile) on every PR.
+- **CI Push Trigger (`trigger`)**:
+  - Branches: `main`, `develop`, `feature/*`, `bugfix/*`, `squad/*`
+  - Validates feature/squad branches upon push, preventing broken merges into `develop`.
+- **Continuous Deployment (CD)**:
+  - `azure-pipelines-cd-hybrid.yml`: Triggered on push to `develop` (PRs excluded via `pr: none`).
+  - `azure-pipelines-cd-azure.yml`: Triggered on push to `main` (PRs excluded via `pr: none`).
+
+### 3. Test Reporting & Coverage Publishing
+- **.NET 9 (`VSTest` / `trx`)**: Published via `PublishTestResults@2` with `testResultsFormat: 'VSTest'` and coverage via `PublishCodeCoverageResults@2` (`Cobertura`).
+- **Python 3.11 (`JUnit` / `xml`)**: Published via `PublishTestResults@2` with `testResultsFormat: 'JUnit'`.
+- **GitHub PR Annotations**: Azure Pipelines automatically translates test failures into GitHub Check annotations on the exact line and file in the Pull Request diff.
+
+### 4. GitHub Status Badges
+Add the following status badges to the GitHub `README.md`:
+
+| Pipeline | Target Branch | Badge Markdown |
+| :--- | :--- | :--- |
+| **Master CI/CD Orchestrator** | `main` | `[![Build Status](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CI-CD-Master?branchName=main)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=1&branchName=main)` |
+| **Master CI/CD Orchestrator** | `develop` | `[![Build Status](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CI-CD-Master?branchName=develop)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=1&branchName=develop)` |
+| **CI PR Quality Gate** | `develop` | `[![CI Status](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CI-PR-QualityGate?branchName=develop)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=2&branchName=develop)` |
+| **CD Local Hybrid Stack** | `develop` | `[![Deploy Local](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CD-Hybrid-Local?branchName=develop)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=3&branchName=develop)` |
+| **CD Azure Cloud Free Tier** | `main` | `[![Deploy Azure](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CD-Azure-Cloud?branchName=main)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=4&branchName=main)` |
+
+---
+
+## 8. Step-by-Step Migration & Installation Plan
 
 ### Step 1: Install Self-Hosted Linux Agent on Local Host (192.168.0.170)
 Run the following commands on the Linux server host to connect it to Azure DevOps:
@@ -174,14 +220,20 @@ sudo ./svc.sh status
      --location eastus2
    ```
 
-### Step 3: Register Pipelines in Azure DevOps
+### Step 3: Register Pipelines in Azure DevOps with GitHub
 1. In Azure DevOps (`https://dev.azure.com/kri-kan/deeplens`), navigate to **Pipelines > Create Pipeline**.
-2. Select **Azure Repos Git** > repository `deeplens`.
-3. Choose **Existing Azure Pipelines YAML file** and select `/azure-pipelines.yml`.
-4. Save and run the pipeline.
+2. Select **GitHub** (or install the **Azure Pipelines app from GitHub Marketplace**).
+3. Select repository `kri-kan/deeplens`.
+4. Choose **Existing Azure Pipelines YAML file** and select `/azure-pipelines.yml`.
+5. Repeat for:
+   - `.azuredevops/pipelines/azure-pipelines-ci.yml` (Name: `DeepLens-CI-PR-QualityGate`)
+   - `.azuredevops/pipelines/azure-pipelines-cd-hybrid.yml` (Name: `DeepLens-CD-Hybrid-Local`)
+   - `.azuredevops/pipelines/azure-pipelines-cd-azure.yml` (Name: `DeepLens-CD-Azure-Cloud`)
+6. Save and run each pipeline.
 
-### Step 4: Configure Branch Policies
-1. In Azure DevOps, go to **Repos > Branches**.
-2. Under `develop` and `main` branches, click `...` > **Branch policies**.
-3. Under **Build Validation**, add a build policy selecting the `DeepLens CI/CD Master Orchestrator Pipeline`.
-4. Require minimum 1 reviewer approval before merging.
+### Step 4: Configure Branch Policies & GitHub Protected Branches
+1. In GitHub (`https://github.com/kri-kan/deeplens/settings/branches`):
+   - Set up branch protection rules for `develop` and `main`.
+   - Enable **Require status checks to pass before merging** and select `DeepLens-CI-PR-QualityGate` / `Quality & Test Validation`.
+   - Require minimum 1 pull request review approval.
+2. In Azure DevOps (`Repos > Branches`), configure branch policies for `develop` and `main` mirroring the same quality gates.
