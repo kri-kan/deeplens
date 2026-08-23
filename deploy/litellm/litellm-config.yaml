@@ -13,6 +13,9 @@ model_list: []
 # -----------------------------------------------------------------------------
 router_settings:
   routing_strategy: least-busy
+  model_group_alias:
+    "deeplens-fast": "deeplens-llm"
+    "gemini-2.5-flash": "deeplens-llm"
   redis_host: os.environ/REDIS_HOST
   redis_port: os.environ/REDIS_PORT
   redis_url: os.environ/REDIS_URL
