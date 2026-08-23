@@ -36,8 +36,15 @@ pr:
       - 'README.md'
       - 'DEEPLENS_GUIDE.md'
       - 'PROJECT_GUIDELINES.md'
-      - 'docs/**'
-      - '.squad/**'
+resources:
+  repositories:
+    - repository: self
+      type: git
+    - repository: deeplens-github
+      type: github
+      name: kri-kan/deeplens
+      endpoint: DeepLens-GitHub-Connection
+      ref: refs/heads/develop
 
 variables:
   - name: agentPool

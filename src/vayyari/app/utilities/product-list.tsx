@@ -635,36 +635,58 @@ export default function ProductCatalogScreen() {
         </View>
       )}
 
-      <FlatList
-        ref={pagerRef}
-        data={CATEGORIES}
-        horizontal
-        pagingEnabled
-        scrollEnabled={!selectionMode}
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScroll}
-        keyExtractor={(item) => item.id}
-        extraData={{ searchQuery, activeFilters, selectedIds, selectionMode, activeTab }}
-        style={{ flex: 1 }}
-        renderItem={useCallback(({ item, index }: any) => (
-          <CategoryPageMemo
-            categoryId={item.id}
+      {Platform.OS === 'web' ? (
+        <View style={{ flex: 1 }}>
+          <CategoryPage
+            key={`web-cat-${CATEGORIES[activeTab].id}`}
+            categoryId={CATEGORIES[activeTab].id}
             query={searchQuery}
             filters={activeFilters}
             onCountChange={(count) => {
               setCategoryCounts(prev => {
-                if (prev[item.id] === count) return prev;
-                return { ...prev, [item.id]: count };
+                if (prev[CATEGORIES[activeTab].id] === count) return prev;
+                return { ...prev, [CATEGORIES[activeTab].id]: count };
               });
             }}
             selectedIds={selectedIds}
             selectionMode={selectionMode}
             onSelect={toggleSelection}
             onLongPressPriceCategory={handleOpenQuickEdit}
-            isActive={index === activeTab}
+            isActive={true}
           />
-        ), [searchQuery, activeFilters, selectedIds, selectionMode, activeTab, toggleSelection, handleOpenQuickEdit])}
-      />
+        </View>
+      ) : (
+        <FlatList
+          ref={pagerRef}
+          data={CATEGORIES}
+          horizontal
+          pagingEnabled
+          scrollEnabled={!selectionMode}
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={onScroll}
+          keyExtractor={(item) => item.id}
+          extraData={{ searchQuery, activeFilters, selectedIds, selectionMode, activeTab }}
+          style={{ flex: 1 }}
+          renderItem={useCallback(({ item, index }: any) => (
+            <CategoryPageMemo
+              categoryId={item.id}
+              query={searchQuery}
+              filters={activeFilters}
+              onCountChange={(count) => {
+                setCategoryCounts(prev => {
+                  if (prev[item.id] === count) return prev;
+                  return { ...prev, [item.id]: count };
+                });
+              }}
+              selectedIds={selectedIds}
+              selectionMode={selectionMode}
+              onSelect={toggleSelection}
+              onLongPressPriceCategory={handleOpenQuickEdit}
+              isActive={index === activeTab}
+            />
+          ), [searchQuery, activeFilters, selectedIds, selectionMode, activeTab, toggleSelection, handleOpenQuickEdit])}
+        />
+      )}
 
     </ScreenWrapper>
   );
@@ -893,7 +915,7 @@ function CategoryPage({
   return (
     <View
       ref={containerRef}
-      style={{ width, flex: 1 }}
+      style={{ width: Platform.OS === 'web' ? '100%' : width, flex: 1 }}
       onLayout={(e) => {
         const w = e.nativeEvent.layout.width;
         if (w > 0 && Math.abs(w - containerWidth) > 5) {

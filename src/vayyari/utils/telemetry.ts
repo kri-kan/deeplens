@@ -1,8 +1,9 @@
+import { Platform } from 'react-native';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 let isInitialized = false;
 
 export const initOtel = async () => {
-  if (isInitialized) return;
+  if (Platform.OS === 'web' || isInitialized) return;
 
   try {
     const { diag, DiagConsoleLogger, DiagLogLevel } = await import('@opentelemetry/api');
@@ -51,6 +52,9 @@ export const initOtel = async () => {
  * Tracks execution time, success, and any exceptions thrown.
  */
 export const wrapInSpan = async <T>(spanName: string, operation: () => Promise<T>): Promise<T> => {
+  if (Platform.OS === 'web') {
+    return operation();
+  }
   try {
     const { trace, SpanStatusCode } = await import('@opentelemetry/api');
     const tracer = trace.getTracer('manual-instrumentation');

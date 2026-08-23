@@ -2,6 +2,7 @@ import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvid
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Platform } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
@@ -66,15 +67,17 @@ function InnerRootLayout() {
   }, []);
 
   useEffect(() => {
-    // Lazy load OpenTelemetry to prevent slowing down the initial LCP
-    setTimeout(async () => {
-      try {
-        const { initOtel } = await import('@/utils/telemetry');
-        await initOtel();
-      } catch (err) {
-        console.warn('Failed to initialize OpenTelemetry', err);
-      }
-    }, 1000);
+    // Lazy load OpenTelemetry to prevent slowing down the initial LCP on native platforms
+    if (Platform.OS !== 'web') {
+      setTimeout(async () => {
+        try {
+          const { initOtel } = await import('@/utils/telemetry');
+          await initOtel();
+        } catch (err) {
+          console.warn('Failed to initialize OpenTelemetry', err);
+        }
+      }, 1000);
+    }
   }, []);
 
 
