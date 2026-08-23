@@ -1,7 +1,7 @@
 # =============================================================================
 # DeepLens LiteLLM Gateway Configuration
 # =============================================================================
-# Architecture: UI & Database-Managed Model Pool with Redis Caching & State
+# Architecture: Dynamic UI & Database-Managed Model Pool with Redis Caching & Router State
 # Unified Endpoint: http://litellm:4000/v1
 # All models, API keys, and endpoints are managed dynamically via the Admin UI
 # and persisted to PostgreSQL (LiteLLM_ProxyModelTable).
@@ -9,7 +9,7 @@
 model_list: []
 
 # -----------------------------------------------------------------------------
-# Router Settings: Routing Strategy, Aliases & High Availability
+# Router Settings: Routing Strategy & High Availability
 # -----------------------------------------------------------------------------
 router_settings:
   routing_strategy: least-busy
@@ -35,19 +35,11 @@ litellm_settings:
     type: redis
     host: os.environ/REDIS_HOST
     port: os.environ/REDIS_PORT
-  fallbacks:
-    - deeplens-llm:
-        - phi4-mini:latest
-        - phi3:latest
-    - deeplens-fast:
-        - phi4-mini:latest
-        - phi3:latest
-    - gemini-2.5-flash:
-        - phi4-mini:latest
-        - phi3:latest
 
 # -----------------------------------------------------------------------------
-# General Settings: Proxy Security
+# General Settings: Proxy Security & DB Persistence
 # -----------------------------------------------------------------------------
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: true
+  database_url: os.environ/DATABASE_URL
