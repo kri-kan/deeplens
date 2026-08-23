@@ -85,6 +85,8 @@ public static class IdentityServerConfig
                     "https://localhost:5001",
                     "http://localhost:3006",
                     "http://127.0.0.1:3006",
+                    "http://localhost:8081",
+                    "http://127.0.0.1:8081",
                     "http://192.168.0.170:3000",
                     "http://192.168.0.170:3006",
                     "http://192.168.0.170:5173",
@@ -151,8 +153,11 @@ public static class IdentityServerConfig
                     "https://localhost:5001",
                     "http://localhost:3006",
                     "http://127.0.0.1:3006",
+                    "http://localhost:8081",
+                    "http://127.0.0.1:8081",
                     "http://192.168.0.170:3000",
-                    "http://192.168.0.170:5173"
+                    "http://192.168.0.170:5173",
+                    "http://192.168.0.170:8081"
                 },
                 
                 // Scopes this client can access
