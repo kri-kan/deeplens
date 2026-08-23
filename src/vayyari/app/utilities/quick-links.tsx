@@ -124,6 +124,14 @@ https://graph.facebook.com/v25.0/oauth/access_token?grant_type=fb_exchange_token
       icon: 'graph-outline',
       url: 'http://localhost:9749',
       color: '#ff9800'
+    },
+    {
+      id: 'litellm-dashboard',
+      title: 'LiteLLM Gateway UI',
+      description: 'Model router, Gemini load balancing & token metrics',
+      icon: 'cube-outline',
+      url: 'http://localhost:4000/ui',
+      color: '#4facfe'
     }
   ];
 

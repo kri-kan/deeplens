@@ -22,6 +22,7 @@ This document tracks ports used by DeepLens services. Many core services are now
 
 | Port | Service            | Protocol | Purpose                        |
 | ---- | ------------------ | -------- | ------------------------------ |
+| 4000 | LiteLLM Proxy & UI | HTTP     | LLM Gateway & Admin UI         |
 | 5000 | Search API         | HTTP     | Image search & ingestion       |
 | 5198 | Identity API       | HTTP     | Authentication & authorization |
 | 8001 | Feature Extraction | HTTP     | AI/ML feature extraction       |
