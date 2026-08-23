@@ -6,7 +6,22 @@
 # All models, API keys, and endpoints are managed dynamically via the Admin UI
 # and persisted to PostgreSQL (LiteLLM_ProxyModelTable).
 
-model_list: []
+model_list:
+  # ---------------------------------------------------------------------------
+  # Local Ollama GPU Tier 1: Phi-4 Mini (3.8B Q4_K_M Resident in VRAM)
+  # ---------------------------------------------------------------------------
+  - model_name: phi4-mini:latest
+    litellm_params:
+      model: ollama/phi4-mini:latest
+      api_base: http://ollama-gpu:11434
+
+  # ---------------------------------------------------------------------------
+  # Local Ollama GPU Tier 2: Qwen2.5 0.5B (Ultra-Fast Lightweight Model)
+  # ---------------------------------------------------------------------------
+  - model_name: qwen2.5:0.5b
+    litellm_params:
+      model: ollama/qwen2.5:0.5b
+      api_base: http://ollama-gpu:11434
 
 # -----------------------------------------------------------------------------
 # Router Settings: Routing Strategy & High Availability
@@ -38,6 +53,16 @@ litellm_settings:
     type: redis
     host: os.environ/REDIS_HOST
     port: os.environ/REDIS_PORT
+  fallbacks:
+    - deeplens-llm:
+        - phi4-mini:latest
+        - qwen2.5:0.5b
+    - deeplens-fast:
+        - phi4-mini:latest
+        - qwen2.5:0.5b
+    - gemini-2.5-flash:
+        - phi4-mini:latest
+        - qwen2.5:0.5b
 
 # -----------------------------------------------------------------------------
 # General Settings: Proxy Security & DB Persistence
