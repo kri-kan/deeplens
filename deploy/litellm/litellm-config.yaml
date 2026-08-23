@@ -7,8 +7,8 @@
 
 model_list:
   # ---------------------------------------------------------------------------
-  # Primary Model Group: deeplens-llm (Google Gemini 2.5 Flash)
-  # Load balanced across multiple API keys using least-busy routing
+  # Primary Model Group: deeplens-llm (Google Gemini 2.5 Flash Pool)
+  # Load balanced across multiple Gemini API keys using least-busy routing
   # ---------------------------------------------------------------------------
   - model_name: deeplens-llm
     litellm_params:
@@ -32,56 +32,7 @@ model_list:
       tpm: 1000000
 
   # ---------------------------------------------------------------------------
-  # Fast Tier Alias: deeplens-fast (Google Gemini 2.5 Flash / Fast Response)
-  # ---------------------------------------------------------------------------
-  - model_name: deeplens-fast
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_1
-      rpm: 15
-      tpm: 1000000
-
-  - model_name: deeplens-fast
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_2
-      rpm: 15
-      tpm: 1000000
-
-  - model_name: deeplens-fast
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_3
-      rpm: 15
-      tpm: 1000000
-
-  # ---------------------------------------------------------------------------
-  # Explicit Gemini Model Group: gemini-2.5-flash
-  # ---------------------------------------------------------------------------
-  - model_name: gemini-2.5-flash
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_1
-      rpm: 15
-      tpm: 1000000
-
-  - model_name: gemini-2.5-flash
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_2
-      rpm: 15
-      tpm: 1000000
-
-  - model_name: gemini-2.5-flash
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_3
-      rpm: 15
-      tpm: 1000000
-
-  # ---------------------------------------------------------------------------
-  # Fallback Tier 1: Local Ollama Phi-4 Mini
-  # Ultra-fast local failover tier
+  # Fallback Tier 1: Local Ollama Phi-4 Mini (GPU VRAM Resident)
   # ---------------------------------------------------------------------------
   - model_name: phi4-mini:latest
     litellm_params:
@@ -89,8 +40,7 @@ model_list:
       api_base: http://ollama-gpu:11434
 
   # ---------------------------------------------------------------------------
-  # Fallback Tier 2: Local Ollama Phi-3
-  # Stable local failover tier
+  # Fallback Tier 2: Local Ollama Phi-3 (GPU Secondary)
   # ---------------------------------------------------------------------------
   - model_name: phi3:latest
     litellm_params:
@@ -98,10 +48,13 @@ model_list:
       api_base: http://ollama-gpu:11434
 
 # -----------------------------------------------------------------------------
-# Router Settings: Routing Strategy & High Availability
+# Router Settings: Routing Strategy, Aliases & High Availability
 # -----------------------------------------------------------------------------
 router_settings:
   routing_strategy: least-busy
+  model_group_alias:
+    "deeplens-fast": "deeplens-llm"
+    "gemini-2.5-flash": "deeplens-llm"
   redis_host: os.environ/REDIS_HOST
   redis_port: os.environ/REDIS_PORT
   redis_url: os.environ/REDIS_URL
