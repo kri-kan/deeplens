@@ -35,10 +35,10 @@ pr:
       - 'DEEPLENS_GUIDE.md'
       - 'PROJECT_GUIDELINES.md'
       - 'docs/**'
+      - '.squad/**'
+
 resources:
   repositories:
-    - repository: self
-      type: git
     - repository: deeplens-github
       type: github
       name: kri-kan/deeplens

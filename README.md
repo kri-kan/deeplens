@@ -1,5 +1,10 @@
 # DeepLens - Visual Search Engine
 
+[![CI Quality Gate](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CI-PR-QualityGate?branchName=develop)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=2&branchName=develop)
+[![Master CI/CD](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CI-CD-Master?branchName=main)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=1&branchName=main)
+[![Hybrid CD](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CD-Hybrid-Local?branchName=develop)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=3&branchName=develop)
+[![Azure Cloud CD](https://dev.azure.com/kri-kan/deeplens/_apis/build/status/DeepLens-CD-Azure-Cloud?branchName=main)](https://dev.azure.com/kri-kan/deeplens/_build/latest?definitionId=4&branchName=main)
+
 **DeepLens** is a high-performance, multi-tenant **visual search engine** built with modern .NET and Python technologies. It provides fast, accurate similarity matching for both **images and videos** using state-of-the-art vector databases and AI/ML models.
 
 ---
