@@ -673,25 +673,43 @@ export default function ProductCatalogScreen() {
 // Swipe-to-select grid page
 // ---------------------------------------------------------------------------
 
-/**
- * Given absolute (pageX, pageY) touch coordinates and the container's measured
- * screen-space top/left, returns the item index in a 3-column grid.
- */
+const getCatalogLayout = (containerWidth: number) => {
+  let numColumns = 3;
+  if (containerWidth >= 1400) numColumns = 6;
+  else if (containerWidth >= 1100) numColumns = 5;
+  else if (containerWidth >= 750) numColumns = 4;
+  else if (containerWidth >= 480) numColumns = 3;
+  else numColumns = 2;
+
+  const gap = 10;
+  const padding = 12;
+  const availableWidth = containerWidth - (padding * 2) - (gap * (numColumns - 1));
+  const tileWidth = Math.max(100, Math.floor(availableWidth / numColumns));
+  const tileHeight = Math.floor(tileWidth * 1.38);
+
+  return { numColumns, tileWidth, tileHeight, gap, padding };
+};
+
 function indexFromPosition(
   pageX: number,
   pageY: number,
   containerLeft: number,
   containerTop: number,
-  scrollOffset: number
+  scrollOffset: number,
+  containerWidth: number,
+  numColumns: number,
+  tileWidth: number,
+  tileHeight: number,
+  gap: number,
+  padding: number
 ): number | null {
-  const COLS = 3;
-  const ROW_H = TILE_SIZE * 1.3;
-  const relX = pageX - containerLeft;
-  const relY = pageY - containerTop + scrollOffset;
-  const col = Math.floor((relX / width) * COLS);
-  const row = Math.floor(relY / ROW_H);
-  if (col < 0 || col >= COLS || row < 0 || relX < 0 || relX > width) return null;
-  return row * COLS + col;
+  const relX = pageX - containerLeft - padding;
+  const relY = pageY - containerTop + scrollOffset - padding;
+  if (relX < 0 || relY < 0 || relX > containerWidth) return null;
+  const col = Math.floor(relX / (tileWidth + gap));
+  const row = Math.floor(relY / (tileHeight + gap));
+  if (col < 0 || col >= numColumns || row < 0) return null;
+  return row * numColumns + col;
 }
 
 function CategoryPage({
@@ -716,6 +734,8 @@ function CategoryPage({
 }) {
   const router = useRouter();
   const scrollOffsetRef = useRef(0);
+  const [containerWidth, setContainerWidth] = useState(width);
+
   // Container screen-position — measured on layout so pageX/pageY can be made relative
   const containerRef = useRef<View>(null);
   const containerTopRef = useRef(0);
@@ -727,6 +747,10 @@ function CategoryPage({
   const isDragSelectingRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const autoScrollTimerRef = useRef<number | null>(null);
+
+  const layout = getCatalogLayout(containerWidth);
+  const layoutRef = useRef(layout);
+  useEffect(() => { layoutRef.current = layout; }, [layout]);
 
   // Keep live refs so PanResponder closure (created once) can read latest values
   const selectionModeRef = useRef(selectionMode);
@@ -787,8 +811,6 @@ function CategoryPage({
       if (flatListRef.current) {
         scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current + delta);
         flatListRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-        // After scrolling, we should ideally re-calculate the selection based on the new offset,
-        // but since the user's finger will likely still be sending move events, the next move event will handle it.
       }
       autoScrollTimerRef.current = requestAnimationFrame(scrollStep);
     };
@@ -804,9 +826,7 @@ function CategoryPage({
       onStartShouldSetPanResponderCapture: () => false, // Let Pressables handle touch starts
       onMoveShouldSetPanResponderCapture: () => isDragSelectingRef.current,
       onMoveShouldSetPanResponder: () => isDragSelectingRef.current,
-      onPanResponderGrant: () => {
-        // Do not clear swipedIdsRef here because onDragStart populates it
-      },
+      onPanResponderGrant: () => {},
       onPanResponderMove: (evt: GestureResponderEvent) => {
         const { pageX, pageY } = evt.nativeEvent;
         
@@ -822,10 +842,17 @@ function CategoryPage({
           stopAutoScroll();
         }
 
+        const l = layoutRef.current;
         const idx = indexFromPosition(
           pageX, pageY,
           containerLeftRef.current, containerTopRef.current,
-          scrollOffsetRef.current
+          scrollOffsetRef.current,
+          containerWidth,
+          l.numColumns,
+          l.tileWidth,
+          l.tileHeight,
+          l.gap,
+          l.padding
         );
         
         const prods = productsRef.current;
@@ -860,7 +887,11 @@ function CategoryPage({
     <View
       ref={containerRef}
       style={{ width, flex: 1 }}
-      onLayout={() => {
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - containerWidth) > 5) {
+          setContainerWidth(w);
+        }
         containerRef.current?.measure((_x, _y, _w, h, pageX, pageY) => {
           containerLeftRef.current = pageX;
           containerTopRef.current = pageY;
@@ -870,13 +901,19 @@ function CategoryPage({
       {...panResponder.panHandlers}
     >
       <FlatList
+        key={`catalog-grid-${layout.numColumns}`}
         ref={flatListRef}
         data={products}
         extraData={selectedIds}
         keyExtractor={(item) => item.id}
+        numColumns={layout.numColumns}
+        columnWrapperStyle={layout.numColumns > 1 ? { gap: layout.gap, marginBottom: layout.gap } : undefined}
+        contentContainerStyle={[styles.gridContent, { paddingHorizontal: layout.padding, paddingTop: 8 }]}
         renderItem={useCallback(({ item }: any) => (
           <ProductTile
             item={item}
+            tileWidth={layout.tileWidth}
+            tileHeight={layout.tileHeight}
             selected={selectedIds.has(item.id)}
             selectionMode={selectionMode}
             onPress={(p) => {
@@ -884,23 +921,18 @@ function CategoryPage({
               else router.push(`/product/${p.id}`);
             }}
             onLongPress={(p) => {
-              // Toggle selection immediately
               onSelect(p.id);
             }}
             onLongPressPriceCategory={onLongPressPriceCategory}
             onDragStart={() => {
               isDragSelectingRef.current = true;
-              // If it WAS selected before the long press (thus unselecting it), action is remove. Else add.
               swipeActionRef.current = selectedIds.has(item.id) ? 'remove' : 'add';
               swipedIdsRef.current = new Set([item.id]);
             }}
             onToggleStar={(p, isStarred) => toggleStar(p.id, isStarred)}
           />
-        ), [selectedIds, selectionMode, onSelect, toggleStar])}
-        numColumns={3}
-        contentContainerStyle={styles.gridContent}
+        ), [selectedIds, selectionMode, onSelect, toggleStar, layout.tileWidth, layout.tileHeight, onLongPressPriceCategory])}
         refreshControl={
-          // Disable pull-to-refresh in selection mode so it doesn't conflict
           selectionMode ? undefined : (
             <RefreshControl refreshing={refreshing} onRefresh={() => fetchProducts(true)} />
           )
