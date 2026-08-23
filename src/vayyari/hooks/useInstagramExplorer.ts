@@ -45,9 +45,31 @@ export const useInstagramExplorer = () => {
   const fetchProfileCategories = useCallback(async () => {
     try {
       const data = await systemService.getProfileCategories();
-      setProfileCategories(data);
+      const standardCategories = [
+        { id: 'MyBusiness', name: 'My Business' },
+        { id: 'MyGeneral', name: 'My General' },
+        { id: 'Competitors', name: 'My Competitors' },
+      ];
+      if (!data || data.length === 0) {
+        setProfileCategories(standardCategories);
+        return;
+      }
+      // Ensure My Competitors is in the categories list
+      const hasCompetitors = data.some(
+        c => c.id.toLowerCase() === 'competitors' || c.id.toLowerCase() === 'competitor'
+      );
+      if (!hasCompetitors) {
+        setProfileCategories([...data, { id: 'Competitors', name: 'My Competitors' }]);
+      } else {
+        setProfileCategories(data);
+      }
     } catch (error) {
       console.error('Failed to fetch profile categories', error);
+      setProfileCategories([
+        { id: 'MyBusiness', name: 'My Business' },
+        { id: 'MyGeneral', name: 'My General' },
+        { id: 'Competitors', name: 'My Competitors' },
+      ]);
     }
   }, []);
 

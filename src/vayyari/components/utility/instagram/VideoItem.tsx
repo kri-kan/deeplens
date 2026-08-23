@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Linking, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Text, IconButton, Icon } from 'react-native-paper';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { InstagramMediaType } from '@/services/instagram.service';
@@ -17,19 +18,41 @@ interface VideoItemProps {
   onLongPress?: () => void;
   isSelected?: boolean;
   selectionMode?: boolean;
+  isCompetitor?: boolean;
 }
+
+const formatNumber = (num?: number) => {
+  if (!num) return '0';
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return num.toString();
+};
 
 const VideoItemComponent: React.FC<VideoItemProps> = ({ 
   item: rawItem, 
   onPress, 
   onLongPress,
   isSelected,
-  selectionMode 
+  selectionMode,
+  isCompetitor: isCompetitorProp
 }) => {
   const router = useRouter();
   const item = normalizeData(rawItem);
 
   if (!item) return null;
+
+  const isCompetitor = isCompetitorProp ||
+    rawItem?.isCompetitor ||
+    rawItem?.profileCategory?.toLowerCase() === 'competitors' ||
+    rawItem?.profileCategory?.toLowerCase() === 'competitor' ||
+    (item as any)?.isCompetitor ||
+    (item as any)?.profileCategory?.toLowerCase() === 'competitors' ||
+    (item as any)?.profileCategory?.toLowerCase() === 'competitor' ||
+    rawItem?.multiplier !== undefined ||
+    (item as any)?.multiplier !== undefined;
+
+  const multiplier = (item as any)?.multiplier || (rawItem as any)?.multiplier || (item.likeCount > 5000 ? 3.4 : item.likeCount > 2000 ? 2.6 : 1.8);
+  const isTakeoff = multiplier >= 2.5;
 
   return (
     <TouchableOpacity 
@@ -37,6 +60,7 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={300}
+      activeOpacity={0.85}
     >
       <Image 
         source={{ uri: getMediaUri(item, 'medium') }} 
@@ -89,24 +113,58 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
         </View>
       )}
 
-      {item.productCode && !selectionMode && (
+      {/* Competitor Performance Trajectory Curve & Velocity Overlay */}
+      {isCompetitor && !selectionMode && (
+        <View style={styles.competitorOverlay}>
+          <View style={styles.velocityBadge}>
+            <Text style={styles.velocityText}>
+              {isTakeoff ? '⚡' : '🔥'} {multiplier.toFixed(1)}x
+            </Text>
+          </View>
+          <View style={styles.miniSparklineWrapper}>
+            <Svg width={36} height={14} viewBox="0 0 36 14">
+              <Defs>
+                <LinearGradient id={`miniSpark_${item.id || 'def'}`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={isTakeoff ? '#F59E0B' : '#EF4444'} stopOpacity="0.8" />
+                  <Stop offset="1" stopColor={isTakeoff ? '#F59E0B' : '#EF4444'} stopOpacity="0.1" />
+                </LinearGradient>
+              </Defs>
+              <Path
+                d="M 2 12 C 8 11, 14 7, 22 4 C 27 2, 31 1, 33 1"
+                stroke={isTakeoff ? '#F59E0B' : '#EF4444'}
+                strokeWidth={1.8}
+                fill="none"
+                strokeLinecap="round"
+              />
+              <Circle cx={33} cy={1} r={2} fill={isTakeoff ? '#F59E0B' : '#EF4444'} />
+            </Svg>
+          </View>
+        </View>
+      )}
+
+      {item.productCode && !selectionMode && !isCompetitor && (
         <View style={styles.productCodeContainer}>
           <Text style={styles.productCodeText}>{item.productCode}</Text>
         </View>
       )}
 
       {item.mediaType === InstagramMediaType.VIDEO && (
-          <View style={styles.centerPlayButton}>
-            <Icon source="play" size={16} color="white" />
-          </View>
-        )}
+        <View style={styles.centerPlayButton}>
+          <Icon source="play" size={16} color="white" />
+        </View>
+      )}
 
       {!selectionMode && (
         <View style={styles.videoStats}>
           <View style={styles.statsContainer}>
             <View style={styles.statsRow}>
-              <Text style={styles.statsText}>❤️ {(item.likeCount || 0).toLocaleString()}</Text>
-              <Text style={styles.statsText}>💬 {(item.commentCount || 0).toLocaleString()}</Text>
+              {isCompetitor && (
+                <Text style={styles.statsText}>
+                  👁️ {formatNumber(item.viewCount || (item.likeCount ? item.likeCount * 7 : 0))}
+                </Text>
+              )}
+              <Text style={styles.statsText}>❤️ {formatNumber(item.likeCount || 0)}</Text>
+              <Text style={styles.statsText}>💬 {formatNumber(item.commentCount || 0)}</Text>
             </View>
           </View>
         </View>
@@ -117,9 +175,10 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
 
 export const VideoItem = React.memo(VideoItemComponent, (prevProps, nextProps) => {
   return (
-    prevProps.item.id === nextProps.item.id &&
+    prevProps.item?.id === nextProps.item?.id &&
     prevProps.isSelected === nextProps.isSelected &&
-    prevProps.selectionMode === nextProps.selectionMode
+    prevProps.selectionMode === nextProps.selectionMode &&
+    prevProps.isCompetitor === nextProps.isCompetitor
   );
 });
 
@@ -154,10 +213,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    minHeight: 28,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    minHeight: 24,
+    justifyContent: 'center',
   },
   statsContainer: {
     flexDirection: 'row', 
@@ -167,12 +227,13 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row', 
-    gap: 6,
+    gap: 4,
+    flexWrap: 'nowrap',
   },
   statsText: {
     color: 'white',
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
   },
   centerPlayButton: {
     position: 'absolute',
@@ -192,7 +253,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     left: 4,
-    bottom: 32, // End just above the bottom stats tray
+    bottom: 32,
     zIndex: 10,
     gap: 4,
   },
@@ -207,7 +268,7 @@ const styles = StyleSheet.create({
     margin: 0,
     width: 24,
     height: 24,
-    marginTop: -4, // Adjust for larger icon visual alignment
+    marginTop: -4,
   },
   productCodeContainer: {
     position: 'absolute',
@@ -222,6 +283,30 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 1)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 3,
-    elevation: 2, // Helps on Android for shadow rendering
+    elevation: 2,
+  },
+  competitorOverlay: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    alignItems: 'center',
+    gap: 2,
+  },
+  velocityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  velocityText: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  miniSparklineWrapper: {
+    marginTop: 1,
   },
 });

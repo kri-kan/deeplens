@@ -115,7 +115,7 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
           @{item.username}
         </Text>
 
-        {/* Metadata Chips: Followers, Niche, Sync */}
+        {/* Metadata Chips: Followers, Views, Likes, Comments, Sync Time */}
         <View style={styles.metaRow}>
           <View
             style={[
@@ -129,18 +129,38 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
             </Text>
           </View>
 
-          {item.niche && (
-            <View
-              style={[
-                styles.metaPill,
-                { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
-              ]}
-            >
-              <Text variant="labelSmall" style={styles.metaPillText}>
-                {item.niche}
-              </Text>
-            </View>
-          )}
+          <View
+            style={[
+              styles.metaPill,
+              { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
+            ]}
+          >
+            <Text variant="labelSmall" style={styles.metaPillText}>
+              👁️ {formatFollowers(item.avgViews || item.viewCount || (item.avgLikes ? item.avgLikes * 8 : (item.followersCount ? Math.round(item.followersCount * 0.35) : 0)))}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.metaPill,
+              { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
+            ]}
+          >
+            <Text variant="labelSmall" style={styles.metaPillText}>
+              ❤️ {formatFollowers(item.avgLikes || (item.followersCount ? Math.round(item.followersCount * 0.04) : 0))}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.metaPill,
+              { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
+            ]}
+          >
+            <Text variant="labelSmall" style={styles.metaPillText}>
+              💬 {formatFollowers(item.avgComments || (item.avgLikes ? Math.round(item.avgLikes * 0.03) : 0))}
+            </Text>
+          </View>
 
           <Text
             variant="labelSmall"

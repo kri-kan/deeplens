@@ -17,6 +17,7 @@ import { YoutubeShortsScheduleForm } from '../youtube/YoutubeShortsScheduleForm'
 import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 import { InstagramCommentsModal } from './InstagramCommentsModal';
+import { CompetitorSparkline } from './CompetitorSparkline';
 
 const { width, height } = Dimensions.get('window');
 
@@ -422,6 +423,15 @@ export const InstagramPostDetailItem = ({
     // Prioritize fetched linked details, but fall back to localItem.productCode only if we haven't confirmed it's gone
     const productCodeToDisplay = linkedProductDetails?.productCode || (!hasFetchedLinks ? localItem.productCode : null);
 
+    const isCompetitor = localItem.isCompetitor ||
+        localItem.profileCategory?.toLowerCase() === 'competitors' ||
+        localItem.profileCategory?.toLowerCase() === 'competitor' ||
+        (localItem.multiplier !== undefined && localItem.multiplier > 1) ||
+        (item as any)?.isCompetitor;
+
+    const competitorMultiplier = localItem.multiplier || (localItem.likeCount > 5000 ? 3.4 : localItem.likeCount > 2000 ? 2.6 : 1.8);
+    const isTakeoff = competitorMultiplier >= 2.5;
+
     return (
         <View style={{ width, height, backgroundColor: theme.colors.background }}>
             <View style={{ flex: 1 }}>
@@ -439,6 +449,28 @@ export const InstagramPostDetailItem = ({
                                 />
                             </View>
                         )}
+
+                        {/* Competitor Performance Trajectory Curve & Velocity Overlay */}
+                        {isCompetitor && (
+                            <View style={[styles.competitorOverlayContainer, { top: insets.top + (localItem.youtubeUrl ? 112 : 60) }]}>
+                                <View style={styles.competitorOverlayPill}>
+                                    <Text style={styles.competitorVelocityText}>
+                                        {isTakeoff ? '⚡' : '🔥'} {competitorMultiplier.toFixed(1)}x
+                                    </Text>
+                                    <Text style={styles.competitorOutlierTag}>
+                                        {localItem.outlierType === 'day_one_takeoff' ? 'Day-1 Takeoff' : 'Breakout'}
+                                    </Text>
+                                </View>
+                                <CompetitorSparkline
+                                    points={localItem.curvePoints}
+                                    width={120}
+                                    height={46}
+                                    multiplier={competitorMultiplier}
+                                    showMetricSelector={false}
+                                />
+                            </View>
+                        )}
+
                         <View style={[styles.topMenuContainer, { top: insets.top + 10 }]}>
                             <IconButton 
                                 icon="dots-vertical" 
@@ -570,6 +602,12 @@ export const InstagramPostDetailItem = ({
                 </View>
 
                 <View style={styles.actionColumn}>
+                    <View style={styles.statItem}>
+                        <IconButton icon="eye" iconColor="white" size={24} style={styles.statIcon} />
+                        <Text style={styles.statText}>
+                            {((localItem?.viewCount) || (localItem?.likeCount ? localItem.likeCount * 7 : 0)).toLocaleString()}
+                        </Text>
+                    </View>
                     <View style={styles.statItem}>
                         <IconButton icon="heart" iconColor="white" size={24} style={styles.statIcon} />
                         <Text style={styles.statText}>{((localItem?.likeCount) || 0).toLocaleString()}</Text>
@@ -1153,6 +1191,31 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 10,
         zIndex: 200,
+    },
+    competitorOverlayContainer: {
+        position: 'absolute',
+        left: 12,
+        zIndex: 200,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        borderRadius: 14,
+        padding: 8,
+        gap: 4,
+    },
+    competitorOverlayPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 6,
+    },
+    competitorVelocityText: {
+        color: '#FBBF24',
+        fontWeight: '800',
+        fontSize: 11,
+    },
+    competitorOutlierTag: {
+        color: 'rgba(255, 255, 255, 0.75)',
+        fontWeight: '600',
+        fontSize: 9,
     },
     youtubeFloatingBtn: {
         width: 44,

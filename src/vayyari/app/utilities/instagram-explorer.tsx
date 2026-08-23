@@ -70,35 +70,46 @@ export default function InstagramExplorer() {
 
   const selectionMode = selectedPosts.size > 0;
 
-  const renderVideoItem = useCallback(({ item }: { item: any }) => (
-    <VideoItem 
-      item={item} 
-      onPress={() => {
-        if (selectionMode) {
-          toggleSelection(item);
-        } else {
-          if (isNavigating.current) return;
-          isNavigating.current = true;
-          instagramService.setLastFetchedPosts(profileData?.videos || []);
-          router.push({
-            pathname: '/utilities/instagram/post-detail',
-            params: { 
-                id: item.id, 
-                username: selectedProfile,
-                sortBy,
-                sortOrder,
-                data: JSON.stringify(item) 
-            }
-          } as any);
-          // Reset after a short delay to allow navigation to complete
-          setTimeout(() => { isNavigating.current = false; }, 1000);
-        }
-      }} 
-      onLongPress={() => toggleSelection(item)}
-      isSelected={selectedPosts.has(item.id)}
-      selectionMode={selectionMode}
-    />
-  ), [selectionMode, selectedPosts, selectedProfile, sortBy, sortOrder, profileData?.videos]);
+  const isCompetitorProfile = (profileData?.profile?.profileCategory || '').toLowerCase() === 'competitors' || 
+    (profileData?.profile?.profileCategory || '').toLowerCase() === 'competitor';
+
+  const renderVideoItem = useCallback(({ item }: { item: any }) => {
+    const postItem = {
+      ...item,
+      isCompetitor: isCompetitorProfile || item.isCompetitor,
+      profileCategory: profileData?.profile?.profileCategory,
+    };
+
+    return (
+      <VideoItem 
+        item={postItem} 
+        onPress={() => {
+          if (selectionMode) {
+            toggleSelection(item);
+          } else {
+            if (isNavigating.current) return;
+            isNavigating.current = true;
+            instagramService.setLastFetchedPosts(profileData?.videos || []);
+            router.push({
+              pathname: '/utilities/instagram/post-detail',
+              params: { 
+                  id: item.id, 
+                  username: selectedProfile,
+                  sortBy,
+                  sortOrder,
+                  data: JSON.stringify(postItem) 
+              }
+            } as any);
+            // Reset after a short delay to allow navigation to complete
+            setTimeout(() => { isNavigating.current = false; }, 1000);
+          }
+        }} 
+        onLongPress={() => toggleSelection(item)}
+        isSelected={selectedPosts.has(item.id)}
+        selectionMode={selectionMode}
+      />
+    );
+  }, [selectionMode, selectedPosts, selectedProfile, sortBy, sortOrder, profileData?.videos, isCompetitorProfile, profileData?.profile?.profileCategory]);
 
   React.useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
@@ -448,13 +459,27 @@ export default function InstagramExplorer() {
         </View>
       </View>
 
-      <CompetitorBanner />
-
       <View style={styles.profileList}>
         <Text variant="titleLarge" style={[styles.sectionTitle, { marginBottom: 0, marginTop: -8 }]}>Active Profiles</Text>
           {profileCategories.map((category) => {
-            const categoryProfiles = watchlist.filter(p => p.profileCategory === category.id);
-            if (categoryProfiles.length === 0) return null;
+            const isCompetitorCategory = category.id.toLowerCase() === 'competitors' || category.id.toLowerCase() === 'competitor';
+            const categoryProfiles = watchlist.filter(p => {
+              const pCat = (p.profileCategory || '').toLowerCase();
+              const cId = category.id.toLowerCase();
+              if (isCompetitorCategory) {
+                return pCat === 'competitors' || pCat === 'competitor';
+              }
+              if (cId === 'mybusiness') {
+                return pCat === 'mybusiness' || pCat === 'my business';
+              }
+              if (cId === 'mygeneral') {
+                return pCat === 'mygeneral' || pCat === 'my general';
+              }
+              return pCat === cId;
+            });
+
+            if (categoryProfiles.length === 0 && !isCompetitorCategory) return null;
+
             return (
               <List.Accordion 
                 key={category.id} 
@@ -469,36 +494,44 @@ export default function InstagramExplorer() {
                   }));
                 }}
               >
-                <View style={styles.profileGrid}>
-                  {categoryProfiles.map(item => (
-                    <TouchableOpacity 
-                      key={item.id || item.username} 
-                      onPress={() => selectProfile(item.username)}
-                      onLongPress={(e) => {
-                        const { pageX, pageY } = e.nativeEvent;
-                        setMenuAnchor({ x: pageX, y: pageY });
-                        setActiveMenu(item.username);
-                      }}
-                      activeOpacity={0.7}
-                      style={styles.profileGridItem}
-                    >
-                      <View style={styles.profileCard}>
-                        <ProfileAvatar 
-                          profile={{ ...item, isInWatchlist: true }} 
-                          size={60} 
-                          showBadge={true}
-                        />
-                      </View>
-                      <Text 
-                        variant="labelSmall" 
-                        style={styles.profileUsername} 
-                        numberOfLines={1}
+                {isCompetitorCategory && (
+                  <View style={{ marginTop: 8 }}>
+                    <CompetitorBanner />
+                  </View>
+                )}
+
+                {categoryProfiles.length > 0 && (
+                  <View style={styles.profileGrid}>
+                    {categoryProfiles.map(item => (
+                      <TouchableOpacity 
+                        key={item.id || item.username} 
+                        onPress={() => selectProfile(item.username)}
+                        onLongPress={(e) => {
+                          const { pageX, pageY } = e.nativeEvent;
+                          setMenuAnchor({ x: pageX, y: pageY });
+                          setActiveMenu(item.username);
+                        }}
+                        activeOpacity={0.7}
+                        style={styles.profileGridItem}
                       >
-                        {item.username}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                        <View style={styles.profileCard}>
+                          <ProfileAvatar 
+                            profile={{ ...item, isInWatchlist: true }} 
+                            size={60} 
+                            showBadge={true}
+                          />
+                        </View>
+                        <Text 
+                          variant="labelSmall" 
+                          style={styles.profileUsername} 
+                          numberOfLines={1}
+                        >
+                          {item.username}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </List.Accordion>
             );
           })}

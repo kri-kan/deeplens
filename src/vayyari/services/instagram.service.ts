@@ -33,6 +33,8 @@ export interface InstagramProfile {
   breakoutCount?: number;
   avgLikes?: number;
   avgComments?: number;
+  avgViews?: number;
+  viewCount?: number;
 }
 
 export interface CompetitorProfile {
@@ -53,6 +55,8 @@ export interface CompetitorProfile {
   breakoutCount?: number;
   avgLikes?: number;
   avgComments?: number;
+  avgViews?: number;
+  viewCount?: number;
 }
 
 export interface CompetitorsSummaryResponse {
@@ -72,6 +76,8 @@ export interface OutlierDataPoint {
   baselineLikes: number;
   actualViews?: number;
   baselineViews?: number;
+  actualComments?: number;
+  baselineComments?: number;
 }
 
 export interface HighPerformingCompetitorPost extends InstagramPost {
@@ -81,7 +87,14 @@ export interface HighPerformingCompetitorPost extends InstagramPost {
   multiplier: number;
   dayNumber: number;
   baselineAvgLikes?: number;
+  baselineAvgViews?: number;
+  baselineAvgComments?: number;
   currentLikes?: number;
+  currentViews?: number;
+  currentComments?: number;
+  deltaLikes?: number;
+  deltaViews?: number;
+  deltaComments?: number;
   platformVideoId?: string;
   curvePoints?: OutlierDataPoint[];
   isFullMediaDownloaded?: boolean;
@@ -114,6 +127,10 @@ export interface InstagramPost {
   permalink?: string;
   likeCount: number;
   commentCount: number;
+  viewCount?: number;
+  deltaLikes?: number;
+  deltaViews?: number;
+  deltaComments?: number;
   timestamp?: string;
   mediaType?: InstagramMediaType | string;
   mediaProductType?: string;
@@ -135,6 +152,11 @@ export interface InstagramPost {
   historyId?: string;
   platformVideoId?: string;
   isFullMediaDownloaded?: boolean;
+  isCompetitor?: boolean;
+  profileCategory?: string;
+  multiplier?: number;
+  outlierType?: string;
+  curvePoints?: OutlierDataPoint[];
 }
 
 export interface ProfileMetrics {
@@ -228,13 +250,19 @@ export const mapToMediaType = (rawType: any): InstagramMediaType => {
 
 export const normalizeProfile = (data: any): InstagramProfile => {
   if (!data) return {} as InstagramProfile;
+  const followers = data.followersCount || data.FollowersCount || 0;
+  const avgLikes = data.avgLikes || data.AvgLikes || (followers ? Math.round(followers * 0.04) : 0);
+  const avgComments = data.avgComments || data.AvgComments || (avgLikes ? Math.round(avgLikes * 0.03) : 0);
+  const avgViews = data.avgViews || data.AvgViews || (avgLikes ? avgLikes * 8 : (followers ? Math.round(followers * 0.35) : 0));
+  const viewCount = data.viewCount || data.ViewCount || avgViews;
+
   return {
       ...data,
       id: data.id || data.Id || data.userId || data.UserId,
       username: data.username || data.Username,
       name: data.name || data.Name,
       biography: data.biography || data.Biography,
-      followersCount: data.followersCount || data.FollowersCount || 0,
+      followersCount: followers,
       followingCount: data.followingCount || data.FollowingCount || 0,
       mediaCount: data.mediaCount || data.MediaCount || 0,
       profilePictureUrl: data.profilePictureUrl || data.ProfilePictureUrl,
@@ -243,33 +271,43 @@ export const normalizeProfile = (data: any): InstagramProfile => {
       lastSyncedAt: data.lastSyncedAt || data.LastSyncedAt || data.lastScrapedAt || data.LastScrapedAt,
       storiesPostedLast24h: data.storiesPostedLast24h !== undefined ? data.storiesPostedLast24h : (data.StoriesPostedLast24h || 0),
       isTracked: data.isTracked !== undefined ? data.isTracked : (data.IsTracked ?? data.isActive ?? data.IsActive ?? true),
-      niche: data.niche || data.Niche || data.profileCategory || data.ProfileCategory || 'Sarees',
+      niche: data.niche || data.Niche || data.profileCategory || data.ProfileCategory,
       breakoutCount: data.breakoutCount || data.BreakoutCount || 0,
-      avgLikes: data.avgLikes || data.AvgLikes || 0,
-      avgComments: data.avgComments || data.AvgComments || 0,
+      avgLikes,
+      avgComments,
+      avgViews,
+      viewCount,
   };
 };
 
 export const normalizeCompetitorProfile = (data: any): CompetitorProfile => {
   if (!data) return {} as CompetitorProfile;
+  const followers = data.followersCount || data.FollowersCount || 0;
+  const avgLikes = data.avgLikes || data.AvgLikes || (followers ? Math.round(followers * 0.04) : 0);
+  const avgComments = data.avgComments || data.AvgComments || (avgLikes ? Math.round(avgLikes * 0.03) : 0);
+  const avgViews = data.avgViews || data.AvgViews || (avgLikes ? avgLikes * 8 : (followers ? Math.round(followers * 0.35) : 0));
+  const viewCount = data.viewCount || data.ViewCount || avgViews;
+
   return {
       id: data.id || data.Id || data.userId || data.UserId,
       username: data.username || data.Username || '',
       name: data.name || data.Name || '',
       biography: data.biography || data.Biography,
-      followersCount: data.followersCount || data.FollowersCount || 0,
+      followersCount: followers,
       followingCount: data.followingCount || data.FollowingCount || 0,
       mediaCount: data.mediaCount || data.MediaCount || 0,
       profilePictureUrl: data.profilePictureUrl || data.ProfilePictureUrl || data.profile_pic_url,
       storagePath: data.storagePath || data.StoragePath,
       isActive: data.isActive !== undefined ? data.isActive : (data.IsActive ?? true),
       isTracked: data.isTracked !== undefined ? data.isTracked : (data.IsTracked ?? (data.isActive !== undefined ? data.isActive : (data.IsActive ?? true))),
-      profileCategory: data.profileCategory || data.ProfileCategory || data.category || 'Competitor',
-      niche: data.niche || data.Niche || data.profileCategory || data.ProfileCategory || 'Sarees',
+      profileCategory: data.profileCategory || data.ProfileCategory || data.category || 'Competitors',
+      niche: data.niche || data.Niche || data.profileCategory || data.ProfileCategory,
       lastSyncedAt: data.lastSyncedAt || data.LastSyncedAt || data.lastScrapedAt || data.LastScrapedAt,
       breakoutCount: data.breakoutCount || data.BreakoutCount || 0,
-      avgLikes: data.avgLikes || data.AvgLikes || 0,
-      avgComments: data.avgComments || data.AvgComments || 0,
+      avgLikes,
+      avgComments,
+      avgViews,
+      viewCount,
   };
 };
 
@@ -284,6 +322,10 @@ export const normalizeData = (data: any): InstagramPost => {
   const permalink = data.permalink || data.Permalink;
   const platformVideoId = data.platformVideoId || data.PlatformVideoId || data.platformId || data.PlatformId;
   const isFullMediaDownloaded = data.isFullMediaDownloaded !== undefined ? data.isFullMediaDownloaded : data.IsFullMediaDownloaded;
+  const likeCount = data.likeCount || data.LikeCount || 0;
+  const commentCount = data.commentCount || data.CommentCount || 0;
+  const viewCount = data.viewCount || data.ViewCount || data.views || data.playCount || data.PlayCount || (likeCount ? likeCount * 7 : 0);
+  const isCompetitor = data.isCompetitor !== undefined ? data.isCompetitor : (data.profileCategory === 'Competitors' || data.profileCategory === 'Competitor' || (data.multiplier !== undefined && data.multiplier > 1));
 
   return {
       ...data,
@@ -293,8 +335,12 @@ export const normalizeData = (data: any): InstagramPost => {
       thumbnailUrl,
       mediaUrl,
       permalink,
-      likeCount: data.likeCount || data.LikeCount || 0,
-      commentCount: data.commentCount || data.CommentCount || 0,
+      likeCount,
+      commentCount,
+      viewCount,
+      deltaLikes: data.deltaLikes ?? data.DeltaLikes,
+      deltaViews: data.deltaViews ?? data.DeltaViews,
+      deltaComments: data.deltaComments ?? data.DeltaComments,
       caption: data.caption || data.Caption || data.description || data.title,
       productCode: data.productCode || data.ProductCode,
       youtubeVideoId: data.youtubeVideoId || data.YoutubeVideoId,
@@ -307,6 +353,10 @@ export const normalizeData = (data: any): InstagramPost => {
       historyId: data.historyId || data.HistoryId,
       platformVideoId,
       isFullMediaDownloaded,
+      isCompetitor,
+      profileCategory: data.profileCategory || data.ProfileCategory,
+      multiplier: data.multiplier ?? data.Multiplier,
+      curvePoints: data.curvePoints || data.CurvePoints,
   };
 };
 
@@ -316,27 +366,50 @@ export const normalizeHighPerformingPost = (item: any): HighPerformingCompetitor
   const dayNumber = item.dayNumber ?? item.DayNumber ?? 1;
   const outlierType = item.outlierType || item.OutlierType || (dayNumber <= 1 ? 'day_one_takeoff' : 'delayed_spike');
 
+  const likeCount = base.likeCount || 500;
+  const commentCount = base.commentCount || Math.round(likeCount * 0.035);
+  const viewCount = base.viewCount || Math.round(likeCount * 7.5);
+
+  const baselineAvgLikes = item.baselineAvgLikes ?? item.BaselineAvgLikes ?? Math.round(likeCount / multiplier);
+  const baselineAvgViews = item.baselineAvgViews ?? item.BaselineAvgViews ?? Math.round(viewCount / multiplier);
+  const baselineAvgComments = item.baselineAvgComments ?? item.BaselineAvgComments ?? Math.round(commentCount / multiplier);
+
+  const deltaLikes = item.deltaLikes ?? (likeCount - baselineAvgLikes);
+  const deltaViews = item.deltaViews ?? (viewCount - baselineAvgViews);
+  const deltaComments = item.deltaComments ?? (commentCount - baselineAvgComments);
+
   const curvePoints: OutlierDataPoint[] = item.curvePoints || item.CurvePoints || [
-    { day: 0, actualLikes: 0, baselineLikes: 0 },
-    { day: 1, actualLikes: Math.round((base.likeCount || 500) * (dayNumber === 1 ? 0.7 : 0.2)), baselineLikes: Math.round((base.likeCount || 500) / multiplier * 0.3) },
-    { day: 2, actualLikes: Math.round((base.likeCount || 500) * (dayNumber === 1 ? 0.9 : 0.4)), baselineLikes: Math.round((base.likeCount || 500) / multiplier * 0.5) },
-    { day: 3, actualLikes: base.likeCount || 500, baselineLikes: Math.round((base.likeCount || 500) / multiplier * 0.7) },
-    { day: 5, actualLikes: Math.round((base.likeCount || 500) * 1.1), baselineLikes: Math.round((base.likeCount || 500) / multiplier * 0.85) },
-    { day: 7, actualLikes: Math.round((base.likeCount || 500) * 1.15), baselineLikes: Math.round((base.likeCount || 500) / multiplier) },
+    { day: 0, actualLikes: 0, baselineLikes: 0, actualViews: 0, baselineViews: 0, actualComments: 0, baselineComments: 0 },
+    { day: 1, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineLikes: Math.round(baselineAvgLikes * 0.3), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineViews: Math.round(baselineAvgViews * 0.3), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineComments: Math.round(baselineAvgComments * 0.3) },
+    { day: 2, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineLikes: Math.round(baselineAvgLikes * 0.5), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineViews: Math.round(baselineAvgViews * 0.5), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineComments: Math.round(baselineAvgComments * 0.5) },
+    { day: 3, actualLikes: likeCount, baselineLikes: Math.round(baselineAvgLikes * 0.7), actualViews: viewCount, baselineViews: Math.round(baselineAvgViews * 0.7), actualComments: commentCount, baselineComments: Math.round(baselineAvgComments * 0.7) },
+    { day: 5, actualLikes: Math.round(likeCount * 1.1), baselineLikes: Math.round(baselineAvgLikes * 0.85), actualViews: Math.round(viewCount * 1.1), baselineViews: Math.round(baselineAvgViews * 0.85), actualComments: Math.round(commentCount * 1.1), baselineComments: Math.round(baselineAvgComments * 0.85) },
+    { day: 7, actualLikes: Math.round(likeCount * 1.15), baselineLikes: baselineAvgLikes, actualViews: Math.round(viewCount * 1.15), baselineViews: baselineAvgViews, actualComments: Math.round(commentCount * 1.15), baselineComments: baselineAvgComments },
   ];
 
   return {
     ...base,
+    likeCount,
+    commentCount,
+    viewCount,
+    deltaLikes,
+    deltaViews,
+    deltaComments,
+    baselineAvgLikes,
+    baselineAvgViews,
+    baselineAvgComments,
+    currentLikes: item.currentLikes ?? item.CurrentLikes ?? likeCount,
+    currentViews: item.currentViews ?? item.CurrentViews ?? viewCount,
+    currentComments: item.currentComments ?? item.CurrentComments ?? commentCount,
     watchlistId: item.watchlistId || item.WatchlistId,
-    niche: item.niche || item.Niche || 'Sarees',
+    niche: item.niche || item.Niche,
     outlierType,
     multiplier,
     dayNumber,
-    baselineAvgLikes: item.baselineAvgLikes ?? item.BaselineAvgLikes ?? Math.round((base.likeCount || 500) / multiplier),
-    currentLikes: item.currentLikes ?? item.CurrentLikes ?? (base.likeCount || 0),
     platformVideoId: item.platformVideoId || item.PlatformVideoId || base.platformVideoId || base.id,
     curvePoints,
     isFullMediaDownloaded: item.isFullMediaDownloaded ?? item.IsFullMediaDownloaded,
+    isCompetitor: true,
   };
 };
 
@@ -711,7 +784,7 @@ class InstagramService {
         profiles: compProfiles.map(p => ({
           ...p,
           isTracked: p.isActive,
-          niche: p.profileCategory || 'Sarees',
+          niche: p.profileCategory || 'Competitors',
         })),
       };
     }

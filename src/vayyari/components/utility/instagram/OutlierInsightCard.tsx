@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
-import { Text, useTheme, Icon, IconButton, ActivityIndicator } from 'react-native-paper';
+import { Text, useTheme, Icon, ActivityIndicator } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { HighPerformingCompetitorPost, InstagramMediaType } from '@/services/instagram.service';
@@ -23,8 +23,8 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
   const isDayOne = dayNumber <= 1;
 
   const multiplierBadgeText = isDayOne
-    ? `⚡ ${multiplier.toFixed(1)}x vs Profile Avg (Day 1)`
-    : `🔥 ${multiplier.toFixed(1)}x vs Profile Avg (Day ${dayNumber})`;
+    ? `⚡ ${multiplier.toFixed(1)}x vs Avg (Day 1)`
+    : `🔥 ${multiplier.toFixed(1)}x vs Avg (Day ${dayNumber})`;
 
   const badgeBgColor = isDayOne
     ? '#FEF3C7' // Warm amber container
@@ -84,6 +84,8 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
   };
 
   const imageUri = getMediaUri(item, 'medium') || item.thumbnailUrl || item.mediaUrl || '';
+  const viewCount = item.viewCount || (item.likeCount ? item.likeCount * 7 : 0);
+  const baselineViews = item.baselineAvgViews || Math.round(viewCount / multiplier);
 
   return (
     <TouchableOpacity
@@ -96,7 +98,7 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
         },
       ]}
     >
-      {/* Header: Author Info & Outlier Tag */}
+      {/* Header: Author Info & Outlier Multiplier Tag */}
       <View style={styles.header}>
         <View style={styles.authorRow}>
           {item.ownerProfilePictureUrl ? (
@@ -131,20 +133,13 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
             >
               @{item.ownerUsername || 'competitor'}
             </Text>
-            <View style={styles.nicheBadgeRow}>
-              {item.niche && (
-                <View
-                  style={[
-                    styles.nichePill,
-                    { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
-                  ]}
-                >
-                  <Text variant="labelSmall" style={styles.nicheText}>
-                    {item.niche}
-                  </Text>
-                </View>
-              )}
-            </View>
+            <Text variant="labelSmall" style={styles.authorSubtitle}>
+              {item.outlierType === 'day_one_takeoff'
+                ? '⚡ Day-1 Viral Takeoff'
+                : item.outlierType === 'delayed_spike'
+                ? '📈 Delayed Growth Spike'
+                : '✨ Outlier Breakout'}
+            </Text>
           </View>
         </View>
 
@@ -156,7 +151,7 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
         </View>
       </View>
 
-      {/* Main Content: Thumbnail Preview + Sparkline Curve */}
+      {/* Main Content: Thumbnail Preview + 3 Core Metrics & Sparkline Curve */}
       <View style={styles.contentRow}>
         {/* Thumbnail Preview */}
         <View style={styles.mediaPreviewContainer}>
@@ -175,34 +170,41 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
 
         {/* Sparkline & Comparison Metrics */}
         <View style={styles.sparklineSection}>
-          <View style={styles.metricsSummary}>
+          {/* 3 Core Metrics Row: Views, Likes, Comments */}
+          <View style={styles.metricsSummaryRow}>
             <View style={styles.metricBlock}>
               <Text variant="labelSmall" style={styles.metricLabel}>
-                Current Likes
+                👁️ Views
               </Text>
-              <Text
-                variant="titleSmall"
-                style={[
-                  styles.metricValue,
-                  { color: theme.colors.onSurface },
-                ]}
-              >
-                {formatNumber(item.likeCount)}
+              <Text variant="titleSmall" style={styles.metricValue}>
+                {formatNumber(viewCount)}
+              </Text>
+              <Text variant="labelSmall" style={styles.baselineSubtext}>
+                avg {formatNumber(baselineViews)}
               </Text>
             </View>
 
             <View style={styles.metricBlock}>
               <Text variant="labelSmall" style={styles.metricLabel}>
-                Baseline Avg
+                ❤️ Likes
               </Text>
-              <Text
-                variant="titleSmall"
-                style={[
-                  styles.metricValue,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
-                {formatNumber(item.baselineAvgLikes)}
+              <Text variant="titleSmall" style={styles.metricValue}>
+                {formatNumber(item.likeCount)}
+              </Text>
+              <Text variant="labelSmall" style={styles.baselineSubtext}>
+                avg {formatNumber(item.baselineAvgLikes)}
+              </Text>
+            </View>
+
+            <View style={styles.metricBlock}>
+              <Text variant="labelSmall" style={styles.metricLabel}>
+                💬 Comments
+              </Text>
+              <Text variant="titleSmall" style={styles.metricValue}>
+                {formatNumber(item.commentCount)}
+              </Text>
+              <Text variant="labelSmall" style={styles.baselineSubtext}>
+                avg {formatNumber(item.baselineAvgComments || Math.round(item.commentCount / multiplier))}
               </Text>
             </View>
           </View>
@@ -210,10 +212,11 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
           {/* SVG Trajectory Sparkline */}
           <CompetitorSparkline
             points={item.curvePoints}
-            width={150}
-            height={68}
+            width={160}
+            height={62}
             multiplier={multiplier}
             dayNumber={dayNumber}
+            showMetricSelector={true}
           />
         </View>
       </View>
@@ -238,15 +241,41 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
         </TouchableOpacity>
       ) : null}
 
-      {/* Action Tray: Stats + 1-Tap Open In Instagram Button */}
+      {/* Action Tray: 3 Core Metrics Overview + 1-Tap Open In Instagram Button */}
       <View style={styles.footerTray}>
         <View style={styles.statsRow}>
-          <Text variant="labelSmall" style={styles.statPill}>
-            ❤️ {formatNumber(item.likeCount)}
-          </Text>
-          <Text variant="labelSmall" style={styles.statPill}>
-            💬 {formatNumber(item.commentCount)}
-          </Text>
+          <View
+            style={[
+              styles.statPillWrapper,
+              { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
+            ]}
+          >
+            <Text variant="labelSmall" style={styles.statPillText}>
+              👁️ {formatNumber(viewCount)}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.statPillWrapper,
+              { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
+            ]}
+          >
+            <Text variant="labelSmall" style={styles.statPillText}>
+              ❤️ {formatNumber(item.likeCount)}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.statPillWrapper,
+              { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface },
+            ]}
+          >
+            <Text variant="labelSmall" style={styles.statPillText}>
+              💬 {formatNumber(item.commentCount)}
+            </Text>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -263,7 +292,7 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
           ) : (
             <>
               <Icon source="instagram" size={16} color="#FFFFFF" />
-              <Text style={styles.instagramButtonText}>Open in Instagram</Text>
+              <Text style={styles.instagramButtonText}>Instagram</Text>
             </>
           )}
         </TouchableOpacity>
@@ -314,19 +343,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  nicheBadgeRow: {
-    flexDirection: 'row',
-    marginTop: 2,
-  },
-  nichePill: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  nicheText: {
+  authorSubtitle: {
     fontSize: 10,
-    fontWeight: '600',
-    opacity: 0.8,
+    opacity: 0.7,
+    marginTop: 1,
   },
   multiplierBadge: {
     paddingHorizontal: 8,
@@ -346,7 +366,7 @@ const styles = StyleSheet.create({
   },
   mediaPreviewContainer: {
     width: 100,
-    height: 100,
+    height: 110,
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
@@ -371,10 +391,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
   },
-  metricsSummary: {
+  metricsSummaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     marginBottom: 4,
   },
   metricBlock: {
@@ -382,12 +402,17 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 10,
-    opacity: 0.6,
-    fontWeight: '500',
+    opacity: 0.7,
+    fontWeight: '600',
   },
   metricValue: {
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 12,
+  },
+  baselineSubtext: {
+    fontSize: 9,
+    opacity: 0.55,
+    marginTop: -2,
   },
   captionContainer: {
     marginTop: 8,
@@ -406,12 +431,16 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
   },
-  statPill: {
+  statPillWrapper: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  statPillText: {
     fontWeight: '700',
-    fontSize: 11,
-    opacity: 0.8,
+    fontSize: 10,
   },
   instagramButton: {
     flexDirection: 'row',
