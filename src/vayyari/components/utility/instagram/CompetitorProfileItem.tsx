@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, Switch, useTheme, Icon } from 'react-native-paper';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import { CompetitorProfile } from '@/services/instagram.service';
 
 interface CompetitorProfileItemProps {
@@ -16,8 +17,20 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
   onPress,
 }) => {
   const theme = useTheme();
+  const router = useRouter();
   const [isTracked, setIsTracked] = useState(item.isTracked ?? item.isActive ?? true);
   const [isToggling, setIsToggling] = useState(false);
+
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+    } else {
+      router.push({
+        pathname: '/utilities/instagram-explorer',
+        params: { profile: item.username },
+      } as any);
+    }
+  };
 
   const handleToggle = async (val: boolean) => {
     // Optimistic UI update
@@ -59,7 +72,7 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
   return (
     <TouchableOpacity
       activeOpacity={0.8}
-      onPress={onPress}
+      onPress={handlePress}
       style={[
         styles.container,
         {

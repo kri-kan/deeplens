@@ -12,12 +12,15 @@ import { instagramService } from '@/services/instagram.service';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { CompetitorBanner } from '@/components/utility/instagram/CompetitorBanner';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
-import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
+import { useRouter, useFocusEffect, useNavigation, useLocalSearchParams } from 'expo-router';
 
 export default function InstagramExplorer() {
   const theme = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
+  const { profile: paramProfile, selectedProfile: paramSelectedProfile } = useLocalSearchParams<{ profile?: string; selectedProfile?: string }>();
+  const targetProfileParam = paramProfile || paramSelectedProfile;
+  const lastTargetProfileParamRef = useRef<string | null>(null);
   const [needsReviewCount, setNeedsReviewCount] = useState(0);
 
   useFocusEffect(
@@ -57,6 +60,23 @@ export default function InstagramExplorer() {
     togglePin,
     profileCategories,
   } = useInstagramExplorer();
+
+  // Auto-select profile when navigated to with `profile` or `selectedProfile` route param
+  React.useEffect(() => {
+    if (targetProfileParam && targetProfileParam !== lastTargetProfileParamRef.current) {
+      lastTargetProfileParamRef.current = targetProfileParam;
+      selectProfile(targetProfileParam);
+    }
+  }, [targetProfileParam, selectProfile]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (targetProfileParam && selectedProfile !== targetProfileParam) {
+        lastTargetProfileParamRef.current = targetProfileParam;
+        selectProfile(targetProfileParam);
+      }
+    }, [targetProfileParam, selectedProfile, selectProfile])
+  );
 
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
@@ -194,6 +214,17 @@ export default function InstagramExplorer() {
     const d = new Date(dateString);
     return `${d.getDate()}-${d.getMonth() + 1}-${d.getFullYear().toString().slice(-2)}`;
   };
+
+  if (selectedProfile && !profileData && loading) {
+    return (
+      <Surface style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator animating={true} size="large" color={theme.colors.primary} />
+        <Text variant="titleMedium" style={{ marginTop: 16, fontWeight: '700', color: theme.colors.onSurface }}>
+          Loading @{selectedProfile}...
+        </Text>
+      </Surface>
+    );
+  }
 
   if (selectedProfile && profileData) {
     return (
