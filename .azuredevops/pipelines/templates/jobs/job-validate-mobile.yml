@@ -5,7 +5,7 @@
 parameters:
   - name: agentPool
     type: string
-    default: 'DeepLens-LocalPool'
+    default: 'ubuntu-latest'
   - name: nodeVersion
     type: string
     default: '22.x'

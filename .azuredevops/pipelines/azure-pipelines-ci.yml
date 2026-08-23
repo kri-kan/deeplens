@@ -6,9 +6,9 @@ name: CI-$(SourceBranchName)-$(Date:yyyyMMdd)$(Rev:.r)
 
 parameters:
   - name: agentPool
-    displayName: 'Agent Pool (Default: DeepLens-LocalPool, Override: ubuntu-latest)'
+    displayName: 'Agent Pool (Default: ubuntu-latest, Override: DeepLens-LocalPool)'
     type: string
-    default: 'DeepLens-LocalPool'
+    default: 'ubuntu-latest'
 
 trigger:
   branches:
