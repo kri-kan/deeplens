@@ -110,18 +110,22 @@ export default function ArchivedProductsScreen() {
   const [containerWidth, setContainerWidth] = useState(width);
 
   const getCatalogLayout = (w: number) => {
-    let numColumns = 3;
+    // Mobile (< 750px): keep original 3-column layout unchanged — tile uses its own TILE_SIZE internally
+    if (w < 750) {
+      return { numColumns: 3, tileWidth: undefined as number | undefined, tileHeight: undefined as number | undefined, gap: 0, padding: 0 };
+    }
+
+    // Web / tablet: responsive multi-column with explicit smaller tile sizes
+    let numColumns = 4;
     if (w >= 1400) numColumns = 6;
     else if (w >= 1100) numColumns = 5;
-    else if (w >= 750) numColumns = 4;
-    else if (w >= 480) numColumns = 3;
-    else numColumns = 2;
+    else numColumns = 4; // 750–1099px
 
-    const gap = 10;
-    const padding = 12;
+    const gap = 8;
+    const padding = 10;
     const availableWidth = w - (padding * 2) - (gap * (numColumns - 1));
     const tileWidth = Math.max(100, Math.floor(availableWidth / numColumns));
-    const tileHeight = Math.floor(tileWidth * 1.38);
+    const tileHeight = Math.floor(tileWidth * 1.3);
 
     return { numColumns, tileWidth, tileHeight, gap, padding };
   };
@@ -135,10 +139,15 @@ export default function ArchivedProductsScreen() {
       onMoveShouldSetPanResponder: () => isDragSelectingRef.current,
       onPanResponderMove: (evt: GestureResponderEvent) => {
         const { pageX, pageY } = evt.nativeEvent;
-        const relX = pageX - layout.padding;
-        const relY = pageY - 100 - layout.padding;
-        const col = Math.floor(relX / (layout.tileWidth + layout.gap));
-        const row = Math.floor(relY / (layout.tileHeight + layout.gap));
+        // On mobile, tileWidth/tileHeight are undefined — fall back to original TILE_SIZE-based calculation
+        const effectiveTileW = layout.tileWidth ?? (width / 3);
+        const effectiveTileH = layout.tileHeight ?? (width / 3 * 1.3);
+        const effectiveGap = layout.gap;
+        const effectivePadding = layout.padding;
+        const relX = pageX - effectivePadding;
+        const relY = pageY - 100 - effectivePadding;
+        const col = Math.floor(relX / (effectiveTileW + effectiveGap));
+        const row = Math.floor(relY / (effectiveTileH + effectiveGap));
         
         if (col >= 0 && col < layout.numColumns && row >= 0) {
           const idx = row * layout.numColumns + col;
@@ -202,8 +211,8 @@ export default function ArchivedProductsScreen() {
           extraData={selectedIds}
           keyExtractor={(item) => item.id}
           numColumns={layout.numColumns}
-          columnWrapperStyle={layout.numColumns > 1 ? { gap: layout.gap, marginBottom: layout.gap } : undefined}
-          contentContainerStyle={[styles.gridContent, { paddingHorizontal: layout.padding, paddingTop: 8 }]}
+          columnWrapperStyle={layout.gap > 0 ? { gap: layout.gap, marginBottom: layout.gap } : undefined}
+          contentContainerStyle={layout.padding > 0 ? [styles.gridContent, { paddingHorizontal: layout.padding, paddingTop: 8 }] : styles.gridContent}
           renderItem={useCallback(({ item }: any) => (
             <ProductTile
               item={item}

@@ -674,18 +674,22 @@ export default function ProductCatalogScreen() {
 // ---------------------------------------------------------------------------
 
 const getCatalogLayout = (containerWidth: number) => {
-  let numColumns = 3;
+  // Mobile (< 750px): keep original 3-column layout unchanged — tile uses its own TILE_SIZE internally
+  if (containerWidth < 750) {
+    return { numColumns: 3, tileWidth: undefined as number | undefined, tileHeight: undefined as number | undefined, gap: 0, padding: 0 };
+  }
+
+  // Web / tablet: responsive multi-column with explicit smaller tile sizes
+  let numColumns = 4;
   if (containerWidth >= 1400) numColumns = 6;
   else if (containerWidth >= 1100) numColumns = 5;
-  else if (containerWidth >= 750) numColumns = 4;
-  else if (containerWidth >= 480) numColumns = 3;
-  else numColumns = 2;
+  else numColumns = 4; // 750–1099px
 
-  const gap = 10;
-  const padding = 12;
+  const gap = 8;
+  const padding = 10;
   const availableWidth = containerWidth - (padding * 2) - (gap * (numColumns - 1));
   const tileWidth = Math.max(100, Math.floor(availableWidth / numColumns));
-  const tileHeight = Math.floor(tileWidth * 1.38);
+  const tileHeight = Math.floor(tileWidth * 1.3);
 
   return { numColumns, tileWidth, tileHeight, gap, padding };
 };
@@ -843,14 +847,16 @@ function CategoryPage({
         }
 
         const l = layoutRef.current;
+        const effectiveTileW = l.tileWidth ?? (width / 3);
+        const effectiveTileH = l.tileHeight ?? (width / 3 * 1.3);
         const idx = indexFromPosition(
           pageX, pageY,
           containerLeftRef.current, containerTopRef.current,
           scrollOffsetRef.current,
           containerWidth,
           l.numColumns,
-          l.tileWidth,
-          l.tileHeight,
+          effectiveTileW,
+          effectiveTileH,
           l.gap,
           l.padding
         );
@@ -907,8 +913,8 @@ function CategoryPage({
         extraData={selectedIds}
         keyExtractor={(item) => item.id}
         numColumns={layout.numColumns}
-        columnWrapperStyle={layout.numColumns > 1 ? { gap: layout.gap, marginBottom: layout.gap } : undefined}
-        contentContainerStyle={[styles.gridContent, { paddingHorizontal: layout.padding, paddingTop: 8 }]}
+        columnWrapperStyle={layout.gap > 0 ? { gap: layout.gap, marginBottom: layout.gap } : undefined}
+        contentContainerStyle={layout.padding > 0 ? [styles.gridContent, { paddingHorizontal: layout.padding, paddingTop: 8 }] : styles.gridContent}
         renderItem={useCallback(({ item }: any) => (
           <ProductTile
             item={item}
