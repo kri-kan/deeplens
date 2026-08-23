@@ -33,6 +33,22 @@ services:
     networks:
       - deeplens-network
 
+  identity-api:
+    image: mcr.microsoft.com/dotnet/aspnet:9.0
+    container_name: nextgen-identity
+    restart: unless-stopped
+    ports:
+      - "${IDENTITY_API_PORT:-5198}:5198"
+    volumes:
+      - ${IDENTITY_HOSTING_PATH}:/app
+    environment:
+      - ASPNETCORE_URLS=http://+:5198
+      - ASPNETCORE_ENVIRONMENT=Development
+    working_dir: /app
+    command: dotnet NextGen.Identity.Api.dll
+    networks:
+      - deeplens-network
+
 networks:
   deeplens-network:
     external: true
