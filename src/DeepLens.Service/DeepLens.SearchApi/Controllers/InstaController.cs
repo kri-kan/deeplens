@@ -2578,6 +2578,498 @@ public class InstaController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    // ── Competitor Tracking & Outlier Analytics Endpoints ─────────────────────
+
+    [HttpGet("competitors/summary")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<CompetitorSummaryDto>> GetCompetitorSummary()
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            var sql = @"
+                SELECT 
+                    (SELECT COUNT(*)::int 
+                     FROM competitor_watchlist 
+                     WHERE platform = 'instagram' 
+                       AND (is_competitor = true OR profile_category = 'Competitors') 
+                       AND is_active = true) AS ActiveCompetitorsCount,
+
+                    (SELECT COUNT(*)::int 
+                     FROM competitor_watchlist 
+                     WHERE platform = 'instagram' 
+                       AND (is_competitor = true OR profile_category = 'Competitors')) AS TotalCompetitorsCount,
+
+                    (SELECT COUNT(DISTINCT post_id)::int 
+                     FROM view_instagram_competitor_outliers 
+                     WHERE snapshot_date >= CURRENT_DATE - INTERVAL '1 day' 
+                       AND (is_day1_breakout = true OR is_delayed_breakout = true OR outlier_score >= 1.5)) AS BreakoutsTodayCount";
+
+            var summary = await conn.QueryFirstOrDefaultAsync<CompetitorSummaryDto>(sql) ?? new CompetitorSummaryDto();
+            return Ok(summary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch competitor summary");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPatch("profile/{username}/toggle-tracking")]
+    [HttpPost("profile/{username}/toggle-tracking")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<IActionResult> ToggleProfileTracking(
+        string username, 
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CompetitorToggleTrackingDto? body = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] bool? isCompetitor = null,
+        [FromQuery] string? trackingTier = null,
+        [FromQuery] int? trackingFrequencyHours = null,
+        [FromQuery] string? competitorNiche = null)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+
+            var finalIsActive = body?.IsActive ?? isActive;
+            var finalIsCompetitor = body?.IsCompetitor ?? isCompetitor;
+            var finalTrackingTier = body?.TrackingTier ?? trackingTier;
+            var finalTrackingFrequencyHours = body?.TrackingFrequencyHours ?? trackingFrequencyHours;
+            var finalCompetitorNiche = body?.CompetitorNiche ?? competitorNiche;
+
+            var setClauses = new List<string>();
+            var p = new DynamicParameters();
+            p.Add("Username", username);
+
+            if (finalIsActive.HasValue)
+            {
+                setClauses.Add("is_active = @IsActive");
+                p.Add("IsActive", finalIsActive.Value);
+            }
+            if (finalIsCompetitor.HasValue)
+            {
+                setClauses.Add("is_competitor = @IsCompetitor");
+                p.Add("IsCompetitor", finalIsCompetitor.Value);
+                if (finalIsCompetitor.Value)
+                {
+                    setClauses.Add("profile_category = 'Competitors'");
+                }
+            }
+            if (!string.IsNullOrEmpty(finalTrackingTier))
+            {
+                setClauses.Add("tracking_tier = @TrackingTier");
+                p.Add("TrackingTier", finalTrackingTier);
+            }
+            if (finalTrackingFrequencyHours.HasValue)
+            {
+                setClauses.Add("tracking_frequency_hours = @TrackingFrequencyHours");
+                p.Add("TrackingFrequencyHours", finalTrackingFrequencyHours.Value);
+            }
+            if (finalCompetitorNiche != null)
+            {
+                setClauses.Add("competitor_niche = @CompetitorNiche");
+                p.Add("CompetitorNiche", finalCompetitorNiche);
+            }
+
+            if (setClauses.Count == 0)
+            {
+                return BadRequest(new { message = "No tracking fields provided to update." });
+            }
+
+            var updateSql = $@"
+                UPDATE competitor_watchlist 
+                SET {string.Join(", ", setClauses)}
+                WHERE LOWER(username) = LOWER(@Username) AND platform = 'instagram'
+                RETURNING id, username, is_active, is_competitor, tracking_tier, tracking_frequency_hours, competitor_niche";
+
+            var updated = await conn.QueryFirstOrDefaultAsync<dynamic>(updateSql, p);
+            if (updated == null)
+            {
+                return NotFound(new { message = $"Competitor profile @{username} not found." });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                username = (string)updated.username,
+                isActive = (bool)updated.is_active,
+                isCompetitor = (bool)updated.is_competitor,
+                trackingTier = (string)updated.tracking_tier,
+                trackingFrequencyHours = (int)updated.tracking_frequency_hours,
+                competitorNiche = (string?)updated.competitor_niche
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to toggle competitor tracking for @{Username}", username);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("watchlist/toggle-tracking")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<IActionResult> ToggleWatchlistTracking(
+        [FromQuery] string? username,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CompetitorToggleTrackingDto? body = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] bool? isCompetitor = null,
+        [FromQuery] string? trackingTier = null,
+        [FromQuery] int? trackingFrequencyHours = null,
+        [FromQuery] string? competitorNiche = null)
+    {
+        if (string.IsNullOrEmpty(username))
+        {
+            return BadRequest(new { message = "Username parameter is required." });
+        }
+
+        return await ToggleProfileTracking(
+            username, 
+            body, 
+            isActive, 
+            isCompetitor, 
+            trackingTier, 
+            trackingFrequencyHours, 
+            competitorNiche);
+    }
+
+    [HttpGet("competitors/insights/high-performing")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<CompetitorOutlierFeedResponse>> GetHighPerformingOutliers(
+        [FromQuery] string archetype = "all",
+        [FromQuery] string? niche = null,
+        [FromQuery] string? username = null,
+        [FromQuery] decimal minMultiplier = 1.5m,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+            int offset = (page - 1) * pageSize;
+
+            using var conn = await _db.CreateConnectionAsync();
+
+            var conditions = new List<string> { "1=1" };
+            var p = new DynamicParameters();
+            p.Add("MinMultiplier", minMultiplier);
+            p.Add("Limit", pageSize);
+            p.Add("Offset", offset);
+
+            // Archetype Filter
+            var cleanArchetype = archetype?.Trim().ToLowerInvariant() ?? "all";
+            switch (cleanArchetype)
+            {
+                case "day1_takeoff":
+                    conditions.Add("(breakout_archetype = 'day1_takeoff' OR is_day1_breakout = true)");
+                    break;
+                case "delayed_breakout":
+                    conditions.Add("(breakout_archetype = 'delayed_breakout' OR is_delayed_breakout = true)");
+                    break;
+                case "sustained_viral":
+                    conditions.Add("breakout_archetype = 'sustained_viral'");
+                    break;
+                case "inspiration":
+                    conditions.Add("is_inspiration_candidate = true");
+                    break;
+                case "all":
+                default:
+                    conditions.Add("(outlier_score >= @MinMultiplier OR delta_multiplier >= @MinMultiplier OR is_day1_breakout = true OR is_delayed_breakout = true)");
+                    break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(niche))
+            {
+                conditions.Add("competitor_niche ILIKE @Niche");
+                p.Add("Niche", $"%{niche.Trim()}%");
+            }
+
+            if (!string.IsNullOrWhiteSpace(username))
+            {
+                conditions.Add("profile_username ILIKE @Username");
+                p.Add("Username", $"%{username.Trim()}%");
+            }
+
+            var whereClause = string.Join(" AND ", conditions);
+
+            var countSql = $@"
+                SELECT COUNT(*)::int 
+                FROM view_instagram_competitor_outliers 
+                WHERE {whereClause}";
+
+            var totalItems = await conn.ExecuteScalarAsync<int>(countSql, p);
+
+            var summaryCountsSql = @"
+                SELECT 
+                    (SELECT COUNT(*)::int FROM competitor_watchlist WHERE platform = 'instagram' AND (is_competitor = true OR profile_category = 'Competitors') AND is_active = true) AS ActiveCompetitorsCount,
+                    (SELECT COUNT(*)::int FROM competitor_watchlist WHERE platform = 'instagram' AND (is_competitor = true OR profile_category = 'Competitors')) AS TotalCompetitorsCount";
+
+            var counts = await conn.QueryFirstOrDefaultAsync<dynamic>(summaryCountsSql);
+            int activeCompetitorsCount = (int)(counts?.activecompetitorscount ?? 0);
+            int totalCompetitorsCount = (int)(counts?.totalcompetitorscount ?? 0);
+
+            var selectSql = $@"
+                SELECT 
+                    post_id AS PostId,
+                    platform_video_id AS PlatformVideoId,
+                    post_url AS PostUrl,
+                    thumbnail_url AS ThumbnailUrl,
+                    media_url AS MediaUrl,
+                    media_type AS MediaType,
+                    title AS Title,
+                    caption AS Caption,
+                    posted_at AS PostedAt,
+                    profile_id AS ProfileId,
+                    profile_username AS ProfileUsername,
+                    profile_name AS ProfileName,
+                    profile_pic_url AS ProfilePicUrl,
+                    competitor_niche AS CompetitorNiche,
+                    tracking_tier AS TrackingTier,
+                    day_offset AS DayOffset,
+                    snapshot_date AS SnapshotDate,
+                    view_count AS ViewCount,
+                    like_count AS LikeCount,
+                    comment_count AS CommentCount,
+                    share_count AS ShareCount,
+                    daily_delta_views AS DailyDeltaViews,
+                    daily_delta_likes AS DailyDeltaLikes,
+                    velocity_score AS VelocityScore,
+                    engagement_rate AS EngagementRate,
+                    profile_baseline_views AS ProfileBaselineViews,
+                    profile_baseline_delta_views AS ProfileBaselineDeltaViews,
+                    profile_baseline_likes AS ProfileBaselineLikes,
+                    niche_baseline_views AS NicheBaselineViews,
+                    niche_baseline_likes AS NicheBaselineLikes,
+                    outlier_score AS OutlierScore,
+                    virality_multiplier AS ViralityMultiplier,
+                    delta_multiplier AS DeltaMultiplier,
+                    day1_view_multiplier AS Day1ViewMultiplier,
+                    outlier_tier AS OutlierTier,
+                    is_day1_breakout AS IsDay1Breakout,
+                    is_delayed_breakout AS IsDelayedBreakout,
+                    breakout_archetype AS BreakoutArchetype,
+                    is_inspiration_candidate AS IsInspirationCandidate,
+                    caption_hook AS CaptionHook
+                FROM view_instagram_competitor_outliers
+                WHERE {whereClause}
+                ORDER BY outlier_score DESC, velocity_score DESC, snapshot_date DESC
+                LIMIT @Limit OFFSET @Offset";
+
+            var items = (await conn.QueryAsync<CompetitorOutlierPostDto>(selectSql, p)).ToList();
+
+            // Hydrate Day-N trajectory points for fetched posts
+            if (items.Count > 0)
+            {
+                var postIds = items.Select(i => i.PostId).Distinct().ToArray();
+                var trajectorySql = @"
+                    SELECT 
+                        m.post_id AS PostId,
+                        m.day_offset AS DayOffset,
+                        m.snapshot_date AS SnapshotDate,
+                        m.view_count AS CumulativeViews,
+                        m.like_count AS CumulativeLikes,
+                        m.daily_delta_views AS DailyDeltaViews,
+                        m.daily_delta_likes AS DailyDeltaLikes,
+                        m.velocity_score AS VelocityScore,
+                        COALESCE(pb.p50_views, 0) AS BaselineMedianViews,
+                        COALESCE(pb.avg_delta_views, 0) AS BaselineAvgDeltaViews,
+                        ROUND(
+                            CASE 
+                                WHEN COALESCE(pb.p50_views, 0) > 0 THEN (m.view_count::numeric / pb.p50_views)
+                                ELSE 1.0
+                            END, 
+                            2
+                        ) AS OutlierMultiplier
+                    FROM instagram_post_daily_metrics m
+                    LEFT JOIN view_instagram_profile_day_n_baselines pb 
+                        ON pb.profile_id = m.profile_id AND pb.day_offset = m.day_offset
+                    WHERE m.post_id = ANY(@postIds)
+                    ORDER BY m.post_id, m.day_offset ASC";
+
+                var trajectoryRows = await conn.QueryAsync<dynamic>(trajectorySql, new { postIds });
+
+                var groupedTrajectory = trajectoryRows
+                    .GroupBy(r => (Guid)r.postid)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Select(r => new DayNTrajectoryPointDto
+                        {
+                            DayOffset = (int)r.dayoffset,
+                            SnapshotDate = (DateTime)r.snapshotdate,
+                            CumulativeViews = (long)(r.cumulativeviews ?? 0),
+                            CumulativeLikes = (long)(r.cumulativelikes ?? 0),
+                            DailyDeltaViews = (long)(r.dailydeltaviews ?? 0),
+                            DailyDeltaLikes = (long)(r.dailydeltalikes ?? 0),
+                            VelocityScore = (decimal)(r.velocityscore ?? 0m),
+                            BaselineMedianViews = (decimal)(r.baselinemedianviews ?? 0m),
+                            BaselineAvgDeltaViews = (decimal)(r.baselineavgdeltaviews ?? 0m),
+                            OutlierMultiplier = (decimal)(r.outliermultiplier ?? 1.0m)
+                        }).ToList()
+                    );
+
+                foreach (var item in items)
+                {
+                    if (groupedTrajectory.TryGetValue(item.PostId, out var trajectory))
+                    {
+                        item.Trajectory = trajectory;
+                    }
+                }
+            }
+
+            return Ok(new CompetitorOutlierFeedResponse
+            {
+                TotalItems = totalItems,
+                Page = page,
+                PageSize = pageSize,
+                ActiveCompetitorsCount = activeCompetitorsCount,
+                TotalCompetitorsCount = totalCompetitorsCount,
+                Items = items
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch competitor outliers");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("competitors/profile/{profileId}/curve")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<CompetitorCurveResponseDto>> GetCompetitorProfileCurve(Guid profileId)
+    {
+        try
+        {
+            using var conn = await _db.CreateConnectionAsync();
+
+            // 1. Profile information
+            var profile = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+                SELECT id, username, display_name, competitor_niche, tracking_tier
+                FROM competitor_watchlist
+                WHERE id = @profileId", new { profileId });
+
+            if (profile == null)
+            {
+                return NotFound(new { message = "Competitor profile not found." });
+            }
+
+            // 2. Baseline Curve Points
+            var baselineSql = @"
+                SELECT 
+                    day_offset AS DayOffset,
+                    sample_size AS SampleSize,
+                    avg_views AS AvgViews,
+                    p50_views AS P50Views,
+                    p75_views AS P75Views,
+                    p90_views AS P90Views,
+                    avg_delta_views AS AvgDeltaViews,
+                    p50_delta_views AS P50DeltaViews,
+                    p50_likes AS P50Likes,
+                    avg_velocity_score AS AvgVelocityScore
+                FROM view_instagram_profile_day_n_baselines
+                WHERE profile_id = @profileId
+                ORDER BY day_offset ASC";
+
+            var baselinePoints = (await conn.QueryAsync<ProfileBaselinePointDto>(baselineSql, new { profileId })).ToList();
+
+            // 3. Recent / Top Posts and Trajectories
+            var postsSql = @"
+                SELECT 
+                    cv.id AS PostId,
+                    cv.platform_video_id AS PlatformVideoId,
+                    cv.title AS Title,
+                    SPLIT_PART(cv.description, E'\n', 1) AS CaptionHook,
+                    cv.posted_at AS PostedAt,
+                    cv.thumbnail_url AS ThumbnailUrl,
+                    COALESCE(os.breakout_archetype, 'standard') AS BreakoutArchetype,
+                    COALESCE(os.is_day1_breakout, false) AS IsDay1Breakout,
+                    COALESCE(os.is_delayed_breakout, false) AS IsDelayedBreakout
+                FROM competitor_videos cv
+                LEFT JOIN LATERAL (
+                    SELECT breakout_archetype, is_day1_breakout, is_delayed_breakout
+                    FROM view_instagram_competitor_outliers o
+                    WHERE o.post_id = cv.id
+                    ORDER BY o.day_offset DESC
+                    LIMIT 1
+                ) os ON true
+                WHERE cv.watchlist_id = @profileId
+                ORDER BY cv.posted_at DESC
+                LIMIT 10";
+
+            var recentPosts = (await conn.QueryAsync<PostTrajectoryDto>(postsSql, new { profileId })).ToList();
+
+            if (recentPosts.Count > 0)
+            {
+                var postIds = recentPosts.Select(p => p.PostId).ToArray();
+                var pointsSql = @"
+                    SELECT 
+                        m.post_id AS PostId,
+                        m.day_offset AS DayOffset,
+                        m.snapshot_date AS SnapshotDate,
+                        m.view_count AS CumulativeViews,
+                        m.like_count AS CumulativeLikes,
+                        m.daily_delta_views AS DailyDeltaViews,
+                        m.daily_delta_likes AS DailyDeltaLikes,
+                        m.velocity_score AS VelocityScore,
+                        COALESCE(pb.p50_views, 0) AS BaselineMedianViews,
+                        COALESCE(pb.avg_delta_views, 0) AS BaselineAvgDeltaViews,
+                        ROUND(
+                            CASE 
+                                WHEN COALESCE(pb.p50_views, 0) > 0 THEN (m.view_count::numeric / pb.p50_views)
+                                ELSE 1.0
+                            END, 
+                            2
+                        ) AS OutlierMultiplier
+                    FROM instagram_post_daily_metrics m
+                    LEFT JOIN view_instagram_profile_day_n_baselines pb 
+                        ON pb.profile_id = m.profile_id AND pb.day_offset = m.day_offset
+                    WHERE m.post_id = ANY(@postIds)
+                    ORDER BY m.post_id, m.day_offset ASC";
+
+                var points = await conn.QueryAsync<dynamic>(pointsSql, new { postIds });
+                var groupedPoints = points.GroupBy(p => (Guid)p.postid).ToDictionary(
+                    g => g.Key,
+                    g => g.Select(r => new DayNTrajectoryPointDto
+                    {
+                        DayOffset = (int)r.dayoffset,
+                        SnapshotDate = (DateTime)r.snapshotdate,
+                        CumulativeViews = (long)(r.cumulativeviews ?? 0),
+                        CumulativeLikes = (long)(r.cumulativelikes ?? 0),
+                        DailyDeltaViews = (long)(r.dailydeltaviews ?? 0),
+                        DailyDeltaLikes = (long)(r.dailydeltalikes ?? 0),
+                        VelocityScore = (decimal)(r.velocityscore ?? 0m),
+                        BaselineMedianViews = (decimal)(r.baselinemedianviews ?? 0m),
+                        BaselineAvgDeltaViews = (decimal)(r.baselineavgdeltaviews ?? 0m),
+                        OutlierMultiplier = (decimal)(r.outliermultiplier ?? 1.0m)
+                    }).ToList()
+                );
+
+                foreach (var p in recentPosts)
+                {
+                    if (groupedPoints.TryGetValue(p.PostId, out var pts))
+                    {
+                        p.Points = pts;
+                    }
+                }
+            }
+
+            var response = new CompetitorCurveResponseDto
+            {
+                ProfileId = profileId,
+                Username = (string)profile.username,
+                CompetitorNiche = (string?)profile.competitor_niche,
+                BaselinePoints = baselinePoints,
+                PostTrajectories = recentPosts
+            };
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve competitor curve for profile {ProfileId}", profileId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
 
 public class InstagramCommentDto

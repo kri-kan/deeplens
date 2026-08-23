@@ -34,6 +34,15 @@ interface PostDetailItemProps {
     onPostUpdated?: (updatedPost: InstagramPost) => void;
 }
 
+const isFullVideoDownloaded = (m?: InstagramPost | null): boolean => {
+    if (!m) return false;
+    if (m.isFullMediaDownloaded === true) return true;
+    if (m.isFullMediaDownloaded === false) return false;
+    if (!m.storagePath) return false;
+    const path = m.storagePath.toLowerCase();
+    return path.endsWith('.mp4') || path.endsWith('.mov');
+};
+
 export const InstagramPostDetailItem = ({ 
     item,
     isMuted, 
@@ -462,21 +471,66 @@ export const InstagramPostDetailItem = ({
                         renderItem={({ item: media, index: mediaIdx }) => {
                             const mHeight = getMediaHeight();
                             const isPlayerActive = isActive && mediaIdx === activeMediaIndex;
+                            const isMediaVideo = isVideo(media);
+                            const isVideoDownloaded = isMediaVideo && isFullVideoDownloaded(media);
                             
                             return (
                                 <View key={media.id || mediaIdx} style={{ width, height: START_TOP - insets.top, justifyContent: 'center' }}>
-                                    {isVideo(media) ? (
-                                        <InstagramVideoPlayer 
-                                            media={media}
-                                            width={width}
-                                            getMediaHeight={getMediaHeight}
-                                            isMuted={isMuted}
-                                            setIsMuted={setIsMuted}
-                                            volume={volume}
-                                            setVolume={setVolume}
-                                            isPlaying={isPlaying}
-                                            isActive={isPlayerActive}
-                                        />
+                                    {isMediaVideo ? (
+                                        isVideoDownloaded ? (
+                                            <InstagramVideoPlayer 
+                                                media={media}
+                                                width={width}
+                                                getMediaHeight={getMediaHeight}
+                                                isMuted={isMuted}
+                                                setIsMuted={setIsMuted}
+                                                volume={volume}
+                                                setVolume={setVolume}
+                                                isPlaying={isPlaying}
+                                                isActive={isPlayerActive}
+                                            />
+                                        ) : (
+                                            <View style={{ width, height: mHeight, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+                                                <Image 
+                                                    source={{ uri: getMediaUri(media, 'large') || media.thumbnailUrl || media.mediaUrl }} 
+                                                    style={{ width, height: mHeight }}
+                                                    contentFit="cover"
+                                                    onLoad={(e) => {
+                                                        const ratio = e.source.width / e.source.height;
+                                                        setMediaAspectRatios(prev => ({ ...prev, [media.id || 'initial']: ratio }));
+                                                    }}
+                                                />
+                                                <View style={styles.thumbnailVideoOverlay}>
+                                                    <TouchableOpacity 
+                                                        activeOpacity={0.85}
+                                                        onPress={() => {
+                                                            const platformId = media.platformVideoId || media.id;
+                                                            const nativeUrl = `instagram://media?id=${platformId}`;
+                                                            Linking.canOpenURL(nativeUrl).then(supported => {
+                                                                if (supported) {
+                                                                    Linking.openURL(nativeUrl);
+                                                                } else if (media.permalink) {
+                                                                    Linking.openURL(media.permalink);
+                                                                } else {
+                                                                    Linking.openURL(`https://www.instagram.com/p/${platformId}/`);
+                                                                }
+                                                            }).catch(() => {
+                                                                if (media.permalink) Linking.openURL(media.permalink);
+                                                            });
+                                                        }}
+                                                        style={styles.openInInstaOverlayBtn}
+                                                    >
+                                                        <View style={styles.playIconContainer}>
+                                                            <Icon source="play" size={32} color="#FFFFFF" />
+                                                        </View>
+                                                        <View style={styles.openInInstaBadge}>
+                                                            <Icon source="instagram" size={16} color="#FFFFFF" />
+                                                            <Text style={styles.openInInstaBadgeText}>Open in Instagram</Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        )
                                     ) : (
                                         <Image 
                                             source={{ uri: getMediaUri(media, 'large') }} 
@@ -1317,5 +1371,48 @@ const styles = StyleSheet.create({
     },
     bold: {
         fontWeight: 'bold',
+    },
+    thumbnailVideoOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.25)',
+    },
+    openInInstaOverlayBtn: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    playIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: 'rgba(0, 0, 0, 0.55)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    openInInstaBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    openInInstaBadgeText: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+        fontSize: 13,
     },
 });

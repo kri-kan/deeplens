@@ -10,6 +10,7 @@ import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
+import { CompetitorBanner } from '@/components/utility/instagram/CompetitorBanner';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
 import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 
@@ -446,6 +447,8 @@ export default function InstagramExplorer() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <CompetitorBanner />
 
       <View style={styles.profileList}>
         <Text variant="titleLarge" style={[styles.sectionTitle, { marginBottom: 0, marginTop: -8 }]}>Active Profiles</Text>

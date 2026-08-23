@@ -71,12 +71,14 @@ export default function PostDetailScreen() {
                     (sortBy as string) || 'date', 
                     (sortOrder as string) || 'desc'
                 );
-                const allPosts = (response.videos || []).map(normalizeData);
-                setPosts(allPosts);
-                
-                const targetId = (id || initialItem?.id)?.toString();
-                const idx = allPosts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
-                if (idx !== -1) setActiveIndex(idx);
+                if (response?.videos && response.videos.length > 0) {
+                    const allPosts = response.videos.map(normalizeData);
+                    setPosts(allPosts);
+                    
+                    const targetId = (id || initialItem?.id)?.toString();
+                    const idx = allPosts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
+                    if (idx !== -1) setActiveIndex(idx);
+                }
             } catch (e) {
                 console.error("Error loading profile posts", e);
             } finally {

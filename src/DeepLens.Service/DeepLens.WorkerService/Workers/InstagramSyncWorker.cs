@@ -97,7 +97,7 @@ namespace DeepLens.WorkerService.Workers
             // only one worker can pick up a specific job at a time.
             using var tx = await conn.BeginTransactionAsync(ct);
             var jobSql = @"
-                SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username, w.profile_category
+                SELECT j.id, j.watchlist_id, j.job_type, j.target_count, w.username, w.profile_category, w.is_competitor
                 FROM scraper_queue j
                 JOIN competitor_watchlist w ON j.watchlist_id = w.id
                 WHERE j.status = 'pending' 
@@ -122,6 +122,8 @@ namespace DeepLens.WorkerService.Workers
             Guid watchlistId = job.watchlist_id;
             string username = job.username;
             string jobType = job.job_type;
+            bool isCompetitor = (bool)(job.is_competitor ?? false);
+            string profileCategory = (string?)job.profile_category ?? "";
 
             using var activity = DeepLensActivitySource.StartActivity("InstagramSyncWorker.ProcessQueue");
             activity?.SetTag("job.id", jobId.ToString());
@@ -169,7 +171,7 @@ namespace DeepLens.WorkerService.Workers
                 var instaMedia = serviceScope.ServiceProvider.GetRequiredService<IInstagramMediaService>();
 
                 // 3. Update Database (Ingest Posts)
-                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, (string?)job.profile_category ?? "", ct);
+                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, profileCategory, isCompetitor, ct);
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
@@ -362,7 +364,7 @@ namespace DeepLens.WorkerService.Workers
             }
         }
 
-        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, string profileCategory, CancellationToken ct)
+        private async Task<int> IngestPostsAsync(NpgsqlConnection conn, Guid jobId, Guid watchlistId, List<MetaPost> posts, string externalId, IStorageService storage, HttpClient http, IInstagramMediaService instaMedia, string profileCategory, bool isCompetitor, CancellationToken ct)
         {
             var existingPosts = (await conn.QueryAsync<dynamic>("SELECT platform_video_id, storage_path FROM competitor_videos WHERE watchlist_id = @Id", new { Id = watchlistId }))
                                 .ToDictionary(x => (string)x.platform_video_id, x => (string?)x.storage_path);
@@ -386,12 +388,7 @@ namespace DeepLens.WorkerService.Workers
                     if (string.IsNullOrEmpty(p.Id)) continue;
                     
                     bool exists = existingPosts.TryGetValue(p.Id, out var storagePath);
-                    
-                    // If it exists and already has a storage path, we skip thumbnail download
-                    if (exists && !string.IsNullOrEmpty(storagePath)) 
-                    {
-                        continue;
-                    }
+                    Guid dbPostId;
 
                     // Download thumbnail if missing
                     string? newStoragePath = null;
@@ -402,7 +399,7 @@ namespace DeepLens.WorkerService.Workers
                         thumbUrl = firstChild.ThumbnailUrl ?? firstChild.MediaUrl;
                     }
 
-                    if (!string.IsNullOrEmpty(thumbUrl))
+                    if (string.IsNullOrEmpty(storagePath) && !string.IsNullOrEmpty(thumbUrl))
                     {
                         newStoragePath = await DownloadAndStoreThumbnailAsync(http, storage, externalId, p.Id, thumbUrl);
                     }
@@ -420,7 +417,7 @@ namespace DeepLens.WorkerService.Workers
                         });
 
                         // Fetch the auto-generated ID if we need to link media
-                        var dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
+                        dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
 
                         // Media Architecture Consistency: Register and Link
                         if (!string.IsNullOrEmpty(newStoragePath))
@@ -443,8 +440,8 @@ namespace DeepLens.WorkerService.Workers
                             await EmitImageUploadedEvent(mediaId, newStoragePath, $"{p.Id}.jpg", "image/jpeg", "instagram", "thumbnail", ct);
                         }
 
-                        // Full Media Download for My Business
-                        if (profileCategory == "My Business")
+                        // Full Media Download strictly for non-competitor My Business profiles
+                        if (!isCompetitor && string.Equals(profileCategory, "My Business", StringComparison.OrdinalIgnoreCase))
                         {
                             await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId, ct);
                         }
@@ -453,7 +450,7 @@ namespace DeepLens.WorkerService.Workers
                     }
                     else 
                     {
-                        var dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
+                        dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
 
                         if (newStoragePath != null)
                         {
@@ -481,6 +478,36 @@ namespace DeepLens.WorkerService.Workers
 
                         count++;
                     }
+
+                    // Upsert Daily Snapshot into instagram_post_daily_metrics for velocity and baseline analytics
+                    var postedAt = p.Timestamp ?? DateTime.UtcNow;
+                    var viewCount = Math.Max(p.LikeCount * 10, p.LikeCount);
+
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO public.instagram_post_daily_metrics (
+                            post_id, profile_id, day_offset, snapshot_date, snapshot_timestamp,
+                            view_count, like_count, comment_count, share_count
+                        )
+                        VALUES (
+                            @dbPostId, @watchlistId, GREATEST(0, (CURRENT_DATE - (@postedAt AT TIME ZONE 'UTC')::DATE)),
+                            CURRENT_DATE, NOW(), @viewCount, @likeCount, @commentCount, @shareCount
+                        )
+                        ON CONFLICT (post_id, day_offset)
+                        DO UPDATE SET
+                            view_count = EXCLUDED.view_count,
+                            like_count = EXCLUDED.like_count,
+                            comment_count = EXCLUDED.comment_count,
+                            share_count = EXCLUDED.share_count,
+                            snapshot_timestamp = NOW()",
+                        new {
+                            dbPostId,
+                            watchlistId,
+                            postedAt,
+                            viewCount,
+                            likeCount = p.LikeCount,
+                            commentCount = p.CommentCount,
+                            shareCount = p.ShareCount
+                        });
 
                     // Periodic progress update in DB for long-running jobs
                     if (count % 5 == 0 || count == total)
@@ -576,11 +603,46 @@ namespace DeepLens.WorkerService.Workers
 
         private async Task UpdateEngagementAsync(NpgsqlConnection conn, List<MetaPost> engagement)
         {
-            var sql = "UPDATE competitor_videos SET like_count = @Likes, comment_count = @Comments WHERE platform_video_id = @Id AND platform = 'instagram'";
+            var updatePostSql = "UPDATE competitor_videos SET like_count = @Likes, comment_count = @Comments, updated_at = NOW() WHERE platform_video_id = @Id AND platform = 'instagram'";
+            var upsertMetricSql = @"
+                INSERT INTO public.instagram_post_daily_metrics (
+                    post_id, profile_id, day_offset, snapshot_date, snapshot_timestamp,
+                    view_count, like_count, comment_count, share_count
+                )
+                SELECT 
+                    cv.id AS post_id,
+                    cv.watchlist_id AS profile_id,
+                    GREATEST(0, (CURRENT_DATE - (cv.posted_at AT TIME ZONE 'UTC')::DATE)) AS day_offset,
+                    CURRENT_DATE AS snapshot_date,
+                    NOW() AS snapshot_timestamp,
+                    GREATEST(COALESCE(cv.like_count, 0) * 10, @Likes * 10, @Likes, 0) AS view_count,
+                    @Likes AS like_count,
+                    @Comments AS comment_count,
+                    COALESCE(cv.share_count, 0) AS share_count
+                FROM public.competitor_videos cv
+                WHERE cv.platform_video_id = @Id AND cv.platform = 'instagram'
+                ON CONFLICT (post_id, day_offset)
+                DO UPDATE SET
+                    view_count = EXCLUDED.view_count,
+                    like_count = EXCLUDED.like_count,
+                    comment_count = EXCLUDED.comment_count,
+                    share_count = EXCLUDED.share_count,
+                    snapshot_timestamp = NOW()";
+
             foreach (var e in engagement)
             {
                 if (string.IsNullOrEmpty(e.Id)) continue;
-                await conn.ExecuteAsync(sql, new { Likes = e.LikeCount, Comments = e.CommentCount, Id = e.Id });
+                await conn.ExecuteAsync(updatePostSql, new { Likes = e.LikeCount, Comments = e.CommentCount, Id = e.Id });
+                await conn.ExecuteAsync(upsertMetricSql, new { Likes = e.LikeCount, Comments = e.CommentCount, Id = e.Id });
+            }
+
+            try
+            {
+                await conn.ExecuteAsync("CALL public.sp_populate_competitor_outlier_snapshots(CURRENT_DATE)");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to refresh outlier snapshots procedure during engagement update");
             }
         }
 

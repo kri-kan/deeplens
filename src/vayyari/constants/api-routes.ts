@@ -128,12 +128,16 @@ export const API_ROUTES = {
     VARIABLES: (purposeKey: string) => `/api/v1/communication/broadcast/purposes/${purposeKey}/variables`,
   },
 
-  // Instagram Product Links
+  // Instagram Product Links & Competitor Intelligence
   INSTAGRAM: {
     LINKS: (postId: string) => `/api/v1/products/instagram/${postId}/links`,
     UNLINK: (postId: string, productId: string) => `/api/v1/products/instagram/${postId}/links/${productId}`,
     LINK: '/api/v1/products/instagram/link',
     CREATE_PRODUCT: (postId: string) => `/api/v1/products/instagram/${postId}/create-product`,
+    COMPETITORS_SUMMARY: '/api/v1/Insta/competitors/summary',
+    COMPETITORS_TOGGLE_TRACKING: (username: string) => `/api/v1/Insta/competitors/${encodeURIComponent(username)}/toggle-tracking`,
+    COMPETITORS_HIGH_PERFORMING: '/api/v1/Insta/competitors/high-performing',
+    COMPETITORS_PROFILE_CURVE: (profileId: string) => `/api/v1/Insta/competitors/${encodeURIComponent(profileId)}/curve`,
   },
 
   // Common / Master Data
