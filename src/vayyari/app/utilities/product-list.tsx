@@ -645,6 +645,7 @@ export default function ProductCatalogScreen() {
         onMomentumScrollEnd={onScroll}
         keyExtractor={(item) => item.id}
         extraData={{ searchQuery, activeFilters, selectedIds, selectionMode, activeTab }}
+        style={{ flex: 1 }}
         renderItem={useCallback(({ item, index }: any) => (
           <CategoryPageMemo
             categoryId={item.id}
@@ -910,6 +911,7 @@ function CategoryPage({
       <FlatList
         key={`catalog-grid-${layout.numColumns}`}
         ref={flatListRef}
+        style={{ flex: 1 }}
         data={products}
         extraData={selectedIds}
         keyExtractor={(item) => item.id}
