@@ -51,7 +51,7 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
         </ScrollView>
       );
     }
-    return <View style={[styles.content, { flex: 1 }, contentContainerStyle]}>{children}</View>;
+    return <View style={[{ flex: 1 }, withScrollView ? styles.content : undefined, contentContainerStyle]}>{children}</View>;
   };
 
   return (
