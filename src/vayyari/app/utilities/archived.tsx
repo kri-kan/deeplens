@@ -107,7 +107,26 @@ export default function ArchivedProductsScreen() {
   const productsRef = useRef(products);
   
   useEffect(() => { onSelectRef.current = toggleSelection; }, [toggleSelection]);
-  useEffect(() => { productsRef.current = products; }, [products]);
+  const [containerWidth, setContainerWidth] = useState(width);
+
+  const getCatalogLayout = (w: number) => {
+    let numColumns = 3;
+    if (w >= 1400) numColumns = 6;
+    else if (w >= 1100) numColumns = 5;
+    else if (w >= 750) numColumns = 4;
+    else if (w >= 480) numColumns = 3;
+    else numColumns = 2;
+
+    const gap = 10;
+    const padding = 12;
+    const availableWidth = w - (padding * 2) - (gap * (numColumns - 1));
+    const tileWidth = Math.max(100, Math.floor(availableWidth / numColumns));
+    const tileHeight = Math.floor(tileWidth * 1.38);
+
+    return { numColumns, tileWidth, tileHeight, gap, padding };
+  };
+
+  const layout = getCatalogLayout(containerWidth);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -116,17 +135,13 @@ export default function ArchivedProductsScreen() {
       onMoveShouldSetPanResponder: () => isDragSelectingRef.current,
       onPanResponderMove: (evt: GestureResponderEvent) => {
         const { pageX, pageY } = evt.nativeEvent;
-        // Simple calculation for a single FlatList without horizontal paging offset
-        const COLS = 3;
-        const ROW_H = TILE_SIZE * 1.3;
-        const topEdge = 100; // rough estimate header height
-        const relX = pageX;
-        const relY = pageY - topEdge; // simplified
-        const col = Math.floor((relX / width) * COLS);
-        const row = Math.floor(relY / ROW_H);
+        const relX = pageX - layout.padding;
+        const relY = pageY - 100 - layout.padding;
+        const col = Math.floor(relX / (layout.tileWidth + layout.gap));
+        const row = Math.floor(relY / (layout.tileHeight + layout.gap));
         
-        if (col >= 0 && col < COLS && row >= 0) {
-          const idx = row * COLS + col;
+        if (col >= 0 && col < layout.numColumns && row >= 0) {
+          const idx = row * layout.numColumns + col;
           const prods = productsRef.current;
           if (idx < prods.length) {
             const id = prods[idx].id;
@@ -173,14 +188,27 @@ export default function ArchivedProductsScreen() {
       }
       withScrollView={false}
     >
-      <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+      <View
+        style={{ flex: 1 }}
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0 && Math.abs(w - containerWidth) > 5) setContainerWidth(w);
+        }}
+        {...panResponder.panHandlers}
+      >
         <FlatList
+          key={`archived-grid-${layout.numColumns}`}
           data={products}
           extraData={selectedIds}
           keyExtractor={(item) => item.id}
+          numColumns={layout.numColumns}
+          columnWrapperStyle={layout.numColumns > 1 ? { gap: layout.gap, marginBottom: layout.gap } : undefined}
+          contentContainerStyle={[styles.gridContent, { paddingHorizontal: layout.padding, paddingTop: 8 }]}
           renderItem={useCallback(({ item }: any) => (
             <ProductTile
               item={item}
+              tileWidth={layout.tileWidth}
+              tileHeight={layout.tileHeight}
               selected={selectedIds.has(item.id)}
               selectionMode={selectionMode}
               onPress={(p) => {
@@ -197,9 +225,7 @@ export default function ArchivedProductsScreen() {
               }}
               onToggleStar={(p, isStarred) => toggleStar(p.id, isStarred)}
             />
-          ), [selectedIds, selectionMode, toggleSelection, toggleStar])}
-          numColumns={3}
-          contentContainerStyle={styles.gridContent}
+          ), [selectedIds, selectionMode, toggleSelection, toggleStar, layout.tileWidth, layout.tileHeight])}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchProducts(true)} />}
           onEndReached={() => hasMore && fetchProducts()}
           onEndReachedThreshold={0.5}
