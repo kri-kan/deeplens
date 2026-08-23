@@ -4,12 +4,29 @@
 
 name: CD-Local-$(Date:yyyyMMdd)$(Rev:.r)
 
+parameters:
+  - name: agentPool
+    displayName: 'Agent Pool (Default: DeepLens-LocalPool, Override: ubuntu-latest)'
+    type: string
+    default: 'DeepLens-LocalPool'
+
 trigger:
   branches:
     include:
       - develop
+  paths:
+    exclude:
+      - 'README.md'
+      - 'DEEPLENS_GUIDE.md'
+      - 'PROJECT_GUIDELINES.md'
+      - 'docs/**'
+      - '.squad/**'
 
 pr: none
+
+variables:
+  - name: agentPool
+    value: ${{ parameters.agentPool }}
 
 stages:
   - stage: DeployToLocalHost
@@ -18,7 +35,10 @@ stages:
       - deployment: LocalHostDeployment
         displayName: 'Deploy Local Stack (192.168.0.170)'
         pool:
-          name: 'DeepLens-LocalPool'
+          ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
+            vmImage: ${{ parameters.agentPool }}
+          ${{ else }}:
+            name: ${{ parameters.agentPool }}
         environment: 'deeplens-local-dev'
         strategy:
           runOnce:

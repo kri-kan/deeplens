@@ -4,6 +4,12 @@
 
 name: CI-$(SourceBranchName)-$(Date:yyyyMMdd)$(Rev:.r)
 
+parameters:
+  - name: agentPool
+    displayName: 'Agent Pool (Default: DeepLens-LocalPool, Override: ubuntu-latest)'
+    type: string
+    default: 'DeepLens-LocalPool'
+
 trigger:
   branches:
     include:
@@ -12,14 +18,30 @@ trigger:
       - feature/*
       - bugfix/*
       - squad/*
+  paths:
+    exclude:
+      - 'README.md'
+      - 'DEEPLENS_GUIDE.md'
+      - 'PROJECT_GUIDELINES.md'
+      - 'docs/**'
+      - '.squad/**'
 
 pr:
   branches:
     include:
       - main
       - develop
+  paths:
+    exclude:
+      - 'README.md'
+      - 'DEEPLENS_GUIDE.md'
+      - 'PROJECT_GUIDELINES.md'
+      - 'docs/**'
+      - '.squad/**'
 
 variables:
+  - name: agentPool
+    value: ${{ parameters.agentPool }}
   - name: DOTNET_VERSION
     value: '9.0.x'
   - name: PYTHON_VERSION
@@ -33,16 +55,20 @@ stages:
     jobs:
       - template: templates/jobs/job-build-test-dotnet.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           dotnetVersion: $(DOTNET_VERSION)
 
       - template: templates/jobs/job-build-test-python.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           pythonVersion: $(PYTHON_VERSION)
 
       - template: templates/jobs/job-build-test-frontend.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           nodeVersion: $(NODE_VERSION)
 
       - template: templates/jobs/job-validate-mobile.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           nodeVersion: $(NODE_VERSION)

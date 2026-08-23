@@ -74,17 +74,17 @@ All pipeline files are modularized under [`.azuredevops/`](file:///home/krikan/p
 ├── azure-pipelines.yml                       # Master Orchestrator Pipeline
 ├── .azuredevops/
 │   ├── MIGRATION_ARCHITECTURE.md             # Complete Architecture & Migration Blueprint
-│   ├── pipelines/
-│   │   ├── azure-pipelines-ci.yml           # Fast PR & Branch Validation Pipeline
-│   │   ├── azure-pipelines-cd-hybrid.yml    # On-Premise Local Stack CD Pipeline
-│   │   └── azure-pipelines-cd-azure.yml     # Azure Free Tiers (SWA + ACA) CD Pipeline
-│   └── templates/
-│       └── jobs/
-│           ├── job-build-test-dotnet.yml     # .NET 9.0 Solution Build, Unit Test & Coverage
-│           ├── job-build-test-python.yml     # Python 3.11 Lint (Flake8) & Test (Pytest)
-│           ├── job-build-test-frontend.yml   # Store (Vite 8) & WhatsApp Processor Build
-│           ├── job-validate-mobile.yml       # Vayyari (React Native/Expo 54) Validation
-│           └── job-docker-build-push.yml     # Docker Multi-Service Matrix Build & Push
+│   └── pipelines/
+│       ├── azure-pipelines-ci.yml           # Fast PR & Branch Validation Pipeline
+│       ├── azure-pipelines-cd-hybrid.yml    # On-Premise Local Stack CD Pipeline
+│       ├── azure-pipelines-cd-azure.yml     # Azure Free Tiers (SWA + ACA) CD Pipeline
+│       └── templates/
+│           └── jobs/
+│               ├── job-build-test-dotnet.yml     # .NET 9.0 Solution Build, Unit Test & Coverage
+│               ├── job-build-test-python.yml     # Python 3.11 Lint (Flake8) & Test (Pytest)
+│               ├── job-build-test-frontend.yml   # Store (Vite 8) & WhatsApp Processor Build
+│               ├── job-validate-mobile.yml       # Vayyari (React Native/Expo 54) Validation
+│               └── job-docker-build-push.yml     # Docker Multi-Service Matrix Build & Push
 ```
 
 ---

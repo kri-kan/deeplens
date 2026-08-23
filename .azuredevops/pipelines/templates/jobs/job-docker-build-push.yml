@@ -3,6 +3,9 @@
 # ==============================================================================
 
 parameters:
+  - name: agentPool
+    type: string
+    default: 'DeepLens-LocalPool'
   - name: containerRegistryServiceConnection
     type: string
     default: 'DeepLens-ContainerRegistry'
@@ -12,15 +15,15 @@ parameters:
   - name: tag
     type: string
     default: '$(Build.BuildId)'
-  - name: vmImage
-    type: string
-    default: 'ubuntu-latest'
 
 jobs:
   - job: DockerBuildAndPush
     displayName: 'Docker Build & Push Microservices'
     pool:
-      vmImage: ${{ parameters.vmImage }}
+      ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
+        vmImage: ${{ parameters.agentPool }}
+      ${{ else }}:
+        name: ${{ parameters.agentPool }}
     strategy:
       matrix:
         SearchApi:

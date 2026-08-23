@@ -3,18 +3,21 @@
 # ==============================================================================
 
 parameters:
+  - name: agentPool
+    type: string
+    default: 'DeepLens-LocalPool'
   - name: nodeVersion
     type: string
     default: '22.x'
-  - name: vmImage
-    type: string
-    default: 'ubuntu-latest'
 
 jobs:
   - job: ValidateMobileApp
     displayName: 'Vayyari Mobile Lint & Typecheck'
     pool:
-      vmImage: ${{ parameters.vmImage }}
+      ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
+        vmImage: ${{ parameters.agentPool }}
+      ${{ else }}:
+        name: ${{ parameters.agentPool }}
     steps:
       - task: NodeTool@0
         displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
