@@ -1,0 +1,54 @@
+# ==============================================================================
+# Job Template: Frontend & Web Apps (Store, WhatsAppProcessor)
+# ==============================================================================
+
+parameters:
+  - name: nodeVersion
+    type: string
+    default: '22.x'
+  - name: vmImage
+    type: string
+    default: 'ubuntu-latest'
+
+jobs:
+  - job: BuildAndTestFrontend
+    displayName: 'Frontend Build & Lint (Store & WhatsApp Processor)'
+    pool:
+      vmImage: ${{ parameters.vmImage }}
+    steps:
+      - task: NodeTool@0
+        displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
+        inputs:
+          versionSpec: ${{ parameters.nodeVersion }}
+
+      - task: Cache@2
+        displayName: 'Cache npm ~/.npm'
+        inputs:
+          key: 'npm | "$(Agent.OS)" | src/store/package.json | src/whatsapp-processor/package.json'
+          restoreKeys: |
+            npm | "$(Agent.OS)"
+            npm
+          path: $(HOME)/.npm
+
+      - script: |
+          echo "=== Building Store App ==="
+          cd src/store
+          npm ci || npm install
+          npm run build
+          cd -
+        displayName: 'Build Store (Vite 8 + React 19)'
+
+      - script: |
+          echo "=== Building WhatsApp Processor Backend ==="
+          cd src/whatsapp-processor
+          npm ci || npm install
+          npm run build
+          cd -
+        displayName: 'Build WhatsApp Processor Backend'
+
+      - task: PublishPipelineArtifact@1
+        displayName: 'Publish Store Artifact'
+        inputs:
+          targetPath: 'src/store/dist'
+          artifact: 'DeepLensStore-dist'
+          publishLocation: 'pipeline'

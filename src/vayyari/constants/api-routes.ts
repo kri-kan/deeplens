@@ -5,8 +5,9 @@
 export const API_ROUTES = {
   // Authentication & Identity
   AUTH: {
-    LOGIN: '/connect/token',
-    PROFILE: '/api/auth/me',
+    LOGIN: '/api/v1/auth/login',
+    REFRESH: '/api/v1/auth/refresh',
+    PROFILE: '/api/v1/auth/capabilities',
     CAPABILITIES: '/api/v1/auth/capabilities',
   },
 

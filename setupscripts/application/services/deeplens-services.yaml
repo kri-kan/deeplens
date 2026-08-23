@@ -21,21 +21,6 @@ services:
     networks:
       - deeplens-network
 
-  # =============================================================================
-  # Feature Extraction Service - Vectorization (Python)
-  # =============================================================================
-  feature-extraction:
-    build:
-      context: ../../../src/DeepLens.FeatureExtractionService
-      dockerfile: Dockerfile
-    container_name: deeplens-feature-extraction
-    restart: unless-stopped
-    ports:
-      - "${FEATURE_EXTRACTION_PORT:-8001}:8001"
-    volumes:
-      - ../../../src/DeepLens.Service/DeepLens.FeatureExtractionService/models:/app/models
-    networks:
-      - deeplens-network
 
   # =============================================================================
   # Instagram Scraper Worker (Python/Node)

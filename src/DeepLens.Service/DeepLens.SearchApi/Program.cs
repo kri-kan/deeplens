@@ -122,19 +122,24 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Configure Authentication
+// Configure Native Authentication (JWT)
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"] ?? "deeplens-super-secret-key-32-chars-long-2026!";
+var symmetricKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtSecretKey));
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Identity:Authority"] ?? "http://localhost:5198";
-        options.Audience = "deeplens-api";
         options.RequireHttpsMetadata = false; 
-        
+        options.SaveToken = true;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuers = new[] 
             { 
+                "deeplens-api",
+                "http://192.168.0.170:5000",
+                "http://100.98.244.8:5000",
+                "http://localhost:5000",
                 "http://192.168.0.170:5198", 
                 "http://100.98.244.8:5198",
                 "http://10.0.2.2:5198",
@@ -143,8 +148,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 "https://localhost:5001"
             },
             ValidateAudience = true,
+            ValidAudiences = new[] { "deeplens-api", "deeplens-webui", "deeplens-mobile" },
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
+            IssuerSigningKey = symmetricKey,
             ClockSkew = TimeSpan.Zero
         };
     });
@@ -215,6 +222,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "DeepLens.SearchApi", timestamp = DateTime.UtcNow })).AllowAnonymous();
 
 // Seed App Settings on startup with retry resilience
 using (var scope = app.Services.CreateScope())

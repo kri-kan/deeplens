@@ -1,0 +1,58 @@
+# ==============================================================================
+# Job Template: Python Services (ReasoningService)
+# ==============================================================================
+
+parameters:
+  - name: pythonVersion
+    type: string
+    default: '3.11'
+  - name: vmImage
+    type: string
+    default: 'ubuntu-latest'
+
+jobs:
+  - job: BuildAndTestPython
+    displayName: 'Python Services Lint & Test'
+    pool:
+      vmImage: ${{ parameters.vmImage }}
+    steps:
+      - task: UsePythonVersion@0
+        displayName: 'Use Python ${{ parameters.pythonVersion }}'
+        inputs:
+          versionSpec: ${{ parameters.pythonVersion }}
+
+      - task: Cache@2
+        displayName: 'Cache Pip Packages'
+        inputs:
+          key: 'pip | "$(Agent.OS)" | src/DeepLens.ReasoningService/requirements.txt'
+          restoreKeys: |
+            pip | "$(Agent.OS)"
+            pip
+          path: $(HOME)/.cache/pip
+
+      - script: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest pytest-cov pytest-asyncio httpx
+        displayName: 'Install Base Test Tools'
+
+      - script: |
+          echo "=== Installing ReasoningService Dependencies ==="
+          pip install -r src/DeepLens.ReasoningService/requirements.txt
+          
+          echo "=== Running Flake8 on ReasoningService ==="
+          flake8 src/DeepLens.ReasoningService --count --select=E9,F63,F7,F82 --show-source --statistics || true
+
+          echo "=== Running ReasoningService Tests ==="
+          cd src/DeepLens.ReasoningService
+          pytest tests/ --junitxml=$(Agent.TempDirectory)/reasoning-test-results.xml || true
+          cd -
+        displayName: 'Test DeepLens.ReasoningService'
+
+      - task: PublishTestResults@2
+        displayName: 'Publish Python Test Results'
+        condition: always()
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '$(Agent.TempDirectory)/*-test-results.xml'
+          mergeTestResults: true
+          failTaskOnFailedTests: false

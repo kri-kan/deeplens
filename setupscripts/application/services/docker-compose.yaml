@@ -1,20 +1,4 @@
 services:
-  identity-api:
-    image: mcr.microsoft.com/dotnet/aspnet:9.0
-    container_name: nextgen-identity
-    restart: unless-stopped
-    ports:
-      - "${IDENTITY_API_PORT:-5198}:5198"
-    volumes:
-      - ${IDENTITY_HOSTING_PATH}:/app
-    environment:
-      - ASPNETCORE_URLS=http://+:5198
-      - ASPNETCORE_ENVIRONMENT=Development
-    working_dir: /app
-    command: dotnet NextGen.Identity.Api.dll
-    networks:
-      - deeplens-network
-
   search-api:
     image: mcr.microsoft.com/dotnet/aspnet:9.0
     container_name: deeplens-api
@@ -42,23 +26,10 @@ services:
     environment:
       - DOTNET_ENVIRONMENT=Development
       - Services__ReasoningApiUrl=http://reasoning-api:8002
-      - ConnectionStrings__FeatureExtractionService=http://feature-extraction:8001
       - ConnectionStrings__Qdrant=http://qdrant:6333
       - ConnectionStrings__Kafka=kafka-prod:29093
     working_dir: /app
     command: dotnet DeepLens.WorkerService.dll
-    networks:
-      - deeplens-network
-
-  web-ui:
-    image: nginx:alpine
-    container_name: deeplens-webui
-    restart: unless-stopped
-    ports:
-      - "${WEB_UI_PORT:-3006}:80"
-    volumes:
-      - ${WEB_UI_HOSTING_PATH}:/usr/share/nginx/html
-      - ./nginx-webui.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - deeplens-network
 

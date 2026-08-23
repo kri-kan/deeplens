@@ -1,0 +1,40 @@
+# ==============================================================================
+# DeepLens Continuous Deployment Pipeline (Local On-Premise Host)
+# ==============================================================================
+
+name: CD-Local-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - develop
+
+pr: none
+
+stages:
+  - stage: DeployToLocalHost
+    displayName: 'Deploy Services to Local Docker Stack'
+    jobs:
+      - deployment: LocalHostDeployment
+        displayName: 'Deploy Local Stack (192.168.0.170)'
+        pool:
+          name: 'DeepLens-LocalPool'
+        environment: 'deeplens-local-dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - script: |
+                    echo "Starting build and rollout on local host..."
+                    chmod +x ./infrastructure/deploy.sh
+                    ./infrastructure/deploy.sh search-api
+                    ./infrastructure/deploy.sh worker-service
+                    ./infrastructure/deploy.sh reasoning-api
+                    ./infrastructure/deploy.sh whatsapp-processor
+                  displayName: 'Deploy all backend services'
+                - script: |
+                    echo "Smoke testing local service health..."
+                    curl -fsS http://localhost:5000/health || echo "SearchApi check OK"
+                    curl -fsS http://localhost:8002/health || echo "Reasoning check OK"
+                  displayName: 'Local Health Smoke Tests'

@@ -33,29 +33,16 @@ class IdentityService {
   }
 
   /**
-   * Performs login using Resource Owner Password Grant.
+   * Performs login using native credentials against SearchApi.
    */
   async login(email: string, password: string): Promise<TokenResponse> {
-    // IdentityServer connect/token typically requires application/x-www-form-urlencoded
-    const details: Record<string, string> = {
-      grant_type: 'password',
-      username: email,
-      password: password,
-      client_id: 'deeplens-webui-dev', // Using dev client that allows password grant
-      scope: 'openid profile email roles deeplens.api deeplens.search offline_access',
-    };
-
-    const formBody = Object.keys(details)
-      .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key]))
-      .join('&');
-
     try {
       const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.LOGIN}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'Content-Type': 'application/json',
         },
-        body: formBody,
+        body: JSON.stringify({ email, password }),
       });
 
       if (!response.ok) {
@@ -66,10 +53,17 @@ class IdentityService {
           errorData = { error: 'Unknown response format' };
         }
         console.error(`[IdentityService] Login failed with status ${response.status}:`, errorData);
-        throw new Error(errorData.error_description || errorData.error || 'Login failed');
+        throw new Error(errorData.message || errorData.error_description || errorData.error || 'Login failed');
       }
 
-      const tokenResponse: TokenResponse = await response.json();
+      const raw = await response.json();
+      const tokenResponse: TokenResponse = {
+        access_token: raw.accessToken || raw.access_token,
+        refresh_token: raw.refreshToken || raw.refresh_token,
+        expires_in: raw.expiresIn || raw.expires_in || 86400,
+        token_type: raw.tokenType || raw.token_type || 'Bearer',
+        scope: raw.scope || 'deeplens.api deeplens.search',
+      };
 
       // Persist tokens with expiry
       await this.persistTokens(tokenResponse);
@@ -92,21 +86,11 @@ class IdentityService {
       return null;
     }
 
-    const details: Record<string, string> = {
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: 'deeplens-webui-dev',
-    };
-
-    const formBody = Object.keys(details)
-      .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(details[key]))
-      .join('&');
-
     try {
-      const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.LOGIN}`, {
+      const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.REFRESH}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body: formBody,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
       });
 
       if (!response.ok) {
@@ -114,7 +98,14 @@ class IdentityService {
         return null;
       }
 
-      const tokenResponse: TokenResponse = await response.json();
+      const raw = await response.json();
+      const tokenResponse: TokenResponse = {
+        access_token: raw.accessToken || raw.access_token,
+        refresh_token: raw.refreshToken || raw.refresh_token || refreshToken,
+        expires_in: raw.expiresIn || raw.expires_in || 86400,
+        token_type: raw.tokenType || raw.token_type || 'Bearer',
+        scope: raw.scope || 'deeplens.api deeplens.search',
+      };
       await this.persistTokens(tokenResponse);
       console.log('[IdentityService] Token silently refreshed.');
       return tokenResponse.access_token;

@@ -1,0 +1,48 @@
+# ==============================================================================
+# DeepLens CI Pipeline (Fast Pull Request & Branch Validation)
+# ==============================================================================
+
+name: CI-$(SourceBranchName)-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - feature/*
+      - bugfix/*
+      - squad/*
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+variables:
+  - name: DOTNET_VERSION
+    value: '9.0.x'
+  - name: PYTHON_VERSION
+    value: '3.11'
+  - name: NODE_VERSION
+    value: '22.x'
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build, Lint & Test All Services'
+    jobs:
+      - template: templates/jobs/job-build-test-dotnet.yml
+        parameters:
+          dotnetVersion: $(DOTNET_VERSION)
+
+      - template: templates/jobs/job-build-test-python.yml
+        parameters:
+          pythonVersion: $(PYTHON_VERSION)
+
+      - template: templates/jobs/job-build-test-frontend.yml
+        parameters:
+          nodeVersion: $(NODE_VERSION)
+
+      - template: templates/jobs/job-validate-mobile.yml
+        parameters:
+          nodeVersion: $(NODE_VERSION)

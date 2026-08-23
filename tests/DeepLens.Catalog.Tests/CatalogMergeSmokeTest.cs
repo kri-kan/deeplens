@@ -1,6 +1,7 @@
 using Dapper;
 using DeepLens.SearchApi.Services;
 using DeepLens.Infrastructure.Services;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -22,13 +23,14 @@ public class CatalogMergeSmokeTest
         var logger = new Mock<ILogger<MetadataService>>().Object;
         var producerConfig = new Confluent.Kafka.ProducerConfig { BootstrapServers = "localhost:9092" };
         var producer = new Confluent.Kafka.ProducerBuilder<string, string>(producerConfig).Build();
+        var cache = new MemoryCache(new MemoryCacheOptions());
         
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> {
                 {"ConnectionStrings:DefaultConnection", _connectionString}
             }).Build();
 
-        _service = new MetadataService(config, logger, producer);
+        _service = new MetadataService(config, logger, cache, producer);
 
         await EnsureSchemaAsync();
     }

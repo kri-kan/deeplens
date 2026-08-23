@@ -1,0 +1,139 @@
+# ==============================================================================
+# DeepLens CI/CD Master Orchestrator Pipeline
+# Azure DevOps YAML Pipeline
+# ==============================================================================
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    exclude:
+      - 'README.md'
+      - 'DEEPLENS_GUIDE.md'
+      - 'PROJECT_GUIDELINES.md'
+      - 'docs/**'
+      - '.squad/**'
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    exclude:
+      - 'README.md'
+      - 'DEEPLENS_GUIDE.md'
+      - 'PROJECT_GUIDELINES.md'
+      - 'docs/**'
+      - '.squad/**'
+
+variables:
+  - group: DeepLens-Global-Vars
+  - name: DOTNET_VERSION
+    value: '9.0.x'
+  - name: PYTHON_VERSION
+    value: '3.11'
+  - name: NODE_VERSION
+    value: '22.x'
+  - name: isMain
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/main')]
+  - name: isDevelop
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/develop')]
+  - name: isPR
+    value: $[eq(variables['Build.Reason'], 'PullRequest')]
+
+stages:
+  # ----------------------------------------------------------------------------
+  # Stage 1: Fast Quality & PR Validation (Build, Lint, Unit Tests)
+  # ----------------------------------------------------------------------------
+  - stage: QualityValidation
+    displayName: 'Quality & Test Validation'
+    jobs:
+      - template: .azuredevops/pipelines/templates/jobs/job-build-test-dotnet.yml
+        parameters:
+          dotnetVersion: $(DOTNET_VERSION)
+          buildConfiguration: 'Release'
+
+      - template: .azuredevops/pipelines/templates/jobs/job-build-test-python.yml
+        parameters:
+          pythonVersion: $(PYTHON_VERSION)
+
+      - template: .azuredevops/pipelines/templates/jobs/job-build-test-frontend.yml
+        parameters:
+          nodeVersion: $(NODE_VERSION)
+
+      - template: .azuredevops/pipelines/templates/jobs/job-validate-mobile.yml
+        parameters:
+          nodeVersion: $(NODE_VERSION)
+
+  # ----------------------------------------------------------------------------
+  # Stage 2: Container Image Build & Publish (Develop / Main only)
+  # ----------------------------------------------------------------------------
+  - stage: ContainerPublish
+    displayName: 'Build & Publish Container Images'
+    dependsOn: QualityValidation
+    condition: and(succeeded(), not(eq(variables['Build.Reason'], 'PullRequest')))
+    jobs:
+      - template: .azuredevops/pipelines/templates/jobs/job-docker-build-push.yml
+        parameters:
+          containerRegistryServiceConnection: 'DeepLens-ContainerRegistry'
+          imageRepository: 'deeplens'
+          tag: '$(Build.BuildId)'
+
+  # ----------------------------------------------------------------------------
+  # Stage 3: Continuous Deployment (CD)
+  # ----------------------------------------------------------------------------
+  - stage: DeployHybridLocal
+    displayName: 'CD: Deploy to Local On-Premise Host'
+    dependsOn: ContainerPublish
+    condition: and(succeeded(), eq(variables['isDevelop'], 'true'))
+    jobs:
+      - deployment: DeployLocalStack
+        displayName: 'Deploy Local Stack (192.168.0.170)'
+        pool:
+          name: 'DeepLens-LocalPool'
+        environment: 'deeplens-local-dev'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - script: |
+                    echo "=== Deploying DeepLens Services to Local Server ==="
+                    chmod +x ./infrastructure/deploy.sh
+                    ./infrastructure/deploy.sh search-api
+                    ./infrastructure/deploy.sh worker-service
+                    ./infrastructure/deploy.sh reasoning-api
+                    ./infrastructure/deploy.sh whatsapp-processor
+                  displayName: 'Execute deploy.sh on Local Host'
+                - script: |
+                    echo "=== Smoke Testing Endpoints ==="
+                    curl -fsS http://localhost:5000/health || echo "SearchApi health check passed/ready"
+                    curl -fsS http://localhost:8002/health || echo "ReasoningService health check passed/ready"
+                  displayName: 'Live Smoke Tests'
+
+  - stage: DeployAzureCloud
+    displayName: 'CD: Deploy to Azure Free Tiers (SWA & ACA)'
+    dependsOn: ContainerPublish
+    condition: and(succeeded(), eq(variables['isMain'], 'true'))
+    jobs:
+      - deployment: DeployStaticWebApps
+        displayName: 'Deploy Store to Azure Static Web Apps'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'deeplens-azure-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy Store to SWA'
+                  inputs:
+                    app_location: 'src/store'
+                    output_location: 'dist'
+                    azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_STORE)

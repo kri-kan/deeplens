@@ -1,6 +1,6 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
-using DeepLens.Contracts.Tenants;
+using DeepLens.Contracts.Auth;
 using NetArchTest.Rules;
 using Xunit;
 
@@ -8,7 +8,7 @@ namespace DeepLens.ArchitectureTests;
 
 public class DtoTests
 {
-    private static readonly Assembly ContractsAssembly = typeof(CreateTenantRequest).Assembly;
+    private static readonly Assembly ContractsAssembly = typeof(LoginRequest).Assembly;
 
     [Fact]
     public void AllPublicPropertiesInContractsShouldHaveJsonPropertyNameAttribute()
