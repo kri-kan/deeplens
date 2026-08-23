@@ -102,10 +102,10 @@ model_list:
 # -----------------------------------------------------------------------------
 router_settings:
   routing_strategy: least-busy
-  num_retries: 3
-  timeout: 120
+  num_retries: 1
+  timeout: 30
   retry_after: 5
-  allowed_fails: 2
+  allowed_fails: 1
   cooldown_time: 30
 
 # -----------------------------------------------------------------------------
@@ -114,17 +114,14 @@ router_settings:
 litellm_settings:
   drop_params: true
   set_verbose: false
-  num_retries: 3
-  request_timeout: 120
+  num_retries: 1
+  request_timeout: 45
   fallbacks:
     - deeplens-llm:
-        - phi3:latest
         - phi4-mini:latest
     - deeplens-fast:
-        - phi3:latest
         - phi4-mini:latest
     - gemini-2.5-flash:
-        - phi3:latest
         - phi4-mini:latest
 
 # -----------------------------------------------------------------------------
