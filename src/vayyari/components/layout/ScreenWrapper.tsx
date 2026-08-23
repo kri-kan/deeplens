@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, ScrollView, View, ViewStyle, RefreshControl } from 'react-native';
+import { StyleSheet, ScrollView, View, ViewStyle, RefreshControl, Platform, useWindowDimensions } from 'react-native';
 import { Surface, Appbar, useTheme } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 
@@ -29,6 +29,11 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
 }) => {
   const theme = useTheme();
   const router = useRouter();
+  // On web, flex:1 alone doesn't constrain height without explicit CSS on ancestor elements.
+  // We read the window height and pin the Surface to it so the inner FlatList gets a bounded
+  // viewport and can scroll normally in the browser.
+  const { height: windowHeight } = useWindowDimensions();
+  const webHeightStyle = Platform.OS === 'web' ? { height: windowHeight } : {};
 
   const renderContent = () => {
     if (withScrollView) {
@@ -50,7 +55,7 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
   };
 
   return (
-    <Surface style={[styles.container, { backgroundColor: theme.colors.background }]} elevation={0}>
+    <Surface style={[styles.container, { backgroundColor: theme.colors.background }, webHeightStyle]} elevation={0}>
       <Appbar.Header 
         style={{ 
           backgroundColor: theme.colors.background, 
