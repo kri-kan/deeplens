@@ -19,10 +19,10 @@ jobs:
       ${{ else }}:
         name: ${{ parameters.agentPool }}
     steps:
-      - task: NodeTool@0
+      - task: UseNode@1
         displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
         inputs:
-          versionSpec: ${{ parameters.nodeVersion }}
+          version: ${{ parameters.nodeVersion }}
 
       - task: Cache@2
         displayName: 'Cache npm ~/.npm'
