@@ -5,6 +5,12 @@
 
 name: $(Date:yyyyMMdd)$(Rev:.r)
 
+parameters:
+  - name: agentPool
+    displayName: 'Agent Pool (Default: DeepLens-LocalPool, Override: ubuntu-latest)'
+    type: string
+    default: 'DeepLens-LocalPool'
+
 trigger:
   branches:
     include:
@@ -33,6 +39,8 @@ pr:
 
 variables:
   - group: DeepLens-Global-Vars
+  - name: agentPool
+    value: ${{ parameters.agentPool }}
   - name: DOTNET_VERSION
     value: '9.0.x'
   - name: PYTHON_VERSION
@@ -55,19 +63,23 @@ stages:
     jobs:
       - template: .azuredevops/pipelines/templates/jobs/job-build-test-dotnet.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           dotnetVersion: $(DOTNET_VERSION)
           buildConfiguration: 'Release'
 
       - template: .azuredevops/pipelines/templates/jobs/job-build-test-python.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           pythonVersion: $(PYTHON_VERSION)
 
       - template: .azuredevops/pipelines/templates/jobs/job-build-test-frontend.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           nodeVersion: $(NODE_VERSION)
 
       - template: .azuredevops/pipelines/templates/jobs/job-validate-mobile.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           nodeVersion: $(NODE_VERSION)
 
   # ----------------------------------------------------------------------------
@@ -80,6 +92,7 @@ stages:
     jobs:
       - template: .azuredevops/pipelines/templates/jobs/job-docker-build-push.yml
         parameters:
+          agentPool: ${{ parameters.agentPool }}
           containerRegistryServiceConnection: 'DeepLens-ContainerRegistry'
           imageRepository: 'deeplens'
           tag: '$(Build.BuildId)'
@@ -95,7 +108,10 @@ stages:
       - deployment: DeployLocalStack
         displayName: 'Deploy Local Stack (192.168.0.170)'
         pool:
-          name: 'DeepLens-LocalPool'
+          ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
+            vmImage: ${{ parameters.agentPool }}
+          ${{ else }}:
+            name: ${{ parameters.agentPool }}
         environment: 'deeplens-local-dev'
         strategy:
           runOnce:

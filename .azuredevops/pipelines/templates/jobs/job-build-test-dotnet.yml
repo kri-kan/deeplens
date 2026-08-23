@@ -3,21 +3,24 @@
 # ==============================================================================
 
 parameters:
+  - name: agentPool
+    type: string
+    default: 'DeepLens-LocalPool'
   - name: dotnetVersion
     type: string
     default: '9.0.x'
   - name: buildConfiguration
     type: string
     default: 'Release'
-  - name: vmImage
-    type: string
-    default: 'ubuntu-latest'
 
 jobs:
   - job: BuildAndTestDotNet
     displayName: '.NET Build, Test & Coverage'
     pool:
-      vmImage: ${{ parameters.vmImage }}
+      ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
+        vmImage: ${{ parameters.agentPool }}
+      ${{ else }}:
+        name: ${{ parameters.agentPool }}
     steps:
       - task: UseDotNet@2
         displayName: 'Install .NET Core SDK ${{ parameters.dotnetVersion }}'
@@ -43,6 +46,8 @@ jobs:
         displayName: 'Build Solutions (${{ parameters.buildConfiguration }})'
 
       - script: |
+          mkdir -p $(Agent.TempDirectory)/TestResults
+          
           dotnet test tests/DeepLens.Domain.Tests/DeepLens.Domain.Tests.csproj \
             -c ${{ parameters.buildConfiguration }} \
             --collect:"XPlat Code Coverage" \

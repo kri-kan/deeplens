@@ -3,18 +3,21 @@
 # ==============================================================================
 
 parameters:
+  - name: agentPool
+    type: string
+    default: 'DeepLens-LocalPool'
   - name: pythonVersion
     type: string
     default: '3.11'
-  - name: vmImage
-    type: string
-    default: 'ubuntu-latest'
 
 jobs:
   - job: BuildAndTestPython
     displayName: 'Python Services Lint & Test'
     pool:
-      vmImage: ${{ parameters.vmImage }}
+      ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
+        vmImage: ${{ parameters.agentPool }}
+      ${{ else }}:
+        name: ${{ parameters.agentPool }}
     steps:
       - task: UsePythonVersion@0
         displayName: 'Use Python ${{ parameters.pythonVersion }}'

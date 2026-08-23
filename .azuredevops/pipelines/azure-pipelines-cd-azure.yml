@@ -8,6 +8,13 @@ trigger:
   branches:
     include:
       - main
+  paths:
+    exclude:
+      - 'README.md'
+      - 'DEEPLENS_GUIDE.md'
+      - 'PROJECT_GUIDELINES.md'
+      - 'docs/**'
+      - '.squad/**'
 
 pr: none
 
