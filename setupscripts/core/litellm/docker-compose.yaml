@@ -13,6 +13,13 @@ services:
       - GEMINI_API_KEY_3=${GEMINI_API_KEY_3:-}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-deeplens-master-key}
       - OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://ollama-gpu:11434}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@192.168.0.170:5432/litellm}
+      - STORE_MODEL_IN_DB=True
+      - UI_USERNAME=${LITELLM_UI_USERNAME:-admin}
+      - UI_PASSWORD=${LITELLM_UI_PASSWORD:-sk-deeplens-master-key}
+      - REDIS_HOST=${REDIS_HOST:-192.168.0.170}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_URL=${REDIS_URL:-redis://192.168.0.170:6379/0}
       - LITELLM_LOG=INFO
     volumes:
       - ../../../deploy/litellm/litellm-config.yaml:/app/config.yaml:ro
@@ -23,6 +30,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       deeplens-network:
         aliases:

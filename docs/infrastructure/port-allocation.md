@@ -6,8 +6,8 @@ This document tracks ports used by DeepLens services. Many core services are now
 
 | Port | Service            | Host            | Purpose                        |
 | ---- | ------------------ | --------------- | ------------------------------ |
-| 5432 | PostgreSQL         | `192.168.0.170` | Primary relational database    |
-| 6379 | Redis              | `192.168.0.170` | Distributed cache              |
+| 5432 | PostgreSQL         | `192.168.0.170` | Primary relational database & LiteLLM spend state |
+| 6379 | Redis              | `192.168.0.170` | Distributed cache, LiteLLM response cache & RPM sync |
 | 9092 | Kafka              | `192.168.0.170` | Message broker                 |
 | 9000 | MinIO (API)        | `192.168.0.170` | Object storage API             |
 | 9001 | MinIO (Console)    | `192.168.0.170` | Object storage UI              |
@@ -17,6 +17,13 @@ This document tracks ports used by DeepLens services. Many core services are now
 | 8080 | Kafka UI           | `192.168.0.170` | Topic management               |
 | 9090 | Prometheus         | `192.168.0.170` | Metrics database               |
 | 16686| Jaeger UI          | `192.168.0.170` | Distributed tracing UI         |
+
+## 🏗️ Startup Dependency Sequence
+
+All infrastructure must launch in strict dependency order:
+1. **Core Data Tier**: `postgres` (5432) & `redis` (6379) initialize and pass healthchecks.
+2. **Inference Tier**: `litellm` (4000) & `ollama-gpu` (11434) boot after `postgres` and `redis` become healthy.
+3. **Gateway & Applications**: `gateway` (80) starts once `litellm` is healthy; application containers (`deeplens-api` 5000, `reasoning-api` 8002) attach to `deeplens-network`.
 
 ## 🚀 Application Services (Local)
 

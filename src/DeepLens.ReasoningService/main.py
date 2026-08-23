@@ -75,7 +75,7 @@ LITELLM_MODEL = os.getenv("LITELLM_MODEL", "deeplens-llm")
 llm_client = AsyncOpenAI(
     base_url=LITELLM_BASE_URL,
     api_key=LITELLM_API_KEY,
-    timeout=10.0,
+    timeout=60.0,
     max_retries=1
 )
 

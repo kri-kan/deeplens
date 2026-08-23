@@ -9,6 +9,11 @@ services:
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
       - ${REDIS_DATA_PATH}:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - deeplens-network
  

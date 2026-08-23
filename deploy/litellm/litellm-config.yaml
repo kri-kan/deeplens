@@ -102,8 +102,11 @@ model_list:
 # -----------------------------------------------------------------------------
 router_settings:
   routing_strategy: least-busy
+  redis_host: os.environ/REDIS_HOST
+  redis_port: os.environ/REDIS_PORT
+  redis_url: os.environ/REDIS_URL
   num_retries: 1
-  timeout: 30
+  timeout: 120
   retry_after: 5
   allowed_fails: 1
   cooldown_time: 30
@@ -115,14 +118,22 @@ litellm_settings:
   drop_params: true
   set_verbose: false
   num_retries: 1
-  request_timeout: 45
+  request_timeout: 120
+  cache: true
+  cache_params:
+    type: redis
+    host: os.environ/REDIS_HOST
+    port: os.environ/REDIS_PORT
   fallbacks:
     - deeplens-llm:
         - phi4-mini:latest
+        - phi3:latest
     - deeplens-fast:
         - phi4-mini:latest
+        - phi3:latest
     - gemini-2.5-flash:
         - phi4-mini:latest
+        - phi3:latest
 
 # -----------------------------------------------------------------------------
 # General Settings: Proxy Security

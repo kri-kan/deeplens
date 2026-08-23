@@ -17,6 +17,9 @@ services:
       - STORE_MODEL_IN_DB=True
       - UI_USERNAME=${LITELLM_UI_USERNAME:-admin}
       - UI_PASSWORD=${LITELLM_UI_PASSWORD:-sk-deeplens-master-key}
+      - REDIS_HOST=${REDIS_HOST:-192.168.0.170}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_URL=${REDIS_URL:-redis://192.168.0.170:6379/0}
       - LITELLM_LOG=INFO
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro

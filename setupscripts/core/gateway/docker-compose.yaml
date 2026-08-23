@@ -8,6 +8,9 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./index.html:/usr/share/nginx/html/index.html:ro
+    depends_on:
+      litellm:
+        condition: service_healthy
     networks:
       - deeplens-network
 
