@@ -10,11 +10,14 @@ DeepLens containerized LiteLLM proxy router providing multi-key load balancing a
 | ---- | ------- |
 | **Admin UI URL** | `http://localhost:4000/ui` |
 | **API Swagger Docs** | `http://localhost:4000/` |
-| **Authentication Type** | Master Key / Bearer Token |
+| **Admin UI Username** | `admin` |
+| **Admin UI Password** | `sk-deeplens-master-key` |
 | **Default Master Key** | `sk-deeplens-master-key` |
-| **Config File** | `deploy/litellm/.env` (`LITELLM_MASTER_KEY`) |
+| **Database Connection** | `postgresql://postgres:***@192.168.0.170:5432/litellm` |
+| **Spend Tracking & DB Storage** | Enabled (`STORE_MODEL_IN_DB=True`) |
+| **Config File** | `deploy/litellm/.env` |
 
-> **Note**: When prompted on the `/ui` login screen, enter `sk-deeplens-master-key` (or your custom `LITELLM_MASTER_KEY` value from `.env`) to access the dashboard.
+> **Note**: When prompted on the `/ui` login screen, enter username `admin` and password `sk-deeplens-master-key` (or your master key / bearer token) to access the dashboard and spend analytics.
 
 ---
 
