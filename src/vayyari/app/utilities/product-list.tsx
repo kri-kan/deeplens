@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, FlatList, Dimensions, RefreshControl, StyleSheet, Alert,
-  PanResponder, GestureResponderEvent, BackHandler, ScrollView
+  PanResponder, GestureResponderEvent, BackHandler, ScrollView, Platform
 } from 'react-native';
 import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Portal, Dialog, List, Button, Menu, TextInput, Chip } from 'react-native-paper';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -904,7 +904,8 @@ function CategoryPage({
           containerHeightRef.current = h;
         });
       }}
-      {...panResponder.panHandlers}
+      // On web, don't attach panHandlers — they block native browser scroll.
+      {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
     >
       <FlatList
         key={`catalog-grid-${layout.numColumns}`}

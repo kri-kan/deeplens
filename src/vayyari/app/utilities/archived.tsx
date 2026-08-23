@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { View, FlatList, Dimensions, RefreshControl, StyleSheet, PanResponder, BackHandler, GestureResponderEvent, Alert } from 'react-native';
+import { View, FlatList, Dimensions, RefreshControl, StyleSheet, PanResponder, BackHandler, GestureResponderEvent, Alert, Platform } from 'react-native';
 import { Text, IconButton, useTheme, ActivityIndicator, Searchbar, Button } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
@@ -203,7 +203,8 @@ export default function ArchivedProductsScreen() {
           const w = e.nativeEvent.layout.width;
           if (w > 0 && Math.abs(w - containerWidth) > 5) setContainerWidth(w);
         }}
-        {...panResponder.panHandlers}
+        // On web, don't attach panHandlers — they block native browser scroll.
+        {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
       >
         <FlatList
           key={`archived-grid-${layout.numColumns}`}
