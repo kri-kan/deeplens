@@ -5,7 +5,7 @@
 parameters:
   - name: agentPool
     type: string
-    default: 'DeepLens-LocalPool'
+    default: 'ubuntu-latest'
   - name: dotnetVersion
     type: string
     default: '9.0.x'

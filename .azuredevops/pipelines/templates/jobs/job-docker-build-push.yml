@@ -5,7 +5,7 @@
 parameters:
   - name: agentPool
     type: string
-    default: 'DeepLens-LocalPool'
+    default: 'ubuntu-latest'
   - name: containerRegistryServiceConnection
     type: string
     default: 'DeepLens-ContainerRegistry'
