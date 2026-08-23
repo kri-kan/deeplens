@@ -8,9 +8,6 @@ services:
     environment:
       - PORT=4000
       - NUM_WORKERS=4
-      - GEMINI_API_KEY_1=${GEMINI_API_KEY_1:-}
-      - GEMINI_API_KEY_2=${GEMINI_API_KEY_2:-}
-      - GEMINI_API_KEY_3=${GEMINI_API_KEY_3:-}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-deeplens-master-key}
       - OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://ollama-gpu:11434}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@192.168.0.170:5432/litellm}

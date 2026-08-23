@@ -1,60 +1,18 @@
 # =============================================================================
 # DeepLens LiteLLM Gateway Configuration
 # =============================================================================
-# Architecture: Multi-Gemini API Key Load Balancing with Local Ollama Fallback
+# Architecture: UI & Database-Managed Model Pool with Redis Caching & State
 # Unified Endpoint: http://litellm:4000/v1
-# Virtual Model Aliases: deeplens-llm, deeplens-fast
+# All models, API keys, and endpoints are managed dynamically via the Admin UI
+# and persisted to PostgreSQL (LiteLLM_ProxyModelTable).
 
-model_list:
-  # ---------------------------------------------------------------------------
-  # Primary Model Group: deeplens-llm (Google Gemini 2.5 Flash Pool)
-  # Load balanced across multiple Gemini API keys using least-busy routing
-  # ---------------------------------------------------------------------------
-  - model_name: deeplens-llm
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_1
-      rpm: 15
-      tpm: 1000000
-
-  - model_name: deeplens-llm
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_2
-      rpm: 15
-      tpm: 1000000
-
-  - model_name: deeplens-llm
-    litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY_3
-      rpm: 15
-      tpm: 1000000
-
-  # ---------------------------------------------------------------------------
-  # Fallback Tier 1: Local Ollama Phi-4 Mini (GPU VRAM Resident)
-  # ---------------------------------------------------------------------------
-  - model_name: phi4-mini:latest
-    litellm_params:
-      model: ollama/phi4-mini:latest
-      api_base: http://ollama-gpu:11434
-
-  # ---------------------------------------------------------------------------
-  # Fallback Tier 2: Local Ollama Phi-3 (GPU Secondary)
-  # ---------------------------------------------------------------------------
-  - model_name: phi3:latest
-    litellm_params:
-      model: ollama/phi3:latest
-      api_base: http://ollama-gpu:11434
+model_list: []
 
 # -----------------------------------------------------------------------------
 # Router Settings: Routing Strategy, Aliases & High Availability
 # -----------------------------------------------------------------------------
 router_settings:
   routing_strategy: least-busy
-  model_group_alias:
-    "deeplens-fast": "deeplens-llm"
-    "gemini-2.5-flash": "deeplens-llm"
   redis_host: os.environ/REDIS_HOST
   redis_port: os.environ/REDIS_PORT
   redis_url: os.environ/REDIS_URL
