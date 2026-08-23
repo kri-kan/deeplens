@@ -8,7 +8,7 @@ parameters:
     default: 'ubuntu-latest'
   - name: containerRegistryServiceConnection
     type: string
-    default: 'DeepLens-ContainerRegistry'
+    default: ''
   - name: imageRepository
     type: string
     default: 'deeplens'
@@ -17,8 +17,8 @@ parameters:
     default: '$(Build.BuildId)'
 
 jobs:
-  - job: DockerBuildAndPush
-    displayName: 'Docker Build & Push Microservices'
+  - job: DockerBuildAndPackage
+    displayName: 'Docker Build Microservices'
     pool:
       ${{ if or(eq(parameters.agentPool, 'ubuntu-latest'), eq(parameters.agentPool, 'windows-latest'), eq(parameters.agentPool, 'macOS-latest'), startsWith(parameters.agentPool, 'ubuntu-'), startsWith(parameters.agentPool, 'windows-'), startsWith(parameters.agentPool, 'macos-')) }}:
         vmImage: ${{ parameters.agentPool }}
@@ -42,19 +42,25 @@ jobs:
           contextPath: 'src/whatsapp-processor'
           dockerfilePath: 'src/whatsapp-processor/Dockerfile'
           imageName: 'whatsapp-processor'
-        CompetitorScraper:
-          contextPath: 'src/competitor-scraper-workers'
-          dockerfilePath: 'src/competitor-scraper-workers/Dockerfile'
-          imageName: 'competitor-scraper-workers'
     steps:
-      - task: Docker@2
-        displayName: 'Build and Push $(imageName)'
-        inputs:
-          containerRegistry: ${{ parameters.containerRegistryServiceConnection }}
-          repository: '${{ parameters.imageRepository }}/$(imageName)'
-          command: 'buildAndPush'
-          Dockerfile: '$(dockerfilePath)'
-          buildContext: '$(contextPath)'
-          tags: |
-            ${{ parameters.tag }}
-            latest
+      - checkout: self
+      - script: |
+          echo "=== Building Docker Image: $(imageName) ==="
+          docker build \
+            -t ${{ parameters.imageRepository }}/$(imageName):${{ parameters.tag }} \
+            -t ${{ parameters.imageRepository }}/$(imageName):latest \
+            -f $(dockerfilePath) \
+            $(contextPath)
+          echo "Docker image ${{ parameters.imageRepository }}/$(imageName):${{ parameters.tag }} built successfully."
+        displayName: 'Docker Build $(imageName)'
+
+      - ${{ if and(ne(parameters.containerRegistryServiceConnection, ''), ne(parameters.containerRegistryServiceConnection, 'none')) }}:
+        - task: Docker@2
+          displayName: 'Push $(imageName) to Container Registry'
+          inputs:
+            containerRegistry: ${{ parameters.containerRegistryServiceConnection }}
+            repository: '${{ parameters.imageRepository }}/$(imageName)'
+            command: 'push'
+            tags: |
+              ${{ parameters.tag }}
+              latest
