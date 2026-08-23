@@ -1,0 +1,83 @@
+# ==============================================================================
+# Job Template: .NET 9.0 Solution Build, Test & Coverage
+# ==============================================================================
+
+parameters:
+  - name: dotnetVersion
+    type: string
+    default: '9.0.x'
+  - name: buildConfiguration
+    type: string
+    default: 'Release'
+  - name: vmImage
+    type: string
+    default: 'ubuntu-latest'
+
+jobs:
+  - job: BuildAndTestDotNet
+    displayName: '.NET Build, Test & Coverage'
+    pool:
+      vmImage: ${{ parameters.vmImage }}
+    steps:
+      - task: UseDotNet@2
+        displayName: 'Install .NET Core SDK ${{ parameters.dotnetVersion }}'
+        inputs:
+          packageType: 'sdk'
+          version: ${{ parameters.dotnetVersion }}
+
+      - task: Cache@2
+        displayName: 'Cache NuGet Packages'
+        inputs:
+          key: 'nuget | "$(Agent.OS)" | **/packages.lock.json, **/*.csproj'
+          restoreKeys: |
+            nuget | "$(Agent.OS)"
+            nuget
+          path: $(HOME)/.nuget/packages
+
+      - script: |
+          dotnet restore src/DeepLens.Service/DeepLens.sln --configfile src/nuget.config
+        displayName: 'Restore NuGet Packages'
+
+      - script: |
+          dotnet build src/DeepLens.Service/DeepLens.sln -c ${{ parameters.buildConfiguration }} --no-restore
+        displayName: 'Build Solutions (${{ parameters.buildConfiguration }})'
+
+      - script: |
+          dotnet test tests/DeepLens.Domain.Tests/DeepLens.Domain.Tests.csproj \
+            -c ${{ parameters.buildConfiguration }} \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=DomainTests.trx" \
+            --results-directory $(Agent.TempDirectory)/TestResults
+
+          dotnet test tests/DeepLens.Application.Tests/DeepLens.Application.Tests.csproj \
+            -c ${{ parameters.buildConfiguration }} \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=ApplicationTests.trx" \
+            --results-directory $(Agent.TempDirectory)/TestResults
+
+          dotnet test tests/DeepLens.ArchitectureTests/DeepLens.ArchitectureTests.csproj \
+            -c ${{ parameters.buildConfiguration }} \
+            --logger "trx;LogFileName=ArchitectureTests.trx" \
+            --results-directory $(Agent.TempDirectory)/TestResults
+
+          dotnet test tests/DeepLens.SearchApi.Tests/DeepLens.SearchApi.Tests.csproj \
+            -c ${{ parameters.buildConfiguration }} \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=SearchApiTests.trx" \
+            --results-directory $(Agent.TempDirectory)/TestResults
+        displayName: 'Execute .NET Unit & Architecture Tests'
+
+      - task: PublishTestResults@2
+        displayName: 'Publish .NET Test Results'
+        condition: always()
+        inputs:
+          testResultsFormat: 'VSTest'
+          testResultsFiles: '$(Agent.TempDirectory)/TestResults/*.trx'
+          mergeTestResults: true
+          failTaskOnFailedTests: true
+
+      - task: PublishCodeCoverageResults@2
+        displayName: 'Publish Code Coverage Results'
+        condition: always()
+        inputs:
+          summaryFileLocation: '$(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml'

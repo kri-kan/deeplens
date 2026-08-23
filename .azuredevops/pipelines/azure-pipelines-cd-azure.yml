@@ -1,0 +1,85 @@
+# ==============================================================================
+# DeepLens Continuous Deployment Pipeline (Azure Free Tiers: SWA & ACA)
+# ==============================================================================
+
+name: CD-Azure-$(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none
+
+variables:
+  - group: DeepLens-Azure-Secrets
+  - name: AZURE_SUBSCRIPTION
+    value: 'DeepLens-Azure-Subscription'
+  - name: RESOURCE_GROUP
+    value: 'rg-deeplens-prod'
+  - name: CONTAINER_APP_ENV
+    value: 'cae-deeplens'
+  - name: ACR_NAME
+    value: 'deeplensregistry'
+
+stages:
+  - stage: DeployFrontends
+    displayName: 'Deploy Frontends to Azure Static Web Apps (Free Tier)'
+    jobs:
+      - deployment: DeployStore
+        displayName: 'Deploy Store to SWA'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'deeplens-cloud-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureStaticWebApp@0
+                  displayName: 'Deploy Store'
+                  inputs:
+                    app_location: 'src/store'
+                    output_location: 'dist'
+                    azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN_STORE)
+
+  - stage: DeployContainerApps
+    displayName: 'Deploy APIs to Azure Container Apps (Free Tier: Scale to Zero)'
+    dependsOn: DeployFrontends
+    jobs:
+      - deployment: DeployAPIs
+        displayName: 'Deploy SearchApi & ReasoningService to ACA'
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'deeplens-cloud-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Deploy SearchApi Container App'
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az containerapp update \
+                        --name deeplens-search-api \
+                        --resource-group $(RESOURCE_GROUP) \
+                        --image $(ACR_NAME).azurecr.io/deeplens/search-api:latest \
+                        --min-replicas 0 \
+                        --max-replicas 1
+
+                - task: AzureCLI@2
+                  displayName: 'Deploy ReasoningService Container App'
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az containerapp update \
+                        --name deeplens-reasoning-api \
+                        --resource-group $(RESOURCE_GROUP) \
+                        --image $(ACR_NAME).azurecr.io/deeplens/reasoning-service:latest \
+                        --min-replicas 0 \
+                        --max-replicas 1

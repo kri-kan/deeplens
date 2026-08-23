@@ -75,8 +75,6 @@ builder.Services.AddScoped<IInstagramMediaService, InstagramMediaService>();
 // Background Workers
 builder.Services.AddHostedService<ImageProcessingWorker>();
 builder.Services.AddHostedService<VideoProcessingWorker>();
-builder.Services.AddHostedService<FeatureExtractionWorker>();
-builder.Services.AddHostedService<VectorIndexingWorker>();
 builder.Services.AddHostedService<ImageMaintenanceWorker>();
 builder.Services.AddHostedService<InstagramSyncWorker>();
 builder.Services.AddHostedService<WhatsAppGroupWorker>();

@@ -21,7 +21,7 @@ export const getApiBaseHost = () => {
   return '127.0.0.1';
 };
 
-export const getIdentityApiUrl = () => `http://${getApiBaseHost()}:5198`;
+export const getIdentityApiUrl = () => `http://${getApiBaseHost()}:5000`;
 export const getSearchApiUrl = () => `http://${getApiBaseHost()}:5000`;
 export const getWhatsappProcessorUrl = () => `http://${getApiBaseHost()}:3005`;
 export const getOtelEndpointUrl = () => `http://${getApiBaseHost()}:4318/v1/traces`;

@@ -26,6 +26,7 @@
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="Npgsql" Version="8.0.2" />
     <PackageReference Include="Minio" Version="6.0.2" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
   </ItemGroup>
 
   <ItemGroup>

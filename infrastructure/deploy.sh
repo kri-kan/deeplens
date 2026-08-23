@@ -12,18 +12,12 @@ RED='\033[0;31m'
 
 if [ -z "$SERVICE_NAME" ]; then
     echo -e "${RED}Error: Service name not specified.${NC}"
-    echo "Usage: ./deploy.sh [identity-api | search-api | worker-service | reasoning-api | whatsapp-processor]"
+    echo "Usage: ./deploy.sh [search-api | worker-service | reasoning-api | whatsapp-processor]"
     exit 1
 fi
 
 # Configuration Mapping
 case $SERVICE_NAME in
-    "identity-api")
-        PROJECT_PATH="src/NextGen.Identity/NextGen.Identity.Api/NextGen.Identity.Api.csproj"
-        HOSTING_PATH="/data/hosting/identity"
-        COMPOSE_SERVICE="identity-api"
-        COMPOSE_DIR="setupscripts/application/services"
-        ;;
     "search-api")
         PROJECT_PATH="src/DeepLens.Service/DeepLens.SearchApi/DeepLens.SearchApi.csproj"
         HOSTING_PATH="/data/hosting/deeplensapi"

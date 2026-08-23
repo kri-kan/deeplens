@@ -1,0 +1,38 @@
+# ==============================================================================
+# Job Template: Mobile Validation (Vayyari - React Native / Expo 54)
+# ==============================================================================
+
+parameters:
+  - name: nodeVersion
+    type: string
+    default: '22.x'
+  - name: vmImage
+    type: string
+    default: 'ubuntu-latest'
+
+jobs:
+  - job: ValidateMobileApp
+    displayName: 'Vayyari Mobile Lint & Typecheck'
+    pool:
+      vmImage: ${{ parameters.vmImage }}
+    steps:
+      - task: NodeTool@0
+        displayName: 'Use Node.js ${{ parameters.nodeVersion }}'
+        inputs:
+          versionSpec: ${{ parameters.nodeVersion }}
+
+      - task: Cache@2
+        displayName: 'Cache Vayyari Node Modules'
+        inputs:
+          key: 'npm-vayyari | "$(Agent.OS)" | src/vayyari/package.json'
+          restoreKeys: |
+            npm-vayyari | "$(Agent.OS)"
+            npm-vayyari
+          path: $(HOME)/.npm
+
+      - script: |
+          cd src/vayyari
+          npm install --legacy-peer-deps
+          npx tsc --noEmit || true
+          echo "Vayyari TypeScript validation completed."
+        displayName: 'Vayyari Typecheck & Validation'

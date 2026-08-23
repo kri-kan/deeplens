@@ -1,0 +1,57 @@
+# ==============================================================================
+# Job Template: Docker Multi-Service Build & Push
+# ==============================================================================
+
+parameters:
+  - name: containerRegistryServiceConnection
+    type: string
+    default: 'DeepLens-ContainerRegistry'
+  - name: imageRepository
+    type: string
+    default: 'deeplens'
+  - name: tag
+    type: string
+    default: '$(Build.BuildId)'
+  - name: vmImage
+    type: string
+    default: 'ubuntu-latest'
+
+jobs:
+  - job: DockerBuildAndPush
+    displayName: 'Docker Build & Push Microservices'
+    pool:
+      vmImage: ${{ parameters.vmImage }}
+    strategy:
+      matrix:
+        SearchApi:
+          contextPath: '.'
+          dockerfilePath: 'src/DeepLens.Service/DeepLens.SearchApi/Dockerfile'
+          imageName: 'search-api'
+        WorkerService:
+          contextPath: '.'
+          dockerfilePath: 'src/DeepLens.Service/DeepLens.WorkerService/Dockerfile'
+          imageName: 'worker-service'
+        ReasoningService:
+          contextPath: 'src/DeepLens.ReasoningService'
+          dockerfilePath: 'src/DeepLens.ReasoningService/Dockerfile'
+          imageName: 'reasoning-service'
+        WhatsAppProcessor:
+          contextPath: 'src/whatsapp-processor'
+          dockerfilePath: 'src/whatsapp-processor/Dockerfile'
+          imageName: 'whatsapp-processor'
+        CompetitorScraper:
+          contextPath: 'src/competitor-scraper-workers'
+          dockerfilePath: 'src/competitor-scraper-workers/Dockerfile'
+          imageName: 'competitor-scraper-workers'
+    steps:
+      - task: Docker@2
+        displayName: 'Build and Push $(imageName)'
+        inputs:
+          containerRegistry: ${{ parameters.containerRegistryServiceConnection }}
+          repository: '${{ parameters.imageRepository }}/$(imageName)'
+          command: 'buildAndPush'
+          Dockerfile: '$(dockerfilePath)'
+          buildContext: '$(contextPath)'
+          tags: |
+            ${{ parameters.tag }}
+            latest
