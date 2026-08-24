@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { IconButton } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { IconButton, Text, Icon } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { InstagramPost } from '@/services/instagram.service';
@@ -34,46 +34,86 @@ export const InstagramVideoPlayer = React.memo(({
     const uri = getMediaUri(media);
     const currentUriRef = useRef<string | null>(uri);
 
-    const player = useVideoPlayer(uri, (p) => {
+    const isImageFallback = !uri || uri.toLowerCase().endsWith('.jpg') || uri.toLowerCase().endsWith('.jpeg');
+    const [hasError, setHasError] = useState(isImageFallback);
+
+    const player = useVideoPlayer(hasError ? '' : uri, (p) => {
         p.loop = true;
         p.muted = isMuted;
         p.volume = volume;
-        if (isPlaying && isActive) p.play();
+        if (isPlaying && isActive && !hasError) {
+            try {
+                p.play();
+            } catch (err) {
+                console.log('[VideoPlayer] Initial play suppressed error:', err);
+            }
+        }
     });
 
-    const [isReady, setIsReady] = useState(player.status === 'readyToPlay');
-    const [hasError, setHasError] = useState(false);
-    const [showFallbackIcon, setShowFallbackIcon] = useState(false);
-    
-    const isImageFallback = uri?.toLowerCase().endsWith('.jpg') || uri?.toLowerCase().endsWith('.jpeg');
-    
-    useEffect(() => {
-        if (hasError || isImageFallback) {
-            const timer = setTimeout(() => {
-                setShowFallbackIcon(true);
-            }, 1000);
-            return () => clearTimeout(timer);
+    const [isReady, setIsReady] = useState(player?.status === 'readyToPlay');
+
+    const handleOpenInInstagram = useCallback(() => {
+        const platformId = media.platformVideoId || media.id;
+        const nativeUrl = platformId ? `instagram://media?id=${platformId}` : '';
+        const webUrl = media.permalink || (platformId ? `https://www.instagram.com/p/${platformId}/` : 'https://www.instagram.com');
+
+        if (nativeUrl) {
+            Linking.canOpenURL(nativeUrl).then(supported => {
+                if (supported) {
+                    Linking.openURL(nativeUrl).catch(() => {
+                        Linking.openURL(webUrl).catch(() => {});
+                    });
+                } else {
+                    Linking.openURL(webUrl).catch(() => {});
+                }
+            }).catch(() => {
+                Linking.openURL(webUrl).catch(() => {});
+            });
         } else {
-            setShowFallbackIcon(false);
+            Linking.openURL(webUrl).catch(() => {});
         }
-    }, [hasError, isImageFallback]);
+    }, [media]);
 
     useEffect(() => {
-        setIsReady(player.status === 'readyToPlay');
-    }, [uri, player]);
-
-    useEffect(() => {
-        if (!player) return;
-        if (isPlaying && isActive) player.play();
-        else player.pause();
-    }, [isPlaying, player, isActive]);
+        if (isImageFallback || !uri) {
+            setHasError(true);
+            setIsReady(false);
+        }
+    }, [uri, isImageFallback]);
 
     useEffect(() => {
         if (!player) return;
-
-        // Sync initial state
         if (player.status === 'readyToPlay') {
             setIsReady(true);
+            setHasError(false);
+        } else if (player.status === 'error') {
+            setHasError(true);
+            setIsReady(false);
+        }
+    }, [player, uri]);
+
+    useEffect(() => {
+        if (!player || hasError || isImageFallback) return;
+        try {
+            if (isPlaying && isActive) {
+                player.play();
+            } else {
+                player.pause();
+            }
+        } catch (err) {
+            console.log('[VideoPlayer] Playback toggle error:', err);
+        }
+    }, [isPlaying, player, isActive, hasError, isImageFallback]);
+
+    useEffect(() => {
+        if (!player) return;
+
+        if (player.status === 'readyToPlay') {
+            setIsReady(true);
+            setHasError(false);
+        } else if (player.status === 'error') {
+            setHasError(true);
+            setIsReady(false);
         }
 
         const stateSub = player.addListener('playingChange', (event) => {
@@ -84,11 +124,12 @@ export const InstagramVideoPlayer = React.memo(({
             if (isActive) console.log(`[Video] Status: ${event.status} | URI: ${uri}`);
             if (event.status === 'readyToPlay') {
                 setIsReady(true);
+                setHasError(false);
             }
-            if (event.error && isActive) {
+            if (event.status === 'error' || event.error) {
                 setHasError(true);
-                if (isImageFallback) return;
-                console.error(`[Video] Error: ${event.error.message} | URI: ${uri}`);
+                setIsReady(false);
+                console.log(`[Video] Handled playback error: ${event.error?.message || 'Playback failed'} | URI: ${uri}`);
             }
         });
 
@@ -100,8 +141,12 @@ export const InstagramVideoPlayer = React.memo(({
 
     useEffect(() => {
         if (!player) return;
-        player.muted = isMuted;
-        player.volume = volume;
+        try {
+            player.muted = isMuted;
+            player.volume = volume;
+        } catch (err) {
+            console.log('[VideoPlayer] Volume update error:', err);
+        }
     }, [isMuted, volume, player]);
 
     useEffect(() => {
@@ -131,80 +176,128 @@ export const InstagramVideoPlayer = React.memo(({
     }, [showVolumeSlider, resetSliderTimer]);
 
     useEffect(() => {
-        if (isActive && player && uri) {
+        if (isActive && player && uri && !isImageFallback) {
             try {
                 if (currentUriRef.current !== uri) {
-                    player.replaceAsync(uri);
+                    player.replaceAsync(uri).then(() => {
+                        setIsReady(player.status === 'readyToPlay');
+                    }).catch((err) => {
+                        console.log('[VideoPlayer] replaceAsync error handled:', err);
+                        setHasError(true);
+                    });
                     currentUriRef.current = uri;
-                    setIsReady(player.status === 'readyToPlay');
                 }
-                if (isPlaying) {
-                    player.play();
+                if (isPlaying && !hasError) {
+                    try {
+                        player.play();
+                    } catch (playErr) {
+                        console.log('[VideoPlayer] play error handled:', playErr);
+                    }
                 }
             } catch (err) {
-                console.error('[VideoPlayer] Source update error:', err);
+                console.log('[VideoPlayer] Source update error handled:', err);
+                setHasError(true);
             }
         }
-    }, [isActive, uri, player, isPlaying]);
+    }, [isActive, uri, player, isPlaying, isImageFallback, hasError]);
+
+    const coverUri = getMediaUri(media, 'large') || media?.thumbnailUrl || media?.mediaUrl;
 
     return (
         <View style={{ width, height: getMediaHeight() }}>
-            <VideoView
-                player={player}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
-            />
+            {!hasError && (
+                <VideoView
+                    player={player}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                />
+            )}
             
-            {!isReady && (
+            {(!isReady || hasError) && (
                 <View style={StyleSheet.absoluteFill}>
                     <Image 
-                        source={{ uri: media?.thumbnailUrl || media?.mediaUrl }} 
+                        source={{ uri: coverUri }} 
                         style={StyleSheet.absoluteFill}
                         contentFit="cover"
                     />
-                    {showFallbackIcon && (
-                        <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
-                            <View style={{ backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 32, padding: 4 }}>
-                                <IconButton icon="video-off-outline" iconColor="white" size={32} />
+                    
+                    {hasError && (
+                        <TouchableOpacity 
+                            style={styles.fallbackOverlay}
+                            activeOpacity={0.85}
+                            onPress={handleOpenInInstagram}
+                        >
+                            <View style={styles.fallbackContentBadge}>
+                                <Icon source="instagram" size={20} color="#FFFFFF" />
+                                <Text style={styles.fallbackText}>
+                                    Video unavailable locally · Tap to open in Instagram
+                                </Text>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     )}
                 </View>
             )}
             
-            <View style={styles.rightVolumeOverlay}>
-                <IconButton
-                    icon={isMuted || volume === 0 ? "volume-off" : "volume-high"}
-                    iconColor="white"
-                    size={28}
-                    style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-                    onPress={() => setIsMuted(!isMuted)}
-                    onLongPress={() => setShowVolumeSlider(!showVolumeSlider)}
-                />
-                
-                {showVolumeSlider && (
-                    <View style={styles.rightVolumeSliderContainer}>
-                        <View style={styles.volumeSliderTrack}>
-                            <View style={[styles.volumeSliderFill, { height: `${volume * 100}%` }]} />
+            {!hasError && isReady && (
+                <View style={styles.rightVolumeOverlay}>
+                    <IconButton
+                        icon={isMuted || volume === 0 ? "volume-off" : "volume-high"}
+                        iconColor="white"
+                        size={28}
+                        style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+                        onPress={() => setIsMuted(!isMuted)}
+                        onLongPress={() => setShowVolumeSlider(!showVolumeSlider)}
+                    />
+                    
+                    {showVolumeSlider && (
+                        <View style={styles.rightVolumeSliderContainer}>
+                            <View style={styles.volumeSliderTrack}>
+                                <View style={[styles.volumeSliderFill, { height: `${volume * 100}%` }]} />
+                            </View>
+                            <TouchableOpacity 
+                                style={StyleSheet.absoluteFill}
+                                onPressIn={(e) => {
+                                    const y = e.nativeEvent.locationY;
+                                    const newVol = Math.max(0, Math.min(1, 1 - (y / 100)));
+                                    setVolume(newVol);
+                                    if (newVol > 0) setIsMuted(false);
+                                    resetSliderTimer();
+                                }}
+                            />
                         </View>
-                        <TouchableOpacity 
-                            style={StyleSheet.absoluteFill}
-                            onPressIn={(e) => {
-                                const y = e.nativeEvent.locationY;
-                                const newVol = Math.max(0, Math.min(1, 1 - (y / 100)));
-                                setVolume(newVol);
-                                if (newVol > 0) setIsMuted(false);
-                                resetSliderTimer();
-                            }}
-                        />
-                    </View>
-                )}
-            </View>
+                    )}
+                </View>
+            )}
         </View>
     );
 });
 
 const styles = StyleSheet.create({
+    fallbackOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        paddingHorizontal: 20,
+    },
+    fallbackContentBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 24,
+        gap: 10,
+        maxWidth: '90%',
+    },
+    fallbackText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 13,
+        textAlign: 'center',
+        flexShrink: 1,
+    },
     rightVolumeOverlay: {
         position: 'absolute',
         bottom: 80,

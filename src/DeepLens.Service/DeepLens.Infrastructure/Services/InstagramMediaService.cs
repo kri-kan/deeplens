@@ -281,18 +281,224 @@ namespace DeepLens.Infrastructure.Services
                 new { dbPostId }, cancellationToken: ct));
         }
 
-        private async Task<string?> DownloadAndStoreMediaAsync(string externalId, string mediaId, string url, string identifier, string mimeType, CancellationToken ct)
+        public async Task<bool> EnsureMediaDownloadedAsync(Guid postId, CancellationToken ct = default)
+        {
+            using var conn = await _db.CreateConnectionAsync();
+            
+            var postInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(new CommandDefinition(@"
+                SELECT cv.id, cv.platform_video_id, cv.media_type, cv.thumbnail_url, cv.media_url, 
+                       cv.storage_path, cv.download_status, w.external_id, w.username, 
+                       w.profile_category, w.is_competitor
+                FROM competitor_videos cv
+                JOIN competitor_watchlist w ON cv.watchlist_id = w.id
+                WHERE cv.id = @postId", new { postId }, cancellationToken: ct));
+
+            if (postInfo == null)
+            {
+                _logger.LogWarning("Post {PostId} not found in database for EnsureMediaDownloadedAsync.", postId);
+                return false;
+            }
+
+            string platformId = postInfo.platform_video_id;
+            string externalId = postInfo.external_id ?? "";
+            string username = postInfo.username ?? "";
+            string? currentStoragePath = postInfo.storage_path;
+            bool isCompetitor = (bool)(postInfo.is_competitor ?? false);
+            string profileCategory = (string?)postInfo.profile_category ?? "";
+            bool isOwnedProfile = !isCompetitor && string.Equals(profileCategory, "My Business", StringComparison.OrdinalIgnoreCase);
+
+            // 1. Check if files physically exist in MinIO
+            bool storageFileExists = !string.IsNullOrEmpty(currentStoragePath) && await _storage.FileExistsAsync(currentStoragePath);
+
+            // Check linked media
+            var linkedMedia = (await conn.QueryAsync<dynamic>(new CommandDefinition(@"
+                SELECT m.id, m.storage_path, m.subcategory, ml.is_primary
+                FROM media m
+                JOIN media_links ml ON m.id = ml.media_id
+                WHERE ml.entity_id = @postId AND ml.entity_type = 'competitor_video'",
+                new { postId }, cancellationToken: ct))).ToList();
+
+            bool allLinkedMediaExist = linkedMedia.Any();
+            foreach (var lm in linkedMedia)
+            {
+                string lPath = (string)lm.storage_path;
+                if (!await _storage.FileExistsAsync(lPath))
+                {
+                    allLinkedMediaExist = false;
+                    break;
+                }
+            }
+
+            if (storageFileExists && allLinkedMediaExist)
+            {
+                _logger.LogDebug("All media files for post {PostId} already physically exist in storage.", postId);
+                return true;
+            }
+
+            _logger.LogInformation("Missing physical media detected for post {PostId} ({PlatformId}). Fetching from Meta Graph API...", postId, platformId);
+
+            // 2. Fetch fresh metadata from Meta Graph API
+            await _metaGraph.ReloadFromDbAsync();
+            var freshPost = await _metaGraph.GetPostByIdAsync(platformId);
+            if (freshPost == null && !string.IsNullOrEmpty(username))
+            {
+                freshPost = await _metaGraph.GetPostByDiscoveryAsync(username, platformId);
+            }
+
+            if (freshPost != null)
+            {
+                if (isOwnedProfile)
+                {
+                    await ProcessFullMediaDownloadAsync(postId, freshPost, externalId, ct);
+                }
+                else
+                {
+                    // For competitor post, download thumbnail and media if available
+                    string? thumbUrl = freshPost.ThumbnailUrl ?? freshPost.MediaUrl;
+                    if (string.IsNullOrEmpty(thumbUrl) && freshPost.MediaType == InstagramMediaType.CAROUSEL_ALBUM && freshPost.Children != null && freshPost.Children.Any())
+                    {
+                        var firstChild = freshPost.Children.First();
+                        thumbUrl = firstChild.ThumbnailUrl ?? firstChild.MediaUrl;
+                    }
+
+                    string? newThumbPath = null;
+                    if (!string.IsNullOrEmpty(thumbUrl))
+                    {
+                        string thumbIdentifier = $"{platformId}.jpg";
+                        newThumbPath = await DownloadAndStoreMediaAsync(externalId, platformId, thumbUrl, thumbIdentifier, "image/jpeg", ct);
+                    }
+
+                    // If it's a video and media_url is available, download full video
+                    string? newVideoPath = null;
+                    if (freshPost.MediaType == InstagramMediaType.VIDEO && !string.IsNullOrEmpty(freshPost.MediaUrl))
+                    {
+                        string videoIdentifier = $"{platformId}_full.mp4";
+                        newVideoPath = await DownloadAndStoreMediaAsync(externalId, platformId, freshPost.MediaUrl, videoIdentifier, "video/mp4", ct);
+                    }
+
+                    string? effectivePath = newVideoPath ?? newThumbPath ?? currentStoragePath;
+
+                    if (!string.IsNullOrEmpty(effectivePath))
+                    {
+                        await conn.ExecuteAsync(new CommandDefinition(@"
+                            UPDATE competitor_videos 
+                            SET storage_path = @effectivePath, 
+                                download_status = 'completed', 
+                                downloaded_at = COALESCE(downloaded_at, NOW()) 
+                            WHERE id = @postId", 
+                            new { effectivePath, postId }, cancellationToken: ct));
+
+                        if (newThumbPath != null)
+                        {
+                            await RegisterAndLinkMediaAsync(conn, postId, newThumbPath, (short)InstagramMediaType.IMAGE, "instagram", "thumbnail", true, 0, ct);
+                        }
+                        if (newVideoPath != null)
+                        {
+                            await RegisterAndLinkMediaAsync(conn, postId, newVideoPath, (short)InstagramMediaType.VIDEO, "instagram", "full_media", false, 0, ct);
+                        }
+                    }
+                }
+
+                return true;
+            }
+            else
+            {
+                // Fallback if Meta Graph couldn't find the post: try with DB urls
+                string? dbThumbUrl = (string?)postInfo.thumbnail_url ?? (string?)postInfo.media_url;
+                string? dbMediaUrl = (string?)postInfo.media_url;
+                string? mediaTypeStr = (string?)postInfo.media_type;
+
+                bool downloadedAny = false;
+
+                if (!string.IsNullOrEmpty(dbThumbUrl))
+                {
+                    string thumbIdentifier = $"{platformId}.jpg";
+                    var thumbPath = await DownloadAndStoreMediaAsync(externalId, platformId, dbThumbUrl, thumbIdentifier, "image/jpeg", ct);
+                    if (thumbPath != null)
+                    {
+                        await RegisterAndLinkMediaAsync(conn, postId, thumbPath, (short)InstagramMediaType.IMAGE, "instagram", "thumbnail", true, 0, ct);
+                        await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @thumbPath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, NOW()) WHERE id = @postId", new { thumbPath, postId }, cancellationToken: ct));
+                        downloadedAny = true;
+                    }
+                }
+
+                if (string.Equals(mediaTypeStr, "VIDEO", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(dbMediaUrl))
+                {
+                    string videoIdentifier = $"{platformId}_full.mp4";
+                    var videoPath = await DownloadAndStoreMediaAsync(externalId, platformId, dbMediaUrl, videoIdentifier, "video/mp4", ct);
+                    if (videoPath != null)
+                    {
+                        await RegisterAndLinkMediaAsync(conn, postId, videoPath, (short)InstagramMediaType.VIDEO, "instagram", "full_media", false, 0, ct);
+                        await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @videoPath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, NOW()) WHERE id = @postId", new { videoPath, postId }, cancellationToken: ct));
+                        downloadedAny = true;
+                    }
+                }
+
+                return downloadedAny;
+            }
+        }
+
+        private async Task<string?> DownloadAndStoreMediaAsync(string externalId, string mediaId, string? url, string identifier, string mimeType, CancellationToken ct)
         {
             try
             {
-                var response = await _httpClient.GetAsync(url, ct);
-                if (!response.IsSuccessStatusCode) return null;
+                HttpResponseMessage? response = null;
+                if (!string.IsNullOrEmpty(url))
+                {
+                    try
+                    {
+                        response = await _httpClient.GetAsync(url, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Initial HTTP GET for media {MediaId} failed from {Url}", mediaId, url);
+                    }
+                }
+
+                // If initial request failed (e.g. 403 Forbidden / 410 Gone / expired CDN URL) or URL was empty:
+                if (response == null || !response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Media download for {MediaId} failed (StatusCode: {StatusCode}). Attempting Graph API re-fetch...", 
+                        mediaId, response?.StatusCode.ToString() ?? "None");
+
+                    try
+                    {
+                        await _metaGraph.ReloadFromDbAsync();
+                        var freshPost = await _metaGraph.GetPostByIdAsync(mediaId);
+                        if (freshPost != null)
+                        {
+                            string? freshUrl = mimeType.StartsWith("video/") 
+                                ? freshPost.MediaUrl 
+                                : (identifier.Contains("_full") ? freshPost.MediaUrl : (freshPost.ThumbnailUrl ?? freshPost.MediaUrl));
+
+                            if (!string.IsNullOrEmpty(freshUrl) && freshUrl != url)
+                            {
+                                _logger.LogInformation("Retrying media download for {MediaId} with refreshed CDN URL from Graph API.", mediaId);
+                                response = await _httpClient.GetAsync(freshUrl, ct);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to re-fetch fresh CDN URL for media {MediaId} from Graph API", mediaId);
+                    }
+                }
+
+                if (response == null || !response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Failed to download media {MediaId}. Final StatusCode: {StatusCode}", mediaId, response?.StatusCode.ToString() ?? "None");
+                    return null;
+                }
 
                 using var stream = await response.Content.ReadAsStreamAsync(ct);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms, ct);
+                ms.Position = 0;
+
                 var context = new InstagramContext(externalId);
                 string fullPath = StoragePathRegistry.GetPath(context, identifier);
                 
-                await _storage.UploadToPathAsync(fullPath, stream, mimeType);
+                await _storage.UploadToPathAsync(fullPath, ms, mimeType);
                 return fullPath;
             }
             catch (Exception ex)

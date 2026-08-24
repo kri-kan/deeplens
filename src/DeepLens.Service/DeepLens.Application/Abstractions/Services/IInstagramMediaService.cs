@@ -19,6 +19,12 @@ namespace DeepLens.Application.Abstractions.Services
         Task ProcessFullMediaDownloadAsync(Guid dbPostId, MetaPost post, string externalId, CancellationToken ct = default);
 
         /// <summary>
+        /// Ensures all physical media (thumbnail and full media/video) for a competitor_videos post exist in MinIO.
+        /// Re-fetches from Meta Graph API if missing.
+        /// </summary>
+        Task<bool> EnsureMediaDownloadedAsync(Guid postId, CancellationToken ct = default);
+
+        /// <summary>
         /// Deletes all media and metadata associated with a profile.
         /// </summary>
         Task<bool> DeleteProfileDataAsync(string username, CancellationToken ct = default);

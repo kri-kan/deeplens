@@ -130,6 +130,13 @@ export const InstagramPostDetailItem = ({
     const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
     const [shareProgress, setShareProgress] = useState<number | null>(null);
     const [localItem, setLocalItem] = useState(item);
+    const [mediaErrors, setMediaErrors] = useState<{ [key: string]: boolean }>({});
+    const [retryKeys, setRetryKeys] = useState<{ [key: string]: number }>({});
+
+    const handleRetryMedia = useCallback((mediaKey: string) => {
+        setMediaErrors(prev => ({ ...prev, [mediaKey]: false }));
+        setRetryKeys(prev => ({ ...prev, [mediaKey]: (prev[mediaKey] || 0) + 1 }));
+    }, []);
 
     // Syncing State
     const [isSyncingComments, setIsSyncingComments] = useState(false);
@@ -157,6 +164,8 @@ export const InstagramPostDetailItem = ({
             setMediaLinks([]);
             setLinkedProductDetails(null);
             setActiveMediaIndex(0);
+            setMediaErrors({});
+            setRetryKeys({});
         } else {
             setLocalItem(item);
         }
@@ -504,11 +513,15 @@ export const InstagramPostDetailItem = ({
     // Prioritize fetched linked details, but fall back to localItem.productCode only if we haven't confirmed it's gone
     const productCodeToDisplay = linkedProductDetails?.productCode || (!hasFetchedLinks ? localItem.productCode : null);
 
-    const isCompetitor = localItem.isCompetitor ||
-        localItem.profileCategory?.toLowerCase() === 'competitors' ||
-        localItem.profileCategory?.toLowerCase() === 'competitor' ||
+    const profileCategory = (localItem.profileCategory || (item as any)?.profileCategory || '')?.toLowerCase();
+    const isCompetitor = Boolean(
+        localItem.isCompetitor ||
+        (item as any)?.isCompetitor ||
+        profileCategory === 'competitors' ||
+        profileCategory === 'competitor' ||
         (localItem.multiplier !== undefined && localItem.multiplier > 1) ||
-        (item as any)?.isCompetitor;
+        ((item as any)?.multiplier !== undefined && (item as any)?.multiplier > 1)
+    );
 
     const competitorMultiplier = localItem.multiplier || (localItem.likeCount > 5000 ? 3.4 : localItem.likeCount > 2000 ? 2.6 : 1.8);
     const isTakeoff = competitorMultiplier >= 2.5;
@@ -587,55 +600,103 @@ export const InstagramPostDetailItem = ({
                             const isMediaVideo = isVideo(media);
                             const isVideoDownloaded = isMediaVideo && isFullVideoDownloaded(media, mediaLinks, localItem);
                             const playbackMedia = isMediaVideo ? resolveVideoMedia(media, mediaLinks, localItem) : media;
-                            
+                            const shouldPlayVideo = isMediaVideo && !isCompetitor && isVideoDownloaded;
+
+                            const mediaKey = media.id || `media_${mediaIdx}`;
+                            const hasMediaError = Boolean(mediaErrors[mediaKey]);
+                            const retryCount = retryKeys[mediaKey] || 0;
+
+                            const rawCoverUri = getMediaUri(media, 'large') || media.thumbnailUrl || media.mediaUrl;
+                            const coverUri = rawCoverUri && retryCount > 0
+                                ? `${rawCoverUri}${rawCoverUri.includes('?') ? '&' : '?'}retry=${retryCount}`
+                                : rawCoverUri;
+
+                            const handleOpenInInstagram = () => {
+                                const platformId = media.platformVideoId || media.id;
+                                const nativeUrl = platformId ? `instagram://media?id=${platformId}` : '';
+                                const webUrl = media.permalink || (platformId ? `https://www.instagram.com/p/${platformId}/` : 'https://www.instagram.com');
+
+                                if (nativeUrl) {
+                                    Linking.canOpenURL(nativeUrl).then(supported => {
+                                        if (supported) {
+                                            Linking.openURL(nativeUrl).catch(() => Linking.openURL(webUrl));
+                                        } else {
+                                            Linking.openURL(webUrl);
+                                        }
+                                    }).catch(() => {
+                                        Linking.openURL(webUrl);
+                                    });
+                                } else {
+                                    Linking.openURL(webUrl);
+                                }
+                            };
+
                             return (
                                 <View key={media.id || mediaIdx} style={{ width, height: START_TOP - insets.top, justifyContent: 'center' }}>
-                                    {isMediaVideo ? (
-                                        isVideoDownloaded ? (
-                                            <InstagramVideoPlayer 
-                                                media={playbackMedia}
-                                                width={width}
-                                                getMediaHeight={getMediaHeight}
-                                                isMuted={isMuted}
-                                                setIsMuted={setIsMuted}
-                                                volume={volume}
-                                                setVolume={setVolume}
-                                                isPlaying={isPlaying}
-                                                isActive={isPlayerActive}
-                                            />
-                                        ) : (
-                                            <View style={{ width, height: mHeight, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-                                                <Image 
-                                                    source={{ uri: getMediaUri(media, 'large') || media.thumbnailUrl || media.mediaUrl }} 
-                                                    style={{ width, height: mHeight }}
-                                                    contentFit="cover"
-                                                    onLoad={(e) => {
-                                                        const ratio = e.source.width / e.source.height;
+                                    {shouldPlayVideo ? (
+                                        <InstagramVideoPlayer 
+                                            media={playbackMedia}
+                                            width={width}
+                                            getMediaHeight={getMediaHeight}
+                                            isMuted={isMuted}
+                                            setIsMuted={setIsMuted}
+                                            volume={volume}
+                                            setVolume={setVolume}
+                                            isPlaying={isPlaying}
+                                            isActive={isPlayerActive}
+                                        />
+                                    ) : hasMediaError ? (
+                                        <View style={[styles.placeholderContainer, { width, height: mHeight, backgroundColor: theme.colors.surfaceVariant }]}>
+                                            <Icon source="image-broken-variant" size={44} color={theme.colors.onSurfaceVariant} />
+                                            <Text variant="bodyMedium" style={[styles.placeholderText, { color: theme.colors.onSurfaceVariant }]}>
+                                                Media unavailable
+                                            </Text>
+                                            <View style={styles.placeholderActionsRow}>
+                                                <Button 
+                                                    mode="contained-tonal" 
+                                                    icon="reload" 
+                                                    compact
+                                                    onPress={() => handleRetryMedia(mediaKey)}
+                                                    style={styles.retryButton}
+                                                >
+                                                    Retry
+                                                </Button>
+                                                <Button 
+                                                    mode="outlined" 
+                                                    icon="instagram" 
+                                                    compact
+                                                    onPress={handleOpenInInstagram}
+                                                    style={styles.openInInstaFallbackButton}
+                                                >
+                                                    Instagram
+                                                </Button>
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <View style={{ width, height: mHeight, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+                                            <Image 
+                                                source={{ uri: coverUri }} 
+                                                style={{ width, height: mHeight }}
+                                                contentFit="cover"
+                                                onLoad={(e) => {
+                                                    const ratio = e.source.width / e.source.height;
+                                                    if (ratio > 0) {
                                                         setMediaAspectRatios(prev => ({ ...prev, [media.id || 'initial']: ratio }));
-                                                    }}
-                                                />
+                                                    }
+                                                }}
+                                                onError={() => {
+                                                    setMediaErrors(prev => ({ ...prev, [mediaKey]: true }));
+                                                }}
+                                            />
+                                            {(isMediaVideo || isCompetitor) && (
                                                 <View style={styles.thumbnailVideoOverlay}>
                                                     <TouchableOpacity 
                                                         activeOpacity={0.85}
-                                                        onPress={() => {
-                                                            const platformId = media.platformVideoId || media.id;
-                                                            const nativeUrl = `instagram://media?id=${platformId}`;
-                                                            Linking.canOpenURL(nativeUrl).then(supported => {
-                                                                if (supported) {
-                                                                    Linking.openURL(nativeUrl);
-                                                                } else if (media.permalink) {
-                                                                    Linking.openURL(media.permalink);
-                                                                } else {
-                                                                    Linking.openURL(`https://www.instagram.com/p/${platformId}/`);
-                                                                }
-                                                            }).catch(() => {
-                                                                if (media.permalink) Linking.openURL(media.permalink);
-                                                            });
-                                                        }}
+                                                        onPress={handleOpenInInstagram}
                                                         style={styles.openInInstaOverlayBtn}
                                                     >
                                                         <View style={styles.playIconContainer}>
-                                                            <Icon source="play" size={32} color="#FFFFFF" />
+                                                            <Icon source={isMediaVideo ? "play" : "instagram"} size={32} color="#FFFFFF" />
                                                         </View>
                                                         <View style={styles.openInInstaBadge}>
                                                             <Icon source="instagram" size={16} color="#FFFFFF" />
@@ -643,18 +704,8 @@ export const InstagramPostDetailItem = ({
                                                         </View>
                                                     </TouchableOpacity>
                                                 </View>
-                                            </View>
-                                        )
-                                    ) : (
-                                        <Image 
-                                            source={{ uri: getMediaUri(media, 'large') }} 
-                                            style={{ width, height: mHeight }}
-                                            contentFit="cover"
-                                            onLoad={(e) => {
-                                                const ratio = e.source.width / e.source.height;
-                                                setMediaAspectRatios(prev => ({ ...prev, [media.id || 'initial']: ratio }));
-                                            }}
-                                        />
+                                            )}
+                                        </View>
                                     )}
                                 </View>
                             );
@@ -1561,5 +1612,26 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '700',
         fontSize: 13,
+    },
+    placeholderContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    placeholderText: {
+        marginTop: 10,
+        fontWeight: '500',
+    },
+    placeholderActionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginTop: 16,
+    },
+    retryButton: {
+        borderRadius: 20,
+    },
+    openInInstaFallbackButton: {
+        borderRadius: 20,
     },
 });

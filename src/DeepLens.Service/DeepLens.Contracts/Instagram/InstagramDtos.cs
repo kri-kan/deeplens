@@ -400,6 +400,9 @@ public class CompetitorOutlierPostDto
     [JsonPropertyName("mediaType")]
     public string? MediaType { get; set; }
 
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath { get; set; }
+
     [JsonPropertyName("title")]
     public string? Title { get; set; }
 
@@ -421,6 +424,9 @@ public class CompetitorOutlierPostDto
 
     [JsonPropertyName("profilePicUrl")]
     public string? ProfilePicUrl { get; set; }
+
+    [JsonPropertyName("profilePicStoragePath")]
+    public string? ProfilePicStoragePath { get; set; }
 
     [JsonPropertyName("competitorNiche")]
     public string? CompetitorNiche { get; set; }

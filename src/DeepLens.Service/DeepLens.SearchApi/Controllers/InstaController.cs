@@ -2734,6 +2734,7 @@ public class InstaController : ControllerBase
     }
 
     [HttpGet("competitors/insights/high-performing")]
+    [HttpGet("competitors/high-performing")]
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult<CompetitorOutlierFeedResponse>> GetHighPerformingOutliers(
         [FromQuery] string archetype = "all",
@@ -2817,6 +2818,7 @@ public class InstaController : ControllerBase
                     thumbnail_url AS ThumbnailUrl,
                     media_url AS MediaUrl,
                     media_type AS MediaType,
+                    storage_path AS StoragePath,
                     title AS Title,
                     caption AS Caption,
                     posted_at AS PostedAt,
@@ -2824,6 +2826,7 @@ public class InstaController : ControllerBase
                     profile_username AS ProfileUsername,
                     profile_name AS ProfileName,
                     profile_pic_url AS ProfilePicUrl,
+                    profile_pic_storage_path AS ProfilePicStoragePath,
                     competitor_niche AS CompetitorNiche,
                     tracking_tier AS TrackingTier,
                     day_offset AS DayOffset,

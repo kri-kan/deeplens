@@ -21,6 +21,7 @@ public interface IStorageService
     Task<Stream> GetFileRangeAsync(string storagePath, long offset, long length);
     Task<int> ReadRangeToBufferAsync(string storagePath, long offset, byte[] buffer, int bufferOffset, int count, CancellationToken ct = default);
     Task<long> GetFileLengthAsync(string storagePath);
+    Task<bool> FileExistsAsync(string storagePath);
     Task DeleteFileAsync(string storagePath);
 }
 
@@ -115,44 +116,109 @@ public class MinioStorageService : IStorageService
             await EnsureBucketExistsAsync(bucketName);
         }
 
-        var putArgs = new PutObjectArgs()
-            .WithBucket(bucketName)
-            .WithObject(objectName)
-            .WithStreamData(data)
-            .WithObjectSize(data.Length)
-            .WithContentType(contentType);
-
-        if (tags != null && tags.Count > 0)
+        Stream uploadStream = data;
+        MemoryStream? ms = null;
+        if (!data.CanSeek)
         {
-            putArgs.WithTagging(new Tagging(tags, false));
+            ms = new MemoryStream();
+            await data.CopyToAsync(ms);
+            ms.Position = 0;
+            uploadStream = ms;
         }
 
-        await _minioClient.PutObjectAsync(putArgs);
-        
-        _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", bucketName, objectName);
-        
-        return storagePath; // Now returning the full path starting with bucket
+        if (uploadStream.CanSeek)
+        {
+            uploadStream.Position = 0;
+        }
+
+        try
+        {
+            long objectSize = uploadStream.Length > 5 * 1024 * 1024 ? -1 : uploadStream.Length;
+            var putArgs = new PutObjectArgs()
+                .WithBucket(bucketName)
+                .WithObject(objectName)
+                .WithStreamData(uploadStream)
+                .WithObjectSize(objectSize)
+                .WithContentType(contentType);
+
+            if (tags != null && tags.Count > 0)
+            {
+                putArgs.WithTagging(new Tagging(tags, false));
+            }
+
+            await _minioClient.PutObjectAsync(putArgs);
+            
+            _logger.LogInformation("Uploaded file to MinIO: {Bucket}/{Path}", bucketName, objectName);
+            
+            return storagePath; // Now returning the full path starting with bucket
+        }
+        finally
+        {
+            ms?.Dispose();
+        }
     }
 
     public async Task<string> UploadThumbnailAsync(string storagePath, Stream data, string contentType, Dictionary<string, string>? tags = null)
     {
         await EnsureBucketExistsAsync();
 
-        var putArgs = new PutObjectArgs()
-            .WithBucket(DefaultBucket)
-            .WithObject(storagePath)
-            .WithStreamData(data)
-            .WithObjectSize(data.Length)
-            .WithContentType(contentType);
-        
-        if (tags != null && tags.Count > 0)
+        Stream uploadStream = data;
+        MemoryStream? ms = null;
+        if (!data.CanSeek)
         {
-            putArgs.WithTagging(new Tagging(tags, false));
+            ms = new MemoryStream();
+            await data.CopyToAsync(ms);
+            ms.Position = 0;
+            uploadStream = ms;
         }
 
-        await _minioClient.PutObjectAsync(putArgs);
+        if (uploadStream.CanSeek)
+        {
+            uploadStream.Position = 0;
+        }
 
-        return $"{DefaultBucket}/{storagePath}";
+        try
+        {
+            long objectSize = uploadStream.Length > 5 * 1024 * 1024 ? -1 : uploadStream.Length;
+            var putArgs = new PutObjectArgs()
+                .WithBucket(DefaultBucket)
+                .WithObject(storagePath)
+                .WithStreamData(uploadStream)
+                .WithObjectSize(objectSize)
+                .WithContentType(contentType);
+            
+            if (tags != null && tags.Count > 0)
+            {
+                putArgs.WithTagging(new Tagging(tags, false));
+            }
+
+            await _minioClient.PutObjectAsync(putArgs);
+
+            return $"{DefaultBucket}/{storagePath}";
+        }
+        finally
+        {
+            ms?.Dispose();
+        }
+    }
+
+    public async Task<bool> FileExistsAsync(string storagePath)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath)) return false;
+
+        try
+        {
+            var (bucketName, objectName) = await ResolveStoragePathAsync(storagePath);
+            var statArgs = new StatObjectArgs()
+                .WithBucket(bucketName)
+                .WithObject(objectName);
+            var stat = await _minioClient.StatObjectAsync(statArgs);
+            return stat != null && stat.Size > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task<(string BucketName, string ObjectName)> ResolveStoragePathAsync(string storagePath)

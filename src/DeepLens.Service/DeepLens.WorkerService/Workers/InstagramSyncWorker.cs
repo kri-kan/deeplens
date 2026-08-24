@@ -337,7 +337,11 @@ namespace DeepLens.WorkerService.Workers
                 if (response.IsSuccessStatusCode)
                 {
                     using var stream = await response.Content.ReadAsStreamAsync();
-                    await storage.UploadToPathAsync(fullPath, stream, "image/jpeg");
+                    using var ms = new MemoryStream();
+                    await stream.CopyToAsync(ms);
+                    ms.Position = 0;
+
+                    await storage.UploadToPathAsync(fullPath, ms, "image/jpeg");
 
                     // Register in central 'media' table
                     var mediaId = Guid.NewGuid();
@@ -398,7 +402,7 @@ namespace DeepLens.WorkerService.Workers
                     bool exists = existingPosts.TryGetValue(p.Id, out var storagePath);
                     Guid dbPostId;
 
-                    // Download thumbnail if missing
+                    // Download thumbnail if missing from MinIO
                     string? newStoragePath = null;
                     string? thumbUrl = p.ThumbnailUrl ?? p.MediaUrl;
                     if (string.IsNullOrEmpty(thumbUrl) && p.MediaType == InstagramMediaType.CAROUSEL_ALBUM && p.Children != null && p.Children.Any())
@@ -407,7 +411,8 @@ namespace DeepLens.WorkerService.Workers
                         thumbUrl = firstChild.ThumbnailUrl ?? firstChild.MediaUrl;
                     }
 
-                    if (string.IsNullOrEmpty(storagePath) && !string.IsNullOrEmpty(thumbUrl))
+                    bool thumbPhysicallyExists = !string.IsNullOrEmpty(storagePath) && await storage.FileExistsAsync(storagePath);
+                    if (!thumbPhysicallyExists && !string.IsNullOrEmpty(thumbUrl))
                     {
                         newStoragePath = await DownloadAndStoreThumbnailAsync(http, storage, externalId, p.Id, thumbUrl);
                     }
@@ -492,7 +497,7 @@ namespace DeepLens.WorkerService.Workers
                             await EmitImageUploadedEvent(mediaId, newStoragePath, $"{p.Id}.jpg", "image/jpeg", "instagram", "thumbnail", ct);
                         }
 
-                        // Check if full media is missing for owned profiles
+                        // Check if full media is physically missing from MinIO for owned profiles
                         if (isOwnedProfile)
                         {
                             var currentPostRecord = await conn.QueryFirstOrDefaultAsync<dynamic>(
@@ -501,10 +506,10 @@ namespace DeepLens.WorkerService.Workers
                             string? currentStoragePath = currentPostRecord?.storage_path;
                             string? currentDownloadStatus = currentPostRecord?.download_status;
 
-                            bool isVideo = p.MediaType == InstagramMediaType.VIDEO;
-                            bool hasValidVideoStorage = !string.IsNullOrEmpty(currentStoragePath) &&
-                                (currentStoragePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
-                                 currentStoragePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase));
+                            string fullMediaExt = p.MediaType == InstagramMediaType.VIDEO ? "mp4" : "jpg";
+                            string fullMediaIdentifier = $"{p.Id}_full.{fullMediaExt}";
+                            string fullMediaPath = StoragePathRegistry.GetPath(new InstagramContext(externalId), fullMediaIdentifier);
+                            bool fullMediaPhysicallyExists = await storage.FileExistsAsync(fullMediaPath);
 
                             bool hasFullMediaLink = await conn.ExecuteScalarAsync<bool>(@"
                                 SELECT EXISTS (
@@ -517,9 +522,7 @@ namespace DeepLens.WorkerService.Workers
 
                             bool isCompleted = string.Equals(currentDownloadStatus, "completed", StringComparison.OrdinalIgnoreCase);
 
-                            bool isFullMediaMissing = isVideo
-                                ? (!hasValidVideoStorage || !hasFullMediaLink || !isCompleted)
-                                : (!hasFullMediaLink || !isCompleted || string.IsNullOrEmpty(currentStoragePath));
+                            bool isFullMediaMissing = !fullMediaPhysicallyExists || !hasFullMediaLink || !isCompleted || string.IsNullOrEmpty(currentStoragePath);
 
                             if (isFullMediaMissing)
                             {
@@ -644,6 +647,10 @@ namespace DeepLens.WorkerService.Workers
                 }
 
                 using var stream = await response.Content.ReadAsStreamAsync();
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                ms.Position = 0;
+
                 var context = new InstagramContext(externalId);
                 
                 // We use postId as filename to avoid duplicates and have deterministic paths
@@ -652,7 +659,7 @@ namespace DeepLens.WorkerService.Workers
                 string fullPath = StoragePathRegistry.GetPath(context, identifier);
                 
                 // UploadToPathAsync uses the full path (bucket included)
-                await storage.UploadToPathAsync(fullPath, stream, "image/jpeg");
+                await storage.UploadToPathAsync(fullPath, ms, "image/jpeg");
                 return fullPath;
             }
             catch (Exception ex)
