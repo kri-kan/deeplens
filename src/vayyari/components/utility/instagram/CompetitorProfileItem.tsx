@@ -27,7 +27,7 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
     } else {
       router.push({
         pathname: '/utilities/instagram-explorer',
-        params: { profile: item.username },
+        params: { profile: item.username, from: 'competitors' },
       } as any);
     }
   };

@@ -12,6 +12,7 @@ interface ProfileHeaderProps {
   onShowSettings: () => void;
   bioExpanded: boolean;
   onToggleBio: () => void;
+  onBack?: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -20,6 +21,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onShowSettings,
   bioExpanded,
   onToggleBio,
+  onBack,
 }) => {
   const theme = useTheme();
   const profile = normalizeProfile(rawProfile);
@@ -36,6 +38,14 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         <View style={styles.meta}>
           <View style={styles.titleRow}>
             <View style={styles.nameContainer}>
+              {onBack && (
+                <IconButton
+                  icon="arrow-left"
+                  size={20}
+                  style={styles.backIcon}
+                  onPress={onBack}
+                />
+              )}
               <Text variant="titleLarge" style={styles.bold}>{profile.name}</Text>
             </View>
             <IconButton icon="cog" size={20} style={styles.settingsIcon} onPress={onShowSettings} />
@@ -105,6 +115,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     gap: 4,
+  },
+  backIcon: {
+    margin: 0,
+    marginRight: 4,
   },
   settingsIcon: {
     margin: 0,

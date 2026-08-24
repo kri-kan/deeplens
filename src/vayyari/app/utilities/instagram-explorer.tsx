@@ -18,9 +18,9 @@ export default function InstagramExplorer() {
   const theme = useTheme();
   const router = useRouter();
   const navigation = useNavigation();
-  const { profile: paramProfile, selectedProfile: paramSelectedProfile } = useLocalSearchParams<{ profile?: string; selectedProfile?: string }>();
+  const { profile: paramProfile, selectedProfile: paramSelectedProfile, from } = useLocalSearchParams<{ profile?: string; selectedProfile?: string; from?: string }>();
   const targetProfileParam = paramProfile || paramSelectedProfile;
-  const lastTargetProfileParamRef = useRef<string | null>(null);
+  const processedProfileParamRef = useRef<string | null>(null);
   const [needsReviewCount, setNeedsReviewCount] = useState(0);
 
   useFocusEffect(
@@ -61,22 +61,15 @@ export default function InstagramExplorer() {
     profileCategories,
   } = useInstagramExplorer();
 
-  // Auto-select profile when navigated to with `profile` or `selectedProfile` route param
+  // Auto-select profile when navigated to with `profile` or `selectedProfile` route param (only once per param change)
   React.useEffect(() => {
-    if (targetProfileParam && targetProfileParam !== lastTargetProfileParamRef.current) {
-      lastTargetProfileParamRef.current = targetProfileParam;
+    if (targetProfileParam && targetProfileParam !== processedProfileParamRef.current) {
+      processedProfileParamRef.current = targetProfileParam;
       selectProfile(targetProfileParam);
+    } else if (!targetProfileParam) {
+      processedProfileParamRef.current = null;
     }
   }, [targetProfileParam, selectProfile]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      if (targetProfileParam && selectedProfile !== targetProfileParam) {
-        lastTargetProfileParamRef.current = targetProfileParam;
-        selectProfile(targetProfileParam);
-      }
-    }, [targetProfileParam, selectedProfile, selectProfile])
-  );
 
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
@@ -131,21 +124,47 @@ export default function InstagramExplorer() {
     );
   }, [selectionMode, selectedPosts, selectedProfile, sortBy, sortOrder, profileData?.videos, isCompetitorProfile, profileData?.profile?.profileCategory]);
 
+  const handleBack = useCallback(() => {
+    if (selectionMode) {
+      setSelectedPosts(new Map());
+      return true;
+    }
+
+    if (selectedProfile) {
+      router.setParams({ profile: undefined, selectedProfile: undefined, from: undefined });
+      processedProfileParamRef.current = null;
+      setSelectedProfile(null);
+
+      if (from === 'competitors') {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/utilities/instagram/competitors');
+        }
+      }
+      return true;
+    }
+
+    return false;
+  }, [selectionMode, selectedProfile, from, router, setSelectedProfile]);
+
   React.useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
       if (selectionMode) {
         e.preventDefault();
         setSelectedPosts(new Map());
-      } else if (selectedProfile) {
-        // Stop exiting explorer entirely if there's a selected profile 
-        // Wait, the stack is only for the explorer page, so going back normally 
-        // exits explorer. If selectedProfile is set, we want to clear it instead!
+        return;
+      }
+      if (selectedProfile && from !== 'competitors') {
+        // Stop exiting explorer entirely if there's a selected profile from non-competitors route
         e.preventDefault();
+        router.setParams({ profile: undefined, selectedProfile: undefined, from: undefined });
+        processedProfileParamRef.current = null;
         setSelectedProfile(null);
       }
     });
     return unsubscribe;
-  }, [navigation, selectionMode, selectedProfile, setSelectedProfile]);
+  }, [navigation, selectionMode, selectedProfile, from, router, setSelectedProfile]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -155,7 +174,7 @@ export default function InstagramExplorer() {
           return true;
         }
         if (selectedProfile) {
-          setSelectedProfile(null);
+          handleBack();
           return true;
         }
         return false;
@@ -163,7 +182,7 @@ export default function InstagramExplorer() {
 
       const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
       return () => backHandler.remove();
-    }, [selectionMode, selectedProfile])
+    }, [selectionMode, selectedProfile, handleBack])
   );
 
   const toggleSelection = (post: any) => {
@@ -250,7 +269,7 @@ export default function InstagramExplorer() {
             </>
           ) : (
             <>
-              <Appbar.BackAction onPress={() => { setSelectedProfile(null); }} />
+              <Appbar.BackAction onPress={handleBack} />
               <Appbar.Content title={`@${selectedProfile}`} titleStyle={styles.bold} />
               <Appbar.Action icon="cloud-sync" onPress={() => router.push('/utilities/instagram-scraper')} />
               <Appbar.Action icon="clipboard-list-outline" onPress={() => router.push('/utilities/instagram/queue')} />
@@ -292,6 +311,7 @@ export default function InstagramExplorer() {
                 } as any)}
                 bioExpanded={bioExpanded}
                 onToggleBio={() => setBioExpanded(!bioExpanded)}
+                onBack={handleBack}
               />
 
               {!selectionMode && (
