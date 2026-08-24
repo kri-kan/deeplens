@@ -96,7 +96,7 @@ function InnerRootLayout() {
             ) : (
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             )}
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true }} />
             <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
