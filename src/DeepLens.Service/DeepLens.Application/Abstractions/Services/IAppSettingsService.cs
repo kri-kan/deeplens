@@ -10,6 +10,7 @@ namespace DeepLens.Application.Abstractions.Services
         Task<List<AppSetting>> GetSectionAsync(string section);
         Task<List<AppSetting>> GetSectionInternalAsync(string section);
         Task<AppSetting?> UpsertAsync(string key, string? value);
+        Task<string?> GetValueAsync(string key);
         Task SeedDefaultsAsync();
     }
 }

@@ -12,6 +12,7 @@ import {
 } from 'react-native-paper';
 import { waProcessorService, ProcessingState } from '@/services/wa-processor.service';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
+import { WhatsAppMediaArchivalCard } from '@/components/utility/whatsapp/WhatsAppMediaArchivalCard';
 
 export default function WhatsAppSettingsScreen() {
   const theme = useTheme();
@@ -146,6 +147,9 @@ export default function WhatsAppSettingsScreen() {
             )}
           />
         </Card>
+
+        <Text variant="titleMedium" style={styles.sectionTitle}>Media Archival & Lifecycle</Text>
+        <WhatsAppMediaArchivalCard />
 
         {state?.pausedAt && (
           <Text variant="bodySmall" style={styles.timestamp}>

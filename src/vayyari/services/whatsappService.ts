@@ -91,5 +91,22 @@ export const whatsappService = {
   unsubscribe: async (customerId: string, channelId: string) => {
     return await productMgmtApiClient.post(API_ROUTES.WHATSAPP.UNSUBSCRIBE(customerId, channelId));
   },
+
+  // ── Media Lifecycle & Archival ─────────────────────────────────────────────
+
+  archiveExpiredMedia: async (): Promise<ArchiveExpiredMediaResponse> => {
+    return await productMgmtApiClient.post<ArchiveExpiredMediaResponse>(
+      API_ROUTES.WHATSAPP.ARCHIVE_EXPIRED_MEDIA
+    );
+  },
 };
+
+export interface ArchiveExpiredMediaResponse {
+  message?: string;
+  archivedCount?: number;
+  retentionDays?: number;
+  processedAt?: string;
+  error?: string;
+}
+
 

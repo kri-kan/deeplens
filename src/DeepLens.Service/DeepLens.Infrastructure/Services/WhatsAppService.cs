@@ -1,8 +1,14 @@
 using Dapper;
 using DeepLens.Application.Abstractions.Data;
+using DeepLens.Application.Abstractions.Services;
 using DeepLens.Contracts.Marketing;
+using DeepLens.Shared.Common;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DeepLens.Infrastructure.Services;
@@ -10,10 +16,20 @@ namespace DeepLens.Infrastructure.Services;
 public class WhatsAppService : IWhatsAppService
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly IStorageService _storageService;
+    private readonly IAppSettingsService _appSettingsService;
+    private readonly ILogger<WhatsAppService> _logger;
 
-    public WhatsAppService(IDbConnectionFactory dbConnectionFactory)
+    public WhatsAppService(
+        IDbConnectionFactory dbConnectionFactory,
+        IStorageService storageService,
+        IAppSettingsService appSettingsService,
+        ILogger<WhatsAppService> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _storageService = storageService;
+        _appSettingsService = appSettingsService;
+        _logger = logger;
     }
 
     public async Task<IEnumerable<WhatsAppAccountDto>> GetActiveAccountsAsync()
@@ -146,5 +162,98 @@ public class WhatsAppService : IWhatsAppService
 
         var rows = await connection.ExecuteAsync(sql, new { CustomerId = customerId, ChannelId = channelId, Now = DateTime.UtcNow });
         return rows > 0;
+    }
+
+    public async Task<WhatsAppArchiveResultDto> ArchiveExpiredMediaAsync(int? retentionDaysOverride = null, CancellationToken ct = default)
+    {
+        int days = MediaConstants.WhatsApp.DefaultMediaRetentionDays;
+        if (retentionDaysOverride.HasValue && retentionDaysOverride.Value > 0)
+        {
+            days = retentionDaysOverride.Value;
+        }
+        else
+        {
+            var settingVal = await _appSettingsService.GetValueAsync(MediaConstants.WhatsApp.MediaRetentionDaysKey);
+            if (int.TryParse(settingVal, out int parsedDays) && parsedDays > 0)
+            {
+                days = parsedDays;
+            }
+        }
+
+        _logger.LogInformation("Starting WhatsApp expired media auto-archive with retention period: {Days} days", days);
+
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        
+        const string selectSql = @"
+            SELECT id AS Id, message_id AS MessageId, group_id AS GroupId, media_url AS MediaUrl
+            FROM wa.messages
+            WHERE (media_url LIKE 'minio://whatsapp-data/%' OR media_url LIKE 'whatsapp-data/%')
+              AND created_at < NOW() - make_interval(days => @Days)
+              AND (group_id IS NULL OR group_id NOT IN (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id IS NOT NULL))";
+
+        var expiredMessages = (await connection.QueryAsync<(long Id, string MessageId, string? GroupId, string MediaUrl)>(
+            selectSql, new { Days = days })).ToList();
+
+        if (expiredMessages.Count == 0)
+        {
+            _logger.LogInformation("No expired WhatsApp media files found to archive (retention: {Days} days)", days);
+            return new WhatsAppArchiveResultDto(0, 0, days, $"No expired media found older than {days} days.");
+        }
+
+        _logger.LogInformation("Found {Count} expired WhatsApp messages to archive", expiredMessages.Count);
+
+        int deletedFilesCount = 0;
+        var messageIdsToUpdate = new List<long>();
+
+        foreach (var msg in expiredMessages)
+        {
+            if (ct.IsCancellationRequested) break;
+            if (string.IsNullOrWhiteSpace(msg.MediaUrl)) continue;
+
+            string sourcePath = msg.MediaUrl;
+            if (sourcePath.StartsWith("minio://"))
+            {
+                sourcePath = sourcePath.Substring(8);
+                var parts = sourcePath.Split('/', 2);
+                if (parts.Length > 1)
+                {
+                    sourcePath = parts[0] + "/" + parts[1];
+                }
+            }
+
+            try
+            {
+                await _storageService.DeleteFileAsync(sourcePath);
+                deletedFilesCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not delete expired WhatsApp raw file {SourcePath} from MinIO", sourcePath);
+            }
+
+            messageIdsToUpdate.Add(msg.Id);
+        }
+
+        if (messageIdsToUpdate.Count > 0)
+        {
+            const string updateSql = @"
+                UPDATE wa.messages
+                SET media_url = NULL,
+                    metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{is_archived}', 'true'::jsonb, true),
+                    updated_at = NOW()
+                WHERE id = ANY(@Ids)";
+
+            await connection.ExecuteAsync(updateSql, new { Ids = messageIdsToUpdate.ToArray() });
+        }
+
+        _logger.LogInformation("Completed WhatsApp media auto-archive: {ArchivedCount} messages archived, {DeletedFilesCount} MinIO files deleted",
+            messageIdsToUpdate.Count, deletedFilesCount);
+
+        return new WhatsAppArchiveResultDto(
+            ArchivedCount: messageIdsToUpdate.Count,
+            DeletedFilesCount: deletedFilesCount,
+            RetentionDays: days,
+            Message: $"Successfully archived {messageIdsToUpdate.Count} expired WhatsApp messages and deleted {deletedFilesCount} raw files (retention: {days} days)."
+        );
     }
 }

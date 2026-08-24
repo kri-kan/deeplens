@@ -43,4 +43,10 @@ public static class MediaConstants
 
         public static readonly string[] AllOptions = { Days30, Days60, Days90, Days180, Days270, Days360, Infinite };
     }
+
+    public static class WhatsApp
+    {
+        public const string MediaRetentionDaysKey = "whatsapp.media.retention_days";
+        public const int DefaultMediaRetentionDays = 100;
+    }
 }

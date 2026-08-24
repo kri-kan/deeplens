@@ -15,6 +15,7 @@ import {
   Divider,
   Portal,
   Dialog,
+  HelperText,
 } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +27,7 @@ import { useAppTheme } from '@/context/ThemeContext';
 import { useAuth, ALL_AUTH_STORAGE_KEYS } from '@/context/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/types/authorization';
-import { appSettingsService, AppSetting, AppSettingsGrouped } from '@/services/app-settings.service';
+import { appSettingsService, AppSetting, AppSettingsGrouped, DEFAULT_WHATSAPP_RETENTION_SETTING } from '@/services/app-settings.service';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 import { Fonts } from '@/constants/theme';
 
@@ -106,10 +107,30 @@ export default function ModalScreen() {
         await appSettingsService.seed();
         data = await appSettingsService.getAll();
       }
+
+      // Ensure whatsapp.media.retention_days is present in Infrastructure or Meta
+      let foundRetention = false;
+      for (const section of Object.values(data)) {
+        if (section?.some(s => s.key === 'whatsapp.media.retention_days')) {
+          foundRetention = true;
+          break;
+        }
+      }
+      if (!foundRetention) {
+        const targetSec = data['Infrastructure'] ? 'Infrastructure' : (data['Infrastructure & Storage'] ? 'Infrastructure & Storage' : 'Infrastructure');
+        if (!data[targetSec]) {
+          data[targetSec] = [];
+        }
+        data[targetSec].push(DEFAULT_WHATSAPP_RETENTION_SETTING);
+      }
+
       setSettings(data);
     } catch (error) {
       console.error('Failed to load settings:', error);
       Alert.alert('Error', 'Failed to load configuration settings from the server. Is the Orchestrator running?');
+      setSettings({
+        Infrastructure: [DEFAULT_WHATSAPP_RETENTION_SETTING],
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -141,9 +162,31 @@ export default function ModalScreen() {
   const saveEditDialog = async () => {
     if (!editingSetting) return;
 
+    if (editingSetting.dataType === 'integer') {
+      const parsed = parseInt(editValue.trim(), 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        Alert.alert('Invalid Input', 'Please enter a positive whole number for this setting.');
+        return;
+      }
+    }
+
+    const valueToSave = editingSetting.dataType === 'integer' ? String(parseInt(editValue.trim(), 10)) : editValue;
+
     try {
       setSaving(true);
-      await appSettingsService.update(editingSetting.key, editValue);
+      await appSettingsService.update(editingSetting.key, valueToSave);
+
+      // Optimistically update local state
+      setSettings(prev => {
+        const next: AppSettingsGrouped = {};
+        for (const [sec, items] of Object.entries(prev)) {
+          next[sec] = items.map(item =>
+            item.key === editingSetting.key ? { ...item, value: valueToSave, updatedAt: new Date().toISOString() } : item
+          );
+        }
+        return next;
+      });
+
       closeEditDialog();
       await loadSettings();
     } catch (error) {
@@ -233,6 +276,8 @@ export default function ModalScreen() {
       displayValue = '••••••••';
     } else if (isSecret && isRevealed && setting.value === '••••••••') {
       displayValue = '(Value hidden on server)';
+    } else if (setting.key === 'whatsapp.media.retention_days' && setting.value) {
+      displayValue = `${setting.value} days`;
     }
 
     const isCodeLike =
@@ -812,10 +857,11 @@ export default function ModalScreen() {
                   label={editingSetting.label}
                   value={editValue}
                   onChangeText={setEditValue}
+                  keyboardType={editingSetting.dataType === 'integer' ? 'numeric' : 'default'}
                   secureTextEntry={editingSetting.isSecret && !dialogSecretRevealed}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  multiline={editValue.length > 40}
+                  multiline={editingSetting.dataType !== 'integer' && editValue.length > 40}
                   right={
                     editingSetting.isSecret ? (
                       <TextInput.Icon
@@ -826,6 +872,11 @@ export default function ModalScreen() {
                   }
                   style={styles.dialogInput}
                 />
+                {editingSetting.dataType === 'integer' && (
+                  <HelperText type="info" visible={true} style={{ marginTop: 2 }}>
+                    Enter a positive whole number (e.g. 100 for 100 days).
+                  </HelperText>
+                )}
               </>
             )}
           </Dialog.Content>

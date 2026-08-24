@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using DeepLens.Contracts.Events;
+using DeepLens.Contracts.Marketing;
 using DeepLens.Application.Abstractions.Services;
 using DeepLens.Infrastructure.Services;
 using System.Text.Json;
@@ -29,6 +30,8 @@ public class WhatsAppGroupWorker : BackgroundService
     private readonly string _connectionString;
     private readonly string[] _subscriptionTopics;
     private readonly PerceptualHashCache _hashCache;
+    private DateTime _lastArchiveCheck = DateTime.MinValue;
+    private readonly TimeSpan _archiveCheckInterval = TimeSpan.FromHours(1);
 
     public WhatsAppGroupWorker(
         ILogger<WhatsAppGroupWorker> logger,
@@ -90,6 +93,12 @@ public class WhatsAppGroupWorker : BackgroundService
                 if (consumeResult?.Message != null)
                 {
                     await ProcessMessage(consumeResult, stoppingToken);
+                }
+
+                if (DateTime.UtcNow - _lastArchiveCheck > _archiveCheckInterval)
+                {
+                    _lastArchiveCheck = DateTime.UtcNow;
+                    _ = RunAutoArchiveExpiredMediaAsync(stoppingToken);
                 }
             }
         }
@@ -675,7 +684,12 @@ public class WhatsAppGroupWorker : BackgroundService
                         string targetPath = $"{cleanCategory}/{evt.GroupId}/{fileName}";
 
                         Guid mediaId = Guid.Parse(mediaFile.MediaId);
-                        var mediaType = mediaFile.MediaType == "video" ? 2 : 1;
+                        // Document messages in WhatsApp are videos sent via iPhone Files/Documents
+                        // (mimetype = video/mp4, video/quicktime). Classify correctly as video (2).
+                        var mediaType = (mediaFile.MediaType == "video" || 
+                                        (mediaFile.MediaType == "document" && 
+                                         !string.IsNullOrEmpty(mediaFile.MimeType) && 
+                                         mediaFile.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))) ? 2 : 1;
 
                         var mediaExists = await conn.QuerySingleOrDefaultAsync<Guid?>(
                             "SELECT id FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
@@ -707,6 +721,27 @@ public class WhatsAppGroupWorker : BackgroundService
                                 }
 
                                 await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
+                            }
+
+                            string newMediaUrl = $"minio://{targetPath}";
+                            await conn.ExecuteAsync(
+                                @"UPDATE wa.messages 
+                                  SET media_url = @NewMediaUrl, updated_at = NOW() 
+                                  WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                                new { 
+                                    NewMediaUrl = newMediaUrl, 
+                                    GroupId = evt.GroupId, 
+                                    OldSourceUrl = mediaFile.MediaUrl,
+                                    OldFileNamePattern = $"%{fileName}"
+                                }, trans);
+
+                            try
+                            {
+                                await storage.DeleteFileAsync(sourcePath);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Could not delete original WhatsApp raw file {SourcePath} after copy to general", sourcePath);
                             }
 
                             const string insertMediaSql = @"
@@ -757,6 +792,27 @@ public class WhatsAppGroupWorker : BackgroundService
                                     }
 
                                     await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
+                                }
+
+                                string newMediaUrl = $"minio://{targetPath}";
+                                await conn.ExecuteAsync(
+                                    @"UPDATE wa.messages 
+                                      SET media_url = @NewMediaUrl, updated_at = NOW() 
+                                      WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                                    new { 
+                                        NewMediaUrl = newMediaUrl, 
+                                        GroupId = evt.GroupId, 
+                                        OldSourceUrl = mediaFile.MediaUrl,
+                                        OldFileNamePattern = $"%{fileName}"
+                                    }, trans);
+
+                                try
+                                {
+                                    await storage.DeleteFileAsync(sourcePath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Could not delete original WhatsApp raw file {SourcePath} after copy to general", sourcePath);
                                 }
 
                                 await conn.ExecuteAsync(
@@ -899,7 +955,12 @@ public class WhatsAppGroupWorker : BackgroundService
                     string targetPath = $"{cleanCategory}/{evt.GroupId}/{fileName}";
 
                     Guid mediaId = Guid.Parse(mediaFile.MediaId);
-                    var mediaType = mediaFile.MediaType == "video" ? 2 : 1;
+                    // Document messages in WhatsApp are videos sent via iPhone Files/Documents
+                    // (mimetype = video/mp4, video/quicktime). Classify correctly as video (2).
+                    var mediaType = (mediaFile.MediaType == "video" || 
+                                    (mediaFile.MediaType == "document" && 
+                                     !string.IsNullOrEmpty(mediaFile.MimeType) && 
+                                     mediaFile.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))) ? 2 : 1;
 
                     var mediaExists = await conn.QuerySingleOrDefaultAsync<Guid?>(
                         "SELECT id FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
@@ -936,6 +997,27 @@ public class WhatsAppGroupWorker : BackgroundService
                         }
 
                         await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
+                    }
+
+                    string newMediaUrl = $"minio://{targetPath}";
+                    await conn.ExecuteAsync(
+                        @"UPDATE wa.messages 
+                          SET media_url = @NewMediaUrl, updated_at = NOW() 
+                          WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                        new { 
+                            NewMediaUrl = newMediaUrl, 
+                            GroupId = evt.GroupId, 
+                            OldSourceUrl = mediaFile.MediaUrl,
+                            OldFileNamePattern = $"%{fileName}"
+                        }, trans);
+
+                    try
+                    {
+                        await storage.DeleteFileAsync(sourcePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Could not delete original WhatsApp raw file {SourcePath} after copy to general", sourcePath);
                     }
 
                     const string insertMediaSql = @"
@@ -1872,6 +1954,25 @@ public class WhatsAppGroupWorker : BackgroundService
             await trans.RollbackAsync(ct);
             _logger.LogError(ex, "Failed to execute delayed auto-merge of {SourceProductId} into {TargetProductId}", sourceProductId, targetProductId);
             throw;
+        }
+    }
+
+    private async Task RunAutoArchiveExpiredMediaAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var whatsAppService = scope.ServiceProvider.GetRequiredService<IWhatsAppService>();
+            var result = await whatsAppService.ArchiveExpiredMediaAsync(null, ct);
+            if (result.ArchivedCount > 0 || result.DeletedFilesCount > 0)
+            {
+                _logger.LogInformation("WhatsApp auto-archive completed: {ArchivedCount} messages updated, {DeletedFilesCount} MinIO files deleted (retention: {RetentionDays} days)",
+                    result.ArchivedCount, result.DeletedFilesCount, result.RetentionDays);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to run WhatsApp expired media auto-archive");
         }
     }
 }

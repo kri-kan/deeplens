@@ -95,6 +95,19 @@ namespace DeepLens.Infrastructure.Services
             return Mask(existing);
         }
 
+        public async Task<string?> GetValueAsync(string key)
+        {
+            if (!_cache.TryGetValue(CACHE_KEY, out List<AppSetting>? settings))
+            {
+                using var conn = await _connectionFactory.CreateConnectionAsync();
+                var dbSettings = await conn.QueryAsync<AppSetting>("SELECT * FROM app_settings");
+                settings = dbSettings.ToList();
+                _cache.Set(CACHE_KEY, settings, TimeSpan.FromHours(1));
+            }
+
+            return settings?.FirstOrDefault(s => s.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Value;
+        }
+
         public async Task SeedDefaultsAsync()
         {
             using var conn = await _connectionFactory.CreateConnectionAsync();
@@ -164,6 +177,7 @@ namespace DeepLens.Infrastructure.Services
             new() { Key = "Infrastructure:MinioAccessKey", Section = "Infrastructure", Label = "MinIO Access Key", Description = "MinIO access key (username).", IsSecret = false, DataType = "string", Value = "" },
             new() { Key = "Infrastructure:MinioSecretKey", Section = "Infrastructure", Label = "MinIO Secret Key", Description = "MinIO secret key (password).", IsSecret = true, DataType = "string", Value = "" },
             new() { Key = "Infrastructure:KafkaBootstrap", Section = "Infrastructure", Label = "Kafka Bootstrap Servers", Description = "Comma-separated Kafka broker addresses.", IsSecret = false, DataType = "string", Value = "192.168.0.170:9092" },
+            new() { Key = "whatsapp.media.retention_days", Section = "Infrastructure", Label = "WhatsApp Media Retention", Description = "Auto-archive raw unpromoted WhatsApp media after N days (Default: 100 days)", IsSecret = false, DataType = "integer", Value = "100" },
             new() { Key = "Media:CacheExpiryHours", Section = "Media", Label = "Media Cache Expiry (hours)", Description = "Browser/App cache duration for images. Default: 6.", IsSecret = false, DataType = "integer", Value = "6" },
             
             // YouTube Settings

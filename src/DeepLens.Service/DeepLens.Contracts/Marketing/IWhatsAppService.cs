@@ -47,6 +47,17 @@ public record CreateWhatsAppAccountRequest(
     [property: JsonPropertyName("phoneNumber")] string? PhoneNumber = null
 );
 
+public record WhatsAppArchiveResultDto(
+    [property: JsonPropertyName("archivedCount")] int ArchivedCount,
+    [property: JsonPropertyName("deletedFilesCount")] int DeletedFilesCount,
+    [property: JsonPropertyName("retentionDays")] int RetentionDays,
+    [property: JsonPropertyName("message")] string Message
+);
+
+public record ArchiveExpiredMediaRequest(
+    [property: JsonPropertyName("retentionDays")] int? RetentionDays = null
+);
+
 public interface IWhatsAppService
 {
     Task<IEnumerable<WhatsAppAccountDto>> GetActiveAccountsAsync();
@@ -60,4 +71,6 @@ public interface IWhatsAppService
     Task<IEnumerable<ChannelSubscriberDto>> GetChannelSubscribersAsync(Guid channelId);
     Task<bool> SubscribeCustomerAsync(Guid customerId, Guid channelId);
     Task<bool> UnsubscribeCustomerAsync(Guid customerId, Guid channelId);
+
+    Task<WhatsAppArchiveResultDto> ArchiveExpiredMediaAsync(int? retentionDaysOverride = null, CancellationToken ct = default);
 }

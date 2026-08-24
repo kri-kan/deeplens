@@ -88,4 +88,24 @@ public class WhatsAppController : ControllerBase
         var result = await _whatsAppService.UnsubscribeCustomerAsync(customerId, channelId);
         return result ? Ok() : BadRequest("Failed to unsubscribe customer from channel");
     }
+
+    /// <summary>
+    /// POST /api/v1/whatsapp/archive-expired-media
+    /// Triggers automated archival and cleanup of expired raw WhatsApp media files past the configured retention threshold.
+    /// </summary>
+    [HttpPost("archive-expired-media")]
+    public async Task<IActionResult> ArchiveExpiredMedia([FromQuery] int? days, [FromBody] ArchiveExpiredMediaRequest? request, CancellationToken ct)
+    {
+        try
+        {
+            int? retentionDays = days ?? request?.RetentionDays;
+            var result = await _whatsAppService.ArchiveExpiredMediaAsync(retentionDays, ct);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
+

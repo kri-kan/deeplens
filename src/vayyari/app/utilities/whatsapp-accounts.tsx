@@ -27,6 +27,7 @@ import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { Section } from '@/components/layout/Section';
 import { whatsappService, WaAccount, CreateWaAccountPayload } from '@/services/whatsappService';
 import { waProcessorService, WaProcessorStatus } from '@/services/wa-processor.service';
+import { WhatsAppMediaArchivalCard } from '@/components/utility/whatsapp/WhatsAppMediaArchivalCard';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -380,6 +381,11 @@ export default function WhatsAppAccountsScreen() {
                 </View>
               </Card.Content>
             </Card>
+          </Section>
+
+          {/* ── Media Lifecycle & Auto-Archive Section ── */}
+          <Section title="Media Retention & Archival" style={styles.section}>
+            <WhatsAppMediaArchivalCard onArchivalComplete={fetchAll} />
           </Section>
 
           {/* ── Account list ── */}
