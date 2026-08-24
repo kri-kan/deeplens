@@ -54,6 +54,40 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
   const multiplier = (item as any)?.multiplier || (rawItem as any)?.multiplier || (item.likeCount > 5000 ? 3.4 : item.likeCount > 2000 ? 2.6 : 1.8);
   const isTakeoff = multiplier >= 2.5;
 
+  const viewCount = item.viewCount || (item.likeCount ? item.likeCount * 7 : 0);
+  const curvePoints = (item as any)?.curvePoints || (rawItem as any)?.curvePoints;
+  const viewPoints: number[] = Array.isArray(curvePoints) && curvePoints.length > 1
+    ? curvePoints.map((p: any) => Number(p.actualViews ?? (p.actualLikes ? p.actualLikes * 7 : 0)))
+    : [
+        Math.round(viewCount * 0.15),
+        Math.round(viewCount * (isTakeoff ? 0.65 : 0.35)),
+        Math.round(viewCount * (isTakeoff ? 0.85 : 0.55)),
+        viewCount,
+        Math.round(viewCount * 1.08),
+        Math.round(viewCount * 1.15),
+      ];
+
+  const w = 36;
+  const h = 14;
+  const pX = 2;
+  const pY = 2;
+  const maxV = Math.max(...viewPoints, 1);
+  const minV = Math.min(...viewPoints, 0);
+  const range = maxV - minV || 1;
+
+  const coords = viewPoints.map((val, idx) => {
+    const x = pX + (idx / (viewPoints.length - 1)) * (w - pX * 2);
+    const y = pY + (h - pY * 2) - ((val - minV) / range) * (h - pY * 2);
+    return { x, y };
+  });
+
+  let sparklinePath = `M ${coords[0].x.toFixed(1)} ${coords[0].y.toFixed(1)}`;
+  for (let i = 1; i < coords.length; i++) {
+    const cpx = ((coords[i - 1].x + coords[i].x) / 2).toFixed(1);
+    sparklinePath += ` C ${cpx} ${coords[i - 1].y.toFixed(1)}, ${cpx} ${coords[i].y.toFixed(1)}, ${coords[i].x.toFixed(1)} ${coords[i].y.toFixed(1)}`;
+  }
+  const lastCoord = coords[coords.length - 1];
+
   return (
     <TouchableOpacity 
       style={[styles.videoItem, isSelected && styles.selectedItem]}
@@ -118,25 +152,25 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
         <View style={styles.competitorOverlay}>
           <View style={styles.velocityBadge}>
             <Text style={styles.velocityText}>
-              {isTakeoff ? '⚡' : '🔥'} {multiplier.toFixed(1)}x
+              ⚡ {multiplier.toFixed(1)}x
             </Text>
           </View>
           <View style={styles.miniSparklineWrapper}>
             <Svg width={36} height={14} viewBox="0 0 36 14">
               <Defs>
                 <LinearGradient id={`miniSpark_${item.id || 'def'}`} x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0" stopColor={isTakeoff ? '#F59E0B' : '#EF4444'} stopOpacity="0.8" />
-                  <Stop offset="1" stopColor={isTakeoff ? '#F59E0B' : '#EF4444'} stopOpacity="0.1" />
+                  <Stop offset="0" stopColor="#3B82F6" stopOpacity="0.9" />
+                  <Stop offset="1" stopColor="#60A5FA" stopOpacity="0.3" />
                 </LinearGradient>
               </Defs>
               <Path
-                d="M 2 12 C 8 11, 14 7, 22 4 C 27 2, 31 1, 33 1"
-                stroke={isTakeoff ? '#F59E0B' : '#EF4444'}
+                d={sparklinePath}
+                stroke="#3B82F6"
                 strokeWidth={1.8}
                 fill="none"
                 strokeLinecap="round"
               />
-              <Circle cx={33} cy={1} r={2} fill={isTakeoff ? '#F59E0B' : '#EF4444'} />
+              <Circle cx={lastCoord.x} cy={lastCoord.y} r={2} fill="#3B82F6" />
             </Svg>
           </View>
         </View>

@@ -104,6 +104,7 @@ export const API_ROUTES = {
     MEMBERSHIPS: (customerId: string) => `/api/v1/whatsapp/customers/${customerId}/memberships`,
     SUBSCRIBE: (customerId: string, channelId: string) => `/api/v1/whatsapp/customers/${customerId}/subscribe/${channelId}`,
     UNSUBSCRIBE: (customerId: string, channelId: string) => `/api/v1/whatsapp/customers/${customerId}/unsubscribe/${channelId}`,
+    ARCHIVE_EXPIRED_MEDIA: '/api/v1/whatsapp/archive-expired-media',
   },
 
   // Generic Communication & Broadcast
@@ -135,7 +136,7 @@ export const API_ROUTES = {
     LINK: '/api/v1/products/instagram/link',
     CREATE_PRODUCT: (postId: string) => `/api/v1/products/instagram/${postId}/create-product`,
     COMPETITORS_SUMMARY: '/api/v1/Insta/competitors/summary',
-    COMPETITORS_TOGGLE_TRACKING: (username: string) => `/api/v1/Insta/competitors/${encodeURIComponent(username)}/toggle-tracking`,
+    COMPETITORS_TOGGLE_TRACKING: (username: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/toggle-tracking`,
     COMPETITORS_HIGH_PERFORMING: '/api/v1/Insta/competitors/high-performing',
     COMPETITORS_PROFILE_CURVE: (profileId: string) => `/api/v1/Insta/competitors/${encodeURIComponent(profileId)}/curve`,
   },

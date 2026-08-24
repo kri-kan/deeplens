@@ -20,7 +20,7 @@ export const CompetitorSparkline: React.FC<CompetitorSparklineProps> = ({
   height = 68,
   multiplier = 2.5,
   dayNumber = 1,
-  defaultMetric = 'likes',
+  defaultMetric = 'views',
   showMetricSelector = true,
 }) => {
   const theme = useTheme();
@@ -104,6 +104,8 @@ export const CompetitorSparkline: React.FC<CompetitorSparklineProps> = ({
   const actualLineColor =
     activeMetric === 'views'
       ? '#3B82F6' // Blue for views
+      : activeMetric === 'comments'
+      ? '#10B981' // Emerald for comments
       : isTakeoff
       ? '#F59E0B' // Amber for day 1 takeoff likes
       : '#EF4444'; // Red/Coral for likes spike

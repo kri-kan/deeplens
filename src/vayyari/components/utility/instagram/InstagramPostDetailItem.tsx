@@ -98,6 +98,13 @@ const resolveVideoMedia = (
     return media;
 };
 
+const formatMetricNumber = (num?: number) => {
+    if (!num) return '0';
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+    return num.toLocaleString();
+};
+
 export const InstagramPostDetailItem = ({ 
     item,
     isMuted, 
@@ -153,6 +160,9 @@ export const InstagramPostDetailItem = ({
 
     // Comments Modal Preview State
     const [isCommentsModalVisible, setIsCommentsModalVisible] = useState(false);
+
+    // Competitor Trajectory Tab State (Views, Likes, Comments)
+    const [activeMetricTab, setActiveMetricTab] = useState<'views' | 'likes' | 'comments'>('views');
 
     // Sync local item and reset state when item changes (for component reuse)
     useEffect(() => {
@@ -798,6 +808,134 @@ export const InstagramPostDetailItem = ({
                                 />
                             </View>
                         </View>
+
+                        {/* Competitor Enhanced Metrics & Performance Trajectory Card */}
+                        {isCompetitor && (
+                            <View style={[styles.competitorMetricsCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                                <View style={styles.metricsCardHeader}>
+                                    <View style={styles.metricsCardTitleRow}>
+                                        <Icon source="trending-up" size={18} color={theme.colors.primary} />
+                                        <Text variant="titleSmall" style={[styles.metricsCardTitle, { color: theme.colors.onSurfaceVariant }]}>
+                                            Performance & Trajectory
+                                        </Text>
+                                    </View>
+                                    <View style={[styles.multiplierBadgeDetail, { backgroundColor: isTakeoff ? '#FEF3C7' : '#FEE2E2' }]}>
+                                        <Text style={{ color: isTakeoff ? '#B45309' : '#B91C1C', fontWeight: '800', fontSize: 11 }}>
+                                            ⚡ {competitorMultiplier.toFixed(1)}x Baseline
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* 3 Parameters Metric Selector Tiles */}
+                                <View style={styles.metricTabsContainer}>
+                                    <TouchableOpacity
+                                        activeOpacity={0.8}
+                                        onPress={() => setActiveMetricTab('views')}
+                                        style={[
+                                            styles.metricTabTile,
+                                            {
+                                                backgroundColor: activeMetricTab === 'views' 
+                                                    ? (theme.colors.elevation?.level3 || theme.colors.surface)
+                                                    : 'transparent',
+                                            }
+                                        ]}
+                                    >
+                                        <View style={styles.metricTabHeader}>
+                                            <Text variant="labelSmall" style={[styles.metricTabLabel, { color: '#3B82F6' }]}>
+                                                👁️ Views
+                                            </Text>
+                                            {activeMetricTab === 'views' && <View style={[styles.activeDotIndicator, { backgroundColor: '#3B82F6' }]} />}
+                                        </View>
+                                        <Text variant="titleMedium" style={[styles.metricTabValue, { color: theme.colors.onSurface }]}>
+                                            {formatMetricNumber(localItem.viewCount || (localItem.likeCount ? localItem.likeCount * 7 : 0))}
+                                        </Text>
+                                        <Text variant="labelSmall" style={styles.metricTabBaseline}>
+                                            avg {formatMetricNumber(localItem.baselineAvgViews || Math.round((localItem.viewCount || (localItem.likeCount ? localItem.likeCount * 7 : 0)) / competitorMultiplier))}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        activeOpacity={0.8}
+                                        onPress={() => setActiveMetricTab('likes')}
+                                        style={[
+                                            styles.metricTabTile,
+                                            {
+                                                backgroundColor: activeMetricTab === 'likes' 
+                                                    ? (theme.colors.elevation?.level3 || theme.colors.surface)
+                                                    : 'transparent',
+                                            }
+                                        ]}
+                                    >
+                                        <View style={styles.metricTabHeader}>
+                                            <Text variant="labelSmall" style={[styles.metricTabLabel, { color: isTakeoff ? '#F59E0B' : '#EF4444' }]}>
+                                                ❤️ Likes
+                                            </Text>
+                                            {activeMetricTab === 'likes' && <View style={[styles.activeDotIndicator, { backgroundColor: isTakeoff ? '#F59E0B' : '#EF4444' }]} />}
+                                        </View>
+                                        <Text variant="titleMedium" style={[styles.metricTabValue, { color: theme.colors.onSurface }]}>
+                                            {formatMetricNumber(localItem.likeCount || 0)}
+                                        </Text>
+                                        <Text variant="labelSmall" style={styles.metricTabBaseline}>
+                                            avg {formatMetricNumber(localItem.baselineAvgLikes || Math.round((localItem.likeCount || 0) / competitorMultiplier))}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        activeOpacity={0.8}
+                                        onPress={() => setActiveMetricTab('comments')}
+                                        style={[
+                                            styles.metricTabTile,
+                                            {
+                                                backgroundColor: activeMetricTab === 'comments' 
+                                                    ? (theme.colors.elevation?.level3 || theme.colors.surface)
+                                                    : 'transparent',
+                                            }
+                                        ]}
+                                    >
+                                        <View style={styles.metricTabHeader}>
+                                            <Text variant="labelSmall" style={[styles.metricTabLabel, { color: '#10B981' }]}>
+                                                💬 Comments
+                                            </Text>
+                                            {activeMetricTab === 'comments' && <View style={[styles.activeDotIndicator, { backgroundColor: '#10B981' }]} />}
+                                        </View>
+                                        <Text variant="titleMedium" style={[styles.metricTabValue, { color: theme.colors.onSurface }]}>
+                                            {formatMetricNumber(localItem.commentCount || 0)}
+                                        </Text>
+                                        <Text variant="labelSmall" style={styles.metricTabBaseline}>
+                                            avg {formatMetricNumber(localItem.baselineAvgComments || Math.round((localItem.commentCount || 0) / competitorMultiplier))}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Trajectory Curve Chart with Baseline Comparison */}
+                                <View style={styles.detailSparklineWrapper}>
+                                    <CompetitorSparkline
+                                        points={localItem.curvePoints}
+                                        width={width - 72}
+                                        height={80}
+                                        multiplier={competitorMultiplier}
+                                        dayNumber={localItem.dayNumber || 1}
+                                        defaultMetric={activeMetricTab}
+                                        showMetricSelector={false}
+                                    />
+                                </View>
+
+                                {/* Trajectory Projection Info */}
+                                <View style={styles.projectionInfoRow}>
+                                    <View style={styles.projectionBadge}>
+                                        <Text variant="labelSmall" style={styles.projectionLabel}>
+                                            Projection:
+                                        </Text>
+                                        <Text variant="labelSmall" style={[styles.projectionValue, { color: theme.colors.primary }]}>
+                                            {localItem.outlierType === 'day_one_takeoff' ? '⚡ Day-1 Viral Takeoff' : localItem.outlierType === 'delayed_spike' ? '📈 Delayed Spike' : '✨ Breakout Curve'}
+                                        </Text>
+                                    </View>
+                                    <Text variant="labelSmall" style={styles.dayIndicator}>
+                                        Day {localItem.dayNumber || 1}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
 
                         {/* Primary Product Section */}
                         <View style={styles.relationSection}>
@@ -1633,5 +1771,94 @@ const styles = StyleSheet.create({
     },
     openInInstaFallbackButton: {
         borderRadius: 20,
+    },
+    competitorMetricsCard: {
+        borderRadius: 16,
+        padding: 14,
+        marginTop: 10,
+        marginBottom: 10,
+        gap: 10,
+    },
+    metricsCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    metricsCardTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flex: 1,
+    },
+    metricsCardTitle: {
+        fontWeight: '700',
+        fontSize: 13,
+    },
+    multiplierBadgeDetail: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    metricTabsContainer: {
+        flexDirection: 'row',
+        gap: 6,
+    },
+    metricTabTile: {
+        flex: 1,
+        borderRadius: 12,
+        padding: 8,
+        alignItems: 'center',
+        gap: 2,
+    },
+    metricTabHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    metricTabLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    activeDotIndicator: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+    },
+    metricTabValue: {
+        fontWeight: '800',
+        fontSize: 13,
+    },
+    metricTabBaseline: {
+        fontSize: 9,
+        opacity: 0.6,
+    },
+    detailSparklineWrapper: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 4,
+    },
+    projectionInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingTop: 4,
+    },
+    projectionBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    projectionLabel: {
+        fontSize: 10,
+        opacity: 0.65,
+    },
+    projectionValue: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    dayIndicator: {
+        fontSize: 10,
+        opacity: 0.65,
+        fontWeight: '600',
     },
 });

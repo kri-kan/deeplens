@@ -37,6 +37,20 @@ const OUTLIER_FILTER_OPTIONS = [
   { id: 'inspiration', label: '✨ Inspiration' },
 ];
 
+const TIMEFRAME_OPTIONS = [
+  { id: '7', label: '7 Days', days: 7 },
+  { id: '30', label: '30 Days', days: 30 },
+  { id: '90', label: '90 Days', days: 90 },
+  { id: 'all', label: 'All Time', days: undefined },
+];
+
+const METRIC_CRITERIA_OPTIONS = [
+  { id: 'multiplier', label: '⚡ Multiplier', sortBy: 'multiplier' as const },
+  { id: 'views', label: '👁️ Views', sortBy: 'views' as const },
+  { id: 'likes', label: '❤️ Likes', sortBy: 'likes' as const },
+  { id: 'comments', label: '💬 Comments', sortBy: 'comments' as const },
+];
+
 export default function CompetitorHubScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -47,6 +61,8 @@ export default function CompetitorHubScreen() {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOutlierFilter, setSelectedOutlierFilter] = useState('all');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('30');
+  const [selectedMetricCriteria, setSelectedMetricCriteria] = useState<'multiplier' | 'views' | 'likes' | 'comments'>('multiplier');
 
   // Data States
   const [summary, setSummary] = useState<CompetitorsSummaryResponse | null>(null);
@@ -98,8 +114,12 @@ export default function CompetitorHubScreen() {
       }
 
       // 3. Fetch High-Performing Outliers
+      const activeDays = selectedTimeframe === 'all' ? undefined : parseInt(selectedTimeframe, 10);
       const highPerformingData = await instagramService.getHighPerformingCompetitors({
         outlierType: selectedOutlierFilter !== 'all' ? selectedOutlierFilter : undefined,
+        days: activeDays,
+        sortBy: selectedMetricCriteria,
+        sortOrder: 'desc',
       });
 
       if (highPerformingData && highPerformingData.length > 0) {
@@ -254,7 +274,7 @@ export default function CompetitorHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedOutlierFilter]);
+  }, [selectedOutlierFilter, selectedTimeframe, selectedMetricCriteria]);
 
   useFocusEffect(
     useCallback(() => {
@@ -301,9 +321,9 @@ export default function CompetitorHubScreen() {
     });
   }, [profiles, searchQuery]);
 
-  // Filtered Outliers by Search & Outlier Type
+  // Filtered Outliers by Search, Outlier Type, and Metric Sorting
   const filteredOutliers = useMemo(() => {
-    return outliers.filter((item) => {
+    const list = outliers.filter((item) => {
       const matchesSearch =
         !searchQuery ||
         (item.caption && item.caption.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -315,7 +335,19 @@ export default function CompetitorHubScreen() {
 
       return matchesSearch && matchesOutlierType;
     });
-  }, [outliers, searchQuery, selectedOutlierFilter]);
+
+    if (selectedMetricCriteria === 'views') {
+      list.sort((a, b) => (b.viewCount || (b.likeCount ? b.likeCount * 7 : 0)) - (a.viewCount || (a.likeCount ? a.likeCount * 7 : 0)));
+    } else if (selectedMetricCriteria === 'likes') {
+      list.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+    } else if (selectedMetricCriteria === 'comments') {
+      list.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+    } else {
+      list.sort((a, b) => (b.multiplier || 0) - (a.multiplier || 0));
+    }
+
+    return list;
+  }, [outliers, searchQuery, selectedOutlierFilter, selectedMetricCriteria]);
 
   const activeCompetitorsCount = profiles.filter((p) => p.isTracked ?? p.isActive).length;
   const totalLimit = summary?.totalLimit ?? 50;
@@ -464,6 +496,72 @@ export default function CompetitorHubScreen() {
       <View style={styles.subviewHeaderContainer}>
         {renderViewSwitcherBar()}
 
+        {/* Metric Criteria Selector (Sort By) */}
+        <View style={styles.outlierFilterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
+            {METRIC_CRITERIA_OPTIONS.map((metric) => (
+              <Chip
+                key={metric.id}
+                selected={selectedMetricCriteria === metric.id}
+                onPress={() => setSelectedMetricCriteria(metric.sortBy)}
+                showSelectedOverlay
+                style={[
+                  styles.outlierChip,
+                  selectedMetricCriteria === metric.id
+                    ? { backgroundColor: theme.colors.primaryContainer }
+                    : { backgroundColor: theme.colors.surfaceVariant },
+                ]}
+                textStyle={[
+                  styles.chipText,
+                  selectedMetricCriteria === metric.id && {
+                    color: theme.colors.onPrimaryContainer,
+                    fontWeight: '800',
+                  },
+                ]}
+              >
+                {metric.label}
+              </Chip>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Timeframe Filter Chips */}
+        <View style={styles.outlierFilterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
+            {TIMEFRAME_OPTIONS.map((tf) => (
+              <Chip
+                key={tf.id}
+                selected={selectedTimeframe === tf.id}
+                onPress={() => setSelectedTimeframe(tf.id)}
+                showSelectedOverlay
+                style={[
+                  styles.outlierChip,
+                  selectedTimeframe === tf.id
+                    ? { backgroundColor: theme.colors.secondaryContainer }
+                    : { backgroundColor: theme.colors.surfaceVariant },
+                ]}
+                textStyle={[
+                  styles.chipText,
+                  selectedTimeframe === tf.id && {
+                    color: theme.colors.onSecondaryContainer,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                {tf.label}
+              </Chip>
+            ))}
+          </ScrollView>
+        </View>
+
         {/* Archetype Filter Chips */}
         <View style={styles.outlierFilterContainer}>
           <ScrollView
@@ -480,13 +578,13 @@ export default function CompetitorHubScreen() {
                 style={[
                   styles.outlierChip,
                   selectedOutlierFilter === filter.id
-                    ? { backgroundColor: theme.colors.secondaryContainer }
+                    ? { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface }
                     : { backgroundColor: theme.colors.surfaceVariant },
                 ]}
                 textStyle={[
                   styles.chipText,
                   selectedOutlierFilter === filter.id && {
-                    color: theme.colors.onSecondaryContainer,
+                    color: theme.colors.primary,
                     fontWeight: '700',
                   },
                 ]}

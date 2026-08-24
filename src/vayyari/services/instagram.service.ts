@@ -100,14 +100,18 @@ export interface HighPerformingCompetitorPost extends InstagramPost {
   isFullMediaDownloaded?: boolean;
 }
 
-export interface HighPerformingParams {
+export interface GetHighPerformingOptions {
   niche?: string;
   outlierType?: string;
+  days?: number;
   limit?: number;
   offset?: number;
-  sortBy?: string;
+  sortBy?: 'multiplier' | 'views' | 'likes' | 'comments' | 'velocity' | 'date' | string;
   sortOrder?: 'asc' | 'desc';
+  minViews?: number;
 }
+
+export type HighPerformingParams = GetHighPerformingOptions;
 
 export interface CompetitorProfileCurveResponse {
   profileId: string;
@@ -156,6 +160,10 @@ export interface InstagramPost {
   profileCategory?: string;
   multiplier?: number;
   outlierType?: string;
+  dayNumber?: number;
+  baselineAvgLikes?: number;
+  baselineAvgViews?: number;
+  baselineAvgComments?: number;
   curvePoints?: OutlierDataPoint[];
 }
 
@@ -356,6 +364,11 @@ export const normalizeData = (data: any): InstagramPost => {
       isCompetitor,
       profileCategory: data.profileCategory || data.ProfileCategory,
       multiplier: data.multiplier ?? data.Multiplier,
+      dayNumber: data.dayNumber ?? data.DayNumber,
+      outlierType: data.outlierType || data.OutlierType,
+      baselineAvgLikes: data.baselineAvgLikes ?? data.BaselineAvgLikes,
+      baselineAvgViews: data.baselineAvgViews ?? data.BaselineAvgViews,
+      baselineAvgComments: data.baselineAvgComments ?? data.BaselineAvgComments,
       curvePoints: data.curvePoints || data.CurvePoints,
   };
 };
@@ -412,6 +425,8 @@ export const normalizeHighPerformingPost = (item: any): HighPerformingCompetitor
     isCompetitor: true,
   };
 };
+
+export const transformOutlier = normalizeHighPerformingPost;
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
@@ -801,20 +816,23 @@ class InstagramService {
     }
   };
 
-  getHighPerformingCompetitors = async (params?: HighPerformingParams): Promise<HighPerformingCompetitorPost[]> => {
+  getHighPerformingCompetitors = async (params?: GetHighPerformingOptions): Promise<HighPerformingCompetitorPost[]> => {
     const queryParams = new URLSearchParams();
-    if (params?.niche && params.niche !== 'All') queryParams.append('niche', params.niche);
+    if (params?.niche && params.niche !== 'All' && params.niche !== 'all') queryParams.append('niche', params.niche);
     if (params?.outlierType && params.outlierType !== 'All' && params.outlierType !== 'all') queryParams.append('outlierType', params.outlierType);
+    if (params?.days !== undefined) queryParams.append('days', params.days.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.offset) queryParams.append('offset', params.offset.toString());
     if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+    if (params?.minViews !== undefined) queryParams.append('minViews', params.minViews.toString());
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
     try {
-      const raw = await searchApiClient.get<any[]>(`${API_ROUTES.INSTAGRAM.COMPETITORS_HIGH_PERFORMING}${queryString}`);
-      if (raw && Array.isArray(raw)) {
-        return raw.map(normalizeHighPerformingPost);
+      const raw = await searchApiClient.get<any>(`${API_ROUTES.INSTAGRAM.COMPETITORS_HIGH_PERFORMING}${queryString}`);
+      const items = Array.isArray(raw) ? raw : (raw?.items || raw?.Items || []);
+      if (Array.isArray(items) && items.length > 0) {
+        return items.map(transformOutlier);
       }
       return [];
     } catch (err) {
