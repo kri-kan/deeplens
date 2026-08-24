@@ -171,7 +171,7 @@ namespace DeepLens.WorkerService.Workers
                 var instaMedia = serviceScope.ServiceProvider.GetRequiredService<IInstagramMediaService>();
 
                 // 3. Update Database (Ingest Posts)
-                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId, storage, httpClient, instaMedia, profileCategory, isCompetitor, ct);
+                int newCount = await IngestPostsAsync(conn, jobId, watchlistId, posts, graphProfile.ExternalId ?? "", storage, httpClient, instaMedia, profileCategory, isCompetitor, ct);
                 scrapedCount = posts.Count;
 
                 await LogAsync(conn, jobId, "INFO", $"Sync complete. {newCount} new/updated posts processed.");
@@ -301,6 +301,11 @@ namespace DeepLens.WorkerService.Workers
                 var storage = scope.ServiceProvider.GetRequiredService<IStorageService>();
                 var http = scope.ServiceProvider.GetRequiredService<HttpClient>();
 
+                _logger.LogInformation("Downloading fresh profile picture for @{Username}...", profile.Username);
+                var context = new InstagramContext(profile.ExternalId ?? "");
+                string identifier = "profile_pic.jpg";
+                string fullPath = StoragePathRegistry.GetPath(context, identifier);
+
                 // --- Singleton Profile Image Rule ---
                 // We want to ensure only one profile image exists at a time to prevent storage bloat.
                 var oldMedia = await conn.QueryAsync<dynamic>(@"
@@ -316,19 +321,17 @@ namespace DeepLens.WorkerService.Workers
                         string oldPath = (string)m.storage_path;
                         Guid oldMediaId = (Guid)m.id;
                         
-                        _logger.LogInformation("Deleting old profile picture: {Path}", oldPath);
-                        await storage.DeleteFileAsync(oldPath);
-                        // ON DELETE CASCADE on media_links will handle the relationship cleanup
-                        await conn.ExecuteAsync("DELETE FROM media WHERE id = @mediaId", new { mediaId = oldMediaId });
+                        if (!string.Equals(oldPath, fullPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogInformation("Deleting old profile picture: {Path}", oldPath);
+                            await storage.DeleteFileAsync(oldPath);
+                            // ON DELETE CASCADE on media_links will handle the relationship cleanup
+                            await conn.ExecuteAsync("DELETE FROM media WHERE id = @mediaId", new { mediaId = oldMediaId });
+                        }
                     } catch (Exception ex) {
                         _logger.LogWarning(ex, "Failed to clean up old profile picture");
                     }
                 }
-
-                _logger.LogInformation("Downloading fresh profile picture for @{Username}...", profile.Username);
-                var context = new InstagramContext(profile.ExternalId ?? "");
-                string identifier = $"profile_pic_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jpg";
-                string fullPath = StoragePathRegistry.GetPath(context, identifier);
 
                 var response = await http.GetAsync(profile.ProfilePictureUrl);
                 if (response.IsSuccessStatusCode)
@@ -340,15 +343,18 @@ namespace DeepLens.WorkerService.Workers
                     var mediaId = Guid.NewGuid();
                     await conn.ExecuteAsync(@"
                         INSERT INTO media (id, storage_path, media_type, category, subcategory)
-                        VALUES (@mediaId, @fullPath, 1, 'instagram', 'profile_pic')",
+                        VALUES (@mediaId, @fullPath, 1, 'instagram', 'profile_pic')
+                        ON CONFLICT (storage_path) DO NOTHING",
                         new { mediaId, fullPath });
+
+                    var actualMediaId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM media WHERE storage_path = @fullPath", new { fullPath });
 
                     // Link to 'competitor_watchlist' via 'media_links'
                     await conn.ExecuteAsync(@"
                         INSERT INTO media_links (media_id, entity_id, entity_type, is_primary)
-                        VALUES (@mediaId, @id, 'instagram_profile', true)
+                        VALUES (@actualMediaId, @id, 'instagram_profile', true)
                         ON CONFLICT (media_id, entity_id, entity_type) DO NOTHING",
-                        new { mediaId, id });
+                        new { actualMediaId, id });
 
                     // Also update the shortcut column in watchlist
                     await conn.ExecuteAsync(
@@ -374,13 +380,15 @@ namespace DeepLens.WorkerService.Workers
             var insertSql = @"
                 INSERT INTO competitor_videos (
                     watchlist_id, platform, platform_video_id, url, description, 
-                    media_type, thumbnail_url, media_url, like_count, comment_count, posted_at, is_reel, storage_path)
+                    media_type, thumbnail_url, media_url, like_count, comment_count, posted_at, is_reel, storage_path, download_status, downloaded_at)
                 VALUES (
                     @WatchlistId, 'instagram', @Id, @Url, @Caption, 
-                    @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath)";
+                    @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath, @DownloadStatus, @DownloadedAt)";
 
-            var updateStorageSql = "UPDATE competitor_videos SET storage_path = @StoragePath WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId";
+            var updateStorageSql = "UPDATE competitor_videos SET storage_path = @StoragePath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, @Now) WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId";
             var updateProgressSql = "UPDATE scraper_queue SET scraped_count = @Count WHERE id = @JobId";
+
+            bool isOwnedProfile = !isCompetitor && string.Equals(profileCategory, "My Business", StringComparison.OrdinalIgnoreCase);
 
             foreach (var p in posts)
             {
@@ -404,16 +412,23 @@ namespace DeepLens.WorkerService.Workers
                         newStoragePath = await DownloadAndStoreThumbnailAsync(http, storage, externalId, p.Id, thumbUrl);
                     }
 
+                    var effectiveStoragePath = newStoragePath ?? storagePath;
+                    var now = DateTime.UtcNow;
+
                     if (!exists)
                     {
-                        var videoId = Guid.NewGuid();
+                        string downloadStatus = !string.IsNullOrEmpty(effectiveStoragePath) ? "completed" : "pending";
+                        DateTime? downloadedAt = !string.IsNullOrEmpty(effectiveStoragePath) ? now : null;
+
                         await conn.ExecuteAsync(insertSql, new {
                             WatchlistId = watchlistId, Id = p.Id, Url = p.Permalink ?? "", Caption = p.Caption,
                             MediaType = p.MediaType.ToString().ToUpper(), ThumbnailUrl = thumbUrl,
                             MediaUrl = p.MediaUrl, LikeCount = p.LikeCount, CommentCount = p.CommentCount,
                             PostedAt = p.Timestamp ?? DateTime.UtcNow,
                             IsReel = p.MediaProductType?.ToUpper() == "REELS",
-                            StoragePath = newStoragePath
+                            StoragePath = newStoragePath,
+                            DownloadStatus = downloadStatus,
+                            DownloadedAt = downloadedAt
                         });
 
                         // Fetch the auto-generated ID if we need to link media
@@ -441,9 +456,10 @@ namespace DeepLens.WorkerService.Workers
                         }
 
                         // Full Media Download strictly for non-competitor My Business profiles
-                        if (!isCompetitor && string.Equals(profileCategory, "My Business", StringComparison.OrdinalIgnoreCase))
+                        if (isOwnedProfile)
                         {
                             await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId, ct);
+                            await conn.ExecuteAsync("UPDATE competitor_videos SET download_status = 'completed', downloaded_at = COALESCE(downloaded_at, @now) WHERE id = @dbPostId AND storage_path IS NOT NULL AND storage_path != ''", new { dbPostId, now });
                         }
 
                         count++;
@@ -455,7 +471,7 @@ namespace DeepLens.WorkerService.Workers
                         if (newStoragePath != null)
                         {
                             // Update existing record with missing storage path
-                            await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Id = p.Id, WatchlistId = watchlistId });
+                            await conn.ExecuteAsync(updateStorageSql, new { StoragePath = newStoragePath, Now = now, Id = p.Id, WatchlistId = watchlistId });
                             
                             // Also ensure it's registered in media if it was missing
                             await conn.ExecuteAsync(@"
@@ -475,6 +491,51 @@ namespace DeepLens.WorkerService.Workers
                             // Emit image uploaded event to pre-generate thumbnails via Kafka queue
                             await EmitImageUploadedEvent(mediaId, newStoragePath, $"{p.Id}.jpg", "image/jpeg", "instagram", "thumbnail", ct);
                         }
+
+                        // Check if full media is missing for owned profiles
+                        if (isOwnedProfile)
+                        {
+                            var currentPostRecord = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                                "SELECT storage_path, download_status FROM competitor_videos WHERE id = @dbPostId",
+                                new { dbPostId });
+                            string? currentStoragePath = currentPostRecord?.storage_path;
+                            string? currentDownloadStatus = currentPostRecord?.download_status;
+
+                            bool isVideo = p.MediaType == InstagramMediaType.VIDEO;
+                            bool hasValidVideoStorage = !string.IsNullOrEmpty(currentStoragePath) &&
+                                (currentStoragePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
+                                 currentStoragePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase));
+
+                            bool hasFullMediaLink = await conn.ExecuteScalarAsync<bool>(@"
+                                SELECT EXISTS (
+                                    SELECT 1 FROM media_links ml
+                                    JOIN media m ON ml.media_id = m.id
+                                    WHERE ml.entity_id = @dbPostId 
+                                      AND ml.entity_type = 'competitor_video'
+                                      AND m.subcategory IN ('full_media', 'carousel_item')
+                                )", new { dbPostId });
+
+                            bool isCompleted = string.Equals(currentDownloadStatus, "completed", StringComparison.OrdinalIgnoreCase);
+
+                            bool isFullMediaMissing = isVideo
+                                ? (!hasValidVideoStorage || !hasFullMediaLink || !isCompleted)
+                                : (!hasFullMediaLink || !isCompleted || string.IsNullOrEmpty(currentStoragePath));
+
+                            if (isFullMediaMissing)
+                            {
+                                await instaMedia.ProcessFullMediaDownloadAsync(dbPostId, p, externalId, ct);
+                            }
+                        }
+
+                        // Ensure download_status is completed if storage_path is present
+                        await conn.ExecuteAsync(@"
+                            UPDATE competitor_videos 
+                            SET download_status = 'completed', 
+                                downloaded_at = COALESCE(downloaded_at, @now) 
+                            WHERE id = @dbPostId 
+                              AND storage_path IS NOT NULL 
+                              AND storage_path != ''", 
+                            new { dbPostId, now });
 
                         count++;
                     }

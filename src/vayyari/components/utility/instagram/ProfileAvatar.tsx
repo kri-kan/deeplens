@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { Avatar, useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { normalizeProfile } from '@/utils/instagram-helpers';
-import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+import { normalizeProfile, getProfilePicUri } from '@/utils/instagram-helpers';
+import { getSearchApiUrl } from '@/utils/api-config';
 
 
 interface ProfileAvatarProps {
@@ -23,19 +23,45 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
 }) => {
   const theme = useTheme();
   const profile = normalizeProfile(rawProfile);
+  const [triedFallback, setTriedFallback] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
-  const getProfilePicUri = (p: any) => {
-    if (!p) return null;
-    const path = p.storagePath;
-    if (path) {
-      const baseUrl = getSearchApiUrl();
-      return `${baseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
+  const baseUrl = getSearchApiUrl() || '';
+  const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+  const storageUri = profile.storagePath 
+    ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(profile.storagePath)}` 
+    : null;
+    
+  let remoteFallbackUri = profile.profilePictureUrl || null;
+  if (remoteFallbackUri && remoteFallbackUri.startsWith('/') && !remoteFallbackUri.startsWith('//')) {
+    remoteFallbackUri = `${cleanBaseUrl}${remoteFallbackUri}`;
+  }
+
+  // Reset error states when profile changes
+  React.useEffect(() => {
+    setTriedFallback(false);
+    setHasError(false);
+  }, [profile.id, profile.username, profile.storagePath, profile.profilePictureUrl]);
+
+  let activeUri: string | null = null;
+  if (!hasError) {
+    if (!triedFallback && storageUri) {
+      activeUri = storageUri;
+    } else if (remoteFallbackUri) {
+      activeUri = remoteFallbackUri;
     }
-    return p.profilePictureUrl;
+  }
+
+  const handleImageError = () => {
+    if (!triedFallback && storageUri && remoteFallbackUri && storageUri !== remoteFallbackUri) {
+      setTriedFallback(true);
+    } else {
+      setHasError(true);
+    }
   };
 
-  const uri = getProfilePicUri(profile);
-  const initials = profile?.username?.substring(0, 2).toUpperCase() || '??';
+  const initials = (profile?.username || profile?.name || '??').substring(0, 2).toUpperCase();
 
   const inWatchlist = profile.isInWatchlist;
   const active = profile.isActive !== false; // Default to true if undefined
@@ -48,20 +74,22 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
 
   return (
     <View style={[{ width: size, height: size }, style]}>
-      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>
-        {uri ? (
+      <View style={[styles.container, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.surfaceVariant }]}>
+        {activeUri ? (
           <Image 
-            source={{ uri }} 
+            source={{ uri: activeUri }} 
             style={styles.image}
             contentFit="cover"
             transition={200}
             cachePolicy="memory-disk"
+            onError={handleImageError}
           />
         ) : (
           <Avatar.Text 
             size={size} 
             label={initials} 
-            style={[styles.fallback, { borderRadius: size / 2 }]}
+            style={[styles.fallback, { borderRadius: size / 2, backgroundColor: theme.colors.surfaceVariant }]}
+            labelStyle={{ color: theme.colors.onSurfaceVariant }}
           />
         )}
       </View>
@@ -106,16 +134,12 @@ export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
   },
   image: {
     width: '100%',
     height: '100%',
   },
   fallback: {
-    backgroundColor: '#e0e0e0',
   },
   badge: {
     position: 'absolute',

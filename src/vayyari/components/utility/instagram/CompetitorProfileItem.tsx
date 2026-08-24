@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, Switch, useTheme, Icon } from 'react-native-paper';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { CompetitorProfile } from '@/services/instagram.service';
+import { ProfileAvatar } from './ProfileAvatar';
 
 interface CompetitorProfileItemProps {
   item: CompetitorProfile;
@@ -82,29 +82,15 @@ export const CompetitorProfileItem: React.FC<CompetitorProfileItemProps> = ({
     >
       {/* Avatar & Tracked Indicator */}
       <View style={styles.avatarWrapper}>
-        {item.profilePictureUrl ? (
-          <Image
-            source={{ uri: item.profilePictureUrl }}
-            style={styles.avatar}
-            contentFit="cover"
-          />
-        ) : (
-          <View
-            style={[
-              styles.avatarPlaceholder,
-              { backgroundColor: theme.colors.primaryContainer },
-            ]}
-          >
-            <Text
-              style={[
-                styles.avatarInitial,
-                { color: theme.colors.onPrimaryContainer },
-              ]}
-            >
-              {(item.name || item.username || 'C').charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
+        <ProfileAvatar
+          profile={{
+            ...item,
+            profileCategory: item.profileCategory || 'Competitors',
+            isInWatchlist: isTracked,
+          }}
+          size={48}
+          showBadge={false}
+        />
         {isTracked && <View style={styles.activeDot} />}
       </View>
 

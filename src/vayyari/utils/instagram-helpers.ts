@@ -36,15 +36,15 @@ export const getMediaUri = (m: any, spec?: 'icon' | 'medium' | 'large'): string 
         const baseUrl = getSearchApiUrl() || '';
         const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 
-        if (spec && (path.toLowerCase().endsWith('.mp4') || path.toLowerCase().endsWith('.mov'))) {
-            path = path.replace(/_full\.(mp4|mov)$/i, '.jpg')
-                       .replace(/_child\.(mp4|mov)$/i, '.jpg')
-                       .replace(/\.(mp4|mov)$/i, '.jpg');
-        }
-
-        const isImage = !path.toLowerCase().endsWith('.mp4') && !path.toLowerCase().endsWith('.mov');
-        if (spec && isImage) {
-            return `${cleanBaseUrl}/api/v1/catalog/media/thumbnail-by-path?path=${encodeURIComponent(path)}&spec=${spec}`;
+        if (spec) {
+            let thumbPath = path;
+            if (thumbPath.toLowerCase().endsWith('.mp4') || thumbPath.toLowerCase().endsWith('.mov')) {
+                thumbPath = thumbPath
+                    .replace(/_full\.(mp4|mov)$/i, '.jpg')
+                    .replace(/_child\.(mp4|mov)$/i, '.jpg')
+                    .replace(/\.(mp4|mov)$/i, '.jpg');
+            }
+            return `${cleanBaseUrl}/api/v1/catalog/media/thumbnail-by-path?path=${encodeURIComponent(thumbPath)}&spec=${spec}`;
         }
 
         // Both images and videos use the Attachment/download endpoint
@@ -52,6 +52,41 @@ export const getMediaUri = (m: any, spec?: 'icon' | 'medium' | 'large'): string 
     }
 
     return normalized.mediaUrl || normalized.thumbnailUrl || '';
+};
+
+export const getProfilePicUri = (profileOrPath: any): string | null => {
+    if (!profileOrPath) return null;
+
+    if (typeof profileOrPath === 'string') {
+        if (profileOrPath.startsWith('http://') || profileOrPath.startsWith('https://')) {
+            return profileOrPath;
+        }
+        const baseUrl = getSearchApiUrl() || '';
+        const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        if (profileOrPath.startsWith('/api/')) {
+            return `${cleanBaseUrl}${profileOrPath}`;
+        }
+        return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(profileOrPath)}`;
+    }
+
+    const path = profileOrPath.storagePath || profileOrPath.StoragePath;
+    if (path) {
+        const baseUrl = getSearchApiUrl() || '';
+        const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(path)}`;
+    }
+
+    const picUrl = profileOrPath.profilePictureUrl || profileOrPath.ProfilePictureUrl || profileOrPath.profile_pic_url || profileOrPath.ownerProfilePictureUrl;
+    if (picUrl) {
+        if (picUrl.startsWith('/') && !picUrl.startsWith('//')) {
+            const baseUrl = getSearchApiUrl() || '';
+            const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+            return `${cleanBaseUrl}${picUrl}`;
+        }
+        return picUrl;
+    }
+
+    return null;
 };
 
 /**

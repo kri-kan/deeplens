@@ -35,13 +35,67 @@ interface PostDetailItemProps {
     onPostUpdated?: (updatedPost: InstagramPost) => void;
 }
 
-const isFullVideoDownloaded = (m?: InstagramPost | null): boolean => {
+const isFullVideoDownloaded = (
+    m?: InstagramPost | null,
+    links: InstagramPost[] = [],
+    rootItem?: InstagramPost | null
+): boolean => {
     if (!m) return false;
-    if (m.isFullMediaDownloaded === true) return true;
-    if (m.isFullMediaDownloaded === false) return false;
-    if (!m.storagePath) return false;
-    const path = m.storagePath.toLowerCase();
-    return path.endsWith('.mp4') || path.endsWith('.mov');
+    if (m.isFullMediaDownloaded === true || rootItem?.isFullMediaDownloaded === true) return true;
+    if (m.storagePath) {
+        const path = m.storagePath.toLowerCase();
+        if (path.endsWith('.mp4') || path.endsWith('.mov')) return true;
+    }
+    const isMediaVideo = isVideo(m) || m.mediaType === 'VIDEO' || (m.mediaType as any) === 2 || (m.mediaType as any) === 10;
+    if (isMediaVideo && links && links.length > 0) {
+        const hasVideoInLinks = links.some(link => {
+            const lPath = (link.storagePath || '').toLowerCase();
+            const lType = link.mediaType;
+            return lPath.endsWith('.mp4') || 
+                   lPath.endsWith('.mov') || 
+                   lType === 'VIDEO' || 
+                   (lType as any) === 2 || 
+                   (lType as any) === 10 || 
+                   link.isFullMediaDownloaded === true;
+        });
+        if (hasVideoInLinks) return true;
+    }
+    if (m.isFullMediaDownloaded === false && !rootItem?.isFullMediaDownloaded) return false;
+    return false;
+};
+
+const resolveVideoMedia = (
+    media: InstagramPost,
+    links: InstagramPost[] = [],
+    rootItem?: InstagramPost
+): InstagramPost => {
+    if (!isVideo(media) && media.mediaType !== 'VIDEO' && (media.mediaType as any) !== 2) {
+        return media;
+    }
+    const mediaPath = (media.storagePath || '').toLowerCase();
+    if (mediaPath.endsWith('.mp4') || mediaPath.endsWith('.mov')) {
+        return media;
+    }
+
+    // Look for matching video in links
+    const matchingLink = links.find(l => {
+        const p = (l.storagePath || '').toLowerCase();
+        return (p.endsWith('.mp4') || p.endsWith('.mov')) && 
+               (getBaseId(p) === getBaseId(media.storagePath || '') || links.length === 1);
+    }) || links.find(l => {
+        const p = (l.storagePath || '').toLowerCase();
+        return p.endsWith('.mp4') || p.endsWith('.mov');
+    }) || (rootItem && ((rootItem.storagePath || '').toLowerCase().endsWith('.mp4') || (rootItem.storagePath || '').toLowerCase().endsWith('.mov')) ? rootItem : null);
+
+    if (matchingLink && matchingLink.storagePath) {
+        return {
+            ...media,
+            storagePath: matchingLink.storagePath,
+            isFullMediaDownloaded: true,
+        };
+    }
+
+    return media;
 };
 
 export const InstagramPostDetailItem = ({ 
@@ -166,8 +220,9 @@ export const InstagramPostDetailItem = ({
     const resolveYoutubeMediaId = () => {
         // 1. Current viewed item in carousel
         const currentMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
-        if (isVideo(currentMedia) && !(currentMedia.storagePath || '').toLowerCase().endsWith('.jpg')) {
-            return currentMedia.id;
+        const resolvedCurrent = resolveVideoMedia(currentMedia, mediaLinks, localItem);
+        if (isVideo(resolvedCurrent) && !(resolvedCurrent.storagePath || '').toLowerCase().endsWith('.jpg')) {
+            return resolvedCurrent.id;
         }
 
         // 2. Search for the first valid video in children/links
@@ -182,8 +237,9 @@ export const InstagramPostDetailItem = ({
 
     const resolveYoutubeVideoUri = () => {
         const currentMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
-        if (isVideo(currentMedia) && !(currentMedia.storagePath || '').toLowerCase().endsWith('.jpg')) {
-            return getMediaUri(currentMedia);
+        const resolvedCurrent = resolveVideoMedia(currentMedia, mediaLinks, localItem);
+        if (isVideo(resolvedCurrent) && !(resolvedCurrent.storagePath || '').toLowerCase().endsWith('.jpg')) {
+            return getMediaUri(resolvedCurrent);
         }
 
         const videoEntry = mediaLinks.find(m => isVideo(m) && (m.storagePath || '').toLowerCase().endsWith('.mp4')) 
@@ -240,7 +296,32 @@ export const InstagramPostDetailItem = ({
                 return !(mainId && itemId === mainId && (links || []).length > 1);
             });
 
-            setMediaLinks(filteredLinks.map(normalizeData));
+            const normalizedLinks = filteredLinks.map(normalizeData);
+            setMediaLinks(normalizedLinks);
+
+            // When fetchMedia runs, if mediaLinks contains the full .mp4 video,
+            // make sure mediaLinks replaces/updates localItem so that InstagramVideoPlayer receives the valid video stream URI.
+            const allFetched = (links || []).map(normalizeData);
+            const fullVideoEntry = normalizedLinks.find(l => {
+                const p = (l.storagePath || '').toLowerCase();
+                return p.endsWith('.mp4') || p.endsWith('.mov') || l.isFullMediaDownloaded === true;
+            }) || allFetched.find(l => {
+                const p = (l.storagePath || '').toLowerCase();
+                return p.endsWith('.mp4') || p.endsWith('.mov') || l.isFullMediaDownloaded === true;
+            });
+
+            if (fullVideoEntry && (isVideo(localItem) || isVideo(fullVideoEntry))) {
+                setLocalItem(prev => ({
+                    ...prev,
+                    ...fullVideoEntry,
+                    caption: prev.caption || fullVideoEntry.caption,
+                    likeCount: prev.likeCount ?? fullVideoEntry.likeCount,
+                    commentCount: prev.commentCount ?? fullVideoEntry.commentCount,
+                    storagePath: fullVideoEntry.storagePath || prev.storagePath,
+                    isFullMediaDownloaded: true,
+                }));
+            }
+
             setHasFetched(true);
         } catch (error) {
             console.error('Failed to fetch media', error);
@@ -504,14 +585,15 @@ export const InstagramPostDetailItem = ({
                             const mHeight = getMediaHeight();
                             const isPlayerActive = isActive && mediaIdx === activeMediaIndex;
                             const isMediaVideo = isVideo(media);
-                            const isVideoDownloaded = isMediaVideo && isFullVideoDownloaded(media);
+                            const isVideoDownloaded = isMediaVideo && isFullVideoDownloaded(media, mediaLinks, localItem);
+                            const playbackMedia = isMediaVideo ? resolveVideoMedia(media, mediaLinks, localItem) : media;
                             
                             return (
                                 <View key={media.id || mediaIdx} style={{ width, height: START_TOP - insets.top, justifyContent: 'center' }}>
                                     {isMediaVideo ? (
                                         isVideoDownloaded ? (
                                             <InstagramVideoPlayer 
-                                                media={media}
+                                                media={playbackMedia}
                                                 width={width}
                                                 getMediaHeight={getMediaHeight}
                                                 isMuted={isMuted}
@@ -921,7 +1003,8 @@ export const InstagramPostDetailItem = ({
                                         disabled={downloadProgress !== null}
                                         onPress={async () => {
                                             try {
-                                                const activeMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                                const rawMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                                const activeMedia = isVideo(rawMedia) ? resolveVideoMedia(rawMedia, mediaLinks, localItem) : rawMedia;
                                                 const url = getMediaUri(activeMedia);
                                                 const path = activeMedia.storagePath || '';
                                                 const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');
@@ -958,7 +1041,8 @@ export const InstagramPostDetailItem = ({
                                         disabled={shareProgress !== null || downloadProgress !== null}
                                         onPress={async () => {
                                             try {
-                                                const activeMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                                const rawMedia = mediaLinks.length > 0 ? mediaLinks[activeMediaIndex] : localItem;
+                                                const activeMedia = isVideo(rawMedia) ? resolveVideoMedia(rawMedia, mediaLinks, localItem) : rawMedia;
                                                 const url = getMediaUri(activeMedia);
                                                 const path = activeMedia.storagePath || '';
                                                 const extension = path.split('.').pop()?.toLowerCase() || (isVideo(activeMedia) ? 'mp4' : 'jpg');

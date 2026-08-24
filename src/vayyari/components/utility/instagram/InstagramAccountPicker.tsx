@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Modal, Portal, Text, Button, RadioButton, Avatar, useTheme, Chip, ActivityIndicator } from 'react-native-paper';
+import { Modal, Portal, Text, Button, RadioButton, useTheme, Chip, ActivityIndicator } from 'react-native-paper';
 import type { InstagramAccountOption } from '@/types/products';
+import { ProfileAvatar } from './ProfileAvatar';
 
 interface InstagramAccountPickerProps {
   visible: boolean;
@@ -71,11 +72,16 @@ export function InstagramAccountPicker({
                       status={isSelected ? 'checked' : 'unchecked'}
                       onPress={() => onSelectAccount(acc)}
                     />
-                    {acc.profilePictureUrl ? (
-                      <Avatar.Image size={36} source={{ uri: acc.profilePictureUrl }} style={{ marginRight: 10 }} />
-                    ) : (
-                      <Avatar.Icon size={36} icon="instagram" style={{ marginRight: 10 }} />
-                    )}
+                    <ProfileAvatar
+                      profile={{
+                        username: acc.username,
+                        name: acc.fullName,
+                        profilePictureUrl: acc.profilePictureUrl,
+                      }}
+                      size={36}
+                      showBadge={false}
+                      style={{ marginRight: 10 }}
+                    />
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text variant="labelLarge" style={{ fontWeight: '700' }}>

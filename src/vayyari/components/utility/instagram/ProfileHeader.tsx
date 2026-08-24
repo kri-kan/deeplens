@@ -59,7 +59,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         </View>
       </View>
 
-      <View style={styles.statsRow}>
+      <View style={[styles.statsRow, { backgroundColor: theme.colors.surfaceVariant, borderRadius: 12, marginHorizontal: 16 }]}>
         <StatBox label="Followers" value={(profile?.followersCount || 0).toLocaleString()} />
         <StatBox label="Posts" value={profile?.mediaCount || 0} />
         <StatBox label="Avg. Likes" value={(metrics?.avgLikes || 0).toLocaleString()} />
@@ -119,9 +119,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#e0e0e0',
     marginBottom: 4,
   },
   statBox: {

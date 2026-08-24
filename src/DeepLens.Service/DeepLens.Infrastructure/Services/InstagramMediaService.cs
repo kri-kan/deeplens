@@ -115,7 +115,7 @@ namespace DeepLens.Infrastructure.Services
 
             if (!string.IsNullOrEmpty(primaryPath))
             {
-                await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @primaryPath WHERE id = @dbPostId", new { primaryPath, dbPostId }, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @primaryPath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, NOW()) WHERE id = @dbPostId", new { primaryPath, dbPostId }, cancellationToken: ct));
             }
 
             _logger.LogInformation("Media refresh complete for post {PostId}", dbPostId);
@@ -129,7 +129,7 @@ namespace DeepLens.Infrastructure.Services
             var mediaToRoot = await conn.QueryAsync<dynamic>(new CommandDefinition(@"
                 SELECT m.id, m.storage_path 
                 FROM media m
-                JOIN media_links ml ON m.id = ml.media_id
+                JOIN media_links ml ON ml.media_id = m.id
                 WHERE ml.entity_id = @entityId AND ml.entity_type = 'competitor_video'", new { entityId }, cancellationToken: ct));
 
             foreach (var m in mediaToRoot)
@@ -168,7 +168,7 @@ namespace DeepLens.Infrastructure.Services
                     await RegisterAndLinkMediaAsync(conn, dbPostId, path, (short)post.MediaType, "instagram", "full_media", true, 0, ct);
                     
                     // Ensure the main post record correctly points to the new primary media
-                    await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @path WHERE id = @dbPostId", new { path, dbPostId }, cancellationToken: ct));
+                    await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @path, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, NOW()) WHERE id = @dbPostId", new { path, dbPostId }, cancellationToken: ct));
                 }
 
                 // If this is a video and has a thumbnail URL, download the thumbnail too (only if missing)
@@ -266,9 +266,19 @@ namespace DeepLens.Infrastructure.Services
                 // set it to the first child's path so the post has a valid thumbnail/media path.
                 if (string.IsNullOrEmpty(post.MediaUrl) && !string.IsNullOrEmpty(firstChildPath))
                 {
-                    await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @firstChildPath WHERE id = @dbPostId", new { firstChildPath, dbPostId }, cancellationToken: ct));
+                    await conn.ExecuteAsync(new CommandDefinition("UPDATE competitor_videos SET storage_path = @firstChildPath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, NOW()) WHERE id = @dbPostId", new { firstChildPath, dbPostId }, cancellationToken: ct));
                 }
             }
+
+            // 3. Mark competitor_videos as completed if storage_path is present
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                UPDATE competitor_videos 
+                SET download_status = 'completed', 
+                    downloaded_at = COALESCE(downloaded_at, NOW()) 
+                WHERE id = @dbPostId 
+                  AND storage_path IS NOT NULL 
+                  AND storage_path != ''", 
+                new { dbPostId }, cancellationToken: ct));
         }
 
         private async Task<string?> DownloadAndStoreMediaAsync(string externalId, string mediaId, string url, string identifier, string mimeType, CancellationToken ct)

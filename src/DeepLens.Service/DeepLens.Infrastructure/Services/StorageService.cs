@@ -178,13 +178,70 @@ public class MinioStorageService : IStorageService
             }
             else
             {
-                try {
+                if (parts[0] == "product" && parts[1].Length > 0 && char.IsDigit(parts[1][0]))
+                {
+                    try
+                    {
+                        var statArgs = new StatObjectArgs()
+                            .WithBucket("instagram")
+                            .WithObject(parts[1]);
+                        await _minioClient.StatObjectAsync(statArgs);
+                        return ("instagram", parts[1]);
+                    }
+                    catch
+                    {
+                        // Fallback to checking standard parts[0] bucket
+                    }
+                }
+
+                try
+                {
                     if (await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(parts[0])))
                     {
                         bucketName = parts[0];
                         objectName = parts[1];
                     }
-                } catch { }
+                }
+                catch { }
+            }
+        }
+
+        // Catch-all check: if StatObjectAsync fails on resolved bucket, check if the file exists in instagram bucket
+        try
+        {
+            var statArgs = new StatObjectArgs()
+                .WithBucket(bucketName)
+                .WithObject(objectName);
+            await _minioClient.StatObjectAsync(statArgs);
+        }
+        catch
+        {
+            if (bucketName != "instagram")
+            {
+                try
+                {
+                    string candidateObj = parts.Length > 1 ? parts[1] : storagePath;
+                    var igStatArgs = new StatObjectArgs()
+                        .WithBucket("instagram")
+                        .WithObject(candidateObj);
+                    await _minioClient.StatObjectAsync(igStatArgs);
+                    return ("instagram", candidateObj);
+                }
+                catch
+                {
+                    try
+                    {
+                        var igStatArgs2 = new StatObjectArgs()
+                            .WithBucket("instagram")
+                            .WithObject(storagePath);
+                        await _minioClient.StatObjectAsync(igStatArgs2);
+                        return ("instagram", storagePath);
+                    }
+                    catch
+                    {
+                        // File not found in instagram bucket either, retain original resolution
+                    }
+                }
             }
         }
 
