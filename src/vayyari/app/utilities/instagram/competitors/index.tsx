@@ -30,13 +30,6 @@ import {
 import { CompetitorProfileItem } from '@/components/utility/instagram/CompetitorProfileItem';
 import { OutlierInsightCard } from '@/components/utility/instagram/OutlierInsightCard';
 
-const OUTLIER_FILTER_OPTIONS = [
-  { id: 'all', label: 'All Breakouts' },
-  { id: 'day_one_takeoff', label: '⚡ Day-1 Takeoffs' },
-  { id: 'delayed_spike', label: '📈 Delayed Spikes' },
-  { id: 'inspiration', label: '✨ Inspiration' },
-];
-
 const TIMEFRAME_OPTIONS = [
   { id: '7', label: '7 Days', days: 7 },
   { id: '30', label: '30 Days', days: 30 },
@@ -60,7 +53,6 @@ export default function CompetitorHubScreen() {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedOutlierFilter, setSelectedOutlierFilter] = useState('all');
   const [selectedTimeframe, setSelectedTimeframe] = useState('30');
   const [selectedMetricCriteria, setSelectedMetricCriteria] = useState<'multiplier' | 'views' | 'likes' | 'comments'>('multiplier');
 
@@ -116,7 +108,6 @@ export default function CompetitorHubScreen() {
       // 3. Fetch High-Performing Outliers
       const activeDays = selectedTimeframe === 'all' ? undefined : parseInt(selectedTimeframe, 10);
       const highPerformingData = await instagramService.getHighPerformingCompetitors({
-        outlierType: selectedOutlierFilter !== 'all' ? selectedOutlierFilter : undefined,
         days: activeDays,
         sortBy: selectedMetricCriteria,
         sortOrder: 'desc',
@@ -129,7 +120,7 @@ export default function CompetitorHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedOutlierFilter, selectedTimeframe, selectedMetricCriteria]);
+  }, [selectedTimeframe, selectedMetricCriteria]);
 
   useFocusEffect(
     useCallback(() => {
@@ -176,19 +167,25 @@ export default function CompetitorHubScreen() {
     });
   }, [profiles, searchQuery]);
 
-  // Filtered Outliers by Search, Outlier Type, and Metric Sorting
+  // Client-Side Deduplication of Outliers
+  const uniqueOutliers = useMemo(() => {
+    const seen = new Set<string>();
+    return (outliers || []).filter((item) => {
+      const key = (item as any).postId || item.platformVideoId || item.id;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [outliers]);
+
+  // Filtered Outliers by Search and Metric Sorting
   const filteredOutliers = useMemo(() => {
-    const list = outliers.filter((item) => {
-      const matchesSearch =
+    const list = uniqueOutliers.filter((item) => {
+      return (
         !searchQuery ||
         (item.caption && item.caption.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.ownerUsername && item.ownerUsername.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesOutlierType =
-        selectedOutlierFilter === 'all' ||
-        item.outlierType === selectedOutlierFilter;
-
-      return matchesSearch && matchesOutlierType;
+        (item.ownerUsername && item.ownerUsername.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
     });
 
     if (selectedMetricCriteria === 'views') {
@@ -202,7 +199,7 @@ export default function CompetitorHubScreen() {
     }
 
     return list;
-  }, [outliers, searchQuery, selectedOutlierFilter, selectedMetricCriteria]);
+  }, [uniqueOutliers, searchQuery, selectedMetricCriteria]);
 
   const activeCompetitorsCount = profiles.filter((p) => p.isTracked ?? p.isActive).length;
   const totalLimit = summary?.totalLimit ?? 50;
@@ -412,39 +409,6 @@ export default function CompetitorHubScreen() {
                 ]}
               >
                 {tf.label}
-              </Chip>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Archetype Filter Chips */}
-        <View style={styles.outlierFilterContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsScroll}
-          >
-            {OUTLIER_FILTER_OPTIONS.map((filter) => (
-              <Chip
-                key={filter.id}
-                selected={selectedOutlierFilter === filter.id}
-                onPress={() => setSelectedOutlierFilter(filter.id)}
-                showSelectedOverlay
-                style={[
-                  styles.outlierChip,
-                  selectedOutlierFilter === filter.id
-                    ? { backgroundColor: theme.colors.elevation?.level3 || theme.colors.surface }
-                    : { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-                textStyle={[
-                  styles.chipText,
-                  selectedOutlierFilter === filter.id && {
-                    color: theme.colors.primary,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {filter.label}
               </Chip>
             ))}
           </ScrollView>
@@ -813,7 +777,7 @@ export default function CompetitorHubScreen() {
         <FlatList
           style={{ flex: 1 }}
           data={filteredOutliers}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${(item as any).postId || item.platformVideoId || item.id || 'outlier'}_${(item as any).dayOffset ?? item.dayNumber ?? 0}_${index}`}
           ListHeaderComponent={renderInsightsHeader}
           renderItem={({ item }) => (
             <OutlierInsightCard

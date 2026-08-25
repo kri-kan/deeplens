@@ -436,10 +436,10 @@ namespace DeepLens.WorkerService.Workers
             var insertSql = @"
                 INSERT INTO competitor_videos (
                     watchlist_id, platform, platform_video_id, url, description, 
-                    media_type, thumbnail_url, media_url, like_count, comment_count, posted_at, is_reel, storage_path, download_status, downloaded_at)
+                    media_type, thumbnail_url, media_url, like_count, comment_count, posted_at, is_reel, storage_path, download_status, downloaded_at, raw_metadata)
                 VALUES (
                     @WatchlistId, 'instagram', @Id, @Url, @Caption, 
-                    @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath, @DownloadStatus, @DownloadedAt)";
+                    @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath, @DownloadStatus, @DownloadedAt, @RawMetadata::jsonb)";
 
             var updateStorageSql = "UPDATE competitor_videos SET storage_path = @StoragePath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, @Now) WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId";
             var updateProgressSql = "UPDATE scraper_queue SET scraped_count = @Count WHERE id = @JobId";
@@ -471,6 +471,7 @@ namespace DeepLens.WorkerService.Workers
 
                     var effectiveStoragePath = newStoragePath ?? storagePath;
                     var now = DateTime.UtcNow;
+                    var rawMetadata = JsonSerializer.Serialize(p);
 
                     if (!exists)
                     {
@@ -485,7 +486,8 @@ namespace DeepLens.WorkerService.Workers
                             IsReel = p.MediaProductType?.ToUpper() == "REELS",
                             StoragePath = newStoragePath,
                             DownloadStatus = downloadStatus,
-                            DownloadedAt = downloadedAt
+                            DownloadedAt = downloadedAt,
+                            RawMetadata = rawMetadata
                         });
 
                         // Fetch the auto-generated ID if we need to link media
@@ -524,6 +526,26 @@ namespace DeepLens.WorkerService.Workers
                     else 
                     {
                         dbPostId = await conn.ExecuteScalarAsync<Guid>("SELECT id FROM competitor_videos WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId", new { Id = p.Id, WatchlistId = watchlistId });
+
+                        // Update existing competitor_videos record with latest engagement and metadata
+                        await conn.ExecuteAsync(@"
+                            UPDATE competitor_videos 
+                            SET like_count = @LikeCount, 
+                                comment_count = @CommentCount, 
+                                media_url = COALESCE(@MediaUrl, media_url),
+                                thumbnail_url = COALESCE(@ThumbnailUrl, thumbnail_url),
+                                raw_metadata = COALESCE(@RawMetadata::jsonb, raw_metadata),
+                                updated_at = @Now 
+                            WHERE id = @dbPostId", 
+                            new { 
+                                dbPostId, 
+                                LikeCount = p.LikeCount, 
+                                CommentCount = p.CommentCount, 
+                                MediaUrl = p.MediaUrl, 
+                                ThumbnailUrl = thumbUrl, 
+                                RawMetadata = rawMetadata, 
+                                Now = now 
+                            });
 
                         if (newStoragePath != null)
                         {
@@ -595,35 +617,42 @@ namespace DeepLens.WorkerService.Workers
                         count++;
                     }
 
-                    // Upsert Daily Snapshot into instagram_post_daily_metrics for velocity and baseline analytics
+                    // Upsert Daily Snapshot into instagram_post_daily_metrics for velocity and baseline analytics (Capped at Day 15)
                     var postedAt = p.Timestamp ?? DateTime.UtcNow;
-                    var viewCount = Math.Max(p.LikeCount * 10, p.LikeCount);
+                    var dayOffset = Math.Max(0, (int)(DateTime.UtcNow.Date - postedAt.ToUniversalTime().Date).TotalDays);
 
-                    await conn.ExecuteAsync(@"
-                        INSERT INTO public.instagram_post_daily_metrics (
-                            post_id, profile_id, day_offset, snapshot_date, snapshot_timestamp,
-                            view_count, like_count, comment_count, share_count
-                        )
-                        VALUES (
-                            @dbPostId, @watchlistId, GREATEST(0, (CURRENT_DATE - (@postedAt AT TIME ZONE 'UTC')::DATE)),
-                            CURRENT_DATE, NOW(), @viewCount, @likeCount, @commentCount, @shareCount
-                        )
-                        ON CONFLICT (post_id, day_offset)
-                        DO UPDATE SET
-                            view_count = EXCLUDED.view_count,
-                            like_count = EXCLUDED.like_count,
-                            comment_count = EXCLUDED.comment_count,
-                            share_count = EXCLUDED.share_count,
-                            snapshot_timestamp = NOW()",
-                        new {
-                            dbPostId,
-                            watchlistId,
-                            postedAt,
-                            viewCount,
-                            likeCount = p.LikeCount,
-                            commentCount = p.CommentCount,
-                            shareCount = p.ShareCount
-                        });
+                    if (dayOffset <= 15)
+                    {
+                        var viewCount = Math.Max(p.LikeCount * 10, p.LikeCount);
+
+                        await conn.ExecuteAsync(@"
+                            INSERT INTO public.instagram_post_daily_metrics (
+                                post_id, profile_id, day_offset, snapshot_date, snapshot_timestamp,
+                                view_count, like_count, comment_count, share_count, raw_metadata
+                            )
+                            VALUES (
+                                @dbPostId, @watchlistId, @dayOffset,
+                                CURRENT_DATE, NOW(), @viewCount, @likeCount, @commentCount, @shareCount, @rawMetadata::jsonb
+                            )
+                            ON CONFLICT (post_id, day_offset)
+                            DO UPDATE SET
+                                view_count = EXCLUDED.view_count,
+                                like_count = EXCLUDED.like_count,
+                                comment_count = EXCLUDED.comment_count,
+                                share_count = EXCLUDED.share_count,
+                                raw_metadata = EXCLUDED.raw_metadata,
+                                snapshot_timestamp = NOW()",
+                            new {
+                                dbPostId,
+                                watchlistId,
+                                dayOffset,
+                                viewCount,
+                                likeCount = p.LikeCount,
+                                commentCount = p.CommentCount,
+                                shareCount = p.ShareCount,
+                                rawMetadata
+                            });
+                    }
 
                     // Periodic progress update in DB for long-running jobs
                     if (count % 5 == 0 || count == total)
@@ -723,7 +752,14 @@ namespace DeepLens.WorkerService.Workers
 
         private async Task UpdateEngagementAsync(NpgsqlConnection conn, List<MetaPost> engagement)
         {
-            var updatePostSql = "UPDATE competitor_videos SET like_count = @Likes, comment_count = @Comments, updated_at = NOW() WHERE platform_video_id = @Id AND platform = 'instagram'";
+            var updatePostSql = @"
+                UPDATE competitor_videos 
+                SET like_count = @Likes, 
+                    comment_count = @Comments, 
+                    raw_metadata = COALESCE(@RawMetadata::jsonb, raw_metadata),
+                    updated_at = NOW() 
+                WHERE platform_video_id = @Id AND platform = 'instagram'";
+
             var upsertMetricSql = @"
                 INSERT INTO public.instagram_post_daily_metrics (
                     post_id, profile_id, day_offset, snapshot_date, snapshot_timestamp,
@@ -740,7 +776,9 @@ namespace DeepLens.WorkerService.Workers
                     @Comments AS comment_count,
                     COALESCE(cv.share_count, 0) AS share_count
                 FROM public.competitor_videos cv
-                WHERE cv.platform_video_id = @Id AND cv.platform = 'instagram'
+                WHERE cv.platform_video_id = @Id 
+                  AND cv.platform = 'instagram'
+                  AND GREATEST(0, (CURRENT_DATE - (cv.posted_at AT TIME ZONE 'UTC')::DATE)) <= 15
                 ON CONFLICT (post_id, day_offset)
                 DO UPDATE SET
                     view_count = EXCLUDED.view_count,
@@ -752,7 +790,8 @@ namespace DeepLens.WorkerService.Workers
             foreach (var e in engagement)
             {
                 if (string.IsNullOrEmpty(e.Id)) continue;
-                await conn.ExecuteAsync(updatePostSql, new { Likes = e.LikeCount, Comments = e.CommentCount, Id = e.Id });
+                var rawMetadata = JsonSerializer.Serialize(e);
+                await conn.ExecuteAsync(updatePostSql, new { Likes = e.LikeCount, Comments = e.CommentCount, RawMetadata = rawMetadata, Id = e.Id });
                 await conn.ExecuteAsync(upsertMetricSql, new { Likes = e.LikeCount, Comments = e.CommentCount, Id = e.Id });
             }
 

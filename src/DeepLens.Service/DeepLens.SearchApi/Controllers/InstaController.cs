@@ -229,7 +229,7 @@ public class InstaController : ControllerBase
                             v.breakout_archetype AS BreakoutArchetype
                         FROM view_instagram_competitor_outliers v
                         WHERE v.post_id = ANY(@videoGuids)
-                        ORDER BY v.post_id, v.day_offset DESC";
+                        ORDER BY v.post_id, v.outlier_score DESC, v.snapshot_date DESC";
 
                     var outlierRows = (await conn.QueryAsync<dynamic>(outlierSql, new { videoGuids }))
                         .ToDictionary(r => (Guid)r.postid, r => r);
@@ -262,6 +262,7 @@ public class InstaController : ControllerBase
                         LEFT JOIN view_instagram_profile_day_n_baselines pb 
                             ON pb.profile_id = m.profile_id AND pb.day_offset = m.day_offset
                         WHERE m.post_id = ANY(@videoGuids)
+                          AND m.day_offset <= 15
                         ORDER BY m.post_id, m.day_offset ASC";
 
                     var trajectoryRows = await conn.QueryAsync<dynamic>(trajectorySql, new { videoGuids });
@@ -3038,7 +3039,7 @@ public class InstaController : ControllerBase
             var whereClause = string.Join(" AND ", conditions);
 
             var countSql = $@"
-                SELECT COUNT(*)::int 
+                SELECT COUNT(DISTINCT v.post_id)::int 
                 FROM view_instagram_competitor_outliers v
                 WHERE {whereClause}";
 
@@ -3056,60 +3057,64 @@ public class InstaController : ControllerBase
             var direction = sortOrder?.Trim().ToLowerInvariant() == "asc" ? "ASC" : "DESC";
             var orderByClause = (sortBy?.Trim().ToLowerInvariant()) switch
             {
-                "views" => $"ORDER BY v.view_count {direction}, v.outlier_score DESC",
-                "likes" => $"ORDER BY v.like_count {direction}, v.outlier_score DESC",
-                "comments" => $"ORDER BY v.comment_count {direction}, v.outlier_score DESC",
-                "velocity" => $"ORDER BY v.velocity_score {direction}, v.outlier_score DESC",
-                "date" => $"ORDER BY v.posted_at {direction}",
-                _ => $"ORDER BY v.outlier_score {direction}, v.velocity_score DESC, v.snapshot_date DESC"
+                "views" => $"ORDER BY ViewCount {direction}, OutlierScore DESC",
+                "likes" => $"ORDER BY LikeCount {direction}, OutlierScore DESC",
+                "comments" => $"ORDER BY CommentCount {direction}, OutlierScore DESC",
+                "velocity" => $"ORDER BY VelocityScore {direction}, OutlierScore DESC",
+                "date" => $"ORDER BY PostedAt {direction}",
+                _ => $"ORDER BY OutlierScore {direction}, VelocityScore DESC, SnapshotDate DESC"
             };
 
             var selectSql = $@"
-                SELECT 
-                    v.post_id AS PostId,
-                    v.platform_video_id AS PlatformVideoId,
-                    v.post_url AS PostUrl,
-                    v.thumbnail_url AS ThumbnailUrl,
-                    v.media_url AS MediaUrl,
-                    v.media_type AS MediaType,
-                    v.storage_path AS StoragePath,
-                    v.title AS Title,
-                    v.caption AS Caption,
-                    v.posted_at AS PostedAt,
-                    v.profile_id AS ProfileId,
-                    v.profile_username AS ProfileUsername,
-                    v.profile_name AS ProfileName,
-                    v.profile_pic_url AS ProfilePicUrl,
-                    v.profile_pic_storage_path AS ProfilePicStoragePath,
-                    v.competitor_niche AS CompetitorNiche,
-                    v.tracking_tier AS TrackingTier,
-                    v.day_offset AS DayOffset,
-                    v.snapshot_date AS SnapshotDate,
-                    v.view_count AS ViewCount,
-                    v.like_count AS LikeCount,
-                    v.comment_count AS CommentCount,
-                    v.share_count AS ShareCount,
-                    v.daily_delta_views AS DailyDeltaViews,
-                    v.daily_delta_likes AS DailyDeltaLikes,
-                    v.velocity_score AS VelocityScore,
-                    v.engagement_rate AS EngagementRate,
-                    v.profile_baseline_views AS ProfileBaselineViews,
-                    v.profile_baseline_delta_views AS ProfileBaselineDeltaViews,
-                    v.profile_baseline_likes AS ProfileBaselineLikes,
-                    v.niche_baseline_views AS NicheBaselineViews,
-                    v.niche_baseline_likes AS NicheBaselineLikes,
-                    v.outlier_score AS OutlierScore,
-                    v.virality_multiplier AS ViralityMultiplier,
-                    v.delta_multiplier AS DeltaMultiplier,
-                    v.day1_view_multiplier AS Day1ViewMultiplier,
-                    v.outlier_tier AS OutlierTier,
-                    v.is_day1_breakout AS IsDay1Breakout,
-                    v.is_delayed_breakout AS IsDelayedBreakout,
-                    v.breakout_archetype AS BreakoutArchetype,
-                    v.is_inspiration_candidate AS IsInspirationCandidate,
-                    v.caption_hook AS CaptionHook
-                FROM view_instagram_competitor_outliers v
-                WHERE {whereClause}
+                SELECT *
+                FROM (
+                    SELECT DISTINCT ON (v.post_id)
+                        v.post_id AS PostId,
+                        v.platform_video_id AS PlatformVideoId,
+                        v.post_url AS PostUrl,
+                        v.thumbnail_url AS ThumbnailUrl,
+                        v.media_url AS MediaUrl,
+                        v.media_type AS MediaType,
+                        v.storage_path AS StoragePath,
+                        v.title AS Title,
+                        v.caption AS Caption,
+                        v.posted_at AS PostedAt,
+                        v.profile_id AS ProfileId,
+                        v.profile_username AS ProfileUsername,
+                        v.profile_name AS ProfileName,
+                        v.profile_pic_url AS ProfilePicUrl,
+                        v.profile_pic_storage_path AS ProfilePicStoragePath,
+                        v.competitor_niche AS CompetitorNiche,
+                        v.tracking_tier AS TrackingTier,
+                        v.day_offset AS DayOffset,
+                        v.snapshot_date AS SnapshotDate,
+                        v.view_count AS ViewCount,
+                        v.like_count AS LikeCount,
+                        v.comment_count AS CommentCount,
+                        v.share_count AS ShareCount,
+                        v.daily_delta_views AS DailyDeltaViews,
+                        v.daily_delta_likes AS DailyDeltaLikes,
+                        v.velocity_score AS VelocityScore,
+                        v.engagement_rate AS EngagementRate,
+                        v.profile_baseline_views AS ProfileBaselineViews,
+                        v.profile_baseline_delta_views AS ProfileBaselineDeltaViews,
+                        v.profile_baseline_likes AS ProfileBaselineLikes,
+                        v.niche_baseline_views AS NicheBaselineViews,
+                        v.niche_baseline_likes AS NicheBaselineLikes,
+                        v.outlier_score AS OutlierScore,
+                        v.virality_multiplier AS ViralityMultiplier,
+                        v.delta_multiplier AS DeltaMultiplier,
+                        v.day1_view_multiplier AS Day1ViewMultiplier,
+                        v.outlier_tier AS OutlierTier,
+                        v.is_day1_breakout AS IsDay1Breakout,
+                        v.is_delayed_breakout AS IsDelayedBreakout,
+                        v.breakout_archetype AS BreakoutArchetype,
+                        v.is_inspiration_candidate AS IsInspirationCandidate,
+                        v.caption_hook AS CaptionHook
+                    FROM view_instagram_competitor_outliers v
+                    WHERE {whereClause}
+                    ORDER BY v.post_id, v.outlier_score DESC, v.snapshot_date DESC
+                ) distinct_posts
                 {orderByClause}
                 LIMIT @Limit OFFSET @Offset";
 
@@ -3146,6 +3151,7 @@ public class InstaController : ControllerBase
                     LEFT JOIN view_instagram_profile_day_n_baselines pb 
                         ON pb.profile_id = m.profile_id AND pb.day_offset = m.day_offset
                     WHERE m.post_id = ANY(@postIds)
+                      AND m.day_offset <= 15
                     ORDER BY m.post_id, m.day_offset ASC";
 
                 var trajectoryRows = await conn.QueryAsync<dynamic>(trajectorySql, new { postIds });
@@ -3264,7 +3270,7 @@ public class InstaController : ControllerBase
                     SELECT breakout_archetype, is_day1_breakout, is_delayed_breakout
                     FROM view_instagram_competitor_outliers o
                     WHERE o.post_id = cv.id
-                    ORDER BY o.day_offset DESC
+                    ORDER BY o.outlier_score DESC, o.snapshot_date DESC
                     LIMIT 1
                 ) os ON true
                 WHERE cv.watchlist_id = @targetProfileId
@@ -3303,6 +3309,7 @@ public class InstaController : ControllerBase
                     LEFT JOIN view_instagram_profile_day_n_baselines pb 
                         ON pb.profile_id = m.profile_id AND pb.day_offset = m.day_offset
                     WHERE m.post_id = ANY(@postIds)
+                      AND m.day_offset <= 15
                     ORDER BY m.post_id, m.day_offset ASC";
 
                 var points = await conn.QueryAsync<dynamic>(pointsSql, new { postIds });
