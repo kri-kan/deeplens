@@ -1,3 +1,4 @@
+import { Linking } from 'react-native';
 import {
     InstagramMediaType,
     normalizeData,
@@ -98,4 +99,36 @@ export const getBaseId = (path: string): string => {
     const parts = path.split('/');
     const filename = parts[parts.length - 1];
     return filename.split('.')[0].split('_')[0];
+};
+
+export const getInstagramPostUrl = (item: any): string => {
+  if (!item) return 'https://www.instagram.com';
+  const candidate = item.postUrl || item.permalink || item.url;
+  if (candidate && typeof candidate === 'string' && candidate.startsWith('http') && !candidate.includes('cdninstagram') && !candidate.includes('/api/v1/Attachment/')) {
+    return candidate;
+  }
+  if (item.ownerUsername) {
+    return `https://www.instagram.com/${item.ownerUsername.replace(/^@/, '')}/`;
+  }
+  return 'https://www.instagram.com';
+};
+
+export const openInstagramPost = async (item: any): Promise<void> => {
+  if (!item) return;
+  const webUrl = getInstagramPostUrl(item);
+  const platformId = item.platformVideoId || item.id;
+  const isNumericId = platformId && /^\d+$/.test(String(platformId));
+  const nativeUrl = isNumericId ? `instagram://media?id=${platformId}` : '';
+
+  try {
+    if (nativeUrl && (await Linking.canOpenURL(nativeUrl))) {
+      await Linking.openURL(nativeUrl).catch(() => Linking.openURL(webUrl));
+    } else {
+      await Linking.openURL(webUrl);
+    }
+  } catch (e) {
+    if (webUrl) {
+      await Linking.openURL(webUrl).catch(() => {});
+    }
+  }
 };

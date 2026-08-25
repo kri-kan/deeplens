@@ -6,7 +6,7 @@ import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { InstagramMediaType } from '@/services/instagram.service';
-import { normalizeData, getMediaUri } from '@/utils/instagram-helpers';
+import { normalizeData, getMediaUri, getInstagramPostUrl, openInstagramPost } from '@/utils/instagram-helpers';
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -115,14 +115,14 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
 
       {!selectionMode && (
         <View style={styles.leftActionsContainer}>
-          {item.permalink && (
+          {Boolean(getInstagramPostUrl(item)) && (
             <>
               <IconButton 
                 icon="open-in-new" 
                 iconColor="white" 
                 size={16} 
                 style={styles.actionIcon}
-                onPress={() => Linking.openURL(item.permalink || '')}
+                onPress={() => openInstagramPost(item)}
               />
               <IconButton 
                 icon="link-variant" 
@@ -130,7 +130,7 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
                 size={16} 
                 style={styles.actionIcon}
                 onPress={async () => {
-                  await Clipboard.setStringAsync(item.permalink || '');
+                  await Clipboard.setStringAsync(getInstagramPostUrl(item));
                 }}
               />
             </>

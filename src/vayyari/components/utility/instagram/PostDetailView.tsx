@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { ProductCreationForm } from '../product/ProductCreationForm';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
-import { getMediaUri } from '@/utils/instagram-helpers';
+import { getMediaUri, openInstagramPost } from '@/utils/instagram-helpers';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
 
@@ -134,7 +134,7 @@ export const PostDetailView: React.FC<PostDetailViewProps> = ({ item, onClose })
                     icon="open-in-new" 
                     iconColor="white" 
                     size={24} 
-                    onPress={() => item.permalink && Linking.openURL(item.permalink)} 
+                    onPress={() => openInstagramPost(item)} 
                 />
 
                 <IconButton 

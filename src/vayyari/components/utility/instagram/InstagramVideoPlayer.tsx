@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { IconButton, Text, Icon } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { InstagramPost } from '@/services/instagram.service';
-import { getMediaUri, normalizeData } from '@/utils/instagram-helpers';
+import { getMediaUri, normalizeData, openInstagramPost } from '@/utils/instagram-helpers';
 
 interface CustomVideoPlayerProps {
     media: InstagramPost;
@@ -53,25 +53,7 @@ export const InstagramVideoPlayer = React.memo(({
     const [isReady, setIsReady] = useState(player?.status === 'readyToPlay');
 
     const handleOpenInInstagram = useCallback(() => {
-        const platformId = media.platformVideoId || media.id;
-        const nativeUrl = platformId ? `instagram://media?id=${platformId}` : '';
-        const webUrl = media.permalink || (platformId ? `https://www.instagram.com/p/${platformId}/` : 'https://www.instagram.com');
-
-        if (nativeUrl) {
-            Linking.canOpenURL(nativeUrl).then(supported => {
-                if (supported) {
-                    Linking.openURL(nativeUrl).catch(() => {
-                        Linking.openURL(webUrl).catch(() => {});
-                    });
-                } else {
-                    Linking.openURL(webUrl).catch(() => {});
-                }
-            }).catch(() => {
-                Linking.openURL(webUrl).catch(() => {});
-            });
-        } else {
-            Linking.openURL(webUrl).catch(() => {});
-        }
+        openInstagramPost(media);
     }, [media]);
 
     useEffect(() => {

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, useTheme, Icon, ActivityIndicator } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { HighPerformingCompetitorPost, InstagramMediaType } from '@/services/instagram.service';
 import { CompetitorSparkline } from './CompetitorSparkline';
-import { getMediaUri } from '@/utils/instagram-helpers';
+import { getMediaUri, openInstagramPost } from '@/utils/instagram-helpers';
 
 interface OutlierInsightCardProps {
   item: HighPerformingCompetitorPost;
@@ -35,27 +35,10 @@ export const OutlierInsightCard: React.FC<OutlierInsightCardProps> = ({ item, on
 
   const handleOpenInstagram = async () => {
     setIsOpeningInsta(true);
-    const platformId = item.platformVideoId || item.id;
     try {
-      if (platformId) {
-        const nativeUrl = `instagram://media?id=${platformId}`;
-        const canOpen = await Linking.canOpenURL(nativeUrl).catch(() => false);
-        if (canOpen) {
-          await Linking.openURL(nativeUrl);
-          setIsOpeningInsta(false);
-          return;
-        }
-      }
-      if (item.permalink) {
-        await Linking.openURL(item.permalink);
-      } else if (platformId) {
-        await Linking.openURL(`https://www.instagram.com/p/${platformId}/`);
-      }
+      await openInstagramPost(item);
     } catch (err) {
       console.warn('Could not open Instagram link', err);
-      if (item.permalink) {
-        await Linking.openURL(item.permalink).catch(() => {});
-      }
     } finally {
       setIsOpeningInsta(false);
     }

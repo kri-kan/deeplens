@@ -140,6 +140,9 @@ public class MetaPost
     public string? ThumbnailUrl { get; set; }
     [JsonPropertyName("permalink")]
     public string? Permalink { get; set; }
+
+    [JsonPropertyName("postUrl")]
+    public string? PostUrl => Permalink;
     [JsonPropertyName("likeCount")]
     public long LikeCount { get; set; }
     [JsonPropertyName("commentCount")]
@@ -441,6 +444,9 @@ public class CompetitorOutlierPostDto
 
     [JsonPropertyName("postUrl")]
     public string? PostUrl { get; set; }
+
+    [JsonPropertyName("permalink")]
+    public string? Permalink => PostUrl;
 
     [JsonPropertyName("thumbnailUrl")]
     public string? ThumbnailUrl { get; set; }

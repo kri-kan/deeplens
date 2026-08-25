@@ -14,7 +14,7 @@ import { ProductTile } from '@/components/utility/product/ProductTile';
 import type { VendorProduct } from '@/types/products';
 import { InstagramVideoPlayer } from './InstagramVideoPlayer';
 import { YoutubeShortsScheduleForm } from '../youtube/YoutubeShortsScheduleForm';
-import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId } from '@/utils/instagram-helpers';
+import { InstagramLink, normalizeData, isVideo, getMediaUri, getBaseId, getInstagramPostUrl, openInstagramPost } from '@/utils/instagram-helpers';
 import { downloadMedia, shareMedia } from '@/utils/media-helpers';
 import { InstagramCommentsModal } from './InstagramCommentsModal';
 import { CompetitorSparkline } from './CompetitorSparkline';
@@ -622,23 +622,7 @@ export const InstagramPostDetailItem = ({
                                 : rawCoverUri;
 
                             const handleOpenInInstagram = () => {
-                                const platformId = media.platformVideoId || media.id;
-                                const nativeUrl = platformId ? `instagram://media?id=${platformId}` : '';
-                                const webUrl = media.permalink || (platformId ? `https://www.instagram.com/p/${platformId}/` : 'https://www.instagram.com');
-
-                                if (nativeUrl) {
-                                    Linking.canOpenURL(nativeUrl).then(supported => {
-                                        if (supported) {
-                                            Linking.openURL(nativeUrl).catch(() => Linking.openURL(webUrl));
-                                        } else {
-                                            Linking.openURL(webUrl);
-                                        }
-                                    }).catch(() => {
-                                        Linking.openURL(webUrl);
-                                    });
-                                } else {
-                                    Linking.openURL(webUrl);
-                                }
+                                openInstagramPost(media);
                             };
 
                             return (
@@ -767,8 +751,11 @@ export const InstagramPostDetailItem = ({
                             <Text style={styles.statText}>{((localItem?.commentCount) || 0).toLocaleString()}</Text>
                         </TouchableOpacity>
                     </View>
-                    <IconButton icon="open-in-new" iconColor="white" size={24} onPress={() => localItem?.permalink && Linking.openURL(localItem.permalink)} />
-                    <IconButton icon="link-variant" iconColor="white" size={24} onPress={async () => localItem?.permalink && await Clipboard.setStringAsync(localItem.permalink)} />
+                    <IconButton icon="open-in-new" iconColor="white" size={24} onPress={() => openInstagramPost(localItem)} />
+                    <IconButton icon="link-variant" iconColor="white" size={24} onPress={async () => {
+                        const postUrl = getInstagramPostUrl(localItem);
+                        if (postUrl) await Clipboard.setStringAsync(postUrl);
+                    }} />
                 </View>
 
                 <GestureDetector gesture={panGesture}>

@@ -117,6 +117,8 @@ export interface HighPerformingCompetitorPost extends InstagramPost {
   platformVideoId?: string;
   curvePoints?: OutlierDataPoint[];
   isFullMediaDownloaded?: boolean;
+  postUrl?: string;
+  permalink?: string;
 }
 
 export interface GetHighPerformingOptions {
@@ -148,6 +150,7 @@ export interface InstagramPost {
   mediaUrl?: string;
   thumbnailUrl?: string;
   permalink?: string;
+  postUrl?: string;
   likeCount: number;
   commentCount: number;
   viewCount?: number;
@@ -361,7 +364,8 @@ export const normalizeData = (data: any): InstagramPost => {
   const storagePath = data.storagePath || data.StoragePath;
   const thumbnailUrl = data.thumbnailUrl || data.ThumbnailUrl;
   const mediaUrl = data.mediaUrl || data.MediaUrl;
-  const permalink = data.permalink || data.Permalink;
+  const postUrl = data.postUrl || data.PostUrl || data.permalink || data.Permalink || data.url || data.Url || data.post_url;
+  const permalink = postUrl;
   const platformVideoId = data.platformVideoId || data.PlatformVideoId || data.id || data.Id || data.platformId || data.PlatformId;
   const ownerUsername = data.profileUsername || data.ownerUsername || data.OwnerUsername || data.username || data.Username;
   const ownerProfilePictureUrl = data.profilePicUrl || data.profilePicStoragePath || data.ownerProfilePictureUrl || data.OwnerProfilePictureUrl || data.profilePictureUrl || data.ProfilePictureUrl;
@@ -417,6 +421,7 @@ export const normalizeData = (data: any): InstagramPost => {
       thumbnailUrl,
       mediaUrl,
       permalink,
+      postUrl,
       ownerUsername,
       ownerProfilePictureUrl,
       likeCount,
@@ -527,6 +532,8 @@ export const normalizeHighPerformingPost = (item: any): HighPerformingCompetitor
     platformVideoId: item.platformVideoId || item.PlatformVideoId || item.id || item.Id || base.platformVideoId || base.id,
     curvePoints,
     isFullMediaDownloaded: item.isFullMediaDownloaded ?? item.IsFullMediaDownloaded ?? base.isFullMediaDownloaded,
+    postUrl: item.postUrl || item.PostUrl || item.permalink || item.Permalink || item.url || item.Url || item.post_url || base.postUrl,
+    permalink: item.postUrl || item.PostUrl || item.permalink || item.Permalink || item.url || item.Url || item.post_url || base.permalink,
     isCompetitor: true,
   };
 };
