@@ -305,6 +305,7 @@ export default function InstagramExplorer() {
               <ProfileHeader 
                 profile={profileData.profile}
                 metrics={profileData.metrics}
+                isCompetitorProfile={isCompetitorProfile}
                 onShowSettings={() => router.push({
                     pathname: '/utilities/instagram/settings',
                     params: { username: profileData.profile?.username }

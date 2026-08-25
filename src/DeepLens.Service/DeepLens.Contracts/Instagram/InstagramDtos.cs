@@ -193,6 +193,30 @@ public class MetaPost
 
     [JsonPropertyName("shareCount")]
     public long ShareCount { get; set; }
+
+    [JsonPropertyName("viewCount")]
+    public long? ViewCount { get; set; }
+
+    [JsonPropertyName("multiplier")]
+    public decimal? Multiplier { get; set; }
+
+    [JsonPropertyName("outlierScore")]
+    public decimal? OutlierScore { get; set; }
+
+    [JsonPropertyName("isDay1Breakout")]
+    public bool? IsDay1Breakout { get; set; }
+
+    [JsonPropertyName("isDelayedBreakout")]
+    public bool? IsDelayedBreakout { get; set; }
+
+    [JsonPropertyName("breakoutArchetype")]
+    public string? BreakoutArchetype { get; set; }
+
+    [JsonPropertyName("trajectory")]
+    public List<DayNTrajectoryPointDto>? Trajectory { get; set; }
+
+    [JsonPropertyName("curvePoints")]
+    public List<DayNTrajectoryPointDto>? CurvePoints => Trajectory;
 }
 
 public class InstagramProfileDetailsDto
@@ -322,6 +346,21 @@ public class CompetitorSummaryDto
 
     [JsonPropertyName("breakoutsTodayCount")]
     public int BreakoutsTodayCount { get; set; }
+
+    [JsonPropertyName("activeCount")]
+    public int ActiveCount => ActiveCompetitorsCount;
+
+    [JsonPropertyName("totalCompetitors")]
+    public int TotalCompetitors => TotalCompetitorsCount;
+
+    [JsonPropertyName("totalLimit")]
+    public int TotalLimit { get; set; } = 50;
+
+    [JsonPropertyName("dayOneTakeoffsCount")]
+    public int DayOneTakeoffsCount { get; set; }
+
+    [JsonPropertyName("delayedSpikesCount")]
+    public int DelayedSpikesCount { get; set; }
 }
 
 public class CompetitorToggleTrackingDto
@@ -360,11 +399,17 @@ public class DayNTrajectoryPointDto
     [JsonPropertyName("cumulativeLikes")]
     public long CumulativeLikes { get; set; }
 
+    [JsonPropertyName("cumulativeComments")]
+    public long CumulativeComments { get; set; }
+
     [JsonPropertyName("dailyDeltaViews")]
     public long DailyDeltaViews { get; set; }
 
     [JsonPropertyName("dailyDeltaLikes")]
     public long DailyDeltaLikes { get; set; }
+
+    [JsonPropertyName("dailyDeltaComments")]
+    public long DailyDeltaComments { get; set; }
 
     [JsonPropertyName("velocityScore")]
     public decimal VelocityScore { get; set; }
@@ -374,6 +419,12 @@ public class DayNTrajectoryPointDto
 
     [JsonPropertyName("baselineAvgDeltaViews")]
     public decimal BaselineAvgDeltaViews { get; set; }
+
+    [JsonPropertyName("baselineMedianLikes")]
+    public decimal BaselineMedianLikes { get; set; }
+
+    [JsonPropertyName("baselineMedianComments")]
+    public decimal BaselineMedianComments { get; set; }
 
     [JsonPropertyName("outlierMultiplier")]
     public decimal OutlierMultiplier { get; set; }
@@ -564,6 +615,12 @@ public class ProfileBaselinePointDto
 
     [JsonPropertyName("p50Likes")]
     public decimal P50Likes { get; set; }
+
+    [JsonPropertyName("p50Comments")]
+    public decimal P50Comments { get; set; }
+
+    [JsonPropertyName("avgComments")]
+    public decimal AvgComments { get; set; }
 
     [JsonPropertyName("avgVelocityScore")]
     public decimal AvgVelocityScore { get; set; }

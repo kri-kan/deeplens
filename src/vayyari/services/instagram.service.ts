@@ -321,19 +321,59 @@ export const normalizeCompetitorProfile = (data: any): CompetitorProfile => {
 
 export const normalizeData = (data: any): InstagramPost => {
   if (!data) return {} as InstagramPost;
-  const id = data.id || data.Id || data.platformId || data.PlatformId;
+  const id = data.postId || data.id || data.Id || data.platformId || data.PlatformId;
   const rawMediaType = data.mediaType !== undefined ? data.mediaType : data.MediaType;
   const mediaType = mapToMediaType(rawMediaType);
   const storagePath = data.storagePath || data.StoragePath;
   const thumbnailUrl = data.thumbnailUrl || data.ThumbnailUrl;
   const mediaUrl = data.mediaUrl || data.MediaUrl;
   const permalink = data.permalink || data.Permalink;
-  const platformVideoId = data.platformVideoId || data.PlatformVideoId || data.platformId || data.PlatformId;
+  const platformVideoId = data.platformVideoId || data.PlatformVideoId || data.id || data.Id || data.platformId || data.PlatformId;
+  const ownerUsername = data.profileUsername || data.ownerUsername || data.OwnerUsername || data.username || data.Username;
+  const ownerProfilePictureUrl = data.profilePicUrl || data.profilePicStoragePath || data.ownerProfilePictureUrl || data.OwnerProfilePictureUrl || data.profilePictureUrl || data.ProfilePictureUrl;
   const isFullMediaDownloaded = data.isFullMediaDownloaded !== undefined ? data.isFullMediaDownloaded : data.IsFullMediaDownloaded;
-  const likeCount = data.likeCount || data.LikeCount || 0;
-  const commentCount = data.commentCount || data.CommentCount || 0;
-  const viewCount = data.viewCount || data.ViewCount || data.views || data.playCount || data.PlayCount || (likeCount ? likeCount * 7 : 0);
+  const likeCount = Number(data.likeCount || data.LikeCount || 0);
+  const commentCount = Number(data.commentCount || data.CommentCount || 0);
+  const viewCount = Number(data.viewCount || data.ViewCount || data.views || data.playCount || data.PlayCount || (likeCount ? likeCount * 7 : 0));
   const isCompetitor = data.isCompetitor !== undefined ? data.isCompetitor : (data.profileCategory === 'Competitors' || data.profileCategory === 'Competitor' || (data.multiplier !== undefined && data.multiplier > 1));
+  const dayNumber = data.dayOffset ?? data.dayNumber ?? data.DayNumber ?? 1;
+  const multiplier = Number(data.outlierScore ?? data.viralityMultiplier ?? data.multiplier ?? data.Multiplier ?? 1.0);
+  const baselineAvgViews = Number(data.profileBaselineViews ?? data.nicheBaselineViews ?? data.baselineAvgViews ?? data.BaselineAvgViews ?? 0);
+  const baselineAvgLikes = Number(data.profileBaselineLikes ?? data.nicheBaselineLikes ?? data.baselineAvgLikes ?? data.BaselineAvgLikes ?? 0);
+  const baselineAvgComments = Number(data.baselineAvgComments ?? data.BaselineAvgComments ?? Math.round(((data.profileBaselineLikes ?? data.nicheBaselineLikes ?? baselineAvgLikes) || 0) * 0.035));
+
+  let outlierType: string;
+  if (data.isDay1Breakout || data.breakoutArchetype === 'day_one_breakout' || data.breakoutArchetype === 'day_one_takeoff') {
+    outlierType = 'day_one_takeoff';
+  } else if (data.isDelayedBreakout || data.breakoutArchetype === 'delayed_breakout' || data.breakoutArchetype === 'delayed_spike') {
+    outlierType = 'delayed_spike';
+  } else if (data.isInspirationCandidate) {
+    outlierType = 'inspiration';
+  } else if (data.outlierType || data.OutlierType) {
+    outlierType = data.outlierType || data.OutlierType;
+  } else {
+    outlierType = 'all';
+  }
+
+  const rawTrajectory = data.trajectory || data.Trajectory || data.curvePoints || data.CurvePoints;
+  const curvePoints: OutlierDataPoint[] = Array.isArray(rawTrajectory) && rawTrajectory.length > 0
+    ? rawTrajectory.map((t: any) => ({
+        day: t.dayOffset ?? t.DayOffset ?? t.day ?? 0,
+        actualViews: Number(t.cumulativeViews ?? t.CumulativeViews ?? t.actualViews ?? 0),
+        actualLikes: Number(t.cumulativeLikes ?? t.CumulativeLikes ?? t.actualLikes ?? 0),
+        actualComments: Number(t.cumulativeComments ?? t.CumulativeComments ?? t.actualComments ?? Math.round((t.cumulativeLikes || t.CumulativeLikes || 0) * 0.035)),
+        baselineViews: Number(t.baselineMedianViews ?? t.BaselineMedianViews ?? t.baselineViews ?? 0),
+        baselineLikes: Number(t.baselineMedianLikes ?? t.BaselineMedianLikes ?? t.baselineLikes ?? Math.round((t.baselineMedianViews || t.BaselineMedianViews || 0) * 0.1)),
+        baselineComments: Number(t.baselineMedianComments ?? t.BaselineMedianComments ?? t.baselineComments ?? Math.round((t.baselineMedianLikes || t.BaselineMedianLikes || 0) * 0.035)),
+      }))
+    : [
+        { day: 0, actualLikes: 0, baselineLikes: 0, actualViews: 0, baselineViews: 0, actualComments: 0, baselineComments: 0 },
+        { day: 1, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineLikes: Math.round(baselineAvgLikes * 0.3), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineViews: Math.round(baselineAvgViews * 0.3), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineComments: Math.round(baselineAvgComments * 0.3) },
+        { day: 2, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineLikes: Math.round(baselineAvgLikes * 0.5), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineViews: Math.round(baselineAvgViews * 0.5), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineComments: Math.round(baselineAvgComments * 0.5) },
+        { day: 3, actualLikes: likeCount, baselineLikes: Math.round(baselineAvgLikes * 0.7), actualViews: viewCount, baselineViews: Math.round(baselineAvgViews * 0.7), actualComments: commentCount, baselineComments: Math.round(baselineAvgComments * 0.7) },
+        { day: 5, actualLikes: Math.round(likeCount * 1.1), baselineLikes: Math.round(baselineAvgLikes * 0.85), actualViews: Math.round(viewCount * 1.1), baselineViews: Math.round(baselineAvgViews * 0.85), actualComments: Math.round(commentCount * 1.1), baselineComments: Math.round(baselineAvgComments * 0.85) },
+        { day: 7, actualLikes: Math.round(likeCount * 1.15), baselineLikes: baselineAvgLikes, actualViews: Math.round(viewCount * 1.15), baselineViews: baselineAvgViews, actualComments: Math.round(commentCount * 1.15), baselineComments: baselineAvgComments },
+      ];
 
   return {
       ...data,
@@ -343,6 +383,8 @@ export const normalizeData = (data: any): InstagramPost => {
       thumbnailUrl,
       mediaUrl,
       permalink,
+      ownerUsername,
+      ownerProfilePictureUrl,
       likeCount,
       commentCount,
       viewCount,
@@ -363,45 +405,74 @@ export const normalizeData = (data: any): InstagramPost => {
       isFullMediaDownloaded,
       isCompetitor,
       profileCategory: data.profileCategory || data.ProfileCategory,
-      multiplier: data.multiplier ?? data.Multiplier,
-      dayNumber: data.dayNumber ?? data.DayNumber,
-      outlierType: data.outlierType || data.OutlierType,
-      baselineAvgLikes: data.baselineAvgLikes ?? data.BaselineAvgLikes,
-      baselineAvgViews: data.baselineAvgViews ?? data.BaselineAvgViews,
-      baselineAvgComments: data.baselineAvgComments ?? data.BaselineAvgComments,
-      curvePoints: data.curvePoints || data.CurvePoints,
+      multiplier,
+      dayNumber,
+      outlierType,
+      baselineAvgLikes,
+      baselineAvgViews,
+      baselineAvgComments,
+      curvePoints,
   };
 };
 
 export const normalizeHighPerformingPost = (item: any): HighPerformingCompetitorPost => {
   const base = normalizeData(item);
-  const multiplier = item.multiplier ?? item.Multiplier ?? 2.5;
-  const dayNumber = item.dayNumber ?? item.DayNumber ?? 1;
-  const outlierType = item.outlierType || item.OutlierType || (dayNumber <= 1 ? 'day_one_takeoff' : 'delayed_spike');
+  const multiplier = Number(item.outlierScore ?? item.viralityMultiplier ?? item.multiplier ?? item.Multiplier ?? base.multiplier ?? 1.0);
+  const dayNumber = item.dayOffset ?? item.dayNumber ?? item.DayNumber ?? base.dayNumber ?? 1;
 
-  const likeCount = base.likeCount || 500;
-  const commentCount = base.commentCount || Math.round(likeCount * 0.035);
-  const viewCount = base.viewCount || Math.round(likeCount * 7.5);
+  let outlierType: string;
+  if (item.isDay1Breakout || item.breakoutArchetype === 'day_one_breakout' || item.breakoutArchetype === 'day_one_takeoff') {
+    outlierType = 'day_one_takeoff';
+  } else if (item.isDelayedBreakout || item.breakoutArchetype === 'delayed_breakout' || item.breakoutArchetype === 'delayed_spike') {
+    outlierType = 'delayed_spike';
+  } else if (item.isInspirationCandidate) {
+    outlierType = 'inspiration';
+  } else if (item.outlierType || item.OutlierType || (base.outlierType && base.outlierType !== 'all')) {
+    outlierType = item.outlierType || item.OutlierType || base.outlierType;
+  } else {
+    outlierType = dayNumber <= 1 ? 'day_one_takeoff' : 'delayed_spike';
+  }
 
-  const baselineAvgLikes = item.baselineAvgLikes ?? item.BaselineAvgLikes ?? Math.round(likeCount / multiplier);
-  const baselineAvgViews = item.baselineAvgViews ?? item.BaselineAvgViews ?? Math.round(viewCount / multiplier);
-  const baselineAvgComments = item.baselineAvgComments ?? item.BaselineAvgComments ?? Math.round(commentCount / multiplier);
+  const likeCount = base.likeCount || 0;
+  const commentCount = base.commentCount || 0;
+  const viewCount = base.viewCount || (likeCount ? likeCount * 7 : 0);
 
-  const deltaLikes = item.deltaLikes ?? (likeCount - baselineAvgLikes);
-  const deltaViews = item.deltaViews ?? (viewCount - baselineAvgViews);
-  const deltaComments = item.deltaComments ?? (commentCount - baselineAvgComments);
+  const baselineAvgLikes = Number(item.profileBaselineLikes ?? item.nicheBaselineLikes ?? item.baselineAvgLikes ?? item.BaselineAvgLikes ?? base.baselineAvgLikes ?? (multiplier > 0 ? Math.round(likeCount / multiplier) : 0));
+  const baselineAvgViews = Number(item.profileBaselineViews ?? item.nicheBaselineViews ?? item.baselineAvgViews ?? item.BaselineAvgViews ?? base.baselineAvgViews ?? (multiplier > 0 ? Math.round(viewCount / multiplier) : 0));
+  const baselineAvgComments = Number(item.baselineAvgComments ?? item.BaselineAvgComments ?? base.baselineAvgComments ?? Math.round((baselineAvgLikes || 0) * 0.035));
 
-  const curvePoints: OutlierDataPoint[] = item.curvePoints || item.CurvePoints || [
-    { day: 0, actualLikes: 0, baselineLikes: 0, actualViews: 0, baselineViews: 0, actualComments: 0, baselineComments: 0 },
-    { day: 1, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineLikes: Math.round(baselineAvgLikes * 0.3), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineViews: Math.round(baselineAvgViews * 0.3), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineComments: Math.round(baselineAvgComments * 0.3) },
-    { day: 2, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineLikes: Math.round(baselineAvgLikes * 0.5), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineViews: Math.round(baselineAvgViews * 0.5), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineComments: Math.round(baselineAvgComments * 0.5) },
-    { day: 3, actualLikes: likeCount, baselineLikes: Math.round(baselineAvgLikes * 0.7), actualViews: viewCount, baselineViews: Math.round(baselineAvgViews * 0.7), actualComments: commentCount, baselineComments: Math.round(baselineAvgComments * 0.7) },
-    { day: 5, actualLikes: Math.round(likeCount * 1.1), baselineLikes: Math.round(baselineAvgLikes * 0.85), actualViews: Math.round(viewCount * 1.1), baselineViews: Math.round(baselineAvgViews * 0.85), actualComments: Math.round(commentCount * 1.1), baselineComments: Math.round(baselineAvgComments * 0.85) },
-    { day: 7, actualLikes: Math.round(likeCount * 1.15), baselineLikes: baselineAvgLikes, actualViews: Math.round(viewCount * 1.15), baselineViews: baselineAvgViews, actualComments: Math.round(commentCount * 1.15), baselineComments: baselineAvgComments },
-  ];
+  const deltaLikes = item.deltaLikes ?? item.DeltaLikes ?? (likeCount - baselineAvgLikes);
+  const deltaViews = item.deltaViews ?? item.DeltaViews ?? (viewCount - baselineAvgViews);
+  const deltaComments = item.deltaComments ?? item.DeltaComments ?? (commentCount - baselineAvgComments);
+
+  const rawTrajectory = item.trajectory || item.Trajectory || item.curvePoints || item.CurvePoints || base.curvePoints;
+  const curvePoints: OutlierDataPoint[] = Array.isArray(rawTrajectory) && rawTrajectory.length > 0
+    ? rawTrajectory.map((t: any) => ({
+        day: t.dayOffset ?? t.DayOffset ?? t.day ?? 0,
+        actualViews: Number(t.cumulativeViews ?? t.CumulativeViews ?? t.actualViews ?? 0),
+        actualLikes: Number(t.cumulativeLikes ?? t.CumulativeLikes ?? t.actualLikes ?? 0),
+        actualComments: Number(t.cumulativeComments ?? t.CumulativeComments ?? t.actualComments ?? Math.round((t.cumulativeLikes || t.CumulativeLikes || 0) * 0.035)),
+        baselineViews: Number(t.baselineMedianViews ?? t.BaselineMedianViews ?? t.baselineViews ?? 0),
+        baselineLikes: Number(t.baselineMedianLikes ?? t.BaselineMedianLikes ?? t.baselineLikes ?? Math.round((t.baselineMedianViews || t.BaselineMedianViews || 0) * 0.1)),
+        baselineComments: Number(t.baselineMedianComments ?? t.BaselineMedianComments ?? t.baselineComments ?? Math.round((t.baselineMedianLikes || t.BaselineMedianLikes || 0) * 0.035)),
+      }))
+    : base.curvePoints || [
+        { day: 0, actualLikes: 0, baselineLikes: 0, actualViews: 0, baselineViews: 0, actualComments: 0, baselineComments: 0 },
+        { day: 1, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineLikes: Math.round(baselineAvgLikes * 0.3), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineViews: Math.round(baselineAvgViews * 0.3), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.7 : 0.2)), baselineComments: Math.round(baselineAvgComments * 0.3) },
+        { day: 2, actualLikes: Math.round(likeCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineLikes: Math.round(baselineAvgLikes * 0.5), actualViews: Math.round(viewCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineViews: Math.round(baselineAvgViews * 0.5), actualComments: Math.round(commentCount * (dayNumber === 1 ? 0.9 : 0.4)), baselineComments: Math.round(baselineAvgComments * 0.5) },
+        { day: 3, actualLikes: likeCount, baselineLikes: Math.round(baselineAvgLikes * 0.7), actualViews: viewCount, baselineViews: Math.round(baselineAvgViews * 0.7), actualComments: commentCount, baselineComments: Math.round(baselineAvgComments * 0.7) },
+        { day: 5, actualLikes: Math.round(likeCount * 1.1), baselineLikes: Math.round(baselineAvgLikes * 0.85), actualViews: Math.round(viewCount * 1.1), baselineViews: Math.round(baselineAvgViews * 0.85), actualComments: Math.round(commentCount * 1.1), baselineComments: Math.round(baselineAvgComments * 0.85) },
+        { day: 7, actualLikes: Math.round(likeCount * 1.15), baselineLikes: baselineAvgLikes, actualViews: Math.round(viewCount * 1.15), baselineViews: baselineAvgViews, actualComments: Math.round(commentCount * 1.15), baselineComments: baselineAvgComments },
+      ];
+
+  const ownerUsername = item.profileUsername || item.ownerUsername || item.OwnerUsername || item.username || item.Username || base.ownerUsername;
+  const ownerProfilePictureUrl = item.profilePicUrl || item.profilePicStoragePath || item.ownerProfilePictureUrl || item.OwnerProfilePictureUrl || item.profilePictureUrl || item.ProfilePictureUrl || base.ownerProfilePictureUrl;
 
   return {
     ...base,
+    id: item.postId || item.id || item.Id || base.id,
+    ownerUsername,
+    ownerProfilePictureUrl,
     likeCount,
     commentCount,
     viewCount,
@@ -419,9 +490,9 @@ export const normalizeHighPerformingPost = (item: any): HighPerformingCompetitor
     outlierType,
     multiplier,
     dayNumber,
-    platformVideoId: item.platformVideoId || item.PlatformVideoId || base.platformVideoId || base.id,
+    platformVideoId: item.platformVideoId || item.PlatformVideoId || item.id || item.Id || base.platformVideoId || base.id,
     curvePoints,
-    isFullMediaDownloaded: item.isFullMediaDownloaded ?? item.IsFullMediaDownloaded,
+    isFullMediaDownloaded: item.isFullMediaDownloaded ?? item.IsFullMediaDownloaded ?? base.isFullMediaDownloaded,
     isCompetitor: true,
   };
 };
@@ -766,8 +837,8 @@ class InstagramService {
       const raw = await searchApiClient.get<any>(API_ROUTES.INSTAGRAM.COMPETITORS_SUMMARY);
       if (raw) {
         return {
-          totalCompetitors: raw.totalCompetitors ?? raw.TotalCompetitors ?? 0,
-          activeCount: raw.activeCount ?? raw.ActiveCount ?? 0,
+          totalCompetitors: raw.totalCompetitorsCount ?? raw.totalCompetitors ?? raw.TotalCompetitors ?? 0,
+          activeCount: raw.activeCompetitorsCount ?? raw.activeCount ?? raw.ActiveCount ?? 0,
           totalLimit: raw.totalLimit ?? raw.TotalLimit ?? 50,
           breakoutsTodayCount: raw.breakoutsTodayCount ?? raw.BreakoutsTodayCount ?? 0,
           dayOneTakeoffsCount: raw.dayOneTakeoffsCount ?? raw.DayOneTakeoffsCount ?? 0,
@@ -819,7 +890,11 @@ class InstagramService {
   getHighPerformingCompetitors = async (params?: GetHighPerformingOptions): Promise<HighPerformingCompetitorPost[]> => {
     const queryParams = new URLSearchParams();
     if (params?.niche && params.niche !== 'All' && params.niche !== 'all') queryParams.append('niche', params.niche);
-    if (params?.outlierType && params.outlierType !== 'All' && params.outlierType !== 'all') queryParams.append('outlierType', params.outlierType);
+    if (params?.outlierType && params.outlierType !== 'All' && params.outlierType !== 'all') {
+      queryParams.append('outlierType', params.outlierType);
+      queryParams.append('archetype', params.outlierType);
+    }
+    queryParams.append('minMultiplier', '1.0');
     if (params?.days !== undefined) queryParams.append('days', params.days.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.offset) queryParams.append('offset', params.offset.toString());
@@ -830,7 +905,7 @@ class InstagramService {
 
     try {
       const raw = await searchApiClient.get<any>(`${API_ROUTES.INSTAGRAM.COMPETITORS_HIGH_PERFORMING}${queryString}`);
-      const items = Array.isArray(raw) ? raw : (raw?.items || raw?.Items || []);
+      const items = Array.isArray(raw) ? raw : (raw?.items || raw?.Items || raw?.posts || raw?.Posts || []);
       if (Array.isArray(items) && items.length > 0) {
         return items.map(transformOutlier);
       }
@@ -843,7 +918,11 @@ class InstagramService {
 
   getCompetitorProfileCurve = async (profileId: string, postId?: string): Promise<CompetitorProfileCurveResponse> => {
     const postParam = postId ? `?postId=${encodeURIComponent(postId)}` : '';
-    return searchApiClient.get<CompetitorProfileCurveResponse>(`${API_ROUTES.INSTAGRAM.COMPETITORS_PROFILE_CURVE(profileId)}${postParam}`);
+    try {
+      return await searchApiClient.get<CompetitorProfileCurveResponse>(`${API_ROUTES.INSTAGRAM.COMPETITORS_PROFILE_CURVE(profileId)}${postParam}`);
+    } catch {
+      return await searchApiClient.get<CompetitorProfileCurveResponse>(`/api/v1/Insta/competitors/${encodeURIComponent(profileId)}/curve${postParam}`);
+    }
   };
 }
 

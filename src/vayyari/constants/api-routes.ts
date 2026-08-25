@@ -138,7 +138,7 @@ export const API_ROUTES = {
     COMPETITORS_SUMMARY: '/api/v1/Insta/competitors/summary',
     COMPETITORS_TOGGLE_TRACKING: (username: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/toggle-tracking`,
     COMPETITORS_HIGH_PERFORMING: '/api/v1/Insta/competitors/high-performing',
-    COMPETITORS_PROFILE_CURVE: (profileId: string) => `/api/v1/Insta/competitors/${encodeURIComponent(profileId)}/curve`,
+    COMPETITORS_PROFILE_CURVE: (profileId: string) => `/api/v1/Insta/competitors/profile/${encodeURIComponent(profileId)}/curve`,
   },
 
   // Common / Master Data

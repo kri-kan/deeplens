@@ -51,13 +51,13 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
     rawItem?.multiplier !== undefined ||
     (item as any)?.multiplier !== undefined;
 
-  const multiplier = (item as any)?.multiplier || (rawItem as any)?.multiplier || (item.likeCount > 5000 ? 3.4 : item.likeCount > 2000 ? 2.6 : 1.8);
+  const multiplier = Number(item.multiplier ?? rawItem?.multiplier ?? (item.likeCount > 5000 ? 3.4 : item.likeCount > 2000 ? 2.6 : 1.8));
   const isTakeoff = multiplier >= 2.5;
 
   const viewCount = item.viewCount || (item.likeCount ? item.likeCount * 7 : 0);
-  const curvePoints = (item as any)?.curvePoints || (rawItem as any)?.curvePoints;
+  const curvePoints = item.curvePoints || (rawItem as any)?.curvePoints || (rawItem as any)?.trajectory || (rawItem as any)?.Trajectory;
   const viewPoints: number[] = Array.isArray(curvePoints) && curvePoints.length > 1
-    ? curvePoints.map((p: any) => Number(p.actualViews ?? (p.actualLikes ? p.actualLikes * 7 : 0)))
+    ? curvePoints.map((p: any) => Number(p.actualViews ?? p.cumulativeViews ?? (p.actualLikes ? p.actualLikes * 7 : (p.cumulativeLikes ? p.cumulativeLikes * 7 : 0))))
     : [
         Math.round(viewCount * 0.15),
         Math.round(viewCount * (isTakeoff ? 0.65 : 0.35)),

@@ -169,7 +169,7 @@ public class InstaController : ControllerBase
         var profileInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             SELECT id, username, display_name, profile_pic_url, profile_pic_storage_path, bio, 
                    follower_count, following_count, post_count, last_scraped_at, 
-                   external_id, is_active, is_data_deleted, profile_category 
+                   external_id, is_active, is_data_deleted, profile_category, is_competitor 
             FROM competitor_watchlist 
             WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'", 
             new { username });
@@ -177,6 +177,7 @@ public class InstaController : ControllerBase
         if (profileInfo == null) return NotFound();
 
         bool isDeleted = profileInfo.is_data_deleted ?? false;
+        bool isCompetitor = (profileInfo.is_competitor == true) || string.Equals((string?)profileInfo.profile_category, "Competitors", StringComparison.OrdinalIgnoreCase);
         var videos = new List<MetaPost>();
         
         if (!isDeleted)
@@ -203,6 +204,113 @@ public class InstaController : ControllerBase
 
             videos = (await conn.QueryAsync<MetaPost>(sql, new { username, fromDate, toDate, limit, offset })).ToList();
             _logger.LogInformation("GetProfile DB query returned {Count} videos for limit {Limit} and offset {Offset}", videos.Count, limit, offset);
+
+            if (isCompetitor && videos.Count > 0)
+            {
+                var videoGuids = videos
+                    .Select(v => Guid.TryParse(v.Id, out var g) ? g : Guid.Empty)
+                    .Where(g => g != Guid.Empty)
+                    .ToArray();
+
+                if (videoGuids.Length > 0)
+                {
+                    // Fetch latest outlier snapshot / metrics per post
+                    var outlierSql = @"
+                        SELECT DISTINCT ON (v.post_id)
+                            v.post_id AS PostId,
+                            v.view_count AS ViewCount,
+                            v.outlier_score AS OutlierScore,
+                            v.virality_multiplier AS Multiplier,
+                            v.is_day1_breakout AS IsDay1Breakout,
+                            v.is_delayed_breakout AS IsDelayedBreakout,
+                            v.breakout_archetype AS BreakoutArchetype
+                        FROM view_instagram_competitor_outliers v
+                        WHERE v.post_id = ANY(@videoGuids)
+                        ORDER BY v.post_id, v.day_offset DESC";
+
+                    var outlierRows = (await conn.QueryAsync<dynamic>(outlierSql, new { videoGuids }))
+                        .ToDictionary(r => (Guid)r.postid, r => r);
+
+                    // Fetch Day-N trajectory points
+                    var trajectorySql = @"
+                        SELECT 
+                            m.post_id AS PostId,
+                            m.day_offset AS DayOffset,
+                            m.snapshot_date AS SnapshotDate,
+                            m.view_count AS CumulativeViews,
+                            m.like_count AS CumulativeLikes,
+                            m.comment_count AS CumulativeComments,
+                            m.daily_delta_views AS DailyDeltaViews,
+                            m.daily_delta_likes AS DailyDeltaLikes,
+                            m.daily_delta_comments AS DailyDeltaComments,
+                            m.velocity_score AS VelocityScore,
+                            COALESCE(pb.p50_views, 0) AS BaselineMedianViews,
+                            COALESCE(pb.avg_delta_views, 0) AS BaselineAvgDeltaViews,
+                            COALESCE(pb.p50_likes, 0) AS BaselineMedianLikes,
+                            ROUND(COALESCE(pb.p50_likes, 0) * 0.035, 2) AS BaselineMedianComments,
+                            ROUND(
+                                CASE 
+                                    WHEN COALESCE(pb.p50_views, 0) > 0 THEN (m.view_count::numeric / pb.p50_views)
+                                    ELSE 1.0
+                                END, 
+                                2
+                            ) AS OutlierMultiplier
+                        FROM instagram_post_daily_metrics m
+                        LEFT JOIN view_instagram_profile_day_n_baselines pb 
+                            ON pb.profile_id = m.profile_id AND pb.day_offset = m.day_offset
+                        WHERE m.post_id = ANY(@videoGuids)
+                        ORDER BY m.post_id, m.day_offset ASC";
+
+                    var trajectoryRows = await conn.QueryAsync<dynamic>(trajectorySql, new { videoGuids });
+                    var groupedTrajectories = trajectoryRows
+                        .GroupBy(r => (Guid)r.postid)
+                        .ToDictionary(
+                            g => g.Key,
+                            g => g.Select(r => new DayNTrajectoryPointDto
+                            {
+                                DayOffset = (int)r.dayoffset,
+                                SnapshotDate = (DateTime)r.snapshotdate,
+                                CumulativeViews = (long)(r.cumulativeviews ?? 0),
+                                CumulativeLikes = (long)(r.cumulativelikes ?? 0),
+                                CumulativeComments = (long)(r.cumulativecomments ?? 0),
+                                DailyDeltaViews = (long)(r.dailydeltaviews ?? 0),
+                                DailyDeltaLikes = (long)(r.dailydeltalikes ?? 0),
+                                DailyDeltaComments = (long)(r.dailydeltacomments ?? 0),
+                                VelocityScore = (decimal)(r.velocityscore ?? 0m),
+                                BaselineMedianViews = (decimal)(r.baselinemedianviews ?? 0m),
+                                BaselineAvgDeltaViews = (decimal)(r.baselineavgdeltaviews ?? 0m),
+                                BaselineMedianLikes = (decimal)(r.baselinemedianlikes ?? 0m),
+                                BaselineMedianComments = (decimal)(r.baselinemediancomments ?? 0m),
+                                OutlierMultiplier = (decimal)(r.outliermultiplier ?? 1.0m)
+                            }).ToList()
+                        );
+
+                    foreach (var v in videos)
+                    {
+                        if (Guid.TryParse(v.Id, out var pId))
+                        {
+                            if (outlierRows.TryGetValue(pId, out var o))
+                            {
+                                v.ViewCount = (long?)(o.viewcount);
+                                v.OutlierScore = (decimal?)(o.outlierscore);
+                                v.Multiplier = (decimal?)(o.multiplier ?? o.outlierscore);
+                                v.IsDay1Breakout = (bool?)(o.isday1breakout);
+                                v.IsDelayedBreakout = (bool?)(o.isdelayedbreakout);
+                                v.BreakoutArchetype = (string?)(o.breakoutarchetype);
+                            }
+
+                            if (groupedTrajectories.TryGetValue(pId, out var traj))
+                            {
+                                v.Trajectory = traj;
+                                if (v.ViewCount == null && traj.Count > 0)
+                                {
+                                    v.ViewCount = traj.Last().CumulativeViews;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         double postFrequency = 0;
@@ -2605,7 +2713,15 @@ public class InstaController : ControllerBase
                     (SELECT COUNT(DISTINCT post_id)::int 
                      FROM view_instagram_competitor_outliers 
                      WHERE snapshot_date >= CURRENT_DATE - INTERVAL '1 day' 
-                       AND (is_day1_breakout = true OR is_delayed_breakout = true OR outlier_score >= 1.5)) AS BreakoutsTodayCount";
+                       AND (is_day1_breakout = true OR is_delayed_breakout = true OR outlier_score >= 1.5)) AS BreakoutsTodayCount,
+
+                    (SELECT COUNT(DISTINCT post_id)::int 
+                     FROM view_instagram_competitor_outliers 
+                     WHERE is_day1_breakout = true OR breakout_archetype IN ('day1_takeoff', 'day_one_breakout', 'day_one_takeoff', 'sustained_viral')) AS DayOneTakeoffsCount,
+
+                    (SELECT COUNT(DISTINCT post_id)::int 
+                     FROM view_instagram_competitor_outliers 
+                     WHERE is_delayed_breakout = true OR breakout_archetype IN ('delayed_breakout', 'delayed_spike')) AS DelayedSpikesCount";
 
             var summary = await conn.QueryFirstOrDefaultAsync<CompetitorSummaryDto>(sql) ?? new CompetitorSummaryDto();
             return Ok(summary);
@@ -2740,6 +2856,7 @@ public class InstaController : ControllerBase
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult<CompetitorOutlierFeedResponse>> GetHighPerformingOutliers(
         [FromQuery] string archetype = "all",
+        [FromQuery] string? outlierType = null,
         [FromQuery] string? niche = null,
         [FromQuery] string? username = null,
         [FromQuery] decimal minMultiplier = 1.5m,
@@ -2766,15 +2883,19 @@ public class InstaController : ControllerBase
             p.Add("Limit", pageSize);
             p.Add("Offset", offset);
 
-            // Archetype Filter
-            var cleanArchetype = archetype?.Trim().ToLowerInvariant() ?? "all";
+            // Archetype Filter (accept either outlierType or archetype parameter)
+            var effectiveArchetype = !string.IsNullOrEmpty(outlierType) && outlierType != "all" ? outlierType : archetype;
+            var cleanArchetype = effectiveArchetype?.Trim().ToLowerInvariant() ?? "all";
             switch (cleanArchetype)
             {
+                case "day_one_takeoff":
                 case "day1_takeoff":
-                    conditions.Add("(v.breakout_archetype = 'day1_takeoff' OR v.is_day1_breakout = true)");
+                case "day_one_breakout":
+                    conditions.Add("(v.is_day1_breakout = true OR v.breakout_archetype IN ('day_one_breakout', 'day_one_takeoff', 'sustained_viral'))");
                     break;
+                case "delayed_spike":
                 case "delayed_breakout":
-                    conditions.Add("(v.breakout_archetype = 'delayed_breakout' OR v.is_delayed_breakout = true)");
+                    conditions.Add("(v.is_delayed_breakout = true OR v.breakout_archetype IN ('delayed_breakout', 'delayed_spike'))");
                     break;
                 case "sustained_viral":
                     conditions.Add("v.breakout_archetype = 'sustained_viral'");
@@ -2784,7 +2905,10 @@ public class InstaController : ControllerBase
                     break;
                 case "all":
                 default:
-                    conditions.Add("(v.outlier_score >= @MinMultiplier OR v.delta_multiplier >= @MinMultiplier OR v.is_day1_breakout = true OR v.is_delayed_breakout = true)");
+                    if (minMultiplier > 1.0m)
+                    {
+                        conditions.Add("(v.outlier_score >= @MinMultiplier OR v.delta_multiplier >= @MinMultiplier OR v.is_day1_breakout = true OR v.is_delayed_breakout = true)");
+                    }
                     break;
             }
 
@@ -2915,11 +3039,15 @@ public class InstaController : ControllerBase
                         m.snapshot_date AS SnapshotDate,
                         m.view_count AS CumulativeViews,
                         m.like_count AS CumulativeLikes,
+                        m.comment_count AS CumulativeComments,
                         m.daily_delta_views AS DailyDeltaViews,
                         m.daily_delta_likes AS DailyDeltaLikes,
+                        m.daily_delta_comments AS DailyDeltaComments,
                         m.velocity_score AS VelocityScore,
                         COALESCE(pb.p50_views, 0) AS BaselineMedianViews,
                         COALESCE(pb.avg_delta_views, 0) AS BaselineAvgDeltaViews,
+                        COALESCE(pb.p50_likes, 0) AS BaselineMedianLikes,
+                        ROUND(COALESCE(pb.p50_likes, 0) * 0.035, 2) AS BaselineMedianComments,
                         ROUND(
                             CASE 
                                 WHEN COALESCE(pb.p50_views, 0) > 0 THEN (m.view_count::numeric / pb.p50_views)
@@ -2945,11 +3073,15 @@ public class InstaController : ControllerBase
                             SnapshotDate = (DateTime)r.snapshotdate,
                             CumulativeViews = (long)(r.cumulativeviews ?? 0),
                             CumulativeLikes = (long)(r.cumulativelikes ?? 0),
+                            CumulativeComments = (long)(r.cumulativecomments ?? 0),
                             DailyDeltaViews = (long)(r.dailydeltaviews ?? 0),
                             DailyDeltaLikes = (long)(r.dailydeltalikes ?? 0),
+                            DailyDeltaComments = (long)(r.dailydeltacomments ?? 0),
                             VelocityScore = (decimal)(r.velocityscore ?? 0m),
                             BaselineMedianViews = (decimal)(r.baselinemedianviews ?? 0m),
                             BaselineAvgDeltaViews = (decimal)(r.baselineavgdeltaviews ?? 0m),
+                            BaselineMedianLikes = (decimal)(r.baselinemedianlikes ?? 0m),
+                            BaselineMedianComments = (decimal)(r.baselinemediancomments ?? 0m),
                             OutlierMultiplier = (decimal)(r.outliermultiplier ?? 1.0m)
                         }).ToList()
                     );
@@ -2981,6 +3113,7 @@ public class InstaController : ControllerBase
     }
 
     [HttpGet("competitors/profile/{profileId}/curve")]
+    [HttpGet("competitors/{profileId}/curve")]
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult<CompetitorCurveResponseDto>> GetCompetitorProfileCurve(Guid profileId)
     {
@@ -3011,6 +3144,8 @@ public class InstaController : ControllerBase
                     avg_delta_views AS AvgDeltaViews,
                     p50_delta_views AS P50DeltaViews,
                     p50_likes AS P50Likes,
+                    ROUND(COALESCE(p50_likes, 0) * 0.035, 2) AS P50Comments,
+                    ROUND(COALESCE(avg_likes, 0) * 0.035, 2) AS AvgComments,
                     avg_velocity_score AS AvgVelocityScore
                 FROM view_instagram_profile_day_n_baselines
                 WHERE profile_id = @profileId
@@ -3054,11 +3189,15 @@ public class InstaController : ControllerBase
                         m.snapshot_date AS SnapshotDate,
                         m.view_count AS CumulativeViews,
                         m.like_count AS CumulativeLikes,
+                        m.comment_count AS CumulativeComments,
                         m.daily_delta_views AS DailyDeltaViews,
                         m.daily_delta_likes AS DailyDeltaLikes,
+                        m.daily_delta_comments AS DailyDeltaComments,
                         m.velocity_score AS VelocityScore,
                         COALESCE(pb.p50_views, 0) AS BaselineMedianViews,
                         COALESCE(pb.avg_delta_views, 0) AS BaselineAvgDeltaViews,
+                        COALESCE(pb.p50_likes, 0) AS BaselineMedianLikes,
+                        ROUND(COALESCE(pb.p50_likes, 0) * 0.035, 2) AS BaselineMedianComments,
                         ROUND(
                             CASE 
                                 WHEN COALESCE(pb.p50_views, 0) > 0 THEN (m.view_count::numeric / pb.p50_views)
@@ -3081,11 +3220,15 @@ public class InstaController : ControllerBase
                         SnapshotDate = (DateTime)r.snapshotdate,
                         CumulativeViews = (long)(r.cumulativeviews ?? 0),
                         CumulativeLikes = (long)(r.cumulativelikes ?? 0),
+                        CumulativeComments = (long)(r.cumulativecomments ?? 0),
                         DailyDeltaViews = (long)(r.dailydeltaviews ?? 0),
                         DailyDeltaLikes = (long)(r.dailydeltalikes ?? 0),
+                        DailyDeltaComments = (long)(r.dailydeltacomments ?? 0),
                         VelocityScore = (decimal)(r.velocityscore ?? 0m),
                         BaselineMedianViews = (decimal)(r.baselinemedianviews ?? 0m),
                         BaselineAvgDeltaViews = (decimal)(r.baselineavgdeltaviews ?? 0m),
+                        BaselineMedianLikes = (decimal)(r.baselinemedianlikes ?? 0m),
+                        BaselineMedianComments = (decimal)(r.baselinemediancomments ?? 0m),
                         OutlierMultiplier = (decimal)(r.outliermultiplier ?? 1.0m)
                     }).ToList()
                 );
