@@ -676,3 +676,66 @@ public class CompetitorCurveResponseDto
     [JsonPropertyName("postTrajectories")]
     public List<PostTrajectoryDto> PostTrajectories { get; set; } = new();
 }
+
+public static class ProfileCategoryConstants
+{
+    public const string MyBusiness = "My Business";
+    public const string Competitors = "Competitors";
+    public const string Suppliers = "Suppliers";
+    public const string Inspirations = "Inspirations";
+    public const string MyGeneral = "My General";
+}
+
+public static class CompetitorNicheConstants
+{
+    public const string BridalSarees = "Bridal Sarees";
+    public const string KanchipuramSilkSarees = "Kanchipuram / Silk Sarees";
+    public const string Lehengas = "Lehengas";
+    public const string KurtisSalwars = "Kurtis / Salwars";
+    public const string DressesWestern = "Dresses / Western";
+    public const string Jewellery = "Jewellery";
+    public const string Other = "Other";
+}
+
+public class ProfileClassificationRequest
+{
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("biography")]
+    public string? Biography { get; set; }
+
+    [JsonPropertyName("categoryName")]
+    public string? CategoryName { get; set; }
+
+    [JsonPropertyName("businessCategoryName")]
+    public string? BusinessCategoryName { get; set; }
+
+    [JsonPropertyName("recentCaptions")]
+    public List<string> RecentCaptions { get; set; } = new();
+}
+
+public class ProfileClassificationResult
+{
+    [JsonPropertyName("profileCategory")]
+    public string ProfileCategory { get; set; } = string.Empty;
+
+    [JsonPropertyName("isCompetitor")]
+    public bool IsCompetitor { get; set; }
+
+    [JsonPropertyName("competitorNiche")]
+    public string? CompetitorNiche { get; set; }
+
+    [JsonPropertyName("confidence")]
+    public double Confidence { get; set; }
+
+    [JsonPropertyName("classificationSource")]
+    public string ClassificationSource { get; set; } = string.Empty;
+
+    [JsonPropertyName("reasoning")]
+    public string? Reasoning { get; set; }
+}
+

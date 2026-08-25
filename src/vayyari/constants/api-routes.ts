@@ -139,6 +139,8 @@ export const API_ROUTES = {
     COMPETITORS_TOGGLE_TRACKING: (username: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/toggle-tracking`,
     COMPETITORS_HIGH_PERFORMING: '/api/v1/Insta/competitors/high-performing',
     COMPETITORS_PROFILE_CURVE: (profileId: string) => `/api/v1/Insta/competitors/profile/${encodeURIComponent(profileId)}/curve`,
+    AUTO_CLASSIFY: (username: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/auto-classify`,
+    SET_CATEGORY: (username: string, category: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/set-category?category=${encodeURIComponent(category)}`,
   },
 
   // Common / Master Data

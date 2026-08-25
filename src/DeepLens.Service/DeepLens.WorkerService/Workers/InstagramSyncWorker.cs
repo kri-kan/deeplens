@@ -178,6 +178,58 @@ namespace DeepLens.WorkerService.Workers
                 activity?.SetTag("items.found", scrapedCount);
                 activity?.SetTag("items.processed", newCount);
 
+                // --- Auto-Classification if profile is unclassified ---
+                var currentCategory = (string?)await conn.ExecuteScalarAsync<string>(
+                    "SELECT profile_category FROM competitor_watchlist WHERE id = @watchlistId", 
+                    new { watchlistId });
+
+                if (string.IsNullOrWhiteSpace(currentCategory) || string.Equals(currentCategory, "Unclassified", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var classifier = serviceScope.ServiceProvider.GetRequiredService<IProfileClassifierService>();
+                        var recentCaptions = posts.Select(p => p.Caption)
+                            .Where(c => !string.IsNullOrWhiteSpace(c))
+                            .Take(20)
+                            .ToList();
+
+                        var classificationRequest = new ProfileClassificationRequest
+                        {
+                            Username = username,
+                            DisplayName = graphProfile.Name,
+                            Biography = graphProfile.Biography,
+                            RecentCaptions = recentCaptions!
+                        };
+
+                        var classificationResult = await classifier.ClassifyProfileAsync(classificationRequest, ct);
+
+                        await conn.ExecuteAsync(@"
+                            UPDATE competitor_watchlist
+                            SET profile_category = @ProfileCategory,
+                                is_competitor = @IsCompetitor,
+                                competitor_niche = @CompetitorNiche,
+                                updated_at = NOW()
+                            WHERE id = @watchlistId",
+                            new
+                            {
+                                watchlistId,
+                                ProfileCategory = classificationResult.ProfileCategory,
+                                IsCompetitor = classificationResult.IsCompetitor,
+                                CompetitorNiche = classificationResult.CompetitorNiche
+                            });
+
+                        profileCategory = classificationResult.ProfileCategory;
+                        isCompetitor = classificationResult.IsCompetitor;
+
+                        await LogAsync(conn, jobId, "INFO", $"Auto-classified profile as '{classificationResult.ProfileCategory}' (Competitor: {classificationResult.IsCompetitor}, Niche: {classificationResult.CompetitorNiche ?? "None"}, Source: {classificationResult.ClassificationSource})");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to auto-classify profile @{Username} during worker sync", username);
+                        await LogAsync(conn, jobId, "WARNING", $"Auto-classification failed: {ex.Message}");
+                    }
+                }
+
                 // --- 3. Engagement Refresh (optional for manual?) ---
                 int refreshLimit = graph.GetEngagementRefreshLimit();
                 var engagement = await graph.GetPostEngagementAsync(username, refreshLimit);

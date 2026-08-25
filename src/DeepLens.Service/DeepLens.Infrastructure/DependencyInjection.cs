@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<DeepLens.Contracts.Catalog.IProductService, DeepLens.Infrastructure.Services.ProductService>();
         services.AddScoped<Microsoft.AspNetCore.Authentication.IClaimsTransformation, DeepLens.Infrastructure.Services.VayyariClaimsTransformation>();
         services.AddHttpClient<DeepLens.Application.Abstractions.Services.ILiteLlmService, DeepLens.Infrastructure.Services.LiteLlmService>();
+        services.AddScoped<DeepLens.Application.Abstractions.Services.IProfileClassifierService, DeepLens.Infrastructure.Services.ProfileClassifierService>();
 
         return services;
     }

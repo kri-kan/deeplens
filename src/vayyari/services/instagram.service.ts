@@ -11,6 +11,21 @@ export enum InstagramMediaType {
   UNKNOWN = 'UNKNOWN'
 }
 
+export interface ProfileClassificationResult {
+  username?: string;
+  isCompetitor: boolean;
+  profileCategory: string;
+  competitorNiche?: string;
+  niche?: string;
+  confidenceScore?: number;
+  confidence?: number;
+  reasoning?: string;
+  explanation?: string;
+  suggestedNiches?: string[];
+  message?: string;
+  success?: boolean;
+}
+
 export interface InstagramProfile {
   id: string;
   username: string;
@@ -23,6 +38,8 @@ export interface InstagramProfile {
   storagePath?: string;
   isActive: boolean;
   profileCategory: string;
+  isCompetitor?: boolean;
+  competitorNiche?: string;
   isDataDeleted: boolean;
   isPinned?: boolean;
   lastSyncedAt?: string;
@@ -49,7 +66,9 @@ export interface CompetitorProfile {
   storagePath?: string;
   isActive: boolean;
   isTracked?: boolean;
+  isCompetitor?: boolean;
   profileCategory?: string;
+  competitorNiche?: string;
   niche?: string;
   lastSyncedAt?: string;
   breakoutCount?: number;
@@ -263,6 +282,11 @@ export const normalizeProfile = (data: any): InstagramProfile => {
   const avgComments = data.avgComments || data.AvgComments || (avgLikes ? Math.round(avgLikes * 0.03) : 0);
   const avgViews = data.avgViews || data.AvgViews || (avgLikes ? avgLikes * 8 : (followers ? Math.round(followers * 0.35) : 0));
   const viewCount = data.viewCount || data.ViewCount || avgViews;
+  const profileCategory = data.profileCategory || data.ProfileCategory || data.category || data.Category || 'Competitors';
+  const competitorNiche = data.competitorNiche || data.CompetitorNiche || data.niche || data.Niche;
+  const isCompetitor = data.isCompetitor !== undefined
+    ? data.isCompetitor
+    : (profileCategory?.toLowerCase() === 'competitors' || profileCategory?.toLowerCase() === 'competitor');
 
   return {
       ...data,
@@ -279,7 +303,10 @@ export const normalizeProfile = (data: any): InstagramProfile => {
       lastSyncedAt: data.lastSyncedAt || data.LastSyncedAt || data.lastScrapedAt || data.LastScrapedAt,
       storiesPostedLast24h: data.storiesPostedLast24h !== undefined ? data.storiesPostedLast24h : (data.StoriesPostedLast24h || 0),
       isTracked: data.isTracked !== undefined ? data.isTracked : (data.IsTracked ?? data.isActive ?? data.IsActive ?? true),
-      niche: data.niche || data.Niche || data.profileCategory || data.ProfileCategory,
+      isCompetitor,
+      profileCategory,
+      competitorNiche,
+      niche: competitorNiche || profileCategory,
       breakoutCount: data.breakoutCount || data.BreakoutCount || 0,
       avgLikes,
       avgComments,
@@ -295,6 +322,11 @@ export const normalizeCompetitorProfile = (data: any): CompetitorProfile => {
   const avgComments = data.avgComments || data.AvgComments || (avgLikes ? Math.round(avgLikes * 0.03) : 0);
   const avgViews = data.avgViews || data.AvgViews || (avgLikes ? avgLikes * 8 : (followers ? Math.round(followers * 0.35) : 0));
   const viewCount = data.viewCount || data.ViewCount || avgViews;
+  const profileCategory = data.profileCategory || data.ProfileCategory || data.category || data.Category || 'Competitors';
+  const competitorNiche = data.competitorNiche || data.CompetitorNiche || data.niche || data.Niche;
+  const isCompetitor = data.isCompetitor !== undefined
+    ? data.isCompetitor
+    : (profileCategory?.toLowerCase() === 'competitors' || profileCategory?.toLowerCase() === 'competitor');
 
   return {
       id: data.id || data.Id || data.userId || data.UserId,
@@ -308,8 +340,10 @@ export const normalizeCompetitorProfile = (data: any): CompetitorProfile => {
       storagePath: data.storagePath || data.StoragePath,
       isActive: data.isActive !== undefined ? data.isActive : (data.IsActive ?? true),
       isTracked: data.isTracked !== undefined ? data.isTracked : (data.IsTracked ?? (data.isActive !== undefined ? data.isActive : (data.IsActive ?? true))),
-      profileCategory: data.profileCategory || data.ProfileCategory || data.category || 'Competitors',
-      niche: data.niche || data.Niche || data.profileCategory || data.ProfileCategory,
+      isCompetitor,
+      profileCategory,
+      competitorNiche,
+      niche: competitorNiche || profileCategory,
       lastSyncedAt: data.lastSyncedAt || data.LastSyncedAt || data.lastScrapedAt || data.LastScrapedAt,
       breakoutCount: data.breakoutCount || data.BreakoutCount || 0,
       avgLikes,
@@ -616,7 +650,7 @@ class InstagramService {
   };
 
   setProfileCategory = async (username: string, category: string): Promise<any> => {
-    return searchApiClient.post(`/api/v1/Insta/profile/${username}/set-category?category=${encodeURIComponent(category)}`, {});
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.SET_CATEGORY(username, category), {});
   };
 
   togglePinStatus = async (username: string, isPinned: boolean): Promise<any> => {
@@ -923,6 +957,10 @@ class InstagramService {
     } catch {
       return await searchApiClient.get<CompetitorProfileCurveResponse>(`/api/v1/Insta/competitors/${encodeURIComponent(profileId)}/curve${postParam}`);
     }
+  };
+
+  autoClassifyProfile = async (username: string): Promise<ProfileClassificationResult> => {
+    return searchApiClient.post<ProfileClassificationResult>(API_ROUTES.INSTAGRAM.AUTO_CLASSIFY(username), {});
   };
 }
 

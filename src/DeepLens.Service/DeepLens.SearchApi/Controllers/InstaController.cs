@@ -22,6 +22,7 @@ public class InstaController : ControllerBase
     private readonly IStorageService _storage;
     private readonly IInstagramMediaService _instaMedia;
     private readonly IAttributeExtractionService _attributeService;
+    private readonly IProfileClassifierService _classifier;
     private readonly ILogger<InstaController> _logger;
 
     private const string MetaPostSelectSql = @"
@@ -75,6 +76,7 @@ public class InstaController : ControllerBase
         IStorageService storage,
         IInstagramMediaService instaMedia,
         IAttributeExtractionService attributeService,
+        IProfileClassifierService classifier,
         ILogger<InstaController> logger)
     {
         _metaGraph = metaGraph;
@@ -82,6 +84,7 @@ public class InstaController : ControllerBase
         _storage = storage;
         _instaMedia = instaMedia;
         _attributeService = attributeService;
+        _classifier = classifier;
         _logger = logger;
     }
 
@@ -380,13 +383,23 @@ public class InstaController : ControllerBase
         var profile = await _metaGraph.GetProfileAsync(username);
         if (profile == null) return NotFound(new { message = "Profile not found on Instagram" });
 
+        var classification = await _classifier.ClassifyProfileAsync(new ProfileClassificationRequest
+        {
+            Username = username,
+            DisplayName = profile.Name,
+            Biography = profile.Biography,
+            RecentCaptions = new List<string>()
+        });
+
         await conn.ExecuteAsync(@"
             INSERT INTO competitor_watchlist (
                 username, platform, display_name, profile_pic_url, bio, 
-                follower_count, following_count, post_count, last_scraped_at, external_id)
+                follower_count, following_count, post_count, last_scraped_at, external_id,
+                profile_category, is_competitor, competitor_niche)
             VALUES (
                 @Username, 'instagram', @Name, @ProfilePictureUrl, @Bio, 
-                @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId)",
+                @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId,
+                @ProfileCategory, @IsCompetitor, @CompetitorNiche)",
             new { 
                 Username = username, 
                 Name = profile.Name, 
@@ -395,10 +408,13 @@ public class InstaController : ControllerBase
                 FollowersCount = (int)profile.FollowersCount, 
                 FollowingCount = (int)profile.FollowingCount,
                 MediaCount = profile.MediaCount,
-                ExternalId = profile.ExternalId
+                ExternalId = profile.ExternalId,
+                ProfileCategory = classification.ProfileCategory,
+                IsCompetitor = classification.IsCompetitor,
+                CompetitorNiche = classification.CompetitorNiche
             });
 
-        return Ok(new { message = "Profile added to watchlist", profile });
+        return Ok(new { message = "Profile added to watchlist", profile, classification });
     }
 
     [HttpDelete("profile/{username}")]
@@ -531,14 +547,24 @@ public class InstaController : ControllerBase
             var profile = await _metaGraph.GetProfileAsync(username);
             if (profile == null) return NotFound(new { message = "Profile not found on Instagram" });
 
+            var classification = await _classifier.ClassifyProfileAsync(new ProfileClassificationRequest
+            {
+                Username = username,
+                DisplayName = profile.Name,
+                Biography = profile.Biography,
+                RecentCaptions = new List<string>()
+            });
+
             watchlistId = Guid.NewGuid();
             await conn.ExecuteAsync(@"
                 INSERT INTO competitor_watchlist (
                     id, username, platform, display_name, profile_pic_url, bio, 
-                    follower_count, following_count, post_count, last_scraped_at, external_id)
+                    follower_count, following_count, post_count, last_scraped_at, external_id,
+                    profile_category, is_competitor, competitor_niche)
                 VALUES (
                     @Id, @Username, 'instagram', @Name, @ProfilePictureUrl, @Bio, 
-                    @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId)",
+                    @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId,
+                    @ProfileCategory, @IsCompetitor, @CompetitorNiche)",
                 new { 
                     Id = watchlistId,
                     Username = username, 
@@ -548,7 +574,10 @@ public class InstaController : ControllerBase
                     FollowersCount = (int)profile.FollowersCount, 
                     FollowingCount = (int)profile.FollowingCount,
                     MediaCount = profile.MediaCount,
-                    ExternalId = profile.ExternalId
+                    ExternalId = profile.ExternalId,
+                    ProfileCategory = classification.ProfileCategory,
+                    IsCompetitor = classification.IsCompetitor,
+                    CompetitorNiche = classification.CompetitorNiche
                 });
         }
 
@@ -703,7 +732,65 @@ public class InstaController : ControllerBase
                 WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
                 new { username, category });
             return Ok(new { username, profileCategory = category });
+    }
+
+    [HttpPost("profile/{username}/auto-classify")]
+    [Authorize(Policy = "IngestPolicy")]
+    public async Task<ActionResult<ProfileClassificationResult>> AutoClassifyProfile(string username)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var profile = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT id, username, display_name, bio, profile_category, is_competitor, competitor_niche
+            FROM competitor_watchlist
+            WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'",
+            new { username });
+
+        if (profile == null)
+        {
+            return NotFound(new { message = $"Profile @{username} not found in watchlist." });
         }
+
+        Guid watchlistId = (Guid)profile.id;
+
+        // Fetch recent captions from competitor_videos
+        var captions = (await conn.QueryAsync<string>(@"
+            SELECT description 
+            FROM competitor_videos 
+            WHERE watchlist_id = @watchlistId AND description IS NOT NULL AND description != ''
+            ORDER BY posted_at DESC
+            LIMIT 20",
+            new { watchlistId })).ToList();
+
+        var request = new ProfileClassificationRequest
+        {
+            Username = (string)profile.username,
+            DisplayName = (string?)profile.display_name,
+            Biography = (string?)profile.bio,
+            RecentCaptions = captions
+        };
+
+        var result = await _classifier.ClassifyProfileAsync(request);
+
+        await conn.ExecuteAsync(@"
+            UPDATE competitor_watchlist
+            SET profile_category = @ProfileCategory,
+                is_competitor = @IsCompetitor,
+                competitor_niche = @CompetitorNiche,
+                updated_at = NOW()
+            WHERE id = @watchlistId",
+            new
+            {
+                watchlistId,
+                ProfileCategory = result.ProfileCategory,
+                IsCompetitor = result.IsCompetitor,
+                CompetitorNiche = result.CompetitorNiche
+            });
+
+        _logger.LogInformation("Auto-classified profile @{Username}: Category={Category}, IsCompetitor={IsCompetitor}, Niche={Niche}, Source={Source}, Confidence={Confidence}",
+            username, result.ProfileCategory, result.IsCompetitor, result.CompetitorNiche, result.ClassificationSource, result.Confidence);
+
+        return Ok(result);
+    }
 
     [HttpPost("profile/{username}/toggle-pin")]
     public async Task<IActionResult> TogglePin(string username, [FromQuery] bool isPinned)
