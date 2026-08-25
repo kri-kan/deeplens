@@ -102,33 +102,35 @@ export const getBaseId = (path: string): string => {
 };
 
 export const getInstagramPostUrl = (item: any): string => {
-  if (!item) return 'https://www.instagram.com';
-  const candidate = item.postUrl || item.permalink || item.url;
-  if (candidate && typeof candidate === 'string' && candidate.startsWith('http') && !candidate.includes('cdninstagram') && !candidate.includes('/api/v1/Attachment/')) {
-    return candidate;
-  }
-  if (item.ownerUsername) {
-    return `https://www.instagram.com/${item.ownerUsername.replace(/^@/, '')}/`;
-  }
-  return 'https://www.instagram.com';
+    if (!item) return 'https://www.instagram.com';
+    const candidate = item.postUrl || item.PostUrl || item.permalink || item.Permalink || item.url || item.Url || item.post_url;
+    if (candidate && typeof candidate === 'string' && candidate.startsWith('http') && !candidate.includes('cdninstagram') && !candidate.includes('/api/v1/Attachment/')) {
+        return candidate;
+    }
+    const shortcode = item.shortcode || item.code;
+    if (shortcode) {
+        return `https://www.instagram.com/p/${shortcode}/`;
+    }
+    const username = item.ownerUsername || item.profileUsername || item.username;
+    if (username) {
+        return `https://www.instagram.com/${String(username).replace(/^@/, '')}/`;
+    }
+    return 'https://www.instagram.com';
 };
 
 export const openInstagramPost = async (item: any): Promise<void> => {
-  if (!item) return;
-  const webUrl = getInstagramPostUrl(item);
-  const platformId = item.platformVideoId || item.id;
-  const isNumericId = platformId && /^\d+$/.test(String(platformId));
-  const nativeUrl = isNumericId ? `instagram://media?id=${platformId}` : '';
+    if (!item) return;
+    const webUrl = getInstagramPostUrl(item);
+    if (!webUrl || webUrl === 'https://www.instagram.com') return;
 
-  try {
-    if (nativeUrl && (await Linking.canOpenURL(nativeUrl))) {
-      await Linking.openURL(nativeUrl).catch(() => Linking.openURL(webUrl));
-    } else {
-      await Linking.openURL(webUrl);
+    try {
+        const canOpen = await Linking.canOpenURL(webUrl).catch(() => false);
+        if (canOpen) {
+            await Linking.openURL(webUrl);
+        } else {
+            await Linking.openURL(webUrl).catch(() => {});
+        }
+    } catch (err) {
+        console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
     }
-  } catch (e) {
-    if (webUrl) {
-      await Linking.openURL(webUrl).catch(() => {});
-    }
-  }
 };
