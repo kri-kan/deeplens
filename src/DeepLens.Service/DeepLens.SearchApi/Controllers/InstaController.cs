@@ -3115,22 +3115,29 @@ public class InstaController : ControllerBase
     [HttpGet("competitors/profile/{profileId}/curve")]
     [HttpGet("competitors/{profileId}/curve")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult<CompetitorCurveResponseDto>> GetCompetitorProfileCurve(Guid profileId)
+    public async Task<ActionResult<CompetitorCurveResponseDto>> GetCompetitorProfileCurve(string profileId)
     {
         try
         {
             using var conn = await _db.CreateConnectionAsync();
 
+            Guid? parsedGuid = Guid.TryParse(profileId, out var g) ? g : null;
+
             // 1. Profile information
             var profile = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 SELECT id, username, display_name, competitor_niche, tracking_tier
                 FROM competitor_watchlist
-                WHERE id = @profileId", new { profileId });
+                WHERE (@parsedGuid IS NOT NULL AND id = @parsedGuid)
+                   OR username ILIKE @profileId
+                   OR instagram_user_id = @profileId
+                LIMIT 1", new { parsedGuid, profileId });
 
             if (profile == null)
             {
                 return NotFound(new { message = "Competitor profile not found." });
             }
+
+            Guid targetProfileId = (Guid)profile.id;
 
             // 2. Baseline Curve Points
             var baselineSql = @"
@@ -3148,10 +3155,10 @@ public class InstaController : ControllerBase
                     ROUND(COALESCE(avg_likes, 0) * 0.035, 2) AS AvgComments,
                     avg_velocity_score AS AvgVelocityScore
                 FROM view_instagram_profile_day_n_baselines
-                WHERE profile_id = @profileId
+                WHERE profile_id = @targetProfileId
                 ORDER BY day_offset ASC";
 
-            var baselinePoints = (await conn.QueryAsync<ProfileBaselinePointDto>(baselineSql, new { profileId })).ToList();
+            var baselinePoints = (await conn.QueryAsync<ProfileBaselinePointDto>(baselineSql, new { targetProfileId })).ToList();
 
             // 3. Recent / Top Posts and Trajectories
             var postsSql = @"
@@ -3173,11 +3180,11 @@ public class InstaController : ControllerBase
                     ORDER BY o.day_offset DESC
                     LIMIT 1
                 ) os ON true
-                WHERE cv.watchlist_id = @profileId
+                WHERE cv.watchlist_id = @targetProfileId
                 ORDER BY cv.posted_at DESC
                 LIMIT 10";
 
-            var recentPosts = (await conn.QueryAsync<PostTrajectoryDto>(postsSql, new { profileId })).ToList();
+            var recentPosts = (await conn.QueryAsync<PostTrajectoryDto>(postsSql, new { targetProfileId })).ToList();
 
             if (recentPosts.Count > 0)
             {
@@ -3244,7 +3251,7 @@ public class InstaController : ControllerBase
 
             var response = new CompetitorCurveResponseDto
             {
-                ProfileId = profileId,
+                ProfileId = targetProfileId,
                 Username = (string)profile.username,
                 CompetitorNiche = (string?)profile.competitor_niche,
                 BaselinePoints = baselinePoints,

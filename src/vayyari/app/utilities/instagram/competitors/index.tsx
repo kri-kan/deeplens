@@ -478,7 +478,7 @@ export default function CompetitorHubScreen() {
           : 'High Performing Insights'
       }
       onBack={viewMode !== 'root' ? () => setViewMode('root') : undefined}
-      withScrollView={viewMode === 'root'}
+      withScrollView={false}
       refreshing={refreshing}
       onRefresh={handleRefresh}
       actions={
@@ -497,7 +497,11 @@ export default function CompetitorHubScreen() {
         /* =========================================================================
            ROOT VIEW: Bento Action Tiles Menu (No Profile List Clutter)
            ========================================================================= */
-        <View style={styles.rootContent}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.rootContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        >
           {/* Hero / Section Intro */}
           <View style={styles.rootHeroContainer}>
             <Text variant="titleMedium" style={[styles.rootHeroTitle, { color: theme.colors.onSurface }]}>
@@ -766,12 +770,13 @@ export default function CompetitorHubScreen() {
               </View>
             </TouchableOpacity>
           )}
-        </View>
+        </ScrollView>
       ) : viewMode === 'profiles' ? (
         /* =========================================================================
            SUB-VIEW 1: Tracked Profiles List
            ========================================================================= */
         <FlatList
+          style={{ flex: 1 }}
           data={filteredProfiles}
           keyExtractor={(item) => item.id || item.username}
           ListHeaderComponent={renderProfilesHeader}
@@ -806,6 +811,7 @@ export default function CompetitorHubScreen() {
            SUB-VIEW 2: High Performing Insights Outlier Feed
            ========================================================================= */
         <FlatList
+          style={{ flex: 1 }}
           data={filteredOutliers}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderInsightsHeader}
