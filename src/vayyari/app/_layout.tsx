@@ -14,6 +14,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { ShareIntentProvider } from '../context/ShareIntentContext';
 import { useShareIntent } from '../hooks/useShareIntent';
+import { useOTAUpdate } from '../hooks/useOTAUpdate';
 
 console.log('[RootLayout] Global execution started');
 
@@ -43,6 +44,7 @@ function InnerRootLayout() {
   const { colorScheme } = useAppTheme();
   const { token, isLoading } = useAuth();
   useShareIntent();
+  useOTAUpdate();
 
   console.log('[RootLayout] InnerRootLayout render:', { colorScheme, isLoading, hasToken: !!token });
 
