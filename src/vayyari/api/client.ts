@@ -5,12 +5,12 @@ export { authEvents, AUTH_UNAUTHORIZED_EVENT } from './events';
 
 // Singleton instances — use proactive token refresh on every request
 export const searchApiClient = new ApiClient(
-  getSearchApiUrl(),
+  () => getSearchApiUrl(),
   () => identityService.getAccessTokenWithRefresh()
 );
 
 export const productMgmtApiClient = new ApiClient(
-  getSearchApiUrl(),
+  () => getSearchApiUrl(),
   () => identityService.getAccessTokenWithRefresh()
 );
 

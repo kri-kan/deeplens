@@ -8,12 +8,17 @@ export interface RequestOptions extends RequestInit {
 }
 
 export class ApiClient {
-  private baseUrl: string;
+  private baseUrl: string | (() => string);
   private getAccessToken?: () => Promise<string | null>;
 
-  constructor(baseUrl: string, getAccessToken?: () => Promise<string | null>) {
-    this.baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  constructor(baseUrl: string | (() => string), getAccessToken?: () => Promise<string | null>) {
+    this.baseUrl = baseUrl;
     this.getAccessToken = getAccessToken;
+  }
+
+  private getBaseUrl(): string {
+    const raw = typeof this.baseUrl === 'function' ? this.baseUrl() : this.baseUrl;
+    return raw.endsWith('/') ? raw.slice(0, -1) : raw;
   }
 
   /**
@@ -176,7 +181,8 @@ export class ApiClient {
 
   private buildUrl(path: string, params?: Record<string, any>): string {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    const url = new URL(`${this.baseUrl}${cleanPath}`);
+    const base = this.getBaseUrl();
+    const url = new URL(`${base}${cleanPath}`);
 
     if (params) {
       Object.keys(params).forEach(key => {
