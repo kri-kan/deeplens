@@ -11,31 +11,34 @@
 1. [Readme](#source-readme-md)
 2. [Development](#source-development-md)
 3. [Architecture](#source-architecture-md)
-4. [Codebase](#source-codebase-md)
-5. [Database_Naming_Standards](#source-database_naming_standards-md)
-6. [Ffmpeg_Setup](#source-ffmpeg_setup-md)
-7. [Release_Notes](#source-release_notes-md)
-8. [Docs - Security](#source-docs-security-md)
-9. [Docs - Services](#source-docs-services-md)
-10. [Docs - Observability](#source-docs-observability-md)
-11. [Infrastructure - Readme](#source-infrastructure-readme-md)
-12. [Infrastructure - Tenant-Guide](#source-infrastructure-tenant-guide-md)
-13. [Infrastructure - Troubleshooting](#source-infrastructure-troubleshooting-md)
-14. [Src - Deeplens.Featureextractionservice - Readme](#source-src-deeplens-featureextractionservice-readme-md)
-15. [Src - Deeplens.Webui - Readme](#source-src-deeplens-webui-readme-md)
-16. [Src - Whatsapp-Processor - Readme](#source-src-whatsapp-processor-readme-md)
-17. [Src - Whatsapp-Processor - Architecture](#source-src-whatsapp-processor-architecture-md)
-18. [Src - Whatsapp-Processor - Database_Setup](#source-src-whatsapp-processor-database_setup-md)
-19. [Src - Whatsapp-Processor - Design_Vision](#source-src-whatsapp-processor-design_vision-md)
-20. [Src - Whatsapp-Processor - Testing_Guide](#source-src-whatsapp-processor-testing_guide-md)
-21. [Src - Whatsapp-Processor - Quick_Reference](#source-src-whatsapp-processor-quick_reference-md)
-22. [Src - Whatsapp-Processor - Message_Grouping_System](#source-src-whatsapp-processor-message_grouping_system-md)
-23. [Src - Whatsapp-Processor - Docs - Admin_Panel_Guide](#source-src-whatsapp-processor-docs-admin_panel_guide-md)
-24. [Src - Whatsapp-Processor - Docs - Baileys_Api_Deep_Dive](#source-src-whatsapp-processor-docs-baileys_api_deep_dive-md)
-25. [Src - Whatsapp-Processor - Docs - Deep-Sync-Implementation](#source-src-whatsapp-processor-docs-deep-sync-implementation-md)
-26. [Src - Whatsapp-Processor - Docs - Lid_Implementation](#source-src-whatsapp-processor-docs-lid_implementation-md)
-27. [Src - Whatsapp-Processor - Scripts - Ddl - Readme](#source-src-whatsapp-processor-scripts-ddl-readme-md)
-28. [Src - Whatsapp-Processor - Client - Readme](#source-src-whatsapp-processor-client-readme-md)
+4. [Vayyari - Mobile Architecture](#source-vayyari-mobile-architecture-md)
+5. [Codebase](#source-codebase-md)
+6. [Database_Naming_Standards](#source-database_naming_standards-md)
+7. [Ffmpeg_Setup](#source-ffmpeg_setup-md)
+8. [Release_Notes](#source-release_notes-md)
+9. [Docs - Security](#source-docs-security-md)
+10. [Docs - Services](#source-docs-services-md)
+11. [Docs - Observability](#source-docs-observability-md)
+12. [Infrastructure - Readme](#source-infrastructure-readme-md)
+13. [Infrastructure - Tenant-Guide](#source-infrastructure-tenant-guide-md)
+14. [Infrastructure - Troubleshooting](#source-infrastructure-troubleshooting-md)
+15. [Publish - Vayyari - Distribution](#source-publish-vayyari-readme-md)
+16. [Src - Vayyari - Mobile App](#source-src-vayyari-readme-md)
+17. [Src - Deeplens.Featureextractionservice - Readme](#source-src-deeplens-featureextractionservice-readme-md)
+18. [Src - Deeplens.Webui - Readme](#source-src-deeplens-webui-readme-md)
+19. [Src - Whatsapp-Processor - Readme](#source-src-whatsapp-processor-readme-md)
+20. [Src - Whatsapp-Processor - Architecture](#source-src-whatsapp-processor-architecture-md)
+21. [Src - Whatsapp-Processor - Database_Setup](#source-src-whatsapp-processor-database_setup-md)
+22. [Src - Whatsapp-Processor - Design_Vision](#source-src-whatsapp-processor-design_vision-md)
+23. [Src - Whatsapp-Processor - Testing_Guide](#source-src-whatsapp-processor-testing_guide-md)
+24. [Src - Whatsapp-Processor - Quick_Reference](#source-src-whatsapp-processor-quick_reference-md)
+25. [Src - Whatsapp-Processor - Message_Grouping_System](#source-src-whatsapp-processor-message_grouping_system-md)
+26. [Src - Whatsapp-Processor - Docs - Admin_Panel_Guide](#source-src-whatsapp-processor-docs-admin_panel_guide-md)
+27. [Src - Whatsapp-Processor - Docs - Baileys_Api_Deep_Dive](#source-src-whatsapp-processor-docs-baileys_api_deep_dive-md)
+28. [Src - Whatsapp-Processor - Docs - Deep-Sync-Implementation](#source-src-whatsapp-processor-docs-deep-sync-implementation-md)
+29. [Src - Whatsapp-Processor - Docs - Lid_Implementation](#source-src-whatsapp-processor-docs-lid_implementation-md)
+30. [Src - Whatsapp-Processor - Scripts - Ddl - Readme](#source-src-whatsapp-processor-scripts-ddl-readme-md)
+31. [Src - Whatsapp-Processor - Client - Readme](#source-src-whatsapp-processor-client-readme-md)
 
 ---
 
@@ -118,19 +121,22 @@ The root `Makefile` exposes the following commands for easy discoverability:
 - `make deploy-worker-service`
 - `make deploy-whatsapp-processor`
 - `make deploy-reasoning-api`
+- `make build-vayyari-apk` (or `make deploy-vayyari-apk`)
+- `make push-vayyari-ota` (or `make deploy-vayyari-ota`)
 
 ### Using the deploy script directly
 
 You can also run the deployment script directly:
-
-*(Code block omitted for brevity)*
-
+```bash
+./infrastructure/deploy.sh [service-name]
+```
+Valid service names: `identity-api`, `search-api`, `worker-service`, `whatsapp-processor`, `reasoning-api`, `vayyari-apk`, `vayyari-ota`.
 
 ### Why use these scripts?
 
 The deployment script (`infrastructure/deploy.sh`) automates:
-1. Building/publishing the project (`dotnet publish`, `npm run build:all`, or copying Python source files for `reasoning-api`).
-2. Copying binaries/files to the correct bind-mounted hosting path (e.g. `/data/hosting/*`).
+1. Building/publishing the project (`dotnet publish`, `npm run build:all`, copying Python source files for `reasoning-api`, Gradle release build for `vayyari-apk`, or Expo bundle export and MinIO mirror for `vayyari-ota`).
+2. Copying binaries/files to the correct bind-mounted hosting path (e.g. `/data/hosting/*`, or `publish/vayyari/` for APKs).
 3. Restarting the appropriate Docker container via `docker compose`.
 
 This ensures critical configuration files (like `appsettings.json` or model dependencies) located in the hosting paths are preserved and not accidentally overwritten during deployments. For Python services like `reasoning-api`, the bind-mounted host volume ensures local updates are immediately reflected and uvicorn hot-reloads the changes when the container restarts.
@@ -154,18 +160,39 @@ OpenClaw natively supports Google Gemini as a cloud provider. To configure Gemin
 For more details on managing the container, see `setupscripts/core/ollama/docker-compose.yaml`.
 
 ## Vayyari Mobile App Development
-The Vayyari Expo packager (`npx expo start --android`) runs continuously in the background on system boot. It is managed by a systemd user service (`vayyari-expo.service`) and runs inside a **`tmux`** session to allow interactive access.
 
-### Accessing the Interactive Console
-To view the live Expo logs, restart the bundler, or open the debugger (press `j`), attach to the background tmux session:
+The Vayyari mobile app is built using **React Native / Expo Bare Workflow** (SDK 54, Expo Router v3, Material Design 3 via `react-native-paper`, Emerald theme, and native Android Gradle configuration under `src/vayyari/android`).
 
-*(Code block omitted for brevity)*
-
+### Live Development Bundler
+The Vayyari Expo packager (`npx expo start --android`) runs continuously in the background on system boot. It is managed by a systemd user service (`vayyari-expo.service`) and runs inside a **`tmux`** session to allow interactive access:
+```bash
+tmux attach -t expo
+```
 **Important:** When you are done, DO NOT press `Ctrl+C` as this will kill the server. Instead, detach from the session by pressing **`Ctrl+B`**, followed by **`D`**.
 
 ### Remote Access (Tailscale)
-Since the host machine is on Tailscale, you can always connect to the Expo app from your mobile device using the server's Tailscale IP address (e.g., `exp://100.x.y.z:8081`). This works seamlessly whether you are at home or traveling, without needing to change any URLs.
+Since the host machine is on Tailscale, you can always connect to the Expo app from your mobile device using the server's Tailscale IP address (e.g., `exp://100.x.y.z:8081`).
 
+### Standalone Release APK Builds
+Build release APKs locally using:
+```bash
+make build-vayyari-apk
+# OR
+./infrastructure/deploy.sh vayyari-apk
+```
+- **AAPT2 Flag**: `-Pandroid.enablePngCrunchInReleaseBuilds=false` is enforced to prevent AAPT2 failures on mismatched image extensions.
+- **Output & Retention**: Output lands at `publish/vayyari/` with `vayyari-latest.apk` and the newest 3 historical `vayyari-v1.0.0-YYYYMMDD.apk` builds.
+
+### Self-Hosted OTA Updates (MinIO + Nginx)
+Export and publish JS bundles to MinIO:
+```bash
+make push-vayyari-ota
+# OR
+cd src/vayyari && ./push-update.sh --notes "Release summary"
+```
+- Bundles are published to MinIO bucket `vayyari-updates/bundles/vYYYYMMDDHHMM/` and registered in `vayyari-updates/manifest.json`.
+- Public Manifest: `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`.
+- Runtime `expo-updates` auto-polling is deferred in favor of direct standalone APK sideloading while MinIO maintains artifact archival.
 
 ---
 
@@ -195,41 +222,52 @@ The following services are managed externally and utilized by DeepLens:
 
 ## 🚀 Application Services (Local)
 
-While the core infrastructure is external, the specialized DeepLens application services (AI/ML) run locally via Docker:
-
-
-*(Code block omitted for brevity)*
-
+While the core infrastructure is external, the specialized DeepLens application services run locally via Docker / Native Systemd:
 
 | Service              | Port   | Purpose                      |
 | -------------------- | ------ | ---------------------------- |
+| Gateway (Nginx)      | `80`   | Portal & Reverse Proxy       |
 | Reasoning API        | `8002` | Phi-3 Metadata Extraction    |
 | Feature Extraction   | `8001` | Image/Video Vectorization    |
+| Search API           | `5000` | Image search & ingestion     |
+| Identity API         | `5198` | Authentication & Authz       |
 | Instagram Worker     | -      | Competitor Data Ingestion    |
-| WhatsApp Processor   | `3000` | Multi-tenant Messaging Service|
+| WhatsApp Processor   | `3000` / `3005` | Multi-tenant Messaging Service|
+| Vayyari Expo Dev     | `8081` | React Native Metro Bundler   |
+
+## 🚪 Gateway Reverse Proxy Routes (Port 80)
+
+| Route Path | Upstream Target | Purpose |
+| ---------- | --------------- | ------- |
+| `/` | Static HTML | DeepLens Portal Landing Page |
+| `/grafana/` | `http://grafana:3000/` | Grafana Dashboards |
+| `/minio/` | `http://minio:9001/` | MinIO Console |
+| `/kafka-ui/` | `http://kafka-ui:8080/` | Kafka UI |
+| `/influx/` | `http://influxdb:8086/` | InfluxDB UI |
+| `/qdrant/` | `http://qdrant:6333/` | Qdrant UI |
+| `/pgadmin/` | `http://pgadmin:80/` | PostgreSQL pgAdmin |
+| `/jaeger/` | `http://jaeger:16686/` | Jaeger Tracing |
+| `/prometheus/` | `http://prometheus:9090/` | Prometheus UI |
+| `/chat/` | `http://open-webui:8080/` | Open WebUI / Ollama |
+| `/vayyari-updates/` | `http://minio:9000/vayyari-updates/` | Vayyari OTA Manifest & JS Bundles |
+
+## 🪣 MinIO Object Storage Buckets
+
+| Bucket Name | Access Policy | Purpose |
+| ----------- | ------------- | ------- |
+| `tenant-<uuid>` | Authenticated / IAM | Tenant image assets, thumbnails, and embeddings |
+| `whatsapp-media` | Authenticated / IAM | Ingested WhatsApp chat attachments and media |
+| `vayyari-updates` | Public (`download`) | Self-hosted Vayyari JS bundles, assets, and `manifest.json` |
 
 ### Build and Deploy Scripts
 
-The `deploy.sh` script automates building and deploying local containerized application code (like the .NET APIs and the Node.js WhatsApp Processor) directly to their respective `/data/hosting` volumes, then restarting their Docker compose services.
-
-
-*(Code block omitted for brevity)*
-
-
-For parameterized multi-service deployment, you can use the suite build scripts located in `setupscripts/application/services/`:
-
-*(Code block omitted for brevity)*
-
+The `deploy.sh` script automates building and deploying local containerized application code (like the .NET APIs and the Node.js WhatsApp Processor) directly to their respective `/data/hosting` volumes, then restarting their Docker compose services. It also handles building Vayyari APKs to `publish/vayyari/` and pushing OTA updates to MinIO `vayyari-updates`.
 
 ## 🏢 Tenant Management
 
 The architecture uses a centralized infrastructure but isolates tenants via prefix-isolated databases and dedicated buckets.
 
 ### Provisioning a Tenant
-
-
-*(Code block omitted for brevity)*
-
 
 This script will:
 1. Create a tenant metadata database on the remote PostgreSQL.
@@ -238,10 +276,6 @@ This script will:
 4. Bootstrap initial admin credentials in the Identity service.
 
 ### Initializing Baseline Data
-
-
-*(Code block omitted for brevity)*
-
 
 This script initializes the core schemas (Identity, Metadata) on the remote PostgreSQL instance using baseline SQL scripts and the CLI tool.
 
@@ -252,6 +286,72 @@ Environment variables are managed via `infrastructure/.env`. See `infrastructure
 > [!IMPORTANT]
 > Ensure the machine running these scripts has network visibility to `192.168.0.170`.
 
+
+---
+
+<a name='source-vayyari-mobile-architecture-md'></a>
+
+# Documentation: docs/architecture/vayyari-mobile-architecture.md
+------------------------------
+
+# Vayyari Mobile App Architecture & Release Guide
+
+**Comprehensive architecture reference for the Vayyari React Native / Expo Bare Workflow mobile application, standalone APK builds, and self-hosted OTA update pipelines.**
+
+## 📱 Executive Overview
+
+Vayyari is the mobile client for the DeepLens ecosystem. Designed for fast mobile catalog exploration, WhatsApp seller message grouping, and visual product discovery, Vayyari operates with a high degree of local autonomy while integrating directly with DeepLens backend microservices.
+
+### Architecture & Component Layers
+1. **Framework & Runtime**: React Native 0.76+ with Hermes JavaScript Engine, Expo SDK 54 (Bare Workflow), Material Design 3 via `react-native-paper`, Emerald dynamic theme engine.
+2. **Navigation & Routing**: `expo-router` v3 file-system routing under `src/vayyari/app/` with authenticated tab groups and deep linking.
+3. **Session & Security**: `AuthContext.tsx` with `AsyncStorage` session persistence and automatic 401 interception.
+4. **Media Engine**: Singleton `expo-video` player per screen dynamically rebinding video sources on swipe, paired with HTTP 206 Partial Content streaming from MinIO.
+5. **Observability**: Distributed tracing with lazy-loaded OpenTelemetry (`wrapInSpan`).
+
+### Standalone Release APK Pipeline
+- **Compilation**: Gradle release task `./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false`.
+- **AAPT2 Rationale**: Disabling PNG crunching prevents AAPT2 packaging errors on courier logos containing JPEG headers under `.png` extensions.
+- **Distribution Path**: Published to `publish/vayyari/` with `vayyari-latest.apk` and dated builds.
+- **Retention Policy**: Retains the newest 3 versioned APK builds and prunes older builds automatically.
+
+### Self-Hosted OTA Pipeline (MinIO + Nginx)
+- **Export Script**: `src/vayyari/push-update.sh` executes `npx expo export --platform android` emitting Hermes bytecode and assets into `dist/`.
+- **MinIO Mirror**: Uses `mc` to mirror bundles to bucket `vayyari-updates` under `bundles/vYYYYMMDDHHMM/` and updates `manifest.json`.
+- **Gateway Reverse Proxy**: Nginx proxies `/vayyari-updates/` to `http://minio:9000/vayyari-updates/`.
+- **Public URL**: `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`.
+- **ADR on Protocol Deferral**: Runtime `expo-updates` auto-polling is deferred (`"updates": {"enabled": false}`) because static MinIO hosting cannot serve dynamic multipart signed responses required by Expo Updates Protocol v1. APK distribution handles user updates, while MinIO maintains artifact archival.
+
+---
+
+<a name='source-publish-vayyari-readme-md'></a>
+
+# Documentation: publish/vayyari/README.md
+------------------------------
+
+# Vayyari Android APK Distribution & OTA Architecture
+
+## 📦 Latest Release & Sideloading
+- **Current Versioned Build**: `publish/vayyari/vayyari-v1.0.0-YYYYMMDD.apk`
+- **Latest Pointer**: `publish/vayyari/vayyari-latest.apk`
+- **Installation via ADB**: `adb install publish/vayyari/vayyari-latest.apk`
+- **Sideloading via Tailscale**: Direct download from the server publish share or MinIO gateway proxy.
+- **Retention Policy**: Keeps newest 3 historical APKs + `vayyari-latest.apk`.
+
+---
+
+<a name='source-src-vayyari-readme-md'></a>
+
+# Documentation: src/vayyari/README.md
+------------------------------
+
+# Vayyari Mobile App (React Native / Expo Bare Workflow)
+
+## 🚀 Development & Build Workflows
+- **Dev Bundler**: `tmux attach -t expo` to interact with the background `vayyari-expo.service`.
+- **Release APK Build**: `make build-vayyari-apk` or `./infrastructure/deploy.sh vayyari-apk`.
+- **OTA Push**: `make push-vayyari-ota` or `./push-update.sh --notes "Release notes"`.
+- **MinIO Bucket**: `local/vayyari-updates` with retention of 3 newest bundle snapshots.
 
 ---
 

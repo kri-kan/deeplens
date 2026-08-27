@@ -54,12 +54,42 @@ DeepLens manages large volumes of image data across multiple storage providers.
 
 ## ☁️ Object Storage (MinIO / S3)
 
-DeepLens uses a **Bucket-per-Tenant** strategy for object storage.
+DeepLens uses a hybrid bucket strategy for object storage:
+- **Tenant Isolation**: Each tenant has an isolated bucket (`tenant-<uuid>`) for curated catalog images, thumbnails, and feature embeddings.
+- **WhatsApp Ingestion**: Unstructured attachments and voice notes land in the `whatsapp-media` bucket.
+- **Mobile Distribution & OTA**: Standalone JS bundles, asset maps, and OTA manifest files are published to the publicly downloadable `vayyari-updates` bucket.
 
 ### Multi-Tenancy Strategy
-- **Shared Instance**: Typically one MinIO instance serves many tenants for development.
+- **Shared Instance**: Typically one MinIO instance serves all development buckets at `http://192.168.0.170:9000`.
 - **Isolation**: Each tenant is restricted to their bucket via IAM policies.
 - **BYOS**: Support for external endpoints (Azure Blob, AWS S3) allows enterprise tenants to keep their data in their own subscription.
+
+---
+
+## 📱 Vayyari Mobile Application & Distribution Service
+
+Vayyari is the Android mobile client for catalog browsing, visual search, and WhatsApp message grouping.
+
+### Architecture & Native Toolchain
+- **Framework**: React Native 0.76+ / Expo SDK 54 (Bare Workflow).
+- **Native Platform**: Android Gradle project located under `src/vayyari/android`.
+- **UI Engine**: React Native Paper (Material Design 3) with custom Emerald/Nocturne dynamic theming.
+- **Telemetry**: Distributed tracing with `@opentelemetry/api` lazy-loaded at runtime.
+
+### Standalone APK Release Pipeline
+- **Command**: `make build-vayyari-apk` or `./infrastructure/deploy.sh vayyari-apk`.
+- **Gradle Task**: `./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false`.
+- **Publish Destination**: `publish/vayyari/`
+  - `vayyari-latest.apk` (current release)
+  - `vayyari-v1.0.0-YYYYMMDD.apk` (versioned build)
+- **Retention Policy**: Automates retention of the **newest 3 versioned APK builds** while pruning older artifacts.
+
+### Self-Hosted OTA Pipeline (MinIO + Nginx)
+- **Export & Push Script**: `src/vayyari/push-update.sh`
+- **Storage Target**: MinIO bucket `vayyari-updates` via `mc` client.
+- **Gateway Route**: Nginx on port 80 proxies `/vayyari-updates/` to `http://minio:9000/vayyari-updates/`.
+- **Public Manifest**: `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`
+- **Protocol Deferral Decision**: Expo Updates Protocol v1 (multipart, signed manifests) is deferred at runtime (`expo-updates` disabled in `app.json`) in favor of direct standalone APK sideloading. Bundles in MinIO are maintained for historical release snapshots and future runtime proxying.
 
 ---
 
@@ -93,3 +123,4 @@ Sidecars are lightweight, synchronous services that extend the platform's capabi
     - `GET /profile/{username}`: Metadata for any public profile.
     - `GET /profile/{username}/posts`: Recent posts (shortcode, caption, media URLs).
 - **Rate Limiting**: Implementation relies on `instaloader` internal sleep mechanisms. Public endpoint usage only.
+
