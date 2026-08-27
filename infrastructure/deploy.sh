@@ -12,7 +12,7 @@ RED='\033[0;31m'
 
 if [ -z "$SERVICE_NAME" ]; then
     echo -e "${RED}Error: Service name not specified.${NC}"
-    echo "Usage: ./deploy.sh [search-api | worker-service | reasoning-api | whatsapp-processor]"
+    echo "Usage: ./deploy.sh [search-api | worker-service | reasoning-api | whatsapp-processor | vayyari-apk | vayyari-ota]"
     exit 1
 fi
 
@@ -42,8 +42,21 @@ case $SERVICE_NAME in
         COMPOSE_SERVICE="reasoning-api"
         COMPOSE_DIR="setupscripts/application"
         ;;
+    "vayyari-apk")
+        PROJECT_PATH="src/vayyari"
+        HOSTING_PATH="publish/vayyari"
+        COMPOSE_SERVICE=""
+        COMPOSE_DIR=""
+        ;;
+    "vayyari-ota")
+        PROJECT_PATH="src/vayyari"
+        HOSTING_PATH=""
+        COMPOSE_SERVICE=""
+        COMPOSE_DIR=""
+        ;;
     *)
         echo -e "${RED}Error: Unknown service '$SERVICE_NAME'${NC}"
+        echo "Valid options: search-api, worker-service, reasoning-api, whatsapp-processor, vayyari-apk, vayyari-ota"
         exit 1
         ;;
 esac
@@ -51,7 +64,62 @@ esac
 echo -e "${CYAN}🚀 Starting deployment for ${YELLOW}$SERVICE_NAME${NC}..."
 
 # 1. Build and Publish
-if [ "$SERVICE_NAME" == "whatsapp-processor" ]; then
+if [ "$SERVICE_NAME" == "vayyari-apk" ]; then
+    echo -e "${CYAN}📦 Building Vayyari Android APK (Release)...${NC}"
+    cd "$PROJECT_PATH/android" || exit 1
+    
+    # Execute Gradle release build with required optimization flags
+    ./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ APK build failed. Deployment aborted.${NC}"
+        exit 1
+    fi
+    cd - > /dev/null
+
+    BUILT_APK="$PROJECT_PATH/android/app/build/outputs/apk/release/app-release.apk"
+    if [ ! -f "$BUILT_APK" ]; then
+        echo -e "${RED}❌ Output APK not found at $BUILT_APK${NC}"
+        exit 1
+    fi
+
+    echo -e "${CYAN}📂 Publishing APK to $HOSTING_PATH...${NC}"
+    mkdir -p "$HOSTING_PATH"
+    
+    TIMESTAMP=$(date +%Y%m%d)
+    VERSION="v1.0.0"
+    VERSIONED_APK="vayyari-${VERSION}-${TIMESTAMP}.apk"
+    
+    cp "$BUILT_APK" "$HOSTING_PATH/$VERSIONED_APK"
+    cp "$BUILT_APK" "$HOSTING_PATH/vayyari-latest.apk"
+    echo -e "${GREEN}✅ Published $VERSIONED_APK and updated vayyari-latest.apk${NC}"
+
+    # Pruning historical APKs: keep newest 3 historical APKs + vayyari-latest.apk
+    echo -e "${CYAN}🧹 Pruning old historical APKs in $HOSTING_PATH (keeping newest 3)...${NC}"
+    KEEP_HISTORICAL=3
+    APK_FILES=($(ls -1t "$HOSTING_PATH"/vayyari-v*.apk 2>/dev/null || true))
+    TOTAL_APKS=${#APK_FILES[@]}
+    if [ "$TOTAL_APKS" -gt "$KEEP_HISTORICAL" ]; then
+        for ((i=KEEP_HISTORICAL; i<TOTAL_APKS; i++)); do
+            echo -e "${YELLOW}   Removing old APK: ${APK_FILES[$i]}${NC}"
+            rm -f "${APK_FILES[$i]}"
+        done
+        echo -e "${GREEN}✅ APK pruning complete.${NC}"
+    else
+        echo -e "${GREEN}✅ APK count ($TOTAL_APKS) within retention limit ($KEEP_HISTORICAL). No pruning needed.${NC}"
+    fi
+
+elif [ "$SERVICE_NAME" == "vayyari-ota" ]; then
+    echo -e "${CYAN}📦 Pushing Vayyari OTA bundle to MinIO local/vayyari-updates...${NC}"
+    cd "$PROJECT_PATH" || exit 1
+    shift || true
+    ./push-update.sh "$@"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ OTA bundle push failed.${NC}"
+        exit 1
+    fi
+    cd - > /dev/null
+
+elif [ "$SERVICE_NAME" == "whatsapp-processor" ]; then
     echo -e "${CYAN}📦 Building Node application...${NC}"
     cd "$PROJECT_PATH" || exit 1
     npm install
@@ -102,13 +170,15 @@ else
     fi
 fi
 
-# 3. Restart Container
-echo -e "${CYAN}🔄 Restarting container ${YELLOW}$COMPOSE_SERVICE${NC}..."
-cd "$COMPOSE_DIR" && docker compose restart "$COMPOSE_SERVICE"
+# 3. Restart Container if defined
+if [ -n "$COMPOSE_SERVICE" ] && [ -n "$COMPOSE_DIR" ]; then
+    echo -e "${CYAN}🔄 Restarting container ${YELLOW}$COMPOSE_SERVICE${NC}..."
+    cd "$COMPOSE_DIR" && docker compose restart "$COMPOSE_SERVICE"
 
-if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Container restart failed.${NC}"
-    exit 1
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Container restart failed.${NC}"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}✅ Deployment successful for $SERVICE_NAME!${NC}"

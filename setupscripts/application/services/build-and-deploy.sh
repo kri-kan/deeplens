@@ -130,6 +130,60 @@ else
 fi
 fi
 
+# --- Build Vayyari Mobile APK (Release) ---
+if should_build "vayyari-apk"; then
+vayyari_path="src/vayyari"
+vayyari_dest="$ROOT_DIR/publish/vayyari"
+
+echo -e "\e[36m--- Building Vayyari APK ($vayyari_path) ---\e[0m"
+mkdir -p "$vayyari_dest"
+
+cd "$ROOT_DIR/$vayyari_path/android" || exit 1
+./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
+
+if [ $? -eq 0 ]; then
+    built_apk="$ROOT_DIR/$vayyari_path/android/app/build/outputs/apk/release/app-release.apk"
+    if [ -f "$built_apk" ]; then
+        timestamp=$(date +%Y%m%d)
+        version="v1.0.0"
+        versioned_apk="vayyari-${version}-${timestamp}.apk"
+        cp "$built_apk" "$vayyari_dest/$versioned_apk"
+        cp "$built_apk" "$vayyari_dest/vayyari-latest.apk"
+        echo -e "\e[32mSuccessfully built and published $versioned_apk and vayyari-latest.apk to $vayyari_dest\e[0m"
+
+        # Prune old historical APKs (keep 3 latest)
+        apk_files=($(ls -1t "$vayyari_dest"/vayyari-v*.apk 2>/dev/null || true))
+        total_apks=${#apk_files[@]}
+        keep_apks=3
+        if [ "$total_apks" -gt "$keep_apks" ]; then
+            for ((i=keep_apks; i<total_apks; i++)); do
+                echo -e "\e[33m   Removing old APK: ${apk_files[$i]}\e[0m"
+                rm -f "${apk_files[$i]}"
+            done
+        fi
+    else
+        echo -e "\e[31mVayyari APK not found at $built_apk!\e[0m"
+    fi
+else
+    echo -e "\e[31mVayyari APK build failed!\e[0m"
+fi
+cd "$ROOT_DIR" || exit 1
+fi
+
+# --- Push Vayyari OTA Updates ---
+if should_build "vayyari-ota"; then
+vayyari_path="src/vayyari"
+echo -e "\e[36m--- Pushing Vayyari OTA Updates to MinIO ($vayyari_path) ---\e[0m"
+cd "$ROOT_DIR/$vayyari_path" || exit 1
+./push-update.sh
+if [ $? -eq 0 ]; then
+    echo -e "\e[32mSuccessfully pushed Vayyari OTA bundle to MinIO local/vayyari-updates\e[0m"
+else
+    echo -e "\e[31mVayyari OTA bundle push failed!\e[0m"
+fi
+cd "$ROOT_DIR" || exit 1
+fi
+
 echo -e "\e[33m--- Restarting Containers ---\e[0m"
 cd "$ROOT_DIR/setupscripts/application/services"
 
