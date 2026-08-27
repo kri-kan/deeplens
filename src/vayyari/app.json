@@ -85,17 +85,10 @@
         }
       ],
       "expo-web-browser",
-      "expo-font",
-      "expo-updates"
+      "expo-font"
     ],
     "updates": {
-      "enabled": true,
-      "url": "http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json",
-      "fallbackToCacheTimeout": 3000,
-      "checkAutomatically": "ON_LOAD"
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
+      "enabled": false
     },
     "experiments": {
       "typedRoutes": true,

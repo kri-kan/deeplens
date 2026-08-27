@@ -1,71 +1,24 @@
-import { useEffect } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
-import * as Updates from 'expo-updates';
-
 /**
- * useOTAUpdate
+ * useOTAUpdate — no-op stub
  *
- * Checks for OTA updates from the self-hosted update server whenever the app
- * comes back to the foreground. If an update is available it is downloaded and
- * applied immediately (reloads the JS bundle).
+ * OTA updates via the Expo Updates Protocol are not active in this build.
+ * The expo-updates plugin has been removed from app.json because MinIO static
+ * file hosting cannot serve the multipart, signed-manifest responses required
+ * by expo-updates v29 (Expo Updates Protocol v1).
  *
- * Update server: http://krikanserver.taild227d9.ts.net/vayyari-updates/
+ * Current OTA distribution model:
+ *   - Bundles are exported and stored in MinIO (`vayyari-updates` bucket) via
+ *     `push-update.sh` for archival and future rollback reference.
+ *   - End users receive app updates by downloading and installing the latest
+ *     APK from the internal publish share:
+ *       http://krikanserver.taild227d9.ts.net/publish/vayyari/
+ *
+ * Future work (ADO #336 follow-up):
+ *   - Implement a lightweight Node/Go Expo Updates Protocol v1 server that
+ *     proxies MinIO and adds the required multipart headers + manifest signing,
+ *     then re-enable expo-updates in app.json.
+ *   - OR: Use EAS Update (expo.dev) for managed OTA — requires EAS project setup.
  */
 export function useOTAUpdate(): void {
-  // expo-updates is a no-op in Expo Go and on web – guard both cases.
-  const updatesAvailable = !__DEV__ && Platform.OS !== 'web';
-
-  const { isUpdateAvailable, isUpdatePending } = Updates.useUpdates();
-
-  // When a pending update has finished downloading, reload the app to apply it.
-  useEffect(() => {
-    if (isUpdatePending) {
-      console.log('[OTA] Update downloaded and pending – reloading now');
-      Updates.reloadAsync().catch((err) => {
-        console.warn('[OTA] Failed to reload after update:', err);
-      });
-    }
-  }, [isUpdatePending]);
-
-  // Check for updates on foreground resume.
-  useEffect(() => {
-    if (!updatesAvailable) {
-      console.log('[OTA] Skipping update check (dev mode or web)');
-      return;
-    }
-
-    const checkForUpdate = async () => {
-      try {
-        console.log('[OTA] Checking for update...');
-        const result = await Updates.checkForUpdateAsync();
-        if (result.isAvailable) {
-          console.log('[OTA] Update available – fetching...');
-          await Updates.fetchUpdateAsync();
-          // reloadAsync() will be triggered by the isUpdatePending effect above.
-        } else {
-          console.log('[OTA] No update available');
-        }
-      } catch (err) {
-        console.warn('[OTA] Update check failed:', err);
-      }
-    };
-
-    const handleAppStateChange = (nextState: AppStateStatus) => {
-      if (nextState === 'active') {
-        checkForUpdate();
-      }
-    };
-
-    // Run once on mount and then on every foreground event.
-    checkForUpdate();
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
-  }, [updatesAvailable]);
-
-  // Log whenever expo-updates reports a new available update.
-  useEffect(() => {
-    if (isUpdateAvailable) {
-      console.log('[OTA] expo-updates reports an update is available');
-    }
-  }, [isUpdateAvailable]);
+  // no-op — OTA auto-update is not active in this build.
 }
