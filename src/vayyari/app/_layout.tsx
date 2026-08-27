@@ -1,6 +1,6 @@
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
@@ -59,6 +59,13 @@ function InnerRootLayout() {
       SplashScreen.hideAsync();
     }
   }, [colorScheme, isLoading]);
+
+  // Proactive auth navigation: Ensure unauthenticated users are routed to /login immediately
+  useEffect(() => {
+    if (!isLoading && !token) {
+      router.replace('/login');
+    }
+  }, [isLoading, token]);
 
   // Fail-safe: hide splash screen after 5 seconds no matter what
   useEffect(() => {
