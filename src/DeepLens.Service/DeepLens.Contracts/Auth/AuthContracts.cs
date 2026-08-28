@@ -17,6 +17,15 @@ public class RefreshTokenRequest
 {
     [JsonPropertyName("refreshToken")]
     public string RefreshToken { get; set; } = string.Empty;
+
+    [JsonPropertyName("tenantId")]
+    public Guid? TenantId { get; set; }
+}
+
+public class LogoutRequest
+{
+    [JsonPropertyName("refreshToken")]
+    public string? RefreshToken { get; set; }
 }
 
 public class LoginResponse

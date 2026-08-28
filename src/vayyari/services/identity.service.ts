@@ -87,10 +87,21 @@ class IdentityService {
     }
 
     try {
+      let tenantId: string | undefined;
+      const storedUser = await AsyncStorage.getItem('auth_user');
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          tenantId = parsed.tenantId || parsed.tenant_id;
+        } catch {
+          // ignore json parse error
+        }
+      }
+
       const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.REFRESH}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refreshToken, tenantId }),
       });
 
       if (!response.ok) {
@@ -107,7 +118,7 @@ class IdentityService {
         scope: raw.scope || 'deeplens.api deeplens.search',
       };
       await this.persistTokens(tokenResponse);
-      console.log('[IdentityService] Token silently refreshed.');
+      console.log('[IdentityService] Token silently refreshed and rotated.');
       return tokenResponse.access_token;
     } catch (err) {
       console.error('[IdentityService] Network error during token refresh:', err);

@@ -7,6 +7,23 @@ export interface RequestOptions extends RequestInit {
   _isRetry?: boolean; // internal flag to prevent infinite refresh loops
 }
 
+// Mutex promise to deduplicate concurrent refresh requests across all ApiClient instances
+let refreshPromise: Promise<string | null> | null = null;
+
+async function getOrExecuteRefreshToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const { identityService } = await import('../services/identity.service');
+        return await identityService.refreshToken();
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
+}
+
 export class ApiClient {
   private baseUrl: string;
   private getAccessToken?: () => Promise<string | null>;
@@ -121,11 +138,10 @@ export class ApiClient {
         const response = await fetch(url, { ...options, headers });
 
         if (!response.ok) {
-          // Intercept 401 for silent refresh
+          // Intercept 401 for mutexed silent refresh
           if (response.status === 401 && !options._isRetry) {
-            console.warn('[ApiClient] Got 401, attempting silent token refresh...');
-            const { identityService } = await import('../services/identity.service');
-            const newToken = await identityService.refreshToken();
+            console.warn('[ApiClient] Got 401, entering mutexed silent token refresh...');
+            const newToken = await getOrExecuteRefreshToken();
 
             if (newToken) {
               return this.request<T>(path, {
@@ -138,7 +154,6 @@ export class ApiClient {
               throw new ApiException({ code: 'UNAUTHORIZED', message: 'Session expired. Please sign in again.' }, 401);
             }
           }
-
           if (response.status >= 500) {
             console.error(`[API Error] ${options.method || 'GET'} ${url} failed with status: ${response.status}`);
           } else {

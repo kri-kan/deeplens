@@ -1,27 +1,32 @@
 import Constants from 'expo-constants';
-
 import { Platform } from 'react-native';
+
+const DEFAULT_LAN_HOST = '192.168.0.170';
 
 export const getApiBaseHost = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     return window.location.hostname;
   }
 
-  if (__DEV__ && Constants.expoConfig?.hostUri) {
+  if (Constants.expoConfig?.hostUri) {
     const host = Constants.expoConfig.hostUri.split(':')[0];
     if (host && host !== '127.0.0.1' && host !== 'localhost') {
       return host;
     }
   }
-  
-  if (Platform.OS === 'android') {
-    return '10.0.2.2';
-  }
-  
-  return '127.0.0.1';
+
+  return DEFAULT_LAN_HOST;
 };
 
-export const getIdentityApiUrl = () => `http://${getApiBaseHost()}:5000`;
-export const getSearchApiUrl = () => `http://${getApiBaseHost()}:5000`;
-export const getWhatsappProcessorUrl = () => `http://${getApiBaseHost()}:3005`;
-export const getOtelEndpointUrl = () => `http://${getApiBaseHost()}:4318/v1/traces`;
+export const getIdentityApiUrl = () =>
+  process.env.EXPO_PUBLIC_IDENTITY_API_URL || `http://${getApiBaseHost()}:5000`;
+
+export const getSearchApiUrl = () =>
+  process.env.EXPO_PUBLIC_SEARCH_API_URL || `http://${getApiBaseHost()}:5000`;
+
+export const getWhatsappProcessorUrl = () =>
+  process.env.EXPO_PUBLIC_WHATSAPP_PROCESSOR_URL || `http://${getApiBaseHost()}:3005`;
+
+export const getOtelEndpointUrl = () =>
+  process.env.EXPO_PUBLIC_OTEL_ENDPOINT || `http://${getApiBaseHost()}:4318/v1/traces`;
+

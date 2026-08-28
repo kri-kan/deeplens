@@ -40,27 +40,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadStoredData = useCallback(async () => {
     console.log('[AuthContext] Starting loadStoredData...');
     try {
-      // Safety timeout to prevent black screen if AsyncStorage hangs
+      // Safety timeout to prevent hanging if AsyncStorage or network hangs
       const storageFetch = async () => {
         const token = await AsyncStorage.getItem(TOKEN_KEY);
+        const refreshToken = await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
         const userData = await AsyncStorage.getItem(USER_KEY);
-        return { token, userData };
+        const expiryStr = await AsyncStorage.getItem(TOKEN_EXPIRY_KEY);
+        return { token, refreshToken, userData, expiryStr };
       };
 
       const result = await Promise.race([
         storageFetch(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
-      ]) as { token: string | null; userData: string | null };
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+      ]) as { token: string | null; refreshToken: string | null; userData: string | null; expiryStr: string | null };
       
-      const { token, userData } = result;
-      console.log('[AuthContext] Stored data fetched:', { hasToken: !!token, hasUser: !!userData });
+      const { token, refreshToken, userData, expiryStr } = result;
+      console.log('[AuthContext] Stored data fetched:', { hasToken: !!token, hasRefreshToken: !!refreshToken, hasUser: !!userData });
       
       if (token && userData) {
+        let activeToken = token;
+        const now = Date.now();
+        const expiry = expiryStr ? parseInt(expiryStr, 10) : 0;
+        const isExpiringSoon = expiry > 0 && expiry < (now + 5 * 60 * 1000); // within 5 min or already expired
+
+        if (isExpiringSoon && refreshToken) {
+          console.log('[AuthContext] Token expired or expiring soon on cold start, attempting silent refresh...');
+          try {
+            const refreshedToken = await identityService.refreshToken();
+            if (refreshedToken) {
+              activeToken = refreshedToken;
+              console.log('[AuthContext] Cold start silent refresh successful.');
+            }
+          } catch (refreshErr) {
+            console.warn('[AuthContext] Cold start silent refresh failed, falling back to stored session:', refreshErr);
+          }
+        }
+
         setState({
-          token,
+          token: activeToken,
           user: JSON.parse(userData),
           isLoading: false,
         });
+      } else if (refreshToken) {
+        // We have a refresh token but no active access token
+        console.log('[AuthContext] Refresh token present without access token, attempting refresh...');
+        const refreshedToken = await identityService.refreshToken();
+        if (refreshedToken && userData) {
+          setState({
+            token: refreshedToken,
+            user: JSON.parse(userData),
+            isLoading: false,
+          });
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }));
+        }
       } else {
         setState(prev => ({ ...prev, isLoading: false }));
       }

@@ -114,6 +114,27 @@ public class AuthController : ControllerBase
         var (accessToken, expiresIn) = GenerateJwtToken(userId, tenantId, (string)user.email, auth);
         var refreshToken = GenerateRefreshToken();
 
+        // Save 90-day refresh token in public.refresh_tokens
+        try
+        {
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = Request.Headers.UserAgent.ToString();
+            const string insertTokenSql = @"
+                INSERT INTO public.refresh_tokens (id, user_id, token, expires_at, created_at, is_revoked, ip_address, user_agent)
+                VALUES (gen_random_uuid(), @UserId, @Token, NOW() + INTERVAL '90 days', NOW(), false, @IpAddress, @UserAgent);";
+            await connection.ExecuteAsync(insertTokenSql, new
+            {
+                UserId = userId,
+                Token = refreshToken,
+                IpAddress = ipAddress,
+                UserAgent = userAgent
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist refresh token for user {UserId}", userId);
+        }
+
         var profile = new UserProfileDto
         {
             Id = userId,
@@ -154,20 +175,113 @@ public class AuthController : ControllerBase
 
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public IActionResult RefreshToken([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.RefreshToken))
         {
             return BadRequest(new { message = "Refresh token is required." });
         }
 
-        // For stateless refresh, generate a new pair if valid or return OK with renewed token
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+
+        // 1. Query for valid unrevoked token
+        const string selectTokenSql = @"
+            SELECT id, user_id, token, expires_at, created_at, is_revoked, revoked_at, revoked_reason
+            FROM public.refresh_tokens
+            WHERE token = @RefreshToken AND is_revoked = false AND expires_at > NOW()
+            LIMIT 1;";
+
+        var storedToken = await connection.QueryFirstOrDefaultAsync<dynamic>(selectTokenSql, new { RefreshToken = request.RefreshToken.Trim() });
+
+        if (storedToken == null)
+        {
+            _logger.LogWarning("Refresh token invalid, expired, or already revoked.");
+            return Unauthorized(new { message = "Invalid or expired refresh token." });
+        }
+
+        Guid userId = storedToken.user_id;
+
+        // 2. Look up user
+        const string selectUserSql = @"
+            SELECT id, tenant_id, email, first_name, last_name, email_confirmed, is_active, created_at, last_login_at
+            FROM public.users
+            WHERE id = @UserId AND deleted_at IS NULL
+            LIMIT 1;";
+
+        var user = await connection.QueryFirstOrDefaultAsync<dynamic>(selectUserSql, new { UserId = userId });
+
+        if (user == null || user.is_active == false)
+        {
+            _logger.LogWarning("User {UserId} not found or inactive during token refresh.", userId);
+            return Unauthorized(new { message = "User account is inactive or disabled." });
+        }
+
+        Guid tenantId = request.TenantId ?? user.tenant_id ?? Guid.Empty;
+
+        // 3. Fetch user authorization & roles
+        var auth = await _permissionCacheService.GetUserAuthorizationAsync(tenantId, userId);
+
+        // 4. Generate new signed JWT accessToken
+        var (newAccessToken, expiresIn) = GenerateJwtToken(userId, tenantId, (string)user.email, auth);
+
+        // 5. Revoke old refresh token (mark is_revoked = true, revoked_at = NOW(), revoked_reason = 'Rotated')
+        const string revokeTokenSql = @"
+            UPDATE public.refresh_tokens
+            SET is_revoked = true, revoked_at = NOW(), revoked_reason = 'Rotated'
+            WHERE id = @TokenId;";
+
+        await connection.ExecuteAsync(revokeTokenSql, new { TokenId = (Guid)storedToken.id });
+
+        // 6. Create and insert new 90-day refresh token
+        var newRefreshToken = GenerateRefreshToken();
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        const string insertNewTokenSql = @"
+            INSERT INTO public.refresh_tokens (id, user_id, token, expires_at, created_at, is_revoked, ip_address, user_agent)
+            VALUES (gen_random_uuid(), @UserId, @Token, NOW() + INTERVAL '90 days', NOW(), false, @IpAddress, @UserAgent);";
+
+        await connection.ExecuteAsync(insertNewTokenSql, new
+        {
+            UserId = userId,
+            Token = newRefreshToken,
+            IpAddress = ipAddress,
+            UserAgent = userAgent
+        });
+
+        _logger.LogInformation("Successfully rotated refresh token for user {UserId}", userId);
+
         return Ok(new
         {
-            accessToken = request.RefreshToken,
-            tokenType = "Bearer",
-            expiresIn = 86400
+            accessToken = newAccessToken,
+            refreshToken = newRefreshToken,
+            expiresIn = expiresIn,
+            tokenType = "Bearer"
         });
+    }
+
+    [HttpPost("logout")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Logout([FromBody] LogoutRequest? request)
+    {
+        if (!string.IsNullOrWhiteSpace(request?.RefreshToken))
+        {
+            try
+            {
+                using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+                const string revokeSql = @"
+                    UPDATE public.refresh_tokens
+                    SET is_revoked = true, revoked_at = NOW(), revoked_reason = 'User Logout'
+                    WHERE token = @RefreshToken AND is_revoked = false;";
+                await connection.ExecuteAsync(revokeSql, new { RefreshToken = request.RefreshToken.Trim() });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error revoking refresh token on logout");
+            }
+        }
+
+        return Ok(new { message = "Logged out successfully." });
     }
 
     [HttpGet("capabilities")]
