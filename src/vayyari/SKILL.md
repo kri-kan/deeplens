@@ -205,8 +205,10 @@ npx expo start
 # Start for Android specifically
 npx expo start --android
 
-# Build APK (development)
-npx expo build:android
+# Build Standalone Release APK (Integrated Build Flow)
+./infrastructure/deploy.sh vayyari-apk
+# or from root: make build-vayyari-apk
+# Output placed in publish/vayyari/vayyari-latest.apk (retaining 3 newest versions)
 
 # Clear cache if things break
 npx expo start --clear
