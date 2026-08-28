@@ -130,6 +130,61 @@ else
 fi
 fi
 
+# --- Build Standalone Vayyari Release APK ---
+if should_build "vayyari-apk"; then
+vayyari_apk_path="src/vayyari/android"
+vayyari_dest="$ROOT_DIR/publish/vayyari"
+
+echo -e "\e[36m--- Building Standalone Vayyari Release APK ($vayyari_apk_path) ---\e[0m"
+mkdir -p "$vayyari_dest"
+
+cd "$ROOT_DIR/$vayyari_apk_path" || exit 1
+./gradlew assembleRelease
+
+if [ $? -eq 0 ]; then
+    apk_source="$ROOT_DIR/$vayyari_apk_path/app/build/outputs/apk/release/app-release.apk"
+    if [ -f "$apk_source" ]; then
+        timestamp=$(date +%Y%m%d_%H%M%S)
+        versioned_apk="$vayyari_dest/vayyari-$timestamp.apk"
+        latest_apk="$vayyari_dest/vayyari-latest.apk"
+
+        cp "$apk_source" "$versioned_apk"
+        cp "$apk_source" "$latest_apk"
+
+        # Prune older versioned APKs, retaining the 3 newest
+        ls -1t "$vayyari_dest"/vayyari-[0-9]*_[0-9]*.apk 2>/dev/null | tail -n +4 | xargs -r rm -f
+
+        apk_size=$(du -h "$latest_apk" | cut -f1)
+        apk_sha=$(sha256sum "$latest_apk" | cut -d' ' -f1)
+        echo -e "\e[32mSuccessfully generated Vayyari APK: $latest_apk ($apk_size, SHA256: $apk_sha)\e[0m"
+    else
+        echo -e "\e[31mAPK file not found at $apk_source!\e[0m"
+    fi
+else
+    echo -e "\e[31mGradle assembleRelease failed!\e[0m"
+fi
+cd "$ROOT_DIR" || exit 1
+fi
+
+# --- Export Vayyari OTA Bundle ---
+if should_build "vayyari-ota"; then
+vayyari_path="src/vayyari"
+vayyari_ota_dest="$ROOT_DIR/publish/vayyari/ota"
+
+echo -e "\e[36m--- Exporting Vayyari OTA Bundle ($vayyari_path) ---\e[0m"
+mkdir -p "$vayyari_ota_dest"
+
+cd "$ROOT_DIR/$vayyari_path" || exit 1
+npx expo export --output-dir "$vayyari_ota_dest"
+
+if [ $? -eq 0 ]; then
+    echo -e "\e[32mSuccessfully exported Vayyari OTA Bundle to $vayyari_ota_dest\e[0m"
+else
+    echo -e "\e[31mVayyari OTA export failed!\e[0m"
+fi
+cd "$ROOT_DIR" || exit 1
+fi
+
 echo -e "\e[33m--- Restarting Containers ---\e[0m"
 cd "$ROOT_DIR/setupscripts/application/services"
 
