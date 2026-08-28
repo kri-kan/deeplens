@@ -11,12 +11,13 @@ Last Updated: December 20, 2025
 DeepLens uses **NextGen.Identity** (based on Duende IdentityServer) as its centralized Identity Provider (IdP).
 
 ### Token Lifecycle
-- **Access Tokens**: Short-lived JWTs (typically 1 hour).
-- **Refresh Tokens**: Long-lived tokens for seamless session extension.
+- **Access Tokens**: Short-lived JWTs (24 hours).
+- **Refresh Tokens**: Long-lived 90-day tokens with sliding Refresh Token Rotation (RTR).
+- **Detailed Specification**: See [Persistent Sessions & Token Architecture](../architecture/persistent-sessions-and-auth.md) for full token flow, mutexed retry queues, threat model, and cross-platform matrix.
 - **Grant Types**: 
-  - `authorization_code` (with PKCE) for Web UI.
+  - `password` / Direct API login (`POST /api/v1/auth/login`).
+  - `authorization_code` (with PKCE) for Web UI / Identity server delegation.
   - `client_credentials` for machine-to-machine (M2M) communication.
-  - `password` (Development only) for quick testing.
 
 ### Token Claims
 Every JWT issued by DeepLens contains:

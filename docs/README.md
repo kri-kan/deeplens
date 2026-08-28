@@ -9,6 +9,7 @@ Welcome to the DeepLens Documentation Hub. This directory is organized to help b
 ### 🏗️ [Architecture](./architecture/)
 *Fundamental design principles and system structure.*
 - [System Overview](./architecture/system-overview.md) - The "Big Picture" of DeepLens.
+- [Persistent Sessions & Auth](./architecture/persistent-sessions-and-auth.md) - JWT lifecycle, 90-day RTR, and cross-platform session persistence.
 - [Multi-Tenancy](./architecture/multi-tenancy.md) - Isolation models and tenant provisioning.
 - [Architecture Decisions (ADR)](./architecture/adr/) - Why we made certain technical choices.
 
