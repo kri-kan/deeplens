@@ -10,6 +10,7 @@ import {
   Modal as RNModal,
   PanResponder,
   TouchableWithoutFeedback,
+  BackHandler,
 } from 'react-native';
 import {
   Surface,
@@ -29,6 +30,9 @@ import {
   TextInput,
 } from 'react-native-paper';
 import { CompactChip } from '@/components/ui/CompactChip';
+import { ZoomableImage } from '@/components/ui/ZoomableImage';
+import { CategoryDropdownPicker } from '@/components/ui/CategoryDropdownPicker';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -133,10 +137,25 @@ export default function ProductDetailScreen() {
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [previewListing, setPreviewListing] = useState<any>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isPreviewZoomed, setIsPreviewZoomed] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [shareProgress, setShareProgress] = useState<number | null>(null);
+
+  // Android BackHandler for Preview Modal
+  useEffect(() => {
+    if (!isPreviewOpen) {
+      setIsPreviewZoomed(false);
+      return;
+    }
+    const onBackPress = () => {
+      setIsPreviewOpen(false);
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [isPreviewOpen]);
 
   const [viewMode, setViewMode] = useState<'carousel' | 'gallery'>('carousel');
 
@@ -809,8 +828,13 @@ export default function ProductDetailScreen() {
       </Portal>
 
       {/* High Quality Preview Modal */}
-      <RNModal visible={isPreviewOpen} transparent animationType="fade">
-        <View style={styles.modalBg}>
+      <RNModal
+        visible={isPreviewOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsPreviewOpen(false)}
+      >
+        <GestureHandlerRootView style={styles.modalBg}>
             <IconButton 
                 icon="close" 
                 iconColor="white" 
@@ -825,6 +849,7 @@ export default function ProductDetailScreen() {
                         data={Array(50).fill(mediaList).flat()}
                         horizontal
                         pagingEnabled
+                        scrollEnabled={!isPreviewZoomed}
                         showsHorizontalScrollIndicator={false}
                         getItemLayout={(_, index) => ({
                           length: width,
@@ -837,18 +862,20 @@ export default function ProductDetailScreen() {
                           if (mediaList.length > 0) {
                             setActiveMediaIndex(index % mediaList.length);
                           }
+                          setIsPreviewZoomed(false);
                         }}
                         keyExtractor={(_, index) => index.toString()}
                         renderItem={({ item: m }) => (
                           <View style={{ width, height: '100%', justifyContent: 'center' }}>
-                            <Image
-                                source={{ 
-                                uri: m.id && m.id !== '00000000-0000-0000-0000-000000000000' 
-                                    ? productService.getThumbnailUrl(m.id, 'large') 
-                                    : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/800')
-                                }}
-                                style={{ width: '100%', height: '100%' }}
-                                contentFit="contain"
+                            <ZoomableImage
+                              uri={
+                                m.id && m.id !== '00000000-0000-0000-0000-000000000000' 
+                                  ? productService.getThumbnailUrl(m.id, 'large') 
+                                  : (m.storagePath ? productService.getThumbnailUrlByPath(m.storagePath, 'large') : 'https://via.placeholder.com/800')
+                              }
+                              containerWidth={width}
+                              containerHeight={Dimensions.get('window').height * 0.7}
+                              onZoomChange={setIsPreviewZoomed}
                             />
                           </View>
                         )}
@@ -946,17 +973,17 @@ export default function ProductDetailScreen() {
                     </View>
                 </>
             )}
-        </View>
+        </GestureHandlerRootView>
       </RNModal>
 
       <Portal>
         <Dialog visible={isEditMetadataOpen} onDismiss={() => setIsEditMetadataOpen(false)}>
           <Dialog.Title>Edit Metadata</Dialog.Title>
           <Dialog.Content>
-            <TextInput
+            <CategoryDropdownPicker
               label="Category"
-              value={editCategory}
-              onChangeText={setEditCategory}
+              selectedCategory={editCategory}
+              onSelectCategory={setEditCategory}
               style={{ marginBottom: 12 }}
             />
             <TextInput

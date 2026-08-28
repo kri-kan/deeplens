@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Image, StyleSheet, Share, FlatList, Dimensions } from 'react-native';
+import { View, StyleSheet, Share, FlatList, Dimensions, BackHandler } from 'react-native';
 import { Portal, Modal, IconButton, Text } from 'react-native-paper';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ZoomableImage } from './ZoomableImage';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 interface ImagePreviewModalProps {
     visible: boolean;
@@ -16,13 +18,26 @@ interface ImagePreviewModalProps {
 export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, initialIndex = 0, title }: ImagePreviewModalProps) => {
     const images = imageUrls && imageUrls.length > 0 ? imageUrls : imageUrl ? [imageUrl] : [];
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
+    const [isZoomed, setIsZoomed] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
         if (visible && images.length > 0) {
             setCurrentIndex(initialIndex < images.length ? initialIndex : 0);
+            setIsZoomed(false);
         }
     }, [visible, initialIndex, images.length]);
+
+    // Handle Android hardware back press
+    useEffect(() => {
+        if (!visible) return;
+        const onBackPress = () => {
+            onDismiss();
+            return true;
+        };
+        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => subscription.remove();
+    }, [visible, onDismiss]);
 
     if (images.length === 0) return null;
 
@@ -31,6 +46,7 @@ export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, ini
     const onMomentumScrollEnd = (event: any) => {
         const index = Math.round(event.nativeEvent.contentOffset.x / width);
         setCurrentIndex(index);
+        setIsZoomed(false);
     };
 
     const getItemLayout = (_: any, index: number) => ({
@@ -46,7 +62,7 @@ export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, ini
                 onDismiss={onDismiss} 
                 contentContainerStyle={styles.container}
             >
-                <View style={styles.content}>
+                <GestureHandlerRootView style={styles.content}>
                     <View style={styles.headerButtons}>
                         {images.length > 1 && (
                             <Text style={styles.pageIndicator}>{currentIndex + 1} / {images.length}</Text>
@@ -73,15 +89,18 @@ export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, ini
                         keyExtractor={(item, index) => `${item}-${index}`}
                         horizontal
                         pagingEnabled
+                        scrollEnabled={!isZoomed}
                         showsHorizontalScrollIndicator={false}
                         onMomentumScrollEnd={onMomentumScrollEnd}
                         initialScrollIndex={initialIndex < images.length ? initialIndex : 0}
                         getItemLayout={getItemLayout}
                         renderItem={({ item }) => (
                             <View style={[styles.imageContainer, { width }]}>
-                                <Image 
-                                    source={{ uri: item }} 
-                                    style={styles.image} 
+                                <ZoomableImage
+                                    uri={item}
+                                    containerWidth={width}
+                                    containerHeight={height * 0.75}
+                                    onZoomChange={setIsZoomed}
                                 />
                             </View>
                         )}
@@ -92,7 +111,7 @@ export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, ini
                             <Text style={styles.title}>{title}</Text>
                         </View>
                     )}
-                </View>
+                </GestureHandlerRootView>
             </Modal>
         </Portal>
     );

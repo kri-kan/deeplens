@@ -8,6 +8,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { ProductCategoryPicker } from '@/components/utility/product/ProductCategoryPicker';
+import { CategoryDropdownPicker } from '@/components/ui/CategoryDropdownPicker';
 import { ProductTile } from '@/components/utility/product/ProductTile';
 import { FilterDrawer, FilterState, DEFAULT_FILTER_STATE } from '@/components/utility/product/FilterDrawer';
 
@@ -435,12 +436,10 @@ export default function ProductCatalogScreen() {
                   keyboardType="numeric"
                   mode="outlined"
                 />
-                <TextInput
+                <CategoryDropdownPicker
                   label="Category Tag"
-                  value={quickEditCategory}
-                  onChangeText={setQuickEditCategory}
-                  placeholder="e.g. Saree, Dress, Lehanga..."
-                  mode="outlined"
+                  selectedCategory={quickEditCategory}
+                  onSelectCategory={setQuickEditCategory}
                 />
               </View>
             )}
