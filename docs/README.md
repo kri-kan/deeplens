@@ -16,6 +16,9 @@ Welcome to the DeepLens Documentation Hub. This directory is organized to help b
 ### 🏁 [Guides & Onboarding](./guides/)
 *How to get things done.*
 - [Development Setup](../DEVELOPMENT.md) (Root) - Quick start for new devs.
+- [Mobile Build & Deploy](./guides/mobile-build-and-deploy.md) - Standalone APK compilation, self-hosted OTA updates, retention, and network security.
+- [Catalog & Media Features](./guides/catalog-and-media-features.md) - Fullscreen image preview modal, gesture zooming, back handlers, and category taxonomy picker.
+- [AI UI Design Preview Workflow](./guides/AI_UI_DESIGN_PREVIEW_WORKFLOW.md) - Pre-commit design validation, token extraction, and browser previews.
 - [FFmpeg Setup](./guides/ffmpeg-setup.md) - Video processing prerequisites.
 - [Troubleshooting](./guides/troubleshooting.md) - Common issues and solutions.
 
