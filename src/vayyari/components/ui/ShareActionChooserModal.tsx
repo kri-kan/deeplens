@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleSheet, View, Image, ScrollView, Modal, Dimensions } from 'react-native';
-import { Surface, Text, Button, IconButton, useTheme } from 'react-native-paper';
+import { StyleSheet, View, Image, ScrollView, Modal } from 'react-native';
+import { Surface, Text, Button, IconButton, TouchableRipple, Icon, useTheme } from 'react-native-paper';
 import { SharedMediaItem } from '@/context/ShareIntentContext';
 
 interface ShareActionChooserModalProps {
@@ -80,33 +80,109 @@ export const ShareActionChooserModal: React.FC<ShareActionChooserModalProps> = (
             Choose what you would like to create with this media:
           </Text>
 
-          {/* Action Buttons */}
+          {/* Action Tiles (Chevron List Item Approach) */}
           <View style={styles.actionContainer}>
-            <Button
-              mode="contained"
-              icon="cart-plus"
-              onPress={onCreateOrder}
-              buttonColor={theme.colors.primary}
-              textColor={theme.colors.onPrimary}
-              style={styles.actionButton}
-              contentStyle={styles.actionButtonContent}
-              labelStyle={styles.actionButtonLabel}
+            {/* Create Order Tile */}
+            <Surface
+              style={[
+                styles.actionTileSurface,
+                {
+                  backgroundColor: (theme.colors as any).surfaceContainerLowest || theme.colors.elevation.level1,
+                  borderColor: (theme.colors as any).outlineVariant || 'rgba(0,0,0,0.1)',
+                },
+              ]}
+              elevation={1}
             >
-              Create Order
-            </Button>
+              <TouchableRipple
+                onPress={onCreateOrder}
+                style={styles.actionTileRipple}
+                rippleColor="rgba(0, 0, 0, 0.08)"
+              >
+                <View style={styles.actionTileContent}>
+                  <View
+                    style={[
+                      styles.iconBadge,
+                      {
+                        backgroundColor: (theme.colors as any).primaryContainer || '#EADDFF',
+                      },
+                    ]}
+                  >
+                    <Icon
+                      source="cart-plus"
+                      size={22}
+                      color={(theme.colors as any).onPrimaryContainer || theme.colors.primary}
+                    />
+                  </View>
 
-            <Button
-              mode="outlined"
-              icon="tag-plus-outline"
-              onPress={onCreateProduct}
-              textColor={theme.colors.primary}
-              style={[styles.actionButton, { borderColor: theme.colors.primary, borderWidth: 1.5 }]}
-              contentStyle={styles.actionButtonContent}
-              labelStyle={styles.actionButtonLabel}
+                  <View style={styles.tileTextContainer}>
+                    <Text variant="titleMedium" style={[styles.tileTitle, { color: theme.colors.onSurface }]}>
+                      Create Order
+                    </Text>
+                    <Text variant="bodySmall" style={[styles.tileSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                      Start a new customer order with this staged media
+                    </Text>
+                  </View>
+
+                  <Icon
+                    source="chevron-right"
+                    size={24}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                </View>
+              </TouchableRipple>
+            </Surface>
+
+            {/* Create Product / Add to Catalog Tile */}
+            <Surface
+              style={[
+                styles.actionTileSurface,
+                {
+                  backgroundColor: (theme.colors as any).surfaceContainerLowest || theme.colors.elevation.level1,
+                  borderColor: (theme.colors as any).outlineVariant || 'rgba(0,0,0,0.1)',
+                },
+              ]}
+              elevation={1}
             >
-              Create Product / Add to Catalog
-            </Button>
+              <TouchableRipple
+                onPress={onCreateProduct}
+                style={styles.actionTileRipple}
+                rippleColor="rgba(0, 0, 0, 0.08)"
+              >
+                <View style={styles.actionTileContent}>
+                  <View
+                    style={[
+                      styles.iconBadge,
+                      {
+                        backgroundColor: (theme.colors as any).secondaryContainer || '#E8DEF8',
+                      },
+                    ]}
+                  >
+                    <Icon
+                      source="tag-plus-outline"
+                      size={22}
+                      color={(theme.colors as any).onSecondaryContainer || theme.colors.secondary}
+                    />
+                  </View>
 
+                  <View style={styles.tileTextContainer}>
+                    <Text variant="titleMedium" style={[styles.tileTitle, { color: theme.colors.onSurface }]}>
+                      Add to Catalog / Create Product
+                    </Text>
+                    <Text variant="bodySmall" style={[styles.tileSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                      Create a new product listing in your catalog
+                    </Text>
+                  </View>
+
+                  <Icon
+                    source="chevron-right"
+                    size={24}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                </View>
+              </TouchableRipple>
+            </Surface>
+
+            {/* Discard & Cancel Button */}
             <Button
               mode="text"
               icon="trash-can-outline"
@@ -114,7 +190,7 @@ export const ShareActionChooserModal: React.FC<ShareActionChooserModalProps> = (
               textColor={theme.colors.error}
               style={styles.discardButton}
             >
-              Discard Media
+              Discard & Cancel
             </Button>
           </View>
         </Surface>
@@ -196,17 +272,41 @@ const styles = StyleSheet.create({
   actionContainer: {
     gap: 12,
   },
-  actionButton: {
-    borderRadius: 14,
+  actionTileSurface: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
-  actionButtonContent: {
-    paddingVertical: 6,
+  actionTileRipple: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  actionButtonLabel: {
+  actionTileContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  tileTextContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  tileTitle: {
+    fontWeight: '600',
     fontSize: 15,
-    fontWeight: 'bold',
+  },
+  tileSubtitle: {
+    marginTop: 2,
+    lineHeight: 16,
   },
   discardButton: {
     marginTop: 4,
   },
 });
+
