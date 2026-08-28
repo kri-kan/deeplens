@@ -1,6 +1,6 @@
 # 📤 Multi-Action Share Intent & Local Media Staging Guide
 
-This guide documents the native Android Share Intent integration, stream-to-local-cache staging architecture, Instagram-style action modal, deferred MinIO upload policy, and product/order creation workflows in the **Vayyari** client application.
+This guide documents the native Android Share Intent integration, `<activity-alias>` share targets, stream-to-local-cache staging architecture, deep link parameter emission, Expo Router `share-target` routing, deferred MinIO upload policy, and product/order creation workflows in the **Vayyari** client application.
 
 ---
 
@@ -9,41 +9,49 @@ This guide documents the native Android Share Intent integration, stream-to-loca
 ```mermaid
 flowchart TD
     subgraph External App
-        A[External App / Gallery / WhatsApp / Instagram] -->|ACTION_SEND / ACTION_SEND_MULTIPLE| B[Android System Share Sheet]
+        A[External App / Gallery / WhatsApp / Instagram] -->|Share Media| B[Android System Share Sheet]
     end
 
-    subgraph Native Android Layer (MainActivity.kt)
-        B -->|Select Vayyari| C[MainActivity.handleShareIntent]
-        C -->|Inspect EXTRA_STREAM| D{Single or Multi?}
-        D -->|Single Uri| E[Open InputStream]
-        D -->|ArrayList of Uris| E
-        E -->|Stream copy to cacheDir| F["staged_share/{sessionId}/media_{i}.{ext}"]
-        F -->|Construct Deep Link| G["vayyari://share-target?sessionId={id}&uris={localUris}"]
-        G -->|Set Intent Action ACTION_VIEW| H[Expo Router / Linking]
+    subgraph Native Android Layer (MainActivity.kt & Manifest Aliases)
+        B -->|Select 'Vayyari: Create Order'| C1[Activity Alias: .ShareOrderActivity]
+        B -->|Select 'Vayyari: Add Product'| C2[Activity Alias: .ShareProductActivity]
+        C1 --> D[MainActivity.handleShareIntent]
+        C2 --> D
+        D -->|Inspect EXTRA_STREAM| E{Single or Multi?}
+        E -->|Single Uri / ArrayList of Uris| F[Stream copy to cacheDir]
+        F --> G["staged_share/{sessionId}/media_{i}.{ext}"]
+        G -->|Inspect intent.component.shortClassName| H{Detect Action}
+        H -->|ShareOrderActivity| I["vayyari://share-target?action=order&sessionId={id}&uris={uris}"]
+        H -->|ShareProductActivity| J["vayyari://share-target?action=product&sessionId={id}&uris={uris}"]
+        H -->|Other / Fallback| K["vayyari://share-target?action=chooser&sessionId={id}&uris={uris}"]
+        I --> L[Set Intent Action ACTION_VIEW]
+        J --> L
+        K --> L
     end
 
-    subgraph React Native Runtime (Vayyari)
-        H --> I[useShareIntent Hook]
-        I -->|Parse Deep Link Query Params| J[ShareActionChooserModal]
-        J -->|Action: Create Order| K[Navigate to /(tabs)/new]
-        J -->|Action: Create Product| L[Navigate to /utilities/create-product]
-        J -->|Action: Discard Media| M[mediaStagingService.purgeSession]
-        M -->|Purge Local Folder| N[Zero Network / Zero MinIO Calls]
+    subgraph Expo Router & Deep Link Routing (app/share-target.tsx)
+        L --> M[app/share-target.tsx]
+        M --> N[Parse Query Params: action, sessionId, uris]
+        N --> O[Populate ShareIntentContext: setSharedMedia]
+        O --> P{action param}
+        P -->|action=order| Q[router.replace '/(tabs)/new']
+        P -->|action=product| R[router.replace '/utilities/create-product']
+        P -->|action=chooser| S[router.replace '/(tabs)' / Open Chooser Modal]
     end
 
     subgraph Form Commit & Upload Policy
-        K --> O[NewOrderScreen]
-        L --> P[ProductCreationForm]
-        O -->|Submit Order| Q[commitCurrentSession -> Purge Local Staging]
-        P -->|Submit Product| R[Upload Staged Assets to MinIO -> commitCurrentSession]
+        Q --> T[NewOrderScreen]
+        R --> U[ProductCreationForm]
+        T -->|Submit Order| V[commitCurrentSession -> Purge Local Staging]
+        U -->|Submit Product| W[Upload Staged Assets to MinIO -> commitCurrentSession]
     end
 ```
 
 ---
 
-## 1. Native Android Intent Filter Configuration
+## 1. Native Android `<activity-alias>` Share Target Configuration
 
-The Android application manifest registers intent filters to accept single (`ACTION_SEND`) and multi-item (`ACTION_SEND_MULTIPLE`) share actions for image and video MIME types.
+The Android application manifest registers dedicated `<activity-alias>` targets pointing to `MainActivity`. This surfaces distinct entry points in the Android system share sheet with tailored labels, allowing merchants to choose directly whether to create an order or add a catalog product from external apps (e.g., WhatsApp, Instagram, Gallery).
 
 ### `AndroidManifest.xml`
 ```xml
@@ -69,34 +77,63 @@ The Android application manifest registers intent filters to accept single (`ACT
         <data android:scheme="vayyari"/>
         <data android:scheme="exp+vayyari"/>
     </intent-filter>
+</activity>
 
-    <!-- Single Media Share Intent -->
-    <intent-filter data-generated="true">
+<!-- Share Target 1: Create Order -->
+<activity-alias
+    android:name=".ShareOrderActivity"
+    android:targetActivity=".MainActivity"
+    android:label="Vayyari: Create Order"
+    android:icon="@mipmap/ic_launcher"
+    android:exported="true">
+    <intent-filter>
         <action android:name="android.intent.action.SEND"/>
         <data android:mimeType="image/*"/>
         <data android:mimeType="video/*"/>
         <category android:name="android.intent.category.DEFAULT"/>
     </intent-filter>
-
-    <!-- Multi-Media Share Intent -->
-    <intent-filter data-generated="true">
+    <intent-filter>
         <action android:name="android.intent.action.SEND_MULTIPLE"/>
         <data android:mimeType="image/*"/>
         <data android:mimeType="video/*"/>
         <category android:name="android.intent.category.DEFAULT"/>
     </intent-filter>
-</activity>
+</activity-alias>
+
+<!-- Share Target 2: Add Product -->
+<activity-alias
+    android:name=".ShareProductActivity"
+    android:targetActivity=".MainActivity"
+    android:label="Vayyari: Add Product"
+    android:icon="@mipmap/ic_launcher"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.SEND"/>
+        <data android:mimeType="image/*"/>
+        <data android:mimeType="video/*"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+    </intent-filter>
+    <intent-filter>
+        <action android:name="android.intent.action.SEND_MULTIPLE"/>
+        <data android:mimeType="image/*"/>
+        <data android:mimeType="video/*"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+    </intent-filter>
+</activity-alias>
 ```
 
 ---
 
-## 2. Stream-to-Local-Cache Staging Mechanism (`MainActivity.kt`)
+## 2. Stream-to-Local-Cache Staging & Component Detection (`MainActivity.kt`)
 
 ### Problem: Android `content://` URI Expiration
 When an external application shares media, it grants temporary read permissions via `content://` URIs. In Android 11+ (API 30+) and Android 13+ (API 33+), these security grants expire rapidly once the sending activity terminates or the user navigates across screens, causing `SecurityException: Permission Denial` when the app tries to access or upload the file later.
 
-### Solution: Immediate Native Stream Staging
-`MainActivity.kt` intercepts the incoming share intent during both cold start (`onCreate`) and warm resume (`onNewIntent`), immediately copying raw input streams into an isolated application cache folder:
+### Solution: Immediate Native Stream Staging & Component Classification
+`MainActivity.kt` intercepts the incoming share intent during both cold start (`onCreate`) and warm resume (`onNewIntent`):
+1. Copies raw input streams into an isolated application cache directory (`staged_share/{sessionId}/`).
+2. Inspects `intent.component?.shortClassName` to identify whether `.ShareOrderActivity` or `.ShareProductActivity` was chosen.
+3. Constructs an internal deep link with `action=order`, `action=product`, or `action=chooser`.
 
 ```kotlin
 private fun handleShareIntent(intent: Intent?) {
@@ -158,10 +195,16 @@ private fun handleShareIntent(intent: Intent?) {
                 }
             }
 
-            // 3. Re-target intent into an internal deep link
+            // 3. Detect target action from component short class name & construct deep link
             if (localUris.isNotEmpty()) {
+                val componentClass = intent.component?.shortClassName ?: ""
+                val targetAction = when {
+                    componentClass.endsWith("ShareOrderActivity") -> "order"
+                    componentClass.endsWith("ShareProductActivity") -> "product"
+                    else -> "chooser"
+                }
                 val encodedUris = localUris.joinToString(",") { Uri.encode(it) }
-                val deepLink = "vayyari://share-target?sessionId=$sessionId&uris=$encodedUris"
+                val deepLink = "vayyari://share-target?action=$targetAction&sessionId=$sessionId&uris=$encodedUris"
                 intent.action = Intent.ACTION_VIEW
                 intent.data = Uri.parse(deepLink)
             }
@@ -181,9 +224,93 @@ private fun handleShareIntent(intent: Intent?) {
 
 ---
 
-## 3. Instagram-Style Share Action Chooser Modal
+## 3. Expo Router Direct Routing & Context Population (`app/share-target.tsx`)
 
-When media is received, `useShareIntent` displays `ShareActionChooserModal`, giving the merchant an immediate choice of destination:
+The Expo Router route `app/share-target.tsx` acts as the single landing hub for incoming `vayyari://share-target` deep links.
+
+### Deep Link Resolution Flow
+1. Extracts `action` (`order` | `product` | `chooser`), `sessionId`, and `uris` from query parameters.
+2. Converts raw comma-separated URIs into typed `SharedMediaItem` models (`image` vs `video`).
+3. Invokes `setSharedMedia(items, sessionId)` on `ShareIntentContext` to hold the staged media in global React state.
+4. Performs immediate redirection using `router.replace`:
+   - `action === 'order'` ➡️ navigates directly to `/(tabs)/new` (New Order creation screen).
+   - `action === 'product'` ➡️ navigates directly to `/utilities/create-product` (Product Creation form).
+   - `action === 'chooser'` / fallback ➡️ navigates to `/(tabs)` where `ShareActionChooserModal` is presented.
+
+### `app/share-target.tsx` Implementation
+```typescript
+import React, { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useShareIntentContext, SharedMediaItem } from '@/context/ShareIntentContext';
+
+export default function ShareTargetScreen() {
+  const router = useRouter();
+  const theme = useTheme();
+  const params = useLocalSearchParams<{
+    action?: string;
+    sessionId?: string;
+    uris?: string;
+    media?: string;
+  }>();
+  const { setSharedMedia } = useShareIntentContext();
+
+  useEffect(() => {
+    const action = params.action || 'chooser';
+    const sessionId = params.sessionId;
+    const urisParam = params.uris || params.media;
+
+    if (urisParam && typeof urisParam === 'string') {
+      const uris = urisParam.split(',').filter(Boolean);
+      const items: SharedMediaItem[] = uris.map(uri => {
+        const lower = uri.toLowerCase();
+        const isVideo =
+          lower.endsWith('.mp4') ||
+          lower.endsWith('.mov') ||
+          lower.endsWith('.mkv') ||
+          lower.endsWith('.webm');
+        return {
+          uri,
+          type: isVideo ? 'video' : 'image',
+          sessionId,
+        };
+      });
+
+      // Stage media in context
+      setSharedMedia(items, sessionId);
+
+      // Direct route based on target action
+      if (action === 'order') {
+        router.replace('/(tabs)/new');
+      } else if (action === 'product') {
+        router.replace('/utilities/create-product');
+      } else {
+        // Fallback to tabs where chooser modal will be handled or displayed
+        router.replace('/(tabs)');
+      }
+    } else {
+      // If no URIs received, route back to main tabs
+      router.replace('/(tabs)');
+    }
+  }, [params, router, setSharedMedia]);
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+      <Text variant="bodyMedium" style={[styles.text, { color: theme.colors.onSurfaceVariant }]}>
+        Processing shared media...
+      </Text>
+    </View>
+  );
+}
+```
+
+---
+
+## 4. Fallback: Instagram-Style Share Action Chooser Modal
+
+When an intent does not match a direct action alias (e.g., standard share deep link with `action=chooser`), `useShareIntent` displays `ShareActionChooserModal`:
 
 ```
 +-------------------------------------------------------------+
@@ -203,7 +330,7 @@ When media is received, `useShareIntent` displays `ShareActionChooserModal`, giv
 +-------------------------------------------------------------+
 ```
 
-### Modal Options & Navigation
+### Modal Actions & Navigation
 1. **Create Order (`onCreateOrder`)**:
    - Stores the staged items and `sessionId` in `ShareIntentContext`.
    - Dismisses modal and navigates to `/(tabs)/new`.
@@ -218,28 +345,31 @@ When media is received, `useShareIntent` displays `ShareActionChooserModal`, giv
 
 ---
 
-## 4. Local Media Staging Lifecycle & Deferred MinIO Upload Policy
+## 5. Local Media Staging Lifecycle & Deferred MinIO Upload Policy
 
 The media lifecycle guarantees zero storage waste and zero network overhead for aborted drafts.
 
 ```mermaid
 stateDiagram-v2
     [*] --> StagedLocally: Android Share Intent / Stream Copy
-    StagedLocally --> ActionModal: useShareIntent Trigger
+    StagedLocally --> DirectRouting: MainActivity detects .ShareOrderActivity / .ShareProductActivity
+    StagedLocally --> ActionModal: Fallback / action=chooser
     
     ActionModal --> Discarded: Tap 'Discard Media' / Dismiss
     Discarded --> [*]: mediaStagingService.purgeSession() [0 Network / 0 MinIO]
     
+    DirectRouting --> DraftingOrder: action=order -> /(tabs)/new
     ActionModal --> DraftingOrder: Tap 'Create Order'
     DraftingOrder --> OrderCancelled: User Cancels / Navigates Back
-    OrderCancelled --> [*]: mediaStagingService.purgeSession()
     DraftingOrder --> OrderCommitted: User Confirms Order
+    OrderCancelled --> [*]: mediaStagingService.purgeSession()
     OrderCommitted --> [*]: mediaStagingService.commitSession()
     
+    DirectRouting --> DraftingProduct: action=product -> /utilities/create-product
     ActionModal --> DraftingProduct: Tap 'Create Product'
     DraftingProduct --> ProductCancelled: User Cancels
-    ProductCancelled --> [*]: mediaStagingService.purgeSession()
     DraftingProduct --> MinIOUploading: User Submits Product
+    ProductCancelled --> [*]: mediaStagingService.purgeSession()
     MinIOUploading --> ProductCommitted: MinIO Upload Success
     ProductCommitted --> [*]: mediaStagingService.commitSession()
 ```
@@ -252,9 +382,9 @@ stateDiagram-v2
 
 ---
 
-## 5. Form Integrations
+## 6. Form Integrations
 
-### 5.1 `NewOrderScreen` (`src/vayyari/app/(tabs)/new.tsx`)
+### 6.1 `NewOrderScreen` (`src/vayyari/app/(tabs)/new.tsx`)
 - Displays staged images/videos in `SharedMediaPreview` at the top of the order creation screen.
 - On order save (`handleCreateOrder`), records local URIs/references and invokes `commitCurrentSession()`:
   ```typescript
@@ -262,7 +392,7 @@ stateDiagram-v2
   await commitCurrentSession();
   ```
 
-### 5.2 `ProductCreationForm` (`src/vayyari/components/utility/product/ProductCreationForm.tsx`)
+### 6.2 `ProductCreationForm` (`src/vayyari/components/utility/product/ProductCreationForm.tsx`)
 - Reads `sharedMedia` from `useShareIntentContext()` and automatically maps items into `ImageUploadList`:
   ```typescript
   if (sharedMedia && sharedMedia.length > 0) {
@@ -286,10 +416,12 @@ stateDiagram-v2
 
 ---
 
-## 6. Verification & Troubleshooting
+## 7. Verification & Troubleshooting
 
 | Symptom | Probable Cause | Resolution |
 | :--- | :--- | :--- |
 | `SecurityException: Permission Denial` on Android | Sharing app revoked `content://` URI permission | Verify `MainActivity.kt` copies `EXTRA_STREAM` to local `staged_share/` before deep linking |
-| Modal does not appear upon share | `launchMode` is not `singleTask` or deep link scheme mismatch | Ensure `MainActivity` has `android:launchMode="singleTask"` and intent filter handles scheme `vayyari://` |
+| Share sheet shows only one generic entry | Manifest `<activity-alias>` tags missing | Ensure `.ShareOrderActivity` and `.ShareProductActivity` are registered in `AndroidManifest.xml` with proper intent filters |
+| Direct routing fails / modal always opens | `intent.component` short class name mismatch | Check `MainActivity.kt` `shortClassName` comparison against `ShareOrderActivity` and `ShareProductActivity` |
+| Deep link not handled by app | Scheme missing or `singleTask` not set | Verify `MainActivity` has `android:launchMode="singleTask"` and intent filter handles scheme `vayyari://` |
 | Orphaned cache buildup | App crashed before commit or discard | `cleanupOldStaging()` automatically sweeps staging folders older than 24h on next startup |
