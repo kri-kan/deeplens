@@ -103,6 +103,7 @@ function InnerRootLayout() {
             )}
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true }} />
             <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
+            <Stack.Screen name="share-target" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
           <ShareActionChooserModal
