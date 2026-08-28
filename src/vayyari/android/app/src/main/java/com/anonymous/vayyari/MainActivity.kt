@@ -90,8 +90,14 @@ class MainActivity : ReactActivity() {
         }
 
         if (localUris.isNotEmpty()) {
+          val componentClass = intent.component?.shortClassName ?: ""
+          val targetAction = when {
+            componentClass.endsWith("ShareOrderActivity") -> "order"
+            componentClass.endsWith("ShareProductActivity") -> "product"
+            else -> "chooser"
+          }
           val encodedUris = localUris.joinToString(",") { Uri.encode(it) }
-          val deepLink = "vayyari://share-target?sessionId=$sessionId&uris=$encodedUris"
+          val deepLink = "vayyari://share-target?action=$targetAction&sessionId=$sessionId&uris=$encodedUris"
           intent.action = Intent.ACTION_VIEW
           intent.data = Uri.parse(deepLink)
         }
