@@ -19,6 +19,7 @@ Welcome to the DeepLens Documentation Hub. This directory is organized to help b
 
 ### 🏁 [Guides & Operations](./guides/)
 *Operational workflows, build procedures, and UI features.*
+- [Share Intent & Local Media Staging](./guides/share-intent-and-media-staging.md) - Native Android share intent filter, stream-to-local-cache staging, multi-action chooser modal, and deferred MinIO upload policy.
 - [Mobile Build & Deployment](./guides/mobile-build-and-deploy.md) - Standalone native APK builds, self-hosted OTA updates via MinIO, and Android cleartext networking.
 - [Catalog & Media Features](./guides/catalog-and-media-features.md) - Fullscreen image preview modal, gesture-driven zoom/pan arbitration, and dynamic category dropdown taxonomy.
 - [Development Setup](../DEVELOPMENT.md) (Root) - Quick start for new developers.
