@@ -8,7 +8,7 @@ import { SharedMediaPreview } from '@/components/order/SharedMediaPreview';
 export default function NewOrderScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { sharedMedia, clearSharedMedia } = useShareIntentContext();
+  const { sharedMedia, commitCurrentSession, discardCurrentSession } = useShareIntentContext();
 
   const [customerName, setCustomerName] = useState('');
   const [phone, setPhone] = useState('');
@@ -47,6 +47,9 @@ export default function NewOrderScreen() {
 
       console.log('Order created successfully:', orderPayload);
 
+      // Clean up staged local session since order creation committed
+      await commitCurrentSession();
+
       Alert.alert(
         'Order Created Successfully 🎉',
         `Order registered via ${source} (${paymentMode}) for ₹${orderAmount}.`,
@@ -54,7 +57,6 @@ export default function NewOrderScreen() {
           {
             text: 'View Orders',
             onPress: () => {
-              clearSharedMedia();
               router.push('/(tabs)/orders');
             },
           },

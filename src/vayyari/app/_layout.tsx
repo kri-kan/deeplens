@@ -14,6 +14,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { ShareIntentProvider } from '../context/ShareIntentContext';
 import { useShareIntent } from '../hooks/useShareIntent';
+import { ShareActionChooserModal } from '../components/ui/ShareActionChooserModal';
 
 console.log('[RootLayout] Global execution started');
 
@@ -42,7 +43,14 @@ export default function RootLayout() {
 function InnerRootLayout() {
   const { colorScheme } = useAppTheme();
   const { token, isLoading } = useAuth();
-  useShareIntent();
+  const {
+    modalVisible,
+    modalMedia,
+    modalSessionId,
+    handleCreateOrder,
+    handleCreateProduct,
+    handleDiscard,
+  } = useShareIntent();
 
   console.log('[RootLayout] InnerRootLayout render:', { colorScheme, isLoading, hasToken: !!token });
 
@@ -50,7 +58,6 @@ function InnerRootLayout() {
   const navTheme = colorScheme === 'dark' 
     ? { ...NavDarkTheme, colors: { ...NavDarkTheme.colors, background: VayyariEmeraldNocturneTheme.colors.background, card: VayyariEmeraldNocturneTheme.colors.surface } } 
     : { ...NavDefaultTheme, colors: { ...NavDefaultTheme.colors, background: VayyariEmeraldTheme.colors.background, card: VayyariEmeraldTheme.colors.surface } };
-
 
   useEffect(() => {
     if (colorScheme && !isLoading) {
@@ -80,8 +87,6 @@ function InnerRootLayout() {
     }
   }, []);
 
-
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PaperProvider theme={paperTheme}>
@@ -100,6 +105,14 @@ function InnerRootLayout() {
             <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
+          <ShareActionChooserModal
+            visible={modalVisible}
+            mediaItems={modalMedia}
+            sessionId={modalSessionId}
+            onCreateOrder={handleCreateOrder}
+            onCreateProduct={handleCreateProduct}
+            onDiscard={handleDiscard}
+          />
         </NavigationThemeProvider>
       </PaperProvider>
     </GestureHandlerRootView>

@@ -1,48 +1,84 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { mediaStagingService } from '@/services/media-staging.service';
 
 export interface SharedMediaItem {
   uri: string;
   type?: 'image' | 'video';
   fileName?: string;
+  sessionId?: string;
 }
 
 interface ShareIntentContextType {
   sharedMedia: SharedMediaItem[];
-  setSharedMedia: (media: SharedMediaItem[]) => void;
+  currentSessionId?: string;
+  setSharedMedia: (media: SharedMediaItem[], sessionId?: string) => void;
   addSharedMedia: (media: SharedMediaItem[]) => void;
   removeSharedMedia: (index: number) => void;
   clearSharedMedia: () => void;
+  discardCurrentSession: () => Promise<void>;
+  commitCurrentSession: () => Promise<void>;
 }
 
 const ShareIntentContext = createContext<ShareIntentContextType>({
   sharedMedia: [],
+  currentSessionId: undefined,
   setSharedMedia: () => {},
   addSharedMedia: () => {},
   removeSharedMedia: () => {},
   clearSharedMedia: () => {},
+  discardCurrentSession: async () => {},
+  commitCurrentSession: async () => {},
 });
 
 export const ShareIntentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [sharedMedia, setSharedMedia] = useState<SharedMediaItem[]>([]);
+  const [sharedMedia, setSharedMediaState] = useState<SharedMediaItem[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>(undefined);
+
+  const setSharedMedia = (media: SharedMediaItem[], sessionId?: string) => {
+    setSharedMediaState(media);
+    if (sessionId !== undefined) {
+      setCurrentSessionId(sessionId);
+    }
+  };
 
   const addSharedMedia = (newItems: SharedMediaItem[]) => {
-    setSharedMedia(prev => [...prev, ...newItems]);
+    setSharedMediaState(prev => [...prev, ...newItems]);
   };
 
   const removeSharedMedia = (index: number) => {
-    setSharedMedia(prev => prev.filter((_, i) => i !== index));
+    setSharedMediaState(prev => prev.filter((_, i) => i !== index));
   };
 
-  const clearSharedMedia = () => setSharedMedia([]);
+  const clearSharedMedia = () => {
+    setSharedMediaState([]);
+    setCurrentSessionId(undefined);
+  };
+
+  const discardCurrentSession = async () => {
+    if (currentSessionId) {
+      await mediaStagingService.purgeSession(currentSessionId);
+    }
+    clearSharedMedia();
+  };
+
+  const commitCurrentSession = async () => {
+    if (currentSessionId) {
+      await mediaStagingService.commitSession(currentSessionId);
+    }
+    clearSharedMedia();
+  };
 
   return (
     <ShareIntentContext.Provider
       value={{
         sharedMedia,
+        currentSessionId,
         setSharedMedia,
         addSharedMedia,
         removeSharedMedia,
         clearSharedMedia,
+        discardCurrentSession,
+        commitCurrentSession,
       }}
     >
       {children}

@@ -27,9 +27,9 @@ class MainActivity : ReactActivity() {
   }
 
   override fun onNewIntent(intent: Intent) {
+    handleShareIntent(intent)
     super.onNewIntent(intent)
     setIntent(intent)
-    handleShareIntent(intent)
   }
 
   private fun handleShareIntent(intent: Intent?) {
@@ -37,8 +37,9 @@ class MainActivity : ReactActivity() {
     val action = intent.action
     val type = intent.type
 
-    if ((Intent.ACTION_SEND == action || Intent.ACTION_SEND_MULTIPLE == action) && type?.startsWith("image/") == true) {
-      val uris = mutableListOf<String>()
+    val isMedia = type != null && (type.startsWith("image/") || type.startsWith("video/") || type == "*/*")
+    if ((Intent.ACTION_SEND == action || Intent.ACTION_SEND_MULTIPLE == action) && isMedia) {
+      val rawUris = mutableListOf<Uri>()
 
       if (Intent.ACTION_SEND == action) {
         val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -47,7 +48,7 @@ class MainActivity : ReactActivity() {
           @Suppress("DEPRECATION")
           intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
         }
-        uri?.let { uris.add(it.toString()) }
+        uri?.let { rawUris.add(it) }
       } else if (Intent.ACTION_SEND_MULTIPLE == action) {
         val uriList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
           intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
@@ -55,13 +56,45 @@ class MainActivity : ReactActivity() {
           @Suppress("DEPRECATION")
           intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
         }
-        uriList?.forEach { uri -> uris.add(uri.toString()) }
+        uriList?.forEach { uri -> rawUris.add(uri) }
       }
 
-      if (uris.isNotEmpty()) {
-        val encodedUris = uris.joinToString(",") { Uri.encode(it) }
-        intent.action = Intent.ACTION_VIEW
-        intent.data = Uri.parse("vayyari://new?media=$encodedUris")
+      if (rawUris.isNotEmpty()) {
+        val sessionId = java.util.UUID.randomUUID().toString()
+        val stageDir = java.io.File(cacheDir, "staged_share/$sessionId").apply { mkdirs() }
+        val localUris = mutableListOf<String>()
+
+        rawUris.forEachIndexed { index, uri ->
+          try {
+            val mimeType = contentResolver.getType(uri) ?: type ?: "image/jpeg"
+            val extension = when {
+              mimeType.contains("png") -> "png"
+              mimeType.contains("webp") -> "webp"
+              mimeType.contains("gif") -> "gif"
+              mimeType.contains("mp4") -> "mp4"
+              mimeType.contains("quicktime") || mimeType.contains("mov") -> "mov"
+              mimeType.contains("video") -> "mp4"
+              else -> "jpg"
+            }
+            val targetFile = java.io.File(stageDir, "media_${index}.${extension}")
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+              targetFile.outputStream().use { outputStream ->
+                inputStream.copyTo(outputStream)
+              }
+            }
+            localUris.add(Uri.fromFile(targetFile).toString())
+          } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to stage shared media stream: $uri", e)
+            localUris.add(uri.toString())
+          }
+        }
+
+        if (localUris.isNotEmpty()) {
+          val encodedUris = localUris.joinToString(",") { Uri.encode(it) }
+          val deepLink = "vayyari://share-target?sessionId=$sessionId&uris=$encodedUris"
+          intent.action = Intent.ACTION_VIEW
+          intent.data = Uri.parse(deepLink)
+        }
       }
     }
   }

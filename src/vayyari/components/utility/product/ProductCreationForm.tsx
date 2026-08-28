@@ -6,6 +6,7 @@ import { InstagramLinkSection } from './InstagramLinkSection';
 import { ImageUploadList } from './ImageUploadList';
 import { useCreateProduct } from '@/hooks/useCreateProduct';
 import { ProductCategory } from '@/types/products';
+import { useShareIntentContext } from '@/context/ShareIntentContext';
 
 interface ProductCreationFormProps {
   initialData?: {
@@ -28,6 +29,19 @@ export const ProductCreationForm: React.FC<ProductCreationFormProps> = ({
   submitLabel = 'Create Product'
 }) => {
   const theme = useTheme();
+  const { sharedMedia, commitCurrentSession, discardCurrentSession } = useShareIntentContext();
+
+  const handleSuccessWrapper = async () => {
+    await commitCurrentSession();
+    onSuccess();
+  };
+
+  const handleCancelWrapper = async () => {
+    await discardCurrentSession();
+    if (onCancel) {
+      onCancel();
+    }
+  };
   
   const {
     loading,
@@ -46,9 +60,9 @@ export const ProductCreationForm: React.FC<ProductCreationFormProps> = ({
     handleCreate,
     linkedPosts,
     setLinkedPosts,
-  } = useCreateProduct(onSuccess);
+  } = useCreateProduct(handleSuccessWrapper);
 
-  // Initialize from props if available
+  // Initialize from props and sharedMedia if available
   React.useEffect(() => {
     if (initialData) {
       if (initialData.title) setTitle(initialData.title);
@@ -56,9 +70,26 @@ export const ProductCreationForm: React.FC<ProductCreationFormProps> = ({
       if (initialData.price) setPrice(initialData.price);
       if (initialData.category) setCategory(initialData.category);
       if (initialData.linkedPosts) setLinkedPosts(initialData.linkedPosts);
-      if (initialData.images) setImages(initialData.images);
+      if (initialData.images && initialData.images.length > 0) {
+        setImages(initialData.images);
+      }
     }
-  }, [initialData]);
+
+    if (sharedMedia && sharedMedia.length > 0) {
+      const mappedAssets = sharedMedia.map((m, idx) => ({
+        uri: m.uri,
+        width: 800,
+        height: 800,
+        fileName: m.fileName || `staged_media_${idx}.jpg`,
+        mimeType: m.type === 'video' ? 'video/mp4' : 'image/jpeg',
+      }));
+      setImages(prev => {
+        const existingUris = new Set(prev.map(p => p.uri));
+        const newToAdd = mappedAssets.filter(a => !existingUris.has(a.uri));
+        return [...prev, ...newToAdd];
+      });
+    }
+  }, [initialData, sharedMedia]);
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
@@ -116,11 +147,9 @@ export const ProductCreationForm: React.FC<ProductCreationFormProps> = ({
         />
 
         <View style={styles.actions}>
-          {onCancel && (
-            <Button mode="outlined" onPress={onCancel} style={styles.btn} disabled={loading}>
-              Cancel
-            </Button>
-          )}
+          <Button mode="outlined" onPress={handleCancelWrapper} style={styles.btn} disabled={loading}>
+            Cancel
+          </Button>
           <Button 
             mode="contained" 
             onPress={handleCreate} 
