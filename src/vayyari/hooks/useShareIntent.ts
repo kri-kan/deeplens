@@ -51,6 +51,7 @@ export function useShareIntent() {
       if (isShareTarget || isLegacyShare) {
         const urisParam = (parsed.queryParams?.uris || parsed.queryParams?.media) as string | undefined;
         const sessionIdParam = parsed.queryParams?.sessionId as string | undefined;
+        const actionParam = parsed.queryParams?.action as string | undefined;
 
         if (typeof urisParam === 'string' && urisParam.length > 0) {
           const uris = urisParam.split(',').filter(Boolean);
@@ -64,9 +65,17 @@ export function useShareIntent() {
             };
           });
 
-          setModalMedia(items);
-          setModalSessionId(sessionIdParam);
-          setModalVisible(true);
+          if (actionParam === 'order' || actionParam === 'product') {
+            setSharedMedia(items, sessionIdParam);
+            setModalVisible(false);
+            setModalMedia([]);
+            setModalSessionId(undefined);
+          } else {
+            // action === 'chooser' or no action
+            setModalMedia(items);
+            setModalSessionId(sessionIdParam);
+            setModalVisible(true);
+          }
         }
       }
     } catch (error) {
@@ -75,14 +84,18 @@ export function useShareIntent() {
   };
 
   const handleCreateOrder = () => {
-    setSharedMedia(modalMedia, modalSessionId);
     setModalVisible(false);
+    setSharedMedia(modalMedia, modalSessionId);
+    setModalMedia([]);
+    setModalSessionId(undefined);
     router.push('/(tabs)/new');
   };
 
   const handleCreateProduct = () => {
-    setSharedMedia(modalMedia, modalSessionId);
     setModalVisible(false);
+    setSharedMedia(modalMedia, modalSessionId);
+    setModalMedia([]);
+    setModalSessionId(undefined);
     router.push('/utilities/create-product');
   };
 
