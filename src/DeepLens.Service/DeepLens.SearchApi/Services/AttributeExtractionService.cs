@@ -1,6 +1,8 @@
 using DeepLens.Contracts.Ingestion;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace DeepLens.SearchApi.Services;
 
@@ -66,13 +68,13 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
                         Color = data.Color,
                         StitchType = data.StitchType,
                         WorkHeaviness = data.WorkHeaviness,
-                        Patterns = data.Patterns ?? new(),
-                        Occasions = data.Occasions ?? new(),
-                        Tags = data.Tags ?? new()
+                        Patterns = data.Patterns ?? new List<string>(),
+                        Occasions = data.Occasions ?? new List<string>(),
+                        Tags = data.Tags ?? new List<string>()
                     };
                 }
             }
-            _logger.LogWarning("Reasoning Service failed with status {Status}.", response.StatusCode);
+            _logger.LogWarning("Reasoning Service failed with status {Status}", response.StatusCode);
             return new ExtractedAttributes();
         }
         catch (Exception ex)
@@ -84,7 +86,7 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
 
     public async Task<SuggestedMetadata> SuggestGroupMetadataAsync(List<string> descriptions)
     {
-        _logger.LogInformation("Calling Reasoning Service (Phi-3) for group metadata suggestion...");
+        _logger.LogInformation("Calling Reasoning Service for group metadata suggestion...");
 
         try
         {
@@ -94,8 +96,9 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
 
             if (response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<SuggestResponse>();
-                if (data != null)
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var data = await response.Content.ReadFromJsonAsync<SuggestResponse>(options);
+                if (data != null && (!string.IsNullOrWhiteSpace(data.Title) || !string.IsNullOrWhiteSpace(data.Keywords)))
                 {
                     return new SuggestedMetadata
                     {
@@ -104,14 +107,30 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
                     };
                 }
             }
-            _logger.LogWarning("Reasoning Service failed with status {Status} for suggestion.", response.StatusCode);
-            return new SuggestedMetadata { Title = string.Empty, Keywords = string.Empty };
+            _logger.LogWarning("Reasoning Service returned status {Status} for suggestion. Using local heuristic fallback.", response.StatusCode);
+            return CreateFallbackMetadata(descriptions);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to call Reasoning Service for metadata suggestion.");
-            return new SuggestedMetadata { Title = string.Empty, Keywords = string.Empty };
+            _logger.LogError(ex, "Failed to call Reasoning Service for metadata suggestion. Using local heuristic fallback.");
+            return CreateFallbackMetadata(descriptions);
         }
+    }
+
+    private SuggestedMetadata CreateFallbackMetadata(List<string> descriptions)
+    {
+        var firstDesc = descriptions.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d)) ?? "New Story Collection";
+        var firstLine = firstDesc.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "New Story Collection";
+        var cleaned = Regex.Replace(firstLine, @"[*#_]", "").Trim();
+        if (cleaned.Length > 35)
+        {
+            cleaned = cleaned.Substring(0, 35).Trim();
+        }
+        return new SuggestedMetadata
+        {
+            Title = string.IsNullOrWhiteSpace(cleaned) ? "New Story Collection" : cleaned,
+            Keywords = ""
+        };
     }
 
     private class ReasoningResponse
@@ -127,7 +146,10 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
 
     private class SuggestResponse
     {
+        [JsonPropertyName("title")]
         public string? Title { get; set; }
+
+        [JsonPropertyName("keywords")]
         public string? Keywords { get; set; }
     }
 }

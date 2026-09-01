@@ -79,39 +79,36 @@ llm_client = AsyncOpenAI(
     max_retries=1
 )
 
+GEMINI_SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+]
+
 async def query_ollama_direct(model: str, messages: list[dict]) -> str | None:
     """Direct HTTP fallback to local Ollama GPU endpoint bypassing LiteLLM proxy."""
-    prompt_parts = []
-    for msg in messages:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role == "system":
-            prompt_parts.append(f"System: {content}\n")
-        else:
-            prompt_parts.append(f"User: {content}\n")
-    prompt_parts.append("Assistant:\n")
-    full_prompt = "\n".join(prompt_parts)
-
     endpoints = ["http://ollama-gpu:11434", "http://localhost:11434", "http://127.0.0.1:11434"]
     for base_url in endpoints:
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 res = await client.post(
-                    f"{base_url}/api/generate",
+                    f"{base_url}/api/chat",
                     json={
                         "model": model,
-                        "prompt": full_prompt,
+                        "messages": messages,
+                        "format": "json",
                         "stream": False,
                         "options": {"temperature": 0.1}
                     }
                 )
                 if res.status_code == 200:
                     data = res.json()
-                    content = data.get("response", "").strip()
+                    content = data.get("message", {}).get("content", "").strip()
                     if content:
                         return content
         except Exception as e:
-            print(f"Direct Ollama fallback to {base_url} failed: {e}", flush=True)
+            print(f"Direct Ollama fallback to {base_url} with model {model} failed: {e}", flush=True)
             continue
     return None
 
@@ -131,11 +128,16 @@ async def call_llm(prompt: str, system: str = "", req: Request = None, model: st
             model=target_model,
             messages=messages,
             response_format={"type": "json_object"},
-            temperature=0.1
+            temperature=0.7,
+            extra_body={"safety_settings": GEMINI_SAFETY_SETTINGS}
         )
-        content = completion.choices[0].message.content or ""
-        if content:
-            return content
+        if completion.choices:
+            choice = completion.choices[0]
+            content = choice.message.content or ""
+            if content and choice.finish_reason != "content_filter":
+                return content
+            elif choice.finish_reason == "content_filter":
+                print(f"LiteLLM model {target_model} finished with content_filter. Falling over to Ollama...", flush=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -143,15 +145,11 @@ async def call_llm(prompt: str, system: str = "", req: Request = None, model: st
 
     # Automatic Zero-Downtime Fallback directly to local Ollama GPU
     print(f"Engaging resilient direct local Ollama fallback for {target_model}...", flush=True)
-    fallback_model = "phi4-mini:latest" if target_model in ["deeplens-llm", "deeplens-fast", "phi4-mini:latest"] else "phi3:latest"
-    direct_content = await query_ollama_direct(fallback_model, messages)
-    if direct_content:
-        return direct_content
-
-    # Secondary try with phi3
-    direct_content = await query_ollama_direct("phi3:latest", messages)
-    if direct_content:
-        return direct_content
+    fallback_models = ["qwen2.5:0.5b", "phi4-mini:latest", "phi3:latest"]
+    for fb_model in fallback_models:
+        direct_content = await query_ollama_direct(fb_model, messages)
+        if direct_content:
+            return direct_content
 
     raise HTTPException(status_code=502, detail=f"Failed to communicate with LLM gateway and Ollama fallback for model {target_model}")
 
@@ -616,27 +614,94 @@ async def extract_metadata(req: Request, request: ExtractionRequest, background_
     except Exception as e:
         return ExtractionResponse(raw_response=raw_text)
 
+def generate_heuristic_metadata(descriptions: list[str]) -> tuple[str, str]:
+    """Fallback generator that extracts clothing keywords and clean title from descriptions."""
+    combined = " ".join(descriptions)
+    matched_fabrics = [f for f in INDIAN_FASHION_GLOSSARY["fabrics"] if re.search(r'\b' + re.escape(f) + r'\b', combined, re.I)]
+    matched_styles = [s for s in INDIAN_FASHION_GLOSSARY["styles"] if re.search(r'\b' + re.escape(s) + r'\b', combined, re.I)]
+    matched_work = [w for w in INDIAN_FASHION_GLOSSARY["work_types"] if re.search(r'\b' + re.escape(w) + r'\b', combined, re.I)]
+
+    title_parts = []
+    if matched_fabrics:
+        title_parts.append(matched_fabrics[0])
+    if matched_work:
+        title_parts.append(matched_work[0])
+    if matched_styles:
+        title_parts.append(matched_styles[0])
+    else:
+        title_parts.append("Collection")
+
+    title = " ".join(title_parts).strip()
+    if not title or title.lower() == "collection":
+        first_line = ""
+        for d in descriptions:
+            lines = [l.strip() for l in d.splitlines() if l.strip() and not l.strip().startswith("#")]
+            if lines:
+                first_line = re.sub(r'[*#_]', '', lines[0]).strip()
+                break
+        title = first_line[:35].strip() if first_line else "New Story Collection"
+
+    keywords_set = set()
+    for item in matched_styles + matched_fabrics + matched_work:
+        keywords_set.add(item.lower())
+    if re.search(r'\bsarees?\b', combined, re.I):
+        keywords_set.add("saree")
+    if re.search(r'\bdress(es)?\b', combined, re.I):
+        keywords_set.add("dress")
+    if re.search(r'\bleh[ae]ngas?\b', combined, re.I):
+        keywords_set.add("lehenga")
+    if re.search(r'\bkurti?s?\b', combined, re.I):
+        keywords_set.add("kurti")
+
+    keywords = ", ".join(sorted(keywords_set))
+    return title, keywords
+
 @app.post("/suggest-group-metadata", response_model=SuggestResponse)
 async def suggest_group_metadata(req: Request, request: SuggestRequest, background_tasks: BackgroundTasks):
     combined_desc = "\n---\n".join(request.descriptions)
     prompt = f"Descriptions:\n{combined_desc}\n\nGenerate the title and keywords."
 
     start_time = time.time()
-    raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_SUGGEST, req=req)
+    raw_text = ""
+    try:
+        raw_text = await call_llm(prompt=prompt, system=SYSTEM_PROMPT_SUGGEST, req=req)
+    except Exception as e:
+        print(f"call_llm error in /suggest-group-metadata: {e}", flush=True)
+
     latency_ms = int((time.time() - start_time) * 1000)
-    
     background_tasks.add_task(log_llm_call, "/suggest-group-metadata", prompt, raw_text, latency_ms)
     
     try:
-        data = json.loads(raw_text)
+        clean_text = (raw_text or "").strip()
+        match = re.search(r'```(?:json)?(.*?)```', clean_text, re.DOTALL)
+        if match:
+            clean_text = match.group(1).strip()
+
+        json_match = re.search(r'\{.*\}', clean_text, re.DOTALL)
+        if json_match:
+            clean_text = json_match.group(0)
+
+        data = json.loads(clean_text)
+        title = data.get("title") or "New Collection"
+        kw = data.get("keywords", "")
+        if isinstance(kw, list):
+            kw = ", ".join(str(item) for item in kw if item)
+        else:
+            kw = str(kw or "")
+
         return SuggestResponse(
-            title=data.get("title", "New Collection"),
-            keywords=data.get("keywords", ""),
+            title=title,
+            keywords=kw,
             raw_response=raw_text
         )
     except Exception as e:
-        print(f"JSON Parse Error: {e}\nRaw Text: {raw_text}")
-        raise HTTPException(status_code=500, detail="Failed to parse LLM response into JSON")
+        print(f"JSON Parse / Metadata Error in /suggest-group-metadata: {e}\nRaw Text: {raw_text}", flush=True)
+        fallback_title, fallback_keywords = generate_heuristic_metadata(request.descriptions)
+        return SuggestResponse(
+            title=fallback_title,
+            keywords=fallback_keywords,
+            raw_response=raw_text
+        )
 
 @app.post("/extract-product", response_model=ProductExtractionResponse)
 async def extract_product(req: Request, request: ProductExtractionRequest, background_tasks: BackgroundTasks, priority: int = 1):
