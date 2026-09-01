@@ -15,6 +15,6 @@ public interface IIdGeneratorService
     Task<string> GenerateProductIdAsync();
     Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20);
     Task<OrderDetailDto?> GetOrderDetailsAsync(string orderId);
-    Task<bool> UpdateOrderDetailsAsync(string orderId, string? customerPhone = null, string? customerAddress = null, OrderSource? source = null, string? sourceHandle = null, PaymentMode? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null, Guid? customerId = null);
+    Task<bool> UpdateOrderDetailsAsync(string orderId, OrderUpdateDto details);
     Task<bool> SoftDeleteOrderAsync(string orderId);
 }

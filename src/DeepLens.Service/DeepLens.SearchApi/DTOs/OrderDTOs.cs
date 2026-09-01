@@ -12,11 +12,41 @@ namespace DeepLens.SearchApi.DTOs;
 /// </summary>
 public class OrderUpdateDto
 {
+    [JsonPropertyName("customerName")]
+    public string? CustomerName { get; set; }
+
     [JsonPropertyName("customerPhone")]
     public string? CustomerPhone { get; set; }
 
     [JsonPropertyName("customerAddress")]
     public string? CustomerAddress { get; set; }
+
+    [JsonPropertyName("shippingStreet")]
+    public string? ShippingStreet { get; set; }
+
+    [JsonPropertyName("shippingCity")]
+    public string? ShippingCity { get; set; }
+
+    [JsonPropertyName("shippingState")]
+    public string? ShippingState { get; set; }
+
+    [JsonPropertyName("shippingPincode")]
+    public string? ShippingPincode { get; set; }
+
+    [JsonPropertyName("isServiceable")]
+    public bool? IsServiceable { get; set; }
+
+    [JsonPropertyName("totalAmount")]
+    public decimal? TotalAmount { get; set; }
+
+    [JsonPropertyName("advancePaid")]
+    public decimal? AdvancePaid { get; set; }
+
+    [JsonPropertyName("codBalance")]
+    public decimal? CodBalance { get; set; }
+
+    [JsonPropertyName("shippingCharges")]
+    public decimal? ShippingCharges { get; set; }
 
     [JsonPropertyName("customerId")]
     public Guid? CustomerId { get; set; }
@@ -44,6 +74,21 @@ public class OrderItemUpdateDto
 {
     [JsonPropertyName("productId")]
     public string? ProductId { get; set; }
+
+    [JsonPropertyName("quantity")]
+    public int Quantity { get; set; } = 1;
+
+    [JsonPropertyName("unitPrice")]
+    public decimal UnitPrice { get; set; }
+
+    [JsonPropertyName("subtotal")]
+    public decimal Subtotal { get; set; }
+
+    [JsonPropertyName("vendorId")]
+    public Guid? VendorId { get; set; }
+
+    [JsonPropertyName("sourceType")]
+    public string? SourceType { get; set; }
 
     [JsonPropertyName("comments")]
     public string? Comments { get; set; }
