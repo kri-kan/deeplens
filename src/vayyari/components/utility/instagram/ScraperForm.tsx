@@ -25,6 +25,8 @@ interface ScraperFormProps {
   profileCategory: string;
   setProfileCategory: (v: string) => void;
   profileCategories: { id: string; name: string }[];
+  successMessage?: string | null;
+  onDismissSuccess?: () => void;
   loading: boolean;
   disabled: boolean;
   onSubmit: () => void;
@@ -42,6 +44,8 @@ export const ScraperForm: React.FC<ScraperFormProps> = ({
   profileCategory,
   setProfileCategory,
   profileCategories,
+  successMessage,
+  onDismissSuccess,
   loading,
   disabled,
   onSubmit,
@@ -167,6 +171,20 @@ export const ScraperForm: React.FC<ScraperFormProps> = ({
       >
         Sync via Graph API
       </Button>
+
+      {successMessage ? (
+        <View style={styles.successContainer}>
+          <Icon source="check-circle" size={20} color="#047857" />
+          <Text variant="bodySmall" style={styles.successText}>
+            {successMessage}
+          </Text>
+          {onDismissSuccess && (
+            <TouchableRipple onPress={onDismissSuccess} style={styles.successCloseBtn}>
+              <Icon source="close" size={16} color="#047857" />
+            </TouchableRipple>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -231,8 +249,29 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   submit: {
-    marginBottom: 12,
+    marginBottom: 8,
     borderRadius: 8,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  successText: {
+    flex: 1,
+    color: '#065f46',
+    fontWeight: '600',
+  },
+  successCloseBtn: {
+    padding: 4,
+    borderRadius: 12,
   },
 });
 

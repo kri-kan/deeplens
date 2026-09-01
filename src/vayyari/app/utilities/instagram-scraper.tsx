@@ -101,6 +101,8 @@ export default function InstagramScraper() {
           profileCategory={profileCategory}
           setProfileCategory={setProfileCategory}
           profileCategories={profileCategories}
+          successMessage={successMessage}
+          onDismissSuccess={() => setSuccessMessage(null)}
           loading={loading}
           disabled={!!tokenHealth?.isExpired}
           onSubmit={startSync}
