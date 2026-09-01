@@ -32,6 +32,15 @@ public static class DependencyInjection
         services.AddHttpClient<DeepLens.Application.Abstractions.Services.ILiteLlmService, DeepLens.Infrastructure.Services.LiteLlmService>();
         services.AddScoped<DeepLens.Application.Abstractions.Services.IProfileClassifierService, DeepLens.Infrastructure.Services.ProfileClassifierService>();
 
+        // Logistics & Delhivery SDK Registrations
+        services.AddHttpClient<DeepLens.Infrastructure.Clients.Delhivery.IDelhiveryClient, DeepLens.Infrastructure.Clients.Delhivery.DelhiveryClient>();
+        services.AddScoped<DeepLens.Infrastructure.Persistence.Repositories.Logistics.ILogisticsRepository, DeepLens.Infrastructure.Persistence.Repositories.Logistics.LogisticsRepository>();
+        services.AddScoped<DeepLens.Infrastructure.Services.Logistics.IPincodeService, DeepLens.Infrastructure.Services.Logistics.PincodeService>();
+        services.AddScoped<DeepLens.Infrastructure.Services.Logistics.IPickupService, DeepLens.Infrastructure.Services.Logistics.PickupService>();
+        services.AddScoped<DeepLens.Infrastructure.Services.Logistics.ITrackingService, DeepLens.Infrastructure.Services.Logistics.TrackingService>();
+        services.AddScoped<DeepLens.Infrastructure.Services.Logistics.INdrService, DeepLens.Infrastructure.Services.Logistics.NdrService>();
+        services.AddScoped<DeepLens.Infrastructure.Services.Logistics.IShipmentService, DeepLens.Infrastructure.Services.Logistics.ShipmentService>();
+
         return services;
     }
 }
