@@ -3,6 +3,18 @@ using DeepLens.Domain.Enums;
 
 namespace DeepLens.Contracts.Instagram;
 
+public class AddInstagramAccountRequest
+{
+    [JsonPropertyName("username")]
+    public string? Username { get; set; }
+
+    [JsonPropertyName("isActive")]
+    public bool? IsActive { get; set; }
+
+    [JsonPropertyName("profileCategory")]
+    public string? ProfileCategory { get; set; }
+}
+
 public class InstagramProfileDto
 {
     [JsonPropertyName("userId")]

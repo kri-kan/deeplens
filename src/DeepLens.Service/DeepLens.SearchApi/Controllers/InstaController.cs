@@ -371,7 +371,11 @@ public class InstaController : ControllerBase
 
     [HttpPost("profile/{username}")]
     [Authorize(Policy = "IngestPolicy")]
-    public async Task<ActionResult> AddToWatchlist(string username)
+    public async Task<ActionResult> AddToWatchlist(
+        string username,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] AddInstagramAccountRequest? body = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? profileCategory = null)
     {
         using var conn = await _db.CreateConnectionAsync();
         var exists = await conn.ExecuteScalarAsync<bool>(
@@ -384,6 +388,9 @@ public class InstaController : ControllerBase
         var profile = await _metaGraph.GetProfileAsync(username);
         if (profile == null) return NotFound(new { message = "Profile not found on Instagram" });
 
+        var finalIsActive = body?.IsActive ?? isActive ?? true;
+        var finalProfileCategory = body?.ProfileCategory ?? profileCategory;
+
         var classification = await _classifier.ClassifyProfileAsync(new ProfileClassificationRequest
         {
             Username = username,
@@ -392,15 +399,23 @@ public class InstaController : ControllerBase
             RecentCaptions = new List<string>()
         });
 
+        var chosenCategory = !string.IsNullOrWhiteSpace(finalProfileCategory) 
+            ? finalProfileCategory 
+            : classification.ProfileCategory;
+
+        bool isCompetitor = string.Equals(chosenCategory, "Competitors", StringComparison.OrdinalIgnoreCase) 
+            || string.Equals(chosenCategory, "Competitor", StringComparison.OrdinalIgnoreCase) 
+            || classification.IsCompetitor;
+
         await conn.ExecuteAsync(@"
             INSERT INTO competitor_watchlist (
                 username, platform, display_name, profile_pic_url, bio, 
                 follower_count, following_count, post_count, last_scraped_at, external_id,
-                profile_category, is_competitor, competitor_niche)
+                profile_category, is_competitor, competitor_niche, is_active)
             VALUES (
                 @Username, 'instagram', @Name, @ProfilePictureUrl, @Bio, 
                 @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId,
-                @ProfileCategory, @IsCompetitor, @CompetitorNiche)",
+                @ProfileCategory, @IsCompetitor, @CompetitorNiche, @IsActive)",
             new { 
                 Username = username, 
                 Name = profile.Name, 
@@ -410,9 +425,10 @@ public class InstaController : ControllerBase
                 FollowingCount = (int)profile.FollowingCount,
                 MediaCount = profile.MediaCount,
                 ExternalId = profile.ExternalId,
-                ProfileCategory = classification.ProfileCategory,
-                IsCompetitor = classification.IsCompetitor,
-                CompetitorNiche = classification.CompetitorNiche
+                ProfileCategory = chosenCategory,
+                IsCompetitor = isCompetitor,
+                CompetitorNiche = classification.CompetitorNiche,
+                IsActive = finalIsActive
             });
 
         return Ok(new { message = "Profile added to watchlist", profile, classification });
@@ -433,11 +449,14 @@ public class InstaController : ControllerBase
 
     [HttpGet("posts/{username}")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult<List<MetaPost>>> GetPosts(string username, [FromQuery] int limit = 10)
+    public async Task<ActionResult> GetPosts(string username, [FromQuery] int limit = 50, [FromQuery] int offset = 0)
     {
-        await _metaGraph.ReloadFromDbAsync();
-        var posts = await _metaGraph.GetPostsAsync(username, limit > 10 ? 2 : 1);
-        return Ok(posts.Take(limit).ToList());
+        using var conn = await _db.CreateConnectionAsync();
+        var posts = await conn.QueryAsync<MetaPost>(
+            $"{MetaPostSelectSql} WHERE LOWER(cv.profile_username) = LOWER(@username) ORDER BY cv.posted_at DESC LIMIT @limit OFFSET @offset",
+            new { username, limit, offset });
+
+        return Ok(posts);
     }
 
     [HttpGet("token")]
@@ -527,12 +546,17 @@ public class InstaController : ControllerBase
             return BadRequest(new { message = "Token refresh failed. The current token might be invalid or expired. Please provide a new Short-Lived Token in Settings." });
         
         var health = _metaGraph.GetTokenHealth();
-        return Ok(new { message = "Token updated successfully", health });
+        return Ok(new { message = "Token refreshed successfully", health });
     }
 
     [HttpPost("profile/{username}/sync")]
     [Authorize(Policy = "IngestPolicy")]
-    public async Task<ActionResult> SyncProfile(string username, [FromQuery] int maxPosts = 50)
+    public async Task<ActionResult> SyncProfile(
+        string username, 
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] AddInstagramAccountRequest? body = null,
+        [FromQuery] int maxPosts = 50,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? profileCategory = null)
     {
         await _metaGraph.ReloadFromDbAsync();
         
@@ -542,6 +566,9 @@ public class InstaController : ControllerBase
         var watchlistId = await conn.QueryFirstOrDefaultAsync<Guid?>(
             "SELECT id FROM competitor_watchlist WHERE LOWER(username) = LOWER(@username) AND platform = 'instagram'", 
             new { username });
+
+        var finalIsActive = body?.IsActive ?? isActive ?? true;
+        var finalProfileCategory = body?.ProfileCategory ?? profileCategory;
 
         if (watchlistId == null)
         {
@@ -556,16 +583,24 @@ public class InstaController : ControllerBase
                 RecentCaptions = new List<string>()
             });
 
+            var chosenCategory = !string.IsNullOrWhiteSpace(finalProfileCategory) 
+                ? finalProfileCategory 
+                : classification.ProfileCategory;
+
+            bool isCompetitor = string.Equals(chosenCategory, "Competitors", StringComparison.OrdinalIgnoreCase) 
+                || string.Equals(chosenCategory, "Competitor", StringComparison.OrdinalIgnoreCase) 
+                || classification.IsCompetitor;
+
             watchlistId = Guid.NewGuid();
             await conn.ExecuteAsync(@"
                 INSERT INTO competitor_watchlist (
                     id, username, platform, display_name, profile_pic_url, bio, 
                     follower_count, following_count, post_count, last_scraped_at, external_id,
-                    profile_category, is_competitor, competitor_niche)
+                    profile_category, is_competitor, competitor_niche, is_active)
                 VALUES (
                     @Id, @Username, 'instagram', @Name, @ProfilePictureUrl, @Bio, 
                     @FollowersCount, @FollowingCount, @MediaCount, NULL, @ExternalId,
-                    @ProfileCategory, @IsCompetitor, @CompetitorNiche)",
+                    @ProfileCategory, @IsCompetitor, @CompetitorNiche, @IsActive)",
                 new { 
                     Id = watchlistId,
                     Username = username, 
@@ -576,10 +611,38 @@ public class InstaController : ControllerBase
                     FollowingCount = (int)profile.FollowingCount,
                     MediaCount = profile.MediaCount,
                     ExternalId = profile.ExternalId,
-                    ProfileCategory = classification.ProfileCategory,
-                    IsCompetitor = classification.IsCompetitor,
-                    CompetitorNiche = classification.CompetitorNiche
+                    ProfileCategory = chosenCategory,
+                    IsCompetitor = isCompetitor,
+                    CompetitorNiche = classification.CompetitorNiche,
+                    IsActive = finalIsActive
                 });
+        }
+        else
+        {
+            // If already in watchlist and explicit category/active provided, update them
+            var setClauses = new List<string>();
+            var p = new DynamicParameters();
+            p.Add("WatchlistId", watchlistId.Value);
+
+            if (body?.IsActive.HasValue == true || isActive.HasValue)
+            {
+                setClauses.Add("is_active = @IsActive");
+                p.Add("IsActive", finalIsActive);
+            }
+            if (!string.IsNullOrWhiteSpace(finalProfileCategory))
+            {
+                setClauses.Add("profile_category = @ProfileCategory");
+                p.Add("ProfileCategory", finalProfileCategory);
+                if (string.Equals(finalProfileCategory, "Competitors", StringComparison.OrdinalIgnoreCase) || string.Equals(finalProfileCategory, "Competitor", StringComparison.OrdinalIgnoreCase))
+                {
+                    setClauses.Add("is_competitor = true");
+                }
+            }
+
+            if (setClauses.Count > 0)
+            {
+                await conn.ExecuteAsync($"UPDATE competitor_watchlist SET {string.Join(", ", setClauses)} WHERE id = @WatchlistId", p);
+            }
         }
 
         // 2. Queue Job (Priority 10 for manual)
