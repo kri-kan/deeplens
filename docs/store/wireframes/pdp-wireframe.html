@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VAYYARI | Product Detail Mock</title>
+    <style>
+      :root {
+        --bg: #f5f1ed; --panel: #fffdfb; --ink: #1f1a19; --muted: #675d5a; --line: #e7dcd3; --soft: #f3e6dc; --accent: #b77d52; --shadow: rgba(26,18,16,0.08);
+        --radius: 0px;
+      }
+      * { box-sizing: border-box; border-radius: 0 !important; }
+      body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg); color: var(--ink); }
+      .page { max-width: 1380px; margin: 0 auto; background: var(--panel); min-height: 100vh; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+      .header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 22px; }
+      .left-cluster { display: flex; align-items: center; gap: 12px; }
+      .menu-btn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: #fff; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 4px; cursor: pointer; }
+      .menu-btn span { width: 16px; height: 2px; border-radius: 999px; background: var(--ink); display: block; }
+      .brand { font-size: clamp(22px, 2vw, 32px); font-weight: 800; letter-spacing: 0.1em; }
+      .nav { display: flex; gap: 24px; color: var(--muted); font-size: 14px; font-weight: 700; }
+      .actions { display: flex; align-items: center; gap: 12px; }
+      .search { width: 260px; height: 42px; border: 1px solid var(--line); border-radius: 999px; background: #f8f4f1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+      .search::before { content: "⌕"; font-size: 18px; margin-right: 8px; }
+      .icon { width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #fff; position: relative; cursor: pointer; }
+      .cart-count { position: absolute; right: -4px; top: -4px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+      .layout { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 26px; padding: 28px; }
+      .gallery { display: grid; grid-template-columns: 92px 1fr; gap: 14px; }
+      .thumbs { display: flex; flex-direction: column; gap: 12px; }
+      .thumb { height: 94px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(135deg, #eed8c3 0%, #cf9e68 100%); cursor: pointer; transition: border-color 0.2s ease, transform 0.2s ease; }
+      .thumb.active { border-color: var(--ink); transform: translateX(2px); }
+      .hero-image { min-height: 660px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(135deg, #f3e3d2 0%, #d2a16b 100%); position: relative; overflow: hidden; transition: background 0.3s ease; }
+      .color-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 8px; }
+      .dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; transition: transform 0.2s ease; }
+      .dot.active { box-shadow: 0 0 0 2px var(--ink), 0 0 0 5px #fff; transform: scale(1.06); }
+      .summary { padding-top: 8px; }
+      .chip { display: inline-block; background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 700; }
+      h1 { margin: 14px 0 12px; font-size: clamp(32px, 3vw, 48px); letter-spacing: -0.06em; }
+      .price-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+      .price { font-size: clamp(26px, 3vw, 36px); font-weight: 800; }
+      .old-price { color: var(--muted); text-decoration: line-through; font-size: 18px; }
+      .offer { border-radius: 999px; background: #f4debf; color: #7d562d; padding: 6px 10px; font-weight: 800; }
+      .section-box { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; margin-top: 14px; }
+      .label { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .sizes { display: flex; flex-wrap: wrap; gap: 10px; }
+      .size { min-width: 54px; height: 42px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-weight: 700; cursor: pointer; }
+      .size.active { background: var(--ink); color: white; }
+      .cta-row { display: flex; gap: 12px; margin-top: 22px; }
+      .btn { flex: 1; height: 54px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; border: 1px solid var(--line); cursor: pointer; }
+      .btn.primary { background: var(--ink); color: white; }
+      .btn.secondary { background: #fff; }
+      .desc { margin-top: 24px; line-height: 1.75; color: var(--muted); }
+      .fact-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+      .fact { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+      .fact strong { display: block; margin-bottom: 6px; }
+      .related { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 22px; }
+      .related h2 { margin: 0 0 18px; font-size: clamp(28px, 2.3vw, 40px); letter-spacing: -0.05em; }
+      .product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+      .mini-product { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+      .mini-image { height: 220px; background: linear-gradient(135deg, #f2e0d1 0%, #c99b67 100%); }
+      .mini-copy { padding: 12px 14px 16px; }
+      .cart-drawer { position: fixed; top: 0; right: 0; width: min(420px, 92vw); height: 100vh; background: #fff; box-shadow: -18px 0 40px rgba(0,0,0,0.12); transform: translateX(110%); transition: transform 0.3s ease; z-index: 50; display: flex; flex-direction: column; }
+      .cart-drawer.open { transform: translateX(0); }
+      .cart-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 20px 16px; border-bottom: 1px solid var(--line); }
+      .cart-body { flex: 1; padding: 18px 20px; overflow: auto; }
+      .cart-item { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .cart-thumb { height: 100px; border-radius: 12px; background: linear-gradient(135deg, #f2e6d4 0%, #d7b08a 100%); }
+      .cart-item strong { display: block; margin-bottom: 6px; }
+      .meta-line { color: var(--muted); font-size: 13px; }
+      .qty-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+      .qty-box { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+      .cart-footer { padding: 18px 20px 22px; border-top: 1px solid var(--line); }
+      .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; color: var(--muted); }
+      .checkout-btn { width: 100%; border: none; border-radius: 12px; background: var(--ink); color: #fff; padding: 15px 18px; font-size: 16px; font-weight: 700; cursor: pointer; }
+      .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(17, 17, 17, 0.92); color: #fff; padding: 12px 18px; border-radius: 999px; opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease; z-index: 60; font-size: 14px; font-weight: 700; }
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .gallery { grid-template-columns: 1fr; } .thumbs { flex-direction: row; } }
+      @media (max-width: 640px) { .topbar { padding-left: 16px; padding-right: 16px; } .nav { display: none; } .search { display: none; } .layout { padding: 16px; } .hero-image { min-height: 420px; } .fact-grid, .product-grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div class="topbar">
+          <div class="left-cluster">
+            <div class="menu-btn" aria-label="Open menu">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="brand">VAYYARI</div>
+          </div>
+          <nav class="nav">
+            <span>Sarees</span>
+            <span>Dresses</span>
+            <span>Lehengas</span>
+            <span>Intimates</span>
+          </nav>
+          <div class="actions">
+            <div class="search">Search</div>
+            <div class="icon" id="bagToggle">
+              🛍
+              <span class="cart-count" id="cartCount">1</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="gallery">
+          <div class="thumbs">
+            <div class="thumb active" data-thumb="ivory" style="background: linear-gradient(135deg, #f5e6d0 0%, #d7b18a 100%);"></div>
+            <div class="thumb" data-thumb="sand" style="background: linear-gradient(135deg, #f1d3ae 0%, #c39263 100%);"></div>
+            <div class="thumb" data-thumb="rose" style="background: linear-gradient(135deg, #efd9d3 0%, #c68c86 100%);"></div>
+          </div>
+          <div class="hero-image" id="heroImage"></div>
+        </section>
+
+        <aside class="summary">
+          <div class="chip">Handloom edit</div>
+          <h1 id="productTitle">Ivory Flow Saree</h1>
+          <div class="price-row">
+            <div class="price" id="productPrice">₹3,299</div>
+            <div class="old-price">₹4,999</div>
+            <div class="offer">34% Off</div>
+          </div>
+
+          <div class="section-box">
+            <div class="label">Color</div>
+            <div class="color-row">
+              <div class="dot active" data-color="ivory" style="background:#f0e3d5;"></div>
+              <div class="dot" data-color="sand" style="background:#d7b18a;"></div>
+              <div class="dot" data-color="stone" style="background:#b9a28a;"></div>
+              <div class="dot" data-color="rose" style="background:#ba8777;"></div>
+            </div>
+            <div style="margin-top:12px; color: var(--muted); font-weight:700;" id="selectedColorLabel">Selected: Ivory</div>
+          </div>
+
+          <div class="section-box">
+            <div class="label">Size</div>
+            <div class="sizes">
+              <div class="size">S</div>
+              <div class="size active">M</div>
+              <div class="size">L</div>
+              <div class="size">XL</div>
+            </div>
+          </div>
+
+          <div class="cta-row">
+            <div class="btn primary" id="addToBagBtn">Add to Bag</div>
+            <div class="btn secondary">Wishlist</div>
+          </div>
+
+          <div class="desc">
+            Crafted for slower ritual mornings and festive evenings, this saree blends breathable cotton-silk texture with hand-finished detailing, a fluid drape, and a graceful finish designed for real occasions.
+          </div>
+
+          <div class="fact-grid">
+            <div class="fact"><strong>Fabric</strong>Cotton silk</div>
+            <div class="fact"><strong>Work</strong>Zari border</div>
+            <div class="fact"><strong>Fit</strong>Flowing drape</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="layout" style="padding-top: 0;">
+        <div class="related">
+          <h2>You may also like</h2>
+          <div class="product-grid">
+            <div class="mini-product">
+              <div class="mini-image"></div>
+              <div class="mini-copy"><strong>Pastel Grace</strong><span>₹2,699</span></div>
+            </div>
+            <div class="mini-product">
+              <div class="mini-image" style="background: linear-gradient(135deg, #ece0d4 0%, #c79b69 100%);"></div>
+              <div class="mini-copy"><strong>Sunrise Weave</strong><span>₹3,499</span></div>
+            </div>
+            <div class="mini-product">
+              <div class="mini-image" style="background: linear-gradient(135deg, #d9dce7 0%, #8498b1 100%);"></div>
+              <div class="mini-copy"><strong>Blush Motion</strong><span>₹2,899</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="cart-drawer" id="cartDrawer">
+      <div class="cart-header">
+        <h3 style="margin:0; font-size: 28px; letter-spacing: -0.05em;">Your bag</h3>
+        <button id="closeCart" style="border:none; background:none; font-size:28px; cursor:pointer;">×</button>
+      </div>
+      <div class="cart-body">
+        <div class="cart-item">
+          <div class="cart-thumb" id="cartProductThumb"></div>
+          <div>
+            <strong id="cartProductName">Ivory Flow Saree</strong>
+            <div class="meta-line" id="cartMetaText">Color: Ivory · Size: M</div>
+            <div class="qty-row">
+              <span class="qty-box">1</span>
+              <strong id="cartProductPrice">₹3,299</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cart-footer">
+        <div class="summary-row"><span>Subtotal</span><strong id="cartSubtotal">₹3,299</strong></div>
+        <div class="summary-row"><span>Shipping</span><span>Free</span></div>
+        <button class="checkout-btn">Proceed to checkout</button>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast">Added to bag</div>
+
+    <script>
+      const heroImage = document.getElementById('heroImage');
+      const selectedColorLabel = document.getElementById('selectedColorLabel');
+      const cartDrawer = document.getElementById('cartDrawer');
+      const bagToggle = document.getElementById('bagToggle');
+      const closeCart = document.getElementById('closeCart');
+      const toast = document.getElementById('toast');
+      const cartCount = document.getElementById('cartCount');
+      const cartProductThumb = document.getElementById('cartProductThumb');
+      const cartProductName = document.getElementById('cartProductName');
+      const cartProductPrice = document.getElementById('cartProductPrice');
+      const cartMetaText = document.getElementById('cartMetaText');
+      const cartSubtotal = document.getElementById('cartSubtotal');
+      const productTitle = document.getElementById('productTitle');
+      const productPrice = document.getElementById('productPrice');
+
+      const colors = {
+        ivory: { gradient: 'linear-gradient(135deg, #f3e6d8 0%, #d3aa75 100%)', label: 'Ivory', title: 'Ivory Flow Saree', price: '₹3,299', thumb: 'linear-gradient(135deg, #f5e6d0 0%, #d7b18a 100%)' },
+        sand: { gradient: 'linear-gradient(135deg, #e9d6af 0%, #b77b4b 100%)', label: 'Sand', title: 'Warm Sand Saree', price: '₹3,499', thumb: 'linear-gradient(135deg, #f1d3ae 0%, #c39263 100%)' },
+        stone: { gradient: 'linear-gradient(135deg, #dacdbd 0%, #8a795f 100%)', label: 'Stone', title: 'Stone Drape Saree', price: '₹3,599', thumb: 'linear-gradient(135deg, #d9d0c7 0%, #9f8b70 100%)' },
+        rose: { gradient: 'linear-gradient(135deg, #f0d5d1 0%, #bf7b71 100%)', label: 'Rose', title: 'Rose Mist Saree', price: '₹3,399', thumb: 'linear-gradient(135deg, #efd9d3 0%, #c68c86 100%)' }
+      };
+
+      function setSelectedColor(colorKey) {
+        const color = colors[colorKey];
+        document.querySelectorAll('.dot').forEach((item) => item.classList.toggle('active', item.dataset.color === colorKey));
+        document.querySelectorAll('.thumb').forEach((item) => item.classList.toggle('active', item.dataset.thumb === colorKey));
+        heroImage.style.background = color.gradient;
+        cartProductThumb.style.background = color.thumb;
+        selectedColorLabel.textContent = 'Selected: ' + color.label;
+        productTitle.textContent = color.title;
+        productPrice.textContent = color.price;
+        cartProductName.textContent = color.title;
+        cartProductPrice.textContent = color.price;
+        cartSubtotal.textContent = color.price;
+        const selectedSize = document.querySelector('.size.active')?.textContent || 'M';
+        cartMetaText.textContent = 'Color: ' + color.label + ' · Size: ' + selectedSize;
+      }
+
+      document.querySelectorAll('.dot').forEach((dot) => dot.addEventListener('click', () => setSelectedColor(dot.dataset.color)));
+      document.querySelectorAll('.thumb').forEach((thumb) => thumb.addEventListener('click', () => setSelectedColor(thumb.dataset.thumb)));
+
+      document.querySelectorAll('.size').forEach((size) => {
+        size.addEventListener('click', () => {
+          document.querySelectorAll('.size').forEach((item) => item.classList.remove('active'));
+          size.classList.add('active');
+          const colorKey = document.querySelector('.dot.active')?.dataset.color || 'ivory';
+          const selectedSize = size.textContent;
+          cartMetaText.textContent = 'Color: ' + colors[colorKey].label + ' · Size: ' + selectedSize;
+        });
+      });
+
+      function openCart() { cartDrawer.classList.add('open'); }
+      function closeDrawer() { cartDrawer.classList.remove('open'); }
+      bagToggle.addEventListener('click', openCart);
+      closeCart.addEventListener('click', closeDrawer);
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => toast.classList.remove('show'), 1600);
+      }
+
+      document.getElementById('addToBagBtn').addEventListener('click', () => {
+        const current = Number(cartCount.textContent || '0');
+        cartCount.textContent = String(current + 1);
+        showToast('Added to bag');
+        openCart();
+      });
+
+      setSelectedColor('ivory');
+    </script>
+  </body>
+</html>

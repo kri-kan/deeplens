@@ -1,0 +1,1444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VAYYARI | Homepage Mock</title>
+    <style>
+      :root {
+        --bg: #f5f1ed;
+        --panel: #fffdfb;
+        --ink: #1f1a19;
+        --muted: #675d5a;
+        --line: #e7dcd3;
+        --soft: #f3e6dc;
+        --accent: #b77d52;
+        --dark: #2a1c1a;
+        --shadow: rgba(26, 18, 16, 0.1);
+        --radius: 0px;
+      }
+      * {
+        box-sizing: border-box;
+        border-radius: 0 !important;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .page {
+        max-width: 100%;
+        margin: 0 auto;
+        background: var(--panel);
+        min-height: 100vh;
+        border-right: none;
+        border-left: none;
+        position: relative;
+      }
+      .header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--line);
+      }
+      body.menu-open .page {
+        filter: brightness(0.82) saturate(0.9);
+        transition: filter 0.2s ease;
+      }
+      @media (min-width: 981px) {
+        .menu-overlay {
+          display: none;
+        }
+      }
+      .menu-btn {
+        display: none;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fff;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+      }
+      .menu-btn span {
+        width: 16px;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--ink);
+        display: block;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 12px 22px;
+        min-height: 68px;
+      }
+      .left-cluster {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        min-width: 0;
+      }
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #ff3f9d 0%, #ff6bba 100%);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 20px;
+        letter-spacing: -0.08em;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+      }
+      .brand {
+        min-width: 120px;
+        font-size: clamp(20px, 1.7vw, 26px);
+        font-weight: 800;
+        letter-spacing: 0.07em;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        color: #262323;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .nav span {
+        cursor: pointer;
+        position: relative;
+        padding: 18px 0 14px;
+      }
+      .nav span.active {
+        color: #ff3f9d;
+      }
+      .nav span.active::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: #ff3f9d;
+        border-radius: 999px;
+      }
+      .right-actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .search {
+        width: min(440px, 36vw);
+        height: 40px;
+        border-radius: 999px;
+        background: #f7f7f7;
+        border: 1px solid #ece3dd;
+        display: flex;
+        align-items: center;
+        padding: 0 16px 0 14px;
+        color: #7f706d;
+        font-size: 14px;
+      }
+      .search::before {
+        content: "⌕";
+        font-size: 18px;
+        margin-right: 10px;
+        color: #7b706d;
+      }
+      .mini-action {
+        font-size: 12px;
+        font-weight: 700;
+        color: #2d2422;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .mini-action .bubble {
+        width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #f5efe8;
+        color: #1f1a19;
+        font-size: 11px;
+      }
+      .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        position: relative;
+        font-size: 18px;
+        cursor: pointer;
+      }
+      .cart-count {
+        position: absolute;
+        right: -4px;
+        top: -4px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--ink);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .category-strip {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(140px, 1fr));
+        gap: 16px 28px;
+        padding: 18px 22px 22px;
+        background: rgba(248, 246, 244, 0.96);
+        border-top: 1px solid rgba(0, 0, 0, 0.03);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+        box-shadow: 0 18px 28px rgba(17, 17, 17, 0.08);
+        opacity: 0;
+        visibility: hidden;
+        max-height: 0;
+        overflow: hidden;
+        transform: translateY(-8px);
+        transition:
+          opacity 0.18s ease,
+          transform 0.18s ease,
+          max-height 0.22s ease,
+          visibility 0.18s ease;
+        pointer-events: none;
+      }
+      .header:hover .category-strip,
+      .header:focus-within .category-strip,
+      .header.menu-open .category-strip {
+        opacity: 1;
+        visibility: visible;
+        max-height: 520px;
+        overflow: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .nav span:hover,
+      .nav span:focus-visible {
+        color: #ff3f9d;
+      }
+      .pill {
+        display: block;
+        padding: 0;
+        white-space: normal;
+        font-size: 13px;
+        line-height: 1.8;
+        color: #3d3533;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .pill strong {
+        display: block;
+        color: #ff3f9d;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .promo-box {
+        margin: 8px 0 0 auto;
+        width: 260px;
+        height: 108px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #f1e3d4 0%, #e5d7c7 100%);
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #1f1a19;
+      }
+      .promo-box::before {
+        content: "RASAVE";
+        font-size: 19px;
+        letter-spacing: 0.04em;
+        font-weight: 900;
+        position: absolute;
+        left: 18px;
+        top: 36px;
+        transform: rotate(-2deg);
+      }
+      .promo-box::after {
+        content: "%";
+        position: absolute;
+        right: 26px;
+        top: 18px;
+        font-size: 68px;
+        line-height: 1;
+        font-weight: 900;
+        opacity: 0.9;
+        transform: rotate(26deg);
+      }
+      .promo-label {
+        position: absolute;
+        left: 18px;
+        bottom: 18px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+      .hero {
+        padding: 0;
+      }
+      .hero-card {
+        position: relative;
+        min-height: 500px;
+        border-radius: 0;
+        overflow: hidden;
+        border: none;
+        box-shadow: none;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .hero-slide {
+        position: absolute;
+        inset: 0;
+        padding: 34px 36px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        color: white;
+        opacity: 0;
+        transition: opacity 0.5s ease;
+        background-size: cover;
+        background-position: center;
+        border-radius: 0;
+      }
+      .hero-slide.active {
+        opacity: 1;
+        z-index: 1;
+      }
+      .hero-slide::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(0, 0, 0, 0.08),
+          rgba(0, 0, 0, 0.5)
+        );
+      }
+      .hero-inner {
+        position: relative;
+        z-index: 1;
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        opacity: 0.9;
+      }
+      h1.hero-title {
+        margin: 8px 0 0;
+        font-size: clamp(42px, 4vw, 72px);
+        letter-spacing: -0.08em;
+        line-height: 0.92;
+      }
+      .hero-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+      }
+      .btn {
+        padding: 12px 18px;
+        border-radius: 999px;
+        font-weight: 700;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: white;
+        color: var(--ink);
+      }
+      .btn.secondary {
+        background: rgba(255, 255, 255, 0.08);
+        color: white;
+      }
+      .hero-dots {
+        position: absolute;
+        bottom: 18px;
+        left: 36px;
+        z-index: 2;
+        display: flex;
+        gap: 8px;
+      }
+      .hero-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+      }
+      .hero-dot.active {
+        background: #fff;
+      }
+      .section {
+        padding: 26px 18px 0;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0 0 18px;
+      }
+      .section-head h2 {
+        margin: 0;
+        font-size: clamp(26px, 2.4vw, 40px);
+        letter-spacing: -0.06em;
+      }
+      .link {
+        color: var(--muted);
+        font-weight: 700;
+      }
+      .bento {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1fr;
+        gap: 16px;
+      }
+      .tile {
+        min-height: 200px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        display: flex;
+        align-items: end;
+        padding: 18px;
+        font-size: clamp(24px, 2vw, 34px);
+        font-weight: 700;
+        letter-spacing: -0.05em;
+      }
+      .tile.large {
+        min-height: 420px;
+        grid-row: span 2;
+      }
+      .tile.dark {
+        background: linear-gradient(135deg, #7d6f6a 0%, #4d3a39 100%);
+        color: white;
+      }
+      .tile.peach {
+        background: linear-gradient(135deg, #f2d8c7 0%, #d7a782 100%);
+        color: var(--ink);
+      }
+      .tile.sand {
+        background: linear-gradient(135deg, #ebdbca 0%, #c89b6d 100%);
+      }
+      .tile.blush {
+        background: linear-gradient(135deg, #f5d6d5 0%, #d5a4a1 100%);
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .card-box {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        background: #fff;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .card-box:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(25, 20, 18, 0.08);
+      }
+      .card-art {
+        height: 210px;
+        background: linear-gradient(135deg, #edd9c5 0%, #d2a77a 100%);
+      }
+      .card-copy {
+        padding: 14px 16px 18px;
+      }
+      .card-copy strong {
+        display: block;
+        font-size: 18px;
+        margin-bottom: 6px;
+      }
+      .card-copy span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .rail {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+      }
+      .product {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .product:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 20px rgba(26, 18, 16, 0.08);
+      }
+      .product-image {
+        height: 240px;
+        background: linear-gradient(135deg, #efe1ce 0%, #d7b08b 100%);
+      }
+      .product-meta {
+        padding: 14px;
+      }
+      .product-name {
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+      .price {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .price strong {
+        font-size: 18px;
+      }
+      .price span {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+      .cta-small {
+        margin-top: 12px;
+        width: 100%;
+        border: 1px solid var(--line);
+        background: var(--soft);
+        border-radius: 999px;
+        padding: 9px 10px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .story-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 18px;
+        padding-bottom: 32px;
+      }
+      .story-panel {
+        min-height: 220px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 26px;
+        display: flex;
+        align-items: end;
+        background: linear-gradient(135deg, #f2e1d0 0%, #d7b18b 100%);
+        font-size: clamp(28px, 3vw, 44px);
+        font-weight: 700;
+        letter-spacing: -0.06em;
+      }
+      .story-box {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: #fff;
+        padding: 20px;
+      }
+      .story-box h3 {
+        margin: 0 0 10px;
+        font-size: 22px;
+      }
+      .story-box p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .footer {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+        background: #f6f0ea;
+        border-top: 1px solid var(--line);
+        padding: 26px 28px 42px;
+      }
+      .foot-block strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+      .foot-block span {
+        display: block;
+        color: var(--muted);
+        margin: 4px 0;
+      }
+      .cart-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(420px, 92vw);
+        height: 100vh;
+        background: #fff;
+        box-shadow: -18px 0 40px rgba(0, 0, 0, 0.12);
+        transform: translateX(110%);
+        transition: transform 0.3s ease;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+      }
+      .cart-drawer.open {
+        transform: translateX(0);
+      }
+      .menu-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: min(420px, 100vw);
+        height: 100vh;
+        background: #f2f0ef;
+        box-shadow: 18px 0 40px rgba(0, 0, 0, 0.12);
+        transform: translateX(-110%);
+        transition: transform 0.3s ease;
+        z-index: 60;
+        overflow: auto;
+      }
+      .menu-panel.open {
+        transform: translateX(0);
+      }
+      .menu-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px 12px;
+        background: rgba(255, 255, 255, 0.96);
+        border-bottom: 1px solid var(--line);
+      }
+      .menu-list {
+        display: grid;
+        gap: 0;
+        padding: 0 0 18px;
+      }
+      .promo-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        padding: 12px 14px 10px;
+      }
+      .promo-card {
+        min-height: 110px;
+        border-radius: 18px;
+        position: relative;
+        overflow: hidden;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+      }
+      .promo-card.pink {
+        background: linear-gradient(135deg, #ff7dad 0%, #ff4da0 100%);
+      }
+      .promo-card.green {
+        background: linear-gradient(135deg, #dce9d7 0%, #9ec38f 100%);
+        color: #0f2114;
+      }
+      .promo-card .promo-main {
+        font-size: 18px;
+        letter-spacing: -0.06em;
+        line-height: 1;
+      }
+      .promo-card .promo-sub {
+        position: absolute;
+        left: 14px;
+        bottom: 12px;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        background: rgba(255, 255, 255, 0.7);
+        border-bottom: 1px solid rgba(42, 28, 26, 0.08);
+        font-size: 20px;
+        font-weight: 500;
+        letter-spacing: -0.04em;
+      }
+      .menu-item.sub {
+        font-size: 17px;
+        padding-left: 24px;
+        color: #312724;
+      }
+      .menu-item .arrow {
+        color: #4c403d;
+        font-size: 22px;
+        line-height: 1;
+      }
+      .footer-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px 18px;
+        background: rgba(255, 255, 255, 0.75);
+        border-top: 1px solid rgba(42, 28, 26, 0.08);
+      }
+      .studio-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .studio-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 7px;
+        border-radius: 6px;
+        background: #ffeff5;
+        color: #ff3f9d;
+        border: 1px solid rgba(255, 63, 157, 0.2);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .profile-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid var(--line);
+        font-weight: 700;
+      }
+      .menu-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(17, 17, 17, 0.28);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+        z-index: 25;
+      }
+      .menu-overlay.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .cart-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 20px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .cart-body {
+        flex: 1;
+        padding: 18px 20px;
+        overflow: auto;
+      }
+      .cart-item {
+        display: grid;
+        grid-template-columns: 84px 1fr;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .cart-thumb {
+        height: 100px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #f2e6d4 0%, #d7b08a 100%);
+      }
+      .cart-item strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+      .meta-line {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .qty-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .qty-box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-weight: 700;
+      }
+      .cart-footer {
+        padding: 18px 20px 22px;
+        border-top: 1px solid var(--line);
+      }
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        color: var(--muted);
+      }
+      .checkout-btn {
+        width: 100%;
+        border: none;
+        border-radius: 12px;
+        background: var(--ink);
+        color: #fff;
+        padding: 15px 18px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: rgba(17, 17, 17, 0.92);
+        color: #fff;
+        padding: 12px 18px;
+        border-radius: 999px;
+        opacity: 0;
+        transition:
+          opacity 0.25s ease,
+          transform 0.25s ease;
+        z-index: 60;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      @media (max-width: 980px) {
+        .menu-btn {
+          display: flex;
+        }
+        .nav {
+          display: none;
+        }
+        .search {
+          width: 180px;
+        }
+        .header:hover .category-strip,
+        .header:focus-within .category-strip,
+        .header.menu-open .category-strip {
+          opacity: 0;
+          visibility: hidden;
+          max-height: 0;
+          pointer-events: none;
+        }
+        .bento {
+          grid-template-columns: 1fr 1fr;
+        }
+        .tile.large {
+          grid-column: span 2;
+        }
+        .cards,
+        .rail {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 640px) {
+        .topbar,
+        .category-strip,
+        .section,
+        .footer {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .search {
+          display: none;
+        }
+        .bento,
+        .cards,
+        .rail,
+        .story-grid,
+        .footer {
+          grid-template-columns: 1fr;
+        }
+        .tile.large {
+          grid-column: auto;
+          min-height: 240px;
+        }
+        .hero-card {
+          min-height: 300px;
+          border-top: 1px solid var(--line);
+          border-bottom: 1px solid var(--line);
+        }
+        .hero-slide {
+          padding: 22px;
+        }
+        h1.hero-title {
+          font-size: 42px;
+        }
+        .hero-actions {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="menu-overlay" id="menuOverlay"></div>
+      <header class="header" id="mainHeader">
+        <div class="topbar">
+          <div class="left-cluster">
+            <div class="menu-btn" aria-label="Open menu">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="brand-mark">M</div>
+            <nav class="nav">
+              <span class="active">Men</span>
+              <span>Women</span>
+              <span>Kids</span>
+              <span>Home</span>
+              <span>Beauty</span>
+              <span>Genz</span>
+              <span>Studio</span>
+              <span style="color: #ff3f9d">New</span>
+            </nav>
+          </div>
+          <div class="right-actions">
+            <div class="search">Search for products, brands and more</div>
+            <div class="mini-action"><span class="bubble">◔</span>Profile</div>
+            <div class="mini-action"><span class="bubble">♡</span>Wishlist</div>
+            <div class="mini-action"><span class="bubble">👜</span>Bag</div>
+          </div>
+        </div>
+        <div class="category-strip">
+          <div class="pill">
+            <strong>Indian &amp; Fusion Wear</strong> Kurtas &amp; Suits<br />Kurtis,
+            Tunics &amp; Tops<br />Sarees<br />Ethnic Wear
+          </div>
+          <div class="pill">
+            <strong>Western Wear</strong>Dresses<br />Tops<br />Jeans &amp;
+            Jeggings<br />Jackets &amp; Coats
+          </div>
+          <div class="pill">
+            <strong>Beauty &amp; Personal Care</strong
+            >Makeup<br />Skincare<br />Fragrances<br />Premium Beauty
+          </div>
+          <div class="pill">
+            <strong>Bag &amp; Accessories</strong
+            >Handbags<br />Wallets<br />Luggage<br />Travel
+          </div>
+          <div class="pill">
+            <strong>Sports &amp; Active Wear</strong
+            >Clothing<br />Footwear<br />Accessories<br />Equipment
+          </div>
+          <div class="pill">
+            <strong>Jewellery</strong>Fashion Jewellery<br />Fine Jewellery<br />Earrings<br />Pendants
+          </div>
+          <div class="pill">
+            <strong>Gadgets</strong>Smart Wearables<br />Headphones<br />Speakers<br />Fitness
+          </div>
+          <div class="pill">
+            <strong>Home &amp; Kitchen</strong
+            >Decor<br />Kitchenware<br />Bedding<br />Storage
+          </div>
+          <div class="pill">
+            <strong>Lingerie</strong
+            >Bras<br />Sleepwear<br />Shapewear<br />Accessories
+          </div>
+          <div class="promo-box">
+            <span class="promo-label">T&amp;C Apply</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-card">
+          <div
+            class="hero-slide active"
+            style="
+              background: linear-gradient(
+                120deg,
+                #d4c0a6 0%,
+                #b77d52 42%,
+                #8d5b42 100%
+              );
+            "
+          >
+            <div class="hero-inner">
+              <div class="eyebrow">New season edit</div>
+              <h1 class="hero-title">Festive handloom</h1>
+              <div class="hero-actions">
+                <div class="btn primary">Shop the edit</div>
+                <div class="btn secondary">Explore dresses</div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="hero-slide"
+            style="
+              background: linear-gradient(
+                120deg,
+                #e6d5c8 0%,
+                #d2a384 40%,
+                #a66f5a 100%
+              );
+            "
+          >
+            <div class="hero-inner">
+              <div class="eyebrow">Minimal luxury</div>
+              <h1 class="hero-title">Soft pastels</h1>
+              <div class="hero-actions">
+                <div class="btn primary">Shop new arrivals</div>
+                <div class="btn secondary">View dresses</div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="hero-slide"
+            style="
+              background: linear-gradient(
+                120deg,
+                #d8d4d0 0%,
+                #9a7d73 45%,
+                #5c4b49 100%
+              );
+            "
+          >
+            <div class="hero-inner">
+              <div class="eyebrow">Weekend edit</div>
+              <h1 class="hero-title">Flowing silhouettes</h1>
+              <div class="hero-actions">
+                <div class="btn primary">Curate my look</div>
+                <div class="btn secondary">Explore collections</div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-dots">
+            <span class="hero-dot active"></span>
+            <span class="hero-dot"></span>
+            <span class="hero-dot"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Curated collections</h2>
+          <div class="link">View all</div>
+        </div>
+        <div class="bento">
+          <div class="tile large dark">Handloom Sarees</div>
+          <div class="tile peach">Everyday Dresses</div>
+          <div class="tile sand">Lehenga Edit</div>
+          <div class="tile blush">Kids Occasionwear</div>
+          <div class="tile sand">Intimates</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Shop by category</h2>
+          <div class="link">Browse all</div>
+        </div>
+        <div class="cards">
+          <div class="card-box">
+            <div class="card-art"></div>
+            <div class="card-copy">
+              <strong>Sarees</strong><span>Silk · Cotton · Festive</span>
+            </div>
+          </div>
+          <div class="card-box">
+            <div
+              class="card-art"
+              style="
+                background: linear-gradient(135deg, #f4d6d2 0%, #d19290 100%);
+              "
+            ></div>
+            <div class="card-copy">
+              <strong>Dresses</strong><span>Soft pastels</span>
+            </div>
+          </div>
+          <div class="card-box">
+            <div
+              class="card-art"
+              style="
+                background: linear-gradient(135deg, #e5d7b8 0%, #c18b59 100%);
+              "
+            ></div>
+            <div class="card-copy">
+              <strong>Lehengas</strong><span>Occasion ready</span>
+            </div>
+          </div>
+          <div class="card-box">
+            <div
+              class="card-art"
+              style="
+                background: linear-gradient(135deg, #d6e6d2 0%, #7ea27d 100%);
+              "
+            ></div>
+            <div class="card-copy">
+              <strong>Kids</strong><span>Festive dresses</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <h2>Trending now</h2>
+          <div class="link">See more</div>
+        </div>
+        <div class="rail">
+          <div class="product">
+            <div class="product-image"></div>
+            <div class="product-meta">
+              <div class="product-name">Ivory Elegance</div>
+              <div class="price">
+                <strong>₹3,299</strong><span>₹4,999</span>
+              </div>
+              <button class="cta-small" data-cart-add="Ivory Elegance">
+                Add to bag
+              </button>
+            </div>
+          </div>
+          <div class="product">
+            <div
+              class="product-image"
+              style="
+                background: linear-gradient(135deg, #f2d9d8 0%, #c9908d 100%);
+              "
+            ></div>
+            <div class="product-meta">
+              <div class="product-name">Rose Bloom</div>
+              <div class="price">
+                <strong>₹2,799</strong><span>₹4,199</span>
+              </div>
+              <button class="cta-small" data-cart-add="Rose Bloom">
+                Add to bag
+              </button>
+            </div>
+          </div>
+          <div class="product">
+            <div
+              class="product-image"
+              style="
+                background: linear-gradient(135deg, #d9d8bc 0%, #9da67a 100%);
+              "
+            ></div>
+            <div class="product-meta">
+              <div class="product-name">Leaf Weave</div>
+              <div class="price">
+                <strong>₹2,499</strong><span>₹3,699</span>
+              </div>
+              <button class="cta-small" data-cart-add="Leaf Weave">
+                Add to bag
+              </button>
+            </div>
+          </div>
+          <div class="product">
+            <div
+              class="product-image"
+              style="
+                background: linear-gradient(135deg, #d8dfe8 0%, #8ca0b9 100%);
+              "
+            ></div>
+            <div class="product-meta">
+              <div class="product-name">Blue Grace</div>
+              <div class="price">
+                <strong>₹3,099</strong><span>₹4,699</span>
+              </div>
+              <button class="cta-small" data-cart-add="Blue Grace">
+                Add to bag
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="padding-bottom: 28px">
+        <div class="story-grid">
+          <div class="story-panel">Thoughtful pieces for every story.</div>
+          <div class="story-box">
+            <h3>Designed to be worn often</h3>
+            <p>
+              Our fabrics are selected for comfort, movement, and
+              longevity—balanced with premium silhouettes and understated color
+              stories tailored for real life.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="foot-block">
+          <strong>Need help?</strong><span>Delivery</span><span>Returns</span
+          ><span>Order tracking</span>
+        </div>
+        <div class="foot-block">
+          <strong>About</strong><span>Our story</span><span>Craft</span
+          ><span>Careers</span>
+        </div>
+        <div class="foot-block">
+          <strong>Collections</strong><span>Sarees</span><span>Dresses</span
+          ><span>Lehengas</span>
+        </div>
+        <div class="foot-block">
+          <strong>Reach us</strong><span>hello@vayyari.com</span
+          ><span>+91 98765 43210</span><span>Mon–Sat</span>
+        </div>
+      </footer>
+    </div>
+
+    <aside class="menu-panel" id="menuPanel">
+      <div class="menu-header">
+        <div class="brand" style="font-size: 22px; letter-spacing: 0.12em">
+          VAYYARI
+        </div>
+        <button
+          id="closeMenu"
+          style="
+            border: none;
+            background: none;
+            font-size: 30px;
+            cursor: pointer;
+          "
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="menu-list">
+        <div class="promo-row">
+          <div class="promo-card pink">
+            <div class="promo-main">₹200<br />OFF</div>
+            <div class="promo-sub">Offer</div>
+          </div>
+          <div class="promo-card green">
+            <div class="promo-main">FLAT<br />₹200 OFF</div>
+            <div class="promo-sub">On your 1st order</div>
+          </div>
+        </div>
+
+        <div class="menu-item">
+          <span>Men</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Women</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Kids</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item sub">
+          <span>Boys Clothing</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item sub">
+          <span>Girls Clothing</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item sub">
+          <span>Footwear</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item sub">
+          <span>Toys &amp; Games</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Infants</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Home &amp; Bath</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Personal Care</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Kids Accessories</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Brands</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Age</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Home &amp; Living</span><span class="arrow">›</span>
+        </div>
+        <div class="menu-item">
+          <span>Beauty</span><span class="arrow">›</span>
+        </div>
+
+        <div class="footer-strip">
+          <div class="studio-meta">
+            <span>Myntra Studio</span>
+            <span class="studio-badge">New</span>
+          </div>
+          <div class="profile-pill">👤 Profile</div>
+        </div>
+      </div>
+    </aside>
+
+    <aside class="cart-drawer" id="cartDrawer">
+      <div class="cart-header">
+        <h3 style="margin: 0; font-size: 28px; letter-spacing: -0.05em">
+          Your bag
+        </h3>
+        <button
+          id="closeCart"
+          style="
+            border: none;
+            background: none;
+            font-size: 28px;
+            cursor: pointer;
+          "
+        >
+          ×
+        </button>
+      </div>
+      <div class="cart-body">
+        <div class="cart-item">
+          <div class="cart-thumb"></div>
+          <div>
+            <strong>Ivory Elegance</strong>
+            <div class="meta-line">Color: Ivory · Size: M</div>
+            <div class="qty-row">
+              <span class="qty-box">1</span>
+              <strong>₹3,299</strong>
+            </div>
+          </div>
+        </div>
+        <div class="cart-item">
+          <div
+            class="cart-thumb"
+            style="
+              background: linear-gradient(135deg, #f5d6d5 0%, #d49d9d 100%);
+            "
+          ></div>
+          <div>
+            <strong>Rose Bloom</strong>
+            <div class="meta-line">Color: Rose · Size: S</div>
+            <div class="qty-row">
+              <span class="qty-box">1</span>
+              <strong>₹2,799</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cart-footer">
+        <div class="summary-row">
+          <span>Subtotal</span><strong>₹6,098</strong>
+        </div>
+        <div class="summary-row"><span>Shipping</span><span>Free</span></div>
+        <button class="checkout-btn">Proceed to checkout</button>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast">Added to bag</div>
+
+    <script>
+      const heroSlides = [...document.querySelectorAll(".hero-slide")];
+      const heroDots = [...document.querySelectorAll(".hero-dot")];
+      let heroIndex = 0;
+
+      function showSlide(index) {
+        heroSlides.forEach((slide, i) =>
+          slide.classList.toggle("active", i === index),
+        );
+        heroDots.forEach((dot, i) =>
+          dot.classList.toggle("active", i === index),
+        );
+      }
+
+      setInterval(() => {
+        heroIndex = (heroIndex + 1) % heroSlides.length;
+        showSlide(heroIndex);
+      }, 4200);
+
+      heroDots.forEach((dot, index) => {
+        dot.addEventListener("click", () => {
+          heroIndex = index;
+          showSlide(heroIndex);
+        });
+      });
+
+      document.querySelectorAll(".pill").forEach((pill) => {
+        pill.addEventListener("click", () => {
+          document
+            .querySelectorAll(".pill")
+            .forEach((p) => p.classList.remove("active"));
+          pill.classList.add("active");
+        });
+      });
+
+      const cartDrawer = document.getElementById("cartDrawer");
+      const bagToggle = document.getElementById("bagToggle");
+      const closeCart = document.getElementById("closeCart");
+      const menuPanel = document.getElementById("menuPanel");
+      const menuOverlay = document.getElementById("menuOverlay");
+      const menuBtn = document.querySelector(".menu-btn");
+      const closeMenu = document.getElementById("closeMenu");
+      const toast = document.getElementById("toast");
+      const cartCount = document.getElementById("cartCount");
+
+      function openCart() {
+        cartDrawer.classList.add("open");
+      }
+      function closeDrawer() {
+        cartDrawer.classList.remove("open");
+      }
+      function closeMenuPanel() {
+        menuPanel.classList.remove("open");
+        menuOverlay.classList.remove("show");
+        document.body.classList.remove("menu-open");
+      }
+      function openMenuPanel() {
+        menuPanel.classList.add("open");
+        menuOverlay.classList.add("show");
+        document.body.classList.add("menu-open");
+      }
+
+      menuBtn.addEventListener("click", openMenuPanel);
+      closeMenu.addEventListener("click", closeMenuPanel);
+      menuOverlay.addEventListener("click", closeMenuPanel);
+      bagToggle.addEventListener("click", openCart);
+      closeCart.addEventListener("click", closeDrawer);
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add("show");
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(
+          () => toast.classList.remove("show"),
+          1500,
+        );
+      }
+
+      document.querySelectorAll("[data-cart-add]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const current = Number(cartCount.textContent || "0");
+          cartCount.textContent = String(current + 1);
+          showToast(`${button.dataset.cartAdd} added to bag`);
+          openCart();
+        });
+      });
+    </script>
+  </body>
+</html>
