@@ -310,10 +310,17 @@ public class MetadataService : IMetadataService
             request.SequenceId = (int)nextVal;
         }
 
+        var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(request.Description, request.SubCategory);
+        var categoryRecord = await db.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT id FROM categories WHERE slug = @classifiedSlug OR name = @classifiedName LIMIT 1",
+            new { classifiedSlug, classifiedName }, trans);
+        var categoryId = (Guid?)(categoryRecord?.id) ?? await db.QueryFirstOrDefaultAsync<Guid?>(
+            "SELECT id FROM categories WHERE slug = 'general' OR slug = 'others' LIMIT 1", null, trans);
+
         var productId = Guid.NewGuid();
         const string sql = @"
-            INSERT INTO products (id, base_sku, title, tags, sequence_id, fabric, stitch_type, work_heaviness, created_at)
-            VALUES (@Id, @Sku, @Title, @Tags, @SeqId, @Fabric, @Stitch, @Work, NOW())
+            INSERT INTO products (id, category_id, base_sku, title, tags, sequence_id, fabric, stitch_type, work_heaviness, created_at)
+            VALUES (@Id, @CategoryId, @Sku, @Title, @Tags, @SeqId, @Fabric, @Stitch, @Work, NOW())
             RETURNING id";
         
         var tags = request.Tags ?? new List<string>();
@@ -325,6 +332,7 @@ public class MetadataService : IMetadataService
 
         return await db.ExecuteScalarAsync<Guid>(sql, new {
             Id = productId,
+            CategoryId = categoryId,
             Sku = sku,
             Title = request.Description?.Substring(0, Math.Min(request.Description.Length, 100)) ?? "New Product",
             Tags = tags.ToArray(),

@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Confluent.Kafka;
 using System.Linq;
+using DeepLens.Infrastructure.Services;
 
 namespace DeepLens.WorkerService.Workers;
 
@@ -128,17 +129,6 @@ public class ProductEnrichmentWorker : BackgroundService
 
         try
         {
-            string mappedCategory = RemapToTaxonomy(extracted.Category);
-            Guid? categoryId = await ResolveCategoryId(conn, mappedCategory, trans);
-
-            var unifiedAttributes = JsonSerializer.Serialize(new
-            {
-                fabric = extracted.Fabric,
-                stitch_type = extracted.StitchType,
-                price = extracted.Price,
-                is_plus_shipping = extracted.IsPlusShipping
-            });
-
             string cleanDesc = !string.IsNullOrEmpty(@event.Description) ? Regex.Replace(@event.Description, @"[*~_`]", "") : "";
             string title = !string.IsNullOrEmpty(extracted.Title) && extracted.Title != "New Product"
                 ? extracted.Title
@@ -152,6 +142,27 @@ public class ProductEnrichmentWorker : BackgroundService
             {
                 title = "New Product";
             }
+
+            var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(title, @event.Description);
+            string mappedCategory;
+            if (classifiedSlug != "general" && classifiedSlug != "others")
+            {
+                mappedCategory = classifiedName;
+            }
+            else
+            {
+                mappedCategory = RemapToTaxonomy(extracted.Category);
+            }
+
+            Guid? categoryId = await ResolveCategoryId(conn, mappedCategory, trans);
+
+            var unifiedAttributes = JsonSerializer.Serialize(new
+            {
+                fabric = extracted.Fabric,
+                stitch_type = extracted.StitchType,
+                price = extracted.Price,
+                is_plus_shipping = extracted.IsPlusShipping
+            });
 
             // Update products table
             const string updateProductSql = @"
@@ -221,9 +232,15 @@ public class ProductEnrichmentWorker : BackgroundService
 
     private async Task<Guid?> ResolveCategoryId(NpgsqlConnection conn, string categoryName, NpgsqlTransaction trans)
     {
-        var id = Guid.NewGuid();
         var slug = CleanBucketName(categoryName);
 
+        var existingId = await conn.QueryFirstOrDefaultAsync<Guid?>(
+            "SELECT id FROM public.categories WHERE slug = @Slug OR name = @Name OR slug = @categoryName OR name = @categoryName LIMIT 1",
+            new { Slug = slug, Name = categoryName, categoryName }, trans);
+
+        if (existingId.HasValue) return existingId.Value;
+
+        var id = Guid.NewGuid();
         const string sql = @"
             WITH ins AS (
                 INSERT INTO public.categories (id, name, slug)

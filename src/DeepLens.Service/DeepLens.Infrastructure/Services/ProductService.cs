@@ -63,18 +63,33 @@ public class ProductService : IProductService
             var hexId = $"VF{nextVal:X3}";
             data.SequenceId = (int)nextVal;
 
-            // 0. Resolve Category from Master List
+            // 0. Resolve Category from Master List or Auto-Classify
             var categoryId = data.CategoryId;
             string categorySlug = data.CategorySlug ?? "general";
 
-            if (!categoryId.HasValue || string.IsNullOrEmpty(data.CategorySlug))
+            if (!categoryId.HasValue || string.IsNullOrEmpty(data.CategorySlug) || data.CategorySlug == "general" || data.CategorySlug == "others")
             {
+                var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(data.Title, data.Description);
+                var targetSlug = (!string.IsNullOrEmpty(data.CategorySlug) && data.CategorySlug != "general" && data.CategorySlug != "others")
+                    ? data.CategorySlug
+                    : classifiedSlug;
+
                 var categoryRecord = await connection.QueryFirstOrDefaultAsync<CategoryDto>(
-                    "SELECT id, slug FROM categories WHERE slug = @slug OR name = @slug", 
-                    new { slug = data.CategorySlug ?? "general" }, transaction);
+                    "SELECT id, slug FROM categories WHERE slug = @slug OR name = @slug OR slug = @classifiedSlug OR name = @classifiedName LIMIT 1", 
+                    new { slug = targetSlug, classifiedSlug, classifiedName }, transaction);
                 
-                categoryId = categoryRecord?.Id ?? Guid.Parse("44a3aeed-7a91-43f2-aa4e-69e76cc29146");
-                categorySlug = categoryRecord?.Slug ?? "general";
+                if (categoryRecord != null)
+                {
+                    categoryId = categoryRecord.Id;
+                    categorySlug = categoryRecord.Slug;
+                }
+                else
+                {
+                    var fallbackRecord = await connection.QueryFirstOrDefaultAsync<CategoryDto>(
+                        "SELECT id, slug FROM categories WHERE slug = 'general' OR slug = 'others' LIMIT 1", null, transaction);
+                    categoryId = fallbackRecord?.Id ?? Guid.Parse("08128100-0822-4f40-9944-32601551c5e6");
+                    categorySlug = fallbackRecord?.Slug ?? "general";
+                }
             }
 
             // 1. Create Product (Master)
@@ -1302,10 +1317,23 @@ public class ProductService : IProductService
                 throw new InvalidOperationException("This post is already linked to another product as 'is'.");
             }
 
-            // 2. Create Product
+            // 2. Resolve Category & Create Product
             var nextVal = await connection.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, transaction);
             var hexId = $"VF{nextVal:X3}";
             var masterId = Guid.NewGuid();
+
+            var categoryId = data.CategoryId;
+            if (!categoryId.HasValue)
+            {
+                var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(data.Title ?? post.Title, data.Description ?? post.Description);
+                var categoryRecord = await connection.QueryFirstOrDefaultAsync<CategoryDto>(
+                    "SELECT id, slug FROM categories WHERE slug = @slug OR name = @name OR slug = @classifiedSlug OR name = @classifiedName LIMIT 1",
+                    new { slug = data.CategorySlug, name = data.CategorySlug, classifiedSlug, classifiedName }, transaction);
+
+                categoryId = categoryRecord?.Id ?? await connection.QueryFirstOrDefaultAsync<Guid?>(
+                    "SELECT id FROM categories WHERE slug = 'general' OR slug = 'others' LIMIT 1", null, transaction) 
+                    ?? Guid.Parse("08128100-0822-4f40-9944-32601551c5e6");
+            }
 
             const string masterSql = @"
                 INSERT INTO products (id, title, base_sku, tags, sequence_id, created_at, fabric, stitch_type, work_heaviness, category_id, description)
@@ -1322,7 +1350,7 @@ public class ProductService : IProductService
                 Fabric = data.Fabric,
                 Stitch = data.StitchType,
                 Work = data.WorkHeaviness,
-                CategoryId = data.CategoryId,
+                CategoryId = categoryId,
                 Description = data.Description ?? post.Description
             }, transaction);
 

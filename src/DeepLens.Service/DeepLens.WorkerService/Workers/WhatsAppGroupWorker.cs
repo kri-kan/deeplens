@@ -531,18 +531,6 @@ public class WhatsAppGroupWorker : BackgroundService
                     var nextVal = await conn.QuerySingleAsync<long>("SELECT nextval('productid_id_seq')", null, trans);
                     var sku = $"VF{nextVal:X3}";
 
-                    Guid? categoryId = await ResolveCategoryId(conn, "general", trans);
-
-                    var unifiedAttributes = JsonSerializer.Serialize(new
-                    {
-                        fabric = extracted.Fabric,
-                        stitch_type = extracted.StitchType,
-                        price = extracted.Price,
-                        is_plus_shipping = extracted.IsPlusShipping,
-                        color = extracted.Color,
-                        sizes = extracted.Sizes
-                    });
-
                     // Build a clean title: strip emojis + collapse whitespace + trim
                     string cleanRawDesc = !string.IsNullOrEmpty(rawDesc) ? Regex.Replace(rawDesc, @"[*~_`]", "") : "";
                     string title = !string.IsNullOrEmpty(extracted.Title) && extracted.Title != "New Product"
@@ -559,6 +547,29 @@ public class WhatsAppGroupWorker : BackgroundService
                     {
                         title = "New Product";
                     }
+
+                    // Deterministic auto-classification using title and full raw description
+                    var (classifiedName, classifiedSlug) = CategoryClassifier.Classify(title, rawDesc);
+                    if (classifiedSlug != "general" && classifiedSlug != "others")
+                    {
+                        extracted.Category = classifiedName;
+                    }
+                    else if (string.IsNullOrWhiteSpace(extracted.Category) || extracted.Category == "general" || extracted.Category == "others")
+                    {
+                        extracted.Category = "Others";
+                    }
+
+                    Guid? categoryId = await ResolveCategoryId(conn, extracted.Category, trans);
+
+                    var unifiedAttributes = JsonSerializer.Serialize(new
+                    {
+                        fabric = extracted.Fabric,
+                        stitch_type = extracted.StitchType,
+                        price = extracted.Price,
+                        is_plus_shipping = extracted.IsPlusShipping,
+                        color = extracted.Color,
+                        sizes = extracted.Sizes
+                    });
 
                     const string productSql = @"
                         INSERT INTO public.products (id, category_id, base_sku, title, fabric, stitch_type, tags, unified_attributes, sequence_id, created_at)
@@ -606,7 +617,7 @@ public class WhatsAppGroupWorker : BackgroundService
                             {
                                 ProductId = productId,
                                 ListingId = listingId,
-                                Category = "general",
+                                Category = extracted.Category,
                                 SubCategory = "General",
                                 Price = extracted.Price,
                                 IsPlusShipping = extracted.IsPlusShipping,
@@ -630,7 +641,7 @@ public class WhatsAppGroupWorker : BackgroundService
                                 TextCount = 1,
                                 ProductId = productId,
                                 ListingId = listingId,
-                                Category = "general",
+                                Category = extracted.Category,
                                 SubCategory = "General",
                                 Price = extracted.Price,
                                 IsPlusShipping = extracted.IsPlusShipping
@@ -1241,9 +1252,15 @@ public class WhatsAppGroupWorker : BackgroundService
 
     private async Task<Guid?> ResolveCategoryId(NpgsqlConnection conn, string categoryName, NpgsqlTransaction trans)
     {
-        var id = Guid.NewGuid();
         var slug = CleanBucketName(categoryName);
-        
+
+        var existingId = await conn.QueryFirstOrDefaultAsync<Guid?>(
+            "SELECT id FROM public.categories WHERE slug = @Slug OR name = @Name OR slug = @categoryName OR name = @categoryName LIMIT 1",
+            new { Slug = slug, Name = categoryName, categoryName }, trans);
+
+        if (existingId.HasValue) return existingId.Value;
+
+        var id = Guid.NewGuid();
         const string sql = @"
             WITH ins AS (
                 INSERT INTO public.categories (id, name, slug) 
