@@ -25,6 +25,8 @@ export default function InstagramScraper() {
     result,
     error,
     setError,
+    successMessage,
+    setSuccessMessage,
     tokenHealth,
     tokenLoading,
     refreshingToken,
@@ -32,6 +34,11 @@ export default function InstagramScraper() {
     setDepthMode,
     depthValue,
     setDepthValue,
+    isActive,
+    setIsActive,
+    profileCategory,
+    setProfileCategory,
+    profileCategories,
     activeJobs,
     queuedJobId,
     handleRefreshToken,
@@ -89,10 +96,28 @@ export default function InstagramScraper() {
           setDepthMode={setDepthMode}
           depthValue={depthValue}
           setDepthValue={setDepthValue}
+          isActive={isActive}
+          setIsActive={setIsActive}
+          profileCategory={profileCategory}
+          setProfileCategory={setProfileCategory}
+          profileCategories={profileCategories}
+          successMessage={successMessage}
+          onDismissSuccess={() => setSuccessMessage(null)}
           loading={loading}
           disabled={!!tokenHealth?.isExpired}
           onSubmit={startSync}
         />
+
+        {successMessage && (
+          <Banner
+            visible={!!successMessage}
+            actions={[{ label: 'Dismiss', onPress: () => setSuccessMessage(null) }]}
+            icon="check-circle"
+            style={{ backgroundColor: '#ecfdf5', borderRadius: 12, marginTop: 8 }}
+          >
+            {successMessage}
+          </Banner>
+        )}
 
         {tokenHealth?.isExpired && (
           <Banner

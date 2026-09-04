@@ -572,8 +572,8 @@ class InstagramService {
     return searchApiClient.get<ProfileDetailsResponse>(url);
   };
 
-  addToWatchlist = async (username: string): Promise<{ message: string; profile: InstagramProfile }> => {
-    return searchApiClient.post(`/api/v1/Insta/profile/${username}`);
+  addToWatchlist = async (username: string, options?: { isActive?: boolean; profileCategory?: string }): Promise<{ message: string; profile: InstagramProfile }> => {
+    return searchApiClient.post(`/api/v1/Insta/profile/${username}`, options);
   };
 
   removeFromWatchlist = async (username: string): Promise<void> => {
@@ -586,8 +586,8 @@ class InstagramService {
 
   // ── On-Demand Sync (Graph API) ──────────────────────────────────────────────
 
-  syncProfile = async (username: string, maxPosts = 50): Promise<SyncResult> => {
-    return searchApiClient.post<SyncResult>(`/api/v1/Insta/profile/${username}/sync?maxPosts=${maxPosts}`);
+  syncProfile = async (username: string, maxPosts = 50, options?: { isActive?: boolean; profileCategory?: string }): Promise<SyncResult> => {
+    return searchApiClient.post<SyncResult>(`/api/v1/Insta/profile/${username}/sync?maxPosts=${maxPosts}`, options);
   };
 
   // ── Token Management ────────────────────────────────────────────────────────
