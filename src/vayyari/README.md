@@ -1,50 +1,92 @@
-# Welcome to your Expo app 👋
+# Vayyari Mobile App (React Native / Expo Bare Workflow)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**Vayyari** is the mobile client for DeepLens, providing high-performance product browsing, WhatsApp catalog curation, and vector-similarity visual search.
 
-## Get started
+---
 
-1. Install dependencies
+## 🏗️ Architecture & Stack
 
-   ```bash
-   npm install
-   ```
+- **Framework**: React Native 0.76+ / Expo SDK 54 (**Bare Workflow**).
+- **Native Project**: Direct Android Gradle configuration under `android/`.
+- **Navigation**: `expo-router` v3 (file-system routing in `app/`).
+- **UI Engine**: `react-native-paper` (Material Design 3) with dynamic Emerald / Emerald Nocturne themes.
+- **State & Auth**: `context/AuthContext.tsx` with `AsyncStorage` session persistence and automatic 401 interception.
+- **Media Engine**: Singleton `expo-video` player with HTTP 206 partial content streaming.
+- **Telemetry**: Lazy-loaded OpenTelemetry tracing via `@opentelemetry/api`.
 
-2. Start the app
+---
 
-   ```bash
-   npx expo start
-   ```
+## 🚀 Local Development
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### 1. Install Dependencies
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Live Expo Bundler (Interactive / tmux)
+The dev server is managed as a systemd service (`vayyari-expo.service`) in a `tmux` session on boot:
+```bash
+# Attach to live session
+tmux attach -t expo
+```
+> **Note**: Detach using `Ctrl+B` then `D`. Do not use `Ctrl+C`.
 
-## Learn more
+To run manually:
+```bash
+npx expo start --android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 🔨 Standalone Android APK Build Pipeline
 
-## Join the community
+Standalone release APKs are compiled locally without cloud build dependencies:
 
-Join our community of developers creating universal apps.
+```bash
+# From workspace root
+make build-vayyari-apk
+# OR
+./infrastructure/deploy.sh vayyari-apk
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Direct Gradle Command
+```bash
+cd android
+./gradlew assembleRelease \
+  -x lint \
+  -x lintVitalAnalyzeRelease \
+  -Pandroid.enablePngCrunchInReleaseBuilds=false
+```
+
+### Build Notes:
+- **AAPT2 Flag**: `-Pandroid.enablePngCrunchInReleaseBuilds=false` bypasses AAPT2 failures on JPEG images stored with `.png` extensions.
+- **Output**: Built APK is saved to `/home/krikan/productivity/deeplens/publish/vayyari/`:
+  - `vayyari-latest.apk` (current release)
+  - `vayyari-v1.0.0-YYYYMMDD.apk` (versioned build)
+- **Retention**: Keeps the **newest 3 versioned APKs** automatically.
+
+---
+
+## 🔄 Self-Hosted OTA Updates (MinIO + Nginx)
+
+JavaScript bundles and assets can be exported and mirrored to MinIO:
+
+```bash
+./push-update.sh --notes "Release description"
+```
+
+1. **Expo Export**: Runs `npx expo export --platform android` to emit Hermes bytecode (`.hbc`) and assets in `dist/`.
+2. **MinIO Mirror**: Uses `mc` to upload the bundle to bucket `vayyari-updates` at `bundles/vYYYYMMDDHHMM/`.
+3. **Manifest**: Uploads latest `manifest.json` referencing bundle and asset URLs.
+4. **Pruning**: MinIO retains the **3 most recent bundle versions**.
+5. **Gateway URL**: Accessible publicly via `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`.
+6. **Protocol Deferral**: Runtime `expo-updates` is disabled in `app.json`. Delivery is managed via standalone APKs while MinIO serves as the artifact archive.
+
+---
+
+## 📚 Related Documentation
+- `publish/vayyari/README.md` — Distribution and installation instructions
+- `src/vayyari/SKILL.md` — Developer patterns and coding conventions
+- `docs/architecture/vayyari-mobile-architecture.md` — Detailed architectural design
+- `DEVELOPMENT.md` — Monorepo development guide
+

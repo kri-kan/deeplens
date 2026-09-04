@@ -25,10 +25,11 @@ DeepLens is a high-performance, multi-tenant **visual search engine** built usin
 ### High-Level System Flow
 ```mermaid
 graph TD
-    User([User / Client]) --> Gateway[API Gateway - .NET]
+    User([User / Client]) --> Gateway[API Gateway - Nginx / .NET]
     Gateway --> Identity[Identity API - Duende]
     Gateway --> Search[Search API - .NET]
     Gateway --> Admin[Admin API - .NET]
+    Gateway --> MinIOOTA[MinIO OTA - /vayyari-updates/]
     
     Search --> Kafka{Apache Kafka}
     Kafka --> Worker[Worker Service - .NET]
@@ -38,6 +39,10 @@ graph TD
     
     Admin --> Metadata[(PostgreSQL Metadata)]
     Search --> Metadata
+
+    MobileApp[Vayyari Mobile App - React Native] --> Gateway
+    MobileApp --> Search
+    MobileApp --> Identity
 ```
 
 ---
@@ -50,7 +55,7 @@ DeepLens provides strict isolation between tenants using a partitioned resource 
 1.  **Platform Metadata (PostgreSQL)**: Shared database with row-level or schema-based separation for global configurations.
 2.  **Tenant Metadata (PostgreSQL)**: Isolated databases provisioned per tenant for image metadata and local settings.
 3.  **Vector Storage (Qdrant)**: Isolated collections (or separate instances) per tenant ensuring no cross-tenant similarity leakage.
-4.  **Object Storage (MinIO/S3/Azure)**: Logical isolation via dedicated buckets within a shared master instance (default) or account-level isolation for high-scale tenants.
+4.  **Object Storage (MinIO/S3/Azure)**: Logical isolation via dedicated buckets (`tenant-<uuid>`) within a shared master instance (default), unstructured media in `whatsapp-media`, and public mobile OTA bundle/asset storage in `vayyari-updates`.
 
 ### Database Schema (Identity & Platform)
 Refers to the core tables in the `nextgen_identity` and `deeplens_platform` databases.
@@ -86,6 +91,7 @@ DeepLens leverages a centralized infrastructure with local application services:
 2.  **App Services (Docker)**: Core AI and worker services are started using `setupscripts/application/docker-compose.yaml`.
 3.  **Platform DB Init**: SQL scripts initialize system schemas and roles on the remote PostgreSQL.
 4.  **Backend APIs**: Identity and Search APIs are started via `dotnet run`.
+5.  **Mobile Client**: Vayyari APKs built via `./infrastructure/deploy.sh vayyari-apk` with bundle artifacts stored in MinIO `vayyari-updates`.
 
 ---
 
@@ -114,6 +120,10 @@ DeepLens leverages a centralized infrastructure with local application services:
 - **Decision**: Implement a dynamic CORS predicate for intranet IP ranges (RFC1918) driven by a configuration toggle.
 - **Rationale**: Avoids the "whack-a-mole" process of manually adding developer/test IP addresses to the configuration, while maintaining security outside the local network.
 
+### ADR-006: Self-Hosted Vayyari Mobile Distribution & Expo Updates Protocol Deferral
+- **Decision**: Distribute Vayyari mobile app updates primarily as standalone APKs (`publish/vayyari/vayyari-latest.apk`) while archiving JS bundles and manifests in MinIO (`vayyari-updates`). Runtime `expo-updates` auto-polling is deferred.
+- **Rationale**: Expo Updates Protocol v1 requires signed, multipart/mixed HTTP responses that static MinIO hosting cannot generate without a dynamic middleware server. Standalone APK builds (via Gradle `assembleRelease`) provide reliable, self-contained installation for internal testers over Tailscale.
+
 ---
 
 ## 📊 Observability Strategy
@@ -130,6 +140,8 @@ DeepLens implements a full **OpenTelemetry** stack:
 
 ## 📁 Related Documents
 - [**DEVELOPMENT.md**](DEVELOPMENT.md) - Setup, Workflow, and Credentials
+- [**Vayyari Mobile Architecture**](./vayyari-mobile-architecture.md) - React Native, Standalone APKs & OTA
 - [**infrastructure/TENANT-GUIDE.md**](infrastructure/TENANT-GUIDE.md) - Provisioning & Storage
 - [**docs/SECURITY.md**](docs/SECURITY.md) - RBAC & Token Lifecycle
 - [**docs/SERVICES.md**](docs/SERVICES.md) - Detailed Service Specifications
+

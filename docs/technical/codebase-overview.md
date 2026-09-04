@@ -29,9 +29,9 @@ DeepLens is built using a clean architecture pattern across multiple services:
 ### Python AI Services (`src/`)
 - **DeepLens.FeatureExtractionService**: FastAPI service using ResNet50/CLIP for vectorizing images.
 
-### Frontend (`src/`)
+### Frontend & Mobile Clients (`src/`)
 - **DeepLens.WebUI**: React/TypeScript dashboard for administrators and tenants.
-- **Vayyari**: Expo/React Native mobile application for customer management and Instagram story planning.
+- **Vayyari**: React Native / Expo Bare Workflow mobile application (`src/vayyari/`) for customer management, WhatsApp catalog browsing, and visual search. Features native Android Gradle builds (`assembleRelease`), local APK distribution (`publish/vayyari/`), and self-hosted OTA bundle archival in MinIO (`vayyari-updates`).
 
 ---
 

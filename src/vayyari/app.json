@@ -87,6 +87,13 @@
       "expo-web-browser",
       "expo-font"
     ],
+    "updates": {
+      "enabled": false
+    },
+    "extra": {
+      "apiHost": "krikanserver.taild227d9.ts.net",
+      "tailscaleIp": "100.98.244.8"
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": false

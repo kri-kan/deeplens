@@ -191,7 +191,7 @@ const result = await wrapInSpan('MyComponent: fetchProduct', async () => {
 
 ---
 
-## Running Locally
+## Running Locally & Building Release APKs
 
 ```bash
 cd src/vayyari
@@ -210,8 +210,16 @@ npx expo start --android
 # or from root: make build-vayyari-apk
 # Output placed in publish/vayyari/vayyari-latest.apk (retaining 3 newest versions)
 
-# Clear cache if things break
-npx expo start --clear
+# Direct native Gradle build
+cd src/vayyari/android
+./gradlew assembleRelease \
+  -x lint \
+  -x lintVitalAnalyzeRelease \
+  -Pandroid.enablePngCrunchInReleaseBuilds=false
+
+# Push OTA bundle to MinIO local/vayyari-updates
+cd src/vayyari
+./push-update.sh --notes "Release summary"
 ```
 
 ---
@@ -224,12 +232,16 @@ npx expo start --clear
 4. **Expo Router anchor**: `unstable_settings.anchor = '(tabs)'` ensures deep links and back navigation behave correctly
 5. **OpenTelemetry lazy load**: OTel is imported dynamically after `EXPO_PUBLIC_OTEL_LAZY_LOAD_DELAY_MS` ms — never import from `@opentelemetry/*` at the top level in screen files
 6. **GestureHandlerRootView**: Must be at the root — already in `_layout.tsx`. Don't add another one inside screens.
+7. **AAPT2 PNG Crunching**: Always pass `-Pandroid.enablePngCrunchInReleaseBuilds=false` during release builds because courier logo assets contain JPEG headers under `.png` extensions.
+8. **Expo Updates Protocol Deferral**: Runtime OTA auto-polling is deferred (`expo-updates` disabled in `app.json`). Updates are delivered via APK reinstallation from `publish/vayyari/vayyari-latest.apk`.
 
 ---
 
 ## Related Documentation
+- `publish/vayyari/README.md` — APK distribution and installation
 - `src/vayyari/DESIGN.md` — Design system and theme documentation
-- `src/vayyari/README.md` — Project setup
-- `src/vayyari/docs/` — Additional feature documentation
+- `src/vayyari/README.md` — Project setup & architecture overview
+- `docs/architecture/vayyari-mobile-architecture.md` — Complete Mobile Architecture Guide
 - `docs/technical/SECURITY.md` — JWT/OAuth flow details
 - `docs/technical/VIDEO_PROCESSING.md` — Backend video streaming requirements
+

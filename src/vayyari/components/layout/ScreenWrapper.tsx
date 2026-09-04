@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, ScrollView, View, ViewStyle, RefreshControl, Platform, useWindowDimensions } from 'react-native';
-import { Surface, Appbar, useTheme } from 'react-native-paper';
+import { Surface, Appbar, useTheme, ActivityIndicator } from 'react-native-paper';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
 
 interface ScreenWrapperProps {
   title: React.ReactNode;
@@ -14,6 +15,7 @@ interface ScreenWrapperProps {
   refreshing?: boolean;
   onRefresh?: () => void;
   headerElevation?: number;
+  requireAuth?: boolean;
 }
 
 export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
@@ -26,14 +28,32 @@ export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({
   refreshing = false,
   onRefresh,
   headerElevation = 0,
+  requireAuth = true,
 }) => {
   const theme = useTheme();
   const router = useRouter();
+  const { token, isLoading } = useAuth();
+  
+  useEffect(() => {
+    if (requireAuth && !isLoading && !token) {
+      router.replace('/login');
+    }
+  }, [requireAuth, isLoading, token, router]);
+
   // On web, flex:1 alone doesn't constrain height without explicit CSS on ancestor elements.
   // We read the window height and pin the Surface to it so the inner FlatList gets a bounded
   // viewport and can scroll normally in the browser.
   const { height: windowHeight } = useWindowDimensions();
   const webHeightStyle = Platform.OS === 'web' ? { height: windowHeight } : {};
+
+  // If page requires auth and user is unauthenticated or auth is checking, prevent rendering stale child data
+  if (requireAuth && (!token || isLoading)) {
+    return (
+      <Surface style={[styles.container, { backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center' }, webHeightStyle]} elevation={0}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </Surface>
+    );
+  }
 
   const renderContent = () => {
     if (withScrollView) {

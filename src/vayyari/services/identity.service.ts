@@ -6,7 +6,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
 
-const identityApiUrl = getIdentityApiUrl();
 export const TOKEN_KEY = 'auth_token';
 export const REFRESH_TOKEN_KEY = 'refresh_token';
 export const TOKEN_EXPIRY_KEY = 'auth_token_expiry'; // unix ms
@@ -29,7 +28,7 @@ class IdentityService {
   private client: ApiClient;
 
   constructor() {
-    this.client = new ApiClient(identityApiUrl);
+    this.client = new ApiClient(() => getIdentityApiUrl());
   }
 
   /**
@@ -37,7 +36,10 @@ class IdentityService {
    */
   async login(email: string, password: string): Promise<TokenResponse> {
     try {
-      const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.LOGIN}`, {
+      const baseUrl = getIdentityApiUrl();
+      const loginUrl = `${baseUrl}${API_ROUTES.AUTH.LOGIN}`;
+      console.log(`[IdentityService] Attempting login to: ${loginUrl}`);
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +72,7 @@ class IdentityService {
 
       return tokenResponse;
     } catch (err) {
-      console.error(`[IdentityService] Network error during login to ${identityApiUrl}:`, err);
+      console.error(`[IdentityService] Network error during login to ${getIdentityApiUrl()}:`, err);
       throw err;
     }
   }
