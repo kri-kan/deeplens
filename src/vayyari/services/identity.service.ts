@@ -100,6 +100,7 @@ class IdentityService {
         }
       }
 
+      const identityApiUrl = getIdentityApiUrl();
       const response = await fetch(`${identityApiUrl}${API_ROUTES.AUTH.REFRESH}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
