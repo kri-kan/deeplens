@@ -76,22 +76,49 @@ public class IdGeneratorService : IIdGeneratorService
         return await _orderRepository.GetDetailsAsync(orderId);
     }
 
-    public async Task<bool> UpdateOrderDetailsAsync(string orderId, string? customerPhone = null, string? customerAddress = null, OrderSource? source = null, string? sourceHandle = null, PaymentMode? paymentMode = null, IEnumerable<OrderItemUpdateDto>? items = null, string? transactionId = null, Guid? customerId = null)
+    public async Task<bool> UpdateOrderDetailsAsync(string orderId, OrderUpdateDto details)
     {
-        int? sourceId = source.HasValue ? (int)source.Value : null;
-        int? paymentModeId = paymentMode.HasValue ? (int)paymentMode.Value : null;
+        int? sourceId = details.Source.HasValue ? (int)details.Source.Value : null;
+        int? paymentModeId = details.PaymentMode.HasValue ? (int)details.PaymentMode.Value : null;
 
-        var result = await _orderRepository.UpdateDetailsAsync(orderId, customerPhone, customerAddress, sourceId, sourceHandle, paymentModeId, transactionId, customerId);
+        var result = await _orderRepository.UpdateDetailsAsync(
+            orderId, 
+            details.CustomerPhone, 
+            details.CustomerAddress, 
+            sourceId, 
+            details.SourceHandle, 
+            paymentModeId, 
+            details.TransactionId, 
+            details.CustomerId,
+            details.CustomerName,
+            details.AdvancePaid,
+            details.CodBalance,
+            details.TotalAmount,
+            details.ShippingCharges,
+            details.ShippingStreet,
+            details.ShippingCity,
+            details.ShippingState,
+            details.ShippingPincode,
+            details.IsServiceable);
 
-        if (items != null)
+        if (details.Items != null)
         {
             var internalId = await _orderRepository.GetInternalIdAsync(orderId);
             await _orderRepository.DeleteItemsAsync(internalId);
             
             int index = 1;
-            foreach (var item in items)
+            foreach (var item in details.Items)
             {
-                await _orderRepository.AddOrderItemAsync(internalId, index++, item.ProductId, item.Comments);
+                await _orderRepository.AddOrderItemAsync(
+                    internalId, 
+                    index++, 
+                    item.ProductId, 
+                    item.Comments,
+                    item.Quantity > 0 ? item.Quantity : 1,
+                    item.UnitPrice,
+                    item.Subtotal > 0 ? item.Subtotal : (item.UnitPrice * (item.Quantity > 0 ? item.Quantity : 1)),
+                    item.VendorId,
+                    item.SourceType);
             }
         }
 

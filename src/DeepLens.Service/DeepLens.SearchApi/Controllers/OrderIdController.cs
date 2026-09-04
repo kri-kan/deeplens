@@ -95,16 +95,7 @@ public class OrderIdController : ControllerBase
     [HttpPut("order/{orderId}")]
     public async Task<IActionResult> UpdateOrderDetails(string orderId, [FromBody] OrderUpdateDto details)
     {
-        var success = await _idGenerator.UpdateOrderDetailsAsync(
-            orderId, 
-            details.CustomerPhone, 
-            details.CustomerAddress, 
-            details.Source,
-            details.SourceHandle,
-            details.PaymentMode,
-            details.Items,
-            details.TransactionId,
-            details.CustomerId);
+        var success = await _idGenerator.UpdateOrderDetailsAsync(orderId, details);
             
         if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
         return Ok(new { message = "Details updated successfully" });

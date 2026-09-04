@@ -44,4 +44,16 @@ public class OrderHistoryDto
 
     [JsonPropertyName("customerId")]
     public Guid? CustomerId { get; set; }
+
+    [JsonPropertyName("customerName")]
+    public string? CustomerName { get; set; }
+
+    [JsonPropertyName("totalAmount")]
+    public decimal? TotalAmount { get; set; }
+
+    [JsonPropertyName("advancePaid")]
+    public decimal? AdvancePaid { get; set; }
+
+    [JsonPropertyName("codBalance")]
+    public decimal? CodBalance { get; set; }
 }
