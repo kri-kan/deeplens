@@ -163,5 +163,25 @@ export const API_ROUTES = {
     UPDATE_ADDRESS: (addressId: string) => `/api/v1/Vendors/addresses/${addressId}`,
     DELETE_ADDRESS: (addressId: string) => `/api/v1/Vendors/addresses/${addressId}`,
     SET_DEFAULT_ADDRESS: (vendorId: string, addressId: string) => `/api/v1/Vendors/${vendorId}/addresses/${addressId}/default`,
+  },
+
+  // Logistics & Fulfillment
+  LOGISTICS: {
+    ORDERS_LIST: '/api/v1/logistics/orders',
+    ORDER_DETAIL: (id: string) => `/api/v1/logistics/orders/${id}`,
+    SPLIT_PACKAGES: (orderId: string) => `/api/v1/logistics/orders/${orderId}/packages`,
+    UPDATE_PACKAGE: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}`,
+    REASSIGN_ITEM: (orderId: string) => `/api/v1/logistics/orders/${orderId}/items/reassign`,
+    UPDATE_PROCUREMENT: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}/procurement`,
+    ATTACH_VENDOR_AWB: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}/vendor-awb`,
+    GENERATE_DELHIVERY_AWB: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}/delhivery-awb`,
+    SCHEDULE_PICKUP: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}/pickup`,
+    SHARE_VENDOR_WHATSAPP: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}/share-vendor`,
+    FORWARD_TRACKING_CUSTOMER: (orderId: string, packageId: string) => `/api/v1/logistics/orders/${orderId}/packages/${packageId}/share-tracking`,
+    NDR_LIST: '/api/v1/logistics/ndr',
+    NDR_ACTION: (ndrId: string) => `/api/v1/logistics/ndr/${ndrId}/action`,
+    ESCALATIONS_LIST: '/api/v1/logistics/escalations',
+    CREATE_ESCALATION: '/api/v1/logistics/escalations',
+    UPDATE_ESCALATION: (id: string) => `/api/v1/logistics/escalations/${id}`,
   }
 };
