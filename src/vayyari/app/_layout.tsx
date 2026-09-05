@@ -8,6 +8,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { VayyariEmeraldTheme, VayyariEmeraldNocturneTheme } from '../constants/theme';
 import { ThemeProvider, useAppTheme } from '../context/ThemeContext';
+import { TamaguiProvider } from 'tamagui';
+import tamaguiConfig from '../tamagui.config';
+import { ThemeProvider as StoreThemeProvider } from '../theme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { PermissionsProvider } from '../context/PermissionsContext';
 import * as SplashScreen from 'expo-splash-screen';
@@ -101,33 +104,37 @@ function InnerRootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PaperProvider theme={paperTheme}>
-        <NavigationThemeProvider value={navTheme}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          >
-            {!token ? (
-              <Stack.Screen name="login" options={{ title: 'Sign In' }} />
-            ) : (
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            )}
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true }} />
-            <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
-            <Stack.Screen name="share-target" options={{ headerShown: false }} />
-          </Stack>
-          <StatusBar style="auto" />
-          <ShareActionChooserModal
-            visible={modalVisible}
-            mediaItems={modalMedia}
-            sessionId={modalSessionId}
-            onCreateOrder={handleCreateOrder}
-            onCreateProduct={handleCreateProduct}
-            onDiscard={handleDiscard}
-          />
-        </NavigationThemeProvider>
-      </PaperProvider>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
+        <StoreThemeProvider initialColorScheme={colorScheme === 'dark' ? 'dark' : 'light'}>
+          <PaperProvider theme={paperTheme}>
+            <NavigationThemeProvider value={navTheme}>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                }}
+              >
+                {!token ? (
+                  <Stack.Screen name="login" options={{ title: 'Sign In' }} />
+                ) : (
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                )}
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true }} />
+                <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
+                <Stack.Screen name="share-target" options={{ headerShown: false }} />
+              </Stack>
+              <StatusBar style="auto" />
+              <ShareActionChooserModal
+                visible={modalVisible}
+                mediaItems={modalMedia}
+                sessionId={modalSessionId}
+                onCreateOrder={handleCreateOrder}
+                onCreateProduct={handleCreateProduct}
+                onDiscard={handleDiscard}
+              />
+            </NavigationThemeProvider>
+          </PaperProvider>
+        </StoreThemeProvider>
+      </TamaguiProvider>
     </GestureHandlerRootView>
   );
 }

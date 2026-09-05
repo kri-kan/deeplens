@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { YStack } from 'tamagui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AdminOrderDetailView } from '@/components/order/AdminOrderDetailView';
 
@@ -12,14 +12,8 @@ export default function OrderDetailsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <YStack flex={1}>
       <AdminOrderDetailView orderId={id} onBack={() => router.back()} />
-    </View>
+    </YStack>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});

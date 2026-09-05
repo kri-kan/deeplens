@@ -1,52 +1,58 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
   ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
+  TextInput,
+  Pressable,
   Linking,
   Alert,
-  Platform,
-} from 'react-native';
-import {
-  Surface,
-  Text,
-  TextInput,
-  Button,
-  IconButton,
-  useTheme,
+  Image,
   ActivityIndicator,
-  Portal,
-  Modal,
-  Chip,
-  Icon,
-} from 'react-native-paper';
+} from 'react-native';
+import { YStack, XStack, Text } from 'tamagui';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 
+import { useTheme } from '@/theme';
+import {
+  LuPencil,
+  LuPlus,
+  LuMapPin,
+  LuX,
+  LuSparkles,
+  LuClipboardPaste,
+  LuCheck,
+  LuTriangleAlert,
+  LuExternalLink,
+  LuTrash2,
+} from '@/components/tamagui-ui/icons/lu';
+import {
+  RiWhatsappLine,
+  RiWhatsappFill,
+  RiInstagramLine,
+} from '@/components/tamagui-ui/icons/ri';
 import { useShareIntentContext } from '@/context/ShareIntentContext';
 import { searchApiClient } from '@/api/client';
 import { customersApi } from '@/api/customers';
-import { delhiveryService, PincodeCheckResult } from '@/services/delhiveryService';
+import { delhiveryService } from '@/services/delhiveryService';
 import { API_ROUTES } from '@/constants/api-routes';
 import {
-  OrderSource,
+  OrderSource as ApiOrderSource,
   PaymentMode,
   OrderIdEntry,
-  OrderItemDraft,
-  ShippingAddressDraft,
-  OrderUpdateRequest,
 } from '@/types/orders';
 
-import { ExistingOrderAutocomplete } from './ExistingOrderAutocomplete';
-import { CatalogOrderItemsList } from './CatalogOrderItemsList';
-import { CatalogItemPickerModal } from './CatalogItemPickerModal';
-
 // Brand colors
-const WHATSAPP_GREEN = '#25D366';
-const INSTAGRAM_PINK = '#E1306C';
+export const WHATSAPP_GREEN = '#25D366';
+export const INSTAGRAM_ACTIVE = '#E1306C';
+
+export type OrderSource = 'whatsapp' | 'instagram' | null;
+export type PaymentType = 'cod' | 'prepaid';
+
+export interface LocalImage {
+  id: string;
+  uri: string;
+}
 
 export interface AddressData {
   name: string;
@@ -58,98 +64,595 @@ export interface AddressData {
   isDelhiveryServiceable?: boolean | null;
 }
 
+// ─────────────────────────────────────────────
+// Underline Field Component
+// ─────────────────────────────────────────────
+export interface UnderlineFieldProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'phone-pad' | 'numeric';
+  multiline?: boolean;
+  multilineHeight?: number;
+  accessibilityLabel?: string;
+  onSmartPaste?: (text: string) => void;
+}
+
+export function UnderlineField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  keyboardType = 'default',
+  multiline = false,
+  multilineHeight,
+  accessibilityLabel,
+  onSmartPaste,
+}: UnderlineFieldProps) {
+  const { tokens } = useTheme();
+  const safeValue = value ?? '';
+  const prevLen = useRef(safeValue.length);
+
+  const handleChange = (v: string) => {
+    if (onSmartPaste && v.length - prevLen.current > 10) {
+      onSmartPaste(v);
+    }
+    prevLen.current = v.length;
+    onChange(v);
+  };
+
+  return (
+    <YStack paddingBottom={8} borderBottomWidth={1} borderBottomColor={tokens.border}>
+      <Text
+        fontSize={9}
+        fontWeight="700"
+        color={tokens.textMuted}
+        textTransform="uppercase"
+        letterSpacing={1.1}
+        marginBottom={3}
+      >
+        {label}
+      </Text>
+      <TextInput
+        accessibilityLabel={accessibilityLabel ?? label}
+        value={safeValue}
+        onChangeText={handleChange}
+        placeholder={placeholder}
+        placeholderTextColor={tokens.textMuted}
+        keyboardType={keyboardType}
+        multiline={multiline}
+        style={{
+          fontSize: 15,
+          color: tokens.text,
+          paddingVertical: 0,
+          textAlignVertical: multiline ? 'top' : 'center',
+          height: multilineHeight ?? (multiline ? 58 : 24),
+          lineHeight: 20,
+        }}
+      />
+    </YStack>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Address Card Component (Exported for Reuse)
+// ─────────────────────────────────────────────
+export interface AddressCardProps {
+  address: AddressData | null;
+  onEditPress: () => void;
+}
+
+export function AddressCard({ address, onEditPress }: AddressCardProps) {
+  const { tokens } = useTheme();
+
+  return (
+    <YStack gap={6}>
+      <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+        Delivery Address
+      </Text>
+
+      {address ? (
+        <YStack
+          backgroundColor={tokens.surface}
+          borderWidth={1}
+          borderColor={tokens.border}
+          borderRadius={tokens.radius.md}
+          padding={12}
+          gap={6}
+        >
+          <XStack justifyContent="space-between" alignItems="flex-start">
+            <XStack gap={8} alignItems="center" flex={1}>
+              <YStack
+                width={28}
+                height={28}
+                borderRadius={tokens.radius.full}
+                backgroundColor={tokens.accentSubtle}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuMapPin size={14} color={tokens.accent} />
+              </YStack>
+              <Text fontSize={13} fontWeight="700" color={tokens.text} flex={1}>
+                {address.name}
+              </Text>
+            </XStack>
+
+            <Pressable onPress={onEditPress}>
+              <YStack
+                width={28}
+                height={28}
+                borderRadius={tokens.radius.sm}
+                backgroundColor={tokens.surfaceRaised}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuPencil size={12} color={tokens.accent} />
+              </YStack>
+            </Pressable>
+          </XStack>
+
+          <Text fontSize={12} color={tokens.textSecondary} lineHeight={17}>
+            {address.address}
+          </Text>
+          <XStack gap={14} alignItems="center">
+            <Text fontSize={11} color={tokens.textMuted}>
+              PIN: {address.pincode}
+            </Text>
+            <Text fontSize={11} color={tokens.textMuted}>
+              📞 {address.phone}
+            </Text>
+            {address.isDelhiveryServiceable === true && (
+              <XStack gap={4} alignItems="center">
+                <LuCheck size={12} color={tokens.success} />
+                <Text fontSize={11} fontWeight="600" color={tokens.success}>
+                  Delhivery
+                </Text>
+              </XStack>
+            )}
+          </XStack>
+        </YStack>
+      ) : (
+        <Pressable onPress={onEditPress}>
+          <YStack
+            backgroundColor={tokens.surface}
+            borderWidth={1.5}
+            borderColor={tokens.border}
+            borderStyle="dashed"
+            borderRadius={tokens.radius.md}
+            padding={14}
+            alignItems="center"
+            justifyContent="center"
+            gap={6}
+          >
+            <YStack
+              width={32}
+              height={32}
+              borderRadius={16}
+              backgroundColor={tokens.accentSubtle}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <LuPlus size={16} color={tokens.accent} />
+            </YStack>
+            <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
+              Add delivery address (Smart-parse)
+            </Text>
+          </YStack>
+        </Pressable>
+      )}
+    </YStack>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Address Sheet Component (Exported for Reuse)
+// ─────────────────────────────────────────────
+export interface AddressSheetProps {
+  visible: boolean;
+  initial: AddressData;
+  onSave: (data: AddressData) => void;
+  onClose: () => void;
+}
+
+export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheetProps) {
+  const { tokens } = useTheme();
+  const [form, setForm] = useState<AddressData>(initial);
+  const [isAiMode, setIsAiMode] = useState(false);
+  const [fillState, setFillState] = useState<'idle' | 'smart-parsed' | 'ai-parsing' | 'ai-error'>('idle');
+  const [aiRawText, setAiRawText] = useState('');
+  const [isCheckingPin, setIsCheckingPin] = useState(false);
+  const [pinServiceable, setPinServiceable] = useState<boolean | null>(initial.isDelhiveryServiceable ?? null);
+
+  useEffect(() => {
+    setForm(initial);
+    setPinServiceable(initial.isDelhiveryServiceable ?? null);
+  }, [initial, visible]);
+
+  if (!visible) return null;
+
+  const updateField = (field: keyof AddressData, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePincodeChange = async (pin: string) => {
+    updateField('pincode', pin);
+    if (pin.length === 6 && /^\d{6}$/.test(pin)) {
+      setIsCheckingPin(true);
+      try {
+        const res = await delhiveryService.checkServiceability(pin);
+        setPinServiceable(res.isServiceable);
+        if (res.city) updateField('city', res.city);
+        if (res.state) updateField('state', res.state);
+      } catch {
+        setPinServiceable(null);
+      } finally {
+        setIsCheckingPin(false);
+      }
+    } else {
+      setPinServiceable(null);
+    }
+  };
+
+  const parseAndApplyText = async (text: string) => {
+    const pinMatch = text.match(/\b(\d{6})\b/);
+    const phoneMatch = text.match(/(\+?91[\s-]?)?[6-9]\d{9}/);
+    const pin = pinMatch ? pinMatch[1] : form.pincode;
+    const phone = phoneMatch ? phoneMatch[0].replace(/\s+/g, '') : form.phone;
+
+    let cleanAddress = text;
+    if (pinMatch) cleanAddress = cleanAddress.replace(pinMatch[0], '');
+    if (phoneMatch) cleanAddress = cleanAddress.replace(phoneMatch[0], '');
+    cleanAddress = cleanAddress.replace(/[,|\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const updated: AddressData = {
+      ...form,
+      phone: phone || form.phone,
+      pincode: pin || form.pincode,
+      address: cleanAddress || form.address,
+    };
+    setForm(updated);
+    setFillState('smart-parsed');
+
+    if (pin && pin.length === 6) {
+      handlePincodeChange(pin);
+    }
+  };
+
+  const handleSmartPaste = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (text && text.trim().length > 0) {
+        await parseAndApplyText(text);
+      }
+    } catch {
+      setFillState('idle');
+    }
+  };
+
+  return (
+    <YStack
+      position="absolute"
+      top={0}
+      left={0}
+      right={0}
+      bottom={0}
+      backgroundColor="rgba(0,0,0,0.48)"
+      justifyContent="flex-end"
+      zIndex={200}
+      onPress={onClose}
+    >
+      <YStack
+        backgroundColor={tokens.background}
+        borderTopLeftRadius={24}
+        borderTopRightRadius={24}
+        paddingTop={12}
+        paddingBottom={32}
+        shadowColor="#000"
+        shadowOpacity={0.22}
+        shadowRadius={24}
+        shadowOffset={{ width: 0, height: -8 }}
+        onPress={(e) => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <YStack alignItems="center" paddingBottom={10}>
+          <YStack width={36} height={4} borderRadius={2} backgroundColor={tokens.border} />
+        </YStack>
+
+        {/* Header */}
+        <XStack paddingHorizontal={20} paddingBottom={12} justifyContent="space-between" alignItems="center">
+          <Text fontSize={16} fontWeight="800" color={tokens.text}>
+            {isAiMode ? 'Smart Address Parser' : 'Delivery Address'}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={onClose}>
+            <YStack
+              width={28}
+              height={28}
+              borderRadius={tokens.radius.full}
+              backgroundColor={tokens.surfaceRaised}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <LuX size={13} color={tokens.textSecondary} />
+            </YStack>
+          </Pressable>
+        </XStack>
+
+        {/* Actions row */}
+        {!isAiMode && (
+          <XStack marginHorizontal={20} marginBottom={14} gap={10}>
+            <Pressable
+              style={{ flex: 1 }}
+              accessibilityRole="button"
+              onPress={handleSmartPaste}
+            >
+              <XStack
+                height={32}
+                alignItems="center"
+                justifyContent="center"
+                borderRadius={9999}
+                borderWidth={1}
+                borderColor={tokens.accent}
+                backgroundColor={tokens.accentSubtle}
+                gap={6}
+              >
+                <LuClipboardPaste size={14} color={tokens.accent} />
+                <Text fontSize={12} fontWeight="700" color={tokens.accent} letterSpacing={0.4}>
+                  SMART PASTE
+                </Text>
+              </XStack>
+            </Pressable>
+
+            <Pressable
+              style={{ flex: 1 }}
+              accessibilityRole="button"
+              onPress={() => setIsAiMode(true)}
+            >
+              <XStack
+                height={32}
+                alignItems="center"
+                justifyContent="center"
+                borderRadius={9999}
+                backgroundColor={tokens.accent}
+                gap={6}
+              >
+                <LuSparkles size={14} color={tokens.accentForeground} />
+                <Text fontSize={12} fontWeight="700" color={tokens.accentForeground} letterSpacing={0.4}>
+                  AI PARSE
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        )}
+
+        {fillState === 'smart-parsed' && (
+          <XStack
+            marginHorizontal={20}
+            marginBottom={10}
+            backgroundColor={`${tokens.success}14`}
+            borderRadius={tokens.radius.sm}
+            borderWidth={1}
+            borderColor={`${tokens.success}30`}
+            paddingHorizontal={12}
+            paddingVertical={7}
+            alignItems="center"
+            gap={8}
+          >
+            <LuCheck size={13} color={tokens.success} />
+            <Text fontSize={12} fontWeight="600" color={tokens.success} flex={1}>
+              Auto-filled from clipboard
+            </Text>
+          </XStack>
+        )}
+
+        {isAiMode ? (
+          <YStack paddingHorizontal={20} gap={10}>
+            <Text fontSize={12} color={tokens.textMuted}>
+              Paste the entire WhatsApp/Instagram delivery text here:
+            </Text>
+            <YStack
+              borderWidth={1}
+              borderColor={tokens.border}
+              borderRadius={tokens.radius.md}
+              backgroundColor={tokens.surface}
+              padding={10}
+            >
+              <TextInput
+                value={aiRawText}
+                onChangeText={setAiRawText}
+                placeholder="Name, Street, Landmark, City, State, PIN, Phone..."
+                placeholderTextColor={tokens.textMuted}
+                multiline
+                numberOfLines={4}
+                style={{
+                  fontSize: 14,
+                  color: tokens.text,
+                  height: 80,
+                  textAlignVertical: 'top',
+                }}
+              />
+            </YStack>
+            <XStack gap={10}>
+              <Pressable
+                style={{ flex: 1 }}
+                onPress={() => setIsAiMode(false)}
+              >
+                <YStack
+                  height={44}
+                  borderRadius={tokens.radius.md}
+                  backgroundColor={tokens.surfaceRaised}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text fontSize={13} fontWeight="700" color={tokens.textSecondary}>
+                    CANCEL
+                  </Text>
+                </YStack>
+              </Pressable>
+              <Pressable
+                style={{ flex: 1 }}
+                onPress={async () => {
+                  if (aiRawText.trim()) {
+                    await parseAndApplyText(aiRawText);
+                    setIsAiMode(false);
+                  }
+                }}
+              >
+                <YStack
+                  height={44}
+                  borderRadius={tokens.radius.md}
+                  backgroundColor={tokens.accent}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text fontSize={13} fontWeight="800" color={tokens.accentForeground}>
+                    EXTRACT & FILL
+                  </Text>
+                </YStack>
+              </Pressable>
+            </XStack>
+          </YStack>
+        ) : (
+          <YStack paddingHorizontal={20} gap={8}>
+            <UnderlineField
+              label="Recipient Name *"
+              value={form.name}
+              onChange={(v) => updateField('name', v)}
+              placeholder="e.g. Priya Menon"
+            />
+            <UnderlineField
+              label="Phone Number *"
+              value={form.phone}
+              onChange={(v) => updateField('phone', v)}
+              placeholder="10-digit mobile number"
+              keyboardType="phone-pad"
+            />
+            <UnderlineField
+              label="Street Address / Landmark *"
+              value={form.address}
+              onChange={(v) => updateField('address', v)}
+              placeholder="House, street, locality"
+              multiline
+              multilineHeight={52}
+            />
+            <UnderlineField
+              label="6-Digit PIN Code *"
+              value={form.pincode}
+              onChange={handlePincodeChange}
+              placeholder="e.g. 560034"
+              keyboardType="numeric"
+            />
+
+            {/* Delhivery indicator */}
+            {isCheckingPin && (
+              <XStack alignItems="center" gap={6} paddingTop={4}>
+                <ActivityIndicator size="small" color={tokens.accent} />
+                <Text fontSize={11} color={tokens.textMuted}>Checking Delhivery pincode...</Text>
+              </XStack>
+            )}
+            {pinServiceable === true && (
+              <XStack alignItems="center" gap={6} paddingTop={4}>
+                <LuCheck size={14} color={tokens.success} />
+                <Text fontSize={12} fontWeight="600" color={tokens.success}>
+                  Delhivery Serviceable
+                </Text>
+              </XStack>
+            )}
+            {pinServiceable === false && (
+              <XStack alignItems="center" gap={6} paddingTop={4}>
+                <LuTriangleAlert size={14} color={tokens.error} />
+                <Text fontSize={12} fontWeight="600" color={tokens.error}>
+                  Unserviceable by Delhivery
+                </Text>
+              </XStack>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                onSave({ ...form, isDelhiveryServiceable: pinServiceable });
+                onClose();
+              }}
+              style={{ marginTop: 8 }}
+            >
+              <YStack
+                height={46}
+                borderRadius={tokens.radius.md}
+                backgroundColor={tokens.accent}
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text fontSize={13} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.6}>
+                  SAVE ADDRESS
+                </Text>
+              </YStack>
+            </Pressable>
+          </YStack>
+        )}
+      </YStack>
+    </YStack>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Main Tamagui Admin Order Create Form
+// ─────────────────────────────────────────────
 export const AdminOrderCreateForm: React.FC = () => {
-  const theme = useTheme();
+  const { tokens } = useTheme();
   const router = useRouter();
   const { sharedMedia, commitCurrentSession, discardCurrentSession, removeSharedMedia } = useShareIntentContext();
 
-  // Mode state
-  const [mode, setMode] = useState<'create_new' | 'attach_existing'>('create_new');
-  const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(undefined);
-
-  // Customer & Source State
-  const [source, setSource] = useState<OrderSource>('WhatsApp');
+  const [source, setSource] = useState<OrderSource>('whatsapp');
+  const [paymentType, setPaymentType] = useState<PaymentType>('cod');
   const [sourceInput, setSourceInput] = useState('');
-  const [paymentMode, setPaymentMode] = useState<PaymentMode>('COD');
-  const [customerName, setCustomerName] = useState('');
-  const [customerId, setCustomerId] = useState<string | undefined>(undefined);
+  const [images, setImages] = useState<LocalImage[]>([]);
+  const [address, setAddress] = useState<AddressData | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Financials State
+  // Line items
+  const [items, setItems] = useState<Array<{
+    id: string;
+    title: string;
+    sku: string;
+    size: string;
+    quantity: number;
+    price: number;
+  }>>([
+    {
+      id: `item-${Date.now()}`,
+      title: 'Handloom Item',
+      sku: '',
+      size: 'Free Size',
+      quantity: 1,
+      price: 0,
+    },
+  ]);
+
+  // Financials
   const [shippingCharges, setShippingCharges] = useState(0);
+  const [discount, setDiscount] = useState(0);
   const [advancePaid, setAdvancePaid] = useState(0);
   const [notes, setNotes] = useState('');
-
-  // Structured Address State
-  const [address, setAddress] = useState<AddressData | null>(null);
-  const [addressSheetOpen, setAddressSheetOpen] = useState(false);
-  const [isCheckingPin, setIsCheckingPin] = useState(false);
-
-  // Temporary sheet state for editing address
-  const [sheetName, setSheetName] = useState('');
-  const [sheetPhone, setSheetPhone] = useState('');
-  const [sheetAddress, setSheetAddress] = useState('');
-  const [sheetPincode, setSheetPincode] = useState('');
-  const [sheetCity, setSheetCity] = useState('');
-  const [sheetState, setSheetState] = useState('');
-  const [sheetServiceable, setSheetServiceable] = useState<boolean | null>(null);
-  const [isParsingClipboard, setIsParsingClipboard] = useState(false);
-
-  // Items State (Media drafts + Catalog drafts)
-  const [mediaDrafts, setMediaDrafts] = useState<OrderItemDraft[]>([]);
-  const [catalogDrafts, setCatalogDrafts] = useState<OrderItemDraft[]>([]);
-  const [catalogPickerVisible, setCatalogPickerVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync staged shared media items to mediaDrafts
+  // Sync staged shared media from external apps
   useEffect(() => {
-    setMediaDrafts(prev => {
-      const existingByUri = new Map(prev.map(d => [d.mediaUri, d]));
-      return sharedMedia.map((m, idx) => {
-        const existing = existingByUri.get(m.uri);
-        if (existing) return existing;
-        return {
-          id: `media-${idx}-${Date.now()}`,
-          sourceType: 'media',
-          mediaUri: m.uri,
-          productCode: '',
-          quantity: 1,
-          unitPrice: 0,
-          subtotal: 0,
-        };
+    if (sharedMedia && sharedMedia.length > 0) {
+      setImages((prev) => {
+        const existingUris = new Set(prev.map((i) => i.uri));
+        const newImgs = sharedMedia
+          .filter((m) => !existingUris.has(m.uri))
+          .map((m, idx) => ({ id: `share-${idx}-${Date.now()}`, uri: m.uri }));
+        return [...prev, ...newImgs];
       });
-    });
+    }
   }, [sharedMedia]);
 
-  // Handle selected existing order population
-  const handleSelectExistingOrder = (order: OrderIdEntry | null) => {
-    if (!order) {
-      setSelectedOrderId(undefined);
-      return;
-    }
-    setSelectedOrderId(order.id);
-    if (order.source) setSource(order.source);
-    if (order.sourceHandle || order.customerPhone) {
-      setSourceInput(order.sourceHandle || order.customerPhone || '');
-    }
-    if (order.customerName) setCustomerName(order.customerName);
-    if (order.paymentMode) setPaymentMode(order.paymentMode);
-    if (order.customerId) setCustomerId(order.customerId);
-    if (order.shippingStreet || order.customerAddress) {
-      setAddress({
-        name: order.customerName || '',
-        phone: order.customerPhone || '',
-        address: order.shippingStreet || order.customerAddress || '',
-        pincode: order.shippingPincode || '',
-        city: order.shippingCity || '',
-        state: order.shippingState || '',
-        isDelhiveryServiceable: order.isServiceable,
-      });
-    }
-    if (order.advancePaid) setAdvancePaid(order.advancePaid);
-    if (order.shippingCharges) setShippingCharges(order.shippingCharges);
+  const handleSourceToggle = (tapped: 'whatsapp' | 'instagram') => {
+    setSource(source === tapped ? null : tapped);
+    setSourceInput('');
   };
 
-  // Add Reference Image from Device Gallery
   const handlePickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -157,968 +660,618 @@ export const AdminOrderCreateForm: React.FC = () => {
         allowsMultipleSelection: true,
         quality: 0.8,
       });
-
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newDrafts: OrderItemDraft[] = result.assets.map((asset, idx) => ({
-          id: `local-media-${Date.now()}-${idx}`,
-          sourceType: 'media',
-          mediaUri: asset.uri,
-          productCode: '',
-          quantity: 1,
-          unitPrice: 0,
-          subtotal: 0,
+        const picked = result.assets.map((a, idx) => ({
+          id: `local-${idx}-${Date.now()}`,
+          uri: a.uri,
         }));
-        setMediaDrafts(prev => [...prev, ...newDrafts]);
+        setImages((prev) => [...prev, ...picked]);
       }
     } catch (e) {
-      console.warn('[AdminOrderCreateForm] Failed to pick image:', e);
-      Alert.alert('Image Selection Error', 'Could not open image picker.');
+      console.warn('Image picker error', e);
     }
   };
 
-  const handleRemoveMedia = (id: string, mediaIndex?: number) => {
-    setMediaDrafts(prev => prev.filter(item => item.id !== id));
-    if (mediaIndex !== undefined) {
-      removeSharedMedia(mediaIndex);
-    }
+  const handleRemoveImage = (id: string) => {
+    setImages((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const handleUpdateMediaPrice = (id: string, price: number) => {
-    setMediaDrafts(prev =>
-      prev.map(item =>
-        item.id === id
-          ? { ...item, unitPrice: price, subtotal: price * (item.quantity || 1) }
-          : item
-      )
-    );
+  const handleAddItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `item-${Date.now()}-${prev.length}`,
+        title: `Item #${prev.length + 1}`,
+        sku: '',
+        size: 'Free Size',
+        quantity: 1,
+        price: 0,
+      },
+    ]);
   };
 
-  const handleUpdateMediaQty = (id: string, qty: number) => {
-    setMediaDrafts(prev =>
-      prev.map(item =>
-        item.id === id
-          ? { ...item, quantity: Math.max(1, qty), subtotal: (item.unitPrice || 0) * Math.max(1, qty) }
-          : item
-      )
-    );
+  const handleUpdateItem = (id: string, updates: Partial<typeof items[0]>) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   };
 
-  // Address Sheet Helpers
-  const openAddressSheet = () => {
-    if (address) {
-      setSheetName(address.name);
-      setSheetPhone(address.phone);
-      setSheetAddress(address.address);
-      setSheetPincode(address.pincode);
-      setSheetCity(address.city || '');
-      setSheetState(address.state || '');
-      setSheetServiceable(address.isDelhiveryServiceable ?? null);
-    } else {
-      setSheetName(customerName);
-      setSheetPhone(source === 'WhatsApp' ? sourceInput : '');
-      setSheetAddress('');
-      setSheetPincode('');
-      setSheetCity('');
-      setSheetState('');
-      setSheetServiceable(null);
-    }
-    setAddressSheetOpen(true);
-  };
-
-  const handlePincodeChange = async (pin: string) => {
-    const clean = pin.replace(/\D/g, '').slice(0, 6);
-    setSheetPincode(clean);
-
-    if (clean.length === 6) {
-      setIsCheckingPin(true);
-      try {
-        const res = await delhiveryService.checkServiceability(clean);
-        setSheetServiceable(res.isServiceable);
-        if (res.city && !sheetCity) setSheetCity(res.city);
-        if (res.state && !sheetState) setSheetState(res.state);
-      } catch (e) {
-        setSheetServiceable(null);
-      } finally {
-        setIsCheckingPin(false);
-      }
-    } else {
-      setSheetServiceable(null);
-    }
-  };
-
-  const handlePasteAddressFromClipboard = async () => {
-    try {
-      setIsParsingClipboard(true);
-      const text = await Clipboard.getStringAsync();
-      if (!text || !text.trim()) {
-        Alert.alert('Clipboard Empty', 'Please copy an address message first.');
-        return;
-      }
-
-      const raw = text.trim();
-      // Extract 6-digit pincode
-      const pinMatch = raw.match(/\b(\d{6})\b/);
-      // Extract 10-digit phone number
-      const phoneMatch = raw.match(/(\+?91[\s-]?)?([6-9]\d{9})\b/);
-
-      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-      let detectedName = '';
-      if (lines.length > 0 && !lines[0].match(/\d/) && lines[0].length < 40) {
-        detectedName = lines[0].replace(/^(Name|Customer):\s*/i, '');
-      }
-
-      if (detectedName) setSheetName(detectedName);
-      if (phoneMatch) setSheetPhone(phoneMatch[2]);
-      if (pinMatch) {
-        handlePincodeChange(pinMatch[1]);
-      }
-
-      // Address text: remaining text with phone/pincode stripped
-      const cleanAddress = raw
-        .replace(/^(Name|Customer):\s*.+/im, '')
-        .replace(/(\+?91[\s-]?)?([6-9]\d{9})\b/g, '')
-        .replace(/\b\d{6}\b/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      if (cleanAddress) {
-        setSheetAddress(cleanAddress);
-      }
-    } catch (e) {
-      console.warn('[AdminOrderCreateForm] Clipboard paste failed:', e);
-    } finally {
-      setIsParsingClipboard(false);
-    }
-  };
-
-  const handleSaveAddress = () => {
-    if (!sheetName.trim()) {
-      Alert.alert('Validation', 'Please enter recipient name.');
+  const handleRemoveItem = (id: string) => {
+    if (items.length <= 1) {
+      Alert.alert('Cannot Remove', 'Order must have at least one item.');
       return;
     }
-    if (!sheetAddress.trim()) {
-      Alert.alert('Validation', 'Please enter street address.');
-      return;
-    }
-    if (!sheetPincode || sheetPincode.length < 6) {
-      Alert.alert('Validation', 'Please enter a valid 6-digit pincode.');
-      return;
-    }
-
-    setAddress({
-      name: sheetName.trim(),
-      phone: sheetPhone.trim(),
-      address: sheetAddress.trim(),
-      pincode: sheetPincode.trim(),
-      city: sheetCity.trim(),
-      state: sheetState.trim(),
-      isDelhiveryServiceable: sheetServiceable,
-    });
-    if (!customerName) setCustomerName(sheetName.trim());
-    setAddressSheetOpen(false);
+    setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Financial Calculations
-  const allItems = [...mediaDrafts, ...catalogDrafts];
-  const itemsTotal = allItems.reduce(
-    (sum, item) => sum + (item.subtotal || (item.unitPrice || 0) * (item.quantity || 1)),
-    0
-  );
-  const totalAmount = itemsTotal + (Number(shippingCharges) || 0);
-  const codBalance = paymentMode === 'COD' ? Math.max(0, totalAmount - (Number(advancePaid) || 0)) : 0;
+  // Calculations
+  const itemsSubtotal = items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
+  const totalAmount = Math.max(0, itemsSubtotal + shippingCharges - discount);
+  const pendingBalance = Math.max(0, totalAmount - advancePaid);
 
-  // Final Order Submission
-  const handleSubmitOrder = async () => {
-    const activeHandle = sourceInput.trim();
-    if (!activeHandle) {
-      Alert.alert('Required Info Missing', `Please enter the Customer ${source === 'WhatsApp' ? 'Phone Number' : 'Instagram Handle'}.`);
+  const handleSubmit = async () => {
+    if (!sourceInput.trim()) {
+      Alert.alert('Missing Contact', 'Please provide customer WhatsApp number or Instagram handle.');
       return;
     }
-
-    if (mode === 'attach_existing' && !selectedOrderId) {
-      Alert.alert('Reference Required', 'Please select an existing Order ID to attach to.');
+    if (items.some((i) => !i.title.trim())) {
+      Alert.alert('Invalid Item', 'All items must have a title.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // 1. Resolve or create customer profile
-      let resolvedCustomerId = customerId;
-      if (!resolvedCustomerId && activeHandle) {
+      // Auto-create or resolve customer if address present
+      let customerId: string | undefined;
+      if (address?.phone) {
         try {
-          const cust = await customersApi.getOrCreateCustomer(
-            source === 'WhatsApp' ? activeHandle : undefined,
-            source === 'Instagram' ? activeHandle : undefined
-          );
+          const cust = await customersApi.getOrCreateCustomer(address.phone);
           if (cust && cust.id) {
-            resolvedCustomerId = cust.id;
+            customerId = cust.id;
           }
-        } catch (e) {
-          console.warn('[AdminOrderCreateForm] Customer resolve skipped:', e);
+        } catch {
+          // ignore lookup failure
         }
       }
 
-      // 2. Generate new order ID if creating new order
-      let targetOrderId = selectedOrderId;
-      if (mode === 'create_new') {
-        const genRes = await searchApiClient.post<{ orderId: string }>(API_ROUTES.ORDERS.GENERATE, null, {
-          params: {
-            source,
-            paymentMode,
-            sourceHandle: activeHandle,
-            customerId: resolvedCustomerId,
-          },
-        });
-        targetOrderId = genRes.orderId;
-      }
-
-      if (!targetOrderId) {
-        throw new Error('Failed to obtain target Order ID');
-      }
-
-      // 3. Map line items
-      const orderItemsPayload = allItems.map(item => ({
-        productId: item.productId || item.productCode || undefined,
-        quantity: item.quantity || 1,
-        unitPrice: item.unitPrice || 0,
-        subtotal: item.subtotal || ((item.unitPrice || 0) * (item.quantity || 1)),
-        vendorId: item.vendorId,
-        sourceType: item.sourceType,
-        comments: item.comments || (item.productCode ? `Code: ${item.productCode}` : undefined),
-      }));
-
-      // 4. Update order details on backend
-      const updatePayload: OrderUpdateRequest = {
-        customerName: (address?.name || customerName).trim() || undefined,
-        customerPhone: source === 'WhatsApp' ? activeHandle : (address?.phone || undefined),
-        sourceHandle: activeHandle,
-        shippingStreet: address?.address || undefined,
-        shippingCity: address?.city || undefined,
-        shippingState: address?.state || undefined,
-        shippingPincode: address?.pincode || undefined,
-        paymentMode,
-        advancePaid: paymentMode === 'COD' ? Number(advancePaid) : totalAmount,
-        shippingCharges: Number(shippingCharges) || 0,
-        totalAmount,
-        items: orderItemsPayload.length > 0 ? orderItemsPayload : undefined,
+      const orderPayload: Partial<OrderIdEntry> = {
+        source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
+        sourceHandle: sourceInput.trim(),
+        paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
+        customerName: address?.name || 'Customer',
+        customerPhone: address?.phone || sourceInput.trim(),
+        customerAddress: address?.address,
+        shippingStreet: address?.address,
+        shippingPincode: address?.pincode,
+        shippingCity: address?.city,
+        shippingState: address?.state,
+        customerId,
+        isServiceable: address?.isDelhiveryServiceable ?? false,
+        shippingCharges,
+        advancePaid,
+        items: items.map((i) => ({
+          productTitle: i.title,
+          sku: i.sku,
+          size: i.size,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          totalPrice: i.price * i.quantity,
+        })),
       };
 
-      await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(targetOrderId), updatePayload);
+      const res = await searchApiClient.post<OrderIdEntry>(API_ROUTES.ORDERS.GENERATE_WITH_ITEMS, orderPayload);
 
-      // 5. Commit share intent session if applicable
-      await commitCurrentSession();
+      if (sharedMedia && sharedMedia.length > 0) {
+        await commitCurrentSession();
+      }
 
-      Alert.alert(
-        'Order Successful 🎉',
-        mode === 'create_new'
-          ? `Order #${targetOrderId} has been created!`
-          : `Order #${targetOrderId} updated with new items!`,
-        [
-          {
-            text: 'View Details',
-            onPress: () => router.push(`/utilities/order-details/${targetOrderId}` as any),
+      Alert.alert('Success', `Order #${res.id || 'created'} registered successfully!`, [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (res.id) {
+              router.replace(`/utilities/order-details/${res.id}`);
+            } else {
+              router.replace('/(tabs)');
+            }
           },
-          {
-            text: 'Create Another',
-            onPress: () => {
-              setSelectedOrderId(undefined);
-              setSourceInput('');
-              setCustomerName('');
-              setAddress(null);
-              setMediaDrafts([]);
-              setCatalogDrafts([]);
-              setShippingCharges(0);
-              setAdvancePaid(0);
-              setNotes('');
-            },
-          },
-        ]
-      );
+        },
+      ]);
     } catch (err: any) {
-      console.error('[AdminOrderCreateForm] Submit error:', err);
-      Alert.alert('Submission Failed', err.message || 'Could not save order. Please check network and try again.');
+      console.error('Order creation error:', err);
+      Alert.alert('Creation Failed', err?.message || 'Failed to submit order. Please retry.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const emptyAddress: AddressData = {
+    name: address?.name ?? '',
+    phone: address?.phone ?? '',
+    address: address?.address ?? '',
+    pincode: address?.pincode ?? '',
+    city: address?.city ?? '',
+    state: address?.state ?? '',
+    isDelhiveryServiceable: address?.isDelhiveryServiceable,
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Mode Switcher */}
-        <Surface style={styles.modeCard} elevation={1}>
-          <ExistingOrderAutocomplete
-            mode={mode}
-            onModeChange={setMode}
-            selectedOrderId={selectedOrderId}
-            onSelectOrder={handleSelectExistingOrder}
-          />
-        </Surface>
+    <YStack flex={1} backgroundColor={tokens.background} position="relative">
+      {/* Header */}
+      <XStack
+        height={56}
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal={16}
+        backgroundColor={tokens.surface}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+      >
+        <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+          New Order
+        </Text>
+        {sharedMedia && sharedMedia.length > 0 && (
+          <XStack
+            backgroundColor={`${tokens.accent}15`}
+            paddingHorizontal={8}
+            paddingVertical={4}
+            borderRadius={tokens.radius.full}
+          >
+            <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+              {sharedMedia.length} Shared Media
+            </Text>
+          </XStack>
+        )}
+      </XStack>
 
-        {/* ── Section 1: Order Type (Source & Payment) ── */}
-        <Surface style={styles.sectionCard} elevation={1}>
-          <View style={styles.rowBetween}>
-            {/* Platform Brand Icons */}
-            <View style={styles.platformIconsRow}>
-              {/* WhatsApp Icon */}
-              <TouchableOpacity
-                accessibilityLabel="Select WhatsApp as order source"
-                onPress={() => {
-                  setSource('WhatsApp');
-                  setSourceInput('');
-                }}
-                style={[
-                  styles.platformIconButton,
-                  source === 'WhatsApp' && { borderColor: WHATSAPP_GREEN, backgroundColor: `${WHATSAPP_GREEN}14` },
-                ]}
+      {/* Scrollable Form Content */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 110 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <YStack paddingHorizontal={16} paddingTop={14} gap={14}>
+          {/* ── Section 1: Order Type & Channel ── */}
+          <YStack gap={8}>
+            <XStack alignItems="center" justifyContent="space-between">
+              {/* Bare Source Brand Icons */}
+              <XStack gap={16} alignItems="center">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Select WhatsApp source"
+                  onPress={() => handleSourceToggle('whatsapp')}
+                >
+                  {source === 'whatsapp' ? (
+                    <RiWhatsappFill size={36} color={WHATSAPP_GREEN} />
+                  ) : (
+                    <RiWhatsappLine size={36} color={tokens.textMuted} />
+                  )}
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Select Instagram source"
+                  onPress={() => handleSourceToggle('instagram')}
+                >
+                  {source === 'instagram' ? (
+                    <RiInstagramLine size={36} color={INSTAGRAM_ACTIVE} />
+                  ) : (
+                    <RiInstagramLine size={36} color={tokens.textMuted} />
+                  )}
+                </Pressable>
+              </XStack>
+
+              {/* Payment Type Pills */}
+              <XStack
+                backgroundColor={tokens.surfaceRaised}
+                borderRadius={tokens.radius.full}
+                borderWidth={1}
+                borderColor={tokens.border}
+                padding={3}
+                gap={2}
               >
-                <Icon source="whatsapp" size={26} color={source === 'WhatsApp' ? WHATSAPP_GREEN : theme.colors.outline} />
-              </TouchableOpacity>
+                {(['cod', 'prepaid'] as PaymentType[]).map((p) => {
+                  const isActive = paymentType === p;
+                  return (
+                    <Pressable key={p} onPress={() => setPaymentType(p)}>
+                      <YStack
+                        paddingHorizontal={16}
+                        paddingVertical={8}
+                        borderRadius={tokens.radius.full}
+                        backgroundColor={isActive ? tokens.accent : 'transparent'}
+                      >
+                        <Text
+                          fontSize={13}
+                          fontWeight="700"
+                          color={isActive ? tokens.accentForeground : tokens.textSecondary}
+                          letterSpacing={0.3}
+                        >
+                          {p === 'cod' ? 'COD' : 'Prepaid'}
+                        </Text>
+                      </YStack>
+                    </Pressable>
+                  );
+                })}
+              </XStack>
+            </XStack>
 
-              {/* Instagram Icon */}
-              <TouchableOpacity
-                accessibilityLabel="Select Instagram as order source"
-                onPress={() => {
-                  setSource('Instagram');
-                  setSourceInput('');
-                }}
-                style={[
-                  styles.platformIconButton,
-                  source === 'Instagram' && { borderColor: INSTAGRAM_PINK, backgroundColor: `${INSTAGRAM_PINK}14` },
-                ]}
+            {/* Input with Quick Launcher */}
+            {source === 'whatsapp' && (
+              <YStack
+                backgroundColor={tokens.surface}
+                borderWidth={1}
+                borderColor={tokens.border}
+                borderRadius={tokens.radius.md}
+                paddingHorizontal={14}
+                height={44}
+                justifyContent="center"
               >
-                <Icon source="instagram" size={26} color={source === 'Instagram' ? INSTAGRAM_PINK : theme.colors.outline} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Payment Mode Pills */}
-            <View style={styles.paymentPillGroup}>
-              {(['COD', 'Prepaid'] as PaymentMode[]).map(p => {
-                const isActive = paymentMode === p;
-                return (
-                  <TouchableOpacity
-                    key={p}
-                    onPress={() => setPaymentMode(p)}
-                    style={[
-                      styles.paymentPill,
-                      isActive && { backgroundColor: theme.colors.primary },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.paymentPillText,
-                        { color: isActive ? theme.colors.onPrimary : theme.colors.onSurfaceVariant },
-                      ]}
-                    >
-                      {p}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Dynamic Smart Contact Input */}
-          <View style={styles.sourceInputWrapper}>
-            <TextInput
-              mode="outlined"
-              label={source === 'WhatsApp' ? 'WhatsApp Phone Number *' : 'Instagram Handle / URL *'}
-              placeholder={source === 'WhatsApp' ? '+91 98765 43210' : '@username or profile link'}
-              value={sourceInput}
-              onChangeText={setSourceInput}
-              keyboardType={source === 'WhatsApp' ? 'phone-pad' : 'default'}
-              autoCapitalize="none"
-              style={styles.textInput}
-              left={<TextInput.Icon icon={source === 'WhatsApp' ? 'phone' : 'at'} color={source === 'WhatsApp' ? WHATSAPP_GREEN : INSTAGRAM_PINK} />}
-              right={
-                sourceInput.trim().length > 0 ? (
-                  <TextInput.Icon
-                    icon="open-in-new"
-                    color={source === 'WhatsApp' ? WHATSAPP_GREEN : INSTAGRAM_PINK}
-                    onPress={() => {
-                      if (source === 'WhatsApp') {
-                        const clean = sourceInput.replace(/\D/g, '');
+                <XStack alignItems="center" gap={10}>
+                  <RiWhatsappLine size={18} color={WHATSAPP_GREEN} />
+                  <TextInput
+                    value={sourceInput}
+                    onChangeText={setSourceInput}
+                    placeholder="WhatsApp Number / Chat URL *"
+                    placeholderTextColor={tokens.textMuted}
+                    keyboardType="phone-pad"
+                    style={{ flex: 1, fontSize: 14, color: tokens.text }}
+                  />
+                  {sourceInput.trim().length > 0 && (
+                    <Pressable
+                      onPress={() => {
+                        const clean = sourceInput.replace(/[^0-9]/g, '');
                         if (clean) Linking.openURL(`https://wa.me/${clean}`);
-                      } else {
+                      }}
+                    >
+                      <XStack
+                        padding={6}
+                        borderRadius={tokens.radius.sm}
+                        backgroundColor={`${WHATSAPP_GREEN}18`}
+                      >
+                        <LuExternalLink size={15} color={WHATSAPP_GREEN} />
+                      </XStack>
+                    </Pressable>
+                  )}
+                </XStack>
+              </YStack>
+            )}
+
+            {source === 'instagram' && (
+              <YStack
+                backgroundColor={tokens.surface}
+                borderWidth={1}
+                borderColor={tokens.border}
+                borderRadius={tokens.radius.md}
+                paddingHorizontal={14}
+                height={44}
+                justifyContent="center"
+              >
+                <XStack alignItems="center" gap={10}>
+                  <RiInstagramLine size={18} color={INSTAGRAM_ACTIVE} />
+                  <TextInput
+                    value={sourceInput}
+                    onChangeText={setSourceInput}
+                    placeholder="Instagram Handle or Direct URL *"
+                    placeholderTextColor={tokens.textMuted}
+                    autoCapitalize="none"
+                    style={{ flex: 1, fontSize: 14, color: tokens.text }}
+                  />
+                  {sourceInput.trim().length > 0 && (
+                    <Pressable
+                      onPress={() => {
                         const clean = sourceInput.replace(/^@/, '').trim();
                         if (clean) Linking.openURL(`https://ig.me/m/${clean}`);
-                      }
-                    }}
-                  />
-                ) : undefined
-              }
-            />
-          </View>
-        </Surface>
+                      }}
+                    >
+                      <XStack
+                        padding={6}
+                        borderRadius={tokens.radius.sm}
+                        backgroundColor={`${INSTAGRAM_ACTIVE}18`}
+                      >
+                        <LuExternalLink size={15} color={INSTAGRAM_ACTIVE} />
+                      </XStack>
+                    </Pressable>
+                  )}
+                </XStack>
+              </YStack>
+            )}
+          </YStack>
 
-        {/* ── Section 2: Reference Images / Staged Media ── */}
-        <Surface style={styles.sectionCard} elevation={1}>
-          <View style={styles.sectionHeaderRow}>
-            <Text variant="titleSmall" style={styles.sectionTitle}>
-              Reference Media ({mediaDrafts.length})
+          <YStack height={1} backgroundColor={tokens.border} />
+
+          {/* ── Section 2: Reference Images Gallery ── */}
+          <YStack gap={6}>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+              Reference Images ({images.length})
             </Text>
-            <TouchableOpacity onPress={handlePickImage}>
-              <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>+ Add Photos</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaTilesRow}>
-            {/* Add Media Tile */}
-            <TouchableOpacity style={styles.addMediaTile} onPress={handlePickImage}>
-              <View style={[styles.addMediaCircle, { backgroundColor: theme.colors.primaryContainer }]}>
-                <Icon source="camera-plus" size={20} color={theme.colors.primary} />
-              </View>
-              <Text variant="labelSmall" style={{ color: theme.colors.primary, marginTop: 4, fontWeight: '600' }}>
-                Add Photo
-              </Text>
-            </TouchableOpacity>
-
-            {/* Media Drafts */}
-            {mediaDrafts.map((item, idx) => (
-              <View key={item.id} style={styles.mediaTileCard}>
-                <Image source={{ uri: item.mediaUri }} style={styles.mediaThumbnail} />
-                <TouchableOpacity
-                  style={styles.mediaDeleteBadge}
-                  onPress={() => handleRemoveMedia(item.id, idx)}
+            <XStack flexWrap="wrap" gap={8}>
+              {images.map((img) => (
+                <YStack
+                  key={img.id}
+                  width={76}
+                  height={76}
+                  borderRadius={tokens.radius.md}
+                  overflow="hidden"
+                  position="relative"
+                  backgroundColor={tokens.surfaceRaised}
                 >
-                  <Icon source="close" size={12} color="#FFF" />
-                </TouchableOpacity>
+                  <Image source={{ uri: img.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <Pressable
+                    style={{ position: 'absolute', top: 4, right: 4 }}
+                    onPress={() => handleRemoveImage(img.id)}
+                  >
+                    <YStack
+                      width={20}
+                      height={20}
+                      borderRadius={10}
+                      backgroundColor="rgba(0,0,0,0.6)"
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      <LuX size={10} color="#FFFFFF" />
+                    </YStack>
+                  </Pressable>
+                </YStack>
+              ))}
 
-                {/* Price & Quantity input tag */}
-                <View style={styles.mediaItemTagRow}>
-                  <TextInput
-                    mode="flat"
-                    dense
-                    keyboardType="numeric"
-                    placeholder="₹ Price"
-                    value={item.unitPrice ? String(item.unitPrice) : ''}
-                    onChangeText={txt => handleUpdateMediaPrice(item.id, Number(txt) || 0)}
-                    style={styles.miniPriceInput}
-                  />
-                  <View style={styles.miniQtyRow}>
-                    <TouchableOpacity onPress={() => handleUpdateMediaQty(item.id, (item.quantity || 1) - 1)}>
-                      <Text style={styles.qtyBtnText}>-</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.qtyText}>{item.quantity || 1}</Text>
-                    <TouchableOpacity onPress={() => handleUpdateMediaQty(item.id, (item.quantity || 1) + 1)}>
-                      <Text style={styles.qtyBtnText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </Surface>
-
-        {/* ── Section 3: Catalog Order Items ── */}
-        <CatalogOrderItemsList
-          items={catalogDrafts}
-          onAddItem={item => setCatalogDrafts(prev => [item, ...prev])}
-          onRemoveItem={id => setCatalogDrafts(prev => prev.filter(it => it.id !== id))}
-        />
-
-        {/* ── Section 4: Delivery Address Card ── */}
-        <Surface style={styles.sectionCard} elevation={1}>
-          <Text variant="titleSmall" style={styles.sectionTitle}>
-            Delivery Address
-          </Text>
-
-          {address ? (
-            <View style={styles.addressCard}>
-              <View style={styles.addressHeaderRow}>
-                <View style={styles.addressNameRow}>
-                  <Icon source="map-marker" size={20} color={theme.colors.primary} />
-                  <Text variant="titleSmall" style={{ fontWeight: '700', marginLeft: 6 }}>
-                    {address.name}
+              <Pressable accessibilityRole="button" onPress={handlePickImage}>
+                <YStack
+                  width={76}
+                  height={76}
+                  borderRadius={tokens.radius.md}
+                  borderWidth={1.5}
+                  borderColor={tokens.border}
+                  borderStyle="dashed"
+                  backgroundColor={tokens.surface}
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={4}
+                >
+                  <YStack
+                    width={30}
+                    height={30}
+                    borderRadius={15}
+                    backgroundColor={tokens.accentSubtle}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <LuPlus size={16} color={tokens.accent} />
+                  </YStack>
+                  <Text fontSize={10} color={tokens.textMuted} fontWeight="600">
+                    Add Photo
                   </Text>
-                </View>
-                <IconButton icon="pencil" size={18} onPress={openAddressSheet} />
-              </View>
+                </YStack>
+              </Pressable>
+            </XStack>
+          </YStack>
 
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                {address.address}
-              </Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                {[address.city, address.state, `PIN: ${address.pincode}`].filter(Boolean).join(', ')}
-              </Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                📞 {address.phone}
-              </Text>
+          <YStack height={1} backgroundColor={tokens.border} />
 
-              {/* Delhivery Status Badge */}
-              <View style={styles.serviceableRow}>
-                {address.isDelhiveryServiceable === true && (
-                  <Chip icon="check-circle" style={styles.chipSuccess} textStyle={{ color: '#137333', fontSize: 11 }}>
-                    Delhivery Serviceable
-                  </Chip>
-                )}
-                {address.isDelhiveryServiceable === false && (
-                  <Chip icon="alert-circle" style={styles.chipError} textStyle={{ color: '#C5221F', fontSize: 11 }}>
-                    Unserviceable Pincode
-                  </Chip>
-                )}
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.emptyAddressCard} onPress={openAddressSheet}>
-              <View style={[styles.addMediaCircle, { backgroundColor: theme.colors.primaryContainer }]}>
-                <Icon source="plus" size={18} color={theme.colors.primary} />
-              </View>
-              <Text variant="bodyMedium" style={{ color: theme.colors.primary, fontWeight: '600', marginTop: 4 }}>
-                Add Delivery Address
-              </Text>
-            </TouchableOpacity>
-          )}
-        </Surface>
-
-        {/* ── Section 5: Financials Summary ── */}
-        <Surface style={styles.sectionCard} elevation={1}>
-          <Text variant="titleSmall" style={styles.sectionTitle}>
-            Payment & Financials
-          </Text>
-
-          <View style={styles.financialRow}>
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              Items Subtotal ({allItems.length} items)
-            </Text>
-            <Text variant="bodyMedium" style={{ fontWeight: '700' }}>
-              ₹{itemsTotal.toLocaleString('en-IN')}
-            </Text>
-          </View>
-
-          <View style={styles.financialInputRow}>
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              Shipping Charges
-            </Text>
-            <TextInput
-              mode="outlined"
-              dense
-              keyboardType="numeric"
-              value={String(shippingCharges)}
-              onChangeText={txt => setShippingCharges(Number(txt) || 0)}
-              style={styles.miniFinancialInput}
-              left={<TextInput.Affix text="₹" />}
-            />
-          </View>
-
-          {paymentMode === 'COD' && (
-            <View style={styles.financialInputRow}>
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                Advance Paid
-              </Text>
-              <TextInput
-                mode="outlined"
-                dense
-                keyboardType="numeric"
-                value={String(advancePaid)}
-                onChangeText={txt => setAdvancePaid(Number(txt) || 0)}
-                style={styles.miniFinancialInput}
-                left={<TextInput.Affix text="₹" />}
-              />
-            </View>
-          )}
-
-          <View style={styles.divider} />
-
-          <View style={styles.financialRow}>
-            <Text variant="titleMedium" style={{ fontWeight: '800' }}>
-              Total Amount
-            </Text>
-            <Text variant="titleMedium" style={{ fontWeight: '800', color: theme.colors.primary }}>
-              ₹{totalAmount.toLocaleString('en-IN')}
-            </Text>
-          </View>
-
-          {paymentMode === 'COD' && (
-            <View style={styles.financialRow}>
-              <Text variant="bodySmall" style={{ color: '#B06000', fontWeight: '700' }}>
-                Pending Balance (COD Collect)
-              </Text>
-              <Text variant="bodySmall" style={{ color: '#B06000', fontWeight: '800' }}>
-                ₹{codBalance.toLocaleString('en-IN')}
-              </Text>
-            </View>
-          )}
-        </Surface>
-
-        {/* Order Notes */}
-        <Surface style={styles.sectionCard} elevation={1}>
-          <TextInput
-            mode="outlined"
-            label="Internal Order Notes (Optional)"
-            placeholder="Special delivery instructions, vendor coordination, etc."
-            multiline
-            numberOfLines={2}
-            value={notes}
-            onChangeText={setNotes}
-            style={styles.notesInput}
+          {/* ── Section 3: Delivery Address Card ── */}
+          <AddressCard
+            address={address}
+            onEditPress={() => setSheetOpen(true)}
           />
-        </Surface>
+
+          <YStack height={1} backgroundColor={tokens.border} />
+
+          {/* ── Section 4: Line Items ── */}
+          <YStack gap={8}>
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+                Order Items ({items.length})
+              </Text>
+              <Pressable onPress={handleAddItem}>
+                <XStack alignItems="center" gap={4}>
+                  <LuPlus size={14} color={tokens.accent} />
+                  <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+                    Add Item
+                  </Text>
+                </XStack>
+              </Pressable>
+            </XStack>
+
+            {items.map((item, index) => (
+              <YStack
+                key={item.id}
+                backgroundColor={tokens.surface}
+                borderWidth={1}
+                borderColor={tokens.border}
+                borderRadius={tokens.radius.md}
+                padding={12}
+                gap={8}
+              >
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                    #{index + 1}
+                  </Text>
+                  {items.length > 1 && (
+                    <Pressable onPress={() => handleRemoveItem(item.id)}>
+                      <LuTrash2 size={14} color={tokens.error} />
+                    </Pressable>
+                  )}
+                </XStack>
+
+                <UnderlineField
+                  label="Title / Product Name *"
+                  value={item.title}
+                  onChange={(v) => handleUpdateItem(item.id, { title: v })}
+                  placeholder="e.g. Pure Silk Banarasi Saree"
+                />
+
+                <XStack gap={10}>
+                  <YStack flex={1}>
+                    <UnderlineField
+                      label="SKU / Code"
+                      value={item.sku}
+                      onChange={(v) => handleUpdateItem(item.id, { sku: v })}
+                      placeholder="e.g. BNR-01"
+                    />
+                  </YStack>
+                  <YStack flex={1}>
+                    <UnderlineField
+                      label="Size"
+                      value={item.size}
+                      onChange={(v) => handleUpdateItem(item.id, { size: v })}
+                      placeholder="e.g. Free Size, M, L"
+                    />
+                  </YStack>
+                </XStack>
+
+                <XStack gap={10}>
+                  <YStack flex={1}>
+                    <UnderlineField
+                      label="Qty"
+                      value={String(item.quantity)}
+                      onChange={(v) => handleUpdateItem(item.id, { quantity: parseInt(v, 10) || 1 })}
+                      keyboardType="numeric"
+                    />
+                  </YStack>
+                  <YStack flex={1}>
+                    <UnderlineField
+                      label="Unit Price (₹)"
+                      value={String(item.price || '')}
+                      onChange={(v) => handleUpdateItem(item.id, { price: parseFloat(v) || 0 })}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </YStack>
+                </XStack>
+              </YStack>
+            ))}
+          </YStack>
+
+          <YStack height={1} backgroundColor={tokens.border} />
+
+          {/* ── Section 5: Financials & Notes ── */}
+          <YStack gap={8}>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+              Financials & Summary
+            </Text>
+
+            <XStack gap={10}>
+              <YStack flex={1}>
+                <UnderlineField
+                  label="Shipping (₹)"
+                  value={String(shippingCharges || '')}
+                  onChange={(v) => setShippingCharges(parseFloat(v) || 0)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </YStack>
+              <YStack flex={1}>
+                <UnderlineField
+                  label="Discount (₹)"
+                  value={String(discount || '')}
+                  onChange={(v) => setDiscount(parseFloat(v) || 0)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </YStack>
+              <YStack flex={1}>
+                <UnderlineField
+                  label="Advance (₹)"
+                  value={String(advancePaid || '')}
+                  onChange={(v) => setAdvancePaid(parseFloat(v) || 0)}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
+              </YStack>
+            </XStack>
+
+            <UnderlineField
+              label="Order Notes / Instructions"
+              value={notes}
+              onChange={setNotes}
+              placeholder="e.g. Urgent festive dispatch, gift wrap"
+              multiline
+              multilineHeight={44}
+            />
+
+            {/* Financial Summary Card */}
+            <YStack
+              backgroundColor={tokens.surfaceRaised}
+              borderRadius={tokens.radius.md}
+              padding={12}
+              gap={6}
+              marginTop={4}
+            >
+              <XStack justifyContent="space-between">
+                <Text fontSize={12} color={tokens.textMuted}>Items Subtotal</Text>
+                <Text fontSize={12} fontWeight="600" color={tokens.text}>₹{itemsSubtotal}</Text>
+              </XStack>
+              <XStack justifyContent="space-between">
+                <Text fontSize={12} color={tokens.textMuted}>Shipping</Text>
+                <Text fontSize={12} fontWeight="600" color={tokens.text}>+₹{shippingCharges}</Text>
+              </XStack>
+              {discount > 0 && (
+                <XStack justifyContent="space-between">
+                  <Text fontSize={12} color={tokens.textMuted}>Discount</Text>
+                  <Text fontSize={12} fontWeight="600" color={tokens.success}>-₹{discount}</Text>
+                </XStack>
+              )}
+              <YStack height={1} backgroundColor={tokens.border} marginVertical={2} />
+              <XStack justifyContent="space-between">
+                <Text fontSize={13} fontWeight="800" color={tokens.text}>Total Order Value</Text>
+                <Text fontSize={15} fontWeight="800" color={tokens.accent}>₹{totalAmount}</Text>
+              </XStack>
+              {advancePaid > 0 && (
+                <XStack justifyContent="space-between">
+                  <Text fontSize={12} color={tokens.textMuted}>Pending Balance (on delivery)</Text>
+                  <Text fontSize={12} fontWeight="700" color={tokens.textSecondary}>₹{pendingBalance}</Text>
+                </XStack>
+              )}
+            </YStack>
+          </YStack>
+        </YStack>
       </ScrollView>
 
-      {/* ── Sticky Bottom Create Button Bar ── */}
-      <Surface style={styles.bottomBar} elevation={4}>
-        <Button
-          mode="contained"
-          icon={mode === 'create_new' ? 'check-bold' : 'link-variant'}
-          loading={isSubmitting}
+      {/* Sticky Submit Bar */}
+      <YStack
+        position="absolute"
+        bottom={0}
+        left={0}
+        right={0}
+        backgroundColor={tokens.surface}
+        borderTopWidth={1}
+        borderTopColor={tokens.border}
+        paddingHorizontal={16}
+        paddingVertical={12}
+        paddingBottom={24}
+        shadowColor="#000"
+        shadowOpacity={0.08}
+        shadowRadius={12}
+        shadowOffset={{ width: 0, height: -4 }}
+        zIndex={50}
+      >
+        <Pressable
+          accessibilityRole="button"
+          onPress={handleSubmit}
           disabled={isSubmitting}
-          onPress={handleSubmitOrder}
-          contentStyle={styles.bottomButtonContent}
-          style={styles.bottomButton}
-          labelStyle={{ fontSize: 16, fontWeight: '800' }}
         >
-          {mode === 'create_new'
-            ? `Create Order • ₹${totalAmount.toLocaleString('en-IN')}`
-            : `Attach to #${selectedOrderId || 'Order'}`}
-        </Button>
-      </Surface>
-
-      {/* ── Address Drawer Sheet Modal ── */}
-      <Portal>
-        <Modal
-          visible={addressSheetOpen}
-          onDismiss={() => setAddressSheetOpen(false)}
-          contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}
-        >
-          <View style={styles.modalHeader}>
-            <Text variant="titleLarge" style={{ fontWeight: '800' }}>
-              Delivery Address
-            </Text>
-            <IconButton icon="close" size={20} onPress={() => setAddressSheetOpen(false)} />
-          </View>
-
-          {/* Paste from Clipboard Button */}
-          <Button
-            mode="outlined"
-            icon="clipboard-arrow-down-outline"
-            loading={isParsingClipboard}
-            onPress={handlePasteAddressFromClipboard}
-            style={styles.clipboardButton}
+          <YStack
+            height={50}
+            borderRadius={tokens.radius.md}
+            backgroundColor={isSubmitting ? tokens.surfaceRaised : tokens.accent}
+            alignItems="center"
+            justifyContent="center"
           >
-            Paste Address from Clipboard
-          </Button>
-
-          <ScrollView style={{ maxHeight: 380 }}>
-            <TextInput
-              mode="outlined"
-              label="Recipient Name *"
-              value={sheetName}
-              onChangeText={setSheetName}
-              style={styles.sheetInput}
-            />
-            <TextInput
-              mode="outlined"
-              label="Contact Phone Number"
-              keyboardType="phone-pad"
-              value={sheetPhone}
-              onChangeText={setSheetPhone}
-              style={styles.sheetInput}
-            />
-            <TextInput
-              mode="outlined"
-              label="Street / House / Building *"
-              multiline
-              numberOfLines={2}
-              value={sheetAddress}
-              onChangeText={setSheetAddress}
-              style={styles.sheetInput}
-            />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TextInput
-                mode="outlined"
-                label="City"
-                value={sheetCity}
-                onChangeText={setSheetCity}
-                style={[styles.sheetInput, { flex: 1 }]}
-              />
-              <TextInput
-                mode="outlined"
-                label="State"
-                value={sheetState}
-                onChangeText={setSheetState}
-                style={[styles.sheetInput, { flex: 1 }]}
-              />
-            </View>
-            <TextInput
-              mode="outlined"
-              label="6-Digit Pincode *"
-              keyboardType="numeric"
-              maxLength={6}
-              value={sheetPincode}
-              onChangeText={handlePincodeChange}
-              style={styles.sheetInput}
-              right={isCheckingPin ? <TextInput.Icon icon={() => <ActivityIndicator size={16} />} /> : undefined}
-            />
-
-            {sheetServiceable === true && (
-              <Chip icon="check-circle" style={styles.chipSuccess} textStyle={{ color: '#137333', fontSize: 11 }}>
-                Delhivery Serviceable
-              </Chip>
+            {isSubmitting ? (
+              <ActivityIndicator color={tokens.textMuted} />
+            ) : (
+              <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.8}>
+                CREATE ORDER
+              </Text>
             )}
-            {sheetServiceable === false && (
-              <Chip icon="alert-circle" style={styles.chipError} textStyle={{ color: '#C5221F', fontSize: 11 }}>
-                Unserviceable Pincode
-              </Chip>
-            )}
-          </ScrollView>
+          </YStack>
+        </Pressable>
+      </YStack>
 
-          <View style={styles.sheetActionsRow}>
-            <Button mode="text" onPress={() => setAddressSheetOpen(false)} style={{ flex: 1 }}>
-              Cancel
-            </Button>
-            <Button mode="contained" onPress={handleSaveAddress} style={{ flex: 1 }}>
-              Done
-            </Button>
-          </View>
-        </Modal>
-      </Portal>
-
-      {/* Catalog Item Picker Modal */}
-      <CatalogItemPickerModal
-        visible={catalogPickerVisible}
-        onDismiss={() => setCatalogPickerVisible(false)}
-        onSelectItem={item => {
-          setCatalogDrafts(prev => [item, ...prev]);
-        }}
+      {/* Address Sheet Modal */}
+      <AddressSheet
+        visible={sheetOpen}
+        initial={emptyAddress}
+        onSave={(data) => setAddress(data)}
+        onClose={() => setSheetOpen(false)}
       />
-    </View>
+    </YStack>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 12,
-    paddingBottom: 90,
-  },
-  modeCard: {
-    borderRadius: 12,
-    marginBottom: 10,
-    overflow: 'hidden',
-  },
-  sectionCard: {
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-  },
-  rowBetween: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  platformIconsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  platformIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentPillGroup: {
-    flexDirection: 'row',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 20,
-    padding: 3,
-    gap: 4,
-  },
-  paymentPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 18,
-  },
-  paymentPillText: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  sourceInputWrapper: {
-    marginTop: 12,
-  },
-  textInput: {
-    backgroundColor: 'transparent',
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  mediaTilesRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  addMediaTile: {
-    width: 80,
-    height: 100,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#B0BEC5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addMediaCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mediaTileCard: {
-    width: 90,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#FAFAFA',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  mediaThumbnail: {
-    width: '100%',
-    height: 70,
-    backgroundColor: '#EEE',
-  },
-  mediaDeleteBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mediaItemTagRow: {
-    padding: 4,
-    gap: 4,
-  },
-  miniPriceInput: {
-    fontSize: 11,
-    height: 28,
-    backgroundColor: 'transparent',
-  },
-  miniQtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  qtyBtnText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    paddingHorizontal: 4,
-  },
-  qtyText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  addressCard: {
-    marginTop: 8,
-  },
-  addressHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  addressNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  emptyAddressCard: {
-    marginTop: 8,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#B0BEC5',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  serviceableRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-  },
-  chipSuccess: {
-    backgroundColor: '#E6F4EA',
-  },
-  chipError: {
-    backgroundColor: '#FCE8E6',
-  },
-  financialRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  financialInputRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  miniFinancialInput: {
-    width: 100,
-    height: 38,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E0E0E0',
-    marginVertical: 8,
-  },
-  notesInput: {
-    backgroundColor: 'transparent',
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
-  },
-  bottomButton: {
-    borderRadius: 10,
-  },
-  bottomButtonContent: {
-    height: 50,
-  },
-  modalContainer: {
-    margin: 20,
-    padding: 18,
-    borderRadius: 16,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  clipboardButton: {
-    marginBottom: 12,
-  },
-  sheetInput: {
-    marginBottom: 10,
-  },
-  sheetActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 14,
-  },
-});
