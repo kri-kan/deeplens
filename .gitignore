@@ -445,3 +445,10 @@ src/whatsapp-processor/reprocess_products.ts
 # Playwright Test Artifacts
 playwright-report/
 test-results/
+
+# Android binaries and build artifacts (exceeds GitHub 100MB limit)
+*.apk
+*.aab
+publish/vayyari/*.apk
+publish/**/*.apk
+!src/IGReplyBot/artifacts/IGReplyBot-debug.apk
