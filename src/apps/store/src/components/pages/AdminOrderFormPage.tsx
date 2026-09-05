@@ -210,8 +210,8 @@ function OrderTypeSection({
                 justifyContent="center"
                 hoverStyle={{ backgroundColor: `${WHATSAPP_GREEN}30` }}
                 pressStyle={{ scale: 0.92 }}
-                accessibilityRole="link"
-                accessibilityLabel="Open WhatsApp chat"
+                role="link"
+                aria-label="Open WhatsApp chat"
                 onPress={() => {
                   const clean = sourceInput.replace(/[^0-9]/g, '');
                   if (clean) {
@@ -267,8 +267,8 @@ function OrderTypeSection({
                 justifyContent="center"
                 hoverStyle={{ backgroundColor: `${INSTAGRAM_ACTIVE}30` }}
                 pressStyle={{ scale: 0.92 }}
-                accessibilityRole="link"
-                accessibilityLabel="Open Instagram message"
+                role="link"
+                aria-label="Open Instagram message"
                 onPress={() => {
                   const clean = sourceInput.replace(/^@/, '').trim();
                   if (clean) {
@@ -564,7 +564,8 @@ export function UnderlineField({
   onSmartPaste,
 }: UnderlineFieldProps) {
   const { tokens } = useTheme();
-  const prevLen = useRef(value.length);
+  const safeValue = value ?? '';
+  const prevLen = useRef(safeValue.length);
 
   const handleChange = (v: string) => {
     // Heuristic paste detection: value grew by more than 10 chars in one event
@@ -593,7 +594,7 @@ export function UnderlineField({
       </Text>
       <TextInput
         accessibilityLabel={accessibilityLabel ?? label}
-        value={value}
+        value={safeValue}
         onChangeText={handleChange}
         placeholder={placeholder}
         placeholderTextColor={tokens.textMuted}

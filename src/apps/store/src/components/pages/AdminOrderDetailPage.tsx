@@ -113,7 +113,7 @@ export function AdminOrderDetailPage({
   const [products, setProducts] = useState<OrderItem[]>(initialProducts);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(initialSelectedIds);
   const [address, setAddress] = useState<AddressData | null>(initialAddress);
-  const [transactionId, setTransactionId] = useState(initialTransactionId);
+  const [transactionId, setTransactionId] = useState(initialTransactionId ?? '');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(initialReceiptUrl);
 
   // Sheets
