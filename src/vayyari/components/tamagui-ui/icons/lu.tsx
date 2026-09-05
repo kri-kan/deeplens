@@ -66,3 +66,21 @@ export const LuReceipt: React.FC<IconProps> = ({ size = 16, color = '#333333', s
 export const LuInfo: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="info" size={size} color={color} style={style} />
 );
+export const LuCopy: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="copy" size={size} color={color} style={style} />
+);
+export const LuTag: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="tag" size={size} color={color} style={style} />
+);
+export const LuSettings: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="settings" size={size} color={color} style={style} />
+);
+export const LuRefreshCw: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="refresh-cw" size={size} color={color} style={style} />
+);
+export const LuHistory: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="history" size={size} color={color} style={style} />
+);
+export const LuInbox: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="inbox" size={size} color={color} style={style} />
+);

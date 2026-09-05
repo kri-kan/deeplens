@@ -1,34 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { View, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { Surface, Text, Appbar, Button, Icon, useTheme, TextInput, Switch } from 'react-native-paper';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchApiClient } from '@/api/client';
 import { customersApi } from '@/api/customers';
 import { API_ROUTES } from '@/constants/api-routes';
-import { HistoryItem } from './HistoryItem';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getStyles } from './styles';
-import * as Clipboard from 'expo-clipboard';
-import { GeneratedIdCard } from './GeneratedIdCard';
-
-import { OrderIdEntry, PaymentMode } from '@/types/orders';
+import { OrderIdEntry, PaymentMode, OrderSource } from '@/types/orders';
+import {
+  OrderIdGeneratorPage,
+} from '@/components/tamagui-ui/pages/OrderIdGeneratorPage';
+import {
+  OrderIdHistoryEntry,
+} from '@/components/tamagui-ui/molecules/OrderIdHistoryItem';
+import {
+  GeneratorSource,
+  GeneratorPaymentMode,
+  GeneratedOrderResult,
+} from '@/components/tamagui-ui/molecules/OrderIdGeneratorCard';
 
 const STORAGE_KEY = 'last_generated_order_ids';
 
 export const OrderIdGenerator = () => {
-  const theme = useTheme();
-  const styles = getStyles(theme);
   const router = useRouter();
-  const [selectedSource, setSelectedSource] = useState<'WhatsApp' | 'Instagram' | null>(null);
-  const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
   const [loading, setLoading] = useState(false);
   const [recentIds, setRecentIds] = useState<OrderIdEntry[]>([]);
   const [displayId, setDisplayId] = useState<OrderIdEntry | null>(null);
   const [isNewId, setIsNewId] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [sourceHandle, setSourceHandle] = useState('');
-  const [showDeleted, setShowDeleted] = useState(false);
 
   useEffect(() => {
     loadRecentIds();
@@ -78,23 +76,19 @@ export const OrderIdGenerator = () => {
     }
   };
 
-  const isGenerateDisabled = () => {
-    if (!selectedSource) return true;
-    if (loading) return true;
-    if (!sourceHandle || sourceHandle.trim().length === 0) return true;
-    
-    if (selectedSource === 'WhatsApp') {
-      const digits = sourceHandle.replace(/\D/g, '');
-      if (digits.length < 10) return true;
-    }
-    return false;
-  };
-
-  const handleGenerate = async () => {
-    if (!selectedSource) return;
+  const handleGenerate = async (
+    source: GeneratorSource,
+    paymentMode: GeneratorPaymentMode,
+    sourceHandle: string
+  ) => {
+    if (!source) return;
 
     try {
       setLoading(true);
+
+      const apiSource: OrderSource = source === 'whatsapp' ? 'WhatsApp' : 'Instagram';
+      const apiPaymentMode: PaymentMode | null =
+        paymentMode === 'cod' ? 'COD' : paymentMode === 'prepaid' ? 'Prepaid' : null;
 
       let customerId: string | undefined = undefined;
 
@@ -102,43 +96,40 @@ export const OrderIdGenerator = () => {
       if (sourceHandle) {
         try {
           const customer = await customersApi.getOrCreateCustomer(
-            selectedSource === 'WhatsApp' ? sourceHandle : undefined,
-            selectedSource === 'Instagram' ? sourceHandle : undefined
+            source === 'whatsapp' ? sourceHandle : undefined,
+            source === 'instagram' ? sourceHandle : undefined
           );
           customerId = customer.id;
         } catch (e) {
           console.warn('[OrderIdGenerator] Failed to get/create customer:', e);
-          // Proceed without customer ID if it fails
         }
       }
 
       const response = await searchApiClient.post<{ orderId: string }>(API_ROUTES.ORDERS.GENERATE, null, {
         params: { 
-          source: selectedSource, 
-          paymentMode: paymentMode || '' ,
+          source: apiSource, 
+          paymentMode: apiPaymentMode || '',
           sourceHandle: sourceHandle || '',
           customerId
         }
       });
+
       const newEntry: OrderIdEntry = {
         id: response.orderId,
-        source: selectedSource,
-        paymentMode: paymentMode,
+        source: apiSource,
+        paymentMode: apiPaymentMode,
         timestamp: new Date().toISOString(),
-        customerPhone: selectedSource === 'WhatsApp' ? sourceHandle : undefined,
-        instagramHandle: selectedSource === 'Instagram' ? sourceHandle : undefined,
+        customerPhone: source === 'whatsapp' ? sourceHandle : undefined,
+        instagramHandle: source === 'instagram' ? sourceHandle : undefined,
+        sourceHandle: sourceHandle,
         customerId
       };
       
-      const updated = [newEntry, ...recentIds].slice(0, 10);
+      const updated = [newEntry, ...recentIds].slice(0, 20);
       await saveRecentIds(updated);
       
       setDisplayId(newEntry);
       setIsNewId(true);
-      
-      setSelectedSource(null);
-      setPaymentMode(null);
-      setSourceHandle('');
     } catch (error) {
       console.error('Failed to generate Order ID:', error);
       Alert.alert('Error', 'Failed to generate Order ID. Please try again.');
@@ -147,24 +138,44 @@ export const OrderIdGenerator = () => {
     }
   };
 
-  const handleUpdate = async (id: string, updatedEntry: OrderIdEntry) => {
+  const handleUpdate = async (
+    id: string,
+    updated: { paymentMode: 'cod' | 'prepaid' | null; sourceHandle: string }
+  ) => {
+    const existing = recentIds.find((x) => x.id === id);
+    if (!existing) return;
+
     try {
       setLoading(true);
+      const apiPaymentMode: PaymentMode | null =
+        updated.paymentMode === 'cod' ? 'COD' : updated.paymentMode === 'prepaid' ? 'Prepaid' : null;
+
+      const isWhatsApp = existing.source?.toLowerCase() === 'whatsapp';
+      const phone = isWhatsApp ? updated.sourceHandle : existing.customerPhone;
+      const igHandle = !isWhatsApp ? updated.sourceHandle : existing.instagramHandle;
+
       await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(id), {
-        customerPhone: updatedEntry.customerPhone,
-        customerAddress: updatedEntry.customerAddress,
-        source: updatedEntry.source,
-        sourceHandle: updatedEntry.instagramHandle || updatedEntry.customerPhone,
-        paymentMode: updatedEntry.paymentMode
+        customerPhone: phone,
+        customerAddress: existing.customerAddress,
+        source: existing.source,
+        sourceHandle: updated.sourceHandle,
+        paymentMode: apiPaymentMode
       });
 
-      const updated = recentIds.map(item => item.id === id ? updatedEntry : item);
-      await saveRecentIds(updated);
+      const updatedEntry: OrderIdEntry = {
+        ...existing,
+        paymentMode: apiPaymentMode,
+        customerPhone: phone,
+        instagramHandle: igHandle,
+        sourceHandle: updated.sourceHandle,
+      };
+
+      const updatedList = recentIds.map(item => item.id === id ? updatedEntry : item);
+      await saveRecentIds(updatedList);
       
       if (displayId?.id === id) {
         setDisplayId(updatedEntry);
       }
-      setEditingId(null);
     } catch (error) {
       console.error('Failed to update order:', error);
       Alert.alert('Error', 'Failed to update order in database.');
@@ -175,158 +186,44 @@ export const OrderIdGenerator = () => {
 
   const copyToClipboard = async (id: string, includePrefix: boolean = false) => {
     const textToCopy = includePrefix ? `order id # ${id}` : id;
-    console.log('Copied to clipboard:', textToCopy);
     await Clipboard.setStringAsync(textToCopy);
   };
 
-  const formatTimeAgo = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  // Map to Tamagui history items
+  const historyMapped: OrderIdHistoryEntry[] = recentIds.map((item) => ({
+    id: item.id,
+    source: item.source?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'instagram',
+    paymentMode: item.paymentMode ? (item.paymentMode.toLowerCase() as 'cod' | 'prepaid') : null,
+    timestamp: item.timestamp,
+    customerPhone: item.customerPhone,
+    instagramHandle: item.instagramHandle,
+    sourceHandle: item.sourceHandle || item.customerPhone || item.instagramHandle,
+    isDeleted: item.isDeleted,
+  }));
 
-    if (diffHours < 24) {
-      if (diffHours < 1) {
-        return diffMinutes <= 1 ? 'Just now' : `${diffMinutes} mins ago`;
+  const generatedMapped: GeneratedOrderResult | null = displayId
+    ? {
+        id: displayId.id,
+        source: displayId.source?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'instagram',
+        paymentMode: displayId.paymentMode
+          ? (displayId.paymentMode.toLowerCase() as 'cod' | 'prepaid')
+          : null,
+        timestamp: displayId.timestamp,
+        sourceHandle: displayId.sourceHandle || displayId.customerPhone || displayId.instagramHandle,
+        isNew: isNewId,
       }
-      return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
-    }
-
-    return date.toLocaleString([], { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
-
-  const renderHistoryItem = ({ item }: { item: OrderIdEntry }) => (
-    <HistoryItem 
-      item={item}
-      isEditing={editingId === item.id}
-      onEdit={setEditingId}
-      onUpdate={handleUpdate}
-      onCopy={copyToClipboard}
-      formatTimeAgo={formatTimeAgo}
-      styles={styles}
-    />
-  );
+    : null;
 
   return (
-    <Surface style={styles.container} elevation={0}>
-      <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.Content title="Order ID Generator" titleStyle={styles.headerTitle} />
-        <Appbar.Action icon="cog" onPress={() => router.push('/modal')} size={20} />
-      </Appbar.Header>
-
-      <View style={styles.content}>
-        <View style={styles.selectionRow}>
-          <TouchableOpacity 
-            style={styles.pureIconContainer}
-            onPress={() => {
-              setSelectedSource('WhatsApp');
-              setIsNewId(false);
-            }}
-          >
-            <Icon 
-              source="whatsapp" 
-              size={55} 
-              color={selectedSource === 'WhatsApp' ? '#25D366' : theme.colors.outline} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.pureIconContainer}
-            onPress={() => {
-              setSelectedSource('Instagram');
-              setIsNewId(false);
-            }}
-          >
-            <Icon 
-              source="instagram" 
-              size={55} 
-              color={selectedSource === 'Instagram' ? '#E4405F' : theme.colors.outline} 
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.paymentButton, paymentMode === 'COD' && styles.paymentButtonSelected]}
-            onPress={() => setPaymentMode('COD')}
-          >
-            <Text style={[styles.paymentText, paymentMode === 'COD' && styles.paymentTextSelected]}>
-              COD
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.paymentButton, paymentMode === 'Prepaid' && styles.paymentButtonSelected]}
-            onPress={() => setPaymentMode('Prepaid')}
-          >
-            <Text style={[styles.paymentText, paymentMode === 'Prepaid' && styles.paymentTextSelected]}>
-              Prepaid
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
-        {selectedSource && (
-          <View>
-            <TextInput
-              label={selectedSource === 'WhatsApp' ? 'Phone Number *' : 'Instagram URL / Handle *'}
-              value={sourceHandle}
-              onChangeText={setSourceHandle}
-              mode="outlined"
-              style={styles.sourceHandleInput}
-              keyboardType={selectedSource === 'WhatsApp' ? 'phone-pad' : 'default'}
-              left={<TextInput.Icon icon={selectedSource === 'WhatsApp' ? 'phone' : 'instagram'} />}
-              placeholder={selectedSource === 'WhatsApp' ? '+91 99999 00000' : 'instagram.com/username'}
-            />
-          </View>
-        )}
-
-        <Button 
-          mode="contained" 
-          onPress={handleGenerate} 
-          disabled={isGenerateDisabled()}
-          loading={loading}
-          style={[
-            styles.generateButton,
-            selectedSource && !loading ? styles.generateButtonEnabled : styles.generateButtonDisabled
-          ]}
-          labelStyle={[
-            styles.generateButtonLabel,
-            selectedSource && !loading ? styles.generateButtonLabelEnabled : styles.generateButtonLabelDisabled
-          ]}
-          contentStyle={styles.generateButtonContent}
-        >
-          {loading ? 'Generating...' : selectedSource ? 'Generate Order ID' : 'Select Platform'}
-        </Button>
-
-        <GeneratedIdCard 
-          entry={displayId}
-          isNew={isNewId}
-          onCopy={copyToClipboard}
-          formatTimeAgo={formatTimeAgo}
-          styles={styles}
-        />
-      </View>
-
-      <View style={styles.listSection}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Text style={styles.listTitle}>Recent IDs</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 16 }}>
-            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Show Deleted</Text>
-            <Switch value={showDeleted} onValueChange={setShowDeleted} />
-          </View>
-        </View>
-        <FlatList
-          data={showDeleted ? recentIds : recentIds.filter(item => !item.isDeleted)}
-          keyExtractor={(item) => item.id + item.timestamp}
-          renderItem={renderHistoryItem}
-          ListEmptyComponent={<Text style={styles.emptyText}>No recent activity</Text>}
-        />
-      </View>
-
-    </Surface>
+    <OrderIdGeneratorPage
+      initialRecentIds={historyMapped}
+      initialGeneratedEntry={generatedMapped}
+      isLoading={loading}
+      onGenerateOrder={handleGenerate}
+      onUpdateOrder={handleUpdate}
+      onCopy={copyToClipboard}
+      onNavigateToDetails={(id) => router.push(`/utilities/order-details/${id}`)}
+      onOpenSettings={() => router.push('/modal')}
+    />
   );
 };
