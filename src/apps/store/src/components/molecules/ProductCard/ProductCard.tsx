@@ -205,7 +205,7 @@ export function ProductCard({
           top={isCompactSize ? 8 : 10}
           left={isCompactSize ? 8 : 10}
           zIndex={15}
-          pointerEvents="none"
+          style={{ pointerEvents: 'none' }}
         >
           <Text
             fontSize={isCompactSize ? 11 : 12}

@@ -210,8 +210,9 @@ export function AgeBadge({
           shadowOpacity={0.25}
           shadowRadius={8}
           shadowOffset={{ width: 0, height: 3 }}
-          pointerEvents="none"
-          accessibilityLiveRegion="polite"
+          role="status"
+          aria-live="polite"
+          style={{ pointerEvents: 'none' }}
         >
           {/* Caret arrow pointing up */}
           <YStack

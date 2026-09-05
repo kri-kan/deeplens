@@ -62,7 +62,8 @@ export function BottomSheet({
         shadowRadius={24}
         shadowOffset={{ width: 0, height: -8 }}
         onPress={(e) => e.stopPropagation()}
-        accessibilityViewIsModal={true}
+        role="dialog"
+        aria-modal={true}
       >
         {/* Drag handle */}
         {showDragHandle && (

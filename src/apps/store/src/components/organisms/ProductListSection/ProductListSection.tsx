@@ -415,7 +415,7 @@ export function ProductListSection({
                       fontSize={15}
                       fontWeight="800"
                       color={tokens.text}
-                      accessibilityLabel={`Line total: ${lineTotal} rupees`}
+                      aria-label={`Line total: ${lineTotal} rupees`}
                     >
                       ₹{lineTotal.toLocaleString('en-IN')}
                     </Text>
