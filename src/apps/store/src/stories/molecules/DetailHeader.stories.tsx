@@ -72,3 +72,33 @@ export const Tight320pxHeader: Story = {
     </YStack>
   ),
 };
+
+export const WithNotchAndStatusBar: Story = {
+  args: {
+    orderId: '00017',
+    compactDate: false,
+    createdAt: new Date().toISOString(),
+    onSave: () => alert('Save clicked'),
+    onDelete: () => alert('Delete clicked'),
+  },
+  render: (args: any) => (
+    <YStack width={390} borderRadius={36} overflow="hidden" borderWidth={8} borderColor="#2a2826" backgroundColor="#000000">
+      {/* Simulated camera punch-hole & status bar */}
+      <YStack height={38} backgroundColor="#fdfbf9" position="relative" justifyContent="center" paddingHorizontal={16}>
+        <YStack
+          position="absolute"
+          top={8}
+          left="50%"
+          marginLeft={-10}
+          width={20}
+          height={20}
+          borderRadius={10}
+          backgroundColor="#000000"
+          zIndex={10}
+        />
+        <Text fontSize={11} fontWeight="700" color="#333333">1:51</Text>
+      </YStack>
+      <DetailHeader {...(args as DetailHeaderProps)} disableSafeArea={true} />
+    </YStack>
+  ),
+};

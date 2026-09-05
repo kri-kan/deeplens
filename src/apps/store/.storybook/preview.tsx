@@ -1,5 +1,6 @@
 import React from "react";
 import { View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { TamaguiProvider, Theme as TamaguiTheme } from "tamagui";
 import { ThemeProvider, useTheme } from "../src/theme";
 import { CampaignName, ColorScheme } from "../src/theme/types";
@@ -63,16 +64,18 @@ export const decorators = [
     const tamaguiTheme = `${campaign}_${colorScheme}`;
 
     return (
-      <TamaguiProvider key={tamaguiTheme} config={tamaguiConfig} defaultTheme={tamaguiTheme}>
-        <ThemeProvider
-          key={tamaguiTheme}
-          initialCampaign={campaign}
-          initialColorScheme={colorScheme}
-          autoSchedule={false}
-        >
-          <ThemedStoryContainer Story={Story} tamaguiTheme={tamaguiTheme} context={context} />
-        </ThemeProvider>
-      </TamaguiProvider>
+      <SafeAreaProvider>
+        <TamaguiProvider key={tamaguiTheme} config={tamaguiConfig} defaultTheme={tamaguiTheme}>
+          <ThemeProvider
+            key={tamaguiTheme}
+            initialCampaign={campaign}
+            initialColorScheme={colorScheme}
+            autoSchedule={false}
+          >
+            <ThemedStoryContainer Story={Story} tamaguiTheme={tamaguiTheme} context={context} />
+          </ThemeProvider>
+        </TamaguiProvider>
+      </SafeAreaProvider>
     );
   },
 ];
