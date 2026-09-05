@@ -34,25 +34,25 @@ export const AllIntents: Story = {
       {/* Attention: Amber Spectrum (e.g. COD, pending review, risk) */}
       <XStack alignItems="center" gap={10}>
         <StatusBadge intent="attention" label="COD Pending" icon={<LuCircleAlert size={12} color="#B06000" />} />
-        <Text fontSize={12} color="$color10">intent: 'attention'</Text>
+        <Text fontSize={12} color="$color" opacity={0.7}>intent: 'attention'</Text>
       </XStack>
 
       {/* Positive: Emerald Spectrum (e.g. Prepaid, verified, credit) */}
       <XStack alignItems="center" gap={10}>
         <StatusBadge intent="positive" label="Prepaid (Paid)" icon={<LuCheck size={12} color="#137333" />} />
-        <Text fontSize={12} color="$color10">intent: 'positive'</Text>
+        <Text fontSize={12} color="$color" opacity={0.7}>intent: 'positive'</Text>
       </XStack>
 
       {/* Critical: Crimson Spectrum (e.g. Cancelled, failed, refunded) */}
       <XStack alignItems="center" gap={10}>
         <StatusBadge intent="critical" label="Order Cancelled" icon={<LuX size={12} color="#C5221F" />} />
-        <Text fontSize={12} color="$color10">intent: 'critical'</Text>
+        <Text fontSize={12} color="$color" opacity={0.7}>intent: 'critical'</Text>
       </XStack>
 
       {/* Info: Accent/Blue Spectrum (e.g. In Transit, SKU Linked) */}
       <XStack alignItems="center" gap={10}>
         <StatusBadge intent="info" label="In Transit" icon={<LuInfo size={12} color="currentColor" />} />
-        <Text fontSize={12} color="$color10">intent: 'info'</Text>
+        <Text fontSize={12} color="$color" opacity={0.7}>intent: 'info'</Text>
       </XStack>
     </YStack>
   ),

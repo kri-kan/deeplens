@@ -20,19 +20,24 @@ export function StatusBadge({
   accessibilityLabel,
 }: StatusBadgeProps) {
   const { tokens } = useTheme();
-  const intentColors = tokens.status[intent];
+  const intentColors = tokens?.status?.[intent] ?? {
+    base: '#F59E0B',
+    subtle: '#FFF4E5',
+    border: '#FFE2B8',
+    text: '#B06000',
+  };
 
   const isSmall = size === 'sm';
 
   return (
     <XStack
-      accessibilityRole="text"
-      accessibilityLabel={accessibilityLabel ?? `${intent} status: ${label}`}
+      role="status"
+      aria-label={accessibilityLabel ?? `${intent} status: ${label}`}
       alignItems="center"
       justifyContent="center"
       paddingHorizontal={isSmall ? 8 : 12}
       height={isSmall ? 22 : 26}
-      borderRadius={tokens.radius.full}
+      borderRadius={tokens?.radius?.full ?? 9999}
       backgroundColor={intentColors.subtle}
       borderWidth={1}
       borderColor={intentColors.border}

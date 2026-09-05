@@ -30,8 +30,8 @@ export function SegmentedControl({
       borderRadius={tokens.radius.sm}
       padding={3}
       gap={4}
-      accessibilityRole="tablist"
-      accessibilityLabel={accessibilityLabel}
+      role="tablist"
+      aria-label={accessibilityLabel}
     >
       {options.map((option) => {
         const isActive = option.id === activeId;

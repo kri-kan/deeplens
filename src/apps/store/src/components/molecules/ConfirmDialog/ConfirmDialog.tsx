@@ -56,8 +56,8 @@ export function ConfirmDialog({
       alignItems="center"
       justifyContent="center"
       padding={20}
-      accessibilityRole="alert"
-      accessibilityLabel={title}
+      role="alert"
+      aria-label={title}
     >
       <YStack
         width="100%"

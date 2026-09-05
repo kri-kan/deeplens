@@ -48,7 +48,7 @@ export function BottomSheet({
       justifyContent="flex-end"
       zIndex={zIndex}
       onPress={onClose}
-      accessibilityRole="none"
+      role="presentation"
     >
       <YStack
         backgroundColor={tokens.background}
