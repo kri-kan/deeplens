@@ -158,7 +158,9 @@ export default function ShareProductScreen() {
     setDownloadProgress(0);
     let urls: string[] = [];
     try {
-      const selected = mediaList.filter((m) => selectedIds.includes(m.id));
+      const selected = selectedIds
+        .map((selectedId) => mediaList.find((m) => m.id === selectedId))
+        .filter((m): m is MediaEntry => Boolean(m));
 
       for (let i = 0; i < selected.length; i++) {
         const media = selected[i];

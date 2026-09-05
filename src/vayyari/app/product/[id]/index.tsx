@@ -846,7 +846,7 @@ export default function ProductDetailScreen() {
                 <>
                     <View style={{ width, height: '70%' }}>
                       <FlatList
-                        data={Array(50).fill(mediaList).flat()}
+                        data={mediaList}
                         horizontal
                         pagingEnabled
                         scrollEnabled={!isPreviewZoomed}
@@ -856,15 +856,13 @@ export default function ProductDetailScreen() {
                           offset: width * index,
                           index,
                         })}
-                        initialScrollIndex={25 * mediaList.length + activeMediaIndex}
+                        initialScrollIndex={activeMediaIndex < mediaList.length ? activeMediaIndex : 0}
                         onMomentumScrollEnd={(e) => {
                           const index = Math.round(e.nativeEvent.contentOffset.x / width);
-                          if (mediaList.length > 0) {
-                            setActiveMediaIndex(index % mediaList.length);
-                          }
+                          setActiveMediaIndex(index);
                           setIsPreviewZoomed(false);
                         }}
-                        keyExtractor={(_, index) => index.toString()}
+                        keyExtractor={(item, index) => item.id || index.toString()}
                         renderItem={({ item: m }) => (
                           <View style={{ width, height: '100%', justifyContent: 'center' }}>
                             <ZoomableImage
@@ -903,18 +901,30 @@ export default function ProductDetailScreen() {
                             onPress={async () => {
                                 try {
                                     const m = mediaList[activeMediaIndex];
-                                    const url = m.storagePath 
-                                        ? productService.getMediaUrlByPath(m.storagePath)
-                                        : productService.getThumbnailUrl(m.id, 'large');
+                                    const url = m.id && m.id !== '00000000-0000-0000-0000-000000000000'
+                                        ? productService.getRawMediaUrl(m.id)
+                                        : (m.storagePath ? productService.getMediaUrlByPath(m.storagePath) : '');
+                                    
+                                    if (!url) {
+                                      Alert.alert('Error', 'Media URL not available');
+                                      return;
+                                    }
+
                                     const path = m.storagePath || '';
-                                    const extension = path.split('.').pop()?.toLowerCase() || 'jpg';
+                                    const extension = m.mediaType === 2 ? 'mp4' : (path.split('.').pop()?.toLowerCase() || 'jpg');
                                     
                                     setDownloadProgress(0);
-                                    await downloadMedia(url, `product_${product.productCode}_${m.id || Date.now()}.${extension}`, (p) => {
+                                    const savedUri = await downloadMedia(
+                                      url, 
+                                      `product_${product.productCode || 'vayyari'}_${m.id || Date.now()}.${extension}`, 
+                                      (p) => {
                                         setDownloadProgress(p);
-                                    });
+                                      }
+                                    );
                                     setDownloadProgress(null);
-                                    Alert.alert('Success', 'Media saved to gallery!');
+                                    if (savedUri) {
+                                      Alert.alert('Success', 'Media saved to gallery!');
+                                    }
                                 } catch (err) {
                                     setDownloadProgress(null);
                                     Alert.alert('Error', 'Failed to download media');
@@ -932,11 +942,17 @@ export default function ProductDetailScreen() {
                             onPress={async () => {
                                 try {
                                     const m = mediaList[activeMediaIndex];
-                                    const url = m.storagePath 
-                                        ? productService.getMediaUrlByPath(m.storagePath)
-                                        : productService.getThumbnailUrl(m.id, 'large');
+                                    const url = m.id && m.id !== '00000000-0000-0000-0000-000000000000'
+                                        ? productService.getRawMediaUrl(m.id)
+                                        : (m.storagePath ? productService.getMediaUrlByPath(m.storagePath) : '');
+                                    
+                                    if (!url) {
+                                      Alert.alert('Error', 'Media URL not available');
+                                      return;
+                                    }
+
                                     const path = m.storagePath || '';
-                                    const extension = path.split('.').pop()?.toLowerCase() || 'jpg';
+                                    const extension = m.mediaType === 2 ? 'mp4' : (path.split('.').pop()?.toLowerCase() || 'jpg');
                                     
                                     setShareProgress(0);
                                     await shareMedia(url, extension, (p) => {

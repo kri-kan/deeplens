@@ -74,6 +74,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
 
   const panGesture = Gesture.Pan()
     .averageTouches(true)
+    .activeOffsetX([-20, 20])
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;

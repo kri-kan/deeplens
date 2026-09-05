@@ -15,6 +15,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ShareIntentProvider } from '../context/ShareIntentContext';
 import { useShareIntent } from '../hooks/useShareIntent';
 import { ShareActionChooserModal } from '../components/ui/ShareActionChooserModal';
+import { ensureInitialPermissions } from '../utils/device-permissions';
 
 console.log('[RootLayout] Global execution started');
 
@@ -64,6 +65,10 @@ function InnerRootLayout() {
       SplashScreen.hideAsync();
     }
   }, [colorScheme, isLoading]);
+
+  useEffect(() => {
+    ensureInitialPermissions();
+  }, []);
 
   // Proactive auth navigation: Ensure unauthenticated users are routed to /login immediately
   useEffect(() => {
