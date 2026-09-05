@@ -5,6 +5,7 @@ import {
   Pressable,
   Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuPencil,
@@ -1089,9 +1090,11 @@ function SectionDivider() {
 
 function AdminPageHeader() {
   const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <XStack
-      height={56}
+      paddingTop={insets.top}
+      height={56 + insets.top}
       alignItems="center"
       justifyContent="center"
       paddingHorizontal={16}
@@ -1117,6 +1120,7 @@ interface SubmitBarProps {
 
 function SubmitBar({ onSubmit, disabled }: SubmitBarProps) {
   const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <YStack
       position="absolute"
@@ -1128,7 +1132,7 @@ function SubmitBar({ onSubmit, disabled }: SubmitBarProps) {
       borderTopColor={tokens.border}
       paddingHorizontal={16}
       paddingVertical={12}
-      paddingBottom={24}
+      paddingBottom={Math.max(24, insets.bottom + 12)}
       shadowColor="#000"
       shadowOpacity={0.08}
       shadowRadius={12}

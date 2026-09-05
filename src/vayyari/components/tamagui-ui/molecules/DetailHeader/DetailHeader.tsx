@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XStack, YStack, Text } from 'tamagui';
 import { LuTrash2, LuCheck } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
@@ -9,6 +10,7 @@ export interface DetailHeaderProps {
   orderId: string;
   createdAt: string | Date;
   compactDate?: boolean;
+  disableSafeArea?: boolean;
   onSave: () => void;
   onDelete: () => void;
 }
@@ -20,14 +22,18 @@ export function DetailHeader({
   orderId,
   createdAt,
   compactDate = false,
+  disableSafeArea = false,
   onSave,
   onDelete,
 }: DetailHeaderProps) {
   const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
 
   return (
     <XStack
-      height={58}
+      paddingTop={topInset}
+      height={58 + topInset}
       alignItems="center"
       justifyContent="space-between"
       paddingHorizontal={16}

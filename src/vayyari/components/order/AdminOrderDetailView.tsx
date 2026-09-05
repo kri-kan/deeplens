@@ -10,6 +10,7 @@ import {
 import { YStack, XStack, Text } from 'tamagui';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
@@ -40,6 +41,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 }) => {
   const { tokens } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -373,7 +375,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       {/* ── Main Scrollable Body ── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 60 }}
+        contentContainerStyle={{ paddingBottom: Math.max(60, insets.bottom + 40) }}
         keyboardShouldPersistTaps="handled"
       >
         <YStack paddingHorizontal={16} paddingTop={12} gap={14}>

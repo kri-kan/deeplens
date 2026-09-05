@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -600,6 +601,7 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
 export const AdminOrderCreateForm: React.FC = () => {
   const { tokens } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { sharedMedia, commitCurrentSession, discardCurrentSession, removeSharedMedia } = useShareIntentContext();
 
   const [source, setSource] = useState<OrderSource>('whatsapp');
@@ -797,7 +799,8 @@ export const AdminOrderCreateForm: React.FC = () => {
     <YStack flex={1} backgroundColor={tokens.background} position="relative">
       {/* Header */}
       <XStack
-        height={56}
+        paddingTop={insets.top}
+        height={56 + insets.top}
         alignItems="center"
         justifyContent="space-between"
         paddingHorizontal={16}
@@ -825,7 +828,7 @@ export const AdminOrderCreateForm: React.FC = () => {
       {/* Scrollable Form Content */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 110 }}
+        contentContainerStyle={{ paddingBottom: Math.max(110, insets.bottom + 90) }}
         keyboardShouldPersistTaps="handled"
       >
         <YStack paddingHorizontal={16} paddingTop={14} gap={14}>
@@ -1235,7 +1238,7 @@ export const AdminOrderCreateForm: React.FC = () => {
         borderTopColor={tokens.border}
         paddingHorizontal={16}
         paddingVertical={12}
-        paddingBottom={24}
+        paddingBottom={Math.max(24, insets.bottom + 12)}
         shadowColor="#000"
         shadowOpacity={0.08}
         shadowRadius={12}

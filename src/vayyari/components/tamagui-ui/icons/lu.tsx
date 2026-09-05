@@ -1,25 +1,5 @@
 import React from 'react';
-import {
-  Pencil,
-  Plus,
-  MapPin,
-  X,
-  Sparkles,
-  ClipboardPaste,
-  Clipboard,
-  ArrowLeft,
-  Check,
-  AlertTriangle,
-  Phone,
-  ExternalLink,
-  Trash2,
-  ChevronDown,
-  ChevronRight,
-  Image,
-  Building2,
-  Receipt,
-  Info,
-} from '@tamagui/lucide-icons';
+import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 
 export interface IconProps {
   size?: number;
@@ -29,29 +9,60 @@ export interface IconProps {
   className?: string;
 }
 
-const wrapIcon = (Component: React.ComponentType<any>) => {
-  const Wrapped: React.FC<IconProps> = ({ size = 16, color = '#333333', strokeWidth = 2, style }) => (
-    <Component size={size} color={color} strokeWidth={strokeWidth} style={style} />
-  );
-  return Wrapped;
-};
-
-export const LuPencil = wrapIcon(Pencil);
-export const LuPlus = wrapIcon(Plus);
-export const LuMapPin = wrapIcon(MapPin);
-export const LuX = wrapIcon(X);
-export const LuSparkles = wrapIcon(Sparkles);
-export const LuClipboardPaste = wrapIcon(ClipboardPaste);
-export const LuClipboard = wrapIcon(Clipboard);
-export const LuArrowLeft = wrapIcon(ArrowLeft);
-export const LuCheck = wrapIcon(Check);
-export const LuTriangleAlert = wrapIcon(AlertTriangle);
-export const LuPhone = wrapIcon(Phone);
-export const LuExternalLink = wrapIcon(ExternalLink);
-export const LuTrash2 = wrapIcon(Trash2);
-export const LuChevronDown = wrapIcon(ChevronDown);
-export const LuChevronRight = wrapIcon(ChevronRight);
-export const LuImage = wrapIcon(Image);
-export const LuBuilding2 = wrapIcon(Building2);
-export const LuReceipt = wrapIcon(Receipt);
-export const LuInfo = wrapIcon(Info);
+export const LuPencil: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="edit-2" size={size} color={color} style={style} />
+);
+export const LuPlus: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="plus" size={size} color={color} style={style} />
+);
+export const LuMapPin: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="map-pin" size={size} color={color} style={style} />
+);
+export const LuX: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="x" size={size} color={color} style={style} />
+);
+export const LuSparkles: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Ionicons name="sparkles" size={size} color={color} style={style} />
+);
+export const LuClipboardPaste: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="clipboard-arrow-down-outline" size={size} color={color} style={style} />
+);
+export const LuClipboard: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="clipboard-text-outline" size={size} color={color} style={style} />
+);
+export const LuArrowLeft: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="arrow-left" size={size} color={color} style={style} />
+);
+export const LuCheck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="check" size={size} color={color} style={style} />
+);
+export const LuTriangleAlert: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="alert-triangle" size={size} color={color} style={style} />
+);
+export const LuPhone: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="phone" size={size} color={color} style={style} />
+);
+export const LuExternalLink: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="external-link" size={size} color={color} style={style} />
+);
+export const LuTrash2: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="trash-2" size={size} color={color} style={style} />
+);
+export const LuChevronDown: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="chevron-down" size={size} color={color} style={style} />
+);
+export const LuChevronRight: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="chevron-right" size={size} color={color} style={style} />
+);
+export const LuImage: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="image" size={size} color={color} style={style} />
+);
+export const LuBuilding2: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="office-building" size={size} color={color} style={style} />
+);
+export const LuReceipt: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="receipt" size={size} color={color} style={style} />
+);
+export const LuInfo: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="info" size={size} color={color} style={style} />
+);
