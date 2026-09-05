@@ -51,7 +51,7 @@ export function TransactionReceiptSection({
           </Text>
           <TextInput
             accessibilityLabel="Transaction or UTR ID"
-            value={transactionId}
+            value={transactionId ?? ''}
             onChangeText={onChangeTransactionId}
             placeholder="e.g. UPI-20240902-892189 or Bank Ref"
             placeholderTextColor={tokens.textMuted}

@@ -36,7 +36,7 @@ export function CompactField({
       </Text>
       <TextInput
         accessibilityLabel={accessibilityLabel ?? label}
-        value={value}
+        value={value ?? ''}
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor={tokens.textMuted}
