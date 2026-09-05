@@ -13,7 +13,7 @@ interface InstagramAccountPickerProps {
   loading?: boolean;
 }
 
-export function InstagramAccountPicker({
+export const InstagramAccountPicker = React.memo(function InstagramAccountPicker({
   visible,
   onDismiss,
   accounts,
@@ -22,6 +22,8 @@ export function InstagramAccountPicker({
   loading = false,
 }: InstagramAccountPickerProps) {
   const theme = useTheme();
+
+  if (!visible) return null;
 
   return (
     <Portal>
@@ -114,7 +116,7 @@ export function InstagramAccountPicker({
       </Modal>
     </Portal>
   );
-}
+});
 
 const styles = StyleSheet.create({
   modalContainer: {

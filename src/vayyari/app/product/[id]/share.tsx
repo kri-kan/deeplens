@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   View,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Dimensions,
   Alert,
   ActivityIndicator as RNActivityIndicator,
@@ -51,33 +52,220 @@ async function downloadToCache(
   return result.uri;
 }
 
-function MediaTile({ media, selected, onToggle, selectionIndex }: {
-  media: MediaEntry; selected: boolean; onToggle: () => void; selectionIndex: number;
+const ThumbnailImage = React.memo(function ThumbnailImage({
+  mediaId,
+  mediaType,
+}: {
+  mediaId: string;
+  mediaType?: number;
 }) {
-  const theme = useTheme();
-  const thumbUrl = media.id && media.id !== '00000000-0000-0000-0000-000000000000'
-    ? productService.getThumbnailUrl(media.id, 'medium') : null;
+  const source = useMemo(() => {
+    const url =
+      mediaId && mediaId !== '00000000-0000-0000-0000-000000000000'
+        ? productService.getThumbnailUrl(mediaId, 'medium')
+        : null;
+    return url ? { uri: url } : null;
+  }, [mediaId]);
 
   return (
-    <TouchableOpacity activeOpacity={0.75} onPress={onToggle} style={styles.tile}>
-      {thumbUrl
-        ? <Image source={{ uri: thumbUrl }} style={styles.tileImage} contentFit="cover" />
-        : <View style={[styles.tileImage, { backgroundColor: '#222' }]} />}
-      {media.mediaType === 2 && (
-        <View style={styles.videoBadge}><Text style={styles.videoBadgeText}>▶ VIDEO</Text></View>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {source ? (
+        <Image
+          source={source}
+          style={styles.tileImage}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={mediaId}
+        />
+      ) : (
+        <View style={[styles.tileImage, { backgroundColor: '#222' }]} />
       )}
+      {mediaType === 2 && (
+        <View style={styles.videoBadge}>
+          <Text style={styles.videoBadgeText}>▶ VIDEO</Text>
+        </View>
+      )}
+    </View>
+  );
+});
+
+const MediaTile = React.memo(function MediaTile({
+  mediaId,
+  mediaType,
+  selected,
+  onToggle,
+  selectionIndex,
+  primaryColor,
+}: {
+  mediaId: string;
+  mediaType?: number;
+  selected: boolean;
+  onToggle: (id: string) => void;
+  selectionIndex: number;
+  primaryColor: string;
+}) {
+  const handlePress = useCallback(() => {
+    onToggle(mediaId);
+  }, [mediaId, onToggle]);
+
+  return (
+    <Pressable onPress={handlePress} style={styles.tile}>
+      <ThumbnailImage mediaId={mediaId} mediaType={mediaType} />
       {selected ? (
-        <View style={[styles.selectedOverlay, { borderColor: theme.colors.primary }]}>
-          <View style={[styles.selectionBadge, { backgroundColor: theme.colors.primary }]}>
+        <View style={[styles.selectedOverlay, { borderColor: primaryColor }]} pointerEvents="none">
+          <View style={[styles.selectionBadge, { backgroundColor: primaryColor }]}>
             <Text style={styles.selectionBadgeText}>{selectionIndex}</Text>
           </View>
         </View>
       ) : (
-        <View style={styles.unselectedCircle} />
+        <View style={styles.unselectedCircle} pointerEvents="none" />
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
-}
+});
+
+const PlatformSection = React.memo(function PlatformSection({
+  targetPlatform,
+  setTargetPlatform,
+  selectedAccount,
+  onOpenAccountPicker,
+  outlineVariantColor,
+  surfaceVariantColor,
+  primaryColor,
+}: {
+  targetPlatform: 'instagram' | 'whatsapp' | 'generic';
+  setTargetPlatform: (platform: 'instagram' | 'whatsapp' | 'generic') => void;
+  selectedAccount: InstagramAccountOption | null;
+  onOpenAccountPicker: () => void;
+  outlineVariantColor: string;
+  surfaceVariantColor: string;
+  primaryColor: string;
+}) {
+  return (
+    <View style={styles.platformSection}>
+      <Text variant="titleSmall" style={{ opacity: 0.7, marginBottom: 8 }}>
+        Target Platform:
+      </Text>
+      <View style={styles.platformChipRow}>
+        <Chip
+          selected={targetPlatform === 'instagram'}
+          icon="instagram"
+          onPress={() => setTargetPlatform('instagram')}
+          style={styles.platformChip}
+        >
+          Instagram
+        </Chip>
+        <Chip
+          selected={targetPlatform === 'whatsapp'}
+          icon="whatsapp"
+          onPress={() => setTargetPlatform('whatsapp')}
+          style={styles.platformChip}
+        >
+          WhatsApp
+        </Chip>
+        <Chip
+          selected={targetPlatform === 'generic'}
+          icon="share-variant"
+          onPress={() => setTargetPlatform('generic')}
+          style={styles.platformChip}
+        >
+          Other
+        </Chip>
+      </View>
+
+      {targetPlatform === 'instagram' && (
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={onOpenAccountPicker}
+          style={[
+            styles.accountSelectorCard,
+            {
+              borderColor: outlineVariantColor,
+              backgroundColor: surfaceVariantColor + '40',
+            },
+          ]}
+        >
+          <View style={styles.accountSelectorRow}>
+            <Chip icon="account-circle" compact style={{ backgroundColor: 'transparent' }}>
+              {selectedAccount ? `@${selectedAccount.username}` : 'Select Account'}
+            </Chip>
+            <Text variant="labelMedium" style={{ color: primaryColor, fontWeight: '700' }}>
+              Change
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
+const DescriptionSection = React.memo(function DescriptionSection({
+  description,
+  setDescription,
+  handleGenerate,
+  isGenerating,
+  vendorDescriptions,
+  appendVendorDescription,
+}: {
+  description: string;
+  setDescription: (text: string) => void;
+  handleGenerate: () => void;
+  isGenerating: boolean;
+  vendorDescriptions: VendorListing[];
+  appendVendorDescription: (desc: string) => void;
+}) {
+  return (
+    <View style={styles.section}>
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        Description
+      </Text>
+      <Button
+        mode="contained-tonal"
+        onPress={handleGenerate}
+        loading={isGenerating}
+        disabled={isGenerating}
+        icon="creation"
+        style={styles.generateBtn}
+      >
+        Generate AI Description (With Product ID)
+      </Button>
+
+      {vendorDescriptions.length > 0 && (
+        <View style={styles.vendorChipsSection}>
+          <Text variant="bodySmall" style={styles.vendorChipsLabel}>
+            Tap a vendor to append their description:
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.chipRow}>
+              {vendorDescriptions.map((l, idx) => (
+                <Chip
+                  key={l.id}
+                  icon="store"
+                  onPress={() => appendVendorDescription(l.description!)}
+                  style={styles.vendorChip}
+                  compact
+                >
+                  {l.vendorName || `Vendor ${idx + 1}`}
+                </Chip>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+      <TextInput
+        mode="outlined"
+        label="Caption / Description"
+        value={description}
+        onChangeText={setDescription}
+        multiline
+        numberOfLines={8}
+        style={styles.input}
+        placeholder="Enter or generate a description…"
+      />
+    </View>
+  );
+});
 
 export default function ShareProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -123,17 +311,32 @@ export default function ShareProductScreen() {
     if (product?.media) setSelectedIds(product.media.map((m) => m.id));
   }, [product?.media]);
 
-  const mediaList: MediaEntry[] = product?.media ?? [];
-  const listings: VendorListing[] = product?.listings ?? [];
-  const vendorDescriptions = listings.filter((l) => l.description?.trim());
+  const mediaList: MediaEntry[] = useMemo(() => product?.media ?? [], [product?.media]);
+  const listings: VendorListing[] = useMemo(() => product?.listings ?? [], [product?.listings]);
+  const vendorDescriptions = useMemo(() => listings.filter((l) => l.description?.trim()), [listings]);
+
+  const allMediaIds = useMemo(() => mediaList.map((m) => m.id), [mediaList]);
 
   const toggleMedia = useCallback((mediaId: string) => {
-    setSelectedIds((prev) => prev.includes(mediaId) ? prev.filter((x) => x !== mediaId) : [...prev, mediaId]);
+    setSelectedIds((prev) => {
+      const idx = prev.indexOf(mediaId);
+      return idx !== -1 ? prev.filter((x) => x !== mediaId) : [...prev, mediaId];
+    });
   }, []);
 
   const toggleAll = useCallback(() => {
-    setSelectedIds((prev) => prev.length === mediaList.length ? [] : mediaList.map((m) => m.id));
-  }, [mediaList]);
+    setSelectedIds((prev) => (prev.length === allMediaIds.length ? [] : allMediaIds));
+  }, [allMediaIds]);
+
+  const selectionMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < selectedIds.length; i++) {
+      map.set(selectedIds[i], i + 1);
+    }
+    return map;
+  }, [selectedIds]);
+
+  const allSelected = allMediaIds.length > 0 && selectedIds.length === allMediaIds.length;
 
   const handleGenerate = useCallback(async () => {
     try {
@@ -146,7 +349,7 @@ export default function ShareProductScreen() {
   }, [generateShareDescription, targetPlatform]);
 
   const appendVendorDescription = useCallback((desc: string) => {
-    setDescription((prev) => prev ? `${prev}\n\n${desc}` : desc);
+    setDescription((prev) => (prev ? `${prev}\n\n${desc}` : desc));
   }, []);
 
   const handleShare = useCallback(async () => {
@@ -241,6 +444,10 @@ export default function ShareProductScreen() {
     }
   }, [selectedIds, mediaList, description, recordShare, recordPublishEvent, targetPlatform, selectedAccount, id]);
 
+  const openAccountPicker = useCallback(() => {
+    setIsAccountPickerVisible(true);
+  }, []);
+
   if (isLoading || !product) {
     return (
       <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
@@ -248,8 +455,6 @@ export default function ShareProductScreen() {
       </View>
     );
   }
-
-  const allSelected = selectedIds.length === mediaList.length;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -264,73 +469,39 @@ export default function ShareProductScreen() {
       </Appbar.Header>
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 140 }}>
-        {/* Platform Selection */}
-        <View style={styles.platformSection}>
-          <Text variant="titleSmall" style={{ opacity: 0.7, marginBottom: 8 }}>Target Platform:</Text>
-          <View style={styles.platformChipRow}>
-            <Chip
-              selected={targetPlatform === 'instagram'}
-              icon="instagram"
-              onPress={() => setTargetPlatform('instagram')}
-              style={styles.platformChip}
-            >
-              Instagram
-            </Chip>
-            <Chip
-              selected={targetPlatform === 'whatsapp'}
-              icon="whatsapp"
-              onPress={() => setTargetPlatform('whatsapp')}
-              style={styles.platformChip}
-            >
-              WhatsApp
-            </Chip>
-            <Chip
-              selected={targetPlatform === 'generic'}
-              icon="share-variant"
-              onPress={() => setTargetPlatform('generic')}
-              style={styles.platformChip}
-            >
-              Other
-            </Chip>
-          </View>
-
-          {/* Instagram Account Selection */}
-          {targetPlatform === 'instagram' && (
-            <TouchableOpacity
-              activeOpacity={0.75}
-              onPress={() => setIsAccountPickerVisible(true)}
-              style={[styles.accountSelectorCard, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant + '40' }]}
-            >
-              <View style={styles.accountSelectorRow}>
-                <Chip icon="account-circle" compact style={{ backgroundColor: 'transparent' }}>
-                  {selectedAccount ? `@${selectedAccount.username}` : 'Select Account'}
-                </Chip>
-                <Text variant="labelMedium" style={{ color: theme.colors.primary, fontWeight: '700' }}>
-                  Change
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
+        <PlatformSection
+          targetPlatform={targetPlatform}
+          setTargetPlatform={setTargetPlatform}
+          selectedAccount={selectedAccount}
+          onOpenAccountPicker={openAccountPicker}
+          outlineVariantColor={theme.colors.outlineVariant}
+          surfaceVariantColor={theme.colors.surfaceVariant}
+          primaryColor={theme.colors.primary}
+        />
 
         <Divider style={styles.divider} />
 
         <View style={styles.sectionHeader}>
           <Text variant="titleSmall" style={{ opacity: 0.6 }}>Select media to share</Text>
-          <TouchableOpacity onPress={toggleAll}>
+          <Pressable onPress={toggleAll} hitSlop={12}>
             <Text style={[styles.selectAllText, { color: theme.colors.primary }]}>
               {allSelected ? 'Deselect All' : 'Select All'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <View style={styles.grid}>
           {mediaList.map((m) => {
-            const selIdx = selectedIds.indexOf(m.id);
+            const selIdx = selectionMap.get(m.id) || 0;
             return (
               <MediaTile
-                key={m.id} media={m} selected={selIdx !== -1}
-                selectionIndex={selIdx + 1} onToggle={() => toggleMedia(m.id)}
+                key={m.id}
+                mediaId={m.id}
+                mediaType={m.mediaType}
+                selected={selIdx > 0}
+                selectionIndex={selIdx}
+                primaryColor={theme.colors.primary}
+                onToggle={toggleMedia}
               />
             );
           })}
@@ -338,35 +509,14 @@ export default function ShareProductScreen() {
 
         <Divider style={styles.divider} />
 
-        <View style={styles.section}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Description</Text>
-          <Button mode="contained-tonal" onPress={handleGenerate} loading={isGenerating}
-            disabled={isGenerating} icon="creation" style={styles.generateBtn}>
-            Generate AI Description (With Product ID)
-          </Button>
-
-          {vendorDescriptions.length > 0 && (
-            <View style={styles.vendorChipsSection}>
-              <Text variant="bodySmall" style={styles.vendorChipsLabel}>
-                Tap a vendor to append their description:
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.chipRow}>
-                  {vendorDescriptions.map((l, idx) => (
-                    <Chip key={l.id} icon="store" onPress={() => appendVendorDescription(l.description!)}
-                      style={styles.vendorChip} compact>
-                      {l.vendorName || `Vendor ${idx + 1}`}
-                    </Chip>
-                  ))}
-                </View>
-              </ScrollView>
-            </View>
-          )}
-
-          <TextInput mode="outlined" label="Caption / Description" value={description}
-            onChangeText={setDescription} multiline numberOfLines={8} style={styles.input}
-            placeholder="Enter or generate a description…" />
-        </View>
+        <DescriptionSection
+          description={description}
+          setDescription={setDescription}
+          handleGenerate={handleGenerate}
+          isGenerating={isGenerating}
+          vendorDescriptions={vendorDescriptions}
+          appendVendorDescription={appendVendorDescription}
+        />
       </ScrollView>
 
       <Surface style={[styles.footer, { paddingBottom: insets.bottom + 12 }]} elevation={4}>
