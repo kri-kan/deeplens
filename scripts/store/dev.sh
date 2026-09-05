@@ -13,19 +13,19 @@ cd "${STORE_DIR}"
 case "${MODE}" in
   storybook)
     echo "Starting Storybook Workbench on port 6006 / Expo web..."
-    EXPO_PUBLIC_STORYBOOK_ENABLED=true npx expo start --web --port 8082
+    EXPO_PUBLIC_STORYBOOK_ENABLED=true npx expo start --web --port 6006
     ;;
   web)
     echo "Starting Store Web Preview on port 8082..."
     npx expo start --web --port 8082
     ;;
   android)
-    echo "Starting Store on Android..."
-    npx expo start --android
+    echo "Starting Store on Android on port 8082..."
+    npx expo start --android --port 8082
     ;;
   ios)
-    echo "Starting Store on iOS..."
-    npx expo start --ios
+    echo "Starting Store on iOS on port 8082..."
+    npx expo start --ios --port 8082
     ;;
   *)
     echo "Unknown mode: ${MODE}. Valid options: web, storybook, android, ios"
