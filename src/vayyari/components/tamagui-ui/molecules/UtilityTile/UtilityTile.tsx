@@ -47,21 +47,21 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
           alignItems="center"
           justifyContent="center"
           position="relative"
-          minHeight={34}
+          minHeight={40}
         >
           {item.icon}
 
           {item.badge && (
             <XStack
               position="absolute"
-              top={-4}
-              right={-8}
+              top={-5}
+              right={-10}
               backgroundColor={tokens.accent}
-              paddingHorizontal={4}
+              paddingHorizontal={5}
               paddingVertical={1}
               borderRadius={tokens.radius.full}
             >
-              <Text fontSize={8} fontWeight="800" color="#ffffff">
+              <Text fontSize={9} fontWeight="800" color="#ffffff">
                 {item.badge}
               </Text>
             </XStack>
@@ -70,13 +70,13 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
 
         {/* Small Label Below */}
         <Text
-          fontSize={11}
+          fontSize={12}
           fontWeight="600"
           color={tokens.text}
           textAlign="center"
           numberOfLines={1}
-          lineHeight={13}
-          maxWidth={76}
+          lineHeight={14}
+          maxWidth={80}
         >
           {item.title}
         </Text>

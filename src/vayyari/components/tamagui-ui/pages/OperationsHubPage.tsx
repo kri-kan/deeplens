@@ -73,22 +73,22 @@ export function OperationsHubPage({
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
-      {/* Top Header - Compact */}
+      {/* Top Header - with slightly larger heading */}
       <XStack
         paddingTop={topInset}
-        height={48 + topInset}
+        height={52 + topInset}
         alignItems="center"
         justifyContent="space-between"
-        paddingHorizontal={12}
+        paddingHorizontal={14}
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
       >
-        <YStack gap={0}>
-          <Text fontSize={15} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+        <YStack gap={1}>
+          <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
             Operations Hub
           </Text>
-          <Text fontSize={10} color={tokens.textMuted}>
+          <Text fontSize={11} color={tokens.textMuted}>
             Operational modules & utilities
           </Text>
         </YStack>
@@ -101,8 +101,8 @@ export function OperationsHubPage({
             onPress={onOpenAiAssistant}
           >
             <XStack
-              paddingVertical={4}
-              paddingHorizontal={8}
+              paddingVertical={5}
+              paddingHorizontal={9}
               borderRadius={tokens.radius.full}
               backgroundColor={`${tokens.accent}14`}
               borderWidth={1}
@@ -110,8 +110,8 @@ export function OperationsHubPage({
               alignItems="center"
               gap={4}
             >
-              <LuSparkles size={13} color={tokens.accent} />
-              <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+              <LuSparkles size={14} color={tokens.accent} />
+              <Text fontSize={12} fontWeight="700" color={tokens.accent}>
                 AI
               </Text>
             </XStack>
@@ -124,25 +124,25 @@ export function OperationsHubPage({
             onPress={onOpenSettings}
           >
             <XStack
-              padding={6}
+              padding={7}
               borderRadius={tokens.radius.full}
               backgroundColor={tokens.surfaceRaised}
               alignItems="center"
               justifyContent="center"
             >
-              <LuSettings size={16} color={tokens.text} />
+              <LuSettings size={17} color={tokens.text} />
             </XStack>
           </Pressable>
         </XStack>
       </XStack>
 
-      {/* Main Scrollable Body - High Density */}
+      {/* Main Scrollable Body */}
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: 12,
-          paddingTop: 8,
+          paddingTop: 10,
           paddingBottom: Math.max(24, bottomInset + 16),
-          gap: 10,
+          gap: 14,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -153,11 +153,11 @@ export function OperationsHubPage({
           borderWidth={1}
           borderColor={tokens.border}
           paddingHorizontal={10}
-          height={36}
+          height={38}
           alignItems="center"
           gap={6}
         >
-          <LuSearch size={14} color={tokens.textMuted} />
+          <LuSearch size={15} color={tokens.textMuted} />
           <TextInput
             accessibilityLabel="Search operational tools input"
             value={query}
@@ -181,7 +181,7 @@ export function OperationsHubPage({
                 borderRadius={tokens.radius.full}
                 backgroundColor={tokens.surfaceRaised}
               >
-                <LuX size={10} color={tokens.textMuted} />
+                <LuX size={11} color={tokens.textMuted} />
               </XStack>
             </Pressable>
           )}
@@ -223,8 +223,8 @@ export function OperationsHubPage({
             </Text>
           </YStack>
         ) : (
-          /* Render Categorized Groups - High Density */
-          <YStack gap={10}>
+          /* Render Categorized Groups */
+          <YStack gap={14}>
             {filteredGroups.map((group) => (
               <UtilitySection
                 key={group.id}

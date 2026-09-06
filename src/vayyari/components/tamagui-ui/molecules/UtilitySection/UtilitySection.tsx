@@ -20,24 +20,24 @@ export function UtilitySection({
 
   return (
     <YStack gap={8}>
-      {/* Section Header */}
-      <XStack alignItems="center" gap={6} paddingHorizontal={4}>
+      {/* Section Header with increased heading size */}
+      <XStack alignItems="center" gap={8} paddingHorizontal={4}>
         <Text
-          fontSize={11}
+          fontSize={13}
           fontWeight="800"
-          color={tokens.textMuted}
+          color={tokens.text}
           textTransform="uppercase"
           letterSpacing={0.8}
         >
           {title}
         </Text>
         <XStack
-          paddingHorizontal={5}
-          paddingVertical={1}
+          paddingHorizontal={6}
+          paddingVertical={1.5}
           borderRadius={tokens.radius.full}
           backgroundColor={tokens.surfaceRaised}
         >
-          <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
+          <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
             {items.length}
           </Text>
         </XStack>
@@ -48,7 +48,7 @@ export function UtilitySection({
         paddingVertical={2}
         paddingHorizontal={0}
         flexWrap="wrap"
-        rowGap={12}
+        rowGap={14}
       >
         {items.map((item) => (
           <YStack key={item.id} width="25%" alignItems="center">
