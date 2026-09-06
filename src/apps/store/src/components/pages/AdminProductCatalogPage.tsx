@@ -8,7 +8,6 @@ import {
   LuSlidersHorizontal,
   LuPlus,
   LuPackage,
-  LuCheck,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
@@ -133,7 +132,7 @@ export function AdminProductCatalogPage({
       {/* Top Header */}
       <XStack
         paddingTop={topInset}
-        height={52 + topInset}
+        height={50 + topInset}
         alignItems="center"
         justifyContent="space-between"
         paddingHorizontal={12}
@@ -141,7 +140,7 @@ export function AdminProductCatalogPage({
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
       >
-        <YStack gap={1}>
+        <YStack gap={0}>
           <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
             Product Catalog
           </Text>
@@ -219,7 +218,7 @@ export function AdminProductCatalogPage({
       {/* Search Input Bar */}
       <XStack
         paddingHorizontal={12}
-        paddingVertical={8}
+        paddingVertical={6}
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
@@ -227,13 +226,13 @@ export function AdminProductCatalogPage({
         <XStack
           flex={1}
           backgroundColor={tokens.surfaceRaised}
-          borderRadius={tokens.radius.md}
+          borderRadius={tokens.radius.sm}
           paddingHorizontal={10}
-          height={38}
+          height={36}
           alignItems="center"
           gap={8}
         >
-          <LuSearch size={15} color={tokens.textMuted} />
+          <LuSearch size={14} color={tokens.textMuted} />
           <TextInput
             accessibilityLabel="Search catalog items input"
             value={internalQuery}
@@ -257,54 +256,62 @@ export function AdminProductCatalogPage({
               style={{ cursor: 'pointer' } as any}
             >
               <XStack
-                padding={3}
+                padding={2}
                 borderRadius={tokens.radius.full}
                 backgroundColor={tokens.border}
               >
-                <LuX size={11} color={tokens.textMuted} />
+                <LuX size={10} color={tokens.textMuted} />
               </XStack>
             </Pressable>
           )}
         </XStack>
       </XStack>
 
-      {/* Active Filter Chips Bar (if any) */}
+      {/* Active Filter Chips Bar (Compact 34px height row) */}
       {filterChips.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            gap: 6,
-          }}
+        <XStack
+          height={34}
+          alignItems="center"
+          paddingHorizontal={10}
+          backgroundColor={tokens.surface}
+          borderBottomWidth={1}
+          borderBottomColor={tokens.border}
         >
-          {filterChips.map((chip) => (
-            <XStack
-              key={chip.id}
-              alignItems="center"
-              gap={4}
-              paddingVertical={3}
-              paddingHorizontal={8}
-              borderRadius={tokens.radius.full}
-              backgroundColor={`${tokens.accent}14`}
-              borderWidth={1}
-              borderColor={`${tokens.accent}30`}
-            >
-              <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                {chip.label}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove filter ${chip.label}`}
-                onPress={() => onRemoveFilterChip?.(chip.id)}
-                style={{ cursor: 'pointer' } as any}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            {filterChips.map((chip) => (
+              <XStack
+                key={chip.id}
+                alignItems="center"
+                height={24}
+                gap={4}
+                paddingHorizontal={8}
+                borderRadius={tokens.radius.full}
+                backgroundColor={`${tokens.accent}14`}
+                borderWidth={1}
+                borderColor={`${tokens.accent}30`}
               >
-                <LuX size={11} color={tokens.accent} />
-              </Pressable>
-            </XStack>
-          ))}
-        </ScrollView>
+                <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                  {chip.label}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove filter ${chip.label}`}
+                  onPress={() => onRemoveFilterChip?.(chip.id)}
+                  style={{ cursor: 'pointer' } as any}
+                >
+                  <LuX size={11} color={tokens.accent} />
+                </Pressable>
+              </XStack>
+            ))}
+          </ScrollView>
+        </XStack>
       )}
 
       {/* Horizontal Category Tabs */}
@@ -314,11 +321,12 @@ export function AdminProductCatalogPage({
         onSelectCategory={handleCategorySelect}
       />
 
-      {/* Product Grid Area */}
+      {/* Product Grid Area - Sits immediately beneath category pills */}
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingHorizontal: 10,
-          paddingTop: 8,
+          paddingHorizontal: 8,
+          paddingTop: 4,
           paddingBottom: Math.max(32, bottomInset + 56),
         }}
         showsVerticalScrollIndicator={false}
@@ -344,28 +352,28 @@ export function AdminProductCatalogPage({
             borderRadius={tokens.radius.md}
             borderWidth={1}
             borderColor={tokens.border}
-            paddingVertical={48}
+            paddingVertical={44}
             paddingHorizontal={20}
             alignItems="center"
             justifyContent="center"
-            gap={10}
-            marginTop={20}
+            gap={8}
+            marginTop={16}
           >
             <XStack
-              width={48}
-              height={48}
+              width={44}
+              height={44}
               borderRadius={tokens.radius.full}
               backgroundColor={tokens.surfaceRaised}
               alignItems="center"
               justifyContent="center"
             >
-              <LuPackage size={24} color={tokens.textMuted} />
+              <LuPackage size={22} color={tokens.textMuted} />
             </XStack>
-            <Text fontSize={15} fontWeight="700" color={tokens.text}>
+            <Text fontSize={14} fontWeight="700" color={tokens.text}>
               No Products Found
             </Text>
             <Text
-              fontSize={12}
+              fontSize={11}
               color={tokens.textMuted}
               textAlign="center"
               maxWidth={260}

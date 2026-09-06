@@ -202,17 +202,39 @@ export const MultiSelectionMode: Story = {
  * 5. Filtered State: Active filters with filter chips bar and counter badge.
  */
 export const FilteredResults: Story = {
-  name: '5. Filtered (Starred & Sarees)',
-  decorators: [withFormFactor('mobile', 'Product Catalog - Filtered')],
+  name: "5. Filtered (Starred & Sarees)",
+  decorators: [withFormFactor("mobile", "Product Catalog - Filtered")],
   args: {
     disableSafeArea: true,
-    products: MOCK_PRODUCTS.filter((p) => p.isStarred),
-    activeCategoryId: 'saree',
+    products: [
+      MOCK_PRODUCTS[0],
+      {
+        id: "sku-010",
+        productCode: "SAR-PAT-110",
+        title: "Patan Patola Double Ikat",
+        price: 13500,
+        category: "saree",
+        imageUri: "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=400&q=80",
+        isStarred: true,
+        timeAgo: "4h ago",
+      },
+      {
+        id: "sku-011",
+        productCode: "SAR-KAN-111",
+        title: "Pure Mysore Silk Saree",
+        price: 7200,
+        category: "saree",
+        imageUri: "https://images.unsplash.com/photo-1609357605129-26f69add5d6e?w=400&q=80",
+        isStarred: true,
+        timeAgo: "1d ago",
+      },
+    ],
+    activeCategoryId: "saree",
     activeFilterCount: 3,
     filterChips: [
-      { id: 'f-star', label: '⭐ Starred Only' },
-      { id: 'f-price', label: '💰 ₹5,000 - ₹15,000' },
-      { id: 'f-date', label: '📅 Last 7 Days' },
+      { id: "f-star", label: "⭐ Starred Only" },
+      { id: "f-price", label: "💰 ₹5,000 - ₹15,000" },
+      { id: "f-date", label: "📅 Last 7 Days" },
     ],
   },
 };

@@ -33,65 +33,71 @@ export function CatalogCategoryPills({
   const { tokens } = useTheme();
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        gap: 8,
-      }}
+    <XStack
+      height={42}
+      alignItems="center"
+      backgroundColor={tokens.background}
     >
-      {categories.map((cat) => {
-        const isActive = cat.id.toLowerCase() === activeCategoryId.toLowerCase();
-        return (
-          <Pressable
-            key={cat.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Filter by ${cat.label}`}
-            onPress={() => onSelectCategory(cat.id)}
-            style={{ cursor: 'pointer' } as any}
-          >
-            <XStack
-              alignItems="center"
-              gap={6}
-              paddingVertical={6}
-              paddingHorizontal={12}
-              borderRadius={tokens.radius.full}
-              backgroundColor={isActive ? tokens.accent : tokens.surface}
-              borderWidth={1}
-              borderColor={isActive ? tokens.accent : tokens.border}
-              pressStyle={{ opacity: 0.8 }}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          alignItems: 'center',
+          paddingHorizontal: 10,
+          gap: 6,
+        }}
+      >
+        {categories.map((cat) => {
+          const isActive = cat.id.toLowerCase() === activeCategoryId.toLowerCase();
+          return (
+            <Pressable
+              key={cat.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter by ${cat.label}`}
+              onPress={() => onSelectCategory(cat.id)}
+              style={{ cursor: 'pointer' } as any}
             >
-              {cat.icon}
-              <Text
-                fontSize={12}
-                fontWeight={isActive ? '800' : '600'}
-                color={isActive ? '#ffffff' : tokens.text}
+              <XStack
+                alignItems="center"
+                height={28}
+                gap={5}
+                paddingHorizontal={10}
+                borderRadius={tokens.radius.full}
+                backgroundColor={isActive ? tokens.accent : tokens.surface}
+                borderWidth={1}
+                borderColor={isActive ? tokens.accent : tokens.border}
+                pressStyle={{ opacity: 0.8 }}
               >
-                {cat.label}
-              </Text>
-
-              {cat.count !== undefined && (
-                <XStack
-                  paddingHorizontal={5}
-                  paddingVertical={1}
-                  borderRadius={tokens.radius.full}
-                  backgroundColor={isActive ? 'rgba(255,255,255,0.25)' : tokens.surfaceRaised}
+                {cat.icon}
+                <Text
+                  fontSize={11}
+                  fontWeight={isActive ? '800' : '600'}
+                  color={isActive ? '#ffffff' : tokens.text}
                 >
-                  <Text
-                    fontSize={10}
-                    fontWeight="700"
-                    color={isActive ? '#ffffff' : tokens.textMuted}
+                  {cat.label}
+                </Text>
+
+                {cat.count !== undefined && (
+                  <XStack
+                    paddingHorizontal={4}
+                    paddingVertical={1}
+                    borderRadius={tokens.radius.full}
+                    backgroundColor={isActive ? 'rgba(255,255,255,0.25)' : tokens.surfaceRaised}
                   >
-                    {cat.count}
-                  </Text>
-                </XStack>
-              )}
-            </XStack>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+                    <Text
+                      fontSize={9}
+                      fontWeight="700"
+                      color={isActive ? '#ffffff' : tokens.textMuted}
+                    >
+                      {cat.count}
+                    </Text>
+                  </XStack>
+                )}
+              </XStack>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </XStack>
   );
 }
