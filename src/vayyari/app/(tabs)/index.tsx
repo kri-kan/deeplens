@@ -43,7 +43,7 @@ const OPERATIONAL_UTILITIES: RawUtilityItem[] = [
   {
     id: 'gen-id',
     title: 'Generate ID',
-    icon: <LuHash size={22} color="#6200ee" />,
+    icon: <LuHash size={30} color="#6200ee" />,
     route: '/utilities/order-id-generator',
     color: '#6200ee',
     permission: PERMISSIONS.ORDERS_VIEW,
@@ -51,7 +51,7 @@ const OPERATIONAL_UTILITIES: RawUtilityItem[] = [
   {
     id: 'customers',
     title: 'Customers',
-    icon: <LuUsers size={22} color="#3f51b5" />,
+    icon: <LuUsers size={30} color="#3f51b5" />,
     route: '/utilities/customer-management',
     color: '#3f51b5',
     permission: PERMISSIONS.CUSTOMERS_VIEW,
@@ -62,7 +62,7 @@ const PRODUCT_UTILITIES: RawUtilityItem[] = [
   {
     id: 'view-catalog',
     title: 'Catalog',
-    icon: <LuList size={22} color="#6200ee" />,
+    icon: <LuList size={30} color="#6200ee" />,
     route: '/utilities/product-list',
     color: '#6200ee',
     permission: PERMISSIONS.CATALOG_VIEW,
@@ -70,7 +70,7 @@ const PRODUCT_UTILITIES: RawUtilityItem[] = [
   {
     id: 'create-product',
     title: 'Create',
-    icon: <LuPlus size={22} color="#00a86b" />,
+    icon: <LuPlus size={30} color="#00a86b" />,
     route: '/utilities/create-product',
     color: '#00a86b',
     permission: PERMISSIONS.CATALOG_CREATE,
@@ -81,7 +81,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'system-dashboard',
     title: 'System',
-    icon: <LuMonitor size={22} color="#607D8B" />,
+    icon: <LuMonitor size={30} color="#607D8B" />,
     route: '/utilities/system-dashboard',
     color: '#607D8B',
     permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
@@ -89,7 +89,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'master-data',
     title: 'Master Data',
-    icon: <LuDatabase size={22} color="#673AB7" />,
+    icon: <LuDatabase size={30} color="#673AB7" />,
     route: '/system/master-data',
     color: '#673AB7',
     permission: PERMISSIONS.SYSTEM_MASTER_DATA_EDIT,
@@ -97,7 +97,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'media-settings',
     title: 'Media',
-    icon: <LuImage size={22} color="#ff5722" />,
+    icon: <LuImage size={30} color="#ff5722" />,
     route: '/utilities/media-settings',
     color: '#ff5722',
     permission: PERMISSIONS.SYSTEM_MEDIA_RULES_EDIT,
@@ -105,7 +105,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'insta-explorer',
     title: 'Explorer',
-    icon: <RiInstagramLine size={22} color="#E1306C" />,
+    icon: <RiInstagramLine size={30} color="#E1306C" />,
     route: '/utilities/instagram-explorer',
     color: '#E1306C',
     permission: PERMISSIONS.INSTAGRAM_VIEW,
@@ -113,7 +113,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'youtube-dashboard',
     title: 'YouTube',
-    icon: <LuYoutube size={22} color="#FF0000" />,
+    icon: <LuYoutube size={30} color="#FF0000" />,
     route: '/utilities/youtube-dashboard',
     color: '#FF0000',
     permission: PERMISSIONS.CATALOG_VIEW,
@@ -121,7 +121,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'quick-links',
     title: 'Links',
-    icon: <LuLink size={22} color="#2196F3" />,
+    icon: <LuLink size={30} color="#2196F3" />,
     route: '/utilities/quick-links',
     color: '#2196F3',
     permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
@@ -129,7 +129,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'whatsapp-mgmt',
     title: 'WhatsApp',
-    icon: <RiWhatsappLine size={22} color="#25D366" />,
+    icon: <RiWhatsappLine size={30} color="#25D366" />,
     route: '/utilities/whatsapp',
     color: '#25D366',
     permission: PERMISSIONS.WHATSAPP_VIEW,
@@ -137,7 +137,7 @@ const SYSTEM_UTILITIES: RawUtilityItem[] = [
   {
     id: 'playground',
     title: 'Playground',
-    icon: <LuFlaskConical size={22} color="#9C27B0" />,
+    icon: <LuFlaskConical size={30} color="#9C27B0" />,
     route: '/system/playground',
     color: '#9C27B0',
     permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
@@ -148,7 +148,7 @@ const COMMUNICATION_UTILITIES: RawUtilityItem[] = [
   {
     id: 'campaigns',
     title: 'Campaigns',
-    icon: <LuMegaphone size={22} color="#FF9800" />,
+    icon: <LuMegaphone size={30} color="#FF9800" />,
     route: '/utilities/communication-management',
     color: '#FF9800',
     permission: PERMISSIONS.WHATSAPP_BROADCAST,
@@ -159,7 +159,7 @@ const ADMIN_UTILITIES: RawUtilityItem[] = [
   {
     id: 'user-directory',
     title: 'Users',
-    icon: <LuUsers size={22} color="#6200ee" />,
+    icon: <LuUsers size={30} color="#6200ee" />,
     route: '/system/users',
     color: '#6200ee',
     permission: PERMISSIONS.USERS_VIEW,
@@ -167,7 +167,7 @@ const ADMIN_UTILITIES: RawUtilityItem[] = [
   {
     id: 'roles-access',
     title: 'Roles',
-    icon: <LuShield size={22} color="#00897B" />,
+    icon: <LuShield size={30} color="#00897B" />,
     route: '/system/roles',
     color: '#00897B',
     permission: PERMISSIONS.ROLES_MANAGE,

@@ -21,7 +21,6 @@ export interface UtilityTileProps {
 
 export function UtilityTile({ item, onPress }: UtilityTileProps) {
   const { tokens } = useTheme();
-  const tileColor = item.color || tokens.accent;
 
   return (
     <Pressable
@@ -39,27 +38,24 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
       <YStack
         alignItems="center"
         justifyContent="center"
-        gap={4}
+        gap={6}
         width="100%"
-        pressStyle={{ opacity: 0.7, scale: 0.94 }}
+        pressStyle={{ opacity: 0.6, scale: 0.92 }}
       >
-        {/* Compact high-density Icon Box */}
+        {/* Pure Icon Button without background box */}
         <YStack
-          width={44}
-          height={44}
-          borderRadius={tokens.radius.sm}
-          backgroundColor={`${tileColor}16`}
           alignItems="center"
           justifyContent="center"
           position="relative"
+          minHeight={34}
         >
           {item.icon}
 
           {item.badge && (
             <XStack
               position="absolute"
-              top={-3}
-              right={-4}
+              top={-4}
+              right={-8}
               backgroundColor={tokens.accent}
               paddingHorizontal={4}
               paddingVertical={1}
@@ -80,7 +76,7 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
           textAlign="center"
           numberOfLines={1}
           lineHeight={13}
-          maxWidth={74}
+          maxWidth={76}
         >
           {item.title}
         </Text>

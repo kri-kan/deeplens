@@ -19,8 +19,8 @@ export function UtilitySection({
   if (items.length === 0) return null;
 
   return (
-    <YStack gap={4}>
-      {/* Section Header - High Density */}
+    <YStack gap={8}>
+      {/* Section Header */}
       <XStack alignItems="center" gap={6} paddingHorizontal={4}>
         <Text
           fontSize={11}
@@ -43,16 +43,12 @@ export function UtilitySection({
         </XStack>
       </XStack>
 
-      {/* High-density grid - compact container with tight spacing */}
+      {/* 4-column Grid of Pure Icon Buttons (No Section Background) */}
       <XStack
-        backgroundColor={tokens.surface}
-        borderRadius={tokens.radius.md}
-        borderWidth={1}
-        borderColor={tokens.border}
-        paddingVertical={6}
-        paddingHorizontal={2}
+        paddingVertical={2}
+        paddingHorizontal={0}
         flexWrap="wrap"
-        rowGap={6}
+        rowGap={12}
       >
         {items.map((item) => (
           <YStack key={item.id} width="25%" alignItems="center">
