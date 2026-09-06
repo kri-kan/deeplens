@@ -136,3 +136,16 @@ export const LuHash: React.FC<IconProps> = ({ size = 16, color = "#333333", styl
 export const LuLayoutDashboard: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="layout" size={size} color={color} style={style} />
 );
+
+export const LuStar: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Ionicons name="star" size={size} color={color} style={style} />
+);
+export const LuSlidersHorizontal: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="sliders" size={size} color={color} style={style} />
+);
+export const LuArchive: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="archive" size={size} color={color} style={style} />
+);
+export const LuRotateCcw: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="rotate-ccw" size={size} color={color} style={style} />
+);

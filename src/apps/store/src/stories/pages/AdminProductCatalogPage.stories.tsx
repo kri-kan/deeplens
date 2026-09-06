@@ -119,6 +119,7 @@ const meta: Meta<StoryProps> = {
     disableSafeArea: false,
     products: MOCK_PRODUCTS,
     activeCategoryId: 'all',
+    searchQuery: '',
   },
   argTypes: {
     ...THEME_ARG_TYPES,
