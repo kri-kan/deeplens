@@ -6,7 +6,7 @@ import { LuCopy, LuCheck, LuPencil, LuTag } from '../../icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge } from '../../atoms/TimestampBadge';
 import { StatusBadge } from '../../atoms/StatusBadge';
-import { openPlatformHandle } from '@/utils/platformLink';
+import { openPlatformHandle, formatDisplayHandle } from '@/utils/platformLink';
 
 export interface OrderIdHistoryEntry {
   id: string;
@@ -45,6 +45,7 @@ export function OrderIdHistoryItem({
 
   const contactHandle =
     item.customerPhone || item.instagramHandle || item.sourceHandle || '';
+  const displayHandle = formatDisplayHandle(item.source, contactHandle);
 
   const handleCopy = (includePrefix: boolean) => {
     const type = includePrefix ? 'prefix' : 'raw';
@@ -156,13 +157,13 @@ export function OrderIdHistoryItem({
             )}
           </XStack>
 
-          {/* Subtitle: Handle (Clickable Deep-Link) + Relative Timestamp */}
+          {/* Subtitle: Handle (Clean formatted handle) + Relative Timestamp */}
           <XStack alignItems="center" gap={8} flexWrap="wrap">
-            {contactHandle ? (
+            {displayHandle ? (
               <TouchableOpacity
                 activeOpacity={0.7}
                 accessibilityRole="link"
-                accessibilityLabel={`Open ${contactHandle} on ${item.source}`}
+                accessibilityLabel={`Open ${displayHandle} on ${item.source}`}
                 onPress={handleOpenPlatform}
                 style={{ cursor: 'pointer' } as any}
               >
@@ -173,11 +174,11 @@ export function OrderIdHistoryItem({
                   textDecorationLine="underline"
                   textDecorationColor={`${tokens.text}33`}
                 >
-                  {contactHandle}
+                  {displayHandle}
                 </Text>
               </TouchableOpacity>
             ) : null}
-            {contactHandle && (
+            {displayHandle && (
               <Text fontSize={11} color={tokens.textMuted}>
                 •
               </Text>

@@ -4,7 +4,7 @@ import { YStack, XStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramFill } from 'react-icons/ri';
 import { LuCopy, LuCheck, LuSparkles, LuPhone, LuTag } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
-import { openPlatformHandle } from '../../../utils/platformLink';
+import { openPlatformHandle, formatDisplayHandle } from '../../../utils/platformLink';
 
 export type GeneratorSource = 'whatsapp' | 'instagram' | null;
 export type GeneratorPaymentMode = 'cod' | 'prepaid' | null;
@@ -85,6 +85,10 @@ export function OrderIdGeneratorCard({
     }
     return false;
   };
+
+  const generatedDisplayHandle = generatedEntry
+    ? formatDisplayHandle(generatedEntry.source, generatedEntry.sourceHandle)
+    : '';
 
   return (
     <YStack
@@ -380,11 +384,11 @@ export function OrderIdGeneratorCard({
                   )}
                 </XStack>
                 <XStack alignItems="center" gap={6} flexWrap="wrap">
-                  {generatedEntry.sourceHandle ? (
+                  {generatedDisplayHandle ? (
                     <TouchableOpacity
                       activeOpacity={0.7}
                       accessibilityRole="link"
-                      accessibilityLabel={`Open ${generatedEntry.sourceHandle} on ${generatedEntry.source}`}
+                      accessibilityLabel={`Open ${generatedDisplayHandle} on ${generatedEntry.source}`}
                       onPress={() => handleOpenPlatform(generatedEntry.source, generatedEntry.sourceHandle)}
                       style={{ cursor: 'pointer' } as any}
                     >
@@ -395,11 +399,11 @@ export function OrderIdGeneratorCard({
                         textDecorationLine="underline"
                         textDecorationColor={`${tokens.text}33`}
                       >
-                        {generatedEntry.sourceHandle}
+                        {generatedDisplayHandle}
                       </Text>
                     </TouchableOpacity>
                   ) : null}
-                  {generatedEntry.sourceHandle && (
+                  {generatedDisplayHandle && (
                     <Text fontSize={10} color={tokens.textMuted}>
                       •
                     </Text>

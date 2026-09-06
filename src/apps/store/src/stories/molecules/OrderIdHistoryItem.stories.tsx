@@ -69,3 +69,16 @@ export const DeletedOrder: Story = {
     },
   },
 };
+
+export const InstagramFullUrlHandle: Story = {
+  name: 'Instagram with Full URL (Clean Handle Display)',
+  args: {
+    item: {
+      id: '849202',
+      source: 'instagram',
+      paymentMode: 'prepaid',
+      timestamp: new Date().toISOString(),
+      instagramHandle: 'https://www.instagram.com/ananya_designs/?hl=en',
+    },
+  },
+};

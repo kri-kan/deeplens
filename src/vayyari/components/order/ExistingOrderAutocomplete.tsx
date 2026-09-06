@@ -4,6 +4,7 @@ import { Surface, Text, TextInput, IconButton, useTheme, SegmentedButtons, Activ
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import { OrderIdEntry } from '@/types/orders';
+import { formatDisplayHandle } from '@/utils/platformLink';
 
 interface ExistingOrderAutocompleteProps {
   mode: 'create_new' | 'attach_existing';
@@ -133,7 +134,7 @@ export const ExistingOrderAutocomplete: React.FC<ExistingOrderAutocompleteProps>
                   )}
                   {selectedOrderDetails.instagramHandle && (
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurface }}>
-                      📸 {selectedOrderDetails.instagramHandle}
+                      📸 {formatDisplayHandle('instagram', selectedOrderDetails.instagramHandle)}
                     </Text>
                   )}
                 </View>
@@ -175,7 +176,7 @@ export const ExistingOrderAutocomplete: React.FC<ExistingOrderAutocompleteProps>
                     </View>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
                       {item.customerPhone ? `📞 ${item.customerPhone}` : ''}{' '}
-                      {item.instagramHandle ? `📸 ${item.instagramHandle}` : ''}{' '}
+                      {item.instagramHandle ? `📸 ${formatDisplayHandle('instagram', item.instagramHandle)}` : ''}{' '}
                       {item.customerAddress ? `🏠 ${item.customerAddress}` : ''}
                     </Text>
                   </TouchableOpacity>

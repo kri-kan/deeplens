@@ -6,6 +6,7 @@ import { useTheme } from '../../../theme';
 import { OrderIdHistoryEntry } from '../OrderIdHistoryItem';
 import { RiWhatsappFill, RiInstagramFill } from 'react-icons/ri';
 import { LuPhone, LuRefreshCw, LuCheck } from 'react-icons/lu';
+import { formatDisplayHandle } from '../../../utils/platformLink';
 
 export interface OrderIdEditSheetProps {
   visible: boolean;
@@ -43,13 +44,20 @@ export function OrderIdEditSheet({
           ? 'prepaid'
           : null;
       setEditPaymentMode(mode);
-      setEditHandle(item.customerPhone || item.instagramHandle || item.sourceHandle || '');
+      const rawHandle = item.customerPhone || item.instagramHandle || item.sourceHandle || '';
+      const initialHandle = item.source?.toLowerCase() === 'instagram'
+        ? formatDisplayHandle('instagram', rawHandle)
+        : rawHandle;
+      setEditHandle(initialHandle);
     }
   }, [item]);
 
   if (!item) return null;
 
-  const originalHandle = item.customerPhone || item.instagramHandle || item.sourceHandle || '';
+  const rawOriginalHandle = item.customerPhone || item.instagramHandle || item.sourceHandle || '';
+  const originalHandle = item.source?.toLowerCase() === 'instagram'
+    ? formatDisplayHandle('instagram', rawOriginalHandle)
+    : rawOriginalHandle;
   const originalMode =
     item.paymentMode?.toLowerCase() === 'cod'
       ? 'cod'

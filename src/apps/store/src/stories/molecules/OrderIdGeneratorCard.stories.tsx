@@ -86,3 +86,20 @@ export const WithGeneratedIDBanner: Story = {
     },
   },
 };
+
+export const WithInstagramUrlBanner: Story = {
+  name: 'With Instagram URL Banner (Clean Handle Display)',
+  args: {
+    selectedSource: null,
+    paymentMode: null,
+    sourceHandle: '',
+    generatedEntry: {
+      id: '849205',
+      source: 'instagram',
+      paymentMode: 'prepaid',
+      timestamp: new Date().toISOString(),
+      sourceHandle: 'https://instagram.com/krikan_handlooms/',
+      isNew: true,
+    },
+  },
+};

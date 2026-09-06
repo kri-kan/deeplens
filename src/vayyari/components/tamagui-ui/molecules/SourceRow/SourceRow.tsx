@@ -1,9 +1,10 @@
 import React from 'react';
-import { Pressable, Linking } from 'react-native';
+import { Pressable } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramLine } from '@/components/tamagui-ui/icons/ri';
 import { useTheme } from '@/theme';
 import { StatusBadge } from '../../atoms/StatusBadge';
+import { openPlatformHandle, formatDisplayHandle } from '@/utils/platformLink';
 
 export type OrderSource = 'whatsapp' | 'instagram' | null;
 export type PaymentType = 'cod' | 'prepaid';
@@ -22,22 +23,12 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
 
   const handleOpenSourceChat = () => {
     if (!sourceContact) return;
-    if (source === 'whatsapp') {
-      const clean = sourceContact.replace(/[^0-9]/g, '');
-      if (clean) {
-        const url = `https://wa.me/${clean}`;
-        if (typeof window !== 'undefined') window.open(url, '_blank');
-        else Linking.openURL(url);
-      }
-    } else if (source === 'instagram') {
-      const clean = sourceContact.replace(/^@/, '').trim();
-      if (clean) {
-        const url = `https://ig.me/m/${clean}`;
-        if (typeof window !== 'undefined') window.open(url, '_blank');
-        else Linking.openURL(url);
-      }
-    }
+    openPlatformHandle(source, sourceContact);
   };
+
+  const displayContact = sourceContact
+    ? formatDisplayHandle(source, sourceContact)
+    : (source === 'whatsapp' ? 'WhatsApp' : 'Instagram');
 
   return (
     <XStack
@@ -71,7 +62,7 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
               color={tokens.text}
               hoverStyle={{ textDecorationLine: 'underline' }}
             >
-              {sourceContact || (source === 'whatsapp' ? 'WhatsApp' : 'Instagram')}
+              {displayContact}
             </Text>
           </XStack>
         </Pressable>
