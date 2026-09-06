@@ -149,3 +149,24 @@ export const LuArchive: React.FC<IconProps> = ({ size = 16, color = "#333333", s
 export const LuRotateCcw: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="rotate-ccw" size={size} color={color} style={style} />
 );
+export const LuEllipsisVertical: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="more-vertical" size={size} color={color} style={style} />
+);
+export const LuStore: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="store" size={size} color={color} style={style} />
+);
+export const LuPlay: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="play" size={size} color={color} style={style} />
+);
+export const LuDownload: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="download" size={size} color={color} style={style} />
+);
+export const LuShare2: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="share-2" size={size} color={color} style={style} />
+);
+export const LuMaximize2: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="maximize-2" size={size} color={color} style={style} />
+);
+export const LuLayoutGrid: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="grid" size={size} color={color} style={style} />
+);
