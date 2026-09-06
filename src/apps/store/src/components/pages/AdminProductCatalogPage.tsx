@@ -25,6 +25,11 @@ import {
 import {
   CatalogQuickEditSheet,
 } from '../molecules/CatalogQuickEditSheet';
+import {
+  CatalogFilterDrawer,
+  FilterState,
+  DEFAULT_FILTER_STATE,
+} from '../molecules/CatalogFilterDrawer';
 
 export interface AdminProductCatalogPageProps {
   products?: ProductGridTileData[];
@@ -36,7 +41,10 @@ export interface AdminProductCatalogPageProps {
   activeFilterCount?: number;
   filterChips?: { id: string; label: string }[];
   onRemoveFilterChip?: (id: string) => void;
+  isFilterDrawerOpen?: boolean;
   onOpenFilterDrawer?: () => void;
+  onCloseFilterDrawer?: () => void;
+  onApplyFilters?: (filters: FilterState) => void;
   onCreateProduct?: () => void;
   onProductPress?: (id: string) => void;
   onToggleStar?: (id: string) => void;
@@ -57,9 +65,12 @@ export function AdminProductCatalogPage({
   searchQuery = '',
   onSearchChange,
   activeFilterCount = 0,
-  filterChips = [],
+  filterChips: initialFilterChips = [],
   onRemoveFilterChip,
+  isFilterDrawerOpen = false,
   onOpenFilterDrawer,
+  onCloseFilterDrawer,
+  onApplyFilters,
   onCreateProduct,
   onProductPress,
   onToggleStar,
@@ -80,6 +91,8 @@ export function AdminProductCatalogPage({
   const [selectedCat, setSelectedCat] = useState(activeCategoryId);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editingProduct, setEditingProduct] = useState<ProductGridTileData | null>(null);
+  const [filterDrawerVisible, setFilterDrawerVisible] = useState(isFilterDrawerOpen);
+  const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
 
   const selectionMode = selectedIds.size > 0;
 
@@ -106,13 +119,68 @@ export function AdminProductCatalogPage({
     setSelectedIds(new Set());
   };
 
-  // Filter products by search & category
+  const handleOpenFilters = () => {
+    setFilterDrawerVisible(true);
+    onOpenFilterDrawer?.();
+  };
+
+  const handleCloseFilters = () => {
+    setFilterDrawerVisible(false);
+    onCloseFilterDrawer?.();
+  };
+
+  const handleApplyFilters = (filters: FilterState) => {
+    setActiveFilters(filters);
+    setFilterDrawerVisible(false);
+    onApplyFilters?.(filters);
+  };
+
+  // Generate dynamic filter chips from state
+  const computedFilterChips = useMemo(() => {
+    if (initialFilterChips.length > 0) return initialFilterChips;
+
+    const chips: { id: string; label: string }[] = [];
+    if (activeFilters.isStarred === true) {
+      chips.push({ id: 'f-star', label: '⭐ Starred Only' });
+    } else if (activeFilters.isStarred === false) {
+      chips.push({ id: 'f-unstar', label: 'Unstarred Only' });
+    }
+    if (activeFilters.minPrice > 0 && activeFilters.maxPrice > 0) {
+      chips.push({ id: 'f-price', label: `₹${activeFilters.minPrice} - ₹${activeFilters.maxPrice}` });
+    } else if (activeFilters.minPrice > 0) {
+      chips.push({ id: 'f-minprice', label: `≥ ₹${activeFilters.minPrice}` });
+    } else if (activeFilters.maxPrice > 0) {
+      chips.push({ id: 'f-maxprice', label: `≤ ₹${activeFilters.maxPrice}` });
+    }
+    activeFilters.fabrics.forEach((fab) => {
+      chips.push({ id: `f-fab-${fab}`, label: fab });
+    });
+    activeFilters.vendorNames.forEach((v) => {
+      chips.push({ id: `f-ven-${v}`, label: v });
+    });
+    if (activeFilters.status && activeFilters.status !== 'active') {
+      chips.push({ id: 'f-status', label: activeFilters.status === 'archived' ? 'Archived' : 'All SKUs' });
+    }
+    return chips;
+  }, [initialFilterChips, activeFilters]);
+
+  const totalFilterCount = activeFilterCount > 0 ? activeFilterCount : computedFilterChips.length;
+
+  // Filter products by search, category, and filter drawer state
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       // Category filter
       if (selectedCat !== 'all' && p.category?.toLowerCase() !== selectedCat.toLowerCase()) {
         return false;
       }
+      // Starred filter
+      if (activeFilters.isStarred === true && !p.isStarred) return false;
+      if (activeFilters.isStarred === false && p.isStarred) return false;
+
+      // Price filter
+      if (activeFilters.minPrice > 0 && (p.price || 0) < activeFilters.minPrice) return false;
+      if (activeFilters.maxPrice > 0 && (p.price || 0) > activeFilters.maxPrice) return false;
+
       // Search query
       if (internalQuery.trim()) {
         const q = internalQuery.toLowerCase();
@@ -123,7 +191,7 @@ export function AdminProductCatalogPage({
       }
       return true;
     });
-  }, [products, selectedCat, internalQuery]);
+  }, [products, selectedCat, internalQuery, activeFilters]);
 
   const tileWidthPercent = `${100 / columns - 1.5}%`;
 
@@ -154,14 +222,14 @@ export function AdminProductCatalogPage({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open catalog filters"
-            onPress={onOpenFilterDrawer}
+            onPress={handleOpenFilters}
             style={{ cursor: 'pointer' } as any}
           >
             <XStack
               padding={7}
               borderRadius={tokens.radius.full}
-              backgroundColor={activeFilterCount > 0 ? `${tokens.accent}14` : tokens.surfaceRaised}
-              borderWidth={activeFilterCount > 0 ? 1 : 0}
+              backgroundColor={totalFilterCount > 0 ? `${tokens.accent}14` : tokens.surfaceRaised}
+              borderWidth={totalFilterCount > 0 ? 1 : 0}
               borderColor={tokens.accent}
               alignItems="center"
               justifyContent="center"
@@ -169,9 +237,9 @@ export function AdminProductCatalogPage({
             >
               <LuSlidersHorizontal
                 size={16}
-                color={activeFilterCount > 0 ? tokens.accent : tokens.text}
+                color={totalFilterCount > 0 ? tokens.accent : tokens.text}
               />
-              {activeFilterCount > 0 && (
+              {totalFilterCount > 0 && (
                 <XStack
                   position="absolute"
                   top={-2}
@@ -184,7 +252,7 @@ export function AdminProductCatalogPage({
                   justifyContent="center"
                 >
                   <Text fontSize={8} fontWeight="800" color="#ffffff">
-                    {activeFilterCount}
+                    {totalFilterCount}
                   </Text>
                 </XStack>
               )}
@@ -268,7 +336,7 @@ export function AdminProductCatalogPage({
       </XStack>
 
       {/* Active Filter Chips Bar (Compact 34px height row) */}
-      {filterChips.length > 0 && (
+      {computedFilterChips.length > 0 && (
         <XStack
           height={34}
           alignItems="center"
@@ -285,7 +353,7 @@ export function AdminProductCatalogPage({
               gap: 6,
             }}
           >
-            {filterChips.map((chip) => (
+            {computedFilterChips.map((chip) => (
               <XStack
                 key={chip.id}
                 alignItems="center"
@@ -429,6 +497,14 @@ export function AdminProductCatalogPage({
         onSave={(id, updates) => {
           onSaveQuickEdit?.(id, updates);
         }}
+      />
+
+      {/* Left Filter Pane / Drawer */}
+      <CatalogFilterDrawer
+        visible={filterDrawerVisible}
+        onClose={handleCloseFilters}
+        current={activeFilters}
+        onApply={handleApplyFilters}
       />
     </YStack>
   );

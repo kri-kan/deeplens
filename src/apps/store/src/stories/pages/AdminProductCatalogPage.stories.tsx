@@ -242,6 +242,20 @@ export const FilteredResults: Story = {
 /**
  * 6. Quick Edit Sheet: Demonstrates inline SKU price & category modification.
  */
+
+/**
+ * 6. Left Filter Pane Open: Two-panel left drawer with Sort, Starred, Category, Price, Fabric, Vendor, and Status tabs.
+ */
+export const FilterDrawerOpen: Story = {
+  name: "6. Left Filter Pane Open",
+  decorators: [withFormFactor("mobile", "Product Catalog - Left Filter Pane")],
+  args: {
+    disableSafeArea: true,
+    isFilterDrawerOpen: true,
+    products: MOCK_PRODUCTS,
+  },
+};
+
 export const QuickEditSheetActive: Story = {
   name: '6. Quick Edit Bottom Sheet',
   decorators: [withFormFactor('mobile', 'Product Catalog - Quick Edit')],
