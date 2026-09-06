@@ -316,6 +316,20 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     });
   };
 
+  // Remove single line item with confirmation prompt
+  const handleRequestRemoveProduct = (id: string) => {
+    const item = products.find((p) => p.id === id);
+    const itemTitle = item ? `"${item.title}"` : 'this line item';
+    setConfirmDialog({
+      visible: true,
+      type: 'single',
+      targetId: id,
+      title: 'Remove Item?',
+      message: `Are you sure you want to remove ${itemTitle} from this order? This action cannot be undone.`,
+      confirmLabel: 'Remove',
+    });
+  };
+
   const handleConfirmAction = async () => {
     if (confirmDialog.type === 'batch') {
       setProducts((prev) => prev.filter((p) => !selectedItemIds.includes(p.id)));
@@ -323,6 +337,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
     } else if (confirmDialog.type === 'single' && confirmDialog.targetId) {
       setProducts((prev) => prev.filter((p) => p.id !== confirmDialog.targetId));
+      setSelectedItemIds((prev) => prev.filter((x) => x !== confirmDialog.targetId));
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
     } else if (confirmDialog.type === 'deleteOrder') {
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
@@ -426,7 +441,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             onEditProduct={handleEditProduct}
             onOpenPicker={handleOpenPicker}
             onUpdateItem={handleUpdateItem}
-            onRemoveProduct={(id: string) => setProducts((prev) => prev.filter((p) => p.id !== id))}
+            onRemoveProduct={handleRequestRemoveProduct}
           />
 
           <YStack height={1} backgroundColor={tokens.border} />

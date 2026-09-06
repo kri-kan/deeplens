@@ -35,7 +35,7 @@ const MOCK_ADDRESS: AddressData = {
 // ─────────────────────────────────────────────
 
 const meta: Meta<any> = {
-  title: 'Pages/AdminOrderForm',
+  title: 'Pages/Admin/OrderForm',
   component: AdminOrderFormPage,
   args: {
     ...THEME_ARGS,

@@ -8,6 +8,7 @@ import {
   LuChevronDown,
   LuX,
   LuBuilding2,
+  LuPencil,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { CustomCheckbox } from '../../atoms/CustomCheckbox';
@@ -184,39 +185,68 @@ export function ProductListSection({
 
                 {/* Right: Title, SKU ID, Size, Qty, Vendor and Remove Button */}
                 <YStack flex={1} gap={2}>
-                  {/* Line 1: Single Line Title + Remove Button */}
+                  {/* Line 1: Single Line Title + Actions (Edit & Remove) */}
                   <XStack alignItems="flex-start" justifyContent="space-between">
-                    <Text
-                      fontSize={13}
-                      fontWeight="700"
-                      color={tokens.text}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      flex={1}
-                      paddingRight={6}
-                    >
-                      {item.title}
-                    </Text>
-
-                    {/* Remove [X] button */}
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove ${item.title}`}
-                      onPress={() => onRemoveProduct(item.id)}
-                      hitSlop={6}
+                      accessibilityLabel={`Edit details for ${item.title}`}
+                      onPress={() => onEditProduct(item)}
+                      style={{ flex: 1, paddingRight: 6 } as any}
                     >
-                      <YStack
-                        width={22}
-                        height={22}
-                        borderRadius={tokens.radius.full}
-                        alignItems="center"
-                        justifyContent="center"
-                        backgroundColor={tokens.surfaceRaised}
-                        hoverStyle={{ backgroundColor: tokens.border }}
+                      <Text
+                        fontSize={13}
+                        fontWeight="700"
+                        color={tokens.text}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
                       >
-                        <LuX size={12} color={tokens.textMuted} />
-                      </YStack>
+                        {item.title}
+                      </Text>
                     </Pressable>
+
+                    <XStack alignItems="center" gap={6}>
+                      {/* Edit Details Sheet Trigger */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit details for ${item.title}`}
+                        onPress={() => onEditProduct(item)}
+                        hitSlop={6}
+                      >
+                        <YStack
+                          width={22}
+                          height={22}
+                          borderRadius={tokens.radius.full}
+                          alignItems="center"
+                          justifyContent="center"
+                          backgroundColor={tokens.surfaceRaised}
+                          borderWidth={1}
+                          borderColor={tokens.border}
+                        >
+                          <LuPencil size={11} color={tokens.accent} />
+                        </YStack>
+                      </Pressable>
+
+                      {/* Remove [X] button */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${item.title}`}
+                        onPress={() => onRemoveProduct(item.id)}
+                        hitSlop={6}
+                      >
+                        <YStack
+                          width={22}
+                          height={22}
+                          borderRadius={tokens.radius.full}
+                          alignItems="center"
+                          justifyContent="center"
+                          backgroundColor={tokens.surfaceRaised}
+                          borderWidth={1}
+                          borderColor={tokens.border}
+                        >
+                          <LuX size={12} color={tokens.textMuted} />
+                        </YStack>
+                      </Pressable>
+                    </XStack>
                   </XStack>
 
                   {/* Line 2: Product ID / SKU, Size Pill and Qty Pill */}

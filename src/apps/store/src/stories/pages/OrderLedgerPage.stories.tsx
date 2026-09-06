@@ -156,7 +156,7 @@ const MOCK_ORDERS: LogisticsOrderCardData[] = [
 // ─────────────────────────────────────────────
 
 const meta: Meta<any> = {
-  title: 'Pages/OrderLedger',
+  title: 'Pages/Admin/OrderLedger',
   component: OrderLedgerPage,
   args: {
     ...THEME_ARGS,

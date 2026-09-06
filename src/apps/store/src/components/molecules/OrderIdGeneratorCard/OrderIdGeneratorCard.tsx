@@ -109,75 +109,60 @@ export function OrderIdGeneratorCard({
         </Text>
       </XStack>
 
-      {/* Row: Source Platforms + Payment Mode Pills */}
-      <XStack gap={10} alignItems="center" flexWrap="wrap">
-        {/* WhatsApp Selector Button */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Select WhatsApp source"
-          onPress={() => onSelectSource(selectedSource === 'whatsapp' ? null : 'whatsapp')}
-          style={{ flex: 1, minWidth: 100 } as any}
-        >
-          <XStack
-            alignItems="center"
-            justifyContent="center"
-            gap={8}
-            paddingVertical={10}
-            paddingHorizontal={12}
-            borderRadius={tokens.radius.md}
-            borderWidth={1.5}
-            borderColor={selectedSource === 'whatsapp' ? WHATSAPP_GREEN : tokens.border}
-            backgroundColor={
-              selectedSource === 'whatsapp' ? `${WHATSAPP_GREEN}14` : tokens.surfaceRaised
-            }
+      {/* Row: Source Platforms (Icon-Only Buttons) + Payment Mode Pills */}
+      <XStack gap={10} alignItems="center" justifyContent="space-between" flexWrap="wrap">
+        {/* Source Icon-Only Buttons */}
+        <XStack gap={10} alignItems="center">
+          {/* WhatsApp Icon Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Select WhatsApp source"
+            onPress={() => onSelectSource(selectedSource === 'whatsapp' ? null : 'whatsapp')}
           >
-            <RiWhatsappFill
-              size={22}
-              color={selectedSource === 'whatsapp' ? WHATSAPP_GREEN : tokens.textMuted}
-            />
-            <Text
-              fontSize={13}
-              fontWeight={selectedSource === 'whatsapp' ? '700' : '500'}
-              color={selectedSource === 'whatsapp' ? WHATSAPP_GREEN : tokens.text}
+            <XStack
+              width={46}
+              height={44}
+              alignItems="center"
+              justifyContent="center"
+              borderRadius={tokens.radius.md}
+              borderWidth={1.5}
+              borderColor={selectedSource === 'whatsapp' ? WHATSAPP_GREEN : tokens.border}
+              backgroundColor={
+                selectedSource === 'whatsapp' ? `${WHATSAPP_GREEN}18` : tokens.surfaceRaised
+              }
             >
-              WhatsApp
-            </Text>
-          </XStack>
-        </Pressable>
+              <RiWhatsappFill
+                size={26}
+                color={selectedSource === 'whatsapp' ? WHATSAPP_GREEN : tokens.textMuted}
+              />
+            </XStack>
+          </Pressable>
 
-        {/* Instagram Selector Button */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Select Instagram source"
-          onPress={() => onSelectSource(selectedSource === 'instagram' ? null : 'instagram')}
-          style={{ flex: 1, minWidth: 100 } as any}
-        >
-          <XStack
-            alignItems="center"
-            justifyContent="center"
-            gap={8}
-            paddingVertical={10}
-            paddingHorizontal={12}
-            borderRadius={tokens.radius.md}
-            borderWidth={1.5}
-            borderColor={selectedSource === 'instagram' ? INSTAGRAM_PINK : tokens.border}
-            backgroundColor={
-              selectedSource === 'instagram' ? `${INSTAGRAM_PINK}14` : tokens.surfaceRaised
-            }
+          {/* Instagram Icon Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Select Instagram source"
+            onPress={() => onSelectSource(selectedSource === 'instagram' ? null : 'instagram')}
           >
-            <RiInstagramFill
-              size={22}
-              color={selectedSource === 'instagram' ? INSTAGRAM_PINK : tokens.textMuted}
-            />
-            <Text
-              fontSize={13}
-              fontWeight={selectedSource === 'instagram' ? '700' : '500'}
-              color={selectedSource === 'instagram' ? INSTAGRAM_PINK : tokens.text}
+            <XStack
+              width={46}
+              height={44}
+              alignItems="center"
+              justifyContent="center"
+              borderRadius={tokens.radius.md}
+              borderWidth={1.5}
+              borderColor={selectedSource === 'instagram' ? INSTAGRAM_PINK : tokens.border}
+              backgroundColor={
+                selectedSource === 'instagram' ? `${INSTAGRAM_PINK}18` : tokens.surfaceRaised
+              }
             >
-              Instagram
-            </Text>
-          </XStack>
-        </Pressable>
+              <RiInstagramFill
+                size={26}
+                color={selectedSource === 'instagram' ? INSTAGRAM_PINK : tokens.textMuted}
+              />
+            </XStack>
+          </Pressable>
+        </XStack>
 
         {/* Payment Pills: COD & Prepaid */}
         <XStack gap={8} alignItems="center">

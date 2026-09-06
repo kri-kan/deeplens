@@ -5,7 +5,7 @@ import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 const meta: Meta<any> = {
-  title: 'Pages/CartPage',
+  title: 'Pages/Store/Cart',
   component: CartPage,
   args: {
     ...THEME_ARGS,
