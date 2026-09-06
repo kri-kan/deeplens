@@ -73,27 +73,27 @@ export function OperationsHubPage({
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
-      {/* Top Header with Safe Area Handling */}
+      {/* Top Header - Compact */}
       <XStack
         paddingTop={topInset}
-        height={56 + topInset}
+        height={48 + topInset}
         alignItems="center"
         justifyContent="space-between"
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
       >
-        <YStack gap={1}>
-          <Text fontSize={16} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+        <YStack gap={0}>
+          <Text fontSize={15} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
             Operations Hub
           </Text>
-          <Text fontSize={11} color={tokens.textMuted}>
-            Operational modules & system utilities
+          <Text fontSize={10} color={tokens.textMuted}>
+            Operational modules & utilities
           </Text>
         </YStack>
 
-        <XStack alignItems="center" gap={8}>
+        <XStack alignItems="center" gap={6}>
           {/* AI Assistant Button */}
           <Pressable
             accessibilityRole="button"
@@ -102,17 +102,17 @@ export function OperationsHubPage({
             style={{ cursor: 'pointer' } as any}
           >
             <XStack
-              paddingVertical={6}
-              paddingHorizontal={10}
+              paddingVertical={4}
+              paddingHorizontal={8}
               borderRadius={tokens.radius.full}
               backgroundColor={`${tokens.accent}14`}
               borderWidth={1}
               borderColor={`${tokens.accent}30`}
               alignItems="center"
-              gap={5}
+              gap={4}
             >
-              <LuSparkles size={14} color={tokens.accent} />
-              <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+              <LuSparkles size={13} color={tokens.accent} />
+              <Text fontSize={11} fontWeight="700" color={tokens.accent}>
                 AI
               </Text>
             </XStack>
@@ -126,40 +126,40 @@ export function OperationsHubPage({
             style={{ cursor: 'pointer' } as any}
           >
             <XStack
-              padding={8}
+              padding={6}
               borderRadius={tokens.radius.full}
               backgroundColor={tokens.surfaceRaised}
               alignItems="center"
               justifyContent="center"
             >
-              <LuSettings size={18} color={tokens.text} />
+              <LuSettings size={16} color={tokens.text} />
             </XStack>
           </Pressable>
         </XStack>
       </XStack>
 
-      {/* Main Scrollable Body */}
+      {/* Main Scrollable Body - High Density */}
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: 14,
-          paddingBottom: Math.max(32, bottomInset + 24),
-          gap: 18,
+          paddingHorizontal: 12,
+          paddingTop: 8,
+          paddingBottom: Math.max(24, bottomInset + 16),
+          gap: 10,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Search Bar */}
+        {/* Search Bar - Compact */}
         <XStack
           backgroundColor={tokens.surface}
-          borderRadius={tokens.radius.md}
+          borderRadius={tokens.radius.sm}
           borderWidth={1}
           borderColor={tokens.border}
-          paddingHorizontal={12}
-          height={42}
+          paddingHorizontal={10}
+          height={36}
           alignItems="center"
-          gap={8}
+          gap={6}
         >
-          <LuSearch size={16} color={tokens.textMuted} />
+          <LuSearch size={14} color={tokens.textMuted} />
           <TextInput
             accessibilityLabel="Search operational tools input"
             value={query}
@@ -169,7 +169,7 @@ export function OperationsHubPage({
             style={
               {
                 flex: 1,
-                fontSize: 13,
+                fontSize: 12,
                 color: tokens.text,
                 outlineStyle: 'none',
               } as any
@@ -183,11 +183,11 @@ export function OperationsHubPage({
               style={{ cursor: 'pointer' } as any}
             >
               <XStack
-                padding={4}
+                padding={3}
                 borderRadius={tokens.radius.full}
                 backgroundColor={tokens.surfaceRaised}
               >
-                <LuX size={12} color={tokens.textMuted} />
+                <LuX size={10} color={tokens.textMuted} />
               </XStack>
             </Pressable>
           )}
@@ -197,40 +197,40 @@ export function OperationsHubPage({
         {totalFilteredCount === 0 ? (
           <YStack
             backgroundColor={tokens.surface}
-            borderRadius={tokens.radius.lg}
+            borderRadius={tokens.radius.md}
             borderWidth={1}
             borderColor={tokens.border}
-            paddingVertical={44}
-            paddingHorizontal={20}
+            paddingVertical={32}
+            paddingHorizontal={16}
             alignItems="center"
             justifyContent="center"
-            gap={10}
+            gap={8}
           >
             <XStack
-              width={52}
-              height={52}
+              width={44}
+              height={44}
               borderRadius={tokens.radius.full}
               backgroundColor={tokens.surfaceRaised}
               alignItems="center"
               justifyContent="center"
             >
-              <LuInbox size={26} color={tokens.textMuted} />
+              <LuInbox size={22} color={tokens.textMuted} />
             </XStack>
-            <Text fontSize={15} fontWeight="700" color={tokens.text}>
+            <Text fontSize={14} fontWeight="700" color={tokens.text}>
               No Tools Found
             </Text>
             <Text
-              fontSize={12}
+              fontSize={11}
               color={tokens.textMuted}
               textAlign="center"
-              maxWidth={260}
+              maxWidth={240}
             >
               No operational utility matches &quot;{query}&quot;. Try a different keyword.
             </Text>
           </YStack>
         ) : (
-          /* Render Categorized Groups */
-          <YStack gap={20}>
+          /* Render Categorized Groups - High Density */
+          <YStack gap={10}>
             {filteredGroups.map((group) => (
               <UtilitySection
                 key={group.id}

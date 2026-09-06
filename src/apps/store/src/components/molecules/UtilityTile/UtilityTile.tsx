@@ -31,7 +31,7 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
       style={{
         alignItems: 'center',
         justifyContent: 'flex-start',
-        paddingVertical: 6,
+        paddingVertical: 4,
         paddingHorizontal: 2,
         width: '100%',
         cursor: 'pointer',
@@ -40,21 +40,21 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
       <YStack
         alignItems="center"
         justifyContent="center"
-        gap={6}
+        gap={4}
         width="100%"
-        pressStyle={{ opacity: 0.7, scale: 0.95 }}
+        pressStyle={{ opacity: 0.7, scale: 0.94 }}
       >
-        {/* Compact Icon Container with subtle color tint & optional badge */}
+        {/* Compact high-density Icon Box */}
         <YStack
-          width={48}
-          height={48}
-          borderRadius={tokens.radius.md}
-          backgroundColor={`${tileColor}14`}
+          width={44}
+          height={44}
+          borderRadius={tokens.radius.sm}
+          backgroundColor={`${tileColor}16`}
           alignItems="center"
           justifyContent="center"
           position="relative"
           hoverStyle={{
-            backgroundColor: `${tileColor}24`,
+            backgroundColor: `${tileColor}26`,
           }}
         >
           {item.icon}
@@ -69,22 +69,22 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
               paddingVertical={1}
               borderRadius={tokens.radius.full}
             >
-              <Text fontSize={9} fontWeight="800" color="#ffffff">
+              <Text fontSize={8} fontWeight="800" color="#ffffff">
                 {item.badge}
               </Text>
             </XStack>
           )}
         </YStack>
 
-        {/* Small Label Below (no heavy descriptions/boxes) */}
+        {/* Small Label Below */}
         <Text
           fontSize={11}
           fontWeight="600"
           color={tokens.text}
           textAlign="center"
-          numberOfLines={2}
+          numberOfLines={1}
           lineHeight={13}
-          maxWidth={76}
+          maxWidth={74}
         >
           {item.title}
         </Text>
