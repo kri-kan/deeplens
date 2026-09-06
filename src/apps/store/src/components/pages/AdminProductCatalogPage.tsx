@@ -193,7 +193,7 @@ export function AdminProductCatalogPage({
     });
   }, [products, selectedCat, internalQuery, activeFilters]);
 
-  const tileWidthPercent = `${100 / columns - 1.5}%`;
+  const cellWidthPercent = columns === 3 ? "33.333333%" : `${100 / columns}%`;
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
@@ -393,24 +393,29 @@ export function AdminProductCatalogPage({
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingHorizontal: 8,
-          paddingTop: 4,
+          paddingHorizontal: 1,
+          paddingTop: 2,
           paddingBottom: Math.max(32, bottomInset + 56),
         }}
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
           /* Loading Skeleton Grid */
-          <XStack flexWrap="wrap" gap={6} justifyContent="space-between">
+          <XStack flexWrap="wrap">
             {Array.from({ length: 9 }).map((_, i) => (
               <YStack
                 key={i}
-                width={tileWidthPercent}
-                aspectRatio={4 / 5}
-                borderRadius={tokens.radius.sm}
-                backgroundColor={tokens.surfaceRaised}
-                opacity={0.6}
-              />
+                width={cellWidthPercent as any}
+                padding={1.5}
+              >
+                <YStack
+                  width="100%"
+                  aspectRatio={4 / 5}
+                  borderRadius={tokens.radius.xs}
+                  backgroundColor={tokens.surfaceRaised}
+                  opacity={0.6}
+                />
+              </YStack>
             ))}
           </XStack>
         ) : filteredProducts.length === 0 ? (
@@ -452,10 +457,10 @@ export function AdminProductCatalogPage({
             </Text>
           </YStack>
         ) : (
-          /* Populated 3-Column Grid */
-          <XStack flexWrap="wrap" gap={6} justifyContent="flex-start">
+          /* Populated 3-Column Grid - Edge to Edge Fill */
+          <XStack flexWrap="wrap">
             {filteredProducts.map((item) => (
-              <YStack key={item.id} width={tileWidthPercent} marginBottom={4}>
+              <YStack key={item.id} width={cellWidthPercent as any} padding={1.5}>
                 <ProductGridTile
                   item={item}
                   selected={selectedIds.has(item.id)}

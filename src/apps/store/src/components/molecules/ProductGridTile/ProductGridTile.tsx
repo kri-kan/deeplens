@@ -38,20 +38,20 @@ export function ProductGridTile({
   const { tokens } = useTheme();
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Product ${item.productCode || item.id}`}
+    <YStack
+      width="100%"
+      cursor="pointer"
       onPress={() => onPress?.(item.id)}
       onLongPress={() => onLongPress?.(item.id)}
-      style={{ width: '100%', cursor: 'pointer' } as any}
+      accessibilityLabel={`Product ${item.productCode || item.id}`}
     >
       <YStack
         width="100%"
         aspectRatio={4 / 5}
-        borderRadius={tokens.radius.sm}
+        borderRadius={tokens.radius.xs}
         overflow="hidden"
         backgroundColor={tokens.surfaceRaised}
-        borderWidth={selected ? 2.5 : 1}
+        borderWidth={selected ? 2.5 : 0.5}
         borderColor={selected ? tokens.accent : tokens.border}
         position="relative"
         pressStyle={{ opacity: 0.88, scale: 0.98 }}
@@ -179,6 +179,6 @@ export function ProductGridTile({
           </XStack>
         </YStack>
       </YStack>
-    </Pressable>
+    </YStack>
   );
 }
