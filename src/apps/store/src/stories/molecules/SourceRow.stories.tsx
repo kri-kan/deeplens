@@ -38,3 +38,17 @@ export const InstagramPrepaid: Story = {
     </YStack>
   ),
 };
+
+export const InstagramFullUrl: Story = {
+  name: 'Instagram with Full URL',
+  args: {
+    source: 'instagram',
+    sourceContact: 'https://www.instagram.com/priya_designs/?hl=en',
+    paymentType: 'prepaid',
+  },
+  render: (args: any) => (
+    <YStack width={390} paddingHorizontal={16} paddingVertical={8}>
+      <SourceRow {...(args as SourceRowProps)} />
+    </YStack>
+  ),
+};

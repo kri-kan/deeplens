@@ -103,3 +103,13 @@ export const WithInstagramUrlBanner: Story = {
     },
   },
 };
+
+export const LoadingState: Story = {
+  name: 'Loading State',
+  args: {
+    selectedSource: 'whatsapp',
+    paymentMode: 'cod',
+    sourceHandle: '+91 98765 43210',
+    loading: true,
+  },
+};

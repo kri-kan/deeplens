@@ -368,7 +368,7 @@ export function OrderIdGeneratorCard({
                       paddingVertical={2}
                       borderRadius={tokens.radius.xs}
                     >
-                      <Text fontSize={10} fontWeight="700" color="#fff">
+                      <Text fontSize={10} fontWeight="700" color={tokens.surface}>
                         NEW
                       </Text>
                     </XStack>
