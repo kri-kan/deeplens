@@ -2,29 +2,32 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STORE_DIR="$(cd "${SCRIPT_DIR}/../../src/apps/store" && pwd)"
+STORYBOOK_DIR="$(cd "${SCRIPT_DIR}/../../src/apps/storybook" && pwd)"
+STORE_DIR="$(cd "${SCRIPT_DIR}/../../src/store" && pwd)"
 
-echo "=== DeepLens Store Workbench Launcher ==="
+echo "=== Vayyari Store & Storybook Launcher ==="
 echo "Mode options: [web | storybook | android | ios]"
 MODE="${1:-web}"
 
-cd "${STORE_DIR}"
-
 case "${MODE}" in
   storybook)
-    echo "Starting Storybook Workbench on port 6006 / Expo web..."
+    echo "Starting Storybook Workbench on port 6006 from src/apps/storybook..."
+    cd "${STORYBOOK_DIR}"
     EXPO_PUBLIC_STORYBOOK_ENABLED=true npx expo start --web --port 6006
     ;;
   web)
-    echo "Starting Store Web Preview on port 8082..."
+    echo "Starting Vayyari Store Web on port 8082 from src/store..."
+    cd "${STORE_DIR}"
     npx expo start --web --port 8082
     ;;
   android)
-    echo "Starting Store on Android on port 8082..."
+    echo "Starting Vayyari Store on Android on port 8082 from src/store..."
+    cd "${STORE_DIR}"
     npx expo start --android --port 8082
     ;;
   ios)
-    echo "Starting Store on iOS on port 8082..."
+    echo "Starting Vayyari Store on iOS on port 8082 from src/store..."
+    cd "${STORE_DIR}"
     npx expo start --ios --port 8082
     ;;
   *)

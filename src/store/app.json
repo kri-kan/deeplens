@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Vayyari",
+    "slug": "vayyari-store",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#1A365D"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.vayyari.store",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Vayyari uses your location to estimate delivery timelines and verify serviceability."
+      }
+    },
+    "android": {
+      "package": "com.vayyari.store",
+      "adaptiveIcon": {
+        "backgroundColor": "#1A365D",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "themeColor": "#1A365D",
+      "backgroundColor": "#FAF7F2",
+      "shortName": "Vayyari",
+      "description": "Authentic Indian Handlooms & Artisan Sarees",
+      "startUrl": "/",
+      "display": "standalone"
+    }
+  }
+}

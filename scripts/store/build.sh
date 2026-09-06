@@ -2,11 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STORE_DIR="$(cd "${SCRIPT_DIR}/../../src/apps/store" && pwd)"
+STORE_DIR="$(cd "${SCRIPT_DIR}/../../src/store" && pwd)"
 
-echo "=== Building DeepLens Store Web Bundle ==="
+echo "=== Building Vayyari Store Web & PWA Bundle ==="
 cd "${STORE_DIR}"
 
 npx expo export -p web
 
-echo "Store web bundle exported successfully to ${STORE_DIR}/dist"
+echo "Store web & PWA bundle exported successfully to ${STORE_DIR}/dist"

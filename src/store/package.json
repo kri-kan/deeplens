@@ -1,30 +1,36 @@
 {
-  "name": "store",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "name": "vayyari-store",
+  "version": "1.0.0",
+  "main": "index.ts",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview",
-    "preview:responsive": "vite preview --port 4173 --host",
-    "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots"
+    "start": "expo start --port 8082",
+    "web": "expo start --web --port 8082",
+    "android": "expo start --android --port 8082",
+    "ios": "expo start --ios --port 8082",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "lucide-react": "^1.31.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "@gorhom/bottom-sheet": "^5.2.14",
+    "@tamagui/config": "^2.7.7",
+    "@tamagui/lucide-icons": "^1.144.4",
+    "expo": "~57.0.18",
+    "expo-linear-gradient": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-icons": "^5.7.0",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "^4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "^15.15.5",
+    "react-native-web": "^0.21.2",
+    "react-native-worklets": "~0.10.4",
+    "tamagui": "^2.7.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.75.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.2.0"
-  }
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "private": true
 }

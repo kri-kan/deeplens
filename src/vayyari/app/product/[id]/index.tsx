@@ -124,14 +124,18 @@ export default function ProductDetailScreen() {
 
   // Download Media
   const handleDownloadMedia = async (mediaItem: MediaSlideItem) => {
-    if (!mediaItem.url) return;
+    if (!mediaItem.url && !mediaItem.id) return;
     try {
+      const downloadUrl =
+        mediaItem.id && mediaItem.id !== '00000000-0000-0000-0000-000000000000'
+          ? productService.getRawMediaUrl(mediaItem.id)
+          : mediaItem.url || '';
       const path = mediaItem.url || '';
       const extension = mediaItem.mediaType === 'video' ? 'mp4' : path.split('.').pop()?.toLowerCase() || 'jpg';
       const filename = `product_${product?.productCode || 'vayyari'}_${mediaItem.id || Date.now()}.${extension}`;
-      const savedUri = await downloadMedia(mediaItem.url, filename);
+      const savedUri = await downloadMedia(downloadUrl, filename);
       if (savedUri) {
-        Alert.alert('Saved', 'Media saved to gallery!');
+        Alert.alert('Saved', 'Media downloaded successfully!');
       }
     } catch (err) {
       console.error('Failed to download media:', err);

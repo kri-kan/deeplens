@@ -1,11 +1,11 @@
 import { cacheDirectory, createDownloadResumable, getInfoAsync } from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import * as Clipboard from 'expo-clipboard';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { requestMediaLibraryPermission } from './device-permissions';
 
 /**
- * Downloads media to the permanent device gallery (DCIM / Pictures / Vayyari).
+ * Downloads media to the permanent device gallery (DCIM / Pictures / Vayyari) or browser downloads on Web.
  */
 export const downloadMedia = async (
   url: string,
@@ -13,6 +13,21 @@ export const downloadMedia = async (
   onProgress?: (progress: number) => void
 ): Promise<string | undefined> => {
   try {
+    if (Platform.OS === 'web') {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+      return filename;
+    }
+
     const hasPermission = await requestMediaLibraryPermission();
     if (!hasPermission) return;
 
@@ -70,6 +85,31 @@ export const shareMedia = async (
 ): Promise<void> => {
   try {
     await Clipboard.setStringAsync(url);
+
+    if (Platform.OS === 'web') {
+      const filename = `share_${Date.now()}.${extension.replace(/^\./, '')}`;
+      if (typeof navigator !== 'undefined' && (navigator as any).canShare) {
+        try {
+          const resp = await fetch(url);
+          const blob = await resp.blob();
+          const file = new File([blob], filename, {
+            type: extension === 'mp4' ? 'video/mp4' : 'image/jpeg',
+          });
+          if ((navigator as any).canShare({ files: [file] })) {
+            await (navigator as any).share({
+              title: 'Vayyari Product Media',
+              files: [file],
+            });
+            return;
+          }
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+        }
+      }
+      await downloadMedia(url, filename);
+      Alert.alert('Media Downloaded', 'Media downloaded and URL copied to clipboard.');
+      return;
+    }
 
     if (!cacheDirectory) {
       Alert.alert('Copied', 'Media URL copied to clipboard.');

@@ -167,11 +167,11 @@
 
 **Actor:** Rahul (Secondary Persona)  
 **Trigger:** Needs to buy wedding gift; browses for quality  
-**Precondition:** No existing account (Guest checkout)
+**Precondition:** No existing account (Guest browsing permitted, Signup mandatory for checkout)
 
 ```
-1. User visits VAYYARI homepage
-   → Sees "Women → Sarees" section
+1. User visits VAYYARI homepage as Guest
+   → Browses curated weaves and seasonal collections without login
 
 2. User taps "Browse All Sarees"
    → Lands on full category page
@@ -181,35 +181,38 @@
    - Material: Silk
    - Color: Blue/Teal
 
-4. User browses 20+ filtered results
+4. User browses filtered results
    → Taps 3 different products
-   → Reads descriptions, watches demo reel for each
+   → Reads descriptions, checks weave swatches and estimated delivery pincode
 
 5. User selects favorite, taps "Add to Cart"
 
-6. User continues browsing, adds second item
+6. User continues browsing as guest, adds second item
 
 7. User taps "Proceed to Cart"
    → Sees both items in cart
    → Can increase/decrease quantities
    → Can remove items
 
-8. User taps "Checkout"
-   → System prompts for phone number (no account)
-   → User enters +91-98765-43210
+8. User taps "Proceed to Checkout"
+   → [MANDATORY SIGNUP GATE] System intercepts unauthenticated checkout
+   → AuthSheet displays: "Login or Signup is required to place your order"
+   → User enters +91 mobile number and receives 6-digit OTP (or uses Google One-Tap)
+   → User enters OTP → Authenticated patron session created
+   → Guest cart automatically merged into authenticated profile
 
-9. Checkout:
-   - Delivery address (NEW address, different from any existing)
-   - Choose delivery timeframe ("Standard 5–7 days" or "Express 2–3 days")
-   - "Pay Securely" → UPI flow
+9. Checkout Screen (Authenticated Patron):
+   - Delivery address selection/entry
+   - Choose delivery timeframe ("Express Insured Dispatch")
+   - "Pay Securely" → Instant UPI flow (Google Pay, PhonePe, Paytm)
 
-10. Order confirmed
-    → Guest account created quietly in background
-    → User can opt into account creation (optional)
+10. Order Confirmed
+    → Verified patron order confirmed
+    → WhatsApp & SMS order receipt sent with tamper-proof tracking AWB
 ```
 
 **Time to Completion:** 18–22 minutes  
-**Success Criteria:** Guest checkout completes; user never forced to create account
+**Success Criteria:** Frictionless guest exploration with transparent, one-tap signup gating upon checkout; verified order confirmation
 
 ---
 

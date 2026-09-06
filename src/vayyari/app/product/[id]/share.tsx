@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator as RNActivityIndicator,
+  Platform,
 } from 'react-native';
 import {
   Appbar,
@@ -364,6 +365,117 @@ export default function ShareProductScreen() {
       const selected = selectedIds
         .map((selectedId) => mediaList.find((m) => m.id === selectedId))
         .filter((m): m is MediaEntry => Boolean(m));
+
+      if (Platform.OS === 'web') {
+        setProgressLabel('Preparing web share & downloads…');
+
+        // 1. Copy description / caption to clipboard
+        if (description) {
+          try {
+            await navigator.clipboard.writeText(description);
+          } catch (clipErr) {
+            console.warn('[WebShare] Clipboard write failed:', clipErr);
+          }
+        }
+
+        // 2. If Web Share API is available (with files support)
+        let webShared = false;
+        if (typeof navigator !== 'undefined' && (navigator as any).canShare) {
+          try {
+            const files: File[] = [];
+            for (let i = 0; i < selected.length; i++) {
+              const media = selected[i];
+              const ext = media.mediaType === 2 ? 'mp4' : 'jpg';
+              const rawUrl = productService.getRawMediaUrl(media.id);
+              const resp = await fetch(rawUrl);
+              const blob = await resp.blob();
+              const file = new File([blob], `product_${product?.productCode || 'vayyari'}_${media.id}.${ext}`, {
+                type: media.mediaType === 2 ? 'video/mp4' : 'image/jpeg',
+              });
+              files.push(file);
+              setDownloadProgress((i + 1) / selected.length);
+            }
+
+            if ((navigator as any).canShare({ files })) {
+              await (navigator as any).share({
+                title: product?.productCode || 'Vayyari Product',
+                text: description || undefined,
+                files,
+              });
+              webShared = true;
+            }
+          } catch (e: any) {
+            if (e?.name !== 'AbortError') {
+              console.warn('[WebShare] Native share failed, falling back to direct download:', e);
+            } else {
+              webShared = true;
+            }
+          }
+        }
+
+        // 3. Fallback: Download each selected image directly to browser downloads
+        if (!webShared) {
+          for (let i = 0; i < selected.length; i++) {
+            const media = selected[i];
+            const ext = media.mediaType === 2 ? 'mp4' : 'jpg';
+            const filename = `product_${product?.productCode || 'vayyari'}_${media.id}.${ext}`;
+            const rawUrl = productService.getRawMediaUrl(media.id);
+            setProgressLabel(`Downloading ${i + 1} of ${selected.length}…`);
+
+            const resp = await fetch(rawUrl);
+            const blob = await resp.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+
+            setDownloadProgress((i + 1) / selected.length);
+          }
+        }
+
+        // 4. Open target platform if web
+        if (targetPlatform === 'whatsapp') {
+          const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(description || '')}`;
+          window.open(waUrl, '_blank');
+        } else if (targetPlatform === 'instagram') {
+          window.open('https://www.instagram.com/', '_blank');
+        }
+
+        // 5. Record publish event
+        if (targetPlatform === 'instagram') {
+          await recordPublishEvent({
+            productId: id,
+            platform: 'instagram',
+            accountId: selectedAccount?.id,
+            accountName: selectedAccount?.username,
+            descriptionUsed: description || null,
+            status: 'published',
+          });
+        } else if (targetPlatform === 'whatsapp') {
+          await recordPublishEvent({
+            productId: id,
+            platform: 'whatsapp',
+            descriptionUsed: description || null,
+            status: 'published',
+          });
+        } else {
+          await recordShare({ platform: 'web_share', descriptionUsed: description || null });
+        }
+
+        setSnackbarMessage(
+          targetPlatform === 'instagram'
+            ? 'Media downloaded & caption copied! Opened Instagram to paste & post.'
+            : targetPlatform === 'whatsapp'
+            ? 'Media downloaded & caption copied! Opened WhatsApp Web.'
+            : 'Media downloaded & caption copied to clipboard!'
+        );
+        setSnackbarVisible(true);
+        return;
+      }
 
       for (let i = 0; i < selected.length; i++) {
         const media = selected[i];

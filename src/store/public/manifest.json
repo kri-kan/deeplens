@@ -1,0 +1,25 @@
+{
+  "short_name": "Vayyari",
+  "name": "Vayyari Luxury Store",
+  "description": "Authentic Indian Handlooms & Artisan Sarees",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#1A365D",
+  "theme_color": "#1A365D",
+  "display": "standalone",
+  "orientation": "any",
+  "categories": ["shopping", "lifestyle"]
+}

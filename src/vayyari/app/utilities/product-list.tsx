@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { BackHandler, Alert, Modal, TouchableOpacity } from 'react-native';
+import { BackHandler, Alert, Modal, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { useTheme } from '@/theme';
@@ -93,6 +93,17 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
 export default function ProductCatalogScreen() {
   const router = useRouter();
   const { tokens } = useTheme();
+  const { width } = useWindowDimensions();
+
+  // Dense, responsive catalog grid scaling for tablets, laptops, and ultra-wide desktops
+  const columns = useMemo(() => {
+    if (width >= 1600) return 8;
+    if (width >= 1350) return 7;
+    if (width >= 1100) return 6;
+    if (width >= 850) return 5;
+    if (width >= 650) return 4;
+    return 3;
+  }, [width]);
   const params = useLocalSearchParams<{
     startDate?: string;
     endDate?: string;
@@ -500,7 +511,7 @@ export default function ProductCatalogScreen() {
         }}
         hasMore={hasMore}
         totalCount={totalCount}
-        columns={3}
+        columns={columns}
         selectedIds={selectedIds}
         selectionMode={selectionMode}
         isAllSelected={isAllSelected}

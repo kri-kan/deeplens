@@ -40,6 +40,17 @@
 - **Frequency:** Weekly (Sunday) or on-demand
 - **Conflict Resolution:** If customer places order for item that was marked OOS mid-sync, order proceeds if stock exists in database
 
+### 1.5 Authentication & Checkout Access Policy (Mandatory Signup Rule)
+
+- **Guest Browsing Permitted:** Guests have unrestricted access to explore the catalog, search items, view product details, select weave swatches, estimate delivery pincodes, add items to bag, and manage a temporary session wishlist.
+- **Guest Checkout Prohibited:** Guest checkout is **strictly disallowed**. Account signup/login is **MANDATORY** before checkout initiation or placing an order.
+- **Checkout Gate:**
+  1. When an unauthenticated visitor clicks "Proceed to Checkout" in the Cart Drawer or Cart Page, the flow is intercepted.
+  2. The system triggers the `AuthSheet` modal requiring mobile OTP (`+91`) verification or Google One-Tap sign-in.
+  3. Items in the guest cart are preserved in local storage and merged with the authenticated patron account upon login.
+  4. Only authenticated users with an active patron profile can view the checkout screen, enter delivery addresses, and initiate UPI payment.
+- **Rationale:** Authentic handloom and luxury artisanal sarees require verified delivery coordination, authentic dispatch notifications, and secure payment receipts.
+
 ---
 
 ## Section 2: Order State Machine (Internal & External)

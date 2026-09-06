@@ -538,6 +538,7 @@ export function AdminProductCatalogPage({
 
       {/* Virtualized Product Grid */}
       <FlatList
+        key={`catalog-grid-${columns}`}
         data={products}
         keyExtractor={(item) => item.id}
         numColumns={columns}
