@@ -19,36 +19,45 @@ export function UtilitySection({
   if (items.length === 0) return null;
 
   return (
-    <YStack gap={10}>
+    <YStack gap={8}>
       {/* Section Header */}
-      <XStack alignItems="center" gap={8} paddingHorizontal={2}>
+      <XStack alignItems="center" gap={8} paddingHorizontal={4}>
         <Text
-          fontSize={13}
+          fontSize={11}
           fontWeight="800"
-          color={tokens.text}
+          color={tokens.textMuted}
           textTransform="uppercase"
-          letterSpacing={0.6}
+          letterSpacing={0.8}
         >
           {title}
         </Text>
         <XStack
-          paddingHorizontal={6}
+          paddingHorizontal={5}
           paddingVertical={1}
           borderRadius={tokens.radius.full}
           backgroundColor={tokens.surfaceRaised}
           borderWidth={1}
           borderColor={tokens.border}
         >
-          <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+          <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
             {items.length}
           </Text>
         </XStack>
       </XStack>
 
-      {/* Grid of Tiles */}
-      <XStack flexWrap="wrap" gap={10}>
+      {/* 4-column Grid of Compact Icon Buttons inside clean container */}
+      <XStack
+        backgroundColor={tokens.surface}
+        borderRadius={tokens.radius.lg}
+        borderWidth={1}
+        borderColor={tokens.border}
+        paddingVertical={10}
+        paddingHorizontal={4}
+        flexWrap="wrap"
+        rowGap={10}
+      >
         {items.map((item) => (
-          <YStack key={item.id} width="48%" flexGrow={1} flexBasis={140}>
+          <YStack key={item.id} width="25%" alignItems="center">
             <UtilityTile item={item} onPress={onLaunchItem} />
           </YStack>
         ))}

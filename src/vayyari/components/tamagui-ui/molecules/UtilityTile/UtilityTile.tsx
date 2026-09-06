@@ -28,76 +28,62 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
       accessibilityRole="button"
       accessibilityLabel={`Launch ${item.title}`}
       onPress={() => onPress?.(item.route)}
-      style={{ flex: 1, minWidth: 100 }}
+      style={{
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingVertical: 6,
+        paddingHorizontal: 2,
+        width: '100%',
+      }}
     >
       <YStack
-        backgroundColor={tokens.surface}
-        borderRadius={tokens.radius.md}
-        borderWidth={1}
-        borderColor={tokens.border}
-        padding={14}
-        alignItems="flex-start"
-        justifyContent="space-between"
-        gap={10}
-        shadowColor="#000"
-        shadowOffset={{ width: 0, height: 1 }}
-        shadowOpacity={0.03}
-        shadowRadius={4}
-        hoverStyle={{
-          borderColor: tileColor,
-          backgroundColor: tokens.surfaceRaised,
-        }}
-        pressStyle={{
-          opacity: 0.85,
-        }}
+        alignItems="center"
+        justifyContent="center"
+        gap={6}
+        width="100%"
+        pressStyle={{ opacity: 0.7, scale: 0.95 }}
       >
-        {/* Top: Icon Box + Optional Badge */}
-        <XStack width="100%" alignItems="center" justifyContent="space-between">
-          <XStack
-            width={40}
-            height={40}
-            borderRadius={tokens.radius.md}
-            backgroundColor={`${tileColor}16`}
-            alignItems="center"
-            justifyContent="center"
-          >
-            {item.icon}
-          </XStack>
+        {/* Compact Icon Container with subtle color tint & optional badge */}
+        <YStack
+          width={48}
+          height={48}
+          borderRadius={tokens.radius.md}
+          backgroundColor={`${tileColor}14`}
+          alignItems="center"
+          justifyContent="center"
+          position="relative"
+        >
+          {item.icon}
 
           {item.badge && (
             <XStack
-              backgroundColor={`${tokens.accent}14`}
-              paddingHorizontal={6}
-              paddingVertical={2}
-              borderRadius={tokens.radius.xs}
+              position="absolute"
+              top={-3}
+              right={-4}
+              backgroundColor={tokens.accent}
+              paddingHorizontal={4}
+              paddingVertical={1}
+              borderRadius={tokens.radius.full}
             >
-              <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+              <Text fontSize={9} fontWeight="800" color="#ffffff">
                 {item.badge}
               </Text>
             </XStack>
           )}
-        </XStack>
-
-        {/* Bottom: Title & Description */}
-        <YStack gap={2}>
-          <Text
-            fontSize={13}
-            fontWeight="700"
-            color={tokens.text}
-            numberOfLines={1}
-          >
-            {item.title}
-          </Text>
-          {item.description ? (
-            <Text
-              fontSize={11}
-              color={tokens.textMuted}
-              numberOfLines={1}
-            >
-              {item.description}
-            </Text>
-          ) : null}
         </YStack>
+
+        {/* Small Label Below */}
+        <Text
+          fontSize={11}
+          fontWeight="600"
+          color={tokens.text}
+          textAlign="center"
+          numberOfLines={2}
+          lineHeight={13}
+          maxWidth={76}
+        >
+          {item.title}
+        </Text>
       </YStack>
     </Pressable>
   );
