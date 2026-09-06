@@ -12,6 +12,9 @@ import { useTheme } from '../../../theme';
 
 export interface CatalogSelectionActionBarProps {
   selectedCount: number;
+  totalCount?: number;
+  isAllSelected?: boolean;
+  onToggleSelectAll?: () => void;
   onClearSelection: () => void;
   onBulkStar?: () => void;
   onBulkMoveCategory?: () => void;
@@ -21,6 +24,9 @@ export interface CatalogSelectionActionBarProps {
 
 export function CatalogSelectionActionBar({
   selectedCount,
+  totalCount,
+  isAllSelected = false,
+  onToggleSelectAll,
   onClearSelection,
   onBulkStar,
   onBulkMoveCategory,
@@ -76,9 +82,33 @@ export function CatalogSelectionActionBar({
             {selectedCount} Selected
           </Text>
           <Text fontSize={10} color={tokens.textMuted}>
-            Batch action mode
+            {totalCount ? `${selectedCount} of ${totalCount}` : 'Batch action mode'}
           </Text>
         </YStack>
+
+        {onToggleSelectAll && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isAllSelected ? 'Deselect all products' : 'Select all products'}
+            onPress={onToggleSelectAll}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <XStack
+              paddingHorizontal={8}
+              paddingVertical={4}
+              borderRadius={tokens.radius.full}
+              backgroundColor={isAllSelected ? `${tokens.accent}20` : tokens.surfaceRaised}
+              borderWidth={1}
+              borderColor={isAllSelected ? tokens.accent : tokens.border}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <Text fontSize={10} fontWeight="700" color={isAllSelected ? tokens.accent : tokens.text}>
+                {isAllSelected ? 'Deselect' : 'All'}
+              </Text>
+            </XStack>
+          </Pressable>
+        )}
       </XStack>
 
       {/* Right: Action Buttons */}

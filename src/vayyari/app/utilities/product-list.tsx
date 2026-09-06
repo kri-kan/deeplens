@@ -19,6 +19,7 @@ import {
   DEFAULT_FILTER_STATE,
 } from '@/components/tamagui-ui/molecules/CatalogFilterDrawer';
 import { useProductCatalog, ProductCatalogFilters } from '@/hooks/useProductCatalog';
+import { useMultiSelect } from '@/hooks/useMultiSelect';
 import { productService } from '@/services/productService';
 import { formatISTTimestamp } from '@/utils/date-format';
 import type { VendorProduct, MediaEntry } from '@/types/products';
@@ -136,46 +137,9 @@ export default function ProductCatalogScreen() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Multi-selection state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const selectedIdsRef = useRef(selectedIds);
-  useEffect(() => {
-    selectedIdsRef.current = selectedIds;
-  }, [selectedIds]);
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-  const clearSelectionRef = useRef(clearSelection);
-  useEffect(() => {
-    clearSelectionRef.current = clearSelection;
-  }, [clearSelection]);
-
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
   // Bulk move category modal state
   const [moveCategoryModalVisible, setMoveCategoryModalVisible] = useState(false);
   const [movingCategory, setMovingCategory] = useState(false);
-
-  // Hardware back press handler
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        if (selectedIdsRef.current.size > 0) {
-          clearSelectionRef.current();
-          return true;
-        }
-        return false;
-      };
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => subscription.remove();
-    }, [])
-  );
 
   // Hydrate filters from route params
   useEffect(() => {
@@ -285,6 +249,20 @@ export default function ProductCatalogScreen() {
   const gridItems: ProductGridTileData[] = useMemo(() => {
     return products.map(mapVendorProductToTileData);
   }, [products]);
+
+  // Multi-selection management via useMultiSelect
+  const {
+    selectedIds,
+    selectionMode,
+    isAllSelected,
+    toggleSelect: toggleSelection,
+    selectRange,
+    clearSelection,
+    toggleSelectAll,
+    toggleSelectionMode,
+  } = useMultiSelect({
+    items: gridItems,
+  });
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
@@ -477,12 +455,12 @@ export default function ProductCatalogScreen() {
   };
 
   const handleBack = useCallback(() => {
-    if (selectedIds.size > 0) {
+    if (selectionMode) {
       clearSelection();
     } else if (router.canGoBack()) {
       router.back();
     }
-  }, [selectedIds.size, clearSelection, router]);
+  }, [selectionMode, clearSelection, router]);
 
   return (
     <>
@@ -524,8 +502,13 @@ export default function ProductCatalogScreen() {
         totalCount={totalCount}
         columns={3}
         selectedIds={selectedIds}
+        selectionMode={selectionMode}
+        isAllSelected={isAllSelected}
         onToggleSelect={toggleSelection}
+        onSelectRange={selectRange}
         onClearSelection={clearSelection}
+        onToggleSelectAll={toggleSelectAll}
+        onToggleSelectionMode={toggleSelectionMode}
         fabricOptions={filterOptions.fabrics.length > 0 ? filterOptions.fabrics : undefined}
         vendorOptions={filterOptions.vendors.length > 0 ? filterOptions.vendors : undefined}
       />

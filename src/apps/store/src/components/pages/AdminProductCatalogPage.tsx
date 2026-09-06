@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { ScrollView, TextInput, Pressable } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import {
   LuX,
   LuSlidersHorizontal,
   LuPackage,
+  LuCheckCheck,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
@@ -89,11 +90,13 @@ export function AdminProductCatalogPage({
   const [internalQuery, setInternalQuery] = useState(searchQuery);
   const [selectedCat, setSelectedCat] = useState(activeCategoryId);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [internalIsSelectionMode, setInternalIsSelectionMode] = useState(false);
+  const lastAnchorIdRef = useRef<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<ProductGridTileData | null>(null);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(isFilterDrawerOpen);
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
 
-  const selectionMode = selectedIds.size > 0;
+  const selectionMode = internalIsSelectionMode || selectedIds.size > 0;
 
   const handleQueryChange = (val: string) => {
     setInternalQuery(val);
@@ -105,7 +108,16 @@ export function AdminProductCatalogPage({
     onSelectCategory?.(id);
   };
 
+  const toggleSelectionMode = () => {
+    if (selectionMode) {
+      clearSelection();
+    } else {
+      setInternalIsSelectionMode(true);
+    }
+  };
+
   const toggleSelection = (id: string) => {
+    lastAnchorIdRef.current = id;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -114,8 +126,41 @@ export function AdminProductCatalogPage({
     });
   };
 
+  const selectRange = (targetId: string, list: ProductGridTileData[]) => {
+    if (!lastAnchorIdRef.current || list.length === 0) {
+      toggleSelection(targetId);
+      return;
+    }
+    const anchorIdx = list.findIndex((p) => p.id === lastAnchorIdRef.current);
+    const targetIdx = list.findIndex((p) => p.id === targetId);
+    if (anchorIdx === -1 || targetIdx === -1) {
+      toggleSelection(targetId);
+      return;
+    }
+    const start = Math.min(anchorIdx, targetIdx);
+    const end = Math.max(anchorIdx, targetIdx);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (let i = start; i <= end; i++) {
+        next.add(list[i].id);
+      }
+      return next;
+    });
+    lastAnchorIdRef.current = targetId;
+  };
+
   const clearSelection = () => {
     setSelectedIds(new Set());
+    setInternalIsSelectionMode(false);
+    lastAnchorIdRef.current = null;
+  };
+
+  const handleToggleSelectAll = (list: ProductGridTileData[]) => {
+    if (list.length > 0 && selectedIds.size >= list.length) {
+      clearSelection();
+    } else {
+      setSelectedIds(new Set(list.map((p) => p.id)));
+    }
   };
 
   const handleOpenFilters = () => {
@@ -255,6 +300,34 @@ export function AdminProductCatalogPage({
                   </Text>
                 </XStack>
               )}
+            </XStack>
+          </Pressable>
+
+          {/* Multi-Select Toggle */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+            onPress={toggleSelectionMode}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <XStack
+              paddingHorizontal={9}
+              height={30}
+              borderRadius={tokens.radius.full}
+              backgroundColor={selectionMode ? `${tokens.accent}18` : tokens.surfaceRaised}
+              borderWidth={selectionMode ? 1 : 0}
+              borderColor={tokens.accent}
+              alignItems="center"
+              justifyContent="center"
+              gap={4}
+            >
+              <LuCheckCheck
+                size={14}
+                color={selectionMode ? tokens.accent : tokens.text}
+              />
+              <Text fontSize={11} fontWeight="700" color={selectionMode ? tokens.accent : tokens.text}>
+                {selectionMode ? 'Done' : 'Select'}
+              </Text>
             </XStack>
           </Pressable>
         </XStack>
@@ -449,7 +522,13 @@ export function AdminProductCatalogPage({
                       onProductPress?.(id);
                     }
                   }}
-                  onLongPress={(id) => toggleSelection(id)}
+                  onLongPress={(id) => {
+                    if (selectionMode) {
+                      selectRange(id, filteredProducts);
+                    } else {
+                      toggleSelection(id);
+                    }
+                  }}
                   onToggleStar={onToggleStar}
                   onQuickEdit={(p) => setEditingProduct(p)}
                 />
@@ -462,6 +541,9 @@ export function AdminProductCatalogPage({
       {/* Floating Multi-Selection Action Bar */}
       <CatalogSelectionActionBar
         selectedCount={selectedIds.size}
+        totalCount={filteredProducts.length}
+        isAllSelected={filteredProducts.length > 0 && selectedIds.size >= filteredProducts.length}
+        onToggleSelectAll={() => handleToggleSelectAll(filteredProducts)}
         onClearSelection={clearSelection}
         onBulkStar={() => onBulkStar?.(Array.from(selectedIds))}
         onBulkArchive={() => onBulkArchive?.(Array.from(selectedIds))}

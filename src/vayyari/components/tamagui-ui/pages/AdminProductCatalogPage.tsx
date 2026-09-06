@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   FlatList,
   ScrollView,
@@ -16,6 +16,7 @@ import {
   LuPackage,
   LuArrowLeft,
   LuArchive,
+  LuCheckSquare,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -81,7 +82,12 @@ export interface AdminProductCatalogPageProps {
   // Controlled selection support
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  onSelectRange?: (id: string) => void;
   onClearSelection?: () => void;
+  onToggleSelectAll?: () => void;
+  isAllSelected?: boolean;
+  selectionMode?: boolean;
+  onToggleSelectionMode?: () => void;
   categoryOptions?: { id: string; label: string }[];
   fabricOptions?: string[];
   vendorOptions?: string[];
@@ -123,7 +129,12 @@ export function AdminProductCatalogPage({
   columns = 3,
   selectedIds: propSelectedIds,
   onToggleSelect,
+  onSelectRange,
   onClearSelection,
+  onToggleSelectAll,
+  isAllSelected: propIsAllSelected,
+  selectionMode: propSelectionMode,
+  onToggleSelectionMode,
   categoryOptions,
   fabricOptions,
   vendorOptions,
@@ -136,12 +147,15 @@ export function AdminProductCatalogPage({
   const [internalQuery, setInternalQuery] = useState(searchQuery);
   const [internalSelectedCat, setInternalSelectedCat] = useState(activeCategoryId);
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
+  const [internalIsSelectionMode, setInternalIsSelectionMode] = useState(false);
+  const lastAnchorIdRef = useRef<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<ProductGridTileData | null>(null);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(isFilterDrawerOpen);
   const [activeFilters, setActiveFilters] = useState<FilterState>(propFilters || DEFAULT_FILTER_STATE);
 
   const selectedIds = propSelectedIds !== undefined ? propSelectedIds : internalSelectedIds;
-  const selectionMode = selectedIds.size > 0;
+  const selectionMode = propSelectionMode !== undefined ? propSelectionMode : (internalIsSelectionMode || selectedIds.size > 0);
+  const isAll = propIsAllSelected !== undefined ? propIsAllSelected : (products.length > 0 && selectedIds.size >= products.length);
 
   const handleQueryChange = (val: string) => {
     setInternalQuery(val);
@@ -153,7 +167,20 @@ export function AdminProductCatalogPage({
     onSelectCategory?.(id);
   };
 
+  const toggleSelectionMode = () => {
+    if (onToggleSelectionMode) {
+      onToggleSelectionMode();
+    } else {
+      if (selectionMode) {
+        clearSelection();
+      } else {
+        setInternalIsSelectionMode(true);
+      }
+    }
+  };
+
   const toggleSelection = (id: string) => {
+    lastAnchorIdRef.current = id;
     if (onToggleSelect) {
       onToggleSelect(id);
     } else {
@@ -166,7 +193,48 @@ export function AdminProductCatalogPage({
     }
   };
 
+  const selectRange = (targetId: string) => {
+    if (onSelectRange) {
+      onSelectRange(targetId);
+      return;
+    }
+    if (!lastAnchorIdRef.current || products.length === 0) {
+      toggleSelection(targetId);
+      return;
+    }
+    const anchorIdx = products.findIndex((p) => p.id === lastAnchorIdRef.current);
+    const targetIdx = products.findIndex((p) => p.id === targetId);
+    if (anchorIdx === -1 || targetIdx === -1) {
+      toggleSelection(targetId);
+      return;
+    }
+    const start = Math.min(anchorIdx, targetIdx);
+    const end = Math.max(anchorIdx, targetIdx);
+    setInternalSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (let i = start; i <= end; i++) {
+        next.add(products[i].id);
+      }
+      return next;
+    });
+    lastAnchorIdRef.current = targetId;
+  };
+
+  const handleToggleSelectAll = () => {
+    if (onToggleSelectAll) {
+      onToggleSelectAll();
+    } else {
+      if (isAll) {
+        clearSelection();
+      } else {
+        setInternalSelectedIds(new Set(products.map((p) => p.id)));
+      }
+    }
+  };
+
   const clearSelection = () => {
+    setInternalIsSelectionMode(false);
+    lastAnchorIdRef.current = null;
     if (onClearSelection) {
       onClearSelection();
     } else {
@@ -334,6 +402,34 @@ export function AdminProductCatalogPage({
               )}
             </XStack>
           </TouchableOpacity>
+
+          {/* Multi-Select Toggle */}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+            activeOpacity={0.7}
+            onPress={toggleSelectionMode}
+          >
+            <XStack
+              paddingHorizontal={9}
+              height={30}
+              borderRadius={tokens.radius.full}
+              backgroundColor={selectionMode ? `${tokens.accent}18` : tokens.surfaceRaised}
+              borderWidth={selectionMode ? 1 : 0}
+              borderColor={tokens.accent}
+              alignItems="center"
+              justifyContent="center"
+              gap={4}
+            >
+              <LuCheckSquare
+                size={13}
+                color={selectionMode ? tokens.accent : tokens.text}
+              />
+              <Text fontSize={11} fontWeight="700" color={selectionMode ? tokens.accent : tokens.text}>
+                {selectionMode ? 'Done' : 'Select'}
+              </Text>
+            </XStack>
+          </TouchableOpacity>
         </XStack>
       </XStack>
 
@@ -477,7 +573,13 @@ export function AdminProductCatalogPage({
                   onProductPress?.(id);
                 }
               }}
-              onLongPress={(id) => toggleSelection(id)}
+              onLongPress={(id) => {
+                if (selectionMode) {
+                  selectRange(id);
+                } else {
+                  toggleSelection(id);
+                }
+              }}
               onToggleStar={onToggleStar}
               onQuickEdit={(p) => setEditingProduct(p)}
             />
@@ -554,6 +656,9 @@ export function AdminProductCatalogPage({
       {/* Floating Multi-Selection Action Bar */}
       <CatalogSelectionActionBar
         selectedCount={selectedIds.size}
+        totalCount={products.length}
+        isAllSelected={isAll}
+        onToggleSelectAll={handleToggleSelectAll}
         onClearSelection={clearSelection}
         onBulkStar={() => onBulkStar?.(Array.from(selectedIds))}
         onBulkMoveCategory={() => onBulkMoveCategory?.(Array.from(selectedIds))}

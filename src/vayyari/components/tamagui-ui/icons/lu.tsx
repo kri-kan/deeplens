@@ -36,6 +36,9 @@ export const LuArrowLeft: React.FC<IconProps> = ({ size = 16, color = '#333333',
 export const LuCheck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="check" size={size} color={color} style={style} />
 );
+export const LuCheckSquare: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="check-square" size={size} color={color} style={style} />
+);
 export const LuTriangleAlert: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="alert-triangle" size={size} color={color} style={style} />
 );
