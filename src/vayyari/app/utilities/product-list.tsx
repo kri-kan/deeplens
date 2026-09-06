@@ -501,10 +501,7 @@ export default function ProductCatalogScreen() {
         onRemoveFilterChip={handleRemoveFilterChip}
         filters={activeFilters}
         onApplyFilters={handleApplyFilters}
-        onCreateProduct={() => {
-          // Future create product route or picker
-          Alert.alert('New Product', 'To catalog new inventory, forward images to your WhatsApp intake bot.');
-        }}
+
         onNavArchived={() => router.push('/utilities/archived')}
         onBack={router.canGoBack() ? handleBack : undefined}
         onProductPress={(id) => router.push(`/product/${id}`)}

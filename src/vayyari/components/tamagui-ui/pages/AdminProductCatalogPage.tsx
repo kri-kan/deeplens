@@ -13,7 +13,6 @@ import {
   LuSearch,
   LuX,
   LuSlidersHorizontal,
-  LuPlus,
   LuPackage,
   LuArrowLeft,
   LuArchive,
@@ -264,14 +263,14 @@ export function AdminProductCatalogPage({
             </TouchableOpacity>
           )}
 
-          <YStack gap={0} flex={1}>
+          <XStack alignItems="center" gap={6} flex={1}>
             <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2} numberOfLines={1}>
               Product Catalog
             </Text>
-            <Text fontSize={11} color={tokens.textMuted} numberOfLines={1}>
-              {displayedCount} items • master SKUs
+            <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
+              ({displayedCount})
             </Text>
-          </YStack>
+          </XStack>
         </XStack>
 
         <XStack alignItems="center" gap={6}>
@@ -335,30 +334,6 @@ export function AdminProductCatalogPage({
               )}
             </XStack>
           </TouchableOpacity>
-
-          {/* Create Product Button */}
-          {onCreateProduct && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Create new product"
-              activeOpacity={0.7}
-              onPress={onCreateProduct}
-            >
-              <XStack
-                paddingVertical={5}
-                paddingHorizontal={10}
-                borderRadius={tokens.radius.full}
-                backgroundColor={tokens.accent}
-                alignItems="center"
-                gap={4}
-              >
-                <LuPlus size={14} color="#ffffff" />
-                <Text fontSize={12} fontWeight="700" color="#ffffff">
-                  Add
-                </Text>
-              </XStack>
-            </TouchableOpacity>
-          )}
         </XStack>
       </XStack>
 

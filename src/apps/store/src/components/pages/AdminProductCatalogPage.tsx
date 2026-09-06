@@ -6,7 +6,6 @@ import {
   LuSearch,
   LuX,
   LuSlidersHorizontal,
-  LuPlus,
   LuPackage,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
@@ -208,14 +207,14 @@ export function AdminProductCatalogPage({
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
       >
-        <YStack gap={0}>
+        <XStack alignItems="center" gap={6}>
           <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
             Product Catalog
           </Text>
-          <Text fontSize={11} color={tokens.textMuted}>
-            {filteredProducts.length} items • master SKUs
+          <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
+            ({filteredProducts.length})
           </Text>
-        </YStack>
+        </XStack>
 
         <XStack alignItems="center" gap={6}>
           {/* Filter Drawer Toggle */}
@@ -256,28 +255,6 @@ export function AdminProductCatalogPage({
                   </Text>
                 </XStack>
               )}
-            </XStack>
-          </Pressable>
-
-          {/* Create Product Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Create new product"
-            onPress={onCreateProduct}
-            style={{ cursor: 'pointer' } as any}
-          >
-            <XStack
-              paddingVertical={5}
-              paddingHorizontal={10}
-              borderRadius={tokens.radius.full}
-              backgroundColor={tokens.accent}
-              alignItems="center"
-              gap={4}
-            >
-              <LuPlus size={14} color="#ffffff" />
-              <Text fontSize={12} fontWeight="700" color="#ffffff">
-                Add
-              </Text>
             </XStack>
           </Pressable>
         </XStack>
