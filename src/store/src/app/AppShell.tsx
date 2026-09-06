@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, SafeAreaView, TextInput } from 'react-native';
 import { useNavigation } from './NavigationContext';
 import { useCart } from '../context/CartContext';
@@ -9,31 +9,44 @@ import { usePWA } from '../context/PWAContext';
 
 // Components
 import { PwaInstallBanner } from '../components/pwa/PwaInstallBanner';
-import { LocationPermissionSheet } from '../components/permissions/LocationPermissionSheet';
-import { DesktopProfileMenu } from '../components/navigation/DesktopProfileMenu';
 import { BottomNav, BottomNavTab } from '../components/navigation/BottomNav';
-import { AuthSheet } from '../components/auth/AuthSheet';
-import { CartDrawer } from '../components/cart/CartDrawer';
 import { ToastContainer } from '../components/feedback/ToastContainer';
+import { ScreenSkeleton } from '../components/feedback/ScreenSkeleton';
+
+// Lazy-loaded Overlay Components (Loaded on user interaction)
+const DesktopProfileMenu = lazy(() =>
+  import('../components/navigation/DesktopProfileMenu').then((m) => ({ default: m.DesktopProfileMenu }))
+);
+const LocationPermissionSheet = lazy(() =>
+  import('../components/permissions/LocationPermissionSheet').then((m) => ({ default: m.LocationPermissionSheet }))
+);
+const AuthSheet = lazy(() =>
+  import('../components/auth/AuthSheet').then((m) => ({ default: m.AuthSheet }))
+);
+const CartDrawer = lazy(() =>
+  import('../components/cart/CartDrawer').then((m) => ({ default: m.CartDrawer }))
+);
 
 // Icons
 import { LuSearch, LuHeart, LuShoppingBag, LuUser, LuMapPin, LuWifiOff } from 'react-icons/lu';
 import { telemetry } from '../services/telemetry';
 
-// Pages
-import { OnboardingPage } from './pages/OnboardingPage';
-import { LoginPage } from './pages/LoginPage';
-import { OtpPage } from './pages/OtpPage';
+// Critical Landing Page (Eagerly bundled for immediate First Paint)
 import { HomePage } from './pages/HomePage';
-import { CatalogPage } from './pages/CatalogPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
-import { CartPage } from './pages/CartPage';
-import { CheckoutPage } from './pages/CheckoutPage';
-import { WishlistPage } from './pages/WishlistPage';
+
+// Lazy-loaded Routes (Code-split into async chunks loaded on demand)
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage').then((m) => ({ default: m.OnboardingPage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
+const OtpPage = lazy(() => import('./pages/OtpPage').then((m) => ({ default: m.OtpPage })));
+const CatalogPage = lazy(() => import('./pages/CatalogPage').then((m) => ({ default: m.CatalogPage })));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage').then((m) => ({ default: m.ProductDetailPage })));
+const CartPage = lazy(() => import('./pages/CartPage').then((m) => ({ default: m.CartPage })));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then((m) => ({ default: m.CheckoutPage })));
+const WishlistPage = lazy(() => import('./pages/WishlistPage').then((m) => ({ default: m.WishlistPage })));
 
 export const AppShell: React.FC = () => {
   const { currentRoute, navigate } = useNavigation();
-  const { itemCount, openDrawer } = useCart();
+  const { itemCount, openDrawer, isDrawerOpen } = useCart();
   const { wishlistCount } = useWishlist();
   const { currentLocation, locationStatus, requestLocationPermission, setManualPincode } = usePermissions();
   const { user, isAuthenticated, logout, loginWithGoogle, verifyOtp } = useAuth();
@@ -277,23 +290,25 @@ export const AppShell: React.FC = () => {
                   {/* Desktop Profile Hover Dropdown */}
                   {showDesktopProfileMenu && (
                     <View style={styles.desktopDropdownContainer}>
-                      <DesktopProfileMenu
-                        user={isAuthenticated ? { name: user?.name || 'Vayyari Patron', phone: user?.phone || '+91 98765 43210', tier: 'VIP Gold' } : null}
-                        onLoginClick={() => {
-                          setShowDesktopProfileMenu(false);
-                          setShowAuthSheet(true);
-                        }}
-                        onLogoutClick={() => {
-                          logout();
-                          setShowDesktopProfileMenu(false);
-                        }}
-                        onItemClick={(k) => {
-                          setShowDesktopProfileMenu(false);
-                          if (k === 'wishlist') navigate('wishlist');
-                          else if (k === 'orders') navigate('cart');
-                          else if (!isAuthenticated) setShowAuthSheet(true);
-                        }}
-                      />
+                      <Suspense fallback={null}>
+                        <DesktopProfileMenu
+                          user={isAuthenticated ? { name: user?.name || 'Vayyari Patron', phone: user?.phone || '+91 98765 43210', tier: 'VIP Gold' } : null}
+                          onLoginClick={() => {
+                            setShowDesktopProfileMenu(false);
+                            setShowAuthSheet(true);
+                          }}
+                          onLogoutClick={() => {
+                            logout();
+                            setShowDesktopProfileMenu(false);
+                          }}
+                          onItemClick={(k) => {
+                            setShowDesktopProfileMenu(false);
+                            if (k === 'wishlist') navigate('wishlist');
+                            else if (k === 'orders') navigate('cart');
+                            else if (!isAuthenticated) setShowAuthSheet(true);
+                          }}
+                        />
+                      </Suspense>
                     </View>
                   )}
                 </View>
@@ -352,8 +367,12 @@ export const AppShell: React.FC = () => {
           </View>
         )}
 
-        {/* Active Screen Content */}
-        <View style={styles.body}>{renderActiveScreen()}</View>
+        {/* Active Screen Content (Code-split with fallback skeleton) */}
+        <View style={styles.body}>
+          <Suspense fallback={<ScreenSkeleton />}>
+            {renderActiveScreen()}
+          </Suspense>
+        </View>
 
         {/* Mobile Bottom Navigation (Visible only on Mobile) */}
         {!hideShell && isMobile && (
@@ -365,44 +384,56 @@ export const AppShell: React.FC = () => {
           />
         )}
 
-        {/* Location Permission Bottom Sheet */}
-        <LocationPermissionSheet
-          visible={showLocationSheet}
-          onClose={() => setShowLocationSheet(false)}
-          permissionStatus={locationStatus === 'granted' ? 'granted' : 'denied'}
-          currentPincode={currentLocation?.pincode || ''}
-          onGrantPermission={async () => {
-            const loc = await requestLocationPermission();
-            if (loc?.pincode) {
-              await setManualPincode(loc.pincode);
-            }
-          }}
-          onUseCurrentLocation={async () => {
-            const loc = await requestLocationPermission();
-            if (loc?.pincode) {
-              await setManualPincode(loc.pincode);
-            }
-          }}
-          onPincodeSubmit={async (code) => {
-            await setManualPincode(code);
-            setShowLocationSheet(false);
-          }}
-        />
+        {/* Location Permission Bottom Sheet (Loaded on-demand) */}
+        {showLocationSheet && (
+          <Suspense fallback={null}>
+            <LocationPermissionSheet
+              visible={showLocationSheet}
+              onClose={() => setShowLocationSheet(false)}
+              permissionStatus={locationStatus === 'granted' ? 'granted' : 'denied'}
+              currentPincode={currentLocation?.pincode || ''}
+              onGrantPermission={async () => {
+                const loc = await requestLocationPermission();
+                if (loc?.pincode) {
+                  await setManualPincode(loc.pincode);
+                }
+              }}
+              onUseCurrentLocation={async () => {
+                const loc = await requestLocationPermission();
+                if (loc?.pincode) {
+                  await setManualPincode(loc.pincode);
+                }
+              }}
+              onPincodeSubmit={async (code) => {
+                await setManualPincode(code);
+                setShowLocationSheet(false);
+              }}
+            />
+          </Suspense>
+        )}
 
-        {/* Login / Signup Modal Sheet */}
-        <AuthSheet
-          visible={showAuthSheet}
-          onClose={() => setShowAuthSheet(false)}
-          onSuccess={handleAuthSuccess}
-        />
+        {/* Login / Signup Modal Sheet (Loaded on-demand) */}
+        {showAuthSheet && (
+          <Suspense fallback={null}>
+            <AuthSheet
+              visible={showAuthSheet}
+              onClose={() => setShowAuthSheet(false)}
+              onSuccess={handleAuthSuccess}
+            />
+          </Suspense>
+        )}
 
-        {/* Cart Drawer */}
-        <CartDrawer
-          onOpenAuth={() => {
-            telemetry.trackEvent('auth_sheet_opened', { source: 'cart_drawer_gate' });
-            setShowAuthSheet(true);
-          }}
-        />
+        {/* Cart Drawer (Loaded on-demand when cart is opened) */}
+        {isDrawerOpen && (
+          <Suspense fallback={null}>
+            <CartDrawer
+              onOpenAuth={() => {
+                telemetry.trackEvent('auth_sheet_opened', { source: 'cart_drawer_gate' });
+                setShowAuthSheet(true);
+              }}
+            />
+          </Suspense>
+        )}
 
         {/* Toast Container */}
         <ToastContainer />
