@@ -84,3 +84,18 @@ export const LuHistory: React.FC<IconProps> = ({ size = 16, color = '#333333', s
 export const LuInbox: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="inbox" size={size} color={color} style={style} />
 );
+export const LuSearch: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="search" size={size} color={color} style={style} />
+);
+export const LuClock: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="clock" size={size} color={color} style={style} />
+);
+export const LuPackage: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="package" size={size} color={color} style={style} />
+);
+export const LuTruck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="truck-delivery-outline" size={size} color={color} style={style} />
+);
+export const LuUser: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="user" size={size} color={color} style={style} />
+);

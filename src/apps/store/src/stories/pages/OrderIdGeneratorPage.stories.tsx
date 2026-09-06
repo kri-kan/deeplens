@@ -61,7 +61,7 @@ const MOCK_HISTORY: OrderIdHistoryEntry[] = [
 // ─────────────────────────────────────────────
 
 const meta: Meta<OrderIdGeneratorPageProps> = {
-  title: 'Pages/Admin/OrderIdGenerator',
+  title: 'Pages/OrderIdGenerator',
   component: OrderIdGeneratorPage,
   args: {
     ...THEME_ARGS,
