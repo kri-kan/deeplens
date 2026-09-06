@@ -1,18 +1,10 @@
 import React, { useState } from 'react';
-import { TextInput, Pressable } from 'react-native';
+import { TextInput, Pressable, TouchableOpacity } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import {
-  RiWhatsappFill,
-  RiInstagramFill,
-} from 'react-icons/ri';
-import {
-  LuCopy,
-  LuCheck,
-  LuSparkles,
-  LuPhone,
-  LuTag,
-} from 'react-icons/lu';
+import { RiWhatsappFill, RiInstagramFill } from 'react-icons/ri';
+import { LuCopy, LuCheck, LuSparkles, LuPhone, LuTag } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { openPlatformHandle } from '../../../utils/platformLink';
 
 export type GeneratorSource = 'whatsapp' | 'instagram' | null;
 export type GeneratorPaymentMode = 'cod' | 'prepaid' | null;
@@ -37,6 +29,7 @@ export interface OrderIdGeneratorCardProps {
   onGenerate: () => void;
   generatedEntry?: GeneratedOrderResult | null;
   onCopy?: (id: string, includePrefix?: boolean) => void;
+  onOpenPlatform?: (source: string, handle?: string) => void;
 }
 
 const WHATSAPP_GREEN = '#25D366';
@@ -53,6 +46,7 @@ export function OrderIdGeneratorCard({
   onGenerate,
   generatedEntry,
   onCopy,
+  onOpenPlatform,
 }: OrderIdGeneratorCardProps) {
   const { tokens } = useTheme();
   const [copiedType, setCopiedType] = useState<'raw' | 'prefix' | null>(null);
@@ -70,6 +64,15 @@ export function OrderIdGeneratorCard({
     setTimeout(() => {
       setCopiedType(null);
     }, 2000);
+  };
+
+  const handleOpenPlatform = (source?: GeneratorSource, handle?: string) => {
+    if (!source) return;
+    if (onOpenPlatform) {
+      onOpenPlatform(source, handle);
+    } else {
+      openPlatformHandle(source, handle);
+    }
   };
 
   const isGenerateDisabled = () => {
@@ -114,10 +117,12 @@ export function OrderIdGeneratorCard({
         {/* Source Icon-Only Buttons */}
         <XStack gap={10} alignItems="center">
           {/* WhatsApp Icon Button */}
-          <Pressable
+          <TouchableOpacity
+            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Select WhatsApp source"
             onPress={() => onSelectSource(selectedSource === 'whatsapp' ? null : 'whatsapp')}
+            style={{ cursor: 'pointer' } as any}
           >
             <XStack
               width={46}
@@ -136,13 +141,15 @@ export function OrderIdGeneratorCard({
                 color={selectedSource === 'whatsapp' ? WHATSAPP_GREEN : tokens.textMuted}
               />
             </XStack>
-          </Pressable>
+          </TouchableOpacity>
 
           {/* Instagram Icon Button */}
-          <Pressable
+          <TouchableOpacity
+            activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Select Instagram source"
             onPress={() => onSelectSource(selectedSource === 'instagram' ? null : 'instagram')}
+            style={{ cursor: 'pointer' } as any}
           >
             <XStack
               width={46}
@@ -161,7 +168,7 @@ export function OrderIdGeneratorCard({
                 color={selectedSource === 'instagram' ? INSTAGRAM_PINK : tokens.textMuted}
               />
             </XStack>
-          </Pressable>
+          </TouchableOpacity>
         </XStack>
 
         {/* Payment Pills: COD & Prepaid */}
@@ -170,6 +177,7 @@ export function OrderIdGeneratorCard({
             accessibilityRole="button"
             accessibilityLabel="Select COD payment mode"
             onPress={() => onSelectPaymentMode(paymentMode === 'cod' ? null : 'cod')}
+            style={{ cursor: 'pointer' } as any}
           >
             <XStack
               paddingVertical={8}
@@ -195,6 +203,7 @@ export function OrderIdGeneratorCard({
             accessibilityRole="button"
             accessibilityLabel="Select Prepaid payment mode"
             onPress={() => onSelectPaymentMode(paymentMode === 'prepaid' ? null : 'prepaid')}
+            style={{ cursor: 'pointer' } as any}
           >
             <XStack
               paddingVertical={8}
@@ -259,7 +268,10 @@ export function OrderIdGeneratorCard({
               } as any}
             />
             {sourceHandle.length > 0 && (
-              <Pressable onPress={() => onChangeSourceHandle('')}>
+              <Pressable
+                onPress={() => onChangeSourceHandle('')}
+                style={{ cursor: 'pointer' } as any}
+              >
                 <Text fontSize={12} color={tokens.textMuted}>
                   Clear
                 </Text>
@@ -280,7 +292,7 @@ export function OrderIdGeneratorCard({
         accessibilityLabel="Generate Order ID CTA"
         disabled={isGenerateDisabled()}
         onPress={onGenerate}
-        style={{ cursor: isGenerateDisabled() ? 'not-allowed' : 'pointer' } as any}
+        style={{ opacity: isGenerateDisabled() ? 0.6 : 1, cursor: isGenerateDisabled() ? 'not-allowed' : 'pointer' } as any}
       >
         <XStack
           height={44}
@@ -315,15 +327,41 @@ export function OrderIdGeneratorCard({
           gap={10}
         >
           <XStack alignItems="center" justifyContent="space-between">
-            <XStack alignItems="center" gap={8}>
-              {generatedEntry.source === 'whatsapp' ? (
-                <RiWhatsappFill size={18} color={WHATSAPP_GREEN} />
-              ) : generatedEntry.source === 'instagram' ? (
-                <RiInstagramFill size={18} color={INSTAGRAM_PINK} />
-              ) : (
-                <LuTag size={18} color={tokens.accent} />
-              )}
-              <YStack gap={1}>
+            <XStack alignItems="center" gap={10} flex={1}>
+              {/* Platform Circle Badge (Clickable Deep-Link) */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${generatedEntry.source} chat or profile`}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={() => handleOpenPlatform(generatedEntry.source, generatedEntry.sourceHandle)}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <XStack
+                  width={36}
+                  height={36}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={
+                    generatedEntry.source === 'whatsapp'
+                      ? `${WHATSAPP_GREEN}18`
+                      : generatedEntry.source === 'instagram'
+                      ? `${INSTAGRAM_PINK}18`
+                      : `${tokens.accent}18`
+                  }
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  {generatedEntry.source === 'whatsapp' ? (
+                    <RiWhatsappFill size={20} color={WHATSAPP_GREEN} />
+                  ) : generatedEntry.source === 'instagram' ? (
+                    <RiInstagramFill size={20} color={INSTAGRAM_PINK} />
+                  ) : (
+                    <LuTag size={18} color={tokens.accent} />
+                  )}
+                </XStack>
+              </TouchableOpacity>
+
+              <YStack gap={1} flex={1}>
                 <XStack alignItems="center" gap={6}>
                   <Text fontSize={16} fontWeight="800" color={tokens.text} letterSpacing={0.5}>
                     #{generatedEntry.id}
@@ -341,10 +379,36 @@ export function OrderIdGeneratorCard({
                     </XStack>
                   )}
                 </XStack>
-                <Text fontSize={11} color={tokens.textMuted}>
-                  {generatedEntry.paymentMode ? `${generatedEntry.paymentMode.toUpperCase()} • ` : ''}
-                  {generatedEntry.isNew ? 'Generated just now' : 'Latest Generated ID'}
-                </Text>
+                <XStack alignItems="center" gap={6} flexWrap="wrap">
+                  {generatedEntry.sourceHandle ? (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open ${generatedEntry.sourceHandle} on ${generatedEntry.source}`}
+                      onPress={() => handleOpenPlatform(generatedEntry.source, generatedEntry.sourceHandle)}
+                      style={{ cursor: 'pointer' } as any}
+                    >
+                      <Text
+                        fontSize={11}
+                        color={tokens.text}
+                        fontWeight="600"
+                        textDecorationLine="underline"
+                        textDecorationColor={`${tokens.text}33`}
+                      >
+                        {generatedEntry.sourceHandle}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {generatedEntry.sourceHandle && (
+                    <Text fontSize={10} color={tokens.textMuted}>
+                      •
+                    </Text>
+                  )}
+                  <Text fontSize={11} color={tokens.textMuted}>
+                    {generatedEntry.paymentMode ? `${generatedEntry.paymentMode.toUpperCase()} • ` : ''}
+                    {generatedEntry.isNew ? 'Generated just now' : 'Latest Generated ID'}
+                  </Text>
+                </XStack>
               </YStack>
             </XStack>
 
@@ -355,6 +419,7 @@ export function OrderIdGeneratorCard({
                 accessibilityRole="button"
                 accessibilityLabel="Copy raw order ID"
                 onPress={() => handleCopy(false)}
+                style={{ cursor: 'pointer' } as any}
               >
                 <XStack
                   alignItems="center"
@@ -386,6 +451,7 @@ export function OrderIdGeneratorCard({
                 accessibilityRole="button"
                 accessibilityLabel="Copy order ID with prefix"
                 onPress={() => handleCopy(true)}
+                style={{ cursor: 'pointer' } as any}
               >
                 <XStack
                   alignItems="center"

@@ -35,6 +35,7 @@ export interface OrderIdGeneratorPageProps {
     updated: { paymentMode: 'cod' | 'prepaid' | null; sourceHandle: string }
   ) => void;
   onCopy?: (id: string, includePrefix?: boolean) => void;
+  onOpenPlatform?: (source: string, handle?: string) => void;
   onNavigateToDetails?: (id: string) => void;
   onBack?: () => void;
   onOpenSettings?: () => void;
@@ -52,6 +53,7 @@ export function OrderIdGeneratorPage({
   onGenerateOrder,
   onUpdateOrder,
   onCopy,
+  onOpenPlatform,
   onNavigateToDetails,
   onBack,
   onOpenSettings,
@@ -165,6 +167,7 @@ export function OrderIdGeneratorPage({
           onGenerate={handleGenerate}
           generatedEntry={initialGeneratedEntry}
           onCopy={onCopy}
+          onOpenPlatform={onOpenPlatform}
         />
 
         {/* History Section Header */}
@@ -250,6 +253,7 @@ export function OrderIdGeneratorPage({
                     if (target) setEditingItem(target);
                   }}
                   onCopy={onCopy}
+                  onOpenPlatform={onOpenPlatform}
                 />
               ))}
             </YStack>

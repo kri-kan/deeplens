@@ -30,6 +30,7 @@ export interface OrderIdGeneratorPageProps {
     paymentMode: GeneratorPaymentMode,
     handle: string
   ) => void;
+  onOpenPlatform?: (source: string, handle?: string) => void;
   onNavigateToDetails?: (id: string) => void;
   onBack?: () => void;
   onOpenSettings?: () => void;
@@ -45,6 +46,7 @@ export function OrderIdGeneratorPage({
   isLoading = false,
   disableSafeArea = false,
   onGenerateOrder,
+  onOpenPlatform,
   onNavigateToDetails,
   onBack,
   onOpenSettings,
@@ -212,6 +214,7 @@ export function OrderIdGeneratorPage({
           onCopy={(id, includePrefix) => {
             console.log(`Copied ${id} (prefix: ${includePrefix})`);
           }}
+          onOpenPlatform={onOpenPlatform}
         />
 
         {/* History Section Header */}
@@ -299,6 +302,7 @@ export function OrderIdGeneratorPage({
                   onCopy={(id, includePrefix) => {
                     console.log(`Copied from history: ${id} (prefix: ${includePrefix})`);
                   }}
+                  onOpenPlatform={onOpenPlatform}
                 />
               ))}
             </YStack>

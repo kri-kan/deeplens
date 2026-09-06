@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, TouchableOpacity } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramFill } from '../../icons/ri';
 import { LuCopy, LuCheck, LuPencil, LuTag } from '../../icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge } from '../../atoms/TimestampBadge';
 import { StatusBadge } from '../../atoms/StatusBadge';
+import { openPlatformHandle } from '@/utils/platformLink';
 
 export interface OrderIdHistoryEntry {
   id: string;
@@ -23,6 +24,7 @@ export interface OrderIdHistoryItemProps {
   onPress?: (id: string) => void;
   onCopy?: (id: string, includePrefix?: boolean) => void;
   onEdit?: (id: string) => void;
+  onOpenPlatform?: (source: string, handle?: string) => void;
 }
 
 const WHATSAPP_GREEN = '#25D366';
@@ -33,6 +35,7 @@ export function OrderIdHistoryItem({
   onPress,
   onCopy,
   onEdit,
+  onOpenPlatform,
 }: OrderIdHistoryItemProps) {
   const { tokens } = useTheme();
   const [copiedType, setCopiedType] = useState<'raw' | 'prefix' | null>(null);
@@ -54,6 +57,14 @@ export function OrderIdHistoryItem({
     }, 1500);
   };
 
+  const handleOpenPlatform = () => {
+    if (onOpenPlatform) {
+      onOpenPlatform(item.source, contactHandle);
+    } else {
+      openPlatformHandle(item.source, contactHandle);
+    }
+  };
+
   return (
     <XStack
       backgroundColor={tokens.surface}
@@ -72,29 +83,38 @@ export function OrderIdHistoryItem({
     >
       {/* Left: Platform Icon & Order Details */}
       <XStack alignItems="center" gap={12} flex={1}>
-        {/* Platform Circle Badge */}
-        <XStack
-          width={36}
-          height={36}
-          borderRadius={tokens.radius.full}
-          backgroundColor={
-            isWhatsApp
-              ? `${WHATSAPP_GREEN}18`
-              : isInstagram
-              ? `${INSTAGRAM_PINK}18`
-              : tokens.surfaceRaised
-          }
-          alignItems="center"
-          justifyContent="center"
+        {/* Platform Circle Badge (Clickable Deep-Link) */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${item.source} chat or profile`}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={handleOpenPlatform}
+          style={{ cursor: 'pointer' } as any}
         >
-          {isWhatsApp ? (
-            <RiWhatsappFill size={20} color={WHATSAPP_GREEN} />
-          ) : isInstagram ? (
-            <RiInstagramFill size={20} color={INSTAGRAM_PINK} />
-          ) : (
-            <LuTag size={18} color={tokens.textMuted} />
-          )}
-        </XStack>
+          <XStack
+            width={36}
+            height={36}
+            borderRadius={tokens.radius.full}
+            backgroundColor={
+              isWhatsApp
+                ? `${WHATSAPP_GREEN}18`
+                : isInstagram
+                ? `${INSTAGRAM_PINK}18`
+                : tokens.surfaceRaised
+            }
+            alignItems="center"
+            justifyContent="center"
+          >
+            {isWhatsApp ? (
+              <RiWhatsappFill size={20} color={WHATSAPP_GREEN} />
+            ) : isInstagram ? (
+              <RiInstagramFill size={20} color={INSTAGRAM_PINK} />
+            ) : (
+              <LuTag size={18} color={tokens.textMuted} />
+            )}
+          </XStack>
+        </TouchableOpacity>
 
         {/* Text Info */}
         <YStack gap={2} flex={1}>
@@ -136,12 +156,26 @@ export function OrderIdHistoryItem({
             )}
           </XStack>
 
-          {/* Subtitle: Handle + Relative Timestamp */}
+          {/* Subtitle: Handle (Clickable Deep-Link) + Relative Timestamp */}
           <XStack alignItems="center" gap={8} flexWrap="wrap">
             {contactHandle ? (
-              <Text fontSize={12} color={tokens.text} fontWeight="500">
-                {contactHandle}
-              </Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${contactHandle} on ${item.source}`}
+                onPress={handleOpenPlatform}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <Text
+                  fontSize={12}
+                  color={tokens.text}
+                  fontWeight="600"
+                  textDecorationLine="underline"
+                  textDecorationColor={`${tokens.text}33`}
+                >
+                  {contactHandle}
+                </Text>
+              </TouchableOpacity>
             ) : null}
             {contactHandle && (
               <Text fontSize={11} color={tokens.textMuted}>
