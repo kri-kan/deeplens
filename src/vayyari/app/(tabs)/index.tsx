@@ -1,56 +1,199 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text, Appbar } from 'react-native-paper';
+import React, { useMemo } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
-import { Section } from '@/components/layout/Section';
-import { GridMenu } from '@/components/utility/GridMenu';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/types/authorization';
+import {
+  OperationsHubPage,
+  UtilityGroup,
+} from '@/components/tamagui-ui/pages/OperationsHubPage';
+import { UtilityTileItem } from '@/components/tamagui-ui/molecules/UtilityTile';
+import {
+  LuHash,
+  LuUsers,
+  LuList,
+  LuPlus,
+  LuMonitor,
+  LuDatabase,
+  LuImage,
+  LuYoutube,
+  LuLink,
+  LuFlaskConical,
+  LuMegaphone,
+  LuShield,
+} from '@/components/tamagui-ui/icons/lu';
+import {
+  RiWhatsappLine,
+  RiInstagramLine,
+} from '@/components/tamagui-ui/icons/ri';
 
-interface UtilityItem {
+interface RawUtilityItem {
   id: string;
   title: string;
-  icon: string;
+  icon: React.ReactNode;
   route: string;
   color?: string;
+  description?: string;
+  badge?: string;
   permission?: string;
 }
 
-const OPERATIONAL_UTILITIES: UtilityItem[] = [
-  { id: 'gen-id', title: 'Generate ID', icon: 'identifier', route: '/utilities/order-id-generator', color: '#6200ee', permission: PERMISSIONS.ORDERS_VIEW },
-  { id: 'customers', title: 'Customers', icon: 'account-group', route: '/utilities/customer-management', color: '#3f51b5', permission: PERMISSIONS.CUSTOMERS_VIEW },
+const OPERATIONAL_UTILITIES: RawUtilityItem[] = [
+  {
+    id: 'gen-id',
+    title: 'Generate ID',
+    icon: <LuHash size={20} color="#6200ee" />,
+    route: '/utilities/order-id-generator',
+    color: '#6200ee',
+    description: 'Order prefix & tracking',
+    badge: 'Fast',
+    permission: PERMISSIONS.ORDERS_VIEW,
+  },
+  {
+    id: 'customers',
+    title: 'Customers',
+    icon: <LuUsers size={20} color="#3f51b5" />,
+    route: '/utilities/customer-management',
+    color: '#3f51b5',
+    description: 'Client ledger & history',
+    permission: PERMISSIONS.CUSTOMERS_VIEW,
+  },
 ];
 
-const PRODUCT_UTILITIES: UtilityItem[] = [
-  { id: 'view-catalog', title: 'Catalog', icon: 'format-list-bulleted', route: '/utilities/product-list', color: '#6200ee', permission: PERMISSIONS.CATALOG_VIEW },
-  { id: 'create-product', title: 'Create', icon: 'plus-box', route: '/utilities/create-product', color: '#00a86b', permission: PERMISSIONS.CATALOG_CREATE },
+const PRODUCT_UTILITIES: RawUtilityItem[] = [
+  {
+    id: 'view-catalog',
+    title: 'Catalog',
+    icon: <LuList size={20} color="#6200ee" />,
+    route: '/utilities/product-list',
+    color: '#6200ee',
+    description: 'Inventory & master SKUs',
+    permission: PERMISSIONS.CATALOG_VIEW,
+  },
+  {
+    id: 'create-product',
+    title: 'Create Product',
+    icon: <LuPlus size={20} color="#00a86b" />,
+    route: '/utilities/create-product',
+    color: '#00a86b',
+    description: 'Onboard new item',
+    badge: 'Add',
+    permission: PERMISSIONS.CATALOG_CREATE,
+  },
 ];
 
-const SYSTEM_UTILITIES: UtilityItem[] = [
-  { id: 'system-dashboard', title: 'System', icon: 'monitor-dashboard', route: '/utilities/system-dashboard', color: '#607D8B', permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW },
-  { id: 'master-data', title: 'Master Data', icon: 'database-settings', route: '/system/master-data', color: '#673AB7', permission: PERMISSIONS.SYSTEM_MASTER_DATA_EDIT },
-  { id: 'media-settings', title: 'Media', icon: 'file-image-outline', route: '/utilities/media-settings', color: '#ff5722', permission: PERMISSIONS.SYSTEM_MEDIA_RULES_EDIT },
-  { id: 'insta-explorer', title: 'Explorer', icon: 'instagram', route: '/utilities/instagram-explorer', color: '#E1306C', permission: PERMISSIONS.INSTAGRAM_VIEW },
-  { id: 'youtube-dashboard', title: 'YouTube', icon: 'youtube', route: '/utilities/youtube-dashboard', color: '#FF0000', permission: PERMISSIONS.CATALOG_VIEW },
-  { id: 'quick-links', title: 'Links', icon: 'link-variant', route: '/utilities/quick-links', color: '#2196F3', permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW },
-  { id: 'whatsapp-mgmt', title: 'WhatsApp', icon: 'whatsapp', route: '/utilities/whatsapp', color: '#25D366', permission: PERMISSIONS.WHATSAPP_VIEW },
-  { id: 'playground', title: 'Playground', icon: 'test-tube', route: '/system/playground', color: '#9C27B0', permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW },
+const SYSTEM_UTILITIES: RawUtilityItem[] = [
+  {
+    id: 'system-dashboard',
+    title: 'System Health',
+    icon: <LuMonitor size={20} color="#607D8B" />,
+    route: '/utilities/system-dashboard',
+    color: '#607D8B',
+    description: 'Telemetry & services',
+    permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
+  },
+  {
+    id: 'master-data',
+    title: 'Master Data',
+    icon: <LuDatabase size={20} color="#673AB7" />,
+    route: '/system/master-data',
+    color: '#673AB7',
+    description: 'Lookups & seed data',
+    permission: PERMISSIONS.SYSTEM_MASTER_DATA_EDIT,
+  },
+  {
+    id: 'media-settings',
+    title: 'Media Engine',
+    icon: <LuImage size={20} color="#ff5722" />,
+    route: '/utilities/media-settings',
+    color: '#ff5722',
+    description: 'Rules & storage specs',
+    permission: PERMISSIONS.SYSTEM_MEDIA_RULES_EDIT,
+  },
+  {
+    id: 'insta-explorer',
+    title: 'Insta Explorer',
+    icon: <RiInstagramLine size={20} color="#E1306C" />,
+    route: '/utilities/instagram-explorer',
+    color: '#E1306C',
+    description: 'Feed sync & scraping',
+    permission: PERMISSIONS.INSTAGRAM_VIEW,
+  },
+  {
+    id: 'youtube-dashboard',
+    title: 'YouTube Hub',
+    icon: <LuYoutube size={20} color="#FF0000" />,
+    route: '/utilities/youtube-dashboard',
+    color: '#FF0000',
+    description: 'Media broadcasts & video',
+    permission: PERMISSIONS.CATALOG_VIEW,
+  },
+  {
+    id: 'quick-links',
+    title: 'Quick Links',
+    icon: <LuLink size={20} color="#2196F3" />,
+    route: '/utilities/quick-links',
+    color: '#2196F3',
+    description: 'Operational shortcuts',
+    permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
+  },
+  {
+    id: 'whatsapp-mgmt',
+    title: 'WhatsApp Ops',
+    icon: <RiWhatsappLine size={20} color="#25D366" />,
+    route: '/utilities/whatsapp',
+    color: '#25D366',
+    description: 'Webhook sync & alerts',
+    permission: PERMISSIONS.WHATSAPP_VIEW,
+  },
+  {
+    id: 'playground',
+    title: 'Playground',
+    icon: <LuFlaskConical size={20} color="#9C27B0" />,
+    route: '/system/playground',
+    color: '#9C27B0',
+    description: 'Component & API tests',
+    permission: PERMISSIONS.SYSTEM_DASHBOARD_VIEW,
+  },
 ];
 
-const COMMUNICATION_UTILITIES: UtilityItem[] = [
-  { id: 'campaigns', title: 'Campaigns', icon: 'bullhorn-variant', route: '/utilities/communication-management', color: '#FF9800', permission: PERMISSIONS.WHATSAPP_BROADCAST },
+const COMMUNICATION_UTILITIES: RawUtilityItem[] = [
+  {
+    id: 'campaigns',
+    title: 'Campaigns',
+    icon: <LuMegaphone size={20} color="#FF9800" />,
+    route: '/utilities/communication-management',
+    color: '#FF9800',
+    description: 'WhatsApp broadcast blasts',
+    permission: PERMISSIONS.WHATSAPP_BROADCAST,
+  },
 ];
 
-const ADMIN_UTILITIES: UtilityItem[] = [
-  { id: 'user-directory', title: 'User Directory', icon: 'account-multiple-outline', route: '/system/users', color: '#6200ee', permission: PERMISSIONS.USERS_VIEW },
-  { id: 'roles-access', title: 'Roles & Access', icon: 'shield-account-outline', route: '/system/roles', color: '#00897B', permission: PERMISSIONS.ROLES_MANAGE },
+const ADMIN_UTILITIES: RawUtilityItem[] = [
+  {
+    id: 'user-directory',
+    title: 'User Directory',
+    icon: <LuUsers size={20} color="#6200ee" />,
+    route: '/system/users',
+    color: '#6200ee',
+    description: 'Staff profiles & accounts',
+    permission: PERMISSIONS.USERS_VIEW,
+  },
+  {
+    id: 'roles-access',
+    title: 'Roles & Access',
+    icon: <LuShield size={20} color="#00897B" />,
+    route: '/system/roles',
+    color: '#00897B',
+    description: 'RBAC permissions matrix',
+    permission: PERMISSIONS.ROLES_MANAGE,
+  },
 ];
 
 /**
- * UtilityScreen Component
- * 
+ * UtilityScreen Component (Operations Hub)
+ *
  * Serves as the central hub for all DeepLens operational, system, and administrative utilities.
  * Filters utility tiles dynamically according to user capabilities and permissions.
  * Includes a swipe-right gesture detector that navigates to the AI assistant.
@@ -59,16 +202,25 @@ export default function UtilityScreen() {
   const router = useRouter();
   const { hasPermission, isSuperAdmin } = usePermissions();
 
-  const filterItems = (items: UtilityItem[]) => {
-    if (isSuperAdmin) return items;
-    return items.filter(item => !item.permission || hasPermission(item.permission));
+  const filterItems = (items: RawUtilityItem[]): UtilityTileItem[] => {
+    if (isSuperAdmin) {
+      return items.map(({ permission, ...item }) => item);
+    }
+    return items
+      .filter((item) => !item.permission || hasPermission(item.permission))
+      .map(({ permission, ...item }) => item);
   };
 
-  const operationalItems = filterItems(OPERATIONAL_UTILITIES);
-  const productItems = filterItems(PRODUCT_UTILITIES);
-  const systemItems = filterItems(SYSTEM_UTILITIES);
-  const communicationItems = filterItems(COMMUNICATION_UTILITIES);
-  const adminItems = filterItems(ADMIN_UTILITIES);
+  const groups: UtilityGroup[] = useMemo(() => {
+    const rawGroups = [
+      { id: 'admin', title: 'Administration & Access', items: filterItems(ADMIN_UTILITIES) },
+      { id: 'business', title: 'Business & Logistics', items: filterItems(OPERATIONAL_UTILITIES) },
+      { id: 'product', title: 'Product Catalog', items: filterItems(PRODUCT_UTILITIES) },
+      { id: 'system', title: 'System & Platform', items: filterItems(SYSTEM_UTILITIES) },
+      { id: 'comms', title: 'Communications', items: filterItems(COMMUNICATION_UTILITIES) },
+    ];
+    return rawGroups.filter((g) => g.items.length > 0);
+  }, [hasPermission, isSuperAdmin]);
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX(40)
@@ -77,81 +229,20 @@ export default function UtilityScreen() {
     .onEnd((e) => {
       // Swipe right means finger moves from left to right (translationX > 0)
       if (e.translationX > 50) {
-        router.push('/ai');
+        router.push('/ai' as any);
       }
     });
 
   return (
     <GestureDetector gesture={swipeGesture}>
       <View style={{ flex: 1 }}>
-        <ScreenWrapper 
-          title="Utilities" 
-          actions={
-            <Appbar.Action icon="cog" onPress={() => router.push('/modal')} />
-          }
-          contentContainerStyle={styles.content}
-        >
-          {/* Administration & Access Section */}
-          {adminItems.length > 0 && (
-            <Section title="Administration & Access" style={styles.section}>
-              <GridMenu items={adminItems} />
-            </Section>
-          )}
-
-          {/* Operational / Business Section */}
-          {operationalItems.length > 0 && (
-            <Section title="Business" style={styles.section}>
-              <GridMenu items={operationalItems} />
-            </Section>
-          )}
-
-          {/* Product Management Section */}
-          {productItems.length > 0 && (
-            <Section title="Product" style={styles.section}>
-              <GridMenu items={productItems} />
-            </Section>
-          )}
-
-          {/* System Section */}
-          {systemItems.length > 0 && (
-            <Section title="System" style={styles.section}>
-              <GridMenu items={systemItems} />
-            </Section>
-          )}
-
-          {/* Communications Section */}
-          {communicationItems.length > 0 && (
-            <Section title="Communications" style={styles.section}>
-              <GridMenu items={communicationItems} />
-            </Section>
-          )}
-
-          <Section title="Business Insights" style={styles.section}>
-            <View style={styles.emptyGridPlaceholder}>
-               <Text variant="bodySmall" style={{ opacity: 0.3 }}>More utilities coming soon...</Text>
-            </View>
-          </Section>
-        </ScreenWrapper>
+        <OperationsHubPage
+          groups={groups}
+          onLaunchTool={(route) => router.push(route as any)}
+          onOpenAiAssistant={() => router.push('/ai' as any)}
+          onOpenSettings={() => router.push('/modal' as any)}
+        />
       </View>
     </GestureDetector>
   );
 }
-
-const styles = StyleSheet.create({
-  content: {
-    paddingBottom: 40,
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginVertical: 8,
-  },
-  emptyGridPlaceholder: {
-    height: 100,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.1)',
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  }
-});

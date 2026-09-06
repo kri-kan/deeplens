@@ -99,3 +99,40 @@ export const LuTruck: React.FC<IconProps> = ({ size = 16, color = '#333333', sty
 export const LuUser: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="user" size={size} color={color} style={style} />
 );
+
+export const LuUsers: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="users" size={size} color={color} style={style} />
+);
+export const LuLayers: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="layers" size={size} color={color} style={style} />
+);
+export const LuList: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="list" size={size} color={color} style={style} />
+);
+export const LuDatabase: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="database-outline" size={size} color={color} style={style} />
+);
+export const LuMonitor: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="monitor" size={size} color={color} style={style} />
+);
+export const LuYoutube: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="youtube" size={size} color={color} style={style} />
+);
+export const LuLink: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="link" size={size} color={color} style={style} />
+);
+export const LuFlaskConical: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="flask-outline" size={size} color={color} style={style} />
+);
+export const LuMegaphone: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="bullhorn-outline" size={size} color={color} style={style} />
+);
+export const LuShield: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="shield" size={size} color={color} style={style} />
+);
+export const LuHash: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="hash" size={size} color={color} style={style} />
+);
+export const LuLayoutDashboard: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="layout" size={size} color={color} style={style} />
+);
