@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useTheme } from '../../../theme';
 
@@ -7,7 +7,8 @@ export interface UtilityTileItem {
   id: string;
   title: string;
   icon: React.ReactNode;
-  route: string;
+  route?: string;
+  onPress?: () => void;
   color?: string;
   description?: string;
   badge?: string;
@@ -22,26 +23,33 @@ export interface UtilityTileProps {
 export function UtilityTile({ item, onPress }: UtilityTileProps) {
   const { tokens } = useTheme();
 
+  const handlePress = () => {
+    if (item.onPress) {
+      item.onPress();
+    } else if (item.route) {
+      onPress?.(item.route);
+    }
+  };
+
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`Launch ${item.title}`}
-      onPress={() => onPress?.(item.route)}
+      activeOpacity={0.65}
+      onPress={handlePress}
       style={{
         alignItems: 'center',
         justifyContent: 'flex-start',
-        paddingVertical: 4,
+        paddingVertical: 6,
         paddingHorizontal: 2,
         width: '100%',
-        cursor: 'pointer',
-      } as any}
+      }}
     >
       <YStack
         alignItems="center"
         justifyContent="center"
         gap={6}
         width="100%"
-        pressStyle={{ opacity: 0.6, scale: 0.92 }}
       >
         {/* Pure Icon Button without background box */}
         <YStack
@@ -82,6 +90,6 @@ export function UtilityTile({ item, onPress }: UtilityTileProps) {
           {item.title}
         </Text>
       </YStack>
-    </Pressable>
+    </TouchableOpacity>
   );
 }

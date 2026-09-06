@@ -209,6 +209,7 @@ export default function UtilityScreen() {
   const swipeGesture = Gesture.Pan()
     .activeOffsetX(40)
     .failOffsetY([-20, 20])
+    .cancelsTouchesInView(false)
     .runOnJS(true)
     .onEnd((e) => {
       // Swipe right means finger moves from left to right (translationX > 0)
@@ -222,7 +223,9 @@ export default function UtilityScreen() {
       <View style={{ flex: 1 }}>
         <OperationsHubPage
           groups={groups}
-          onLaunchTool={(route) => router.push(route as any)}
+          onLaunchTool={(route) => {
+            if (route) router.push(route as any);
+          }}
           onOpenAiAssistant={() => router.push('/ai' as any)}
           onOpenSettings={() => router.push('/modal' as any)}
         />
