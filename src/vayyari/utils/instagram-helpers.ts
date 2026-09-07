@@ -1,4 +1,4 @@
-import { Linking } from 'react-native';
+import { Linking, Alert } from 'react-native';
 import {
     InstagramMediaType,
     normalizeData,
@@ -148,58 +148,78 @@ export const mediaIdToShortcode = (mediaId: string): string => {
     }
 };
 
-export const getInstagramPostUrl = (item: any): string => {
-    if (!item) return 'https://www.instagram.com';
+/**
+ * Resolves the direct Instagram web URL for a post item or shortcode.
+ * Returns null if no valid post URL or valid shortcode is found.
+ * NOTE: Never falls back to generic homepages, user profiles, or database UUIDs.
+ */
+export const getInstagramPostUrl = (item: any): string | null => {
+    if (!item) return null;
 
     if (typeof item === 'string') {
-        if (item.startsWith('http://') || item.startsWith('https://')) {
-            return item;
+        const trimmed = item.trim();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            if (/instagram\.com\/(p|reel|reels|tv)\/[A-Za-z0-9_-]+/i.test(trimmed)) {
+                return trimmed;
+            }
+            return null;
         }
-        return `https://www.instagram.com/p/${item.replace(/^\/+|\/+$/g, '')}/`;
+        // Only accept actual Instagram shortcode patterns (5-25 chars, not a UUID)
+        if (/^[A-Za-z0-9_-]{5,25}$/.test(trimmed) && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(trimmed)) {
+            return `https://www.instagram.com/p/${trimmed}/`;
+        }
+        return null;
     }
 
+    // Check candidate post URL fields
     const candidate = item.postUrl || item.PostUrl || item.permalink || item.Permalink || item.url || item.Url || item.post_url;
     if (candidate && typeof candidate === 'string' && candidate.startsWith('http') && !candidate.includes('cdninstagram') && !candidate.includes('/api/v1/Attachment/')) {
         return candidate;
     }
-    const shortcode = item.shortcode || item.code;
-    if (shortcode) {
-        return `https://www.instagram.com/p/${shortcode}/`;
+
+    // Check explicit shortcode (must not be a UUID)
+    const rawCode = item.shortcode || item.code;
+    if (rawCode && typeof rawCode === 'string') {
+        const cleanCode = rawCode.trim();
+        if (/^[A-Za-z0-9_-]{5,25}$/.test(cleanCode) && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(cleanCode)) {
+            return `https://www.instagram.com/p/${cleanCode}/`;
+        }
     }
-    const username = item.ownerUsername || item.profileUsername || item.username;
-    if (username) {
-        return `https://www.instagram.com/${String(username).replace(/^@/, '')}/`;
-    }
-    return 'https://www.instagram.com';
+
+    return null;
 };
 
 /**
- * Opens an Instagram post, reel, or profile in the native Instagram app if available,
- * falling back gracefully to the web URL.
+ * Opens an Instagram post or reel in the native Instagram app if available,
+ * falling back gracefully to the verified web URL if the app is absent.
+ * If no valid post link exists, does not open anything and notifies the user.
  */
 export const openInstagramPost = async (item: any): Promise<void> => {
     if (!item) return;
 
-    let webUrl = '';
+    let webUrl: string | null = null;
     let shortcode = '';
     let postType = 'p';
 
     if (typeof item === 'string') {
-        if (item.startsWith('http://') || item.startsWith('https://')) {
-            webUrl = item;
-            const match = item.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
+        const trimmed = item.trim();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+            const match = trimmed.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
             if (match) {
                 postType = match[1].toLowerCase();
                 shortcode = match[2];
+                webUrl = trimmed;
             }
-        } else if (/^[A-Za-z0-9_-]+$/.test(item.trim())) {
-            shortcode = item.trim();
+        } else if (/^[A-Za-z0-9_-]{5,25}$/.test(trimmed) && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(trimmed)) {
+            shortcode = trimmed;
             webUrl = `https://www.instagram.com/p/${shortcode}/`;
         }
     } else {
         webUrl = getInstagramPostUrl(item);
-        shortcode = item.shortcode || item.code || '';
-        if (!shortcode && webUrl) {
+        const rawCode = item.shortcode || item.code;
+        if (rawCode && typeof rawCode === 'string' && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawCode)) {
+            shortcode = rawCode.trim();
+        } else if (webUrl) {
             const match = webUrl.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
             if (match) {
                 postType = match[1].toLowerCase();
@@ -208,7 +228,12 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         }
     }
 
-    if (!webUrl || webUrl === 'https://www.instagram.com') return;
+    // Strictly validate that we have a real post link before taking any action
+    if (!webUrl && !shortcode) {
+        console.warn('[openInstagramPost] No valid Instagram post URL or shortcode found for item:', item);
+        Alert.alert('Unavailable', 'No valid Instagram post link is available for this item.');
+        return;
+    }
 
     // Build candidate native URIs
     const candidateUris: string[] = [];
@@ -238,7 +263,7 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         }
     }
 
-    // If canOpenURL was blocked by OS or returned false, attempt primary native URI once inside try-catch
+    // If canOpenURL check was blocked by OS or returned false, attempt primary native URI once inside try-catch
     if (candidateUris.length > 0) {
         try {
             await Linking.openURL(candidateUris[0]);
@@ -248,10 +273,12 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         }
     }
 
-    // Fallback to web URL
-    try {
-        await Linking.openURL(webUrl);
-    } catch (err) {
-        console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
+    // Fallback to verified web URL ONLY if valid
+    if (webUrl) {
+        try {
+            await Linking.openURL(webUrl);
+        } catch (err) {
+            console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
+        }
     }
 };

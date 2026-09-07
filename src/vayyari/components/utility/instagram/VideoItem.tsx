@@ -130,7 +130,10 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
                 size={16} 
                 style={styles.actionIcon}
                 onPress={async () => {
-                  await Clipboard.setStringAsync(getInstagramPostUrl(item));
+                  const url = getInstagramPostUrl(item);
+                  if (url) {
+                    await Clipboard.setStringAsync(url);
+                  }
                 }}
               />
             </>
