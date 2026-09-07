@@ -11,7 +11,7 @@ import { useEventListener } from 'expo';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { instagramService, StoryGroup, InstagramPost, InstagramProfile, InstagramMediaType } from '@/services/instagram.service';
 import { wrapInSpan } from '@/utils/telemetry';
-import { getMediaUri } from '@/utils/instagram-helpers';
+import { getMediaUri, getInstagramPostUrl } from '@/utils/instagram-helpers';
 import { UnifiedPlannerItem } from '@/services/instagram.service';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
@@ -541,9 +541,14 @@ export default function StorySharingScreen() {
 
       let queuedCount = 0;
       let skippedCount = 0;
+      let skippedInvalidCount = 0;
       
       for (const { item } of orderedEntries) {
         if (item.type === 'post' && item.post) {
+          if (!getInstagramPostUrl(item.post)) {
+            skippedInvalidCount++;
+            continue;
+          }
           const result = await instagramService.queueForStory(item.post.id, targetProfile.id);
           if (result.duplicate) skippedCount++; else queuedCount++;
         } else if (item.type === 'group' && item.group) {
@@ -551,6 +556,10 @@ export default function StorySharingScreen() {
           const toQueue = starred.length > 0 ? starred.slice(0, 2) : (item.group.posts?.slice(0, 1) || []);
           
           for (const p of toQueue) {
+            if (!getInstagramPostUrl(p)) {
+              skippedInvalidCount++;
+              continue;
+            }
             const result = await instagramService.queueForStory(p.id, targetProfile.id, item.group.id);
             if (result.duplicate) skippedCount++; else queuedCount++;
           }
@@ -558,8 +567,15 @@ export default function StorySharingScreen() {
       }
       
       clearSelection();
-      const skipMsg = skippedCount > 0 ? ` (${skippedCount} already in queue, skipped)` : '';
-      Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}${skipMsg}`);
+      if (queuedCount === 0 && skippedInvalidCount > 0) {
+        Alert.alert('Cannot Queue', 'Selected post(s) or reel(s) do not have valid Instagram links.');
+      } else {
+        const skipDetails: string[] = [];
+        if (skippedCount > 0) skipDetails.push(`${skippedCount} duplicate(s)`);
+        if (skippedInvalidCount > 0) skipDetails.push(`${skippedInvalidCount} invalid URL(s) skipped`);
+        const skipMsg = skipDetails.length > 0 ? ` (${skipDetails.join(', ')})` : '';
+        Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}${skipMsg}`);
+      }
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Failed to queue items');

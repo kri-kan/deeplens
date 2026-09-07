@@ -4,7 +4,7 @@ import { useTheme, Text, Button, ActivityIndicator, IconButton, Menu } from 'rea
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { instagramService, InstagramPost, InstagramProfile } from '@/services/instagram.service';
-import { getMediaUri, openInstagramPost } from '@/utils/instagram-helpers';
+import { getMediaUri, openInstagramPost, getInstagramPostUrl } from '@/utils/instagram-helpers';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 const { width } = Dimensions.get('window');
@@ -92,7 +92,8 @@ export default function StoryQueueScreen() {
     setLoading(true);
     try {
       const items = await instagramService.getStoryQueue(selectedProfileId);
-      setQueue(items);
+      const validItems = items.filter(item => Boolean(getInstagramPostUrl(item)));
+      setQueue(validItems);
     } catch (err: any) {
       console.error(err);
       if (err?.status !== 401) {

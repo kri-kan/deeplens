@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { instagramService, StoryGroup, InstagramPost, InstagramProfile, InstagramMediaType } from '@/services/instagram.service';
 import { wrapInSpan } from '@/utils/telemetry';
-import { getMediaUri } from '@/utils/instagram-helpers';
+import { getMediaUri, getInstagramPostUrl } from '@/utils/instagram-helpers';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
 
 
@@ -993,9 +993,14 @@ export default function StoryPlannerDashboard() {
     try {
       const items = Array.from(selectedItems.values());
       let queuedCount = 0;
+      let skippedInvalidCount = 0;
       
       for (const item of items) {
         if (item.type === 'post' && item.post) {
+          if (!getInstagramPostUrl(item.post)) {
+            skippedInvalidCount++;
+            continue;
+          }
           await instagramService.queueForStory(item.post.id, targetProfile.id);
           queuedCount++;
         } else if (item.type === 'group' && item.group) {
@@ -1004,6 +1009,10 @@ export default function StoryPlannerDashboard() {
           const toQueue = starred.length > 0 ? starred.slice(0, 2) : (item.group.posts?.slice(0, 1) || []);
           
           for (const p of toQueue) {
+            if (!getInstagramPostUrl(p)) {
+              skippedInvalidCount++;
+              continue;
+            }
             await instagramService.queueForStory(p.id, targetProfile.id, item.group.id);
             queuedCount++;
           }
@@ -1011,7 +1020,12 @@ export default function StoryPlannerDashboard() {
       }
       
       setSelectedItems(new Map());
-      Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}`);
+      if (queuedCount === 0 && skippedInvalidCount > 0) {
+        Alert.alert('Cannot Queue', 'Selected post(s) or reel(s) do not have valid Instagram links.');
+      } else {
+        const skipMsg = skippedInvalidCount > 0 ? ` (${skippedInvalidCount} skipped due to invalid URLs)` : '';
+        Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}${skipMsg}`);
+      }
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Failed to queue items');

@@ -2231,6 +2231,16 @@ public class InstaController : ControllerBase
         try
         {
             using var conn = await _db.CreateConnectionAsync();
+
+            var postUrl = await conn.QueryFirstOrDefaultAsync<string>(@"
+                SELECT url FROM competitor_videos WHERE id = @PostId",
+                new { PostId = id });
+
+            if (string.IsNullOrWhiteSpace(postUrl) || !System.Text.RegularExpressions.Regex.IsMatch(postUrl, @"instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                return BadRequest(new { error = "Cannot post to story: post does not have a valid Instagram post/reel URL." });
+            }
+
             var historyId = Guid.NewGuid();
             await conn.ExecuteAsync(new CommandDefinition(@"
                 WITH updated AS (
@@ -2262,6 +2272,16 @@ public class InstaController : ControllerBase
         try
         {
             using var conn = await _db.CreateConnectionAsync();
+
+            // Validate that the post exists and has a valid Instagram URL
+            var postUrl = await conn.QueryFirstOrDefaultAsync<string>(@"
+                SELECT url FROM competitor_videos WHERE id = @PostId",
+                new { PostId = id });
+
+            if (string.IsNullOrWhiteSpace(postUrl) || !System.Text.RegularExpressions.Regex.IsMatch(postUrl, @"instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            {
+                return BadRequest(new { error = "Cannot queue post for story: post does not have a valid Instagram post/reel URL." });
+            }
 
             // Check if this post is already in the pending queue for this target account.
             // If so, return the existing history record without creating a duplicate.
@@ -2321,6 +2341,9 @@ public class InstaController : ControllerBase
                 JOIN competitor_videos cv ON cv.id = sph.post_id
                 WHERE sph.target_watchlist_id = @TargetWatchlistId
                   AND sph.posted_at IS NULL
+                  AND cv.url IS NOT NULL
+                  AND cv.url != ''
+                  AND cv.url ~* 'instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+'
                 ORDER BY sph.id ASC";
 
             var queue = (await conn.QueryAsync<dynamic>(sql, new { TargetWatchlistId = targetWatchlistId })).ToList();
@@ -2441,6 +2464,7 @@ public class InstaController : ControllerBase
                       AND cw.is_data_deleted = false
                       AND cv.status != 'ignore'
                       AND (cv.status != 'suspend' OR cv.suspend_until IS NULL OR cv.suspend_until < now())
+                      AND cv.url IS NOT NULL AND cv.url != '' AND cv.url ~* 'instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+'
                       AND NOT EXISTS (SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id)
                 )
                 SELECT item_type AS ItemType, id AS Id, sort_timestamp AS SortTimestamp
@@ -2488,6 +2512,7 @@ public class InstaController : ControllerBase
                       AND cw.is_data_deleted = false
                       AND cv.status != 'ignore'
                       AND (cv.status != 'suspend' OR cv.suspend_until IS NULL OR cv.suspend_until < now())
+                      AND cv.url IS NOT NULL AND cv.url != '' AND cv.url ~* 'instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+'
                       AND NOT EXISTS (SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id)
                 )
                 SELECT
