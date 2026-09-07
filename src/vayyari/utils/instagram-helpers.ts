@@ -1,4 +1,4 @@
-import { Linking, Alert } from 'react-native';
+import { Linking, Alert, Platform } from 'react-native';
 import {
     InstagramMediaType,
     normalizeData,
@@ -205,12 +205,14 @@ export const openInstagramPost = async (item: any): Promise<void> => {
 
     let webUrl: string | null = null;
     let shortcode = '';
+    let postType = 'p';
 
     if (typeof item === 'string') {
         const trimmed = item.trim();
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
             const match = trimmed.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
             if (match) {
+                postType = match[1].toLowerCase() === 'reels' ? 'reel' : match[1].toLowerCase();
                 shortcode = match[2];
                 webUrl = trimmed;
             }
@@ -223,25 +225,77 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         const rawCode = item.shortcode || item.code;
         if (rawCode && typeof rawCode === 'string' && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawCode)) {
             shortcode = rawCode.trim();
-            if (!webUrl) {
-                webUrl = `https://www.instagram.com/p/${shortcode}/`;
+        }
+        if (webUrl) {
+            const match = webUrl.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
+            if (match) {
+                postType = match[1].toLowerCase() === 'reels' ? 'reel' : match[1].toLowerCase();
+                if (!shortcode) {
+                    shortcode = match[2];
+                }
             }
+        } else if (shortcode) {
+            webUrl = `https://www.instagram.com/p/${shortcode}/`;
         }
     }
 
     // Strictly validate that we have a real post link before taking any action
-    if (!webUrl) {
+    if (!webUrl && !shortcode) {
         console.warn('[openInstagramPost] No valid Instagram post URL or shortcode found for item:', item);
         Alert.alert('Unavailable', 'No valid Instagram post link is available for this item.');
         return;
     }
 
+    if (!webUrl && shortcode) {
+        webUrl = `https://www.instagram.com/${postType}/${shortcode}/`;
+    }
+
+    // Build candidate URIs to launch native Instagram app directly
+    const candidateUris: string[] = [];
+
+    if (Platform.OS === 'android' && shortcode) {
+        // Direct intent targeting Instagram package with canonical HTTPS post URL
+        // Forces Android to open the Instagram native app directly without browser redirect
+        candidateUris.push(`intent://www.instagram.com/${postType}/${shortcode}/#Intent;package=com.instagram.android;scheme=https;end`);
+        if (postType !== 'p') {
+            candidateUris.push(`intent://www.instagram.com/p/${shortcode}/#Intent;package=com.instagram.android;scheme=https;end`);
+        }
+    }
+
+    if (shortcode) {
+        candidateUris.push(`instagram://${postType}/${shortcode}`);
+        if (postType !== 'p') {
+            candidateUris.push(`instagram://p/${shortcode}`);
+        }
+    }
+
+    // Try candidate native app URIs first
+    for (const uri of candidateUris) {
+        try {
+            const canOpen = await Linking.canOpenURL(uri).catch(() => false);
+            if (canOpen) {
+                await Linking.openURL(uri);
+                return;
+            }
+        } catch {
+            // continue
+        }
+    }
+
+    // Direct attempt on primary candidate if canOpenURL check was restricted by OS
+    if (candidateUris.length > 0) {
+        try {
+            await Linking.openURL(candidateUris[0]);
+            return;
+        } catch {
+            // Instagram app is not installed
+        }
+    }
+
+    // Final fallback to web URL
     try {
-        const canOpen = await Linking.canOpenURL(webUrl).catch(() => false);
-        if (canOpen) {
+        if (webUrl) {
             await Linking.openURL(webUrl);
-        } else {
-            await Linking.openURL(webUrl).catch(() => {});
         }
     } catch (err) {
         console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
