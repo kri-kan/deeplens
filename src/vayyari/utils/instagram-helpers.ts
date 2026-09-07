@@ -101,8 +101,63 @@ export const getBaseId = (path: string): string => {
     return filename.split('.')[0].split('_')[0];
 };
 
+/**
+ * Instagram Base64 URL character set for shortcode <-> media ID encoding.
+ */
+const INSTAGRAM_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+/**
+ * Converts an Instagram post shortcode (e.g. "DcOHkPJndeD") to its internal numeric media ID.
+ * Example: "DcOHkPJndeD" -> "3967141598254192515"
+ */
+export const shortcodeToMediaId = (shortcode: string): string => {
+    if (!shortcode || typeof shortcode !== 'string') return '';
+    const clean = shortcode.trim().replace(/^\/+|\/+$/g, '');
+    try {
+        let id = 0n;
+        for (let i = 0; i < clean.length; i++) {
+            const char = clean[i];
+            const index = INSTAGRAM_ALPHABET.indexOf(char);
+            if (index === -1) return '';
+            id = (id * 64n) + BigInt(index);
+        }
+        return id.toString();
+    } catch {
+        return '';
+    }
+};
+
+/**
+ * Converts an Instagram numeric media ID to its shortcode.
+ * Example: "3967141598254192515" -> "DcOHkPJndeD"
+ */
+export const mediaIdToShortcode = (mediaId: string): string => {
+    if (!mediaId || typeof mediaId !== 'string') return '';
+    try {
+        let id = BigInt(mediaId.trim());
+        if (id <= 0n) return '';
+        let shortcode = '';
+        while (id > 0n) {
+            const remainder = Number(id % 64n);
+            id = id / 64n;
+            shortcode = INSTAGRAM_ALPHABET[remainder] + shortcode;
+        }
+        return shortcode;
+    } catch {
+        return '';
+    }
+};
+
 export const getInstagramPostUrl = (item: any): string => {
     if (!item) return 'https://www.instagram.com';
+
+    if (typeof item === 'string') {
+        if (item.startsWith('http://') || item.startsWith('https://')) {
+            return item;
+        }
+        return `https://www.instagram.com/p/${item.replace(/^\/+|\/+$/g, '')}/`;
+    }
+
     const candidate = item.postUrl || item.PostUrl || item.permalink || item.Permalink || item.url || item.Url || item.post_url;
     if (candidate && typeof candidate === 'string' && candidate.startsWith('http') && !candidate.includes('cdninstagram') && !candidate.includes('/api/v1/Attachment/')) {
         return candidate;
@@ -118,18 +173,84 @@ export const getInstagramPostUrl = (item: any): string => {
     return 'https://www.instagram.com';
 };
 
+/**
+ * Opens an Instagram post, reel, or profile in the native Instagram app if available,
+ * falling back gracefully to the web URL.
+ */
 export const openInstagramPost = async (item: any): Promise<void> => {
     if (!item) return;
-    const webUrl = getInstagramPostUrl(item);
+
+    let webUrl = '';
+    let shortcode = '';
+    let postType = 'p';
+
+    if (typeof item === 'string') {
+        if (item.startsWith('http://') || item.startsWith('https://')) {
+            webUrl = item;
+            const match = item.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
+            if (match) {
+                postType = match[1].toLowerCase();
+                shortcode = match[2];
+            }
+        } else if (/^[A-Za-z0-9_-]+$/.test(item.trim())) {
+            shortcode = item.trim();
+            webUrl = `https://www.instagram.com/p/${shortcode}/`;
+        }
+    } else {
+        webUrl = getInstagramPostUrl(item);
+        shortcode = item.shortcode || item.code || '';
+        if (!shortcode && webUrl) {
+            const match = webUrl.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
+            if (match) {
+                postType = match[1].toLowerCase();
+                shortcode = match[2];
+            }
+        }
+    }
+
     if (!webUrl || webUrl === 'https://www.instagram.com') return;
 
-    try {
-        const canOpen = await Linking.canOpenURL(webUrl).catch(() => false);
-        if (canOpen) {
-            await Linking.openURL(webUrl);
-        } else {
-            await Linking.openURL(webUrl).catch(() => {});
+    // Build candidate native URIs
+    const candidateUris: string[] = [];
+
+    if (shortcode) {
+        const mediaId = shortcodeToMediaId(shortcode);
+        if (mediaId) {
+            candidateUris.push(`instagram://media?id=${mediaId}`);
         }
+        const normalizedType = postType === 'reels' ? 'reel' : postType;
+        candidateUris.push(`instagram://${normalizedType}/${shortcode}`);
+        if (normalizedType !== 'p') {
+            candidateUris.push(`instagram://p/${shortcode}`);
+        }
+    }
+
+    // Try candidate native URIs via canOpenURL check
+    for (const uri of candidateUris) {
+        try {
+            const canOpen = await Linking.canOpenURL(uri).catch(() => false);
+            if (canOpen) {
+                await Linking.openURL(uri);
+                return;
+            }
+        } catch {
+            // Continue to next candidate
+        }
+    }
+
+    // If canOpenURL was blocked by OS or returned false, attempt primary native URI once inside try-catch
+    if (candidateUris.length > 0) {
+        try {
+            await Linking.openURL(candidateUris[0]);
+            return;
+        } catch {
+            // Instagram app is not installed or unable to handle URI
+        }
+    }
+
+    // Fallback to web URL
+    try {
+        await Linking.openURL(webUrl);
     } catch (err) {
         console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
     }
