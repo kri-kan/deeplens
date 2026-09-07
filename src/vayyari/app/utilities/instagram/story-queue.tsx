@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Alert, Dimensions, BackHandler, TouchableOpacity } from 'react-native';
-import { useTheme, Text, Button, ActivityIndicator, IconButton, Menu } from 'react-native-paper';
+import { useTheme, Text, Button, ActivityIndicator, IconButton, Menu, Icon } from 'react-native-paper';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import { instagramService, InstagramPost, InstagramProfile } from '@/services/instagram.service';
-import { getMediaUri, openInstagramPost, getInstagramPostUrl } from '@/utils/instagram-helpers';
+import { instagramService, InstagramPost, InstagramProfile, InstagramMediaType } from '@/services/instagram.service';
+import { getMediaUri, getMediaFallbackUri, openInstagramPost, getInstagramPostUrl } from '@/utils/instagram-helpers';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 const { width } = Dimensions.get('window');
@@ -14,6 +14,116 @@ const ITEM_SIZE = width / COLUMN_COUNT;
 // Tile sizes: in selection mode tiles shrink so gaps are visible between them
 const TILE_SELECTION_GAP = 6;
 const TILE_SELECTION = (width - TILE_SELECTION_GAP * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
+
+interface QueueTileProps {
+  item: InstagramPost;
+  index: number;
+  selectionMode: boolean;
+  tileSize: number;
+  tileMargin: number;
+  primaryColor: string;
+  onLongPress: () => void;
+  onRemove: (item: InstagramPost) => void;
+  onMarkPosted: (item: InstagramPost) => void;
+}
+
+const QueueTile = React.memo(({
+  item,
+  index,
+  selectionMode,
+  tileSize,
+  tileMargin,
+  primaryColor,
+  onLongPress,
+  onRemove,
+  onMarkPosted,
+}: QueueTileProps) => {
+  const primaryUri = getMediaUri(item, 'medium');
+  const fallbackUri = getMediaFallbackUri(item);
+  const [imageUri, setImageUri] = useState<string>(primaryUri || fallbackUri);
+
+  useEffect(() => {
+    setImageUri(getMediaUri(item, 'medium') || getMediaFallbackUri(item));
+  }, [item]);
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.tileContainer,
+        { width: tileSize, height: tileSize, margin: tileMargin, padding: 0 }
+      ]}
+      activeOpacity={0.9}
+      onLongPress={!selectionMode ? onLongPress : undefined}
+      delayLongPress={400}
+    >
+      <View style={[styles.tileInner, selectionMode && styles.tileInnerSelection]}>
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.thumbnail}
+          contentFit="cover"
+          transition={200}
+          onError={() => {
+            if (fallbackUri && imageUri !== fallbackUri) {
+              setImageUri(fallbackUri);
+            }
+          }}
+        />
+
+        {/* Video play indicator if reel/video */}
+        {item.mediaType === InstagramMediaType.VIDEO && !selectionMode && (
+          <View style={styles.centerPlayButton}>
+            <Icon source="play" size={16} color="white" />
+          </View>
+        )}
+
+        {/* Queue position badge — normal mode */}
+        {!selectionMode && (
+          <View style={styles.indexBadge}>
+            <Text style={styles.indexBadgeText}>{index + 1}</Text>
+          </View>
+        )}
+
+        {/* Minus remove badge — selection mode */}
+        {selectionMode && (
+          <View style={styles.removeBadgeWrapper}>
+            <IconButton
+              icon="minus-circle"
+              iconColor="#ffffff"
+              containerColor="rgba(211, 47, 47, 0.9)"
+              size={16}
+              style={styles.removeBadge}
+              onPress={() => onRemove(item)}
+            />
+          </View>
+        )}
+
+        {/* Action buttons — normal mode only */}
+        {!selectionMode && (
+          <View style={styles.tileActions}>
+            <IconButton
+              icon="instagram"
+              mode="contained-tonal"
+              size={20}
+              onPress={() => openInstagramPost(item)}
+              testID={`share-queue-item-${index}`}
+              style={styles.actionButton}
+            />
+            <IconButton
+              icon="check"
+              mode="contained"
+              iconColor="white"
+              containerColor={primaryColor}
+              size={20}
+              onPress={() => onMarkPosted(item)}
+              testID={`mark-shared-queue-item-${index}`}
+              style={styles.actionButton}
+            />
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 export default function StoryQueueScreen() {
   const theme = useTheme();
@@ -127,83 +237,34 @@ export default function StoryQueueScreen() {
     ]);
   };
 
+  const handleMarkPosted = async (item: InstagramPost) => {
+    try {
+      const targetProfile = ownProfiles.find(p => p.id === selectedProfileId);
+      if (targetProfile) {
+        await instagramService.markPostPosted(item.id, targetProfile.id);
+        loadQueue();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const renderQueueItem = ({ item, index }: { item: InstagramPost, index: number }) => {
     const tileSize = selectionMode ? TILE_SELECTION : ITEM_SIZE;
     const tileMargin = selectionMode ? TILE_SELECTION_GAP / 2 : 1;
 
     return (
-      <TouchableOpacity
-        style={[
-          styles.tileContainer,
-          { width: tileSize, height: tileSize, margin: tileMargin, padding: 0 }
-        ]}
-        activeOpacity={0.9}
-        onLongPress={!selectionMode ? enterSelectionMode : undefined}
-        delayLongPress={400}
-      >
-        <View style={[styles.tileInner, selectionMode && styles.tileInnerSelection]}>
-          <Image
-            source={{ uri: getMediaUri(item, 'medium') }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-
-          {/* Queue position badge — normal mode */}
-          {!selectionMode && (
-            <View style={styles.indexBadge}>
-              <Text style={styles.indexBadgeText}>{index + 1}</Text>
-            </View>
-          )}
-
-          {/* Minus remove badge — selection mode */}
-          {selectionMode && (
-            <View style={styles.removeBadgeWrapper}>
-              <IconButton
-                icon="minus-circle"
-                iconColor="#ffffff"
-                containerColor="rgba(211, 47, 47, 0.9)"
-                size={16}
-                style={styles.removeBadge}
-                onPress={() => handleRemoveFromQueue(item)}
-              />
-            </View>
-          )}
-
-          {/* Action buttons — normal mode only */}
-          {!selectionMode && (
-            <View style={styles.tileActions}>
-              <IconButton
-                icon="instagram"
-                mode="contained-tonal"
-                size={20}
-                onPress={() => openInstagramPost(item)}
-                testID={`share-queue-item-${index}`}
-                style={styles.actionButton}
-              />
-              <IconButton
-                icon="check"
-                mode="contained"
-                iconColor="white"
-                containerColor={theme.colors.primary}
-                size={20}
-                onPress={async () => {
-                  try {
-                    const targetProfile = ownProfiles.find(p => p.id === selectedProfileId);
-                    if (targetProfile) {
-                      await instagramService.markPostPosted(item.id, targetProfile.id);
-                      loadQueue();
-                    }
-                  } catch (err) {
-                    console.error(err);
-                  }
-                }}
-                testID={`mark-shared-queue-item-${index}`}
-                style={styles.actionButton}
-              />
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
+      <QueueTile
+        item={item}
+        index={index}
+        selectionMode={selectionMode}
+        tileSize={tileSize}
+        tileMargin={tileMargin}
+        primaryColor={theme.colors.primary}
+        onLongPress={enterSelectionMode}
+        onRemove={handleRemoveFromQueue}
+        onMarkPosted={handleMarkPosted}
+      />
     );
   };
 
@@ -338,16 +399,35 @@ const styles = StyleSheet.create({
     padding: TILE_SELECTION_GAP / 2,
   },
   tileContainer: {
-    // width/height/margin set dynamically per mode
+    overflow: 'hidden',
   },
   tileInner: {
-    flex: 1,
-    backgroundColor: '#e0e0e0',
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#1a1a1a',
     position: 'relative',
     overflow: 'hidden',
   },
   tileInnerSelection: {
-    borderRadius: 6,
+    borderRadius: 8,
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  centerPlayButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -16,
+    marginLeft: -16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
   },
   indexBadge: {
     position: 'absolute',
