@@ -4,7 +4,7 @@ import { useTheme, Text, Button, ActivityIndicator, IconButton, Menu } from 'rea
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { instagramService, InstagramPost, InstagramProfile } from '@/services/instagram.service';
-import { getMediaUri } from '@/utils/instagram-helpers';
+import { getMediaUri, openInstagramPost } from '@/utils/instagram-helpers';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 const { width } = Dimensions.get('window');
@@ -175,12 +175,7 @@ export default function StoryQueueScreen() {
                 icon="instagram"
                 mode="contained-tonal"
                 size={20}
-                onPress={() => {
-                  import('react-native').then(({ Linking }) => {
-                    const link = item.permalink || `https://instagram.com/p/${item.id}`;
-                    Linking.openURL(link);
-                  });
-                }}
+                onPress={() => openInstagramPost(item)}
                 testID={`share-queue-item-${index}`}
                 style={styles.actionButton}
               />
