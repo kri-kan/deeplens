@@ -205,14 +205,12 @@ export const openInstagramPost = async (item: any): Promise<void> => {
 
     let webUrl: string | null = null;
     let shortcode = '';
-    let postType = 'p';
 
     if (typeof item === 'string') {
         const trimmed = item.trim();
         if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
             const match = trimmed.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
             if (match) {
-                postType = match[1].toLowerCase();
                 shortcode = match[2];
                 webUrl = trimmed;
             }
@@ -225,66 +223,28 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         const rawCode = item.shortcode || item.code;
         if (rawCode && typeof rawCode === 'string' && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(rawCode)) {
             shortcode = rawCode.trim();
-        } else if (webUrl) {
-            const match = webUrl.match(/(?:https?:\/\/(?:www\.)?instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+))/i);
-            if (match) {
-                postType = match[1].toLowerCase();
-                shortcode = match[2];
+            if (!webUrl) {
+                webUrl = `https://www.instagram.com/p/${shortcode}/`;
             }
         }
     }
 
     // Strictly validate that we have a real post link before taking any action
-    if (!webUrl && !shortcode) {
+    if (!webUrl) {
         console.warn('[openInstagramPost] No valid Instagram post URL or shortcode found for item:', item);
         Alert.alert('Unavailable', 'No valid Instagram post link is available for this item.');
         return;
     }
 
-    // Build candidate native URIs
-    const candidateUris: string[] = [];
-
-    if (shortcode) {
-        const mediaId = shortcodeToMediaId(shortcode);
-        if (mediaId) {
-            candidateUris.push(`instagram://media?id=${mediaId}`);
-        }
-        const normalizedType = postType === 'reels' ? 'reel' : postType;
-        candidateUris.push(`instagram://${normalizedType}/${shortcode}`);
-        if (normalizedType !== 'p') {
-            candidateUris.push(`instagram://p/${shortcode}`);
-        }
-    }
-
-    // Try candidate native URIs via canOpenURL check
-    for (const uri of candidateUris) {
-        try {
-            const canOpen = await Linking.canOpenURL(uri).catch(() => false);
-            if (canOpen) {
-                await Linking.openURL(uri);
-                return;
-            }
-        } catch {
-            // Continue to next candidate
-        }
-    }
-
-    // If canOpenURL check was blocked by OS or returned false, attempt primary native URI once inside try-catch
-    if (candidateUris.length > 0) {
-        try {
-            await Linking.openURL(candidateUris[0]);
-            return;
-        } catch {
-            // Instagram app is not installed or unable to handle URI
-        }
-    }
-
-    // Fallback to verified web URL ONLY if valid
-    if (webUrl) {
-        try {
+    try {
+        const canOpen = await Linking.canOpenURL(webUrl).catch(() => false);
+        if (canOpen) {
             await Linking.openURL(webUrl);
-        } catch (err) {
-            console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
+        } else {
+            await Linking.openURL(webUrl).catch(() => {});
         }
+    } catch (err) {
+        console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
+        Alert.alert('Error', 'Could not open Instagram link.');
     }
 };
