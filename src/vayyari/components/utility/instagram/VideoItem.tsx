@@ -6,7 +6,7 @@ import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { InstagramMediaType } from '@/services/instagram.service';
-import { normalizeData, getMediaUri, getInstagramPostUrl, openInstagramPost } from '@/utils/instagram-helpers';
+import { normalizeData, getMediaUri, getMediaFallbackUri, getInstagramPostUrl, openInstagramPost } from '@/utils/instagram-helpers';
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -50,6 +50,14 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
     (item as any)?.profileCategory?.toLowerCase() === 'competitor' ||
     rawItem?.multiplier !== undefined ||
     (item as any)?.multiplier !== undefined;
+
+  const primaryUri = getMediaUri(item, 'medium');
+  const fallbackUri = getMediaFallbackUri(item);
+  const [imageUri, setImageUri] = React.useState<string>(primaryUri || fallbackUri);
+
+  React.useEffect(() => {
+    setImageUri(getMediaUri(item, 'medium') || getMediaFallbackUri(item));
+  }, [rawItem]);
 
   const multiplier = Number(item.multiplier ?? rawItem?.multiplier ?? (item.likeCount > 5000 ? 3.4 : item.likeCount > 2000 ? 2.6 : 1.8));
   const isTakeoff = multiplier >= 2.5;
@@ -97,10 +105,15 @@ const VideoItemComponent: React.FC<VideoItemProps> = ({
       activeOpacity={0.85}
     >
       <Image 
-        source={{ uri: getMediaUri(item, 'medium') }} 
+        source={{ uri: imageUri }} 
         style={[styles.thumbnail, isSelected && { opacity: 0.7 }]}
         contentFit="cover"
         transition={200}
+        onError={() => {
+          if (fallbackUri && imageUri !== fallbackUri) {
+            setImageUri(fallbackUri);
+          }
+        }}
       />
       
       {selectionMode && (

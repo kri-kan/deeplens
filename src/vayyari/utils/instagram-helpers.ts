@@ -55,6 +55,12 @@ export const getMediaUri = (m: any, spec?: 'icon' | 'medium' | 'large'): string 
     return normalized.mediaUrl || normalized.thumbnailUrl || '';
 };
 
+export const getMediaFallbackUri = (m: any): string => {
+    const normalized = normalizeData(m);
+    if (!normalized) return '';
+    return normalized.thumbnailUrl || normalized.mediaUrl || '';
+};
+
 export const getProfilePicUri = (profileOrPath: any): string | null => {
     if (!profileOrPath) return null;
 
