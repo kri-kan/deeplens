@@ -198,7 +198,16 @@ export const getInstagramPostUrl = (item: any): string | null => {
 /**
  * Opens an Instagram post or reel in the native Instagram app if available,
  * falling back gracefully to the verified web URL if the app is absent.
- * If no valid post link exists, does not open anything and notifies the user.
+ *
+ * CRITICAL ARCHITECTURAL CONSTRAINTS:
+ * 1. DO NOT use `instagram://media?id=${mediaId}`. Opening via numeric media ID poisons
+ *    Instagram's Story Composer sticker payload with numeric IDs (e.g. /p/3957543988533504451),
+ *    which return 404 on the web.
+ * 2. On Android, use explicit intent targeting `com.instagram.android` with canonical shortcode URL
+ *    (`intent://www.instagram.com/${postType}/${shortcode}/#Intent;package=com.instagram.android;scheme=https;end`).
+ *    This forces Android to bypass Chrome/browser routing while preserving the canonical shortcode.
+ * 3. On iOS, use `instagram://${postType}/${shortcode}`.
+ * 4. See docs/deeplens/guides/INSTAGRAM_DEEP_LINKING_AND_URL_ROUTING.md for full guide.
  */
 export const openInstagramPost = async (item: any): Promise<void> => {
     if (!item) return;
