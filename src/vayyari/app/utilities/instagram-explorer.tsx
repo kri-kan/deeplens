@@ -9,6 +9,7 @@ import { ProfileHeader } from '@/components/utility/instagram/ProfileHeader';
 
 import { useInstagramExplorer } from '@/hooks/useInstagramExplorer';
 import { instagramService } from '@/services/instagram.service';
+import { getInstagramPostUrl } from '@/utils/instagram-helpers';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { CompetitorBanner } from '@/components/utility/instagram/CompetitorBanner';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
@@ -216,13 +217,23 @@ export default function InstagramExplorer() {
       }
 
       let queuedCount = 0;
+      let skippedInvalidCount = 0;
       for (const post of posts) {
+        if (!getInstagramPostUrl(post)) {
+          skippedInvalidCount++;
+          continue;
+        }
         await instagramService.queueForStory(post.id, targetProfile.id);
         queuedCount++;
       }
       
       setSelectedPosts(new Map());
-      Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}`);
+      if (queuedCount === 0 && skippedInvalidCount > 0) {
+        Alert.alert('Cannot Queue', 'Selected post(s) or reel(s) do not have valid Instagram links.');
+      } else {
+        const skipMsg = skippedInvalidCount > 0 ? ` (${skippedInvalidCount} skipped due to invalid URLs)` : '';
+        Alert.alert('Success', `Queued ${queuedCount} items for story posting to @${targetProfile.username}${skipMsg}`);
+      }
     } catch (err) {
       Alert.alert('Error', 'Failed to queue items');
     }
