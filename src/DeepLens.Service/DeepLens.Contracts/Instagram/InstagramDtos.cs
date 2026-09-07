@@ -209,6 +209,9 @@ public class MetaPost
     [JsonPropertyName("shareCount")]
     public long ShareCount { get; set; }
 
+    [JsonPropertyName("historyId")]
+    public string? HistoryId { get; set; }
+
     [JsonPropertyName("viewCount")]
     public long? ViewCount { get; set; }
 

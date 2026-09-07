@@ -2346,7 +2346,7 @@ public class InstaController : ControllerBase
                   AND cv.url ~* 'instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+'
                 ORDER BY sph.id ASC";
 
-            var queue = (await conn.QueryAsync<dynamic>(sql, new { TargetWatchlistId = targetWatchlistId })).ToList();
+            var queue = (await conn.QueryAsync<MetaPost>(sql, new { TargetWatchlistId = targetWatchlistId })).ToList();
             return Ok(queue);
         }
         catch (Exception ex)
