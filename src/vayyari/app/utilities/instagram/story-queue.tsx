@@ -52,7 +52,7 @@ const QueueTile = React.memo(({
         styles.tileContainer,
         { width: tileSize, height: tileSize, margin: tileMargin, padding: 0 }
       ]}
-      activeOpacity={0.9}
+      activeOpacity={0.85}
       onLongPress={!selectionMode ? onLongPress : undefined}
       delayLongPress={400}
     >
@@ -76,48 +76,52 @@ const QueueTile = React.memo(({
           </View>
         )}
 
-        {/* Queue position badge — normal mode */}
+        {/* Queue sequence badge — top-left (matches Image 1 sharing.tsx) */}
         {!selectionMode && (
-          <View style={styles.indexBadge}>
-            <Text style={styles.indexBadgeText}>{index + 1}</Text>
+          <View style={styles.itemIndexBadge}>
+            <Text style={styles.itemIndexBadgeText}>#{index + 1}</Text>
           </View>
+        )}
+
+        {/* Instagram action button — top-right purple badge (matches Image 1 sharing.tsx) */}
+        {!selectionMode && (
+          <TouchableOpacity
+            style={styles.shareIconBadge}
+            activeOpacity={0.7}
+            onPress={() => openInstagramPost(item)}
+            testID={`share-queue-item-${index}`}
+          >
+            <Icon source="instagram" size={16} color="white" />
+          </TouchableOpacity>
         )}
 
         {/* Minus remove badge — selection mode */}
         {selectionMode && (
-          <View style={styles.removeBadgeWrapper}>
-            <IconButton
-              icon="minus-circle"
-              iconColor="#ffffff"
-              containerColor="rgba(211, 47, 47, 0.9)"
-              size={16}
-              style={styles.removeBadge}
-              onPress={() => onRemove(item)}
-            />
-          </View>
+          <TouchableOpacity
+            style={styles.removeBadgeWrapper}
+            activeOpacity={0.7}
+            onPress={() => onRemove(item)}
+          >
+            <View style={styles.removeCircle}>
+              <Icon source="minus" size={14} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
         )}
 
-        {/* Action buttons — normal mode only */}
+        {/* Sleek bottom overlay bar with username and mark posted checkmark */}
         {!selectionMode && (
-          <View style={styles.tileActions}>
-            <IconButton
-              icon="instagram"
-              mode="contained-tonal"
-              size={20}
-              onPress={() => openInstagramPost(item)}
-              testID={`share-queue-item-${index}`}
-              style={styles.actionButton}
-            />
-            <IconButton
-              icon="check"
-              mode="contained"
-              iconColor="white"
-              containerColor={primaryColor}
-              size={20}
+          <View style={styles.groupBottomOverlay}>
+            <Text style={styles.groupBottomTitle} numberOfLines={1}>
+              {item.ownerUsername ? `@${item.ownerUsername}` : 'Post'}
+            </Text>
+            <TouchableOpacity
+              style={[styles.markPostedBadge, { backgroundColor: primaryColor }]}
+              activeOpacity={0.7}
               onPress={() => onMarkPosted(item)}
               testID={`mark-shared-queue-item-${index}`}
-              style={styles.actionButton}
-            />
+            >
+              <Icon source="check" size={13} color="#ffffff" />
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -251,7 +255,7 @@ export default function StoryQueueScreen() {
 
   const renderQueueItem = ({ item, index }: { item: InstagramPost, index: number }) => {
     const tileSize = selectionMode ? TILE_SELECTION : ITEM_SIZE;
-    const tileMargin = selectionMode ? TILE_SELECTION_GAP / 2 : 1;
+    const tileMargin = selectionMode ? TILE_SELECTION_GAP / 2 : 0;
 
     return (
       <QueueTile
@@ -407,9 +411,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
     position: 'relative',
     overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   tileInnerSelection: {
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   thumbnail: {
     width: '100%',
@@ -419,55 +427,94 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    marginTop: -16,
-    marginLeft: -16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    marginTop: -14,
+    marginLeft: -14,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 2,
+    zIndex: 4,
   },
-  indexBadge: {
+  itemIndexBadge: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    zIndex: 5,
+  },
+  itemIndexBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    lineHeight: 13,
+  },
+  shareIconBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(98, 0, 238, 0.95)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  indexBadgeText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
+    zIndex: 10,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   removeBadgeWrapper: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: 4,
+    right: 4,
     zIndex: 10,
   },
-  removeBadge: {
-    margin: 0,
-    width: 28,
-    height: 28,
+  removeCircle: {
+    backgroundColor: 'rgba(211, 47, 47, 0.95)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
-  tileActions: {
+  groupBottomOverlay: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 0,
     left: 0,
     right: 0,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 5,
   },
-  actionButton: {
-    margin: 0,
-    width: 36,
-    height: 36,
+  groupBottomTitle: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 4,
+  },
+  markPostedBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyContainer: {
     padding: 40,

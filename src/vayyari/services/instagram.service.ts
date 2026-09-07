@@ -339,8 +339,8 @@ export const normalizeCompetitorProfile = (data: any): CompetitorProfile => {
       followersCount: followers,
       followingCount: data.followingCount || data.FollowingCount || 0,
       mediaCount: data.mediaCount || data.MediaCount || 0,
-      profilePictureUrl: data.profilePictureUrl || data.ProfilePictureUrl || data.profile_pic_url,
-      storagePath: data.storagePath || data.StoragePath,
+      profilePictureUrl: data.profilePictureUrl || data.ProfilePictureUrl || data.profile_pic_url || data.profilepicurl,
+      storagePath: data.storagePath || data.StoragePath || data.storagepath || data.storage_path,
       isActive: data.isActive !== undefined ? data.isActive : (data.IsActive ?? true),
       isTracked: data.isTracked !== undefined ? data.isTracked : (data.IsTracked ?? (data.isActive !== undefined ? data.isActive : (data.IsActive ?? true))),
       isCompetitor,
@@ -358,21 +358,21 @@ export const normalizeCompetitorProfile = (data: any): CompetitorProfile => {
 
 export const normalizeData = (data: any): InstagramPost => {
   if (!data) return {} as InstagramPost;
-  const id = data.postId || data.id || data.Id || data.platformId || data.PlatformId;
-  const rawMediaType = data.mediaType !== undefined ? data.mediaType : data.MediaType;
+  const id = data.postId || data.id || data.Id || data.platformId || data.PlatformId || data.postid;
+  const rawMediaType = data.mediaType !== undefined ? data.mediaType : (data.MediaType !== undefined ? data.MediaType : (data.mediatype !== undefined ? data.mediatype : data.media_type));
   const mediaType = mapToMediaType(rawMediaType);
-  const storagePath = data.storagePath || data.StoragePath;
-  const thumbnailUrl = data.thumbnailUrl || data.ThumbnailUrl;
-  const mediaUrl = data.mediaUrl || data.MediaUrl;
-  const postUrl = data.postUrl || data.PostUrl || data.permalink || data.Permalink || data.url || data.Url || data.post_url;
+  const storagePath = data.storagePath || data.StoragePath || data.storagepath || data.storage_path;
+  const thumbnailUrl = data.thumbnailUrl || data.ThumbnailUrl || data.thumbnailurl || data.thumbnail_url;
+  const mediaUrl = data.mediaUrl || data.MediaUrl || data.mediaurl || data.media_url;
+  const postUrl = data.postUrl || data.PostUrl || data.permalink || data.Permalink || data.url || data.Url || data.post_url || data.posturl;
   const permalink = postUrl;
-  const platformVideoId = data.platformVideoId || data.PlatformVideoId || data.id || data.Id || data.platformId || data.PlatformId;
-  const ownerUsername = data.profileUsername || data.ownerUsername || data.OwnerUsername || data.username || data.Username;
-  const ownerProfilePictureUrl = data.profilePicUrl || data.profilePicStoragePath || data.ownerProfilePictureUrl || data.OwnerProfilePictureUrl || data.profilePictureUrl || data.ProfilePictureUrl;
-  const isFullMediaDownloaded = data.isFullMediaDownloaded !== undefined ? data.isFullMediaDownloaded : data.IsFullMediaDownloaded;
-  const likeCount = Number(data.likeCount || data.LikeCount || 0);
-  const commentCount = Number(data.commentCount || data.CommentCount || 0);
-  const viewCount = Number(data.viewCount || data.ViewCount || data.views || data.playCount || data.PlayCount || (likeCount ? likeCount * 7 : 0));
+  const platformVideoId = data.platformVideoId || data.PlatformVideoId || data.id || data.Id || data.platformId || data.PlatformId || data.platformvideoid;
+  const ownerUsername = data.profileUsername || data.ownerUsername || data.OwnerUsername || data.username || data.Username || data.ownerusername || data.profileusername;
+  const ownerProfilePictureUrl = data.profilePicUrl || data.profilePicStoragePath || data.ownerProfilePictureUrl || data.OwnerProfilePictureUrl || data.profilePictureUrl || data.ProfilePictureUrl || data.profilepicurl || data.profilepicstoragepath;
+  const isFullMediaDownloaded = data.isFullMediaDownloaded !== undefined ? data.isFullMediaDownloaded : (data.IsFullMediaDownloaded !== undefined ? data.IsFullMediaDownloaded : data.isfullmediadownloaded);
+  const likeCount = Number(data.likeCount || data.LikeCount || data.likecount || data.like_count || 0);
+  const commentCount = Number(data.commentCount || data.CommentCount || data.commentcount || data.comment_count || 0);
+  const viewCount = Number(data.viewCount || data.ViewCount || data.viewcount || data.views || data.playCount || data.PlayCount || (likeCount ? likeCount * 7 : 0));
   const isCompetitor = data.isCompetitor !== undefined ? data.isCompetitor : (data.profileCategory === 'Competitors' || data.profileCategory === 'Competitor' || (data.multiplier !== undefined && data.multiplier > 1));
   const dayNumber = data.dayOffset ?? data.dayNumber ?? data.DayNumber ?? 1;
   const multiplier = Number(data.outlierScore ?? data.viralityMultiplier ?? data.multiplier ?? data.Multiplier ?? 1.0);
@@ -434,12 +434,12 @@ export const normalizeData = (data: any): InstagramPost => {
       productCode: data.productCode || data.ProductCode,
       youtubeVideoId: data.youtubeVideoId || data.YoutubeVideoId,
       youtubeUrl: data.youtubeUrl || data.YoutubeUrl,
-      isStarred: data.isStarred !== undefined ? data.isStarred : data.IsStarred,
-      lastPostedAt: data.lastPostedAt || data.LastPostedAt,
-      rightSwipes: data.rightSwipes ?? data.RightSwipes ?? 0,
-      leftSwipes: data.leftSwipes ?? data.LeftSwipes ?? 0,
-      shareCount: data.shareCount ?? data.ShareCount ?? 0,
-      historyId: data.historyId || data.HistoryId,
+      isStarred: data.isStarred !== undefined ? data.isStarred : (data.IsStarred !== undefined ? data.IsStarred : (data.isstarred !== undefined ? data.isstarred : data.is_starred)),
+      lastPostedAt: data.lastPostedAt || data.LastPostedAt || data.lastpostedat || data.last_posted_at,
+      rightSwipes: data.rightSwipes ?? data.RightSwipes ?? data.rightswipes ?? data.right_swipes ?? 0,
+      leftSwipes: data.leftSwipes ?? data.LeftSwipes ?? data.leftswipes ?? data.left_swipes ?? 0,
+      shareCount: data.shareCount ?? data.ShareCount ?? data.sharecount ?? data.share_count ?? 0,
+      historyId: data.historyId || data.HistoryId || data.historyid || data.history_id,
       platformVideoId,
       isFullMediaDownloaded,
       isCompetitor,
