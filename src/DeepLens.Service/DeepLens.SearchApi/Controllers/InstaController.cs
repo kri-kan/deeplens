@@ -2336,7 +2336,7 @@ public class InstaController : ControllerBase
                     cv.status AS Status,
                     cv.suspend_until AS SuspendUntil,
                     cv.last_reviewed_at AS LastReviewedAt,
-                    sph.id AS HistoryId
+                    sph.id::text AS HistoryId
                 FROM story_posting_history sph
                 JOIN competitor_videos cv ON cv.id = sph.post_id
                 WHERE sph.target_watchlist_id = @TargetWatchlistId
