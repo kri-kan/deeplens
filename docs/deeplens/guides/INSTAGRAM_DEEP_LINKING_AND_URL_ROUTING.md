@@ -113,9 +113,19 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         webUrl = `https://www.instagram.com/${postType}/${shortcode}/`;
     }
 
+    // 1. Web (Browser / Storybook / PWA): directly open canonical HTTPS link in a new tab
+    if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.open) {
+            window.open(webUrl, '_blank', 'noopener,noreferrer');
+        } else {
+            await Linking.openURL(webUrl).catch(() => {});
+        }
+        return;
+    }
+
     const candidateUris: string[] = [];
 
-    // 1. Android explicit Intent targeting com.instagram.android
+    // 2. Android: explicit Intent targeting com.instagram.android
     if (Platform.OS === 'android' && shortcode) {
         candidateUris.push(`intent://www.instagram.com/${postType}/${shortcode}/#Intent;package=com.instagram.android;scheme=https;end`);
         if (postType !== 'p') {
@@ -123,7 +133,7 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         }
     }
 
-    // 2. iOS custom scheme
+    // 3. iOS: custom scheme
     if (shortcode) {
         candidateUris.push(`instagram://${postType}/${shortcode}`);
         if (postType !== 'p') {

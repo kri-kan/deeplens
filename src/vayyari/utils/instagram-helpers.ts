@@ -248,18 +248,25 @@ export const openInstagramPost = async (item: any): Promise<void> => {
         }
     }
 
-    // Strictly validate that we have a real post link before taking any action
     if (!webUrl && !shortcode) {
         console.warn('[openInstagramPost] No valid Instagram post URL or shortcode found for item:', item);
         Alert.alert('Unavailable', 'No valid Instagram post link is available for this item.');
         return;
     }
 
-    if (!webUrl && shortcode) {
-        webUrl = `https://www.instagram.com/${postType}/${shortcode}/`;
+    const targetUrl = webUrl || `https://www.instagram.com/${postType}/${shortcode}/`;
+
+    // On Web (Browser, Storybook, PWA), directly open the canonical HTTPS URL in a new tab
+    if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.open) {
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        } else {
+            await Linking.openURL(targetUrl).catch(() => {});
+        }
+        return;
     }
 
-    // Build candidate URIs to launch native Instagram app directly
+    // Build candidate URIs to launch native Instagram app directly on mobile
     const candidateUris: string[] = [];
 
     if (Platform.OS === 'android' && shortcode) {
@@ -303,11 +310,11 @@ export const openInstagramPost = async (item: any): Promise<void> => {
 
     // Final fallback to web URL
     try {
-        if (webUrl) {
-            await Linking.openURL(webUrl);
+        if (targetUrl) {
+            await Linking.openURL(targetUrl);
         }
     } catch (err) {
-        console.warn('[openInstagramPost] Failed to open URL:', webUrl, err);
+        console.warn('[openInstagramPost] Failed to open URL:', targetUrl, err);
         Alert.alert('Error', 'Could not open Instagram link.');
     }
 };
