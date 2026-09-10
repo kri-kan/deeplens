@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { Platform } from "react-native";
 import { view } from "./storybook.requires";
 
 const DEFAULT_STORY_ID = "design-system-overview--all-components";
@@ -22,6 +23,21 @@ const LEGACY_PREFIX_MAPPINGS: [string, string][] = [
   ["pages-homepage--", "pages-store-home--"],
   ["pages-productdetailpage--", "pages-store-productdetail--"],
   ["pages-wishlistpage--", "pages-store-wishlist--"],
+  // Flatten PostPlanner molecules and organisms to match peer atomic structure
+  ["molecules-postplanner-", "molecules-"],
+  ["organisms-postplanner-", "organisms-"],
+  // Post Planner & Curation mappings
+  ["pages-admin-postplanner-curation--", "pages-admin-curation--"],
+  ["pages-admin-post-planner-curation--", "pages-admin-curation--"],
+  ["pages-admin-postplanner-sharing-queue--", "pages-admin-post-planner-sharing-queue--"],
+  ["pages-admin-postplanner-queue--", "pages-admin-post-planner-sharing-queue--"],
+  ["pages-admin-post-planner-queue--", "pages-admin-post-planner-sharing-queue--"],
+  // Store Curation and Publish prefix mappings
+  ["pages-admin-store-curation--", "pages-admin-store-product-curation-workbench--"],
+  ["pages-admin-store-curation-workbench--", "pages-admin-store-product-curation-workbench--"],
+  ["pages-admin-store-product-curation--", "pages-admin-store-product-curation-workbench--"],
+  ["pages-admin-store-publish--", "pages-admin-vayyari-store-product-publish--"],
+  ["pages-admin-store-product-publish--", "pages-admin-vayyari-store-product-publish--"],
 ];
 
 /**
@@ -44,6 +60,51 @@ const LEGACY_STORY_ALIASES: Record<string, string> = {
   "pages-admin-orderidgenerator--populatedstate": "pages-orderidgenerator--populated-state",
   "pages-admin-orderidgenerator--populated-state": "pages-orderidgenerator--populated-state",
   "pages-orderidgenerator--populatedstate": "pages-orderidgenerator--populated-state",
+  // Post Planner / Curation aliases
+  "pages-admin-curation": "pages-admin-curation--interactive-workbench",
+  "pages-admin-curation--default-curation": "pages-admin-curation--default-curation-grid",
+  "pages-admin-curation--curation": "pages-admin-curation--interactive-workbench",
+  "pages-admin-curation--curation-grid": "pages-admin-curation--default-curation-grid",
+  "pages-admin-post-planner-curation": "pages-admin-curation--interactive-workbench",
+  "pages-admin-post-planner-sharing-queue": "pages-admin-post-planner-sharing-queue--interactive-workbench",
+  "pages-admin-post-planner-queue": "pages-admin-post-planner-sharing-queue--interactive-workbench",
+  "pages-admin-post-planner--curation": "pages-admin-curation--interactive-workbench",
+  "pages-admin-post-planner--curation-grid": "pages-admin-curation--default-curation-grid",
+  "pages-admin-post-planner--queue": "pages-admin-post-planner-sharing-queue--interactive-workbench",
+  "pages-admin-post-planner--sharing-queue": "pages-admin-post-planner-sharing-queue--interactive-workbench",
+  // Product Share & Publish aliases
+  "pages-admin-product-share": "pages-admin-product-share-publish--interactive-catalog-share",
+  "pages-admin-product-share-publish": "pages-admin-product-share-publish--interactive-catalog-share",
+  "pages-admin-productshare": "pages-admin-product-share-publish--interactive-catalog-share",
+  "pages-admin-share": "pages-admin-product-share-publish--interactive-catalog-share",
+  // Store Product Curation Workbench aliases
+  "pages-admin-store-product-curation-workbench": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-product-curation": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-curation": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-curation-workbench": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-store-curation": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-workbench": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-storeproductcuration": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-curation--default-curation-workbench": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-curation-workbench--default-curation-workbench": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  "pages-admin-store-product-curation--default-curation-workbench": "pages-admin-store-product-curation-workbench--default-curation-workbench",
+  // Vayyari Store Product Publish aliases
+  "pages-admin-vayyari-store-product-publish": "pages-admin-vayyari-store-product-publish--interactive-publish-workbench",
+  "pages-admin-vayyari-store-publish": "pages-admin-vayyari-store-product-publish--interactive-publish-workbench",
+  "pages-admin-store-publish": "pages-admin-vayyari-store-product-publish--interactive-publish-workbench",
+  "pages-admin-store-product-publish": "pages-admin-vayyari-store-product-publish--interactive-publish-workbench",
+  "pages-admin-vayyari-store-product-publish--interactive-publish-workbench": "pages-admin-vayyari-store-product-publish--interactive-publish-workbench",
+  // Vayyari Store In-Store Inventory aliases
+  "pages-admin-vayyari-store-in-store-inventory": "pages-admin-vayyari-store-in-store-inventory--default-store-inventory",
+  "pages-admin-vayyari-store-inventory": "pages-admin-vayyari-store-in-store-inventory--default-store-inventory",
+  "pages-admin-store-inventory": "pages-admin-vayyari-store-in-store-inventory--default-store-inventory",
+  "pages-admin-store-synced-inventory": "pages-admin-vayyari-store-in-store-inventory--default-store-inventory",
+  // Beta Store Cart aliases
+  "pages-store-beta-cart": "pages-store-beta-beta-cart--default-beta-cart",
+  "pages-store-beta-beta-cart": "pages-store-beta-beta-cart--default-beta-cart",
+  "pages-store-beta-bag": "pages-store-beta-beta-cart--default-beta-cart",
+  "pages-beta-cart": "pages-store-beta-beta-cart--default-beta-cart",
+  "pages-beta-bag": "pages-store-beta-beta-cart--default-beta-cart",
 };
 
 /**
@@ -193,7 +254,7 @@ try {
  * 4. Fallback default ('design-system-overview--all-components')
  */
 function getInitialStoryId(): string {
-  if (typeof window !== "undefined") {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     try {
       const params = new URLSearchParams(window.location.search);
       const fromUrl =
@@ -232,7 +293,7 @@ function getInitialStoryId(): string {
 const storage = {
   getItem: async (key: string) => {
     try {
-      if (typeof window !== "undefined") {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
         if (key === "lastOpenedStory") {
           const params = new URLSearchParams(window.location.search);
           const fromUrl =
@@ -254,7 +315,7 @@ const storage = {
   },
   setItem: async (key: string, value: string) => {
     try {
-      if (typeof window !== "undefined") {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
         const normalized = key === "lastOpenedStory" ? normalizeStoryId(value) : value;
         if (window.localStorage) {
           window.localStorage.setItem(key, normalized);
@@ -286,9 +347,118 @@ const StorybookUI = view.getStorybookUI({
  * - Two-way browser URL history routing (popstate / back / forward buttons)
  * - Auto-persistence across page reloads
  */
-export default function StorybookUIRoot(props: any) {
+/**
+ * Enhances desktop Storybook sidebar:
+ * 1. Expands sidebar width to 340px (preventing text wrapping on long component names).
+ * 2. Keeps the search input and logo static / sticky at the top during scroll.
+ * 3. Prevents text wrapping on story tree items while adding clean ellipsis.
+ */
+function useSidebarEnhancements() {
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (Platform.OS !== "web" || typeof window === "undefined" || typeof document === "undefined") return;
+
+    const STYLE_ID = "storybook-sidebar-enhancements";
+    let styleEl = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = STYLE_ID;
+      styleEl.textContent = `
+        /* 1. Expand desktop sidebar drawer to 340px */
+        div:has(#storybook-explorer-tree)[style*="border-right-width"],
+        div:has(#storybook-explorer-tree)[style*="width: 240px"],
+        div:has(#storybook-explorer-tree)[style*="width:240px"],
+        div:has(#storybook-explorer-tree)[style*="width: 340px"],
+        div:has(#storybook-explorer-tree)[style*="width:340px"] {
+          width: 340px !important;
+          min-width: 340px !important;
+        }
+
+        /* 2. Pin logo container static at the top */
+        div:has(#storybook-explorer-tree) .r-overflowY-1rnoaur > div > div:first-child,
+        div:has(#storybook-explorer-tree) div[style*="overflow-y: auto"] > div > div:first-child {
+          position: sticky !important;
+          top: 0px !important;
+          z-index: 30 !important;
+          background-color: var(--sb-sidebar-bg, #ffffff) !important;
+        }
+
+        /* 3. Pin search input static right beneath the logo with full-bleed background */
+        div:has(#storybook-explorer-tree) div:has(> input) {
+          position: sticky !important;
+          top: 42px !important;
+          z-index: 25 !important;
+          background-color: var(--sb-sidebar-bg, #ffffff) !important;
+          margin-left: -10px !important;
+          margin-right: -10px !important;
+          padding-left: 10px !important;
+          padding-right: 10px !important;
+          padding-top: 8px !important;
+          padding-bottom: 8px !important;
+          box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08) !important;
+        }
+
+        /* 4. Prevent text wrapping on story tree items with neat ellipsis */
+        #storybook-explorer-tree div[dir="auto"],
+        #storybook-explorer-tree .css-text-146c3p1 {
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    const applyDynamicStyles = () => {
+      const tree = document.getElementById("storybook-explorer-tree");
+      if (!tree) return;
+
+      let sidebar: HTMLElement | null = tree;
+      while (sidebar && sidebar.parentElement && sidebar !== document.body) {
+        if (
+          sidebar.style?.borderRightWidth ||
+          sidebar.style?.width === "240px" ||
+          sidebar.style?.width === "340px" ||
+          sidebar.getAttribute("style")?.includes("border-right-width")
+        ) {
+          break;
+        }
+        sidebar = sidebar.parentElement;
+      }
+
+      if (sidebar && sidebar.parentElement) {
+        const parentBg = window.getComputedStyle(sidebar.parentElement).backgroundColor;
+        const bg =
+          parentBg && parentBg !== "rgba(0, 0, 0, 0)" && parentBg !== "transparent"
+            ? parentBg
+            : "#ffffff";
+        document.documentElement.style.setProperty("--sb-sidebar-bg", bg);
+        if (sidebar.style.width !== "340px") {
+          sidebar.style.setProperty("width", "340px", "important");
+          sidebar.style.setProperty("min-width", "340px", "important");
+        }
+      }
+    };
+
+    applyDynamicStyles();
+    const interval = setInterval(applyDynamicStyles, 1000);
+
+    const observer = new MutationObserver(() => {
+      applyDynamicStyles();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      clearInterval(interval);
+      observer.disconnect();
+    };
+  }, []);
+}
+
+export default function StorybookUIRoot(props: any) {
+  useSidebarEnhancements();
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined" || typeof window.addEventListener !== "function") return;
 
     // Handle browser Back / Forward navigation
     const handlePopState = (event: PopStateEvent) => {

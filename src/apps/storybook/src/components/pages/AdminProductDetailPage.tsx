@@ -18,6 +18,7 @@ import {
   LuX,
   LuDownload,
   LuLayers,
+  LuStore,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
@@ -50,6 +51,7 @@ export interface AdminProductDetailData {
   timestamp?: string;
   exclusiveDescription?: string;
   isArchived?: boolean;
+  isPublishedToStore?: boolean;
   media?: MediaSlideItem[];
   listings?: VendorListingItemData[];
 }
@@ -59,6 +61,7 @@ export interface AdminProductDetailPageProps {
   onBack?: () => void;
   onFindSimilar?: () => void;
   onShare?: () => void;
+  onPublishToStore?: () => void;
   onStarMedia?: (mediaId: string) => void;
   onReevaluateLLM?: () => void;
   onDeleteProduct?: () => void;
@@ -83,6 +86,7 @@ export function AdminProductDetailPage({
   onBack,
   onFindSimilar,
   onShare,
+  onPublishToStore,
   onStarMedia,
   onReevaluateLLM,
   onDeleteProduct,
@@ -188,28 +192,46 @@ export function AdminProductDetailPage({
         justifyContent="space-between"
         paddingHorizontal={12}
       >
-        {/* Back Button */}
-        {onBack ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Navigate back"
-            onPress={onBack}
-            style={{ cursor: 'pointer' } as any}
-          >
-            <XStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor="rgba(0,0,0,0.55)"
-              alignItems="center"
-              justifyContent="center"
+        {/* Back Button & Store Badge */}
+        <XStack alignItems="center" gap={8}>
+          {onBack ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Navigate back"
+              onPress={onBack}
+              style={{ cursor: 'pointer' } as any}
             >
-              <LuArrowLeft size={18} color="#ffffff" />
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor="rgba(0,0,0,0.55)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuArrowLeft size={18} color="#ffffff" />
+              </XStack>
+            </Pressable>
+          ) : (
+            <XStack width={36} />
+          )}
+
+          {product?.isPublishedToStore && (
+            <XStack
+              backgroundColor={tokens.accent}
+              paddingHorizontal={8}
+              paddingVertical={4}
+              borderRadius={12}
+              alignItems="center"
+              gap={4}
+            >
+              <LuStore size={12} color={tokens.accentForeground} />
+              <Text fontSize={10} fontWeight="800" color={tokens.accentForeground}>
+                In Store
+              </Text>
             </XStack>
-          </Pressable>
-        ) : (
-          <XStack width={36} />
-        )}
+          )}
+        </XStack>
 
         {/* Right Header Action Icons */}
         <XStack alignItems="center" gap={8}>
@@ -375,6 +397,26 @@ export function AdminProductDetailPage({
                   <LuShare2 size={18} color={tokens.text} />
                   <Text fontSize={14} fontWeight="700" color={tokens.text}>
                     Share Product
+                  </Text>
+                </XStack>
+              </Pressable>
+            )}
+
+            {/* Publish to Store */}
+            {onPublishToStore && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Publish to Store"
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  onPublishToStore();
+                }}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <XStack alignItems="center" gap={12} paddingVertical={12}>
+                  <LuStore size={18} color={tokens.accent} />
+                  <Text fontSize={14} fontWeight="800" color={tokens.accent}>
+                    {product?.isPublishedToStore ? '✓ Published to Store (Re-sync)' : '🚀 Publish to Store'}
                   </Text>
                 </XStack>
               </Pressable>
