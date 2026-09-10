@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuDownload, LuX, LuMonitor, LuCheck, LuSmartphone } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
@@ -42,13 +43,13 @@ export function PwaInstallBanner({
       setDeferredPrompt(null);
     };
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.addEventListener('appinstalled', handleAppInstalled);
     }
 
     return () => {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
         window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         window.removeEventListener('appinstalled', handleAppInstalled);
       }

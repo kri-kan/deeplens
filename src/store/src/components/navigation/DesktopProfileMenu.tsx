@@ -1,18 +1,18 @@
 import React from 'react';
 import { YStack, XStack, Text } from 'tamagui';
 import {
-  LuPackage,
-  LuHeart,
-  LuGift,
-  LuSparkles,
-  LuCreditCard,
-  LuTag,
-  LuMapPin,
-  LuHeadphones,
-  LuLogOut,
-  LuChevronRight,
-  LuUser,
-} from 'react-icons/lu';
+  Package,
+  Heart,
+  Gift,
+  Sparkles,
+  CreditCard,
+  Tag,
+  MapPin,
+  Headphones,
+  LogOut,
+  ChevronRight,
+  User,
+} from 'lucide-react-native';
 import { useTheme } from '../../theme';
 
 export interface ProfileUser {
@@ -38,14 +38,14 @@ export function DesktopProfileMenu({
   const isGuest = !user;
 
   const menuItems = [
-    { key: 'orders', label: 'Orders', icon: <LuPackage size={16} color={tokens.textSecondary} /> },
-    { key: 'wishlist', label: 'Wishlist', icon: <LuHeart size={16} color={tokens.textSecondary} /> },
-    { key: 'giftcards', label: 'Gift Cards', icon: <LuGift size={16} color={tokens.textSecondary} /> },
-    { key: 'insider', label: 'Vayyari Insider', icon: <LuSparkles size={16} color="#D4AF37" />, tag: 'NEW' },
-    { key: 'credit', label: 'Vayyari Credit', icon: <LuCreditCard size={16} color={tokens.textSecondary} /> },
-    { key: 'coupons', label: 'Coupons', icon: <LuTag size={16} color={tokens.textSecondary} /> },
-    { key: 'addresses', label: 'Saved Addresses', icon: <LuMapPin size={16} color={tokens.textSecondary} /> },
-    { key: 'contact', label: 'Contact Us', icon: <LuHeadphones size={16} color={tokens.textSecondary} /> },
+    { key: 'orders', label: 'Orders', icon: <Package size={16} color={tokens.textSecondary} /> },
+    { key: 'wishlist', label: 'Wishlist', icon: <Heart size={16} color={tokens.textSecondary} /> },
+    { key: 'giftcards', label: 'Gift Cards', icon: <Gift size={16} color={tokens.textSecondary} /> },
+    { key: 'insider', label: 'Vayyari Insider', icon: <Sparkles size={16} color="#D4AF37" />, tag: 'NEW' },
+    { key: 'credit', label: 'Vayyari Credit', icon: <CreditCard size={16} color={tokens.textSecondary} /> },
+    { key: 'coupons', label: 'Coupons', icon: <Tag size={16} color={tokens.textSecondary} /> },
+    { key: 'addresses', label: 'Saved Addresses', icon: <MapPin size={16} color={tokens.textSecondary} /> },
+    { key: 'contact', label: 'Contact Us', icon: <Headphones size={16} color={tokens.textSecondary} /> },
   ];
 
   return (
@@ -102,7 +102,7 @@ export function DesktopProfileMenu({
               alignItems="center"
               justifyContent="center"
             >
-              <LuUser size={20} color={tokens.accent} />
+              <User size={20} color={tokens.accent} />
             </YStack>
             <YStack flex={1}>
               <Text fontSize={14} fontWeight="800" color={tokens.text}>
@@ -151,7 +151,7 @@ export function DesktopProfileMenu({
                 </Text>
               </XStack>
             ) : (
-              <LuChevronRight size={14} color={tokens.textMuted} />
+              <ChevronRight size={14} color={tokens.textMuted} />
             )}
           </XStack>
         ))}
@@ -169,7 +169,7 @@ export function DesktopProfileMenu({
               pressStyle={{ opacity: 0.8 }}
               onPress={onLogoutClick}
             >
-              <LuLogOut size={16} color="#E53935" />
+              <LogOut size={16} color="#E53935" />
               <Text fontSize={13} fontWeight="700" color="#E53935">
                 Logout
               </Text>

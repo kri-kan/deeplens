@@ -78,6 +78,16 @@
             color: #00f2fe;
             border-color: rgba(0, 242, 254, 0.3);
         }
+        .badge-store {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        .badge-analytics {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
         .status-online {
             display: inline-flex;
             align-items: center;
@@ -108,9 +118,46 @@
         <p>Unified access to your infrastructure</p>
     </header>
     <div class="grid">
-        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':3006'" class="card" style="border-color: #00f2fe;">
-            <h3>🌐 DeepLens Web UI</h3>
-            <p>Main Application Front-end</p>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':8082'" class="card" style="border-color: #10b981;">
+            <h3>🛍️ Vayyari Store PWA</h3>
+            <p>Customer Storefront, Instant SKU Discovery & Beta Device Bag</p>
+            <div class="card-footer">
+                <span class="badge badge-store">Store PWA</span>
+                <span class="badge">Port 8082</span>
+                <span class="status-online"><span class="dot"></span> Active</span>
+            </div>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':6006'" class="card" style="border-color: #10b981;">
+            <h3>🎨 Storybook Workbench</h3>
+            <p>UI Component Library, 7-State Flows & Beta Bag Workbench</p>
+            <div class="card-footer">
+                <span class="badge badge-store">Store & UI</span>
+                <span class="badge">Port 6006</span>
+                <span class="status-online"><span class="dot"></span> Active</span>
+            </div>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':5200/swagger'" class="card">
+            <h3>🏪 Store API</h3>
+            <p>E-Commerce, Anonymous Device Cart & Wishlist Swagger</p>
+            <div class="card-footer">
+                <span class="badge badge-store">Store API</span>
+                <span class="badge">Port 5200</span>
+            </div>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':8000'" class="card">
+            <h3>🦔 PostHog Analytics</h3>
+            <p>Self-Hosted User Journeys, Active Visitors & Conversion Funnels</p>
+            <div class="card-footer">
+                <span class="badge badge-analytics">Product Analytics</span>
+                <span class="badge">Port 8000</span>
+            </div>
+        </a>
+        <a href="#" onclick="window.location.href='http://'+window.location.hostname+':8081'" class="card">
+            <h3>📱 Vayyari App (Expo)</h3>
+            <p>Mobile Catalog, Order Builder & Curation</p>
+            <div class="card-footer">
+                <span class="badge">Port 8081</span>
+            </div>
         </a>
         <a href="#" onclick="window.location.href='http://'+window.location.hostname+':5000/swagger'" class="card">
             <h3>🔍 Search API</h3>
@@ -122,7 +169,7 @@
         </a>
         <a href="#" onclick="window.location.href='http://'+window.location.hostname+':3000'" class="card">
             <h3>📈 Grafana</h3>
-            <p>Dashboards & Visualization</p>
+            <p>Dashboards & APM Observability</p>
         </a>
         <a href="#" onclick="window.location.href='http://'+window.location.hostname+':9001'" class="card">
             <h3>📦 MinIO</h3>

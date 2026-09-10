@@ -40,7 +40,10 @@ All ports have been verified across code, configuration files, and documentation
 | ----------------- | ---------------------------------------------------------- | --------- | --------- |
 | Identity API      | `src/NextGen.Identity/NextGen.Identity.Api/Properties/launchSettings.json`  | 5198      | ✅ Correct |
 | Search API        | `src/DeepLens.Service/DeepLens.SearchApi/Properties/launchSettings.json`    | 5000      | ✅ Correct |
-| DeepLens Web UI   | `src/DeepLens.WebUI/vite.config.ts`                        | 5001      | ✅ Correct |
+| Vayyari Admin App | `src/vayyari`                                              | 8081      | ✅ Active  |
+| Vayyari Store PWA | `src/store`                                                | 8082      | ✅ Active  |
+| Store API         | `src/services/Store.Api`                                   | 5200      | ✅ Active  |
+| Storybook UI      | `src/apps/storybook`                                       | 6006      | ✅ Active  |
 | WhatsApp API      | `src/whatsapp-processor/.env.example`                      | 3005      | ✅ Correct |
 | WhatsApp UI (Dev) | `src/whatsapp-processor/client/vite.config.ts`             | 3006      | ✅ Correct |
 | PostgreSQL        | Remote (192.168.0.170) | 5432 | ✅ Correct |

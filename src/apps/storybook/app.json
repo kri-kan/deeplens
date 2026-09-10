@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "store",
-    "slug": "deeplens-store",
+    "name": "Storybook Workbench",
+    "slug": "vayyari-storybook",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

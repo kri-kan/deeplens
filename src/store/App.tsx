@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TamaguiProvider } from 'tamagui';
 import tamaguiConfig from './tamagui.config';
 import { ThemeProvider } from './src/theme';
@@ -42,27 +43,29 @@ if (typeof document !== 'undefined') {
 
 export default function App() {
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
-      <ThemeProvider>
-        <NavigationProvider initialRoute="home">
-          <PWAProvider>
-            <PermissionsProvider>
-              <AuthProvider>
-                <OnboardingProvider>
-                  <CartProvider>
-                    <WishlistProvider>
-                      <ToastProvider>
-                        <StatusBar style="light" />
-                        <AppShell />
-                      </ToastProvider>
-                    </WishlistProvider>
-                  </CartProvider>
-                </OnboardingProvider>
-              </AuthProvider>
-            </PermissionsProvider>
-          </PWAProvider>
-        </NavigationProvider>
-      </ThemeProvider>
-    </TamaguiProvider>
+    <SafeAreaProvider>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme="light">
+        <ThemeProvider>
+          <NavigationProvider initialRoute="home">
+            <PWAProvider>
+              <PermissionsProvider>
+                <AuthProvider>
+                  <OnboardingProvider>
+                    <CartProvider>
+                      <WishlistProvider>
+                        <ToastProvider>
+                          <StatusBar style="light" />
+                          <AppShell />
+                        </ToastProvider>
+                      </WishlistProvider>
+                    </CartProvider>
+                  </OnboardingProvider>
+                </AuthProvider>
+              </PermissionsProvider>
+            </PWAProvider>
+          </NavigationProvider>
+        </ThemeProvider>
+      </TamaguiProvider>
+    </SafeAreaProvider>
   );
 }

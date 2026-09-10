@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Image } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuStar, LuCheck, LuPencil } from 'react-icons/lu';
+import { LuStar, LuCheck, LuPencil, LuStore } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 
 export interface ProductGridTileData {
@@ -12,6 +12,7 @@ export interface ProductGridTileData {
   category?: string;
   imageUri?: string;
   isStarred?: boolean;
+  isPublishedToStore?: boolean;
   listingCount?: number;
   timeAgo?: string;
 }
@@ -67,6 +68,27 @@ export function ProductGridTile({
           <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor={tokens.surfaceRaised}>
             <Text fontSize={11} color={tokens.textMuted}>No Media</Text>
           </YStack>
+        )}
+
+        {/* Top-Left: Store Published Tag Badge */}
+        {!selectionMode && item.isPublishedToStore && (
+          <XStack
+            position="absolute"
+            top={6}
+            left={6}
+            backgroundColor={tokens.accent}
+            paddingHorizontal={6}
+            paddingVertical={2}
+            borderRadius={4}
+            alignItems="center"
+            gap={3}
+            zIndex={10}
+          >
+            <LuStore size={10} color={tokens.accentForeground} />
+            <Text fontSize={9} fontWeight="800" color={tokens.accentForeground}>
+              Store
+            </Text>
+          </XStack>
         )}
 
         {/* Multi-Selection Overlay & Checkbox */}

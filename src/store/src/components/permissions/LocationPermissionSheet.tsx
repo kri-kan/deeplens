@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { YStack, XStack, Text, Input, Spinner } from 'tamagui';
-import { LuMapPin, LuNavigation, LuCircleAlert, LuCheck, LuSparkles } from 'react-icons/lu';
+import { MapPin, Navigation, AlertCircle, Check, Sparkles } from 'lucide-react-native';
 import { BottomSheet } from '../atoms/BottomSheet';
 import { useTheme } from '../../theme';
 
@@ -106,7 +106,7 @@ export function LocationPermissionSheet({
                 alignItems="center"
                 justifyContent="center"
               >
-                <LuCircleAlert size={18} color="#E53935" />
+                <AlertCircle size={18} color="#E53935" />
               </YStack>
               <YStack flex={1}>
                 <Text fontSize={13} fontWeight="800" color="#B71C1C">
@@ -154,7 +154,7 @@ export function LocationPermissionSheet({
           {isLocating ? (
             <Spinner size="small" color={tokens.accent} />
           ) : (
-            <LuNavigation size={18} color={tokens.accent} />
+            <Navigation size={18} color={tokens.accent} />
           )}
           <Text fontSize={14} fontWeight="700" color={tokens.accent}>
             {isLocating ? 'Detecting Location via GPS...' : 'Use Current Location'}
@@ -186,7 +186,7 @@ export function LocationPermissionSheet({
               alignItems="center"
               height={44}
             >
-              <LuMapPin size={16} color={tokens.textMuted} />
+              <MapPin size={16} color={tokens.textMuted} />
               <Input
                 value={pincode}
                 onChangeText={(text) => {
@@ -240,13 +240,13 @@ export function LocationPermissionSheet({
             gap={6}
           >
             <XStack alignItems="center" gap={8}>
-              <LuCheck size={16} color="#2E7D32" />
+              <Check size={16} color="#2E7D32" />
               <Text fontSize={12} fontWeight="700" color="#2E7D32">
                 Delivering to Pincode: {submittedPincode}
               </Text>
             </XStack>
             <XStack alignItems="center" gap={6}>
-              <LuSparkles size={13} color={tokens.accent} />
+              <Sparkles size={13} color={tokens.accent} />
               <Text fontSize={11} color={tokens.textSecondary}>
                 Express Delivery & Cash on Delivery available for this area.
               </Text>

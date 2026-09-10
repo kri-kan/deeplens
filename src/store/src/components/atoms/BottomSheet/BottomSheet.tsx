@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuX } from 'react-icons/lu';
+import { X } from 'lucide-react-native';
 import { useTheme } from '../../../theme';
 
 export interface BottomSheetProps {
@@ -107,7 +107,7 @@ export function BottomSheet({
                     justifyContent="center"
                     hoverStyle={{ backgroundColor: tokens.border }}
                   >
-                    <LuX size={14} color={tokens.textSecondary} />
+                    <X size={14} color={tokens.textSecondary} />
                   </YStack>
                 </Pressable>
               )}

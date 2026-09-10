@@ -1,6 +1,6 @@
 import React from 'react';
 import { XStack, YStack, Text } from 'tamagui';
-import { LuHouse, LuSparkles, LuUser } from 'react-icons/lu';
+import { Home, Sparkles, User } from 'lucide-react-native';
 import { useTheme } from '../../theme';
 
 export type BottomNavTab = 'home' | 'curations' | 'profile';
@@ -24,17 +24,17 @@ export function BottomNav({
     {
       id: 'home',
       label: 'Home',
-      icon: <LuHouse size={22} color={activeTab === 'home' ? '#E53935' : tokens.textMuted} />,
+      icon: <Home size={22} color={activeTab === 'home' ? '#E53935' : tokens.textMuted} />,
     },
     {
       id: 'curations',
       label: 'Curations',
-      icon: <LuSparkles size={22} color={activeTab === 'curations' ? '#E53935' : tokens.textMuted} />,
+      icon: <Sparkles size={22} color={activeTab === 'curations' ? '#E53935' : tokens.textMuted} />,
     },
     {
       id: 'profile',
       label: 'Profile',
-      icon: <LuUser size={22} color={activeTab === 'profile' ? '#E53935' : tokens.textMuted} />,
+      icon: <User size={22} color={activeTab === 'profile' ? '#E53935' : tokens.textMuted} />,
     },
   ];
 

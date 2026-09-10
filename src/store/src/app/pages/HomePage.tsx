@@ -10,7 +10,7 @@ import { mockCatalogService, StoreProduct } from '../../services/mock/mockCatalo
 import { telemetry } from '../../services/telemetry';
 
 // Icons
-import { LuSparkles, LuHeart, LuShoppingBag, LuChevronRight, LuTag, LuWifiOff } from 'react-icons/lu';
+import { Sparkles, Heart, ShoppingBag, ChevronRight, Tag, WifiOff } from 'lucide-react-native';
 
 const CATEGORIES = [
   { id: 'all', label: 'All Crafts', icon: '✦' },
@@ -94,7 +94,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
       {/* Offline Alert Bar if Network Disconnected */}
       {isOffline && (
         <View style={styles.offlineNotice}>
-          <LuWifiOff size={14} color="#B71C1C" />
+          <WifiOff size={14} color="#B71C1C" />
           <Text style={styles.offlineNoticeText}>
             Offline Mode: Browsing cached artisan catalog.
           </Text>
@@ -115,7 +115,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
           <View style={styles.guestOfferCard}>
             <View style={styles.guestOfferLeft}>
               <View style={styles.tagBadge}>
-                <LuTag size={13} color="#E53935" />
+                <Tag size={13} color="#E53935" />
                 <Text style={styles.tagBadgeText}>FLAT ₹500 OFF</Text>
               </View>
               <Text style={styles.guestOfferTitle}>Exclusive First Order Privilege</Text>
@@ -143,7 +143,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
             <View style={styles.heroEyebrowRow}>
-              <LuSparkles size={14} color="#D4AF37" />
+              <Sparkles size={14} color="#D4AF37" />
               <Text style={styles.heroEyebrow}>ROYAL FESTIVE WEAVE EDIT 2026</Text>
             </View>
             <Text style={[styles.heroTitle, isLaptop && styles.heroTitleLaptop, isDesktop && styles.heroTitleDesktop]}>
@@ -168,7 +168,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
           <Text style={styles.sectionTitle}>Curated Collections</Text>
           <TouchableOpacity onPress={() => navigate('catalog')} style={styles.viewAllRow}>
             <Text style={styles.viewAllText}>View All</Text>
-            <LuChevronRight size={14} color="#E53935" />
+            <ChevronRight size={14} color="#E53935" />
           </TouchableOpacity>
         </View>
 
@@ -232,7 +232,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
                     onPress={(e) => handleWishlist(e, p)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <LuHeart
+                    <Heart
                       size={16}
                       color={wishlisted ? '#E53935' : '#424242'}
                       fill={wishlisted ? '#E53935' : 'transparent'}
@@ -288,7 +288,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
                       onPress={(e) => handleAddToCart(e, p)}
                       activeOpacity={0.85}
                     >
-                      <LuShoppingBag size={14} color="#FFFFFF" />
+                      <ShoppingBag size={14} color="#FFFFFF" />
                     </TouchableOpacity>
                   </View>
                 </View>

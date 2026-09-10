@@ -1,6 +1,7 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuDownload, LuX, LuMonitor, LuSmartphone, LuCheck } from 'react-icons/lu';
+import { Download, X, Monitor, Smartphone, Check } from 'lucide-react-native';
 import { usePWA } from '../../context/PWAContext';
 import { useTheme } from '../../theme';
 
@@ -18,7 +19,7 @@ export function PwaInstallBanner({
   const { tokens } = useTheme();
   const { isInstalled, showInstallBanner, setShowInstallBanner, promptInstall, isOffline } = usePWA();
 
-  if (isInstalled || !showInstallBanner) return null;
+  if (Platform.OS !== 'web' || isInstalled || !showInstallBanner) return null;
 
   const handleInstallClick = async () => {
     await promptInstall();
@@ -63,9 +64,9 @@ export function PwaInstallBanner({
             justifyContent="center"
           >
             {isDesktop ? (
-              <LuMonitor size={18} color="#D4AF37" />
+              <Monitor size={18} color="#D4AF37" />
             ) : (
-              <LuSmartphone size={18} color="#D4AF37" />
+              <Smartphone size={18} color="#D4AF37" />
             )}
           </YStack>
 
@@ -114,7 +115,7 @@ export function PwaInstallBanner({
             pressStyle={{ scale: 0.97 }}
             onPress={handleInstallClick}
           >
-            <LuDownload size={13} color="#FFFFFF" />
+            <Download size={13} color="#FFFFFF" />
             <Text fontSize={11} fontWeight="800" color="#FFFFFF" letterSpacing={0.5}>
               INSTALL APP
             </Text>
@@ -127,7 +128,7 @@ export function PwaInstallBanner({
             onPress={handleDismissClick}
             hoverStyle={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
           >
-            <LuX size={15} color="#9AA5B1" />
+            <X size={15} color="#9AA5B1" />
           </XStack>
         </XStack>
       </XStack>

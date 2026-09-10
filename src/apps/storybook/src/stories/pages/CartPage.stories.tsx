@@ -9,10 +9,10 @@ const meta: Meta<any> = {
   component: CartPage,
   args: {
     ...THEME_ARGS,
+    initialItems: INITIAL_CART_ITEMS,
     onNavigateHome: () => alert('Navigating to Home'),
     onNavigatePDP: (name: string) => alert(`Navigating to PDP for: ${name || 'Saree'}`),
-    onProceedToCheckout: (summary: any) =>
-      alert(`Proceeding to checkout with ${summary.items.length} items. Total: ₹${summary.finalTotal}`),
+    onProceedToCheckout: (summary: any) => alert(`Proceeding to checkout with ${summary.items.length} items! Total: ₹${summary.finalTotal}`),
   },
   argTypes: {
     ...THEME_ARG_TYPES,
@@ -21,27 +21,30 @@ const meta: Meta<any> = {
 export default meta;
 type Story = StoryObj<typeof CartPage>;
 
-export const InteractiveFormFactors: Story = {
-  render: (args) => (
-    <FormFactorPreview title="Shopping Bag" initialFactor="desktop">
-      <CartPage {...args} />
-    </FormFactorPreview>
-  ),
-};
-
-export const DesktopView: Story = {
+/**
+ * 1. Default Interactive Shopping Bag:
+ * Full-featured cart with item selection, pincode validation, coupon codes, and donation options.
+ */
+export const DefaultCart: Story = {
+  name: '1. Standard Shopping Bag (1200px Desktop)',
   decorators: [withFormFactor('desktop', 'Shopping Bag (1200px Desktop)')],
 };
 
-export const TabletView: Story = {
-  decorators: [withFormFactor('tablet', 'Shopping Bag (768px Tablet)')],
-};
-
-export const MobileView: Story = {
+/**
+ * 2. Mobile Form Factor (390px):
+ * Mobile shopping bag with sticky bottom checkout bar.
+ */
+export const MobileCartView: Story = {
+  name: '2. Mobile Shopping Bag (390px Viewport)',
   decorators: [withFormFactor('mobile', 'Shopping Bag (390px Mobile)')],
 };
 
+/**
+ * 3. Empty Bag State:
+ * Displays zero-item state with CTA to explore ethnic handloom catalog.
+ */
 export const EmptyBagView: Story = {
+  name: '3. Empty Shopping Bag',
   args: {
     initialItems: [],
   },

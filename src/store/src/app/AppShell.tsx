@@ -1,5 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, SafeAreaView, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from './NavigationContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -28,7 +29,7 @@ const CartDrawer = lazy(() =>
 );
 
 // Icons
-import { LuSearch, LuHeart, LuShoppingBag, LuUser, LuMapPin, LuWifiOff } from 'react-icons/lu';
+import { Search, Heart, ShoppingBag, User, MapPin, WifiOff } from 'lucide-react-native';
 import { telemetry } from '../services/telemetry';
 
 // Critical Landing Page (Eagerly bundled for immediate First Paint)
@@ -161,7 +162,7 @@ export const AppShell: React.FC = () => {
         {/* Offline Banner */}
         {isOffline && (
           <View style={styles.offlineBanner}>
-            <LuWifiOff size={15} color="#FFFFFF" />
+            <WifiOff size={15} color="#FFFFFF" />
             <Text style={styles.offlineText}>
               You are currently browsing offline. Cached luxury collections are ready.
             </Text>
@@ -216,7 +217,7 @@ export const AppShell: React.FC = () => {
                   isLaptop && styles.desktopSearchBoxLaptop,
                 ]}
               >
-                <LuSearch size={15} color="#757575" />
+                <Search size={15} color="#757575" />
                 <TextInput
                   style={styles.desktopSearchInput}
                   placeholder={isTablet ? "Search..." : isLaptop ? "Search sarees, silks..." : "Search for sarees, silks, jewellery..."}
@@ -241,7 +242,7 @@ export const AppShell: React.FC = () => {
                   onPress={() => setShowLocationSheet(true)}
                   activeOpacity={0.8}
                 >
-                  <LuMapPin size={14} color="#E53935" />
+                  <MapPin size={14} color="#E53935" />
                   <View>
                     {showActionLabels && <Text style={styles.locationLabel}>Deliver to</Text>}
                     <Text style={styles.locationValue} numberOfLines={1}>
@@ -252,7 +253,7 @@ export const AppShell: React.FC = () => {
 
                 {/* Wishlist */}
                 <TouchableOpacity style={styles.iconBtn} onPress={() => navigate('wishlist')} activeOpacity={0.8}>
-                  <LuHeart size={19} color="#1A365D" />
+                  <Heart size={19} color="#1A365D" />
                   {wishlistCount > 0 && (
                     <View style={styles.badge}>
                       <Text style={styles.badgeText}>{wishlistCount}</Text>
@@ -263,7 +264,7 @@ export const AppShell: React.FC = () => {
 
                 {/* Bag */}
                 <TouchableOpacity style={styles.iconBtn} onPress={openDrawer} activeOpacity={0.8}>
-                  <LuShoppingBag size={19} color="#1A365D" />
+                  <ShoppingBag size={19} color="#1A365D" />
                   {itemCount > 0 && (
                     <View style={styles.badge}>
                       <Text style={styles.badgeText}>{itemCount}</Text>
@@ -279,7 +280,7 @@ export const AppShell: React.FC = () => {
                     onPress={() => setShowDesktopProfileMenu(!showDesktopProfileMenu)}
                     activeOpacity={0.8}
                   >
-                    <LuUser size={19} color={isAuthenticated ? '#2E7D32' : '#E53935'} />
+                    <User size={19} color={isAuthenticated ? '#2E7D32' : '#E53935'} />
                     {showActionLabels && (
                       <Text style={styles.iconLabel}>
                         {isAuthenticated ? user?.name?.split(' ')[0] || 'Patron' : 'Profile'}
@@ -328,10 +329,10 @@ export const AppShell: React.FC = () => {
 
               <View style={styles.mobileHeaderIcons}>
                 <TouchableOpacity style={styles.mobileIconBtn} onPress={() => navigate('catalog')}>
-                  <LuSearch size={20} color="#1A365D" />
+                  <Search size={20} color="#1A365D" />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.mobileIconBtn} onPress={() => navigate('wishlist')}>
-                  <LuHeart size={20} color="#1A365D" />
+                  <Heart size={20} color="#1A365D" />
                   {wishlistCount > 0 && (
                     <View style={styles.mobileBadge}>
                       <Text style={styles.mobileBadgeText}>{wishlistCount}</Text>
@@ -339,7 +340,7 @@ export const AppShell: React.FC = () => {
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.mobileIconBtn} onPress={openDrawer}>
-                  <LuShoppingBag size={20} color="#1A365D" />
+                  <ShoppingBag size={20} color="#1A365D" />
                   {itemCount > 0 && (
                     <View style={styles.mobileBadge}>
                       <Text style={styles.mobileBadgeText}>{itemCount}</Text>
@@ -355,7 +356,7 @@ export const AppShell: React.FC = () => {
               onPress={() => setShowLocationSheet(true)}
               activeOpacity={0.85}
             >
-              <LuMapPin size={14} color="#E53935" />
+              <MapPin size={14} color="#E53935" />
               <Text style={styles.mobileLocationText}>
                 {currentLocation?.pincode ? (
                   <>Deliver to <Text style={styles.boldText}>{currentLocation.city || 'Pincode'} {currentLocation.pincode}</Text></>

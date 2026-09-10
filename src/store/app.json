@@ -37,6 +37,7 @@
       "description": "Authentic Indian Handlooms & Artisan Sarees",
       "startUrl": "/",
       "display": "standalone"
-    }
+    },
+    "scheme": "vayyari"
   }
 }

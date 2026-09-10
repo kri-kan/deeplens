@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  posthog-redis:
+    image: redis:7.0-alpine
+    container_name: deeplens-posthog-redis
+    restart: unless-stopped
+    volumes:
+      - posthog-redis-data:/data
+    networks:
+      - deeplens-network
+
+  posthog-db:
+    image: postgres:15-alpine
+    container_name: deeplens-posthog-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: posthog
+      POSTGRES_USER: posthog
+      POSTGRES_PASSWORD: posthog_secure_pass
+    volumes:
+      - posthog-db-data:/var/lib/postgresql/data
+    networks:
+      - deeplens-network
+
+  posthog:
+    image: posthog/posthog:latest
+    container_name: deeplens-posthog
+    restart: unless-stopped
+    depends_on:
+      - posthog-db
+      - posthog-redis
+    environment:
+      - SITE_URL=http://localhost:8000
+      - SECRET_KEY=deeplens_posthog_secret_key_2026_super_secure
+      - DATABASE_URL=postgres://posthog:posthog_secure_pass@deeplens-posthog-db:5432/posthog
+      - REDIS_URL=redis://deeplens-posthog-redis:6379/
+      - IS_BEHIND_PROXY=true
+      - DISABLE_SECURE_SSL_REDIRECT=true
+      - OPT_OUT_CAPTURING=false
+    ports:
+      - "8000:8000"   # PostHog Web UI & Ingestion API
+    volumes:
+      - posthog-storage:/var/lib/posthog
+    networks:
+      - deeplens-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  deeplens-network:
+    external: true
+    name: deeplens-network
+
+volumes:
+  posthog-redis-data:
+  posthog-db-data:
+  posthog-storage:
