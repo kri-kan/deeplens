@@ -19,6 +19,7 @@ import {
   LuX,
   LuDownload,
   LuLayers,
+  LuStore,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -51,6 +52,7 @@ export interface AdminProductDetailData {
   timestamp?: string;
   exclusiveDescription?: string;
   isArchived?: boolean;
+  isPublishedToStore?: boolean;
   media?: MediaSlideItem[];
   listings?: VendorListingItemData[];
 }
@@ -64,6 +66,8 @@ export interface AdminProductDetailPageProps {
   onReevaluateLLM?: () => void;
   onDeleteProduct?: () => void;
   onUnarchive?: () => void;
+  onPublishToStore?: () => void;
+  onNavigateToStoreCuration?: () => void;
   onSaveMetadata?: (updates: {
     category?: string;
     fabric?: string;
@@ -89,6 +93,8 @@ export function AdminProductDetailPage({
   onReevaluateLLM,
   onDeleteProduct,
   onUnarchive,
+  onPublishToStore,
+  onNavigateToStoreCuration,
   onSaveMetadata,
   onOpenWhatsAppListing,
   onDownloadMedia,
@@ -191,28 +197,51 @@ export function AdminProductDetailPage({
         justifyContent="space-between"
         paddingHorizontal={12}
       >
-        {/* Back Button */}
-        {onBack ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Navigate back"
-            activeOpacity={0.7}
-            onPress={onBack}
-          >
-            <XStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor="rgba(0,0,0,0.55)"
-              alignItems="center"
-              justifyContent="center"
+        {/* Back Button & In-Store Pill */}
+        <XStack alignItems="center" gap={8}>
+          {onBack ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Navigate back"
+              activeOpacity={0.7}
+              onPress={onBack}
             >
-              <LuArrowLeft size={18} color="#ffffff" />
-            </XStack>
-          </TouchableOpacity>
-        ) : (
-          <XStack width={36} />
-        )}
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor="rgba(0,0,0,0.55)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuArrowLeft size={18} color="#ffffff" />
+              </XStack>
+            </TouchableOpacity>
+          ) : (
+            <XStack width={36} />
+          )}
+
+          {product.isPublishedToStore && (
+            <TouchableOpacity
+              onPress={onNavigateToStoreCuration}
+              activeOpacity={0.8}
+            >
+              <XStack
+                backgroundColor="rgba(16,185,129,0.9)"
+                paddingHorizontal={8}
+                paddingVertical={4}
+                borderRadius={12}
+                alignItems="center"
+                gap={4}
+              >
+                <LuStore size={12} color="#ffffff" />
+                <Text fontSize={10} fontWeight="800" color="#ffffff">
+                  In Store
+                </Text>
+              </XStack>
+            </TouchableOpacity>
+          )}
+        </XStack>
 
         {/* Right Header Action Icons */}
         <XStack alignItems="center" gap={8}>
@@ -376,10 +405,51 @@ export function AdminProductDetailPage({
                 <XStack alignItems="center" gap={12} paddingVertical={12}>
                   <LuShare2 size={18} color={tokens.text} />
                   <Text fontSize={14} fontWeight="700" color={tokens.text}>
-                    Share Product
+                    Share & Publish Product
                   </Text>
                 </XStack>
               </TouchableOpacity>
+            )}
+
+            {/* Store Publish / Curation Action */}
+            {product.isPublishedToStore ? (
+              onNavigateToStoreCuration && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Curate in Store"
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setIsMenuOpen(false);
+                    onNavigateToStoreCuration();
+                  }}
+                >
+                  <XStack alignItems="center" gap={12} paddingVertical={12}>
+                    <LuStore size={18} color="#10B981" />
+                    <Text fontSize={14} fontWeight="700" color="#10B981">
+                      Curate in Storefront ➔
+                    </Text>
+                  </XStack>
+                </TouchableOpacity>
+              )
+            ) : (
+              onPublishToStore && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Publish to Store"
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setIsMenuOpen(false);
+                    onPublishToStore();
+                  }}
+                >
+                  <XStack alignItems="center" gap={12} paddingVertical={12}>
+                    <LuStore size={18} color={tokens.accent} />
+                    <Text fontSize={14} fontWeight="700" color={tokens.text}>
+                      🚀 Publish to Store
+                    </Text>
+                  </XStack>
+                </TouchableOpacity>
+              )
             )}
 
             {/* Edit Metadata */}

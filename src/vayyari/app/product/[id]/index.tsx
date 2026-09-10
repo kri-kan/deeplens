@@ -9,6 +9,7 @@ import {
 import { MediaSlideItem } from '@/components/tamagui-ui/molecules/AdminProductMediaCarousel';
 import { VendorListingItemData } from '@/components/tamagui-ui/molecules/AdminVendorListingCard';
 import { productService } from '@/services/productService';
+import { storeAdminService } from '@/services/storeAdminService';
 import { useProductDetail } from '@/hooks/useProductDetail';
 import { downloadMedia } from '@/utils/media-helpers';
 import { formatISTTimestamp } from '@/utils/date-format';
@@ -230,6 +231,35 @@ export default function ProductDetailScreen() {
       onSaveMetadata={handleSaveMetadata}
       onOpenWhatsAppListing={handleOpenWhatsAppListing}
       onDownloadMedia={handleDownloadMedia}
+      onPublishToStore={async () => {
+        if (!product) return;
+        try {
+          const firstMedia = product.media?.[0]?.storagePath
+            ? productService.getThumbnailUrlByPath(product.media[0].storagePath, 'large')
+            : 'https://picsum.photos/seed/saree/600/800';
+          await storeAdminService.batchPublish([
+            {
+              vayyariProductId: product.id,
+              productCode: product.productCode || 'PROD',
+              title: product.title || 'Product',
+              categoryName: product.category || 'Saree',
+              fabric: product.fabric || 'Silk',
+              baseCost: Number(product.vendorPrice) || 8000,
+              mediaUrls: [firstMedia],
+            },
+          ]);
+          Alert.alert('Published to Store', 'Product has been synced to Store and is ready for curation.');
+          fetchProductDetails();
+        } catch (err) {
+          console.error('Failed to publish to Store:', err);
+          Alert.alert('Error', 'Failed to publish to Store.');
+        }
+      }}
+      onNavigateToStoreCuration={() => {
+        if (id) {
+          router.push(`/store/curate/${id}` as any);
+        }
+      }}
     />
   );
 }

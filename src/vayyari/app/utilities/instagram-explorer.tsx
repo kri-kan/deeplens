@@ -12,6 +12,7 @@ import { instagramService } from '@/services/instagram.service';
 import { getInstagramPostUrl } from '@/utils/instagram-helpers';
 import { ProfileAvatar } from '@/components/utility/instagram/ProfileAvatar';
 import { CompetitorBanner } from '@/components/utility/instagram/CompetitorBanner';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { styles } from '@/styles/screens/instagram-explorer.styles';
 import { useRouter, useFocusEffect, useNavigation, useLocalSearchParams } from 'expo-router';
 
@@ -438,92 +439,199 @@ export default function InstagramExplorer() {
       refreshing={refreshing}
       onRefresh={handleRefresh}
     >
-      <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
-        <Text variant="titleMedium" style={{ fontWeight: 'bold', marginBottom: 12, color: theme.colors.onSurface }}>Story Planner</Text>
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+      {/* Story Planner Section */}
+      <View style={{ paddingHorizontal: 16, marginBottom: 18 }}>
+        <Text variant="titleMedium" style={{ fontWeight: '800', marginBottom: 10, color: theme.colors.onSurface }}>
+          Story Planner
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
           {/* Curation Card */}
           <TouchableOpacity 
             onPress={() => router.push('/utilities/instagram/story-planner')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
             style={{ 
               flex: 1, 
-              backgroundColor: theme.colors.surfaceVariant, 
-              borderRadius: 16, 
-              padding: 8, 
-              aspectRatio: 1,
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
               alignItems: 'center',
               justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
             }}
           >
-            <IconButton icon="calendar-edit" size={28} iconColor={theme.colors.secondary} style={{ margin: 0 }} />
-            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Curation</Text>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(5, 150, 105, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="calendar-check" size={22} color="#059669" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface }}>Curation</Text>
           </TouchableOpacity>
 
           {/* Sharing Card */}
           <TouchableOpacity 
             onPress={() => router.push('/utilities/instagram/story-planner/sharing')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
             style={{ 
               flex: 1, 
-              backgroundColor: theme.colors.surfaceVariant, 
-              borderRadius: 16, 
-              padding: 8, 
-              aspectRatio: 1,
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
               alignItems: 'center',
               justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
             }}
           >
-            <IconButton icon="share-variant" size={28} iconColor={theme.colors.secondary} style={{ margin: 0 }} />
-            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Sharing</Text>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(37, 99, 235, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="share-variant" size={22} color="#2563EB" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface }}>Sharing</Text>
           </TouchableOpacity>
 
           {/* Swipe Game Card */}
           <TouchableOpacity 
             onPress={() => router.push('/utilities/instagram/story-planner/swipe-game')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
             style={{ 
               flex: 1, 
-              backgroundColor: theme.colors.surfaceVariant, 
-              borderRadius: 16, 
-              padding: 8, 
-              aspectRatio: 1,
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
               alignItems: 'center',
               justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
             }}
           >
-            <IconButton icon="cards-heart" size={28} iconColor={theme.colors.secondary} style={{ margin: 0 }} />
-            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Swipes</Text>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(217, 119, 6, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="cards-heart" size={22} color="#D97706" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface }}>Swipes</Text>
           </TouchableOpacity>
 
           {/* Review List Card */}
           <TouchableOpacity 
             onPress={() => router.push('/utilities/instagram/story-planner/review-list')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
             style={{ 
               flex: 1, 
-              backgroundColor: theme.colors.surfaceVariant, 
-              borderRadius: 16, 
-              padding: 8, 
-              aspectRatio: 1,
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
               alignItems: 'center',
               justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
             }}
           >
-            <View style={{ position: 'relative' }}>
-              <IconButton icon="alert-decagram" size={28} iconColor={theme.colors.error} style={{ margin: 0 }} />
+            <View style={{ position: 'relative', width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(220, 38, 38, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="alert-decagram" size={22} color="#DC2626" />
               {needsReviewCount > 0 && (
-                <View style={{ position: 'absolute', top: 0, right: 0, backgroundColor: theme.colors.error, borderRadius: 10, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: theme.colors.onError, fontSize: 9, fontWeight: 'bold' }}>{needsReviewCount}</Text>
+                <View style={{ position: 'absolute', top: -4, right: -6, backgroundColor: '#DC2626', borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#FFFFFF' }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '800' }}>{needsReviewCount > 99 ? '99+' : needsReviewCount}</Text>
                 </View>
               )}
             </View>
-            <Text variant="labelSmall" style={{ fontWeight: 'bold', textAlign: 'center', marginTop: 4 }}>Review</Text>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface }}>Review</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.profileList}>
-        <Text variant="titleLarge" style={[styles.sectionTitle, { marginBottom: 0, marginTop: -8 }]}>Active Profiles</Text>
+      {/* Post Planner Section */}
+      <View style={{ paddingHorizontal: 16, marginBottom: 18 }}>
+        <Text variant="titleMedium" style={{ fontWeight: '800', marginBottom: 10, color: theme.colors.onSurface }}>Post Planner</Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {/* Tile 1: Product Curation */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/post-planner?tab=curation' as any)}
+            activeOpacity={0.7}
+            style={{ 
+              width: 82, 
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+            }}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(5, 150, 105, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="calendar-check" size={22} color="#059669" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface, fontSize: 10 }} numberOfLines={1}>
+              Curation
+            </Text>
+          </TouchableOpacity>
+
+          {/* Tile 2: Post Planner */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/post-planner?tab=sharing' as any)}
+            activeOpacity={0.7}
+            style={{ 
+              width: 82, 
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+            }}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(126, 34, 206, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="grid-large" size={22} color="#7E22CE" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface, fontSize: 10 }} numberOfLines={1}>
+              Post Planner
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      {/* Active Profiles Section */}
+      <View style={{ paddingBottom: 24 }}>
+        <Text variant="titleLarge" style={[styles.sectionTitle, { marginBottom: 12, marginTop: -4, fontWeight: '900' }]}>Active Profiles</Text>
           {profileCategories.map((category) => {
             const isCompetitorCategory = category.id.toLowerCase() === 'competitors' || category.id.toLowerCase() === 'competitor';
             const categoryProfiles = watchlist.filter(p => {
@@ -542,60 +650,112 @@ export default function InstagramExplorer() {
             });
 
             if (categoryProfiles.length === 0 && !isCompetitorCategory) return null;
+            const isExpanded = expandedCategories[category.id] !== false;
 
             return (
-              <List.Accordion 
+              <View 
                 key={category.id} 
-                id={category.id}
-                title={`${category.name} (${categoryProfiles.length})`}
-                titleStyle={{ fontWeight: 'bold' }}
-                expanded={expandedCategories[category.id] !== false}
-                onPress={() => {
-                  setExpandedCategories(prev => ({
-                    ...prev,
-                    [category.id]: prev[category.id] === false ? true : false
-                  }));
+                style={{
+                  backgroundColor: theme.colors.surface,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+                  marginHorizontal: 16,
+                  marginBottom: 12,
+                  overflow: 'hidden',
+                  elevation: 1,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.03,
+                  shadowRadius: 4,
                 }}
               >
-                {isCompetitorCategory && (
-                  <View style={{ marginTop: 8 }}>
-                    <CompetitorBanner />
+                {/* Category Header */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setExpandedCategories(prev => ({
+                      ...prev,
+                      [category.id]: prev[category.id] === false ? true : false
+                    }));
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text variant="titleSmall" style={{ fontWeight: '800', color: theme.colors.onSurface }}>
+                      {category.name}
+                    </Text>
+                    <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.05)' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.onSurfaceVariant }}>
+                        {categoryProfiles.length}
+                      </Text>
+                    </View>
                   </View>
-                )}
 
-                {categoryProfiles.length > 0 && (
-                  <View style={styles.profileGrid}>
-                    {categoryProfiles.map(item => (
-                      <TouchableOpacity 
-                        key={item.id || item.username} 
-                        onPress={() => selectProfile(item.username)}
-                        onLongPress={(e) => {
-                          const { pageX, pageY } = e.nativeEvent;
-                          setMenuAnchor({ x: pageX, y: pageY });
-                          setActiveMenu(item.username);
-                        }}
-                        activeOpacity={0.7}
-                        style={styles.profileGridItem}
-                      >
-                        <View style={styles.profileCard}>
-                          <ProfileAvatar 
-                            profile={{ ...item, isInWatchlist: true }} 
-                            size={60} 
-                            showBadge={true}
-                          />
-                        </View>
-                        <Text 
-                          variant="labelSmall" 
-                          style={styles.profileUsername} 
-                          numberOfLines={1}
-                        >
-                          {item.username}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                  <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialCommunityIcons 
+                      name={isExpanded ? "chevron-up" : "chevron-down"} 
+                      size={20} 
+                      color={theme.colors.onSurfaceVariant} 
+                    />
                   </View>
+                </TouchableOpacity>
+
+                {isExpanded && (
+                  <>
+                    {isCompetitorCategory && (
+                      <View style={{ paddingHorizontal: 12, marginBottom: 8 }}>
+                        <CompetitorBanner />
+                      </View>
+                    )}
+
+                    {categoryProfiles.length > 0 ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 8, paddingBottom: 12, rowGap: 8 }}>
+                        {categoryProfiles.map(item => (
+                          <TouchableOpacity 
+                            key={item.id || item.username} 
+                            onPress={() => selectProfile(item.username)}
+                            onLongPress={(e) => {
+                              const { pageX, pageY } = e.nativeEvent;
+                              setMenuAnchor({ x: pageX, y: pageY });
+                              setActiveMenu(item.username);
+                            }}
+                            activeOpacity={0.7}
+                            style={{ width: '25%', alignItems: 'center', marginVertical: 4 }}
+                          >
+                            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                              <ProfileAvatar 
+                                profile={{ ...item, isInWatchlist: true }} 
+                                size={58} 
+                                showBadge={true}
+                              />
+                            </View>
+                            <Text 
+                              variant="labelSmall" 
+                              style={{ textAlign: 'center', marginTop: 6, fontWeight: '600', fontSize: 11, color: theme.colors.onSurface }} 
+                              numberOfLines={1}
+                            >
+                              {item.username}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : (
+                      <View style={{ padding: 16, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                          No profiles in this category
+                        </Text>
+                      </View>
+                    )}
+                  </>
                 )}
-              </List.Accordion>
+              </View>
             );
           })}
 

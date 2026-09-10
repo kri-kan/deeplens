@@ -22,6 +22,8 @@ import {
   LuFlaskConical,
   LuMegaphone,
   LuShield,
+  LuStore,
+  LuSparkles,
 } from '@/components/tamagui-ui/icons/lu';
 import {
   RiWhatsappLine,
@@ -73,6 +75,25 @@ const PRODUCT_UTILITIES: RawUtilityItem[] = [
     icon: <LuPlus size={36} color="#00a86b" />,
     route: '/utilities/create-product',
     color: '#00a86b',
+    permission: PERMISSIONS.CATALOG_CREATE,
+  },
+];
+
+const STORE_UTILITIES: RawUtilityItem[] = [
+  {
+    id: 'store-inventory',
+    title: 'Storefront',
+    icon: <LuStore size={36} color="#0D9488" />,
+    route: '/store/inventory',
+    color: '#0D9488',
+    permission: PERMISSIONS.CATALOG_VIEW,
+  },
+  {
+    id: 'store-publish',
+    title: 'Publish Batch',
+    icon: <LuSparkles size={36} color="#8B5CF6" />,
+    route: '/store/publish',
+    color: '#8B5CF6',
     permission: PERMISSIONS.CATALOG_CREATE,
   },
 ];
@@ -198,6 +219,7 @@ export default function UtilityScreen() {
   const groups: UtilityGroup[] = useMemo(() => {
     const rawGroups = [
       { id: 'admin', title: 'Administration & Access', items: filterItems(ADMIN_UTILITIES) },
+      { id: 'store', title: 'Storefront Operations', items: filterItems(STORE_UTILITIES) },
       { id: 'business', title: 'Business', items: filterItems(OPERATIONAL_UTILITIES) },
       { id: 'product', title: 'Product', items: filterItems(PRODUCT_UTILITIES) },
       { id: 'system', title: 'System', items: filterItems(SYSTEM_UTILITIES) },

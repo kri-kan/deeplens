@@ -2,7 +2,11 @@ import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvid
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
+import { Platform, LogBox } from 'react-native';
+
+LogBox.ignoreLogs([
+  'Looks like you have configured linking in multiple places',
+]);
 import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';

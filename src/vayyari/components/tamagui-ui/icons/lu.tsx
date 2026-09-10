@@ -173,3 +173,36 @@ export const LuMaximize2: React.FC<IconProps> = ({ size = 16, color = "#333333",
 export const LuLayoutGrid: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="grid" size={size} color={color} style={style} />
 );
+export const LuVideo: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="video" size={size} color={color} style={style} />
+);
+export const LuTrendingUp: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="trending-up" size={size} color={color} style={style} />
+);
+export const LuDollarSign: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="dollar-sign" size={size} color={color} style={style} />
+);
+export const LuCheckCheck: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Ionicons name="checkmark-done" size={size} color={color} style={style} />
+);
+export const LuChevronUp: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="chevron-up" size={size} color={color} style={style} />
+);
+export const LuCalendar: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="calendar" size={size} color={color} style={style} />
+);
+export const LuChevronLeft: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="chevron-left" size={size} color={color} style={style} />
+);
+export const LuSun: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="sun" size={size} color={color} style={style} />
+);
+export const LuSunset: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="weather-sunset" size={size} color={color} style={style} />
+);
+export const LuSunrise: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="weather-sunset-up" size={size} color={color} style={style} />
+);
+export const LuMoon: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="moon" size={size} color={color} style={style} />
+);

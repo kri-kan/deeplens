@@ -969,6 +969,26 @@ class InstagramService {
   autoClassifyProfile = async (username: string): Promise<ProfileClassificationResult> => {
     return searchApiClient.post<ProfileClassificationResult>(API_ROUTES.INSTAGRAM.AUTO_CLASSIFY(username), {});
   };
+
+  getPostPlannerChannels = async (): Promise<PostPlannerChannelOption[]> => {
+    return searchApiClient.get<PostPlannerChannelOption[]>(API_ROUTES.INSTAGRAM.POST_PLANNER_CHANNELS);
+  };
+
+  getPostPlannerItems = async (category?: string): Promise<PostPlannerItem[]> => {
+    return searchApiClient.get<PostPlannerItem[]>(API_ROUTES.INSTAGRAM.POST_PLANNER_ITEMS(category));
+  };
+
+  matchProductChannels = async (payload: MatchProductChannelsPayload): Promise<{ success: boolean; productId: string; planningStatus: string }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.POST_PLANNER_MATCH_CHANNELS, payload);
+  };
+
+  recordPostAction = async (payload: RecordPostActionPayload): Promise<{ success: boolean; status: string; publishedAt?: string; scheduledAt?: string }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.POST_PLANNER_RECORD_ACTION, payload);
+  };
+
+  classifyChannel = async (payload: ClassifyChannelPayload): Promise<{ success: boolean; watchlistId: string; channelType: string }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.POST_PLANNER_CLASSIFY_CHANNEL, payload);
+  };
 }
 
 export interface UnifiedPlannerItem {
@@ -1041,6 +1061,64 @@ export interface StoryPostingHistory {
 export interface SwipeResponseItem {
   historyId: string;
   direction: 'left' | 'right';
+}
+
+export interface PostPlannerChannelOption {
+  watchlistId: string;
+  username: string;
+  displayName?: string;
+  profilePicUrl?: string;
+  channelType: 'focus' | 'dump';
+  categoryFocus: string[];
+  targetDemography?: string;
+}
+
+export interface PostPlannerChannelAssignment {
+  assignmentId: string;
+  watchlistId: string;
+  username: string;
+  channelType: 'focus' | 'dump';
+  status: 'assigned' | 'scheduled' | 'shared' | 'excluded' | 'unassigned';
+  scheduledAt?: string;
+  publishedAt?: string;
+  publishedUrl?: string;
+  captionUsed?: string;
+}
+
+export interface PostPlannerItem {
+  productId: string;
+  productCode: string;
+  title: string;
+  category: string;
+  fabric?: string;
+  price: number;
+  primaryImageUrl?: string;
+  isStarred: boolean;
+  planningStatus: 'in_progress' | 'complete';
+  channelAssignments: PostPlannerChannelAssignment[];
+}
+
+export interface MatchProductChannelsPayload {
+  productId: string;
+  watchlistIds: string[];
+  isDonePlanning: boolean;
+}
+
+export interface RecordPostActionPayload {
+  productId: string;
+  watchlistId: string;
+  actionType: 'shared_now' | 'scheduled' | 'excluded';
+  scheduledAt?: string;
+  publishedUrl?: string;
+  externalPostId?: string;
+  captionUsed?: string;
+}
+
+export interface ClassifyChannelPayload {
+  watchlistId: string;
+  channelType: 'focus' | 'dump';
+  categoryFocus: string[];
+  targetDemography?: string;
 }
 
 export const instagramService = new InstagramService();

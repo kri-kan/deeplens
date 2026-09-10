@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "vayyari",
+    "name": "Vayyari Admin",
     "slug": "vayyari",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -32,7 +32,9 @@
       "intentFilters": [
         {
           "action": "SEND",
-          "category": ["DEFAULT"],
+          "category": [
+            "DEFAULT"
+          ],
           "data": [
             {
               "mimeType": "image/*"
@@ -41,7 +43,9 @@
         },
         {
           "action": "SEND_MULTIPLE",
-          "category": ["DEFAULT"],
+          "category": [
+            "DEFAULT"
+          ],
           "data": [
             {
               "mimeType": "image/*"

@@ -30,3 +30,6 @@ export const getWhatsappProcessorUrl = () =>
 export const getOtelEndpointUrl = () =>
   process.env.EXPO_PUBLIC_OTEL_ENDPOINT || `http://${getApiBaseHost()}:4318/v1/traces`;
 
+export const getStoreApiUrl = () =>
+  process.env.EXPO_PUBLIC_STORE_API_URL || `http://${getApiBaseHost()}:5200`;
+

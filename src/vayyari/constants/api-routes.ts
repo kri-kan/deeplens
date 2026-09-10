@@ -141,6 +141,11 @@ export const API_ROUTES = {
     COMPETITORS_PROFILE_CURVE: (profileId: string) => `/api/v1/Insta/competitors/profile/${encodeURIComponent(profileId)}/curve`,
     AUTO_CLASSIFY: (username: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/auto-classify`,
     SET_CATEGORY: (username: string, category: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/set-category?category=${encodeURIComponent(category)}`,
+    POST_PLANNER_CHANNELS: '/api/v1/Insta/post-planner/channels',
+    POST_PLANNER_ITEMS: (category?: string) => `/api/v1/Insta/post-planner/items${category ? `?category=${encodeURIComponent(category)}` : ''}`,
+    POST_PLANNER_MATCH_CHANNELS: '/api/v1/Insta/post-planner/match-channels',
+    POST_PLANNER_RECORD_ACTION: '/api/v1/Insta/post-planner/record-action',
+    POST_PLANNER_CLASSIFY_CHANNEL: '/api/v1/Insta/post-planner/channels/classify',
   },
 
   // Common / Master Data
