@@ -3448,6 +3448,254 @@ public class InstaController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // POST PLANNER & MULTI-CHANNEL GROWTH ENGINE
+    // ─────────────────────────────────────────────────────────────
+
+    [HttpGet("post-planner/channels")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<PostPlannerChannelOptionDto>>> GetPostPlannerChannels(CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var sql = @"
+            SELECT 
+                id AS WatchlistId,
+                username AS Username,
+                display_name AS DisplayName,
+                profile_pic_url AS ProfilePicUrl,
+                COALESCE(channel_type, 'focus') AS ChannelType,
+                COALESCE(category_focus, ARRAY[]::text[]) AS CategoryFocus,
+                target_demography AS TargetDemography
+            FROM competitor_watchlist
+            WHERE profile_category = 'My Business' AND platform = 'instagram' AND is_active = true
+            ORDER BY channel_type ASC, username ASC";
+
+        var channels = (await conn.QueryAsync<PostPlannerChannelOptionDto>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
+        return Ok(channels);
+    }
+
+    [HttpGet("post-planner/items")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<ActionResult<List<PostPlannerItemDto>>> GetPostPlannerItems([FromQuery] string? category = null, CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var productSql = @"
+            SELECT 
+                p.id AS ProductId,
+                COALESCE(p.base_sku, '') AS ProductCode,
+                COALESCE(p.title, '') AS Title,
+                c.name AS Category,
+                p.fabric AS Fabric,
+                COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) AS Price,
+                (SELECT i.storage_path FROM images i 
+                 JOIN product_variants pv ON pv.id = i.product_variant_id 
+                 WHERE pv.product_id = p.id ORDER BY i.created_at ASC LIMIT 1) AS PrimaryImageUrl,
+                p.is_starred AS IsStarred,
+                COALESCE((SELECT ppa.planning_status FROM post_planner_assignments ppa WHERE ppa.product_id = p.id LIMIT 1), 'in_progress') AS PlanningStatus
+            FROM products p
+            LEFT JOIN categories c ON c.id = p.category_id
+            WHERE p.is_starred = true
+            ORDER BY p.created_at DESC
+            LIMIT 100";
+
+        var products = (await conn.QueryAsync<PostPlannerItemDto>(new CommandDefinition(productSql, cancellationToken: ct))).ToList();
+        if (products.Count == 0)
+        {
+            return Ok(products);
+        }
+
+        var productIds = products.Select(p => p.ProductId).ToArray();
+        var assignmentsSql = @"
+            SELECT 
+                ppa.id AS AssignmentId,
+                ppa.product_id AS ProductId,
+                ppa.watchlist_id AS WatchlistId,
+                cw.username AS Username,
+                COALESCE(ppa.channel_type, 'focus') AS ChannelType,
+                ppa.status AS Status,
+                ppa.scheduled_at AS ScheduledAt,
+                ppa.published_at AS PublishedAt,
+                ppa.published_url AS PublishedUrl,
+                ppa.caption_used AS CaptionUsed
+            FROM post_planner_assignments ppa
+            JOIN competitor_watchlist cw ON cw.id = ppa.watchlist_id
+            WHERE ppa.product_id = ANY(@ProductIds)";
+
+        var rawAssignments = await conn.QueryAsync<dynamic>(new CommandDefinition(assignmentsSql, new { ProductIds = productIds }, cancellationToken: ct));
+        var assignmentsByProduct = rawAssignments
+            .GroupBy(a => (Guid)a.productid)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(a => new PostPlannerChannelAssignmentDto
+                {
+                    AssignmentId = (Guid)a.assignmentid,
+                    WatchlistId = (Guid)a.watchlistid,
+                    Username = (string)a.username,
+                    ChannelType = (string)a.channeltype,
+                    Status = (string)a.status,
+                    ScheduledAt = (DateTime?)a.scheduledat,
+                    PublishedAt = (DateTime?)a.publishedat,
+                    PublishedUrl = (string?)a.publishedurl,
+                    CaptionUsed = (string?)a.captionused
+                }).ToList()
+            );
+
+        var result = products.Select(p => p with
+        {
+            ChannelAssignments = assignmentsByProduct.TryGetValue(p.ProductId, out var list) ? list : new List<PostPlannerChannelAssignmentDto>()
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpPost("post-planner/match-channels")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<IActionResult> MatchProductChannels([FromBody] MatchProductChannelsRequest request, CancellationToken ct = default)
+    {
+        if (request.ProductId == Guid.Empty)
+        {
+            return BadRequest(new { message = "ProductId is required" });
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+        var channels = (await conn.QueryAsync<dynamic>(@"
+            SELECT id, COALESCE(channel_type, 'focus') AS channel_type
+            FROM competitor_watchlist
+            WHERE id = ANY(@WatchlistIds)",
+            new { WatchlistIds = request.WatchlistIds.ToArray() })).ToDictionary(x => (Guid)x.id, x => (string)x.channel_type);
+
+        var planningStatus = request.IsDonePlanning ? "complete" : "in_progress";
+
+        foreach (var wId in request.WatchlistIds)
+        {
+            var cType = channels.TryGetValue(wId, out var ctVal) ? ctVal : "focus";
+            await conn.ExecuteAsync(@"
+                INSERT INTO post_planner_assignments (product_id, watchlist_id, channel_type, status, planning_status, updated_at)
+                VALUES (@ProductId, @WatchlistId, @ChannelType, 'assigned', @PlanningStatus, NOW())
+                ON CONFLICT (product_id, watchlist_id)
+                DO UPDATE SET planning_status = @PlanningStatus, updated_at = NOW()",
+                new { ProductId = request.ProductId, WatchlistId = wId, ChannelType = cType, PlanningStatus = planningStatus });
+        }
+
+        await conn.ExecuteAsync(@"
+            UPDATE post_planner_assignments
+            SET planning_status = @PlanningStatus, updated_at = NOW()
+            WHERE product_id = @ProductId",
+            new { ProductId = request.ProductId, PlanningStatus = planningStatus });
+
+        return Ok(new { success = true, productId = request.ProductId, planningStatus });
+    }
+
+    [HttpPost("post-planner/record-action")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<IActionResult> RecordPostAction([FromBody] RecordPostActionRequest request, CancellationToken ct = default)
+    {
+        if (request.ProductId == Guid.Empty || request.WatchlistId == Guid.Empty)
+        {
+            return BadRequest(new { message = "ProductId and WatchlistId are required" });
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+
+        string status;
+        DateTime? publishedAt = null;
+        DateTime? scheduledAt = null;
+
+        if (request.ActionType == "shared_now")
+        {
+            status = "shared";
+            publishedAt = DateTime.UtcNow;
+        }
+        else if (request.ActionType == "scheduled")
+        {
+            status = "scheduled";
+            scheduledAt = request.ScheduledAt ?? DateTime.UtcNow.AddHours(4);
+        }
+        else if (request.ActionType == "excluded")
+        {
+            status = "excluded";
+        }
+        else
+        {
+            return BadRequest(new { message = $"Unsupported actionType: {request.ActionType}" });
+        }
+
+        await conn.ExecuteAsync(@"
+            INSERT INTO post_planner_assignments (
+                product_id, watchlist_id, status, scheduled_at, published_at, published_url, external_post_id, caption_used, updated_at
+            ) VALUES (
+                @ProductId, @WatchlistId, @Status, @ScheduledAt, @PublishedAt, @PublishedUrl, @ExternalPostId, @CaptionUsed, NOW()
+            )
+            ON CONFLICT (product_id, watchlist_id)
+            DO UPDATE SET 
+                status = @Status,
+                scheduled_at = @ScheduledAt,
+                published_at = @PublishedAt,
+                published_url = COALESCE(@PublishedUrl, post_planner_assignments.published_url),
+                external_post_id = COALESCE(@ExternalPostId, post_planner_assignments.external_post_id),
+                caption_used = COALESCE(@CaptionUsed, post_planner_assignments.caption_used),
+                updated_at = NOW()",
+            new
+            {
+                ProductId = request.ProductId,
+                WatchlistId = request.WatchlistId,
+                Status = status,
+                ScheduledAt = scheduledAt,
+                PublishedAt = publishedAt,
+                PublishedUrl = request.PublishedUrl,
+                ExternalPostId = request.ExternalPostId,
+                CaptionUsed = request.CaptionUsed
+            });
+
+        if (status == "shared")
+        {
+            var channelInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT username FROM competitor_watchlist WHERE id = @WatchlistId",
+                new { WatchlistId = request.WatchlistId });
+
+            await conn.ExecuteAsync(@"
+                INSERT INTO product_publishing_events (
+                    product_id, platform, account_id, account_name, published_url, external_post_id, description_used, status, published_at, created_at
+                ) VALUES (
+                    @ProductId, 'instagram', @AccountId, @AccountName, @PublishedUrl, @ExternalPostId, @CaptionUsed, 'published', NOW(), NOW()
+                )",
+                new
+                {
+                    ProductId = request.ProductId,
+                    AccountId = request.WatchlistId.ToString(),
+                    AccountName = (string?)channelInfo?.username ?? "instagram",
+                    PublishedUrl = request.PublishedUrl,
+                    ExternalPostId = request.ExternalPostId,
+                    CaptionUsed = request.CaptionUsed
+                });
+        }
+
+        return Ok(new { success = true, status, publishedAt, scheduledAt });
+    }
+
+    [HttpPost("post-planner/channels/classify")]
+    [Authorize(Policy = "SearchPolicy")]
+    public async Task<IActionResult> ClassifyChannel([FromBody] UpdateChannelClassificationRequest request, CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        await conn.ExecuteAsync(@"
+            UPDATE competitor_watchlist
+            SET channel_type = @ChannelType,
+                category_focus = @CategoryFocus,
+                target_demography = @TargetDemography,
+                updated_at = NOW()
+            WHERE id = @WatchlistId",
+            new
+            {
+                WatchlistId = request.WatchlistId,
+                ChannelType = request.ChannelType,
+                CategoryFocus = request.CategoryFocus.ToArray(),
+                TargetDemography = request.TargetDemography
+            });
+
+        return Ok(new { success = true, watchlistId = request.WatchlistId, channelType = request.ChannelType });
+    }
 }
 
 public class InstagramCommentDto
