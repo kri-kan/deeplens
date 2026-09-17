@@ -355,7 +355,7 @@ function StoryViewerModal({ visible, profile, onClose }: StoryViewerModalProps) 
             </View>
 
             {/* Navigation Touch Zones */}
-            <View style={[StyleSheet.absoluteFillObject, { top: 100, bottom: detailsExpanded ? '40%' : 110 }]}>
+            <View style={[StyleSheet.absoluteFill, { top: 100, bottom: detailsExpanded ? '40%' : 110 }]}>
               <View style={{ flex: 1, flexDirection: 'row' }}>
                 <TouchableWithoutFeedback
                   onPressIn={handlePressIn}

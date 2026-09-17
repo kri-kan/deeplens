@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Surface, Text, useTheme, Icon } from 'react-native-paper';
 
-export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function CustomTabBar({ state, descriptors, navigation }: any) {
   const theme = useTheme();
 
   return (
@@ -14,7 +13,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
       ]}
       elevation={2}
     >
-      {state.routes.map((route, index) => {
+      {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         if ((options as any).href === null) {
           return null;

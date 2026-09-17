@@ -3,8 +3,7 @@ import { View, StyleSheet, Dimensions, TouchableOpacity, Linking, FlatList, Scro
 import { Text, IconButton, useTheme, Button, Portal, Dialog, List, Divider, Switch, Icon } from 'react-native-paper';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { EdgeInsets } from 'react-native-safe-area-context';
@@ -1484,7 +1483,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     menuBackdrop: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(0,0,0,0.5)',
     },
     menuSheet: {
@@ -1696,7 +1695,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     thumbnailVideoOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(0,0,0,0.25)',

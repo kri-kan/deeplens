@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   selectedOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(76, 175, 80, 0.35)',
   },
   overlay: {

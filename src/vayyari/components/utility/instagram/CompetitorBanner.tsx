@@ -1,8 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, useTheme, Icon } from 'react-native-paper';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { instagramService, CompetitorsSummaryResponse } from '@/services/instagram.service';
 
 interface CompetitorBannerProps {
