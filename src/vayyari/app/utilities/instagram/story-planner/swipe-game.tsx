@@ -166,7 +166,7 @@ export default function StorySwipeGameScreen() {
     return (
       <View style={[styles.cardInner, { padding: 0 }]}>
         {latestPost ? (
-          <View style={[StyleSheet.absoluteFillObject, { borderRadius: 16, overflow: 'hidden' }]}>
+          <View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }]}>
             <Image 
               source={{ uri: getMediaUri(latestPost, 'large') }} 
               style={{ width: '100%', height: '100%' }} 
@@ -174,7 +174,7 @@ export default function StorySwipeGameScreen() {
             />
           </View>
         ) : (
-          <View style={[StyleSheet.absoluteFillObject, styles.fallbackContainer, { backgroundColor: theme.colors.surfaceVariant, borderRadius: 16 }]}>
+          <View style={[StyleSheet.absoluteFill, styles.fallbackContainer, { backgroundColor: theme.colors.surfaceVariant, borderRadius: 16 }]}>
             <IconButton icon="image-off-outline" size={40} iconColor={theme.colors.onSurfaceVariant} />
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No posts in this group</Text>
           </View>
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     opacity: 0.85
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     padding: 16,
     justifyContent: 'space-between',

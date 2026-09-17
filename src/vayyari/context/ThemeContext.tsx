@@ -55,9 +55,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resolvedColorScheme = themeMode === 'system'
-    ? (nativeColorScheme ?? 'light')
-    : themeMode;
+  const resolvedColorScheme: 'light' | 'dark' = (themeMode === 'system' ? nativeColorScheme : themeMode) === 'dark'
+    ? 'dark'
+    : 'light';
 
   if (!isLoaded) {
     // Skip rendering until we resolve the persisted theme to prevent flashing

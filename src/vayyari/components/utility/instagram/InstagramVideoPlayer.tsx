@@ -256,7 +256,7 @@ export const InstagramVideoPlayer = React.memo(({
 
 const styles = StyleSheet.create({
     fallbackOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         justifyContent: 'center',
         alignItems: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.45)',

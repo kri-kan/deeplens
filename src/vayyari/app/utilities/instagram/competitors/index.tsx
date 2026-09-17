@@ -17,8 +17,7 @@ import {
   useTheme,
   Icon,
 } from 'react-native-paper';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import {

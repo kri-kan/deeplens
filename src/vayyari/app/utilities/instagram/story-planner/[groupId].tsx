@@ -861,7 +861,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   selectionOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
