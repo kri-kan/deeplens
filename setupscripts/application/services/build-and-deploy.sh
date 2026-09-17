@@ -130,33 +130,39 @@ else
 fi
 fi
 
-# --- Build Standalone Vayyari Release APK ---
-if should_build "vayyari-apk"; then
+# --- Build Standalone Vayyari Admin Release APK ---
+if should_build "vayyari-apk" || should_build "vayyari-admin-apk" || should_build "admin-apk"; then
 vayyari_apk_path="src/vayyari/android"
-vayyari_dest="$ROOT_DIR/publish/vayyari"
+vayyari_dest="$ROOT_DIR/publish/admin-app"
 
-echo -e "\e[36m--- Building Standalone Vayyari Release APK ($vayyari_apk_path) ---\e[0m"
+echo -e "\e[36m--- Building Standalone Vayyari Admin Release APK ($vayyari_apk_path) ---\e[0m"
 mkdir -p "$vayyari_dest"
 
 cd "$ROOT_DIR/$vayyari_apk_path" || exit 1
-./gradlew assembleRelease
+./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
 
 if [ $? -eq 0 ]; then
     apk_source="$ROOT_DIR/$vayyari_apk_path/app/build/outputs/apk/release/app-release.apk"
     if [ -f "$apk_source" ]; then
         timestamp=$(date +%Y%m%d_%H%M%S)
-        versioned_apk="$vayyari_dest/vayyari-$timestamp.apk"
-        latest_apk="$vayyari_dest/vayyari-latest.apk"
+        versioned_apk="$vayyari_dest/vayyari-admin-v1.0.0-$timestamp.apk"
+        latest_apk="$vayyari_dest/vayyari-admin-latest.apk"
+        legacy_apk="$vayyari_dest/vayyari-latest.apk"
 
         cp "$apk_source" "$versioned_apk"
         cp "$apk_source" "$latest_apk"
+        cp "$apk_source" "$legacy_apk"
+
+        # Maintain backward-compatible symlinks
+        ln -sfn admin-app "$ROOT_DIR/publish/vayyari-admin"
+        ln -sfn admin-app "$ROOT_DIR/publish/vayyari"
 
         # Prune older versioned APKs, retaining the 3 newest
-        ls -1t "$vayyari_dest"/vayyari-[0-9]*_[0-9]*.apk 2>/dev/null | tail -n +4 | xargs -r rm -f
+        ls -1t "$vayyari_dest"/vayyari-admin-v*.apk 2>/dev/null | tail -n +4 | xargs -r rm -f
 
         apk_size=$(du -h "$latest_apk" | cut -f1)
         apk_sha=$(sha256sum "$latest_apk" | cut -d' ' -f1)
-        echo -e "\e[32mSuccessfully generated Vayyari APK: $latest_apk ($apk_size, SHA256: $apk_sha)\e[0m"
+        echo -e "\e[32mSuccessfully generated Vayyari Admin APK: $latest_apk ($apk_size, SHA256: $apk_sha)\e[0m"
     else
         echo -e "\e[31mAPK file not found at $apk_source!\e[0m"
     fi
@@ -166,12 +172,12 @@ fi
 cd "$ROOT_DIR" || exit 1
 fi
 
-# --- Export Vayyari OTA Bundle ---
-if should_build "vayyari-ota"; then
+# --- Export Vayyari Admin OTA Bundle ---
+if should_build "vayyari-ota" || should_build "vayyari-admin-ota" || should_build "admin-ota"; then
 vayyari_path="src/vayyari"
-vayyari_ota_dest="$ROOT_DIR/publish/vayyari/ota"
+vayyari_ota_dest="$ROOT_DIR/publish/admin-app/ota"
 
-echo -e "\e[36m--- Exporting Vayyari OTA Bundle ($vayyari_path) ---\e[0m"
+echo -e "\e[36m--- Exporting Vayyari Admin OTA Bundle ($vayyari_path) ---\e[0m"
 mkdir -p "$vayyari_ota_dest"
 
 cd "$ROOT_DIR/$vayyari_path" || exit 1

@@ -6,13 +6,13 @@ description: >
   or modifying auth/navigation/video playback.
 ---
 
-# Vayyari — Developer Skill
+# Vayyari Admin — Developer Skill
 
 ## Overview
 
-Vayyari is a **React Native / Expo** mobile app (Android-first) that serves as the mobile frontend for the DeepLens visual search platform. It features product browsing, WhatsApp-integrated media management, AI features, and visual search.
+Vayyari Admin is a **React Native / Expo** mobile and web application that serves as the administrative client for DeepLens and Vayyari Fashions operations. It features product browsing, WhatsApp-integrated media management, AI features, and visual search.
 
-- **Framework**: Expo SDK (Expo Router v3 — file-system routing)
+- **Framework**: Expo SDK 57 (Expo Router — file-system routing)
 - **UI Library**: `react-native-paper` (Material Design 3) + custom Emerald theme
 - **State**: React Context API (no Redux/Zustand)
 - **Navigation**: Expo Router (file-system based, Slot/Stack/Tabs)
@@ -206,9 +206,9 @@ npx expo start
 npx expo start --android
 
 # Build Standalone Release APK (Integrated Build Flow)
-./infrastructure/deploy.sh vayyari-apk
-# or from root: make build-vayyari-apk
-# Output placed in publish/vayyari/vayyari-latest.apk (retaining 3 newest versions)
+./infrastructure/deploy.sh vayyari-admin-apk
+# or from root: make build-admin-apk
+# Output placed in publish/admin-app/vayyari-admin-latest.apk (retaining 3 newest versions)
 
 # Direct native Gradle build
 cd src/vayyari/android
@@ -233,12 +233,12 @@ cd src/vayyari
 5. **OpenTelemetry lazy load**: OTel is imported dynamically after `EXPO_PUBLIC_OTEL_LAZY_LOAD_DELAY_MS` ms — never import from `@opentelemetry/*` at the top level in screen files
 6. **GestureHandlerRootView**: Must be at the root — already in `_layout.tsx`. Don't add another one inside screens.
 7. **AAPT2 PNG Crunching**: Always pass `-Pandroid.enablePngCrunchInReleaseBuilds=false` during release builds because courier logo assets contain JPEG headers under `.png` extensions.
-8. **Expo Updates Protocol Deferral**: Runtime OTA auto-polling is deferred (`expo-updates` disabled in `app.json`). Updates are delivered via APK reinstallation from `publish/vayyari/vayyari-latest.apk`.
+8. **Expo Updates Protocol Deferral**: Runtime OTA auto-polling is deferred (`expo-updates` disabled in `app.json`). Updates are delivered via APK reinstallation from `publish/admin-app/vayyari-admin-latest.apk`.
 
 ---
 
 ## Related Documentation
-- `publish/vayyari/README.md` — APK distribution and installation
+- `publish/admin-app/README.md` — APK distribution and installation
 - `src/vayyari/DESIGN.md` — Design system and theme documentation
 - `src/vayyari/README.md` — Project setup & architecture overview
 - `docs/architecture/vayyari-mobile-architecture.md` — Complete Mobile Architecture Guide

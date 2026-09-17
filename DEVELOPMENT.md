@@ -26,8 +26,8 @@ Valid service names: `identity-api`, `search-api`, `worker-service`, `whatsapp-p
 ### Why use these scripts?
 
 The deployment script (`infrastructure/deploy.sh`) automates:
-1. Building/publishing the project (`dotnet publish`, `npm run build:all`, copying Python source files for `reasoning-api`, Gradle release build for `vayyari-apk`, or Expo bundle export and MinIO mirror for `vayyari-ota`).
-2. Copying binaries/files to the correct bind-mounted hosting path (e.g. `/data/hosting/*`, or `publish/vayyari/` for APKs).
+1. Building/publishing the project (`dotnet publish`, `npm run build:all`, copying Python source files for `reasoning-api`, Gradle release build for `vayyari-admin-apk`, or Expo bundle export and MinIO mirror for `vayyari-admin-ota`).
+2. Copying binaries/files to the correct bind-mounted hosting path (e.g. `/data/hosting/*`, or `publish/admin-app/` for APKs).
 3. Restarting the appropriate Docker container via `docker compose` (for containerized backend services).
 
 This ensures critical configuration files (like `appsettings.json` or model dependencies) located in the hosting paths are preserved and not accidentally overwritten during deployments. For Python services like `reasoning-api`, the bind-mounted host volume ensures local updates are immediately reflected and uvicorn hot-reloads the changes when the container restarts.
@@ -90,15 +90,16 @@ cd src/vayyari/android
 ```
 - **AAPT2 Flag**: `-Pandroid.enablePngCrunchInReleaseBuilds=false` is mandatory to prevent asset packaging errors caused by JPEG courier logos with `.png` file extensions.
 - **Lint flags**: Skips non-critical release lint checks to ensure fast local compilation.
-- **Output Destination**: Produced APKs are copied to `publish/vayyari/`:
-  - `publish/vayyari/vayyari-v1.0.0-YYYYMMDD.apk` (versioned timestamp build)
-  - `publish/vayyari/vayyari-latest.apk` (latest release pointer)
+- **Output Destination**: Produced APKs are copied to `publish/admin-app/` (with symlinks at `publish/vayyari-admin/` and `publish/vayyari/`):
+  - `publish/admin-app/vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk` (versioned timestamp build)
+  - `publish/admin-app/vayyari-admin-latest.apk` (latest release pointer)
+  - `publish/admin-app/vayyari-latest.apk` (backward-compatible pointer)
 - **Retention Policy**: The script automatically retains the **newest 3 versioned APKs** and prunes older builds.
 
 ---
 
 ### Self-Hosted OTA Updates (MinIO + Nginx)
-Vayyari supports self-hosted JS bundle & asset publishing using MinIO object storage and Nginx:
+Vayyari Admin supports self-hosted JS bundle & asset publishing using MinIO object storage and Nginx:
 
 ```bash
 # Via Makefile
@@ -114,5 +115,5 @@ cd src/vayyari
 3. **Gateway Exposure**: Nginx proxies requests on `/vayyari-updates/` to MinIO port 9000, making manifests accessible at:
    `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`
 4. **Bundle Retention**: `push-update.sh` keeps the newest 3 bundle snapshots in MinIO and cleans up older releases.
-5. **Updates Protocol Deferral**: Runtime `expo-updates` auto-polling is deferred because MinIO static hosting cannot provide dynamic multipart signed responses required by Expo Updates Protocol v1. Currently, updates are distributed as standalone APKs (`publish/vayyari/vayyari-latest.apk`) while MinIO maintains version archival.
+5. **Updates Protocol Deferral**: Runtime `expo-updates` auto-polling is deferred because MinIO static hosting cannot provide dynamic multipart signed responses required by Expo Updates Protocol v1. Currently, updates are distributed as standalone APKs (`publish/admin-app/vayyari-admin-latest.apk`) while MinIO maintains version archival.
 

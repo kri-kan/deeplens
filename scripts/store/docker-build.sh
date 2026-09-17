@@ -9,11 +9,10 @@ echo "=== DeepLens Store Container & Binary Release Builder ==="
 echo "1. Publishing Store.Api Stateless Binary..."
 dotnet publish "${ROOT_DIR}/src/services/Store.Api/Store.Api.csproj" \
   -c Release \
-  -o "${ROOT_DIR}/publish/Store.Api" \
+  -o "${ROOT_DIR}/publish/store-api" \
   --no-restore
 
-echo "2. Store.Api binary published to ${ROOT_DIR}/publish/Store.Api"
-echo "To deploy to live hosting:"
-echo "  mkdir -p /data/hosting/Store.Api"
-echo "  cp -r ${ROOT_DIR}/publish/Store.Api/* /data/hosting/Store.Api/"
-echo "  docker compose restart store-api 2>/dev/null || true"
+echo "2. Packaging Standalone Production Container Image..."
+VERSION="${1:-latest}"
+docker build -t "deeplens-store-api:${VERSION}" -f "${ROOT_DIR}/src/services/Store.Api/Dockerfile" "${ROOT_DIR}/src/services/Store.Api/"
+echo "✅ Packaged image created: deeplens-store-api:${VERSION}"

@@ -49,6 +49,30 @@ services:
     networks:
       - deeplens-network
 
+  store-api:
+    image: mcr.microsoft.com/dotnet/aspnet:9.0
+    container_name: deeplens-store-api
+    restart: unless-stopped
+    ports:
+      - "${STORE_API_PORT:-5200}:5200"
+    volumes:
+      - ${STORE_API_HOSTING_PATH}:/app
+    environment:
+      - ASPNETCORE_URLS=http://+:5200
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__StoreDb=Host=krikanpg;Port=5432;Database=deeplens_store;Username=postgres;Password=Krikank1$
+      - ConnectionStrings__Redis=192.168.0.170:6379
+      - Kafka__BootstrapServers=kafka-prod:29093
+      - Minio__Endpoint=minio:9000
+      - Minio__AccessKey=krikan
+      - Minio__SecretKey=Krikank1$
+      - Minio__BucketName=store-assets
+      - Minio__PublicBaseUrl=http://media.vayyarifashions.com/store-assets
+    working_dir: /app
+    command: dotnet Store.Api.dll
+    networks:
+      - deeplens-network
+
 networks:
   deeplens-network:
     external: true

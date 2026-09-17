@@ -120,8 +120,8 @@ DeepLens leverages a centralized infrastructure with local application services:
 - **Decision**: Implement a dynamic CORS predicate for intranet IP ranges (RFC1918) driven by a configuration toggle.
 - **Rationale**: Avoids the "whack-a-mole" process of manually adding developer/test IP addresses to the configuration, while maintaining security outside the local network.
 
-### ADR-006: Self-Hosted Vayyari Mobile Distribution & Expo Updates Protocol Deferral
-- **Decision**: Distribute Vayyari mobile app updates primarily as standalone APKs (`publish/vayyari/vayyari-latest.apk`) while archiving JS bundles and manifests in MinIO (`vayyari-updates`). Runtime `expo-updates` auto-polling is deferred.
+### ADR-006: Self-Hosted Vayyari Admin Mobile Distribution & Expo Updates Protocol Deferral
+- **Decision**: Distribute Vayyari Admin mobile app updates primarily as standalone APKs (`publish/admin-app/vayyari-admin-latest.apk`) while archiving JS bundles and manifests in MinIO (`vayyari-updates`). Runtime `expo-updates` auto-polling is deferred.
 - **Rationale**: Expo Updates Protocol v1 requires signed, multipart/mixed HTTP responses that static MinIO hosting cannot generate without a dynamic middleware server. Standalone APK builds (via Gradle `assembleRelease`) provide reliable, self-contained installation for internal testers over Tailscale.
 
 ---

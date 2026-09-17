@@ -29,7 +29,7 @@ graph TD
     end
 
     subgraph "Distribution & OTA"
-        APKRepo[publish/vayyari/ APK Store]
+        APKRepo[publish/admin-app/ APK Store]
         OTABucket[MinIO: vayyari-updates Bucket]
     end
 
@@ -118,20 +118,21 @@ cd src/vayyari/android
 
 ## 🗄️ APK Distribution & Retention Policy
 
-### Distribution Directory (`publish/vayyari/`)
-Standalone release APKs are deployed to `publish/vayyari/` on the local VM.
+### Distribution Directory (`publish/admin-app/`)
+Standalone release APKs are deployed to `publish/admin-app/` on the local VM (with backward-compatible symlinks at `publish/vayyari-admin/` and `publish/vayyari/`).
 
 ```
-publish/vayyari/
-├── README.md                      # Distribution guide & release notes
-├── vayyari-latest.apk             # Pointer to latest successful release
-└── vayyari-v1.0.0-YYYYMMDD.apk    # Dated release builds
+publish/admin-app/
+├── README.md                            # Distribution guide & release notes
+├── vayyari-admin-latest.apk             # Pointer to latest successful release
+├── vayyari-latest.apk                   # Backward-compatible pointer
+└── vayyari-admin-v1.0.0-YYYYMMDD.apk    # Dated release builds
 ```
 
 ### Retention Rules:
-- **Active Release**: `vayyari-latest.apk` is refreshed upon every successful build.
+- **Active Release**: `vayyari-admin-latest.apk` (and `vayyari-latest.apk`) is refreshed upon every successful build.
 - **Historical Builds**: Retains the **3 most recent historical versioned APKs**.
-- **Pruning**: Automated in `./infrastructure/deploy.sh vayyari-apk` to ensure server storage is preserved.
+- **Pruning**: Automated in `./infrastructure/deploy.sh vayyari-admin-apk` to ensure server storage is preserved.
 
 ---
 
@@ -196,5 +197,5 @@ Modern versions of Expo Updates (`expo-updates` v29+ / SDK 50+) enforce **Expo U
 ### Decision
 - Static file hosting in MinIO cannot natively construct signed multipart HTTP responses required by the protocol.
 - Consequently, runtime dynamic OTA polling is deferred (`"updates": { "enabled": false }` in `app.json`, and `useOTAUpdate()` operates as a stub).
-- App delivery is managed via standalone APK distribution (`publish/vayyari/vayyari-latest.apk`).
+- App delivery is managed via standalone APK distribution (`publish/admin-app/vayyari-admin-latest.apk`).
 - `src/vayyari/push-update.sh` remains active as the canonical bundle exporter and MinIO artifact archiver, keeping versioned JS bundles ready for rollback analysis and future protocol proxy servers.

@@ -31,7 +31,7 @@ DeepLens is built using a clean architecture pattern across multiple services:
 
 ### Frontend & Mobile Clients (`src/`)
 - **DeepLens.WebUI**: React/TypeScript dashboard for administrators and tenants.
-- **Vayyari**: React Native / Expo Bare Workflow mobile application (`src/vayyari/`) for customer management, WhatsApp catalog browsing, and visual search. Features native Android Gradle builds (`assembleRelease`), local APK distribution (`publish/vayyari/`), and self-hosted OTA bundle archival in MinIO (`vayyari-updates`).
+- **Vayyari Admin**: React Native / Expo Bare Workflow mobile and web application (`src/vayyari/`) for customer management, WhatsApp catalog browsing, and visual search. Features native Android Gradle builds (`assembleRelease`), local APK distribution (`publish/admin-app/`), and self-hosted OTA bundle archival in MinIO (`vayyari-updates`).
 
 ---
 

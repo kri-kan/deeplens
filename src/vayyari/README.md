@@ -1,12 +1,12 @@
-# Vayyari Mobile App (React Native / Expo Bare Workflow)
+# Vayyari Admin App (React Native / Expo Bare Workflow)
 
-**Vayyari** is the mobile client for DeepLens, providing high-performance product browsing, WhatsApp catalog curation, and vector-similarity visual search.
+**Vayyari Admin** is the administrative mobile and web client for DeepLens and Vayyari Fashions, providing high-performance product browsing, WhatsApp catalog curation, order fulfillment, store curation, and vector-similarity visual search.
 
 ---
 
 ## 🏗️ Architecture & Stack
 
-- **Framework**: React Native 0.76+ / Expo SDK 54 (**Bare Workflow**).
+- **Framework**: React Native 0.86+ / Expo SDK 57 (**Bare Workflow**).
 - **Native Project**: Direct Android Gradle configuration under `android/`.
 - **Navigation**: `expo-router` v3 (file-system routing in `app/`).
 - **UI Engine**: `react-native-paper` (Material Design 3) with dynamic Emerald / Emerald Nocturne themes.
@@ -44,9 +44,9 @@ Standalone release APKs are compiled locally without cloud build dependencies:
 
 ```bash
 # From workspace root
-make build-vayyari-apk
+make build-vayyari-admin-apk
 # OR
-./infrastructure/deploy.sh vayyari-apk
+./infrastructure/deploy.sh vayyari-admin-apk
 ```
 
 ### Direct Gradle Command
@@ -60,9 +60,10 @@ cd android
 
 ### Build Notes:
 - **AAPT2 Flag**: `-Pandroid.enablePngCrunchInReleaseBuilds=false` bypasses AAPT2 failures on JPEG images stored with `.png` extensions.
-- **Output**: Built APK is saved to `/home/krikan/productivity/deeplens/publish/vayyari/`:
-  - `vayyari-latest.apk` (current release)
-  - `vayyari-v1.0.0-YYYYMMDD.apk` (versioned build)
+- **Output**: Built APK is saved to `/home/krikan/productivity/deeplens/publish/admin-app/` (with symlinks at `publish/vayyari-admin/` and `publish/vayyari/`):
+  - `vayyari-admin-latest.apk` (current release)
+  - `vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk` (versioned build)
+  - `vayyari-latest.apk` (backward-compatible link)
 - **Retention**: Keeps the **newest 3 versioned APKs** automatically.
 
 ---
@@ -85,7 +86,7 @@ JavaScript bundles and assets can be exported and mirrored to MinIO:
 ---
 
 ## 📚 Related Documentation
-- `publish/vayyari/README.md` — Distribution and installation instructions
+- `publish/admin-app/README.md` — Distribution and installation instructions
 - `src/vayyari/SKILL.md` — Developer patterns and coding conventions
 - `docs/architecture/vayyari-mobile-architecture.md` — Detailed architectural design
 - `DEVELOPMENT.md` — Monorepo development guide

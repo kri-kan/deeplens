@@ -77,11 +77,12 @@ Vayyari is the Android mobile client for catalog browsing, visual search, and Wh
 - **Telemetry**: Distributed tracing with `@opentelemetry/api` lazy-loaded at runtime.
 
 ### Standalone APK Release Pipeline
-- **Command**: `make build-vayyari-apk` or `./infrastructure/deploy.sh vayyari-apk`.
+- **Command**: `make build-admin-apk` or `./infrastructure/deploy.sh vayyari-admin-apk`.
 - **Gradle Task**: `./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false`.
-- **Publish Destination**: `publish/vayyari/`
-  - `vayyari-latest.apk` (current release)
-  - `vayyari-v1.0.0-YYYYMMDD.apk` (versioned build)
+- **Publish Destination**: `publish/admin-app/` (symlinks at `publish/vayyari-admin/` and `publish/vayyari/`)
+  - `vayyari-admin-latest.apk` (current release)
+  - `vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk` (versioned build)
+  - `vayyari-latest.apk` (backward-compatible link)
 - **Retention Policy**: Automates retention of the **newest 3 versioned APK builds** while pruning older artifacts.
 
 ### Self-Hosted OTA Pipeline (MinIO + Nginx)

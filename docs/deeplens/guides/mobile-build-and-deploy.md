@@ -17,14 +17,14 @@ flowchart TD
         B --> D[cd src/vayyari/android && ./gradlew assembleRelease]
         D --> E[AAPT2 Optimization & Hermes Bytecode Compilation]
         E --> F[Output: app/build/outputs/apk/release/app-release.apk]
-        F --> G[Publish to publish/vayyari/]
-        G --> H[Version Tagging: vayyari-YYYYMMDD_HHMMSS.apk]
-        G --> I[Symlink/Copy: vayyari-latest.apk]
+        F --> G[Publish to publish/admin-app/]
+        G --> H[Version Tagging: vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk]
+        G --> I[Symlink/Copy: vayyari-admin-latest.apk & vayyari-latest.apk]
         G --> J[3-Version Retention Pruning & SHA-256 Checksum]
     end
 
     subgraph OTA Deployment Pipeline
-        C --> K[npx expo export --output-dir publish/vayyari/ota]
+        C --> K[npx expo export --output-dir publish/admin-app/ota]
         K --> L[Upload Bundle & Assets to MinIO bucket: vayyari-updates]
         L --> M[Nginx Reverse Proxy /vayyari-updates/ -> MinIO:9000]
         M --> N[Vayyari Mobile Clients Fetch Updates on Launch]
@@ -80,18 +80,19 @@ After compilation, the release APK located at:
 `src/vayyari/android/app/build/outputs/apk/release/app-release.apk`
 is copied into the central distribution directory:
 ```
-publish/vayyari/
-├── vayyari-20260828_101500.apk
-├── vayyari-20260828_143020.apk
-├── vayyari-20260829_003015.apk
-└── vayyari-latest.apk -> (latest build copy)
+publish/admin-app/
+├── vayyari-admin-20260918_021500.apk
+├── vayyari-admin-latest.apk -> (latest build copy)
+├── vayyari-latest.apk -> (backward-compatible copy)
+└── README.md
 ```
+(Symlinks `publish/vayyari-admin/` and `publish/vayyari/` point to `publish/admin-app/`).
 
 ### 2.2 3-Version Retention Policy
 To prevent unconstrained disk space usage while retaining recent deployment rollbacks, `deploy.sh` enforces a strict 3-version retention rule using timestamp-based sorting:
 ```bash
 # Retain only the 3 newest timestamped APKs
-ls -1t "$HOSTING_PATH"/vayyari-[0-9]*_[0-9]*.apk 2>/dev/null | tail -n +4 | xargs -r rm -f
+ls -1t "$HOSTING_PATH"/vayyari-admin-v*.apk 2>/dev/null | tail -n +4 | xargs -r rm -f
 ```
 
 ### 2.3 Integrity & Checksum Verification
@@ -110,12 +111,12 @@ Self-hosted OTA updates allow fast JS and asset hotfixes without requiring users
 
 ### 3.1 OTA Export Command
 ```bash
-./infrastructure/deploy.sh vayyari-ota
+./infrastructure/deploy.sh vayyari-admin-ota
 ```
 This executes:
 ```bash
 cd src/vayyari
-npx expo export --output-dir "../../publish/vayyari/ota"
+npx expo export --output-dir "../../publish/admin-app/ota"
 ```
 
 ### 3.2 MinIO Storage & Distribution Architecture
