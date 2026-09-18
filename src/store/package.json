@@ -7,7 +7,7 @@
     "web": "expo start --web --port 8082",
     "android": "expo start --android --port 8082",
     "ios": "expo start --ios --port 8082",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node --stack-size=8192 ./node_modules/.bin/tsc --noEmit",
     "postinstall": "mkdir -p node_modules/react-native/sdks && ln -sfn ../../hermes-compiler/hermesc node_modules/react-native/sdks/hermesc"
   },
   "dependencies": {
