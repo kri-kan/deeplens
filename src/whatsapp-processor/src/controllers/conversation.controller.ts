@@ -212,4 +212,30 @@ export class ConversationController {
             res.status(500).json({ error: error.message });
         }
     }
+
+    async retryMessageMedia(req: Request, res: Response) {
+        const { messageId } = req.params;
+        try {
+            const result = await this.service.retryMessageMedia(messageId);
+            if (!result.success) {
+                return res.status(400).json(result);
+            }
+            res.json(result);
+        } catch (err: any) {
+            logger.error({ err, messageId }, 'Failed to retry message media download');
+            res.status(500).json({ success: false, error: err.message });
+        }
+    }
+
+    async backfillChatMedia(req: Request, res: Response) {
+        const { jid } = req.params;
+        const limit = req.body?.limit ? parseInt(req.body.limit, 10) : (req.query?.limit ? parseInt(req.query.limit as string, 10) : 50);
+        try {
+            const result = await this.service.backfillChatMedia(jid, limit);
+            res.json(result);
+        } catch (err: any) {
+            logger.error({ err, jid }, 'Failed to backfill chat media');
+            res.status(500).json({ error: err.message });
+        }
+    }
 }

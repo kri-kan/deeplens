@@ -447,6 +447,19 @@ export const waProcessorService = {
 
   toggleChatAutoProcess: async (jid: string, autoProcess: boolean): Promise<void> => {
     await patch(`/chats/${encodeURIComponent(jid)}/auto-process`, { autoProcess });
+  },
+
+  retryMediaDownload: async (messageId: string): Promise<{ success: boolean; mediaUrl?: string; error?: string }> => {
+    return post<{ success: boolean; mediaUrl?: string; error?: string }>(
+      `/conversations/messages/${encodeURIComponent(messageId)}/retry-media`
+    );
+  },
+
+  backfillChatMedia: async (jid: string, limit?: number): Promise<{ total: number; downloaded: number; failed: number }> => {
+    return post<{ total: number; downloaded: number; failed: number }>(
+      `/conversations/${encodeURIComponent(jid)}/backfill-media`,
+      { limit }
+    );
   }
 };
 

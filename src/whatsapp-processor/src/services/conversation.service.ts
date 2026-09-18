@@ -162,4 +162,12 @@ export class ConversationService {
     async getChatsByVendor(vendorId: string) {
         return await this.repository.getChatsByVendor(vendorId);
     }
+
+    async retryMessageMedia(messageId: string) {
+        return this.waService.retryMediaDownload(messageId);
+    }
+
+    async backfillChatMedia(jid: string, limit?: number) {
+        return this.waService.backfillChatMedia(jid, limit);
+    }
 }

@@ -45,6 +45,18 @@ export function createConversationRoutes(waService: WhatsAppService): Router {
     router.get('/vendor/:vendorId', (req, res) => controller.getChatsByVendor(req, res));
 
     /**
+     * POST /api/conversations/messages/:messageId/retry-media
+     * Retries downloading media for a specific message
+     */
+    router.post('/messages/:messageId/retry-media', (req, res) => controller.retryMessageMedia(req, res));
+
+    /**
+     * POST /api/conversations/:jid/backfill-media
+     * Backfills missing media for a conversation
+     */
+    router.post('/:jid/backfill-media', (req, res) => controller.backfillChatMedia(req, res));
+
+    /**
      * GET /api/conversations/:jid
      * Returns details for a single conversation
      */

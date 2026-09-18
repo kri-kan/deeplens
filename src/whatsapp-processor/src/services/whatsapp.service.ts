@@ -1046,6 +1046,236 @@ export class WhatsAppService {
         return `${timestamp}.${extension}`;
     }
 
+    /**
+     * Retries downloading and uploading media for a single message that has missing media.
+     * Reconstructs WAMessage from stored metadata and requests fresh CDN tokens via sock.updateMediaMessage.
+     */
+    public async retryMediaDownload(messageId: string): Promise<{ success: boolean; mediaUrl?: string; error?: string }> {
+        const sock = this.sock;
+        if (!sock) {
+            return { success: false, error: 'WhatsApp socket is not connected' };
+        }
+
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return { success: false, error: 'Database connection not available' };
+        }
+
+        try {
+            const res = await client.query(
+                `SELECT message_id, jid, content, message_type, media_type, media_url, is_from_me, sender, timestamp, metadata, group_id
+                 FROM wa.messages
+                 WHERE message_id = $1`,
+                [messageId]
+            );
+
+            if (res.rows.length === 0) {
+                return { success: false, error: `Message ${messageId} not found` };
+            }
+
+            const row = res.rows[0];
+
+            // If already downloaded, return existing url
+            if (row.media_url) {
+                return { success: true, mediaUrl: row.media_url };
+            }
+
+            const metadata = row.metadata || {};
+
+            // Extract media payload from metadata
+            let targetMsg = metadata.message || metadata;
+            if (targetMsg.ephemeralMessage?.message) targetMsg = targetMsg.ephemeralMessage.message;
+            if (targetMsg.viewOnceMessage?.message) targetMsg = targetMsg.viewOnceMessage.message;
+            if (targetMsg.viewOnceMessageV2?.message) targetMsg = targetMsg.viewOnceMessageV2.message;
+            if (targetMsg.documentWithCaptionMessage?.message) targetMsg = targetMsg.documentWithCaptionMessage.message;
+
+            let type: MediaType | null = null;
+            let mediaKeyName: string | null = null;
+            let payload: any = null;
+
+            if (targetMsg.imageMessage) {
+                type = 'photo';
+                mediaKeyName = 'imageMessage';
+                payload = targetMsg.imageMessage;
+            } else if (targetMsg.videoMessage) {
+                type = 'video';
+                mediaKeyName = 'videoMessage';
+                payload = targetMsg.videoMessage;
+            } else if (targetMsg.audioMessage) {
+                type = 'audio';
+                mediaKeyName = 'audioMessage';
+                payload = targetMsg.audioMessage;
+            } else if (targetMsg.documentMessage) {
+                type = 'document';
+                mediaKeyName = 'documentMessage';
+                payload = targetMsg.documentMessage;
+            } else if (targetMsg.stickerMessage) {
+                type = 'sticker';
+                mediaKeyName = 'stickerMessage';
+                payload = targetMsg.stickerMessage;
+            }
+
+            if (!type || !mediaKeyName || !payload) {
+                return {
+                    success: false,
+                    error: 'Message does not contain media keys or encrypted payload in metadata'
+                };
+            }
+
+            // Construct synthetic WAMessage
+            const syntheticWAMessage: WAMessage = {
+                key: {
+                    remoteJid: row.jid,
+                    id: row.message_id,
+                    fromMe: !!row.is_from_me,
+                    participant: row.sender || undefined
+                },
+                message: {
+                    [mediaKeyName]: payload
+                },
+                messageTimestamp: Number(row.timestamp)
+            };
+
+            let buffer: Buffer | null = null;
+
+            try {
+                buffer = await downloadMediaMessage(
+                    syntheticWAMessage,
+                    'buffer',
+                    {},
+                    {
+                        logger: logger as any,
+                        reuploadRequest: sock.updateMediaMessage
+                    }
+                ) as Buffer;
+            } catch (dlErr: any) {
+                logger.warn({ messageId, err: dlErr.message }, 'Failed to download media buffer from WhatsApp CDN');
+                // Fallback to embedded jpegThumbnail if available for photo
+                if (type === 'photo' && payload.jpegThumbnail && typeof payload.jpegThumbnail === 'string') {
+                    try {
+                        buffer = Buffer.from(payload.jpegThumbnail, 'base64');
+                        logger.info({ messageId }, 'Falling back to embedded jpegThumbnail from metadata');
+                    } catch (tbErr) {
+                        // ignore
+                    }
+                }
+            }
+
+            if (!buffer || buffer.length === 0) {
+                return {
+                    success: false,
+                    error: 'Failed to download media: file may have expired on WhatsApp servers'
+                };
+            }
+
+            const filename = this.getMediaFilename(syntheticWAMessage, type);
+            const mediaUrl = await uploadMedia(buffer, row.jid, filename, type);
+
+            if (!mediaUrl) {
+                return {
+                    success: false,
+                    error: 'Failed to upload media to storage'
+                };
+            }
+
+            const mimeType = payload.mimetype || (type === 'photo' ? 'image/jpeg' : type === 'video' ? 'video/mp4' : null);
+
+            await client.query(
+                `UPDATE wa.messages 
+                 SET media_url = $1, 
+                     media_type = COALESCE($2, media_type), 
+                     media_size = $3, 
+                     media_mime_type = $4,
+                     updated_at = NOW() 
+                 WHERE message_id = $5`,
+                [mediaUrl, type, buffer.length, mimeType, messageId]
+            );
+
+            // If message belongs to a group, update has_pending_media if all media are now present
+            if (row.group_id) {
+                try {
+                    await client.query(
+                        `UPDATE wa.message_groups 
+                         SET has_pending_media = (
+                             SELECT COUNT(*) > 0 
+                             FROM wa.messages 
+                             WHERE group_id = $1 
+                               AND media_type IS NOT NULL 
+                               AND media_url IS NULL
+                         ),
+                         updated_at = NOW()
+                         WHERE group_id = $1`,
+                        [row.group_id]
+                    );
+                } catch (groupErr) {
+                    logger.warn({ groupErr, groupId: row.group_id }, 'Failed to update message group pending media status');
+                }
+            }
+
+            logger.info({ messageId, jid: row.jid, mediaUrl, size: buffer.length }, 'Successfully retried and downloaded media');
+
+            return { success: true, mediaUrl };
+        } catch (err: any) {
+            logger.error({ err: err.message, stack: err.stack, messageId }, 'Error retrying media download');
+            return { success: false, error: err.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Backfills missing media for messages in a given chat JID.
+     * Iterates through messages sequentially with throttle to avoid rate-limiting.
+     */
+    public async backfillChatMedia(jid: string, limit: number = 50): Promise<{ total: number; downloaded: number; failed: number }> {
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            throw new Error('Database client not available');
+        }
+
+        const cappedLimit = Math.min(Math.max(1, limit), 200);
+
+        const res = await client.query(
+            `SELECT message_id
+             FROM wa.messages
+             WHERE jid = $1
+               AND media_url IS NULL
+               AND (
+                   metadata ? 'imageMessage' OR
+                   metadata ? 'videoMessage' OR
+                   metadata ? 'documentMessage' OR
+                   metadata ? 'audioMessage' OR
+                   metadata ? 'stickerMessage'
+               )
+             ORDER BY timestamp DESC
+             LIMIT $2`,
+            [jid, cappedLimit]
+        );
+
+        const messages = res.rows;
+        let downloaded = 0;
+        let failed = 0;
+
+        logger.info({ jid, count: messages.length }, 'Starting media backfill for chat');
+
+        for (const msg of messages) {
+            const result = await this.retryMediaDownload(msg.message_id);
+            if (result.success) {
+                downloaded++;
+            } else {
+                failed++;
+            }
+            // Small 100ms throttle between downloads to respect WhatsApp connection
+            await new Promise(r => setTimeout(r, 100));
+        }
+
+        logger.info({ jid, total: messages.length, downloaded, failed }, 'Completed media backfill for chat');
+
+        return {
+            total: messages.length,
+            downloaded,
+            failed
+        };
+    }
+
     async refreshGroups(): Promise<void> {
         if (!this.sock) return;
 

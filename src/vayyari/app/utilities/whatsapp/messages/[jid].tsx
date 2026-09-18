@@ -71,15 +71,31 @@ const ChatMediaItem = React.memo(({
   msg, 
   size, 
   onPress,
+  onRetry,
 }: { 
   msg: Message; 
   size: number; 
   onPress?: () => void;
+  onRetry?: (messageId: string) => Promise<string | null>;
 }) => {
   const [loadFailed, setLoadFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const isVideo = msg.mediaType === 'video';
   const isSticker = isStickerMsg(msg);
   const isArchived = !isSticker && (!msg.mediaUrl || loadFailed || isMediaArchived(msg));
+
+  const handleRetryPress = async () => {
+    if (retrying || !onRetry) return;
+    setRetrying(true);
+    try {
+      const url = await onRetry(msg.messageId);
+      if (url) {
+        setLoadFailed(false);
+      }
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   if (isSticker && msg.mediaUrl && !loadFailed) {
     return (
@@ -112,7 +128,8 @@ const ChatMediaItem = React.memo(({
   return (
     <TouchableOpacity 
       activeOpacity={0.8} 
-      onPress={isArchived ? undefined : onPress}
+      onPress={isArchived ? handleRetryPress : onPress}
+      disabled={retrying}
       style={{ 
         width: size, 
         height: size, 
@@ -127,23 +144,34 @@ const ChatMediaItem = React.memo(({
       }}
     >
       {isArchived ? (
-        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 4 }}>
-          <IconButton 
-            icon={isVideo ? "video-off-outline" : "image-off-outline"} 
-            size={size > 120 ? 28 : 20} 
-            iconColor="#94a3b8" 
-            style={{ margin: 0 }} 
-          />
-          <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#64748b', fontWeight: '600', textAlign: 'center', marginTop: 2 }}>
-            {loadFailed ? 'Load Failed' : isVideo ? 'Video Archived' : 'Photo Archived'}
-          </Text>
+        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 4, width: '100%', height: '100%' }}>
+          {retrying ? (
+            <>
+              <ActivityIndicator size="small" color="#6366f1" />
+              <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#6366f1', fontWeight: '700', textAlign: 'center', marginTop: 4 }}>
+                Fetching...
+              </Text>
+            </>
+          ) : (
+            <>
+              <IconButton 
+                icon={loadFailed ? "refresh" : isVideo ? "video-off-outline" : "image-off-outline"} 
+                size={size > 120 ? 24 : 18} 
+                iconColor="#6366f1" 
+                style={{ margin: 0 }} 
+              />
+              <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#475569', fontWeight: '600', textAlign: 'center', marginTop: 2 }}>
+                {loadFailed ? 'Failed (Tap)' : isVideo ? 'Video (Tap)' : 'Photo (Tap)'}
+              </Text>
+            </>
+          )}
         </View>
       ) : isVideo ? (
         <View style={{ width: '100%', height: '100%', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
           <ExpoImage 
             source={{ uri: msg.mediaUrl! }} 
             style={StyleSheet.absoluteFill} 
-            contentFit="cover"
+            contentFit="cover" 
             cachePolicy="memory-disk"
             onError={() => setLoadFailed(true)}
           />
@@ -263,6 +291,71 @@ export default function FullMessageBrowser() {
     await Promise.all([refreshTimeline(false), fetchMeta(false)]);
     setRefreshing(false);
   };
+
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  const [retryingGroupId, setRetryingGroupId] = useState<string | null>(null);
+  const [isBackfilling, setIsBackfilling] = useState(false);
+
+  const handleRetryMedia = useCallback(async (messageId: string): Promise<string | null> => {
+    setRetryingMessageId(messageId);
+    try {
+      const res = await waProcessorService.retryMediaDownload(messageId);
+      if (res.success && res.mediaUrl) {
+        setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, mediaUrl: res.mediaUrl! } : m));
+        return res.mediaUrl;
+      } else {
+        Alert.alert('Media Download Failed', res.error || 'WhatsApp could not deliver the media file.');
+        return null;
+      }
+    } catch (err: any) {
+      Alert.alert('Retry Error', err.message || 'Failed to retry download');
+      return null;
+    } finally {
+      setRetryingMessageId(null);
+    }
+  }, [setMessages]);
+
+  const handleRetryGroup = useCallback(async (group: MediaGroup) => {
+    setRetryingGroupId(group.groupId || 'group');
+    try {
+      const missingMsgs = group.messages.filter(m => !m.mediaUrl);
+      for (const m of missingMsgs) {
+        await handleRetryMedia(m.messageId);
+      }
+    } finally {
+      setRetryingGroupId(null);
+    }
+  }, [handleRetryMedia]);
+
+  const handleBackfillMissingMedia = useCallback(async () => {
+    if (!jid || isBackfilling) return;
+    const cleanJid = decodeURIComponent(jid);
+    Alert.alert(
+      'Backfill Missing Media',
+      'Download missing photos and videos (up to 50 recent) for this chat directly from WhatsApp servers?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Download Now',
+          onPress: async () => {
+            setIsBackfilling(true);
+            try {
+              const res = await waProcessorService.backfillChatMedia(cleanJid, 50);
+              Alert.alert(
+                'Backfill Complete',
+                `Downloaded: ${res.downloaded}\nFailed/Expired: ${res.failed}\nTotal Processed: ${res.total}`
+              );
+              await Promise.all([refreshTimeline(false), fetchMeta(false)]);
+            } catch (err: any) {
+              Alert.alert('Backfill Error', err.message || 'Failed to backfill media');
+            } finally {
+              setIsBackfilling(false);
+            }
+          }
+        }
+      ]
+    );
+  }, [jid, isBackfilling, refreshTimeline, fetchMeta]);
 
   const groupsMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -789,8 +882,9 @@ export default function FullMessageBrowser() {
           setPreviewData({ urls: [msg.mediaUrl], index: 0 });
         }
       })}
+      onRetry={handleRetryMedia}
     />
-  ), []);
+  ), [handleRetryMedia]);
 
   const cleanMessageText = useCallback((msg: Message) => {
     let text = msg.messageText || '';
@@ -908,25 +1002,47 @@ export default function FullMessageBrowser() {
                   </View>
                 ) : (
                   <View style={styles.allArchivedContainer}>
-                    <IconButton icon="archive-outline" size={20} iconColor="#64748b" style={{ margin: 0 }} />
-                    <View style={{ flex: 1, marginLeft: 4 }}>
+                    <IconButton icon="image-off-outline" size={22} iconColor="#6366f1" style={{ margin: 0 }} />
+                    <View style={{ flex: 1, marginLeft: 6 }}>
                       <Text style={styles.allArchivedTitle}>
-                        {group.messages.length} media {group.messages.length === 1 ? 'item' : 'items'} archived
+                        {group.messages.length} {group.messages.length === 1 ? 'photo/video' : 'photos/videos'} not downloaded
                       </Text>
                       <Text style={styles.allArchivedSubtext}>
-                        Pruned during product archiving to optimize storage
+                        Original media is available on WhatsApp
                       </Text>
                     </View>
+                    <Button 
+                      mode="contained-tonal"
+                      compact
+                      loading={retryingGroupId === (group.groupId || 'group')}
+                      disabled={retryingGroupId === (group.groupId || 'group')}
+                      onPress={() => handleRetryGroup(group)}
+                      buttonColor="#e0e7ff"
+                      textColor="#4338ca"
+                      labelStyle={{ fontSize: 11, fontWeight: '700' }}
+                    >
+                      {retryingGroupId === (group.groupId || 'group') ? 'Fetching...' : 'Fetch Media'}
+                    </Button>
                   </View>
                 )}
 
                 {archivedCount > 0 && activeMessages.length > 0 && (
-                  <View style={styles.archivedMediaBadge}>
-                    <IconButton icon="archive-outline" size={14} iconColor="#475569" style={{ margin: 0, width: 16, height: 16 }} />
-                    <Text style={styles.archivedMediaBadgeText}>
-                      {archivedCount} excess {archivedCount === 1 ? 'media' : 'media items'} archived (pruned)
+                  <TouchableOpacity 
+                    style={styles.archivedMediaBadge}
+                    activeOpacity={0.7}
+                    disabled={retryingGroupId === (group.groupId || 'group')}
+                    onPress={() => handleRetryGroup(group)}
+                  >
+                    <IconButton 
+                      icon={retryingGroupId === (group.groupId || 'group') ? "loading" : "cloud-download-outline"} 
+                      size={14} 
+                      iconColor="#4338ca" 
+                      style={{ margin: 0, width: 16, height: 16 }} 
+                    />
+                    <Text style={[styles.archivedMediaBadgeText, { color: '#4338ca', fontWeight: '600' }]}>
+                      {retryingGroupId === (group.groupId || 'group') ? 'Fetching...' : `Fetch remaining ${archivedCount} ${archivedCount === 1 ? 'item' : 'items'}`}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 )}
 
                 {groupCaptions ? <Text style={styles.messageText}>{groupCaptions}</Text> : null}
@@ -1026,12 +1142,22 @@ export default function FullMessageBrowser() {
                   {renderMediaContent(msg, 240)}
                 </View>
               ) : isPhotoOrVideo && isArchived ? (
-                <View style={styles.singleArchivedContainer}>
-                  <IconButton icon={msg.mediaType === 'video' ? 'video-off-outline' : 'image-off-outline'} size={18} iconColor="#64748b" style={{ margin: 0, width: 22, height: 22 }} />
-                  <Text style={styles.singleArchivedText}>
-                    {msg.mediaType === 'video' ? 'Video' : 'Photo'} archived (storage pruned)
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => handleRetryMedia(msg.messageId)}
+                  disabled={retryingMessageId === msg.messageId}
+                  style={styles.singleArchivedContainer}
+                >
+                  <IconButton 
+                    icon={retryingMessageId === msg.messageId ? "loading" : "cloud-download-outline"} 
+                    size={18} 
+                    iconColor="#6366f1" 
+                    style={{ margin: 0, width: 22, height: 22 }} 
+                  />
+                  <Text style={[styles.singleArchivedText, { color: '#6366f1', fontWeight: '600' }]}>
+                    {retryingMessageId === msg.messageId ? 'Fetching media...' : `${msg.mediaType === 'video' ? 'Video' : 'Photo'} (Tap to fetch)`}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ) : msg.mediaType === 'document' ? (
                 <View style={styles.filePlaceholder}>
                   <IconButton icon="file-document" size={30} />
@@ -1072,7 +1198,7 @@ export default function FullMessageBrowser() {
         </View>
       </View>
     );
-  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, groupsMap, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme, renderMediaContent, cleanMessageText, getHighlightedStyle, isItemHighlighted]);
+  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, groupsMap, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme, renderMediaContent, cleanMessageText, getHighlightedStyle, isItemHighlighted, handleRetryMedia, handleRetryGroup, retryingMessageId, retryingGroupId]);
 
   return (
     <ScreenWrapper 
@@ -1112,6 +1238,13 @@ export default function FullMessageBrowser() {
             icon="magnify" 
             iconColor={theme.colors.primary} 
             onPress={() => setIsSearching(true)} 
+          />
+          <IconButton 
+            icon="cloud-download-outline" 
+            iconColor={theme.colors.primary} 
+            loading={isBackfilling}
+            disabled={isBackfilling}
+            onPress={handleBackfillMissingMedia} 
           />
           <IconButton 
             icon="cog-outline" 
