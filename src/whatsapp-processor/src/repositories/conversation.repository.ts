@@ -433,28 +433,25 @@ export class ConversationRepository {
         }
 
         // 5. Default Group-based or offset-based query
-        const params: any[] = [jid, limit, offset];
-        let query: string;
-
         if (aroundGroupId) {
-            params.push(aroundGroupId);
-            query = `
+            const params: any[] = [jid, limit, aroundGroupId];
+            const query = `
                 ${chatJidSubquery},
                 target_ts_lookup AS (
                     SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
                     FROM wa.messages
-                    WHERE jid IN (SELECT jid FROM chat_jids) AND group_id = $4
+                    WHERE jid IN (SELECT jid FROM chat_jids) AND group_id = $3
                     UNION ALL
                     SELECT EXTRACT(EPOCH FROM last_message_at)::bigint as min_ts, EXTRACT(EPOCH FROM last_message_at)::bigint as max_ts
                     FROM wa.message_groups
-                    WHERE group_id = $4
+                    WHERE group_id = $3
                     UNION ALL
                     SELECT CASE 
-                        WHEN $4 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($4, '_', 2)::bigint 
+                        WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint 
                         ELSE NULL 
                     END as min_ts,
                     CASE 
-                        WHEN $4 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($4, '_', 2)::bigint 
+                        WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint 
                         ELSE NULL 
                     END as max_ts
                 ),
@@ -467,14 +464,14 @@ export class ConversationRepository {
                     SELECT ${selectFields}
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
-                      AND group_id = $4
+                      AND group_id = $3
                 ),
                 older_msgs AS (
                     SELECT ${selectFields}
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND timestamp < (SELECT min_ts FROM target_bounds)
-                      AND (group_id != $4 OR group_id IS NULL)
+                      AND (group_id != $3 OR group_id IS NULL)
                     ORDER BY timestamp DESC
                     LIMIT 25
                 ),
@@ -483,7 +480,7 @@ export class ConversationRepository {
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND timestamp > (SELECT max_ts FROM target_bounds)
-                      AND (group_id != $4 OR group_id IS NULL)
+                      AND (group_id != $3 OR group_id IS NULL)
                     ORDER BY timestamp ASC
                     LIMIT 25
                 ),
@@ -506,8 +503,11 @@ export class ConversationRepository {
                 ) combined
                 ORDER BY timestamp DESC
             `;
+            const result = await this.client.query(query, params);
+            return result.rows;
         } else {
-            query = `
+            const params: any[] = [jid, limit, offset];
+            const query = `
                 ${chatJidSubquery}
                 SELECT ${selectFields}
                 FROM wa.messages
@@ -515,10 +515,9 @@ export class ConversationRepository {
                 ORDER BY timestamp DESC
                 LIMIT $2 OFFSET $3
             `;
+            const result = await this.client.query(query, params);
+            return result.rows;
         }
-
-        const result = await this.client.query(query, params);
-        return result.rows;
     }
 
     async countMessages(jid: string): Promise<number> {
