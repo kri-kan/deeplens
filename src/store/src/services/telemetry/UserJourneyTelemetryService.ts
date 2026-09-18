@@ -51,7 +51,7 @@ class UserJourneyTelemetryManager {
   private isEnabled: boolean = true;
   private optOut: boolean = false;
   private deviceId: string;
-  private posthogHost: string = 'http://localhost:8000';
+  private posthogHost: string = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_POSTHOG_HOST) || '';
 
   constructor() {
     this.sessionStartTime = Date.now();
@@ -136,8 +136,8 @@ class UserJourneyTelemetryManager {
             distinct_id: this.deviceId,
           });
         } catch {}
-      } else {
-        // Direct lightweight beacon to self-hosted PostHog ingestion endpoint
+      } else if (this.posthogHost) {
+        // Direct lightweight beacon to self-hosted PostHog ingestion endpoint (only if configured)
         try {
           fetch(`${this.posthogHost}/capture/`, {
             method: 'POST',

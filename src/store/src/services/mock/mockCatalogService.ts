@@ -198,11 +198,18 @@ export const mockCatalogService = {
   async getProductById(id: string): Promise<StoreProduct | null> {
     try {
       const base = getStoreApiUrl();
-      // Try dedicated product code endpoint first: /api/v1/products/code/{code}
-      let res = await fetch(`${base}/api/v1/products/code/${encodeURIComponent(id)}`);
-      if (!res.ok) {
-        // Fallback to /api/v1/products/{id}
+      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      let res: Response;
+      if (isGuid) {
+        // Direct GUID lookup avoids 404 on /products/code/{guid}
         res = await fetch(`${base}/api/v1/products/${encodeURIComponent(id)}`);
+      } else {
+        // Dedicated product code endpoint first: /api/v1/products/code/{code}
+        res = await fetch(`${base}/api/v1/products/code/${encodeURIComponent(id)}`);
+        if (!res.ok) {
+          // Fallback to /api/v1/products/{id}
+          res = await fetch(`${base}/api/v1/products/${encodeURIComponent(id)}`);
+        }
       }
       if (res.ok) {
         const p = await res.json();

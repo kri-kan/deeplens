@@ -151,6 +151,10 @@ app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService 
 {
     var inStore = await curationService.GetInStoreProductsAsync();
     var match = inStore.FirstOrDefault(p => string.Equals(p.ProductCode, code, StringComparison.OrdinalIgnoreCase));
+    if (match == null && Guid.TryParse(code, out var guid))
+    {
+        match = inStore.FirstOrDefault(p => p.Id == guid);
+    }
     if (match == null)
         return Results.NotFound(new { message = $"Product with code '{code}' not found" });
 
@@ -195,6 +199,10 @@ app.MapGet("/api/v1/product/code/{code}", async (string code, ICurationService c
 {
     var inStore = await curationService.GetInStoreProductsAsync();
     var match = inStore.FirstOrDefault(p => string.Equals(p.ProductCode, code, StringComparison.OrdinalIgnoreCase));
+    if (match == null && Guid.TryParse(code, out var guid))
+    {
+        match = inStore.FirstOrDefault(p => p.Id == guid);
+    }
     if (match == null)
         return Results.NotFound(new { message = $"Product with code '{code}' not found" });
 
