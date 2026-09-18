@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 STORE_DIR="${ROOT_DIR}/src/store"
-PUBLISH_DIR="${ROOT_DIR}/publish/vayyari"
+PUBLISH_DIR="${ROOT_DIR}/publish/vayyari/web"
 
 echo "================================================================="
 echo "🛍️  Vayyari Store: Web & PWA Production Release Publisher"
