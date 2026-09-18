@@ -6,17 +6,13 @@ import { requestMediaLibraryPermission } from './device-permissions';
 function getMediaLibrary() {
   if (Platform.OS === 'web') return null;
   try {
-    let hasNativeModule: any = null;
-    try {
-      const { requireOptionalNativeModule } = require('expo-modules-core');
-      if (typeof requireOptionalNativeModule === 'function') {
-        hasNativeModule =
-          requireOptionalNativeModule('ExpoMediaLibraryNext') ??
-          requireOptionalNativeModule('ExpoMediaLibrary');
-      }
-    } catch {
-      hasNativeModule = null;
-    }
+    // Only check for ExpoMediaLibraryNext — the v57 module name.
+    // Do NOT fall back to the old 'ExpoMediaLibrary': if only the old native module
+    // is present (pre-upgrade dev APK), expo-media-library v57 will throw at require() time.
+    const { requireOptionalNativeModule } = require('expo-modules-core');
+    const hasNativeModule = typeof requireOptionalNativeModule === 'function'
+      ? requireOptionalNativeModule('ExpoMediaLibraryNext')
+      : null;
 
     if (!hasNativeModule) {
       return null;
@@ -81,20 +77,23 @@ export const downloadMedia = async (
     }
 
     const MediaLibrary = getMediaLibrary();
-    if (!MediaLibrary?.createAssetAsync) {
+    if (!MediaLibrary?.Asset) {
+      // Native media library unavailable (pre-upgrade APK or simulator without native module)
       return localUri;
     }
 
-    const asset = await MediaLibrary.createAssetAsync(localUri);
+    // v57 class-based API: Asset.create() replaces deprecated createAssetAsync()
+    const asset = await MediaLibrary.Asset.create(localUri);
 
     try {
-      if (MediaLibrary.getAlbumAsync && MediaLibrary.createAlbumAsync && MediaLibrary.addAssetsToAlbumAsync) {
-        const album = await MediaLibrary.getAlbumAsync('Vayyari');
-        if (!album) {
-          await MediaLibrary.createAlbumAsync('Vayyari', asset, false);
-        } else {
-          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-        }
+      // v57 class-based API: Album.get() / Album.create() / album.add()
+      // replaces deprecated getAlbumAsync / createAlbumAsync / addAssetsToAlbumAsync.
+      // Album.create() takes assetsRefs as an array (string[] | Asset[]).
+      const album = await MediaLibrary.Album.get('Vayyari');
+      if (!album) {
+        await MediaLibrary.Album.create('Vayyari', [asset]);
+      } else {
+        await album.add(asset);
       }
     } catch {
       // Asset created in primary gallery even if custom album grouping fails

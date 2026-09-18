@@ -40,48 +40,54 @@ npx expo start --android
 
 ## 🔨 Standalone Android APK Build Pipeline
 
-Standalone release APKs are compiled locally without cloud build dependencies:
+Universal Android APKs (supporting ARM64 devices and x86_64 emulators) are built using [`build-apk.sh`](file:///home/krikan/productivity/deeplens/src/vayyari/build-apk.sh):
 
 ```bash
-# From workspace root
-make build-vayyari-admin-apk
-# OR
-./infrastructure/deploy.sh vayyari-admin-apk
-```
+# Build Universal Release APK
+make admin-apk
+# OR: ./infrastructure/deploy.sh admin-apk
+# OR: ./build-apk.sh release --arch universal
 
-### Direct Gradle Command
-```bash
-cd android
-./gradlew assembleRelease \
-  -x lint \
-  -x lintVitalAnalyzeRelease \
-  -Pandroid.enablePngCrunchInReleaseBuilds=false
+# Build Universal Debug APK (with developer tools & LogBox)
+make admin-debug-apk
+# OR: ./infrastructure/deploy.sh admin-apk-debug
+# OR: ./build-apk.sh debug --arch universal
+
+# Build Both sequentially
+make admin-apk-both
+# OR: ./infrastructure/deploy.sh admin-apk-both
+# OR: ./build-apk.sh both
 ```
 
 ### Build Notes:
-- **AAPT2 Flag**: `-Pandroid.enablePngCrunchInReleaseBuilds=false` bypasses AAPT2 failures on JPEG images stored with `.png` extensions.
-- **Output**: Built APK is saved to `/home/krikan/productivity/deeplens/publish/admin-app/` (with symlinks at `publish/vayyari-admin/` and `publish/vayyari/`):
-  - `vayyari-admin-latest.apk` (current release)
-  - `vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk` (versioned build)
-  - `vayyari-latest.apk` (backward-compatible link)
-- **Retention**: Keeps the **newest 3 versioned APKs** automatically.
+- **Universal Architecture**: `-PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64` ensures zero DSO linker crashes in x86_64 AVD emulators and native arm64-v8a devices.
+- **AAPT2 Flag**: Bypasses AAPT2 failures on JPEG images stored with `.png` extensions.
+- **Output**: Built APKs are saved directly to `publish/admin-app/`:
+  - `vayyari-admin-latest.apk` (Universal Release, 111 MB)
+  - `vayyari-admin-v1.0.0-*.apk` (Versioned Release)
+  - `vayyari-admin-debug-latest.apk` (Universal Debug, 243 MB)
+- **Retention**: Retains the **newest 3 versioned APKs** automatically.
 
 ---
 
 ## 🔄 Self-Hosted OTA Updates (MinIO + Nginx)
 
-JavaScript bundles and assets can be exported and mirrored to MinIO:
+The app features a 100% self-hosted Over-The-Air update system:
 
 ```bash
-./push-update.sh --notes "Release description"
+# Publish Admin OTA bundle
+make push-admin-ota
+# OR: ./infrastructure/deploy.sh admin-ota
+# OR: ./push-update.sh --notes "Release description"
 ```
 
-1. **Expo Export**: Runs `npx expo export --platform android` to emit Hermes bytecode (`.hbc`) and assets in `dist/`.
-2. **MinIO Mirror**: Uses `mc` to upload the bundle to bucket `vayyari-updates` at `bundles/vYYYYMMDDHHMM/`.
-3. **Manifest**: Uploads latest `manifest.json` referencing bundle and asset URLs.
-4. **Pruning**: MinIO retains the **3 most recent bundle versions**.
-5. **Gateway URL**: Accessible publicly via `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`.
-6. **Protocol Deferral**: Runtime `expo-updates` is disabled in `app.json`. Delivery is managed via standalone APKs while MinIO serves as the artifact archive.
+1. **Expo Export**: Compiles Hermes bytecode (`.hbc`) and hashed assets into `dist/`.
+2. **Monotonic Subversioning**: Automatically calculates `<baseVersion>.<commitCount>[-dirty]` from git (e.g., `1.0.0.181`).
+3. **MinIO Upload**: Uploads bundle and assets to `local/admin-updates/bundles/<subversion>/`.
+4. **Manifest**: Uploads `manifest.json` with SHA-256 and MD5 checksums, bundle size, and release notes.
+5. **Gateway Routing**: Proxied publicly via `http://<HOST>/admin-updates/manifest.json`.
+6. **Automatic Git Hook**: Non-native changes committed under `src/vayyari/` automatically push an OTA bundle in the background (bypass with `SKIP_OTA=1 git commit`).
+7. **Runtime Loading**: `MainApplication.kt` detects `ota/active/bundle.js` and dynamically loads the update on boot. Client checks for updates via `useOTAUpdate()` in `app/_layout.tsx`.
 
 ---
 

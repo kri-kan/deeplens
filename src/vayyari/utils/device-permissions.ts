@@ -6,17 +6,15 @@ const PERMISSION_PROMPTED_KEY = 'vayyari_device_permissions_prompted';
 function getMediaLibrary() {
   if (Platform.OS === 'web') return null;
   try {
-    let hasNativeModule: any = null;
-    try {
-      const { requireOptionalNativeModule } = require('expo-modules-core');
-      if (typeof requireOptionalNativeModule === 'function') {
-        hasNativeModule =
-          requireOptionalNativeModule('ExpoMediaLibraryNext') ??
-          requireOptionalNativeModule('ExpoMediaLibrary');
-      }
-    } catch {
-      hasNativeModule = null;
-    }
+    // Only check for ExpoMediaLibraryNext — the v57 module name.
+    // Do NOT fall back to the old 'ExpoMediaLibrary' name: if only the old module
+    // is present (e.g. a dev APK built before the upgrade) we must return null,
+    // because expo-media-library v57's package requires ExpoMediaLibraryNext and
+    // will throw at require() time if only the old native module is installed.
+    const { requireOptionalNativeModule } = require('expo-modules-core');
+    const hasNativeModule = typeof requireOptionalNativeModule === 'function'
+      ? requireOptionalNativeModule('ExpoMediaLibraryNext')
+      : null;
 
     if (!hasNativeModule) {
       return null;

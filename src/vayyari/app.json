@@ -26,7 +26,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "package": "com.anonymous.vayyari",
+      "package": "com.vayyari.admin",
       "intentFilters": [
         {
           "action": "SEND",

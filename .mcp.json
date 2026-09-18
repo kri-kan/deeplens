@@ -58,6 +58,15 @@
       "tools": [
         "*"
       ]
+    },
+    "squad_subagents": {
+      "command": "/usr/bin/python3",
+      "args": [
+        "/home/krikan/productivity/deeplensSquad/scripts/squad_subagent_mcp.py"
+      ],
+      "tools": [
+        "*"
+      ]
     }
   }
 }

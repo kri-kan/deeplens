@@ -1,10 +1,10 @@
-appId: com.anonymous.vayyari
+appId: com.vayyari.admin
 ---
 # Start the app. It might open the Expo Dev Launcher.
 - stopApp:
-    appId: com.anonymous.vayyari
+    appId: com.vayyari.admin
 - launchApp:
-    appId: com.anonymous.vayyari
+    appId: com.vayyari.admin
 
 # Allow app splash screen / initial launcher transition to settle
 - evalScript: |
@@ -14,9 +14,9 @@ appId: com.anonymous.vayyari
 # Handle Expo Developer Launcher if it appears (check both URL pattern and Recently Opened card)
 - runFlow:
     when:
-      visible: "http://10.0.2.2:8081"
+      visible: ".*:8081.*"
     commands:
-      - tapOn: "http://10.0.2.2:8081"
+      - tapOn: ".*:8081.*"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 8000);
@@ -25,8 +25,18 @@ appId: com.anonymous.vayyari
       visible: "RECENTLY OPENED"
     commands:
       - tapOn:
-          text: "vayyari"
+          text: "Vayyari Admin"
           below: "RECENTLY OPENED"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 8000);
+- runFlow:
+    when:
+      visible: "DEVELOPMENT SERVERS"
+    commands:
+      - tapOn:
+          text: "Vayyari Admin"
+          below: "DEVELOPMENT SERVERS"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 8000);
@@ -44,9 +54,9 @@ appId: com.anonymous.vayyari
       # If the app got stuck on Expo Dev Launcher or returned to it, tap dev server / recently opened card and reload deep link
       - runFlow:
           when:
-            visible: "http://10.0.2.2:8081"
+            visible: ".*:8081.*"
           commands:
-            - tapOn: "http://10.0.2.2:8081"
+            - tapOn: ".*:8081.*"
             - evalScript: |
                 var start = new Date().getTime();
                 while (new Date().getTime() < start + 8000);
@@ -56,8 +66,19 @@ appId: com.anonymous.vayyari
             visible: "RECENTLY OPENED"
           commands:
             - tapOn:
-                text: "vayyari"
+                text: "Vayyari Admin"
                 below: "RECENTLY OPENED"
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 8000);
+            - openLink: "vayyari://utilities/instagram/story-queue?profileUsername=${PROFILE_NAME}"
+      - runFlow:
+          when:
+            visible: "DEVELOPMENT SERVERS"
+          commands:
+            - tapOn:
+                text: "Vayyari Admin"
+                below: "DEVELOPMENT SERVERS"
             - evalScript: |
                 var start = new Date().getTime();
                 while (new Date().getTime() < start + 8000);

@@ -6,6 +6,7 @@ import { Platform, LogBox } from 'react-native';
 
 LogBox.ignoreLogs([
   'Looks like you have configured linking in multiple places',
+  'Deprecated API for given entry type.',
 ]);
 import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -21,6 +22,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { ShareIntentProvider } from '../context/ShareIntentContext';
 import { useShareIntent } from '../hooks/useShareIntent';
+import { useOTAUpdate } from '../hooks/useOTAUpdate';
 import { ShareActionChooserModal } from '../components/ui/ShareActionChooserModal';
 import { ensureInitialPermissions } from '../utils/device-permissions';
 
@@ -49,6 +51,7 @@ export default function RootLayout() {
 }
 
 function InnerRootLayout() {
+  useOTAUpdate();
   const { colorScheme } = useAppTheme();
   const { token, isLoading } = useAuth();
   const {

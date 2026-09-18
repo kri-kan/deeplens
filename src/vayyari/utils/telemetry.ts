@@ -30,11 +30,45 @@ export const initOtel = async () => {
     // Initialize the Provider with default context manager and propagator
     provider.register();
 
+    // Permanently remove PerformanceObserver from global scope on native.
+    // The OTel fetch plugin checks `typeof PerformanceObserver !== 'function'` on EVERY
+    // fetch call (in _prepareSpanData) and calls observer.observe({ entryTypes: ['resource'] })
+    // — the deprecated API — if it's present. Hermes fires "Deprecated API for given entry
+    // type." on every network request as a result. Resource timing via PerformanceObserver
+    // has zero value in native context; OTel spans already capture timing via hrTime().
+    (global as any).PerformanceObserver = undefined;
+
+    // React Native's Performance implementation only supports 'mark' and 'measure' timeline entries.
+    // When OpenTelemetry's FetchInstrumentation finishes a fetch call and observer entries are empty,
+    // it falls back to calling `performance.getEntriesByType('resource')`.
+    // In Hermes/React Native, Performance.getEntriesByType('resource') prints:
+    // "console.warn('Deprecated API for given entry type.')" on every single HTTP request.
+    // We override getEntriesByType so querying 'resource' cleanly returns [] without warning.
+    if (typeof performance !== 'undefined') {
+      if (typeof performance.getEntriesByType === 'function') {
+        const origGetEntriesByType = performance.getEntriesByType.bind(performance);
+        performance.getEntriesByType = ((entryType: string) => {
+          if (entryType === 'resource') return [];
+          return origGetEntriesByType(entryType as any);
+        }) as any;
+      }
+      if (typeof performance.getEntriesByName === 'function') {
+        const origGetEntriesByName = performance.getEntriesByName.bind(performance);
+        performance.getEntriesByName = ((name: string, entryType?: string) => {
+          if (entryType === 'resource') return [];
+          return origGetEntriesByName(name, entryType as any);
+        }) as any;
+      }
+    }
+
     // Register instrumentations explicitly
     registerInstrumentations({
       instrumentations: [
         new FetchInstrumentation({
-          clearTimingResources: true,
+          // clearTimingResources: false — performance.clearResourceTimings() is a browser-only
+          // Web Performance API not available in React Native (Hermes/JSC). Enabling it causes
+          // "TypeError: undefined is not a function" on every fetch completion on Android.
+          clearTimingResources: false,
         }),
       ],
       tracerProvider: provider,

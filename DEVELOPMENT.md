@@ -12,8 +12,11 @@ The root `Makefile` exposes the following commands for easy discoverability:
 - `make deploy-worker-service`
 - `make deploy-whatsapp-processor`
 - `make deploy-reasoning-api`
-- `make build-vayyari-apk` (or `make deploy-vayyari-apk`)
-- `make push-vayyari-ota` (or `make deploy-vayyari-ota`)
+- `make admin-apk` / `make admin-debug-apk` / `make admin-apk-both` (Universal Vayyari Admin APKs)
+- `make store-apk` / `make store-debug-apk` / `make store-apk-both` (Vayyari Store APKs)
+- `make push-admin-ota` (Publishes Vayyari Admin OTA bundle to MinIO)
+- `make push-store-ota` (Publishes Vayyari Store OTA bundle to MinIO)
+- `make push-all-ota` (Publishes both Admin and Store OTA bundles)
 
 ### Using the deploy script directly
 
@@ -21,7 +24,7 @@ You can also run the deployment script directly:
 ```bash
 ./infrastructure/deploy.sh [service-name]
 ```
-Valid service names: `identity-api`, `search-api`, `worker-service`, `store-api`, `whatsapp-processor`, `reasoning-api`, `store-app`, `store-apk`, `store-apk-debug`, `store-apk-both`, `admin-apk`, `admin-ota`.
+Valid service names: `identity-api`, `search-api`, `worker-service`, `store-api`, `whatsapp-processor`, `reasoning-api`, `store-app`, `store-apk`, `store-apk-debug`, `store-apk-both`, `store-ota`, `admin-apk`, `admin-apk-debug`, `admin-apk-both`, `admin-ota`.
 
 ### Why use these scripts?
 
@@ -110,11 +113,11 @@ cd src/vayyari
 ```
 
 1. **Bundle Generation**: Generates Hermes bytecode (`.hbc`) using `npx expo export --platform android`.
-2. **MinIO Upload**: Mirrors bundles and assets to `local/vayyari-updates/bundles/vYYYYMMDDHHMM/` and updates `local/vayyari-updates/manifest.json`.
-3. **Gateway Exposure**: Nginx proxies requests on `/vayyari-updates/` to MinIO port 9000, making manifests accessible at:
-   `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`
-4. **Bundle Retention**: `push-update.sh` keeps the newest 3 bundle snapshots in MinIO and cleans up older releases.
-5. **Updates Protocol Deferral**: Runtime `expo-updates` auto-polling is deferred because MinIO static hosting cannot provide dynamic multipart signed responses required by Expo Updates Protocol v1. Currently, updates are distributed as standalone APKs (`publish/admin-app/vayyari-admin-latest.apk`) while MinIO maintains version archival.
+2. **MinIO Upload**: Mirrors bundles and assets to `local/admin-updates/bundles/<subversion>/` and updates `local/admin-updates/manifest.json`.
+3. **Gateway Exposure**: Nginx proxies requests on `/admin-updates/` to MinIO port 9000, making manifests accessible at:
+   `http://krikanserver.taild227d9.ts.net/admin-updates/manifest.json`
+4. **Bundle Retention**: `push-update.sh` keeps the newest 5 bundle snapshots in MinIO and cleans up older releases.
+5. **Runtime Loading**: `MainApplication.kt` detects `ota/active/bundle.js` and dynamically loads the update on boot. Client checks for updates via `selfHostedOTA.ts` on launch.
 
 ---
 

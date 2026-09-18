@@ -60,7 +60,7 @@ graph TD
 | :--- | :--- | :--- |
 | **Source Path** | `src/vayyari` | `src/store` |
 | **Target Audience** | Merchants, catalog curators, store admins | End customers browsing & purchasing sarees |
-| **Android Package ID** | `com.anonymous.vayyari` | `com.vayyari.store` |
+| **Android Package ID** | `com.vayyari.admin` | `com.vayyari.store` |
 | **Framework Version** | Expo SDK 57, React Native 0.86.3, React 19.2.3 | Expo SDK 57, React Native 0.86.3, React 19.2.3 |
 | **Engine & Architecture** | Hermes Engine, New Architecture | Hermes Engine, New Architecture (Fabric) |
 | **UI Component System** | Tamagui 2.7+ & React Native Paper | Tamagui 2.7+, BottomSheet v5, Reanimated 4 |
@@ -91,22 +91,54 @@ graph TD
 ## 🔨 Android APK Build Pipelines
 
 ### 1. Store App Pipeline (`scripts/store/build-store-apk.sh`)
-- Standalone multi-variant build script supporting:
-  - `--release`: Compiles optimized release binary (`vayyari-store-latest.apk`, 34MB).
-  - `--debug`: Compiles debuggable binary (`vayyari-store-debug-latest.apk`, 64MB).
-  - `--both`: Compiles both variants sequentially.
-  - `--arch <arm64|universal|x86_64>`: Configurable ABI target.
-  - `--keep <N>`: Retains latest N historical builds (default: 3).
-  - `--clean`: Pre-cleans Gradle cache.
-  - `--install`: Auto-installs to connected device via ADB.
-- Integrated into `infrastructure/deploy.sh` (`store-apk`, `store-apk-debug`, `store-apk-both`) and `Makefile`.
+- Multi-variant script supporting `--release`, `--debug`, `--both`, `--arch <arm64|universal|x86_64>`, `--keep <N>`, `--clean`, and `--install`.
+- Integrated into `infrastructure/deploy.sh` (`store-apk`, `store-apk-debug`, `store-apk-both`) and root `Makefile`.
 
-### 2. Admin App Pipeline (`infrastructure/deploy.sh`)
-- Automated Gradle release packaging for `src/vayyari`:
+### 2. Admin App Pipeline (`src/vayyari/build-apk.sh`)
+- Multi-variant universal compilation script:
   ```bash
-  ./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
+  ./src/vayyari/build-apk.sh release --arch universal
   ```
-- Output published to `publish/admin-app/` with SHA256 checksums and 3-version historical pruning.
+- Flags: `release`, `debug`, `both`, `--arch <universal|arm64|x86_64>`, `--keep <N>`, `--clean`, `--install`.
+- Integrated into `infrastructure/deploy.sh` (`admin-apk`, `admin-apk-debug`, `admin-apk-both`) and root `Makefile`.
+- Output published to `publish/admin-app/` with SHA256 checksums and automated pruning.
+
+---
+
+## 🔄 Self-Hosted Over-The-Air (OTA) Updates Architecture
+
+The DeepLens mobile ecosystem operates an enterprise self-hosted OTA system connecting Expo Hermes bytecode exports directly to MinIO and Nginx.
+
+> [!TIP]
+> For the comprehensive technical specification, mathematical versioning formulas, native C++/Kotlin runtime hooks, and security threat mitigations, see the [Self-Hosted Mobile OTA Updates White Paper](file:///home/krikan/productivity/deeplens/docs/deeplens/architecture/self-hosted-mobile-ota-whitepaper.md).
+
+```
+Git Commit (JS/TS changes)
+        │
+        ▼
+.git/hooks/post-commit
+        │
+        ├──► push-update.sh        ──► MinIO: admin-updates/ (Admin)
+        └──► push-store-update.sh ──► MinIO: store-updates/   (Store)
+                                                │
+                                                ▼
+                                         Nginx Gateway :80
+                                                │
+                                                ▼
+                                      Mobile App Startup Hook
+                                      (MainApplication.kt)
+                                                │
+                                    ota/active/bundle.js ?
+                                     ├── YES ──► Loads OTA bundle
+                                     └── NO  ──► Loads bundled asset
+```
+
+### Core Components
+1. **Dynamic Native Loader**: `MainApplication.kt` checks `context.filesDir/ota/active/bundle.js` and passes `jsBundleFilePath` to `ExpoReactHostFactory.getDefaultReactHost`.
+2. **Monotonic Subversioning**: `<baseVersion>.<commitCount>[-dirty]` calculated on each release.
+3. **MinIO & Gateway**: Buckets `admin-updates` and `store-updates` proxied through Nginx Gateway `/admin-updates/` and `/store-updates/`.
+4. **Client-Side Integrity**: `selfHostedOTA.ts` downloads to `ota/staging/`, verifies SHA-256 and MD5, checks `targetNativeVersion: 1`, and atomically swaps to `ota/active/`.
+5. **Git Hook & Make Targets**: Automated background push via `.git/hooks/post-commit`, manual triggers via `make push-admin-ota`, `make push-store-ota`, `make push-all-ota`.
 
 ---
 
@@ -116,18 +148,20 @@ graph TD
 publish/
 ├── admin-app/
 │   ├── README.md
-│   ├── vayyari-admin-latest.apk
+│   ├── vayyari-admin-latest.apk           # Universal Release (111 MB)
 │   ├── vayyari-admin-v1.0.0-*.apk
-│   └── ota/
+│   ├── vayyari-admin-debug-latest.apk     # Universal Debug (243 MB)
+│   └── vayyari-admin-debug-v1.0.0-*.apk
 └── vayyari/
     ├── README.md
-    ├── vayyari-store-latest.apk
+    ├── vayyari-store-latest.apk           # Store Release (~34 MB)
     ├── vayyari-store-latest.apk.sha256
     ├── vayyari-store-v1.0.0-*.apk
-    ├── vayyari-store-debug-latest.apk
+    ├── vayyari-store-debug-latest.apk     # Store Debug (~64 MB)
     ├── vayyari-store-debug-latest.apk.sha256
     ├── vayyari-store-debug-v1.0.0-*.apk
     └── (Web & PWA bundles)
 ```
 
 Each APK artifact is accompanied by an audit-ready SHA256 checksum file and installation instructions.
+

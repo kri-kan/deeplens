@@ -186,13 +186,13 @@ make build-vayyari-apk
 ### Self-Hosted OTA Updates (MinIO + Nginx)
 Export and publish JS bundles to MinIO:
 ```bash
-make push-vayyari-ota
+make push-admin-ota
 # OR
 cd src/vayyari && ./push-update.sh --notes "Release summary"
 ```
-- Bundles are published to MinIO bucket `vayyari-updates/bundles/vYYYYMMDDHHMM/` and registered in `vayyari-updates/manifest.json`.
-- Public Manifest: `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`.
-- Runtime `expo-updates` auto-polling is deferred in favor of direct standalone APK sideloading while MinIO maintains artifact archival.
+- Bundles are published to MinIO bucket `admin-updates/bundles/<subversion>/` and registered in `admin-updates/manifest.json`.
+- Public Manifest: `http://krikanserver.taild227d9.ts.net/admin-updates/manifest.json`.
+- Delivered at runtime via `MainApplication.kt` dynamic bundle loader and `selfHostedOTA.ts`.
 
 ### Vayyari Customer Store App (`src/store`)
 The customer-facing e-commerce storefront for authentic handlooms and sarees.
@@ -286,7 +286,8 @@ While the core infrastructure is external, the specialized DeepLens application 
 | `/jaeger/` | `http://jaeger:16686/` | Jaeger Tracing |
 | `/prometheus/` | `http://prometheus:9090/` | Prometheus UI |
 | `/chat/` | `http://open-webui:8080/` | Open WebUI / Ollama |
-| `/vayyari-updates/` | `http://minio:9000/vayyari-updates/` | Vayyari OTA Manifest & JS Bundles |
+| `/admin-updates/` | `http://minio:9000/admin-updates/` | Vayyari Admin OTA Manifest & JS Bundles |
+| `/store-updates/` | `http://minio:9000/store-updates/` | Vayyari Store OTA Manifest & JS Bundles |
 
 ## 🪣 MinIO Object Storage Buckets
 
@@ -294,11 +295,12 @@ While the core infrastructure is external, the specialized DeepLens application 
 | ----------- | ------------- | ------- |
 | `tenant-<uuid>` | Authenticated / IAM | Tenant image assets, thumbnails, and embeddings |
 | `whatsapp-media` | Authenticated / IAM | Ingested WhatsApp chat attachments and media |
-| `vayyari-updates` | Public (`download`) | Self-hosted Vayyari JS bundles, assets, and `manifest.json` |
+| `admin-updates` | Public (`download`) | Self-hosted Admin JS bundles, assets, and `manifest.json` |
+| `store-updates` | Public (`download`) | Self-hosted Store JS bundles, assets, and `manifest.json` |
 
 ### Build and Deploy Scripts
 
-The `deploy.sh` script automates building and deploying local containerized application code (like the .NET APIs and the Node.js WhatsApp Processor) directly to their respective `/data/hosting` volumes, then restarting their Docker compose services. It also handles building Vayyari APKs to `publish/vayyari/` and pushing OTA updates to MinIO `vayyari-updates`.
+The `deploy.sh` script automates building and deploying local containerized application code (like the .NET APIs and the Node.js WhatsApp Processor) directly to their respective `/data/hosting` volumes, then restarting their Docker compose services. It also handles building Vayyari APKs to `publish/admin-app/` and `publish/vayyari/` and pushing OTA updates to MinIO `admin-updates` and `store-updates`.
 
 ## 🏢 Tenant Management
 
@@ -354,10 +356,10 @@ Vayyari is the mobile client for the DeepLens ecosystem. Designed for fast mobil
 
 ### Self-Hosted OTA Pipeline (MinIO + Nginx)
 - **Export Script**: `src/vayyari/push-update.sh` executes `npx expo export --platform android` emitting Hermes bytecode and assets into `dist/`.
-- **MinIO Mirror**: Uses `mc` to mirror bundles to bucket `vayyari-updates` under `bundles/vYYYYMMDDHHMM/` and updates `manifest.json`.
-- **Gateway Reverse Proxy**: Nginx proxies `/vayyari-updates/` to `http://minio:9000/vayyari-updates/`.
-- **Public URL**: `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`.
-- **ADR on Protocol Deferral**: Runtime `expo-updates` auto-polling is deferred (`"updates": {"enabled": false}`) because static MinIO hosting cannot serve dynamic multipart signed responses required by Expo Updates Protocol v1. APK distribution handles user updates, while MinIO maintains artifact archival.
+- **MinIO Mirror**: Uses `mc` to mirror bundles to bucket `admin-updates` under `bundles/<subversion>/` and updates `manifest.json`.
+- **Gateway Reverse Proxy**: Nginx proxies `/admin-updates/` to `http://minio:9000/admin-updates/`.
+- **Public URL**: `http://krikanserver.taild227d9.ts.net/admin-updates/manifest.json`.
+- **Active Runtime Delivery**: `MainApplication.kt` intercepts bundle initialization to load `ota/active/bundle.js` directly. Versioning is monotonic based on commit counts.
 
 ---
 
@@ -388,7 +390,7 @@ Vayyari is the mobile client for the DeepLens ecosystem. Designed for fast mobil
 - **Dev Bundler**: `tmux attach -t expo` to interact with the background `vayyari-expo.service`.
 - **Release APK Build**: `make build-vayyari-apk` or `./infrastructure/deploy.sh vayyari-apk`.
 - **OTA Push**: `make push-vayyari-ota` or `./push-update.sh --notes "Release notes"`.
-- **MinIO Bucket**: `local/vayyari-updates` with retention of 3 newest bundle snapshots.
+- **MinIO Bucket**: `local/admin-updates` with retention of 5 newest bundle snapshots.
 
 ---
 

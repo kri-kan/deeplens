@@ -40,3 +40,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# APK build output (timestamped release copies)
+dist-apk/

@@ -147,15 +147,9 @@ if [ $? -eq 0 ]; then
         timestamp=$(date +%Y%m%d_%H%M%S)
         versioned_apk="$vayyari_dest/vayyari-admin-v1.0.0-$timestamp.apk"
         latest_apk="$vayyari_dest/vayyari-admin-latest.apk"
-        legacy_apk="$vayyari_dest/vayyari-latest.apk"
 
         cp "$apk_source" "$versioned_apk"
         cp "$apk_source" "$latest_apk"
-        cp "$apk_source" "$legacy_apk"
-
-        # Maintain backward-compatible symlinks
-        ln -sfn admin-app "$ROOT_DIR/publish/vayyari-admin"
-        ln -sfn admin-app "$ROOT_DIR/publish/vayyari"
 
         # Prune older versioned APKs, retaining the 3 newest
         ls -1t "$vayyari_dest"/vayyari-admin-v*.apk 2>/dev/null | tail -n +4 | xargs -r rm -f

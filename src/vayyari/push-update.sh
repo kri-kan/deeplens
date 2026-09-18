@@ -5,27 +5,37 @@
 # Usage:
 #   ./push-update.sh [--notes "Release notes text"]
 #
+# ┌──────────────────────────────────────────────────────────────────┐
+# │  This script pushes a JS-only OTA bundle. It does NOT rebuild    │
+# │  the native APK. Run ./build-apk.sh FIRST when you have changed: │
+# │    • Any native module dependency (package.json)                 │
+# │    • android/ directory files (Gradle, manifests)               │
+# │    • app.json plugins (expo-media-library, splash, etc.)         │
+# │    • expo SDK version bump                                       │
+# │  Use this script (push-update.sh) alone when only TS/JS changed. │
+# └──────────────────────────────────────────────────────────────────┘
+#
 # What this does:
 #   1. Generates a version tag: v$(date +%Y%m%d%H%M)  e.g. v202608280130
 #   2. Runs:  npx expo export --platform android
 #   3. Mirrors the full dist/ output to MinIO:
-#        local/vayyari-updates/bundles/$VERSION/
+#        local/admin-updates/bundles/$VERSION/
 #   4. Writes and uploads manifest.json to:
-#        local/vayyari-updates/manifest.json
-#   5. Prunes old version folders — keeps newest 3, deletes the rest.
+#        local/admin-updates/manifest.json
+#   5. Prunes old version folders — keeps newest 5, deletes the rest.
 #   6. Prints a summary.
 #
 # Requirements:
 #   - MinIO Client (mc) configured with alias "local" → http://localhost:9000
-#     Bucket "vayyari-updates" must exist and be publicly readable.
+#     Bucket "admin-updates" must exist and be publicly readable.
 #     Quick setup:
 #       mc alias set local http://localhost:9000 <ACCESS_KEY> <SECRET_KEY>
-#       mc mb local/vayyari-updates
-#       mc anonymous set download local/vayyari-updates
+#       mc mb local/admin-updates
+#       mc anonymous set download local/admin-updates
 #   - npx available in PATH (Node.js installed)
 #
 # MinIO layout after this script:
-#   vayyari-updates/
+#   admin-updates/
 #   ├── manifest.json               ← latest version pointer (ops reference)
 #   └── bundles/
 #       ├── v202608280130/          ← versioned snapshot (newest kept 3)
@@ -44,10 +54,10 @@ set -euo pipefail
 # ─── Constants ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MINIO_ALIAS="local"
-MINIO_BUCKET="vayyari-updates"
+MINIO_BUCKET="admin-updates"
 BUNDLES_PREFIX="bundles"
-BASE_URL="http://krikanserver.taild227d9.ts.net/vayyari-updates"
-KEEP_VERSIONS=3
+BASE_URL="http://krikanserver.taild227d9.ts.net/admin-updates"
+KEEP_VERSIONS=5
 
 # ─── Argument parsing ──────────────────────────────────────────────────────────
 RELEASE_NOTES="No release notes provided."
@@ -74,7 +84,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── Version tag ──────────────────────────────────────────────────────────────
-VERSION="v$(date +%Y%m%d%H%M)"
+BASE_VERSION="1.0.0"
+if [[ -f "$SCRIPT_DIR/app.json" ]]; then
+  EXTRACTED_VER=$(grep -o '"version": *"[^"]*"' "$SCRIPT_DIR/app.json" | head -1 | cut -d'"' -f4 || true)
+  if [[ -n "$EXTRACTED_VER" ]]; then
+    BASE_VERSION="$EXTRACTED_VER"
+  fi
+fi
+
+COMMIT_COUNT=$(git rev-list --count HEAD -- "$SCRIPT_DIR" 2>/dev/null || echo "1")
+SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
+DIRTY_FLAG=""
+if [[ -n "$(git status --porcelain "$SCRIPT_DIR" 2>/dev/null)" ]]; then
+  DIRTY_FLAG="-dirty"
+fi
+
+VERSION="${BASE_VERSION}.${COMMIT_COUNT}${DIRTY_FLAG}"
 PUBLISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -125,8 +150,8 @@ if ! MC="$(find_mc)"; then
   Configure the 'local' alias:
     ~/bin/mc alias set local http://localhost:9000 <ACCESS_KEY> <SECRET_KEY>
   Create and open the bucket:
-    ~/bin/mc mb local/vayyari-updates
-    ~/bin/mc anonymous set download local/vayyari-updates"
+    ~/bin/mc mb local/admin-updates
+    ~/bin/mc anonymous set download local/admin-updates"
 fi
 ok "mc found: $MC ($("$MC" --version 2>&1 | head -1))"
 
@@ -208,6 +233,9 @@ step "Uploading manifest.json"
 
 BUNDLE_URL="${BASE_URL}/${BUNDLES_PREFIX}/${VERSION}/bundle.js"
 ASSETS_URL="${BASE_URL}/${BUNDLES_PREFIX}/${VERSION}/assets/"
+BUNDLE_SHA256="$(sha256sum "$BUNDLE_FILE" | cut -d' ' -f1)"
+BUNDLE_MD5="$(md5sum "$BUNDLE_FILE" | cut -d' ' -f1)"
+BUNDLE_SIZE="$(wc -c < "$BUNDLE_FILE")"
 
 # Escape double quotes in release notes (basic safeguard)
 SAFE_NOTES="${RELEASE_NOTES//\"/\'}"
@@ -216,7 +244,16 @@ MANIFEST_TMP="$(mktemp /tmp/vayyari-manifest-XXXXXX.json)"
 cat > "$MANIFEST_TMP" <<MANIFEST_EOF
 {
   "version": "${VERSION}",
+  "baseVersion": "${BASE_VERSION}",
+  "subversion": ${COMMIT_COUNT},
+  "commitSha": "${SHORT_SHA}",
+  "targetNativeVersion": 1,
+  "bundlePath": "${BUNDLES_PREFIX}/${VERSION}/bundle.js",
   "bundleUrl": "${BUNDLE_URL}",
+  "bundleSha256": "${BUNDLE_SHA256}",
+  "bundleMd5": "${BUNDLE_MD5}",
+  "bundleSize": ${BUNDLE_SIZE},
+  "assetsPath": "${BUNDLES_PREFIX}/${VERSION}/assets/",
   "assetsUrl": "${ASSETS_URL}",
   "publishedAt": "${PUBLISHED_AT}",
   "releaseNotes": "${SAFE_NOTES}"
@@ -235,8 +272,8 @@ ALL_VERSIONS="$(
   "$MC" ls "${MINIO_ALIAS}/${MINIO_BUCKET}/${BUNDLES_PREFIX}/" 2>/dev/null \
     | awk '{print $NF}' \
     | sed 's|/$||' \
-    | grep -E '^v[0-9]{12}$' \
-    | sort
+    | grep -E '^[0-9]+\.[0-9]+' \
+    | sort -V
 )"
 
 VERSION_COUNT=0

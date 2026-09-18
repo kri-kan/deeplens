@@ -74,7 +74,7 @@ case $SERVICE_NAME in
         COMPOSE_SERVICE="store-apk-both"
         COMPOSE_DIR=""
         ;;
-    "vayyari-apk"|"vayyari-admin-apk"|"admin-app-apk"|"admin-apk")
+    "vayyari-apk"|"vayyari-admin-apk"|"admin-app-apk"|"admin-apk"|"admin-apk-debug"|"admin-apk-both")
         PROJECT_PATH="src/vayyari"
         HOSTING_PATH="publish/admin-app"
         COMPOSE_SERVICE="vayyari-admin-apk"
@@ -86,9 +86,15 @@ case $SERVICE_NAME in
         COMPOSE_SERVICE="vayyari-admin-ota"
         COMPOSE_DIR=""
         ;;
+    "store-ota"|"vayyari-store-ota")
+        PROJECT_PATH="src/store"
+        HOSTING_PATH="publish/vayyari/ota"
+        COMPOSE_SERVICE="store-ota"
+        COMPOSE_DIR=""
+        ;;
     *)
         echo -e "${RED}Error: Unknown service '$SERVICE_NAME'${NC}"
-        echo "Usage: ./deploy.sh [search-api | worker-service | store-api | reasoning-api | whatsapp-processor | store-app | store-apk | store-apk-debug | store-apk-both | vayyari-admin-apk | admin-apk | vayyari-apk | vayyari-ota]"
+        echo "Usage: ./deploy.sh [search-api | worker-service | store-api | reasoning-api | whatsapp-processor | store-app | store-apk | store-apk-debug | store-apk-both | store-ota | admin-apk | admin-apk-debug | admin-apk-both | admin-ota]"
         exit 1
         ;;
 esac
@@ -117,57 +123,22 @@ elif [ "$SERVICE_NAME" == "store-apk-both" ] || [ "$SERVICE_NAME" == "store-apks
     exit 0
 
 elif [ "$SERVICE_NAME" == "vayyari-apk" ] || [ "$SERVICE_NAME" == "vayyari-admin-apk" ] || [ "$SERVICE_NAME" == "admin-app-apk" ] || [ "$SERVICE_NAME" == "admin-apk" ]; then
-    echo -e "${CYAN}📦 Building Vayyari Admin Android APK (Release)...${NC}"
-    cd "$PROJECT_PATH/android" || exit 1
-    
-    # Execute Gradle release build with required optimization flags
-    ./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}❌ APK build failed. Deployment aborted.${NC}"
-        exit 1
-    fi
-    cd - > /dev/null
+    echo -e "${CYAN}📦 Building Vayyari Admin Android APK (Universal Release)...${NC}"
+    "${ROOT_DIR}/src/vayyari/build-apk.sh" --release --arch universal
+    exit 0
 
-    BUILT_APK="$PROJECT_PATH/android/app/build/outputs/apk/release/app-release.apk"
-    if [ ! -f "$BUILT_APK" ]; then
-        echo -e "${RED}❌ Output APK not found at $BUILT_APK${NC}"
-        exit 1
-    fi
+elif [ "$SERVICE_NAME" == "admin-apk-debug" ]; then
+    echo -e "${CYAN}🛠️ Building Vayyari Admin Android APK (Universal Debug)...${NC}"
+    "${ROOT_DIR}/src/vayyari/build-apk.sh" --debug --arch universal
+    exit 0
 
-    echo -e "${CYAN}📂 Publishing APK to $HOSTING_PATH...${NC}"
-    mkdir -p "$HOSTING_PATH"
-    
-    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    VERSION="v1.0.0"
-    VERSIONED_APK="vayyari-admin-${VERSION}-${TIMESTAMP}.apk"
-    LATEST_APK="vayyari-admin-latest.apk"
-    
-    cp "$BUILT_APK" "$HOSTING_PATH/$VERSIONED_APK"
-    cp "$BUILT_APK" "$HOSTING_PATH/$LATEST_APK"
-    echo -e "${GREEN}✅ Published $VERSIONED_APK and updated $LATEST_APK${NC}"
-
-    # Pruning historical APKs: keep newest 3 historical APKs
-    echo -e "${CYAN}🧹 Pruning old historical APKs in $HOSTING_PATH (keeping newest 3)...${NC}"
-    KEEP_HISTORICAL=3
-    APK_FILES=($(ls -1t "$HOSTING_PATH"/vayyari-admin-v*.apk 2>/dev/null || true))
-    TOTAL_APKS=${#APK_FILES[@]}
-    if [ "$TOTAL_APKS" -gt "$KEEP_HISTORICAL" ]; then
-        for ((i=KEEP_HISTORICAL; i<TOTAL_APKS; i++)); do
-            echo -e "${YELLOW}   Removing old APK: ${APK_FILES[$i]}${NC}"
-            rm -f "${APK_FILES[$i]}"
-        done
-        echo -e "${GREEN}✅ APK pruning complete.${NC}"
-    else
-        echo -e "${GREEN}✅ APK count ($TOTAL_APKS) within retention limit ($KEEP_HISTORICAL). No pruning needed.${NC}"
-    fi
-
-    APK_SIZE=$(du -h "$HOSTING_PATH/$LATEST_APK" | cut -f1)
-    APK_SHA=$(sha256sum "$HOSTING_PATH/$LATEST_APK" | cut -d' ' -f1)
-    echo -e "${GREEN}✅ Vayyari Admin APK generated successfully: $HOSTING_PATH/$LATEST_APK ($APK_SIZE, SHA256: $APK_SHA)${NC}"
+elif [ "$SERVICE_NAME" == "admin-apk-both" ]; then
+    echo -e "${CYAN}📦🛠️ Building Vayyari Admin Android APKs (Universal Release & Debug)...${NC}"
+    "${ROOT_DIR}/src/vayyari/build-apk.sh" --both --arch universal
     exit 0
 
 elif [ "$SERVICE_NAME" == "vayyari-ota" ] || [ "$SERVICE_NAME" == "vayyari-admin-ota" ] || [ "$SERVICE_NAME" == "admin-app-ota" ] || [ "$SERVICE_NAME" == "admin-ota" ]; then
-    echo -e "${CYAN}📦 Pushing Vayyari Admin OTA bundle to MinIO local/vayyari-updates...${NC}"
+    echo -e "${CYAN}📦 Pushing Vayyari Admin OTA bundle to MinIO local/admin-updates...${NC}"
     cd "$PROJECT_PATH" || exit 1
     shift || true
     ./push-update.sh "$@"
@@ -176,6 +147,15 @@ elif [ "$SERVICE_NAME" == "vayyari-ota" ] || [ "$SERVICE_NAME" == "vayyari-admin
         exit 1
     fi
     cd - > /dev/null
+
+elif [ "$SERVICE_NAME" == "store-ota" ] || [ "$SERVICE_NAME" == "vayyari-store-ota" ]; then
+    echo -e "${CYAN}📦 Pushing Vayyari Store OTA bundle to MinIO local/store-updates...${NC}"
+    shift || true
+    "${ROOT_DIR}/scripts/store/push-store-update.sh" "$@"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}❌ Store OTA bundle push failed.${NC}"
+        exit 1
+    fi
 
 elif [ "$SERVICE_NAME" == "whatsapp-processor" ]; then
     echo -e "${CYAN}📦 Building Node application...${NC}"

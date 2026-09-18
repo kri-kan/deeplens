@@ -104,60 +104,234 @@ publish/vayyari/
 
 ## 🛠️ Part 2: Vayyari Admin App (`src/vayyari`)
 
-The internal Vayyari Admin app serves catalog curation, WhatsApp message categorization, and store operations.
+The internal Vayyari Admin app serves catalog curation, WhatsApp message categorization, visual search, and store operations. Package ID: `com.vayyari.admin`.
 
-### 2.1 Release APK Build Workflow
+### 2.1 Automated Build Pipeline Script: `src/vayyari/build-apk.sh`
+
+The canonical script for compiling Admin APKs is located at [`src/vayyari/build-apk.sh`](file:///home/krikan/productivity/deeplens/src/vayyari/build-apk.sh).
+
+#### Syntax
 ```bash
-# Via deploy.sh
+./src/vayyari/build-apk.sh [release | debug | both] [OPTIONS]
+```
+
+#### CLI Options & Flags
+| Option / Flag | Description | Default |
+| :--- | :--- | :--- |
+| `release`, `--release` | Builds optimized production Release APK. AAPT2 PNG crunching bypassed. | **Default** |
+| `debug`, `--debug` | Builds Debug APK with Hermes debug symbols, dev menu, and LogBox enabled. | |
+| `both`, `--both`, `--all` | Builds both Release and Debug APKs sequentially. | |
+| `--arch <arm64\|universal\|x86_64>` | Target CPU ABI architecture: <br>• `universal`: `-PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64` (Runs on physical phones + x86_64 AVD emulators)<br>• `arm64`: `-PreactNativeArchitectures=arm64-v8a`<br>• `x86_64`: Emulators | `universal` |
+| `--keep <N>` | Number of historical versioned APKs to retain in `publish/admin-app/` before auto-pruning. | `3` |
+| `--clean` | Runs `./gradlew clean` prior to compilation. | `false` |
+| `--install[=variant]` | Automatically installs the generated APK onto a connected Android device or emulator via ADB. | `false` |
+| `-h`, `--help` | Displays the help and usage manual. | |
+
+### 2.2 Quick Build Commands via Infrastructure & Makefile
+
+```bash
+# Build Universal Release APK (Recommended for physical devices and emulators)
 ./infrastructure/deploy.sh admin-apk
-
-# Via Makefile
-make admin-apk
-```
-
-Under the hood, this compiles `src/vayyari/android` with Gradle:
-```bash
-./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
-```
-
-Published to [`publish/admin-app/`](file:///home/krikan/productivity/deeplens/publish/admin-app/):
-- `vayyari-admin-latest.apk`
-- `vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk`
-
-### 2.2 Self-Hosted OTA (Over-The-Air) Bundle Deployment
-
-Self-hosted OTA allows fast JS and asset hotfixes without reinstalling APKs.
-
-```bash
-./infrastructure/deploy.sh admin-ota
 # or
-cd src/vayyari && ./push-update.sh
+make admin-apk
+
+# Build Universal Debug APK (For developer debugging)
+./infrastructure/deploy.sh admin-apk-debug
+# or
+make admin-debug-apk
+
+# Build Both Release & Debug Universal APKs
+./infrastructure/deploy.sh admin-apk-both
+# or
+make admin-apk-both
 ```
 
-- **Export Path**: `publish/admin-app/ota/`
-- **MinIO Storage**: Uploaded to bucket `vayyari-updates` at `192.168.0.170:9000`.
-- **Reverse Proxy**: Nginx routes `/vayyari-updates/` requests to MinIO so mobile clients can auto-update on launch.
+### 2.3 Published Artifacts in `publish/admin-app/`
+
+Artifacts are published directly to [`publish/admin-app/`](file:///home/krikan/productivity/deeplens/publish/admin-app/):
+- `vayyari-admin-latest.apk` (111 MB Universal Release build)
+- `vayyari-admin-v1.0.0-*.apk` (Versioned Release build)
+- `vayyari-admin-debug-latest.apk` (243 MB Universal Debug build)
+- `vayyari-admin-debug-v1.0.0-*.apk` (Versioned Debug build)
 
 ---
 
-## 📲 Part 3: Installation & Device Verification
+## 🔄 Part 3: 100% Self-Hosted Over-The-Air (OTA) Updates
 
-### 3.1 Installing Vayyari Store APK via ADB
+DeepLens includes an enterprise self-hosted OTA updates system for both **Vayyari Admin** and **Vayyari Store** applications. It bypasses third-party clouds (Expo Updates / EAS) and pulls updates directly from local MinIO storage via the Nginx API gateway.
+
+> [!NOTE]
+> For the complete architectural whitepaper covering monotonic subversion arithmetic, native Hermes memory-mapping, two-tier atomic staging, and threat mitigation models, see the [Self-Hosted Mobile OTA Updates White Paper](file:///home/krikan/productivity/deeplens/docs/deeplens/architecture/self-hosted-mobile-ota-whitepaper.md).
+
+### 3.1 OTA Architecture Overview
+
+```
+Developer / Git Commit
+         │
+         ▼
+.git/hooks/post-commit  ──(auto-detects JS/TS changes)──►  Background OTA Push
+         │
+         ├──► src/vayyari/push-update.sh        ──► MinIO: admin-updates/
+         └──► scripts/store/push-store-update.sh ──► MinIO: store-updates/
+                                                            │
+                                                            ▼
+                                                   Nginx Gateway :80
+                                                   /admin-updates/
+                                                   /store-updates/
+                                                            │
+                                                            ▼
+                                                   Mobile App on Boot
+                                                   (selfHostedOTA.ts)
+                                                            │
+                                                   Checks sha256 checksum
+                                                   Downloads to ota/staging/
+                                                   Atomic swap to ota/active/
+                                                            │
+                                                            ▼
+                                                   MainApplication.kt
+                                                   Loads ota/active/bundle.js
+```
+
+### 3.2 Monotonic Subversioning Model
+
+Every OTA release is tagged with a deterministic, monotonic version string calculated directly from git history:
+```
+<BASE_VERSION>.<COMMIT_COUNT>[-dirty]
+```
+- **`BASE_VERSION`**: Read from the application's `app.json` (e.g., `1.0.0`).
+- **`COMMIT_COUNT`**: Number of commits affecting the application's directory (`git rev-list --count HEAD -- <app_dir>`). Increments automatically on every commit.
+- **`-dirty`**: Appended automatically if uncommitted changes exist in the working tree.
+- **Example Subversions**: `1.0.0.181`, `1.0.0.182`, `1.0.0.11`.
+
+### 3.3 Operating OTA Updates: All Commands
+
+#### A. Publishing Vayyari Admin OTA Bundle
 ```bash
-# Install latest Release APK
+# Via Makefile (Fastest)
+make push-admin-ota
+
+# Via deploy.sh
+./infrastructure/deploy.sh admin-ota
+
+# Via direct script (with custom release notes)
+./src/vayyari/push-update.sh --notes "Updated curation swatch matching and color picker"
+```
+
+#### B. Publishing Vayyari Store OTA Bundle
+```bash
+# Via Makefile (Fastest)
+make push-store-ota
+
+# Via deploy.sh
+./infrastructure/deploy.sh store-ota
+
+# Via direct script (with custom release notes)
+./scripts/store/push-store-update.sh --notes "Fixed product details page variant grouping"
+```
+
+#### C. Publishing Both Apps Concurrently
+```bash
+make push-all-ota
+```
+
+### 3.4 Automated Git Post-Commit Hook
+
+A native git post-commit hook is installed at [`.git/hooks/post-commit`](file:///home/krikan/productivity/deeplens/.git/hooks/post-commit).
+- **Trigger**: Runs automatically whenever you execute `git commit`.
+- **Intelligent Diff Filtering**: Inspects the committed files using `git diff-tree`. If changes occurred in `src/vayyari/` or `src/store/` outside native `android/` folders, it automatically triggers `push-update.sh` or `push-store-update.sh` in the background.
+- **Bypassing the Hook**: If you are making a quick commit and do not want to trigger an OTA upload, set `SKIP_OTA=1`:
+  ```bash
+  SKIP_OTA=1 git commit -m "docs: update architecture reference"
+  ```
+
+### 3.5 Native Android Bundle Hook (`MainApplication.kt`)
+
+In both `src/vayyari` and `src/store`, `MainApplication.kt` intercepts bundle resolution at startup:
+```kotlin
+val otaFile = File(applicationContext.filesDir, "ota/active/bundle.js")
+val bundlePath = if (otaFile.exists() && otaFile.length() > 0) otaFile.absolutePath else null
+
+ExpoReactHostFactory.getDefaultReactHost(
+    context = applicationContext,
+    packageList = PackageList(this).packages,
+    jsBundleFilePath = bundlePath
+)
+```
+- If `ota/active/bundle.js` exists and is valid, the app loads the new OTA bundle dynamically.
+- If no OTA bundle is installed, it safely falls back to the embedded APK asset (`assets://index.android.bundle`).
+
+### 3.6 Client-Side OTA Updating Service
+
+Mounted in the root layout components ([`src/vayyari/app/_layout.tsx`](file:///home/krikan/productivity/deeplens/src/vayyari/app/_layout.tsx) and [`src/store/App.tsx`](file:///home/krikan/productivity/deeplens/src/store/App.tsx)):
+1. Checks `{gateway_url}/manifest.json` on launch.
+2. Verifies `targetNativeVersion: 1` matches the binary version (prevents crashing if native modules change).
+3. Compares remote `subversion` against locally installed subversion.
+4. Downloads the remote Hermes bytecode bundle to `ota/staging/bundle.js`.
+5. Verifies SHA-256 and MD5 checksums match the manifest.
+6. Atomically moves `ota/staging/` to `ota/active/`.
+7. Reloads the JavaScript runtime or activates on the next app boot.
+
+---
+
+## 📲 Part 4: Installation, Testing & Troubleshooting
+
+### 4.1 Installing Applications via ADB
+
+```bash
+# List connected devices and emulators
+adb devices
+
+# Install Vayyari Admin Release APK (Universal)
+adb install -r publish/admin-app/vayyari-admin-latest.apk
+
+# Install Vayyari Admin Debug APK
+adb install -r publish/admin-app/vayyari-admin-debug-latest.apk
+
+# Install Vayyari Store Release APK
 adb install -r publish/vayyari/vayyari-store-latest.apk
 
-# Install latest Debug APK
+# Install Vayyari Store Debug APK
 adb install -r publish/vayyari/vayyari-store-debug-latest.apk
-
-# Auto-install directly during build
-./scripts/store/build-store-apk.sh --release --install
 ```
 
-### 3.2 Installing Vayyari Admin APK via ADB
+### 4.2 Launching Apps from Command Line
+
 ```bash
-adb install -r publish/admin-app/vayyari-admin-latest.apk
+# Launch Vayyari Admin
+adb shell am start -n com.vayyari.admin/.MainActivity
+
+# Launch Vayyari Store
+adb shell am start -n com.vayyari.store/.MainActivity
 ```
 
-### 3.3 Verifying Cleartext & LAN Connectivity
-Both applications include `android:usesCleartextTraffic="true"` and network security configurations to allow communication over local LAN (`192.168.0.170`), localhost, and Tailscale VPN mesh addresses (`krikanserver.taild227d9.ts.net`).
+### 4.3 Verifying OTA Manifests and Bundles
+
+```bash
+# Check Vayyari Admin manifest
+curl -s http://localhost/admin-updates/manifest.json | jq .
+
+# Check Vayyari Store manifest
+curl -s http://localhost/store-updates/manifest.json | jq .
+
+# Test bundle HTTP download headers
+curl -I -s http://localhost/admin-updates/bundles/1.0.0.181-dirty/bundle.js | head -n 5
+curl -I -s http://localhost/store-updates/bundles/1.0.0.11-dirty/bundle.js | head -n 5
+```
+
+### 4.4 Inspecting MinIO Storage
+
+```bash
+# List Admin bundle versions
+mc ls local/admin-updates/bundles/
+
+# List Store bundle versions
+mc ls local/store-updates/bundles/
+```
+
+### 4.5 Inspecting Live OTA Logs on Device
+
+```bash
+# Filter Android logcat for OTA updates
+adb logcat | grep -E "VayyariOTA|StoreOTA|ReactNative"
+```
+
