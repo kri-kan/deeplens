@@ -56,6 +56,24 @@ case $SERVICE_NAME in
         COMPOSE_SERVICE="store-app"
         COMPOSE_DIR=""
         ;;
+    "store-apk"|"store-apk-release"|"vayyari-store-apk")
+        PROJECT_PATH="src/store"
+        HOSTING_PATH="publish/vayyari"
+        COMPOSE_SERVICE="store-apk"
+        COMPOSE_DIR=""
+        ;;
+    "store-apk-debug")
+        PROJECT_PATH="src/store"
+        HOSTING_PATH="publish/vayyari"
+        COMPOSE_SERVICE="store-apk-debug"
+        COMPOSE_DIR=""
+        ;;
+    "store-apk-both"|"store-apks")
+        PROJECT_PATH="src/store"
+        HOSTING_PATH="publish/vayyari"
+        COMPOSE_SERVICE="store-apk-both"
+        COMPOSE_DIR=""
+        ;;
     "vayyari-apk"|"vayyari-admin-apk"|"admin-app-apk"|"admin-apk")
         PROJECT_PATH="src/vayyari"
         HOSTING_PATH="publish/admin-app"
@@ -70,7 +88,7 @@ case $SERVICE_NAME in
         ;;
     *)
         echo -e "${RED}Error: Unknown service '$SERVICE_NAME'${NC}"
-        echo "Usage: ./deploy.sh [search-api | worker-service | store-api | reasoning-api | whatsapp-processor | store-app | vayyari-admin-apk | admin-apk | vayyari-apk | vayyari-ota]"
+        echo "Usage: ./deploy.sh [search-api | worker-service | store-api | reasoning-api | whatsapp-processor | store-app | store-apk | store-apk-debug | store-apk-both | vayyari-admin-apk | admin-apk | vayyari-apk | vayyari-ota]"
         exit 1
         ;;
 esac
@@ -81,6 +99,21 @@ echo -e "${CYAN}🚀 Starting deployment/build for ${YELLOW}$SERVICE_NAME${NC}..
 if [ "$SERVICE_NAME" == "store-app" ] || [ "$SERVICE_NAME" == "vayyari-store" ] || [ "$SERVICE_NAME" == "store" ]; then
     echo -e "${CYAN}🛍️  Building & Publishing Vayyari Store Web & PWA App...${NC}"
     "${ROOT_DIR}/scripts/store/publish-store.sh"
+    exit 0
+
+elif [ "$SERVICE_NAME" == "store-apk" ] || [ "$SERVICE_NAME" == "store-apk-release" ] || [ "$SERVICE_NAME" == "vayyari-store-apk" ]; then
+    echo -e "${CYAN}📦 Building Vayyari Store Android APK (Release)...${NC}"
+    "${ROOT_DIR}/scripts/store/build-store-apk.sh" --release
+    exit 0
+
+elif [ "$SERVICE_NAME" == "store-apk-debug" ]; then
+    echo -e "${CYAN}🛠️ Building Vayyari Store Android APK (Debug)...${NC}"
+    "${ROOT_DIR}/scripts/store/build-store-apk.sh" --debug
+    exit 0
+
+elif [ "$SERVICE_NAME" == "store-apk-both" ] || [ "$SERVICE_NAME" == "store-apks" ]; then
+    echo -e "${CYAN}📦🛠️ Building Vayyari Store Android APKs (Release & Debug)...${NC}"
+    "${ROOT_DIR}/scripts/store/build-store-apk.sh" --both
     exit 0
 
 elif [ "$SERVICE_NAME" == "vayyari-apk" ] || [ "$SERVICE_NAME" == "vayyari-admin-apk" ] || [ "$SERVICE_NAME" == "admin-app-apk" ] || [ "$SERVICE_NAME" == "admin-apk" ]; then
@@ -108,12 +141,10 @@ elif [ "$SERVICE_NAME" == "vayyari-apk" ] || [ "$SERVICE_NAME" == "vayyari-admin
     VERSION="v1.0.0"
     VERSIONED_APK="vayyari-admin-${VERSION}-${TIMESTAMP}.apk"
     LATEST_APK="vayyari-admin-latest.apk"
-    LEGACY_LATEST="vayyari-latest.apk"
     
     cp "$BUILT_APK" "$HOSTING_PATH/$VERSIONED_APK"
     cp "$BUILT_APK" "$HOSTING_PATH/$LATEST_APK"
-    cp "$BUILT_APK" "$HOSTING_PATH/$LEGACY_LATEST"
-    echo -e "${GREEN}✅ Published $VERSIONED_APK, updated $LATEST_APK and legacy pointer $LEGACY_LATEST${NC}"
+    echo -e "${GREEN}✅ Published $VERSIONED_APK and updated $LATEST_APK${NC}"
 
     # Pruning historical APKs: keep newest 3 historical APKs
     echo -e "${CYAN}🧹 Pruning old historical APKs in $HOSTING_PATH (keeping newest 3)...${NC}"
