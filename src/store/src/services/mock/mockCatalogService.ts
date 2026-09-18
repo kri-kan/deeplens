@@ -1,11 +1,42 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+import { SwatchTemplateType } from '../../components/atoms/SwatchDot/CustomSwatchDot';
+
 export interface EthnicSwatch {
   id: string;
   name: string;
-  type: 'solid' | 'contrast' | 'dhup_chhaon' | 'split' | 'grid';
+  type: 'solid' | 'contrast' | 'dhup_chhaon' | 'split' | 'grid' | SwatchTemplateType;
   primaryHex: string;
   secondaryHex?: string;
   accentHex?: string;
   imageUrl?: string;
+}
+
+export interface StoreColorGroup {
+  id: string;
+  name: string;
+  colorwayCode?: string;
+  template?: SwatchTemplateType;
+  slotA?: string;
+  slotB?: string;
+  slotC?: string;
+  slotD?: string;
+  colors?: string[];
+  colorCount?: number;
+  isAvailable?: boolean;
+}
+
+export interface StoreMediaItem {
+  id: string;
+  url: string;
+  mediaType?: number;
+  order?: number;
+  dwellSeconds?: number;
+  isCover?: boolean;
+  colorGroupId?: string;
+  isQualified?: boolean;
+  isCommon?: boolean;
+  title?: string;
 }
 
 export interface StoreProduct {
@@ -27,17 +58,33 @@ export interface StoreProduct {
   weaveOrigin: string;
   description: string;
   features: string[];
+  colorGroupId?: string;
+  colorwayName?: string;
+  colorHex?: string;
+  swatchTemplate?: SwatchTemplateType;
+  colorGroups?: StoreColorGroup[];
+  mediaOrder?: StoreMediaItem[];
 }
-
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 
 export const MOCK_STORE_PRODUCTS: StoreProduct[] = [];
 
 const DEFAULT_LAN_HOST = '192.168.0.170';
 
+const normalizeMediaUrl = (url?: string): string => {
+  if (!url) return '';
+  return url
+    .replace(/http:\/\/192\.168\.0\.170:9000/g, 'http://media.vayyarifashions.com')
+    .replace(/http:\/\/localhost:9000/g, 'http://media.vayyarifashions.com');
+};
+
 const getStoreApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_STORE_API_URL) {
+    return process.env.EXPO_PUBLIC_STORE_API_URL;
+  }
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    if (window.location.hostname.endsWith('vayyarifashions.com')) {
+      return `${window.location.protocol}//storeapi.vayyarifashions.com`;
+    }
     return `http://${window.location.hostname}:5200`;
   }
   if (Constants.expoConfig?.hostUri) {
@@ -46,10 +93,89 @@ const getStoreApiUrl = () => {
       return `http://${host}:5200`;
     }
   }
-  if (Platform.OS === 'android') {
-    return `http://${DEFAULT_LAN_HOST}:5200`;
-  }
-  return 'http://localhost:5200';
+  return 'http://storeapi.vayyarifashions.com';
+};
+
+const mapRawProduct = (p: any, defaultCode?: string): StoreProduct => {
+  const mappedColorGroups: StoreColorGroup[] = Array.isArray(p.colorGroups)
+    ? p.colorGroups.map((cg: any) => ({
+        id: cg.id,
+        name: cg.name,
+        colorwayCode: cg.colorwayCode,
+        template: cg.template,
+        slotA: cg.slotA,
+        slotB: cg.slotB,
+        slotC: cg.slotC,
+        slotD: cg.slotD,
+        colors: cg.colors,
+        colorCount: cg.colorCount,
+        isAvailable: cg.isAvailable ?? true,
+      }))
+    : [];
+
+  const mappedMediaOrder: StoreMediaItem[] = Array.isArray(p.mediaOrder)
+    ? p.mediaOrder.map((m: any) => ({
+        id: m.id,
+        url: normalizeMediaUrl(m.url),
+        mediaType: m.mediaType,
+        order: m.order,
+        dwellSeconds: m.dwellSeconds,
+        isCover: m.isCover,
+        colorGroupId: m.colorGroupId,
+        isQualified: m.isQualified,
+        isCommon: m.isCommon,
+        title: m.title,
+      }))
+    : [];
+
+  const derivedImages: string[] =
+    mappedMediaOrder.length > 0
+      ? mappedMediaOrder.map((m) => m.url)
+      : (p.allMediaUris && p.allMediaUris.length > 0
+          ? p.allMediaUris
+          : [p.primaryImageUri || 'https://picsum.photos/seed/saree/600/800']
+        ).map(normalizeMediaUrl);
+
+  const derivedSwatches: EthnicSwatch[] =
+    mappedColorGroups.length > 0
+      ? mappedColorGroups.map((cg) => ({
+          id: cg.id,
+          name: cg.name,
+          type: (cg.template as any) || 'solid',
+          primaryHex: cg.slotA || cg.colors?.[0] || '#D4AF37',
+          secondaryHex: cg.slotB || cg.colors?.[1],
+          accentHex: cg.slotC || cg.colors?.[2],
+        }))
+      : p.color
+      ? [{ id: 'sw-1', name: p.color, type: 'solid', primaryHex: p.colorHex || '#8B0000' }]
+      : [];
+
+  return {
+    id: p.id,
+    code: p.productCode || defaultCode || 'VY-LIVE-01',
+    title: p.title || '-',
+    brand: p.brand || 'VAYYARI HANDLOOM',
+    category: (p.category || 'saree').toLowerCase() as any,
+    price: p.price ?? 8000,
+    originalPrice: p.originalPrice ?? p.price ?? 12000,
+    discountPercentage: p.discountPercentage ?? 0,
+    rating: 4.9,
+    reviewCount: 12,
+    inStock: p.inStock ?? true,
+    stockQuantity: p.stockQuantity ?? 1,
+    images: derivedImages,
+    swatches: derivedSwatches,
+    fabric: p.fabric || 'Pure Silk',
+    weaveOrigin: p.weaveOrigin || 'Handcrafted Heritage, India',
+    description: (p.descriptions && p.descriptions.length > 0 && p.descriptions[0]) ? p.descriptions[0] : (p.title || '-'),
+    features: p.features && p.features.length > 0 ? p.features : ['Authentic Handloom', 'Pure Zari Weave', 'Express Dispatch'],
+    colorGroupId: p.colorGroupId,
+    colorwayName: p.colorwayName || p.color,
+    colorHex: p.colorHex,
+    swatchTemplate: p.swatchTemplate,
+    colorGroups: mappedColorGroups,
+    mediaOrder: mappedMediaOrder,
+  };
 };
 
 export const mockCatalogService = {
@@ -60,27 +186,7 @@ export const mockCatalogService = {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          return data.map((p: any) => ({
-            id: p.id,
-            code: p.productCode || 'VY-LIVE-01',
-            title: p.title,
-            brand: p.brand || 'VAYYARI HANDLOOM',
-            category: (p.category || 'saree').toLowerCase() as any,
-            price: p.price || 8000,
-            originalPrice: p.originalPrice || 12000,
-            discountPercentage: p.discountPercentage || 0,
-            rating: 4.9,
-            reviewCount: 12,
-            inStock: p.inStock ?? true,
-            images: p.allMediaUris && p.allMediaUris.length > 0 ? p.allMediaUris : [p.primaryImageUri || 'https://picsum.photos/seed/saree/600/800'],
-            swatches: [
-              { id: 'sw-1', name: p.color || 'Standard', type: 'solid', primaryHex: '#D4AF37' }
-            ],
-            fabric: p.fabric || 'Pure Silk',
-            weaveOrigin: 'Handcrafted Heritage, India',
-            description: p.descriptions?.[0] || p.title,
-            features: ['Authentic Handloom', 'Pure Zari Weave', 'Express Dispatch']
-          }));
+          return data.map((p: any) => mapRawProduct(p));
         }
       }
     } catch (err) {
@@ -100,32 +206,11 @@ export const mockCatalogService = {
       }
       if (res.ok) {
         const p = await res.json();
-        return {
-          id: p.id,
-          code: p.productCode || id,
-          title: p.title || '-',
-          brand: p.brand || '-',
-          category: (p.category || 'saree').toLowerCase() as any,
-          price: p.price ?? 0,
-          originalPrice: p.originalPrice ?? p.price ?? 0,
-          discountPercentage: p.discountPercentage ?? 0,
-          rating: 4.9,
-          reviewCount: 12,
-          inStock: p.inStock ?? true,
-          stockQuantity: p.stockQuantity ?? 1,
-          images: p.allMediaUris && p.allMediaUris.length > 0 ? p.allMediaUris : (p.primaryImageUri ? [p.primaryImageUri] : []),
-          swatches: p.color ? [
-            { id: 'sw-1', name: p.color, type: 'solid', primaryHex: '#8B0000' }
-          ] : [],
-          fabric: p.fabric || '-',
-          weaveOrigin: p.weaveOrigin || '-',
-          description: (p.descriptions && p.descriptions.length > 0 && p.descriptions[0]) ? p.descriptions[0] : '-',
-          features: p.features && p.features.length > 0 ? p.features : []
-        };
+        return mapRawProduct(p, id);
       }
     } catch (err) {
       console.warn('Failed to fetch live product by code/id from Store.Api:', err);
     }
     return null;
-  }
+  },
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useWishlist } from "../../context/WishlistContext";
 import { usePermissions } from "../../context/PermissionsContext";
 import { useToast } from "../../context/ToastContext";
 import { mockCatalogService, StoreProduct, EthnicSwatch } from "../../services/mock/mockCatalogService";
+import { CustomSwatchDot } from "../../components/atoms/SwatchDot/CustomSwatchDot";
 
 export const ProductDetailPage: React.FC = () => {
   const { params, goBack, navigate } = useNavigation();
@@ -28,6 +29,7 @@ export const ProductDetailPage: React.FC = () => {
   const [product, setProduct] = useState<StoreProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [selectedColorGroupId, setSelectedColorGroupId] = useState<string | null>(null);
   const [selectedSwatch, setSelectedSwatch] = useState<EthnicSwatch | undefined>(undefined);
   const [zoomModalVisible, setZoomModalVisible] = useState(false);
   const isDesktop = width >= 1024;
@@ -38,8 +40,15 @@ export const ProductDetailPage: React.FC = () => {
     setLoading(true);
     mockCatalogService.getProductById(targetId).then((p) => {
       setProduct(p);
-      if (p && p.swatches && p.swatches.length > 0) {
-        setSelectedSwatch(p.swatches[0]);
+      if (p) {
+        const initialCgId =
+          p.colorGroupId ||
+          (p.colorGroups && p.colorGroups.length > 0 ? p.colorGroups[0].id : null);
+        setSelectedColorGroupId(initialCgId);
+        if (p.swatches && p.swatches.length > 0) {
+          const match = initialCgId ? p.swatches.find((s) => s.id === initialCgId) : null;
+          setSelectedSwatch(match || p.swatches[0]);
+        }
       }
       setSelectedImage(0);
       setLoading(false);
@@ -88,9 +97,49 @@ export const ProductDetailPage: React.FC = () => {
     });
   };
 
+  const activeColorGroup = useMemo(() => {
+    if (!product?.colorGroups || product.colorGroups.length === 0) return null;
+    return (
+      product.colorGroups.find((cg) => cg.id === selectedColorGroupId) ||
+      product.colorGroups[0]
+    );
+  }, [product, selectedColorGroupId]);
+
+  const displayedMedia = useMemo(() => {
+    if (!product) return [];
+    if (product.mediaOrder && product.mediaOrder.length > 0) {
+      if (selectedColorGroupId) {
+        const matching = product.mediaOrder.filter(
+          (m) => m.colorGroupId === selectedColorGroupId || m.isCommon || !m.colorGroupId
+        );
+        if (matching.length > 0) {
+          return matching.map((m) => m.url);
+        }
+      }
+      return product.mediaOrder.map((m) => m.url);
+    }
+    return product.images || [];
+  }, [product, selectedColorGroupId]);
+
+  const handleSelectColorGroup = (colorGroupId: string) => {
+    setSelectedColorGroupId(colorGroupId);
+    setSelectedImage(0);
+    const cg = product?.colorGroups?.find((c) => c.id === colorGroupId);
+    if (cg) {
+      setSelectedSwatch({
+        id: cg.id,
+        name: cg.name,
+        type: (cg.template as any) || "solid",
+        primaryHex: cg.slotA || cg.colors?.[0] || "#D4AF37",
+        secondaryHex: cg.slotB || cg.colors?.[1],
+        accentHex: cg.slotC || cg.colors?.[2],
+      });
+    }
+  };
+
   const currentImageUri =
-    product.images && product.images.length > 0
-      ? product.images[selectedImage] || product.images[0]
+    displayedMedia.length > 0
+      ? displayedMedia[selectedImage] || displayedMedia[0]
       : null;
 
   return (
@@ -139,13 +188,13 @@ export const ProductDetailPage: React.FC = () => {
             </TouchableOpacity>
 
             {/* Thumbnail Strip */}
-            {product.images && product.images.length > 1 && (
+            {displayedMedia && displayedMedia.length > 1 && (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.thumbRow}
               >
-                {product.images.map((img, idx) => (
+                {displayedMedia.map((img, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={[styles.thumbBox, selectedImage === idx && styles.thumbBoxActive]}
@@ -186,11 +235,86 @@ export const ProductDetailPage: React.FC = () => {
 
             {/* Colorway / Swatch Section */}
             <View style={styles.sectionDivider} />
-            <View style={styles.specItem}>
-              <Text style={styles.specKey}>Colorway / Shade</Text>
-              <Text style={styles.specVal}>
-                {selectedSwatch?.name || (product.swatches && product.swatches[0]?.name) || "-"}
-              </Text>
+            <View style={styles.swatchSection}>
+              <View style={styles.swatchHeaderRow}>
+                <View style={styles.swatchTitleGroup}>
+                  <Text style={styles.swatchSectionTitle}>Colorway</Text>
+                  <Text style={styles.activeColorName}>
+                    {activeColorGroup?.name || selectedSwatch?.name || product.colorwayName || "Standard"}
+                  </Text>
+                </View>
+                {product.colorGroups && product.colorGroups.length > 0 && (
+                  <View style={styles.swatchCountPill}>
+                    <Text style={styles.swatchCountText}>{product.colorGroups.length} Shades</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Swatch Selector Row */}
+              {product.colorGroups && product.colorGroups.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.swatchListContainer}
+                >
+                  {product.colorGroups.map((cg) => {
+                    const isSelected = cg.id === selectedColorGroupId;
+                    return (
+                      <TouchableOpacity
+                        key={cg.id}
+                        onPress={() => handleSelectColorGroup(cg.id)}
+                        style={[
+                          styles.swatchItemWrapper,
+                          isSelected && styles.swatchItemWrapperActive,
+                        ]}
+                        activeOpacity={0.8}
+                        accessibilityLabel={`Color: ${cg.name}`}
+                      >
+                        <CustomSwatchDot
+                          template={cg.template || "solid"}
+                          primaryColor={cg.slotA || cg.colors?.[0] || "#D4AF37"}
+                          secondaryColor={cg.slotB || cg.colors?.[1]}
+                          tertiaryColor={cg.slotC || cg.colors?.[2]}
+                          quaternaryColor={cg.slotD || cg.colors?.[3]}
+                          colors={cg.colors}
+                          colorCount={cg.colorCount as any}
+                          size={36}
+                          shape="circle"
+                          selected={isSelected}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : product.swatches && product.swatches.length > 0 ? (
+                <View style={styles.legacySwatchRow}>
+                  {product.swatches.map((sw) => {
+                    const isSelected = selectedSwatch?.id === sw.id;
+                    return (
+                      <TouchableOpacity
+                        key={sw.id}
+                        onPress={() => {
+                          setSelectedSwatch(sw);
+                          setSelectedImage(0);
+                        }}
+                        style={[
+                          styles.swatchItemWrapper,
+                          isSelected && styles.swatchItemWrapperActive,
+                        ]}
+                      >
+                        <CustomSwatchDot
+                          template={(sw.type as any) || "solid"}
+                          primaryColor={sw.primaryHex}
+                          secondaryColor={sw.secondaryHex}
+                          size={36}
+                          shape="circle"
+                          selected={isSelected}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
 
             {/* Delivery Location & Timeline */}
@@ -296,7 +420,7 @@ export const ProductDetailPage: React.FC = () => {
             <Image source={{ uri: currentImageUri }} style={styles.modalImage} resizeMode="contain" />
           )}
           <Text style={styles.modalImageIndex}>
-            Photo {selectedImage + 1} of {product.images.length}
+            Photo {selectedImage + 1} of {displayedMedia.length}
           </Text>
         </View>
       </Modal>
@@ -551,6 +675,64 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#E2E8F0",
     marginVertical: 12,
+  },
+  swatchSection: {
+    marginVertical: 14,
+  },
+  swatchHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  swatchTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  swatchSectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#718096",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  activeColorName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A365D",
+  },
+  swatchCountPill: {
+    backgroundColor: "#F3E8FF",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  swatchCountText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#7B1FA2",
+  },
+  swatchListContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  legacySwatchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  swatchItemWrapper: {
+    padding: 3,
+    borderRadius: 9999,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  swatchItemWrapperActive: {
+    borderColor: "#1A365D",
   },
   deliveryCard: {
     backgroundColor: "#FFFFFF",

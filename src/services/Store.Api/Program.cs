@@ -1,6 +1,10 @@
+using Dapper;
 using Microsoft.AspNetCore.Mvc;
+using Minio;
 using Store.Api.Models;
 using Store.Api.Services;
+
+DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +15,27 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "DeepLens Store.Api (Beta Platform & Admin Curation)", Version = "v1" });
 });
 
+builder.Services.AddHttpClient();
+
+// MinIO Client Registration
+builder.Services.AddSingleton<IMinioClient>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var endpoint = config["Minio:Endpoint"] ?? config["Minio__Endpoint"] ?? "192.168.0.170:9000";
+    var accessKey = config["Minio:AccessKey"] ?? config["Minio__AccessKey"] ?? "krikan";
+    var secretKey = config["Minio:SecretKey"] ?? config["Minio__SecretKey"] ?? "Krikank1$";
+    var useSsl = config.GetValue<bool>("Minio:UseSsl", false);
+
+    return new MinioClient()
+        .WithEndpoint(endpoint)
+        .WithCredentials(accessKey, secretKey)
+        .WithSSL(useSsl)
+        .Build();
+});
+
 // Register Domain Services
+builder.Services.AddSingleton<IStoreEventPublisher, StoreEventPublisher>();
+builder.Services.AddSingleton<IMediaStorageService, MediaStorageService>();
 builder.Services.AddSingleton<ICartService, CartService>();
 builder.Services.AddSingleton<ICurationService, CurationService>();
 builder.Services.AddHostedService<CartPruningBackgroundService>();
@@ -108,6 +132,12 @@ app.MapGet("/api/v1/products", async ([FromQuery] string? search, [FromQuery] st
         stockQuantity = p.StockQuantity,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "https://picsum.photos/seed/saree/600/800",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
+        colorGroupId = p.ColorGroupId,
+        colorwayName = p.ColorwayName,
+        colorHex = p.ColorHex,
+        swatchTemplate = p.SwatchTemplate,
+        colorGroups = p.ColorGroups,
+        mediaOrder = p.MediaOrder,
         descriptions = !string.IsNullOrEmpty(p.Description) ? new[] { p.Description } : Array.Empty<string>()
     });
 
@@ -146,6 +176,12 @@ app.MapGet("/api/v1/products/code/{code}", async (string code, ICurationService 
         stockQuantity = p.StockQuantity,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
+        colorGroupId = p.ColorGroupId,
+        colorwayName = p.ColorwayName,
+        colorHex = p.ColorHex,
+        swatchTemplate = p.SwatchTemplate,
+        colorGroups = p.ColorGroups,
+        mediaOrder = p.MediaOrder,
         descriptions = !string.IsNullOrEmpty(p.Description) ? new[] { p.Description } : Array.Empty<string>()
     };
 
@@ -184,6 +220,12 @@ app.MapGet("/api/v1/product/code/{code}", async (string code, ICurationService c
         stockQuantity = p.StockQuantity,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
+        colorGroupId = p.ColorGroupId,
+        colorwayName = p.ColorwayName,
+        colorHex = p.ColorHex,
+        swatchTemplate = p.SwatchTemplate,
+        colorGroups = p.ColorGroups,
+        mediaOrder = p.MediaOrder,
         descriptions = !string.IsNullOrEmpty(p.Description) ? new[] { p.Description } : Array.Empty<string>()
     };
 
@@ -230,6 +272,12 @@ app.MapGet("/api/v1/products/{id}", async (string id, ICurationService curationS
         stockQuantity = p.StockQuantity,
         primaryImageUri = p.MediaOrder.FirstOrDefault()?.Url ?? "",
         allMediaUris = p.MediaOrder.Select(m => m.Url).ToArray(),
+        colorGroupId = p.ColorGroupId,
+        colorwayName = p.ColorwayName,
+        colorHex = p.ColorHex,
+        swatchTemplate = p.SwatchTemplate,
+        colorGroups = p.ColorGroups,
+        mediaOrder = p.MediaOrder,
         descriptions = !string.IsNullOrEmpty(p.Description) ? new[] { p.Description } : Array.Empty<string>()
     };
 
@@ -350,5 +398,14 @@ app.MapPatch("/api/v1/admin/products/{id}/curation", async (Guid id, [FromBody] 
 })
 .WithName("AdminUpdateProductCuration")
 .WithOpenApi();
+
+try
+{
+    await app.Services.GetRequiredService<IMediaStorageService>().EnsureBucketExistsAsync();
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(ex, "Could not ensure MinIO bucket exists on startup");
+}
 
 app.Run();
