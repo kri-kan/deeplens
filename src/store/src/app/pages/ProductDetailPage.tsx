@@ -17,6 +17,7 @@ import { usePermissions } from "../../context/PermissionsContext";
 import { useToast } from "../../context/ToastContext";
 import { mockCatalogService, StoreProduct, EthnicSwatch } from "../../services/mock/mockCatalogService";
 import { CustomSwatchDot } from "../../components/atoms/SwatchDot/CustomSwatchDot";
+import { FullscreenMediaViewer, FullscreenMediaItem } from "../../components/media";
 
 export const ProductDetailPage: React.FC = () => {
   const { params, goBack, navigate } = useNavigation();
@@ -105,21 +106,32 @@ export const ProductDetailPage: React.FC = () => {
     );
   }, [product, selectedColorGroupId]);
 
-  const displayedMedia = useMemo(() => {
+  const displayedMediaItems = useMemo<FullscreenMediaItem[]>(() => {
     if (!product) return [];
     if (product.mediaOrder && product.mediaOrder.length > 0) {
-      if (selectedColorGroupId) {
-        const matching = product.mediaOrder.filter(
-          (m) => m.colorGroupId === selectedColorGroupId || m.isCommon || !m.colorGroupId
-        );
-        if (matching.length > 0) {
-          return matching.map((m) => m.url);
-        }
-      }
-      return product.mediaOrder.map((m) => m.url);
+      const items = selectedColorGroupId
+        ? product.mediaOrder.filter(
+            (m) => m.colorGroupId === selectedColorGroupId || m.isCommon || !m.colorGroupId
+          )
+        : product.mediaOrder;
+      const finalItems = items.length > 0 ? items : product.mediaOrder;
+      return finalItems.map((m) => ({
+        id: m.id,
+        url: m.url,
+        mediaType: m.mediaType ?? (/\.(mp4|mov|webm|m3u8)(\?.*)?$/i.test(m.url) ? 2 : 1),
+        title: m.title,
+      }));
     }
-    return product.images || [];
+    return (product.images || []).map((url, idx) => ({
+      id: `img-${idx}`,
+      url,
+      mediaType: /\.(mp4|mov|webm|m3u8)(\?.*)?$/i.test(url) ? 2 : 1,
+    }));
   }, [product, selectedColorGroupId]);
+
+  const displayedMedia = useMemo(() => {
+    return displayedMediaItems.map((m) => m.url);
+  }, [displayedMediaItems]);
 
   const handleSelectColorGroup = (colorGroupId: string) => {
     setSelectedColorGroupId(colorGroupId);
@@ -410,20 +422,15 @@ export const ProductDetailPage: React.FC = () => {
         </View>
       )}
 
-      {/* Fullscreen Image Zoom Modal */}
-      <Modal visible={zoomModalVisible} transparent animationType="fade" onRequestClose={() => setZoomModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setZoomModalVisible(false)}>
-            <Text style={styles.modalCloseText}>✕ Close</Text>
-          </TouchableOpacity>
-          {currentImageUri && (
-            <Image source={{ uri: currentImageUri }} style={styles.modalImage} resizeMode="contain" />
-          )}
-          <Text style={styles.modalImageIndex}>
-            Photo {selectedImage + 1} of {displayedMedia.length}
-          </Text>
-        </View>
-      </Modal>
+      {/* Fullscreen Edge-to-Edge Media Viewer */}
+      <FullscreenMediaViewer
+        visible={zoomModalVisible}
+        onClose={() => setZoomModalVisible(false)}
+        media={displayedMediaItems}
+        initialIndex={selectedImage}
+        productTitle={product.title}
+        productCode={product.code}
+      />
     </View>
   );
 };
@@ -884,32 +891,5 @@ const styles = StyleSheet.create({
     color: "#FAF7F2",
     fontSize: 14,
     fontWeight: "700",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.95)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalCloseBtn: {
-    position: "absolute",
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 10,
-  },
-  modalCloseText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  modalImage: {
-    width: "90%",
-    height: "75%",
-  },
-  modalImageIndex: {
-    color: "#E2E8F0",
-    fontSize: 13,
-    marginTop: 16,
   },
 });
