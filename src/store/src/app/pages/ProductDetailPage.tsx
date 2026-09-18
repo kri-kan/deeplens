@@ -56,6 +56,41 @@ export const ProductDetailPage: React.FC = () => {
     });
   }, [targetId]);
 
+  const activeColorGroup = useMemo(() => {
+    if (!product?.colorGroups || product.colorGroups.length === 0) return null;
+    return (
+      product.colorGroups.find((cg) => cg.id === selectedColorGroupId) ||
+      product.colorGroups[0]
+    );
+  }, [product, selectedColorGroupId]);
+
+  const displayedMediaItems = useMemo<FullscreenMediaItem[]>(() => {
+    if (!product) return [];
+    if (product.mediaOrder && product.mediaOrder.length > 0) {
+      const items = selectedColorGroupId
+        ? product.mediaOrder.filter(
+            (m) => m.colorGroupId === selectedColorGroupId || m.isCommon || !m.colorGroupId
+          )
+        : product.mediaOrder;
+      const finalItems = items.length > 0 ? items : product.mediaOrder;
+      return finalItems.map((m) => ({
+        id: m.id,
+        url: m.url,
+        mediaType: m.mediaType ?? (/\.(mp4|mov|webm|m3u8)(\?.*)?$/i.test(m.url) ? 2 : 1),
+        title: m.title,
+      }));
+    }
+    return (product.images || []).map((url, idx) => ({
+      id: `img-${idx}`,
+      url,
+      mediaType: /\.(mp4|mov|webm|m3u8)(\?.*)?$/i.test(url) ? 2 : 1,
+    }));
+  }, [product, selectedColorGroupId]);
+
+  const displayedMedia = useMemo(() => {
+    return displayedMediaItems.map((m) => m.url);
+  }, [displayedMediaItems]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -97,41 +132,6 @@ export const ProductDetailPage: React.FC = () => {
       type: added ? "success" : "info",
     });
   };
-
-  const activeColorGroup = useMemo(() => {
-    if (!product?.colorGroups || product.colorGroups.length === 0) return null;
-    return (
-      product.colorGroups.find((cg) => cg.id === selectedColorGroupId) ||
-      product.colorGroups[0]
-    );
-  }, [product, selectedColorGroupId]);
-
-  const displayedMediaItems = useMemo<FullscreenMediaItem[]>(() => {
-    if (!product) return [];
-    if (product.mediaOrder && product.mediaOrder.length > 0) {
-      const items = selectedColorGroupId
-        ? product.mediaOrder.filter(
-            (m) => m.colorGroupId === selectedColorGroupId || m.isCommon || !m.colorGroupId
-          )
-        : product.mediaOrder;
-      const finalItems = items.length > 0 ? items : product.mediaOrder;
-      return finalItems.map((m) => ({
-        id: m.id,
-        url: m.url,
-        mediaType: m.mediaType ?? (/\.(mp4|mov|webm|m3u8)(\?.*)?$/i.test(m.url) ? 2 : 1),
-        title: m.title,
-      }));
-    }
-    return (product.images || []).map((url, idx) => ({
-      id: `img-${idx}`,
-      url,
-      mediaType: /\.(mp4|mov|webm|m3u8)(\?.*)?$/i.test(url) ? 2 : 1,
-    }));
-  }, [product, selectedColorGroupId]);
-
-  const displayedMedia = useMemo(() => {
-    return displayedMediaItems.map((m) => m.url);
-  }, [displayedMediaItems]);
 
   const handleSelectColorGroup = (colorGroupId: string) => {
     setSelectedColorGroupId(colorGroupId);
