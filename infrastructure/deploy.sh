@@ -14,7 +14,7 @@ RED='\033[0;31m'
 
 if [ -z "$SERVICE_NAME" ]; then
     echo -e "${RED}Error: Service name not specified.${NC}"
-    echo "Usage: ./deploy.sh [search-api | worker-service | store-api | reasoning-api | whatsapp-processor | vayyari-apk | vayyari-ota]"
+    echo "Usage: ./deploy.sh [search-api | worker-service | store-api | reasoning-api | whatsapp-processor | store-app | store-apk | store-apk-debug | store-apk-both | admin-apk | admin-ota]"
     exit 1
 fi
 

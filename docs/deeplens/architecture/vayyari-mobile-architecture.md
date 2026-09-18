@@ -1,201 +1,133 @@
 # Vayyari Mobile App Architecture & Release Guide
 
-**Comprehensive architecture reference for the Vayyari React Native / Expo Bare Workflow mobile application, standalone APK builds, and self-hosted OTA update pipelines.**
+**Comprehensive architecture reference for the DeepLens mobile applications: Vayyari Admin App and Vayyari Store App, standalone APK builds, and release distribution pipelines.**
 
-Last Updated: August 28, 2026  
-Related ADO Stories: #336, #340
+Last Updated: September 18, 2026  
+Related ADO Stories: #336, #340, #537, #542, #546, #552, #558, #563
 
 ---
 
-## 📱 Executive Overview
+## 📱 Executive Overview: Two Distinct Mobile Applications
 
-**Vayyari** is the mobile client for the DeepLens ecosystem. Designed for fast mobile catalog exploration, WhatsApp seller message grouping, and visual product discovery, Vayyari operates with a high degree of local autonomy while integrating directly with DeepLens backend microservices.
+The DeepLens mobile ecosystem consists of two specialized React Native / Expo bare-workflow applications:
 
 ```mermaid
 graph TD
-    subgraph "Vayyari Client (Android / React Native)"
-        UI[Material Design 3 UI / Paper]
-        Router[Expo Router v3 File-System Routing]
-        Auth[AuthContext & Secure Session]
-        Video[Singleton Video Player Engine]
-        Telemetry[Lazy-Loaded OpenTelemetry]
+    subgraph "1. Vayyari Admin App (src/vayyari)"
+        AdminUI[Admin UI / Tamagui & Paper]
+        AdminCuration[Catalog Curation & Swatch Matching]
+        AdminWhatsApp[WhatsApp Media Ingestion]
+        AdminRouter[Expo Router File Routing]
     end
 
-    subgraph "DeepLens Backend Infrastructure"
+    subgraph "2. Vayyari Customer Store App (src/store)"
+        StoreUI[Customer Storefront / Tamagui]
+        StoreCatalog[Handloom & Saree Catalog]
+        StoreCart[Cart & Checkout Flow]
+        StoreRouter[Expo Router / Fabric New Architecture]
+    end
+
+    subgraph "Backend Infrastructure"
         Gateway[Nginx Gateway :80]
-        IdentityApi[Identity API :5198]
-        SearchApi[Search & Catalog API :5000]
-        MinIO[(MinIO Object Storage :9000)]
+        IdentityApi[NextGen.Identity :5198]
+        SearchApi[DeepLens.SearchApi :5000]
+        StoreApi[Store.Api :5200]
+        MinIO[(MinIO Storage :9000)]
     end
 
-    subgraph "Distribution & OTA"
-        APKRepo[publish/admin-app/ APK Store]
-        OTABucket[MinIO: vayyari-updates Bucket]
+    subgraph "Centralized Distribution"
+        AdminAPK[publish/admin-app/ - vayyari-admin-*.apk]
+        StoreAPK[publish/vayyari/ - vayyari-store-*.apk]
+        StoreWeb[publish/vayyari/ - Web & PWA]
     end
 
-    UI --> Router
-    Router --> Auth
-    Auth -->|OAuth2 / JWT| IdentityApi
-    UI -->|Visual Search & Catalog| SearchApi
-    Video -->|HTTP 206 Streaming| SearchApi
-    Telemetry -->|OTel Tracing| Gateway
+    AdminUI --> AdminRouter
+    AdminRouter --> IdentityApi
+    AdminRouter --> SearchApi
+    AdminWhatsApp --> SearchApi
+    AdminCuration --> StoreApi
 
-    Gateway -->|Proxy /vayyari-updates/| OTABucket
-    APKRepo -->|Direct Sideload / ADB| UI
+    StoreUI --> StoreRouter
+    StoreRouter --> StoreApi
+    StoreCatalog --> StoreApi
+
+    AdminUI -->|Build & Publish| AdminAPK
+    StoreUI -->|Build & Publish| StoreAPK
+    StoreUI -->|Export Web| StoreWeb
 ```
+
+| Dimension | Vayyari Admin App | Vayyari Customer Store App |
+| :--- | :--- | :--- |
+| **Source Path** | `src/vayyari` | `src/store` |
+| **Target Audience** | Merchants, catalog curators, store admins | End customers browsing & purchasing sarees |
+| **Android Package ID** | `com.anonymous.vayyari` | `com.vayyari.store` |
+| **Framework Version** | Expo SDK 57, React Native 0.86.3, React 19.2.3 | Expo SDK 57, React Native 0.86.3, React 19.2.3 |
+| **Engine & Architecture** | Hermes Engine, New Architecture | Hermes Engine, New Architecture (Fabric) |
+| **UI Component System** | Tamagui 2.7+ & React Native Paper | Tamagui 2.7+, BottomSheet v5, Reanimated 4 |
+| **Publishing Location** | `publish/admin-app/` | `publish/vayyari/` |
+| **Supported APK Variants** | Release (`vayyari-admin-latest.apk`) | Release & Debug (`vayyari-store-latest.apk`, `vayyari-store-debug-latest.apk`) |
 
 ---
 
-## 🏗️ Architecture & Component Layers
+## 🏗️ Technical Architecture & Component Layers
 
 ### 1. Framework & Core Runtime
-- **Runtime**: React Native 0.76+ with the **Hermes JavaScript Engine**.
-- **Workflow**: **Expo Bare Workflow** (Expo SDK 54). All native configuration is retained in the source repository under `src/vayyari/android`.
-- **Styling & UI**: `react-native-paper` implementing Google Material Design 3.
-- **Theming**: Dynamic `Emerald` (Light) and `Emerald Nocturne` (Dark) theme engines with persistent system / user toggles.
+- **Runtime**: React Native 0.86.3 with the native **Hermes JavaScript Engine**.
+- **Workflow**: **Expo Bare Workflow** (Expo SDK 57) with full control over native `android/` directories.
+- **Hermes Setup**: Configured with explicit `hermesCommand` and `postinstall` symlinks to `node_modules/react-native/sdks/hermesc/linux64-bin/hermesc`.
+- **Memory Optimization**: Gradle build processes configured with `-Xmx6144m -XX:MaxMetaspaceSize=1024m` to prevent D8 dexer memory starvation.
 
 ### 2. Navigation & File-System Routing
-- **Routing Engine**: `expo-router` v3 using file-system conventions under `src/vayyari/app/`.
-- **Route Topology**:
-  - `app/_layout.tsx`: Root provider envelope (Paper ThemeProvider, AuthProvider, Stack Navigator, OpenTelemetry init, Splash screen lock).
-  - `app/(tabs)/`: Main tabbed experience (Catalog Home, Visual Search, WhatsApp Inbox, AI Assistant, Settings).
-  - `app/login.tsx`: Unauthenticated entry point.
-  - `app/modal.tsx`: Standardized modal overlay.
-  - `app/product/`: Deep-linked product detail and SKU inspector routes.
+- **Routing Engine**: `expo-router` v4+ using file-system conventions.
+- **Module Safety**: Native modules like `expo-media-library` are guarded with lazy runtime pre-checks (`requireOptionalNativeModule`) to prevent startup crashes when running on platforms without the native module.
 
-### 3. Authentication & API Client
-- **Session Management**: `src/vayyari/context/AuthContext.tsx` handles token persistence via `AsyncStorage` with an automated 1500ms safety timeout to prevent boot deadlock.
-- **Token Handling**: Communicates with `NextGen.Identity.Api` (`http://<HOST>:5198/connect/token`) via OAuth 2.0 Resource Owner Password Credentials and Refresh Token flows.
-- **Interceptors**: `src/vayyari/api/client.ts` automatically attaches `Bearer` JWT tokens and listens for `401 Unauthorized` responses to seamlessly trigger session invalidation.
-
-### 4. Media & Playback Engine (Singleton Pattern)
-- **Singleton Architecture**: To prevent OOM errors and native decoder leaks on mobile devices, screens must instantiate a single `expo-video` player per view and rebind sources dynamically during carousel swipes.
-- **Range Support**: Video streams are delivered from backend `MinioSeekableStream` instances supporting **HTTP 206 Partial Content**.
-- **Persistence**: Playback preferences (volume level, muted state) are synchronized directly to local `AsyncStorage`.
+### 3. Backend API Connectivity
+- **Vayyari Admin App**: Connects to `NextGen.Identity` (port 5198), `DeepLens.SearchApi` (port 5000), and `Store.Api` (port 5200).
+- **Vayyari Store App**: Connects to `Store.Api` (port 5200) for catalog discovery, product curation details, swatches, and cart operations.
+- **Cleartext & LAN Configuration**: Both apps configure `android:usesCleartextTraffic="true"` and network security configs allowing access to `192.168.0.170`, localhost, and Tailscale domain `krikanserver.taild227d9.ts.net`.
 
 ---
 
-## 🔨 Standalone Android APK Build Process
+## 🔨 Android APK Build Pipelines
 
-Vayyari produces standalone release APKs directly on the Linux VM without requiring external cloud build services (like EAS Build).
+### 1. Store App Pipeline (`scripts/store/build-store-apk.sh`)
+- Standalone multi-variant build script supporting:
+  - `--release`: Compiles optimized release binary (`vayyari-store-latest.apk`, 34MB).
+  - `--debug`: Compiles debuggable binary (`vayyari-store-debug-latest.apk`, 64MB).
+  - `--both`: Compiles both variants sequentially.
+  - `--arch <arm64|universal|x86_64>`: Configurable ABI target.
+  - `--keep <N>`: Retains latest N historical builds (default: 3).
+  - `--clean`: Pre-cleans Gradle cache.
+  - `--install`: Auto-installs to connected device via ADB.
+- Integrated into `infrastructure/deploy.sh` (`store-apk`, `store-apk-debug`, `store-apk-both`) and `Makefile`.
 
-### Native Android Project Layout
-```
-src/vayyari/android/
-├── app/
-│   ├── build.gradle               # App module build config & dependencies
-│   ├── proguard-rules.pro         # Proguard/R8 rules
-│   └── src/main/
-│       ├── AndroidManifest.xml    # Permissions & cleartext traffic config
-│       └── java/com/anonymous/vayyari/MainActivity.kt
-├── build.gradle                   # Root Gradle script
-├── gradle/wrapper/                # Gradle wrapper binaries
-└── gradlew                        # Gradle execution wrapper
-```
-
-### Build Commands
-```bash
-# Using Makefile
-make build-vayyari-apk
-
-# Using deployment script
-./infrastructure/deploy.sh vayyari-apk
-
-# Direct Gradle execution
-cd src/vayyari/android
-./gradlew assembleRelease \
-  -x lint \
-  -x lintVitalAnalyzeRelease \
-  -Pandroid.enablePngCrunchInReleaseBuilds=false
-```
-
-### Critical Build Flags & Workarounds
-1. **`-Pandroid.enablePngCrunchInReleaseBuilds=false`**: AAPT2 includes a PNG crunching step during release builds. Several asset images (e.g., courier logos in the catalog) contain JPEG binary data despite having a `.png` filename extension. Disabling PNG crunching allows AAPT2 to bundle the raw assets without throwing a corrupt header build exception.
-2. **`-x lint -x lintVitalAnalyzeRelease`**: Bypasses full Android Lint analysis during local release builds to optimize CI/build times.
-3. **`usesCleartextTraffic="true"`**: Configured in `AndroidManifest.xml` to allow seamless local network and Tailscale HTTP communication to DeepLens APIs.
+### 2. Admin App Pipeline (`infrastructure/deploy.sh`)
+- Automated Gradle release packaging for `src/vayyari`:
+  ```bash
+  ./gradlew assembleRelease -x lint -x lintVitalAnalyzeRelease -Pandroid.enablePngCrunchInReleaseBuilds=false
+  ```
+- Output published to `publish/admin-app/` with SHA256 checksums and 3-version historical pruning.
 
 ---
 
-## 🗄️ APK Distribution & Retention Policy
-
-### Distribution Directory (`publish/admin-app/`)
-Standalone release APKs are deployed to `publish/admin-app/` on the local VM (with backward-compatible symlinks at `publish/vayyari-admin/` and `publish/vayyari/`).
+## 🗄️ Distribution Directories & Checksum Verification
 
 ```
-publish/admin-app/
-├── README.md                            # Distribution guide & release notes
-├── vayyari-admin-latest.apk             # Pointer to latest successful release
-├── vayyari-latest.apk                   # Backward-compatible pointer
-└── vayyari-admin-v1.0.0-YYYYMMDD.apk    # Dated release builds
+publish/
+├── admin-app/
+│   ├── README.md
+│   ├── vayyari-admin-latest.apk
+│   ├── vayyari-admin-v1.0.0-*.apk
+│   └── ota/
+└── vayyari/
+    ├── README.md
+    ├── vayyari-store-latest.apk
+    ├── vayyari-store-latest.apk.sha256
+    ├── vayyari-store-v1.0.0-*.apk
+    ├── vayyari-store-debug-latest.apk
+    ├── vayyari-store-debug-latest.apk.sha256
+    ├── vayyari-store-debug-v1.0.0-*.apk
+    └── (Web & PWA bundles)
 ```
 
-### Retention Rules:
-- **Active Release**: `vayyari-admin-latest.apk` (and `vayyari-latest.apk`) is refreshed upon every successful build.
-- **Historical Builds**: Retains the **3 most recent historical versioned APKs**.
-- **Pruning**: Automated in `./infrastructure/deploy.sh vayyari-admin-apk` to ensure server storage is preserved.
-
----
-
-## 🌐 Self-Hosted OTA Updates Architecture (MinIO + Nginx)
-
-DeepLens features an automated OTA bundling and publishing pipeline using local MinIO object storage and the Nginx Gateway.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as Developer / CI
-    participant Script as push-update.sh
-    participant Expo as Expo CLI (expo export)
-    participant MinIO as MinIO (vayyari-updates)
-    participant Gateway as Nginx Gateway (:80)
-
-    Dev->>Script: ./push-update.sh --notes "Release summary"
-    Script->>Expo: npx expo export --platform android
-    Expo-->>Script: Hermes Bytecode (.hbc) & Hashed Assets (dist/)
-    Script->>MinIO: mc cp bundle.js -> vayyari-updates/bundles/v<TIMESTAMP>/bundle.js
-    Script->>MinIO: mc mirror dist/ -> vayyari-updates/bundles/v<TIMESTAMP>/
-    Script->>MinIO: Upload manifest.json -> vayyari-updates/manifest.json
-    Script->>MinIO: Prune old versions (keep newest 3)
-    MinIO-->>Gateway: Proxied via /vayyari-updates/
-    Gateway-->>Dev: Manifest Live at http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json
-```
-
-### MinIO Storage Topology (`vayyari-updates` Bucket)
-- **Bucket Policy**: `download` (Public read for assets and manifests).
-- **Directory Layout**:
-```
-vayyari-updates/
-├── manifest.json
-└── bundles/
-    ├── v202608280130/
-    │   ├── bundle.js              # Primary Hermes bytecode bundle
-    │   └── assets/                # Exported asset dictionary
-    ├── v202608271800/
-    └── v202608270900/
-```
-
-### Nginx Gateway Configuration (`/vayyari-updates/`)
-The gateway reverse proxies requests into MinIO:
-```nginx
-location /vayyari-updates/ {
-    proxy_pass http://minio:9000/vayyari-updates/;
-    proxy_set_header Host minio:9000;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-```
-
----
-
-## ⚖️ Architectural Decision Record: Expo Updates Protocol Deferral
-
-### Context
-Modern versions of Expo Updates (`expo-updates` v29+ / SDK 50+) enforce **Expo Updates Protocol v1**, which requires:
-1. Multipart/mixed HTTP responses containing structured protocol metadata headers (`expo-protocol-version: 1`, `expo-sfv-version: 0`).
-2. Code signing certificates or server-generated signatures in the manifest header.
-
-### Decision
-- Static file hosting in MinIO cannot natively construct signed multipart HTTP responses required by the protocol.
-- Consequently, runtime dynamic OTA polling is deferred (`"updates": { "enabled": false }` in `app.json`, and `useOTAUpdate()` operates as a stub).
-- App delivery is managed via standalone APK distribution (`publish/admin-app/vayyari-admin-latest.apk`).
-- `src/vayyari/push-update.sh` remains active as the canonical bundle exporter and MinIO artifact archiver, keeping versioned JS bundles ready for rollback analysis and future protocol proxy servers.
+Each APK artifact is accompanied by an audit-ready SHA256 checksum file and installation instructions.

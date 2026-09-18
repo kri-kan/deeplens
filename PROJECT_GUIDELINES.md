@@ -10,8 +10,9 @@ DeepLens is a high-performance visual search engine.
 
 ## 🚀 Deployment & Development
 - **Mandatory Deployment**: Any backend C# or service-layer changes **MUST** be finalized by running the deployment script: `./setupscripts/application/services/build-and-deploy.sh` or `./infrastructure/deploy.sh [service-name]`.
-- **Mobile Release Builds**: Standalone Android APKs are generated with `./infrastructure/deploy.sh vayyari-admin-apk` (or `make build-admin-apk`) and published to `publish/admin-app/` (with legacy symlink `publish/vayyari/`).
-- **Mobile OTA Publishing**: Bundle updates are exported and mirrored to MinIO bucket `vayyari-updates` via `./infrastructure/deploy.sh vayyari-admin-ota` (or `make push-vayyari-ota`).
+- **Vayyari Admin Mobile Builds**: Standalone Android APKs are generated with `./infrastructure/deploy.sh admin-apk` (or `make admin-apk`) and published directly to `publish/admin-app/`.
+- **Vayyari Store Mobile Builds**: Release & Debug Android APKs are generated with `./infrastructure/deploy.sh store-apk` / `store-apk-debug` / `store-apk-both` (or `make store-apk`, `make store-debug-apk`, `make store-apk-both`) and published to `publish/vayyari/`.
+- **Mobile OTA Publishing**: Bundle updates are exported and mirrored to MinIO bucket `vayyari-updates` via `./infrastructure/deploy.sh admin-ota` (or `make push-vayyari-ota`).
 - **Async First**: Image/Video processing should always be handled via **Kafka** topics.
 - **Observability**: Use `OpenTelemetry` for tracing. Every API request should propagate trace context.
 
@@ -46,6 +47,7 @@ DeepLens is a high-performance visual search engine.
 - **Deduplication**: Preserve content-addressable storage (PHash) logic when modifying media ingestion.
 - **Video playback (Vayyari Admin)**: Singleton `expo-video` player — rebind source, never create new instances per card.
 - **Android Gradle Builds (Vayyari Admin)**: Always supply `-Pandroid.enablePngCrunchInReleaseBuilds=false` and `-x lint -x lintVitalAnalyzeRelease` during release APK builds to prevent AAPT2 PNG crunch errors on mismatched image headers.
+- **Android Gradle Builds (Vayyari Store)**: Build via `scripts/store/build-store-apk.sh` (or `make store-apk`, `make store-debug-apk`). Requires Hermes compiler symlink (`npm run postinstall`) and Gradle 9.3.1 with 6GB heap. Publishes to `publish/vayyari/`.
 - **OTA Updates (Vayyari Admin)**: JavaScript bundle updates must be pushed via `src/vayyari/push-update.sh` to update MinIO `vayyari-updates/manifest.json`.
 
 ### Project-Specific Skills
