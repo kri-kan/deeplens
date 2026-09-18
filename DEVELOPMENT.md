@@ -21,13 +21,13 @@ You can also run the deployment script directly:
 ```bash
 ./infrastructure/deploy.sh [service-name]
 ```
-Valid service names: `identity-api`, `search-api`, `worker-service`, `whatsapp-processor`, `reasoning-api`, `vayyari-apk`, `vayyari-ota`.
+Valid service names: `identity-api`, `search-api`, `worker-service`, `store-api`, `whatsapp-processor`, `reasoning-api`, `store-app`, `store-apk`, `store-apk-debug`, `store-apk-both`, `admin-apk`, `admin-ota`.
 
 ### Why use these scripts?
 
 The deployment script (`infrastructure/deploy.sh`) automates:
-1. Building/publishing the project (`dotnet publish`, `npm run build:all`, copying Python source files for `reasoning-api`, Gradle release build for `vayyari-admin-apk`, or Expo bundle export and MinIO mirror for `vayyari-admin-ota`).
-2. Copying binaries/files to the correct bind-mounted hosting path (e.g. `/data/hosting/*`, or `publish/admin-app/` for APKs).
+1. Building/publishing the project (`dotnet publish`, `npm run build:all`, copying Python source files for `reasoning-api`, Gradle release/debug builds for `store-apk` and `admin-apk`, or Expo bundle export and MinIO mirror for `admin-ota`).
+2. Copying binaries/files to the correct bind-mounted hosting path (`/data/hosting/*`, `publish/admin-app/` for Admin APKs, or `publish/vayyari/` for Store APKs and web bundles).
 3. Restarting the appropriate Docker container via `docker compose` (for containerized backend services).
 
 This ensures critical configuration files (like `appsettings.json` or model dependencies) located in the hosting paths are preserved and not accidentally overwritten during deployments. For Python services like `reasoning-api`, the bind-mounted host volume ensures local updates are immediately reflected and uvicorn hot-reloads the changes when the container restarts.
@@ -90,10 +90,9 @@ cd src/vayyari/android
 ```
 - **AAPT2 Flag**: `-Pandroid.enablePngCrunchInReleaseBuilds=false` is mandatory to prevent asset packaging errors caused by JPEG courier logos with `.png` file extensions.
 - **Lint flags**: Skips non-critical release lint checks to ensure fast local compilation.
-- **Output Destination**: Produced APKs are copied to `publish/admin-app/` (with symlinks at `publish/vayyari-admin/` and `publish/vayyari/`):
+- **Output Destination**: Produced APKs are copied to `publish/admin-app/`:
   - `publish/admin-app/vayyari-admin-v1.0.0-YYYYMMDD_HHMMSS.apk` (versioned timestamp build)
   - `publish/admin-app/vayyari-admin-latest.apk` (latest release pointer)
-  - `publish/admin-app/vayyari-latest.apk` (backward-compatible pointer)
 - **Retention Policy**: The script automatically retains the **newest 3 versioned APKs** and prunes older builds.
 
 ---
@@ -116,4 +115,49 @@ cd src/vayyari
    `http://krikanserver.taild227d9.ts.net/vayyari-updates/manifest.json`
 4. **Bundle Retention**: `push-update.sh` keeps the newest 3 bundle snapshots in MinIO and cleans up older releases.
 5. **Updates Protocol Deferral**: Runtime `expo-updates` auto-polling is deferred because MinIO static hosting cannot provide dynamic multipart signed responses required by Expo Updates Protocol v1. Currently, updates are distributed as standalone APKs (`publish/admin-app/vayyari-admin-latest.apk`) while MinIO maintains version archival.
+
+---
+
+## Vayyari Customer Store App (`src/store`)
+
+The customer-facing e-commerce storefront for authentic sarees and handlooms.
+
+### Native Android APK Builds (`publish/vayyari/`)
+
+The Store App supports building both Release and Debug APKs locally:
+
+```bash
+# Build Release APK
+make store-apk
+# Or: ./infrastructure/deploy.sh store-apk
+# Or: ./scripts/store/build-store-apk.sh --release
+
+# Build Debug APK
+make store-debug-apk
+# Or: ./infrastructure/deploy.sh store-apk-debug
+# Or: ./scripts/store/build-store-apk.sh --debug
+
+# Build Both Release and Debug APKs
+make store-apk-both
+# Or: ./infrastructure/deploy.sh store-apk-both
+# Or: ./scripts/store/build-store-apk.sh --both
+```
+
+#### Build Pipeline Script Options (`scripts/store/build-store-apk.sh`):
+- `--release`: Compiles Release APK (`publish/vayyari/vayyari-store-latest.apk`, ~34MB)
+- `--debug`: Compiles Debug APK (`publish/vayyari/vayyari-store-debug-latest.apk`, ~64MB)
+- `--both`: Compiles both variants sequentially
+- `--arch <arm64|universal|x86_64>`: Target architecture (default: `arm64`)
+- `--keep <N>`: Retain latest N historical versions (default: `3`)
+- `--clean`: Runs `./gradlew clean` before build
+- `--install`: Auto-installs to connected device via ADB
+
+#### Web / PWA Bundle Publishing:
+```bash
+make store-app
+# Or: ./infrastructure/deploy.sh store-app
+# Or: ./scripts/store/publish-store.sh
+```
+Exports static HTML, service worker, and web JS bundles to `publish/vayyari/`.
+
 
