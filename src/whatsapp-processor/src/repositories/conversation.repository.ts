@@ -441,37 +441,70 @@ export class ConversationRepository {
             query = `
                 ${chatJidSubquery},
                 target_ts_lookup AS (
-                    SELECT MIN(timestamp) as ts
+                    SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) AND group_id = $4
                     UNION ALL
-                    SELECT EXTRACT(EPOCH FROM last_message_at)::bigint as ts
+                    SELECT EXTRACT(EPOCH FROM last_message_at)::bigint as min_ts, EXTRACT(EPOCH FROM last_message_at)::bigint as max_ts
                     FROM wa.message_groups
                     WHERE group_id = $4
                     UNION ALL
                     SELECT CASE 
                         WHEN $4 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($4, '_', 2)::bigint 
                         ELSE NULL 
-                    END as ts
+                    END as min_ts,
+                    CASE 
+                        WHEN $4 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($4, '_', 2)::bigint 
+                        ELSE NULL 
+                    END as max_ts
                 ),
-                target_msg AS (
-                    SELECT MIN(ts) as min_ts FROM target_ts_lookup WHERE ts IS NOT NULL AND ts > 0
+                target_bounds AS (
+                    SELECT MIN(min_ts) as min_ts, MAX(max_ts) as max_ts 
+                    FROM target_ts_lookup 
+                    WHERE min_ts IS NOT NULL AND min_ts > 0
                 ),
-                count_newer AS (
-                    SELECT COUNT(*) as cnt
+                group_msgs AS (
+                    SELECT ${selectFields}
                     FROM wa.messages
-                    WHERE jid IN (SELECT jid FROM chat_jids)
-                      AND timestamp >= (SELECT min_ts FROM target_msg)
+                    WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                      AND group_id = $4
+                ),
+                older_msgs AS (
+                    SELECT ${selectFields}
+                    FROM wa.messages
+                    WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                      AND timestamp < (SELECT min_ts FROM target_bounds)
+                      AND (group_id != $4 OR group_id IS NULL)
+                    ORDER BY timestamp DESC
+                    LIMIT 25
+                ),
+                newer_msgs AS (
+                    SELECT ${selectFields}
+                    FROM wa.messages
+                    WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                      AND timestamp > (SELECT max_ts FROM target_bounds)
+                      AND (group_id != $4 OR group_id IS NULL)
+                    ORDER BY timestamp ASC
+                    LIMIT 25
+                ),
+                fallback_msgs AS (
+                    SELECT ${selectFields}
+                    FROM wa.messages
+                    WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                      AND (SELECT min_ts FROM target_bounds) IS NULL
+                    ORDER BY timestamp DESC
+                    LIMIT $2
                 )
-                SELECT ${selectFields}
-                FROM wa.messages
-                WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
+                SELECT * FROM (
+                    SELECT * FROM group_msgs
+                    UNION ALL
+                    SELECT * FROM older_msgs
+                    UNION ALL
+                    SELECT * FROM newer_msgs
+                    UNION ALL
+                    SELECT * FROM fallback_msgs
+                ) combined
                 ORDER BY timestamp DESC
-                LIMIT CASE 
-                    WHEN (SELECT min_ts FROM target_msg) IS NOT NULL THEN GREATEST($2, (SELECT cnt FROM count_newer) + 20)
-                    ELSE $2
-                END
-                OFFSET $3
             `;
         } else {
             query = `

@@ -673,5 +673,41 @@ export function createGroupReviewRoutes(): Router {
         }
     });
 
+    /**
+     * POST /api/group-review/:jid/rezone
+     * Triggers complete re-zoning of a chat adhering strictly to grouping_config (e.g. sticker-first)
+     */
+    router.post('/group-review/:jid/rezone', async (req: Request, res: Response) => {
+        const { jid } = req.params;
+        const client = getWhatsAppDbClient();
+        if (!client) {
+            return res.status(500).json({ success: false, message: 'Database client not available' });
+        }
+
+        try {
+            const { zoningService } = await import('../services/zoning.service');
+            const stats = await zoningService.rezoneChat(jid, client);
+
+            // Re-evaluate newly formed product groups
+            const groupsRes = await client.query(
+                `SELECT DISTINCT group_id FROM wa.messages WHERE jid = $1 AND group_id LIKE 'product_%'`,
+                [jid]
+            );
+            for (const row of groupsRes.rows) {
+                await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
+            }
+
+            return res.json({
+                success: true,
+                jid,
+                ...stats,
+                message: 'Chat re-zoning completed successfully'
+            });
+        } catch (err: any) {
+            logger.error({ err: err.message, jid }, 'Failed to rezone chat');
+            return res.status(500).json({ success: false, error: err.message });
+        }
+    });
+
     return router;
 }

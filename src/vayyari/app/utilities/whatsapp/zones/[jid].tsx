@@ -164,14 +164,41 @@ export default function GroupZoneViewScreen() {
 
   const handleMerge = async (groupId: string, targetGroupId: string, statusA: string, statusB: string) => {
     const triggerMerge = async () => {
+      // 1. Snapshot previous groups for rollback
+      const previousGroups = [...groups];
+
+      // 2. Optimistic Update: Immediately merge target and source in React state
+      const sourceGroup = groups.find(g => g.groupId === groupId);
+      setGroups(prev =>
+        prev
+          .filter(g => g.groupId !== groupId)
+          .map(g => {
+            if (g.groupId === targetGroupId) {
+              return {
+                ...g,
+                mediaCount: (g.mediaCount || 0) + (sourceGroup?.mediaCount || 0),
+                textCount: (g.textCount || 0) + (sourceGroup?.textCount || 0),
+                messages: [
+                  ...(g.messages || []),
+                  ...(sourceGroup?.messages || []).map((m: any) => ({ ...m, groupId: targetGroupId }))
+                ]
+              };
+            }
+            return g;
+          })
+      );
+
+      // 3. Fire API in background without blocking or full-screen loading
       try {
-        setLoading(true);
         await waProcessorService.mergeGroupZones(groupId, targetGroupId);
-        Alert.alert('Success', 'Groups merged successfully');
-        fetchGroups();
+        // Silent sync
+        if (jid) {
+          const data = await waProcessorService.fetchGroupsReview(decodeURIComponent(jid));
+          setGroups(data);
+        }
       } catch (err: any) {
+        setGroups(previousGroups);
         Alert.alert('Error', err?.message ?? 'Failed to merge groups');
-        setLoading(false);
       }
     };
 
@@ -205,7 +232,7 @@ export default function GroupZoneViewScreen() {
     }
   };
 
-  if (loading && !refreshing) {
+  if (loading && !refreshing && groups.length === 0) {
     return (
       <ScreenWrapper title="Product Zones">
         <ActivityIndicator style={{ marginTop: 40 }} />

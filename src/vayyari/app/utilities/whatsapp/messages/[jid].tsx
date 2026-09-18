@@ -101,6 +101,7 @@ const ChatMediaItem = React.memo(({
           source={{ uri: msg.mediaUrl }} 
           style={{ width: '100%', height: '100%' }} 
           contentFit="contain" 
+          cachePolicy="memory-disk"
           onError={() => setLoadFailed(true)}
           transition={100}
         />
@@ -143,6 +144,7 @@ const ChatMediaItem = React.memo(({
             source={{ uri: msg.mediaUrl! }} 
             style={StyleSheet.absoluteFill} 
             contentFit="cover"
+            cachePolicy="memory-disk"
             onError={() => setLoadFailed(true)}
           />
           <IconButton icon="play-circle" size={size > 100 ? 40 : 20} iconColor="#fff" style={{ margin: 0 }} />
@@ -152,6 +154,7 @@ const ChatMediaItem = React.memo(({
           source={{ uri: msg.mediaUrl! }} 
           style={{ width: '100%', height: '100%' }} 
           contentFit="cover" 
+          cachePolicy="memory-disk"
           onError={() => setLoadFailed(true)}
           transition={100}
         />
@@ -196,6 +199,8 @@ export default function FullMessageBrowser() {
 
   const {
     messages,
+    setMessages,
+    updateMessageGroup,
     loading: timelineLoading,
     loadingOlder,
     loadingNewer,
@@ -231,9 +236,9 @@ export default function FullMessageBrowser() {
   const flatListRef = useRef<FlatList>(null);
   const hasScrolledToTargetRef = useRef(false);
 
-  const fetchMeta = useCallback(async () => {
+  const fetchMeta = useCallback(async (showLoading = false) => {
     if (!jid) return;
-    setMetaLoading(true);
+    if (showLoading) setMetaLoading(true);
     try {
       const cleanJid = decodeURIComponent(jid);
       const [statsData, groupsData] = await Promise.all([
@@ -245,17 +250,17 @@ export default function FullMessageBrowser() {
     } catch (err: any) {
       console.error('Fetch meta error:', err);
     } finally {
-      setMetaLoading(false);
+      if (showLoading) setMetaLoading(false);
     }
   }, [jid]);
 
   useEffect(() => {
-    fetchMeta();
+    fetchMeta(true);
   }, [fetchMeta]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refreshTimeline(), fetchMeta()]);
+    await Promise.all([refreshTimeline(false), fetchMeta(false)]);
     setRefreshing(false);
   };
 
@@ -419,14 +424,44 @@ export default function FullMessageBrowser() {
     const prevGroup = groups[groupIndex + 1];
 
     const triggerMerge = async () => {
+      // 1. Snapshot previous state for rollback on error
+      const previousMessages = [...messages];
+      const previousGroups = [...groups];
+
+      // 2. Optimistic Update: Immediately update in-memory React state
+      const targetGroupId = prevGroup.groupId;
+      updateMessageGroup(groupId, targetGroupId);
+
+      const sourceGroup = groups.find(g => g.groupId === groupId);
+      setGroups(prev =>
+        prev
+          .filter(g => g.groupId !== groupId)
+          .map(g => {
+            if (g.groupId === targetGroupId) {
+              return {
+                ...g,
+                mediaCount: (g.mediaCount || 0) + (sourceGroup?.mediaCount || 0),
+                textCount: (g.textCount || 0) + (sourceGroup?.textCount || 0),
+                messages: [
+                  ...(g.messages || []),
+                  ...(sourceGroup?.messages || []).map((m: any) => ({ ...m, groupId: targetGroupId }))
+                ]
+              };
+            }
+            return g;
+          })
+      );
+
+      // 3. Fire API in background without blocking network round-trip or screen refresh
       try {
-        setRefreshing(true);
-        await waProcessorService.mergeGroupZones(groupId, prevGroup.groupId);
-        Alert.alert('Success', 'Groups merged successfully');
-        await onRefresh();
+        await waProcessorService.mergeGroupZones(groupId, targetGroupId);
+        // Silently sync server metadata in background without full UI reload
+        fetchMeta(false);
       } catch (err: any) {
+        // Rollback state on error
+        setMessages(previousMessages);
+        setGroups(previousGroups);
         Alert.alert('Error', err?.message ?? 'Failed to merge groups');
-        setRefreshing(false);
       }
     };
 
@@ -564,9 +599,9 @@ export default function FullMessageBrowser() {
     hasScrolledToTargetRef.current = false;
   }, [targetKey]);
 
-  // Initial scroll anchoring to target message: Wait until BOTH messages and meta/groups are loaded
+  // Initial scroll anchoring to target message: trigger as soon as messages are loaded and target is located
   useEffect(() => {
-    if (timelineLoading || metaLoading || groupedMessages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
+    if (timelineLoading || groupedMessages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
     if (hasScrolledToTargetRef.current) return;
 
     const targetIndex = findTargetIndex();
@@ -582,7 +617,7 @@ export default function FullMessageBrowser() {
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [timelineLoading, metaLoading, groupedMessages, highlightGroupId, targetMessageId, findTargetIndex, scrollToTarget]);
+  }, [timelineLoading, groupedMessages, highlightGroupId, targetMessageId, findTargetIndex, scrollToTarget]);
 
   // Re-anchor if zoningMode is toggled or groups change while targeting is active
   useEffect(() => {
@@ -1099,7 +1134,7 @@ export default function FullMessageBrowser() {
           resizeMode="repeat"
         />
         
-        {timelineLoading || metaLoading ? (
+        {(timelineLoading || metaLoading) && messages.length === 0 ? (
           <ActivityIndicator style={{ flex: 1 }} color="#25D366" />
         ) : (
           <View style={{ flex: 1 }}>
@@ -1115,7 +1150,7 @@ export default function FullMessageBrowser() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               ListFooterComponent={loadingOlder ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
               ListHeaderComponent={loadingNewer ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
-              initialNumToRender={(highlightGroupId || targetMessageId) && groupedMessages.length > 0 ? Math.max(100, groupedMessages.length) : 25}
+              initialNumToRender={(highlightGroupId || targetMessageId) && groupedMessages.length > 0 ? Math.min(25, groupedMessages.length) : 25}
               maxToRenderPerBatch={30}
               windowSize={15}
               removeClippedSubviews={Platform.OS === 'android'}
