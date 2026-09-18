@@ -80,7 +80,8 @@ export const Stage1MediaQualification: Story = {
 export const Stage2SwatchCreation: Story = {
   name: '2. Stage 2: Swatch Creation & Count Stepper',
   args: {
-    initialStage: 'swatch_creation',
+    initialScreen: 'qualify_and_group',
+    initialStage: 'swatches',
     initialShowPreview: false,
   },
 };
@@ -92,7 +93,8 @@ export const Stage2SwatchCreation: Story = {
 export const Stage2TwoDigitSwatchCount: Story = {
   name: '2b. Stage 2: Two-Digit Swatch Count (12 Colorways)',
   args: {
-    initialStage: 'swatch_creation',
+    initialScreen: 'qualify_and_group',
+    initialStage: 'swatches',
     initialColorGroups: Array.from({ length: 12 }, (_, i) => ({
       id: `cg-${i + 1}`,
       name: `Colorway ${i + 1}`,
@@ -100,6 +102,8 @@ export const Stage2TwoDigitSwatchCount: Story = {
       template: 'contrast-border',
       slotA: i % 2 === 0 ? '#1B4D3E' : '#C0392B',
       slotB: '#D4AF37',
+      colors: [i % 2 === 0 ? '#1B4D3E' : '#C0392B', '#D4AF37'],
+      colorCount: 2,
       isAvailable: true,
     })),
     initialShowPreview: false,
@@ -107,12 +111,26 @@ export const Stage2TwoDigitSwatchCount: Story = {
 };
 
 /**
- * 3. Stage 3: Swatch Heads, Common [C] & Media Assignment:
+ * 2c. Stage 2: Configured Swatches Row (Direct Tap/Long-Press):
+ * Demonstrates the horizontal Configured Swatches row rendered below the template tiles & stepper.
+ * Merchandiser can tap or long-press any swatch directly in Stage 2 to customize colors.
+ */
+export const Stage2cConfiguredSwatchesRow: Story = {
+  name: '2c. Stage 2: Configured Swatches Row (Direct Tap / Long-Press)',
+  args: {
+    initialScreen: 'qualify_and_group',
+    initialStage: 'swatches',
+    initialShowPreview: false,
+  },
+};
+
+/**
+ * 3. Stage 3: Swatch Heads, Common [C] & Frameless Bottom Nav:
  * Horizontal swipeable swatch heads with default [C] Common swatch, overlay count badges,
- * assigning ungrouped media to swatches, and long-press/color picker.
+ * responsive 250ms long-press, and clean frameless bottom nav links (‹ Swatches and Save ✓).
  */
 export const Stage3GroupingAndCommon: Story = {
-  name: '3. Qualify & Group: Stage 3 Swatch Heads & Grouping (Save in Right)',
+  name: '3. Qualify & Group: Stage 3 Swatch Heads & Frameless Bottom Nav',
   args: {
     initialScreen: 'qualify_and_group',
     initialStage: 'grouping',
@@ -121,13 +139,14 @@ export const Stage3GroupingAndCommon: Story = {
 };
 
 /**
- * 3b. Long-Press Color Assignment Picker Popup:
- * Interactive modal for assigning N colors based on swatch template (Slot A Body 80%, Slot B Zari 20%),
- * auto-extracted K-Means centroids, 32 Oklch ethnic anchors, and live swatch preview dot.
+ * 3b. Color Assignment Picker (2 Slots: Contrast Border, Fixed Limit):
+ * Demonstrates strict slot limit for Contrast Border: exactly 2 slots (Body 80%, Border 20%).
+ * Notice + Slot button is hidden and slot removal is disabled.
  */
 export const Stage3bColorPickerModalOpen: Story = {
-  name: '3b. Long-Press Color Assignment Picker (2 Slots: Body & Zari)',
+  name: '3b. Color Picker: Contrast Border (2 Slots Fixed, Body & Border)',
   args: {
+    initialScreen: 'qualify_and_group',
     initialStage: 'grouping',
     initialColorPickerGroupId: 'cg-emerald',
     initialShowPreview: false,
@@ -135,14 +154,46 @@ export const Stage3bColorPickerModalOpen: Story = {
 };
 
 /**
- * 3c. Color Assignment Picker (3 Slots: Peacock 3-Color Pie):
- * Demonstrates dynamic N-slot architecture for 3-color pie multi-shade swatches with square slot tiles.
+ * 3c. Color Assignment Picker (3 Slots: Peacock 3-Color Pie, Variable Limit 2-4):
+ * Demonstrates variable slot limits for Multi-Shade: 3 wedges (33% each).
+ * Allows adding up to 4 slots (+ Slot is visible) or removing down to 2 slots.
  */
 export const Stage3cThreeSlotColorPickerModalOpen: Story = {
-  name: '3c. Color Assignment Picker (3 Slots: Peacock 3-Color Pie)',
+  name: '3c. Color Picker: Multi-Shade Split (3 Wedges, Limit: 2–4)',
   args: {
+    initialScreen: 'qualify_and_group',
     initialStage: 'grouping',
     initialColorPickerGroupId: 'cg-peacock',
+    initialShowPreview: false,
+  },
+};
+
+/**
+ * 3d. Color Assignment Picker (1 Slot: Solid Hue, Fixed Limit):
+ * Demonstrates strict 1-slot limit for Solid swatches: Primary (100%).
+ * Notice + Slot is completely hidden and slot removal is disabled.
+ */
+export const Stage3dSolidColorPickerModalOpen: Story = {
+  name: '3d. Color Picker: Solid Hue (1 Slot Fixed, Primary 100%)',
+  args: {
+    initialScreen: 'qualify_and_group',
+    initialStage: 'grouping',
+    initialColorPickerGroupId: 'cg-royal',
+    initialShowPreview: false,
+  },
+};
+
+/**
+ * 3e. Color Assignment Picker (4 Slots: Quadrant Split, Max Limit Reached):
+ * Demonstrates 4-quadrant split multi-shade swatch (25% each).
+ * Because the 4-slot limit is reached, the + Slot button is automatically hidden.
+ */
+export const Stage3eFourSlotQuadColorPickerModalOpen: Story = {
+  name: '3e. Color Picker: 4-Quadrant Split (Max Limit 4 Reached)',
+  args: {
+    initialScreen: 'qualify_and_group',
+    initialStage: 'grouping',
+    initialColorPickerGroupId: 'cg-quad',
     initialShowPreview: false,
   },
 };

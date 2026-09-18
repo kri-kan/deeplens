@@ -23,7 +23,25 @@ public record StoreMediaItemDto(
     [property: JsonPropertyName("mediaType")] int MediaType,
     [property: JsonPropertyName("order")] int Order,
     [property: JsonPropertyName("dwellSeconds")] double DwellSeconds,
-    [property: JsonPropertyName("isCover")] bool IsCover
+    [property: JsonPropertyName("isCover")] bool IsCover,
+    [property: JsonPropertyName("colorGroupId")] string? ColorGroupId = null,
+    [property: JsonPropertyName("isQualified")] bool? IsQualified = null,
+    [property: JsonPropertyName("isCommon")] bool? IsCommon = null,
+    [property: JsonPropertyName("title")] string? Title = null
+);
+
+public record StoreColorGroupDto(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("colorwayCode")] string? ColorwayCode = null,
+    [property: JsonPropertyName("template")] string? Template = null,
+    [property: JsonPropertyName("slotA")] string? SlotA = null,
+    [property: JsonPropertyName("slotB")] string? SlotB = null,
+    [property: JsonPropertyName("slotC")] string? SlotC = null,
+    [property: JsonPropertyName("slotD")] string? SlotD = null,
+    [property: JsonPropertyName("colors")] List<string>? Colors = null,
+    [property: JsonPropertyName("colorCount")] int? ColorCount = null,
+    [property: JsonPropertyName("isAvailable")] bool? IsAvailable = null
 );
 
 public record StoreProductDto(
@@ -42,6 +60,8 @@ public record StoreProductDto(
     [property: JsonPropertyName("colorGroupId")] Guid? ColorGroupId,
     [property: JsonPropertyName("colorwayName")] string ColorwayName,
     [property: JsonPropertyName("colorHex")] string ColorHex,
+    [property: JsonPropertyName("swatchTemplate")] string? SwatchTemplate,
+    [property: JsonPropertyName("colorGroups")] List<StoreColorGroupDto>? ColorGroups,
     [property: JsonPropertyName("mediaOrder")] List<StoreMediaItemDto> MediaOrder,
     [property: JsonPropertyName("tags")] List<string> Tags,
     [property: JsonPropertyName("isPublished")] bool IsPublished,
@@ -70,9 +90,12 @@ public record UpdateCurationRequest(
     [property: JsonPropertyName("stockQuantity")] int? StockQuantity,
     [property: JsonPropertyName("mrp")] decimal? Mrp,
     [property: JsonPropertyName("salePrice")] decimal? SalePrice,
+    [property: JsonPropertyName("description")] string? Description,
     [property: JsonPropertyName("colorGroupId")] Guid? ColorGroupId,
     [property: JsonPropertyName("colorwayName")] string? ColorwayName,
     [property: JsonPropertyName("colorHex")] string? ColorHex,
+    [property: JsonPropertyName("swatchTemplate")] string? SwatchTemplate,
+    [property: JsonPropertyName("colorGroups")] List<StoreColorGroupDto>? ColorGroups,
     [property: JsonPropertyName("mediaOrder")] List<StoreMediaItemDto>? MediaOrder,
     [property: JsonPropertyName("tags")] List<string>? Tags
 );

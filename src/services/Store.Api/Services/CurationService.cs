@@ -1,174 +1,202 @@
-using System.Collections.Concurrent;
 using System.Text.Json;
+using Dapper;
+using Npgsql;
 using Store.Api.Models;
 
 namespace Store.Api.Services;
 
 public class CurationService : ICurationService
 {
-    private static readonly ConcurrentDictionary<Guid, StoreProductDto> _products = new();
-    private static readonly ConcurrentDictionary<Guid, List<StoreProductAuditDto>> _auditLogs = new();
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private readonly string _connectionString;
+    private readonly IMediaStorageService _mediaStorage;
+    private readonly IStoreEventPublisher _eventPublisher;
     private readonly ILogger<CurationService> _logger;
 
-    public CurationService(ILogger<CurationService> logger)
+    public CurationService(
+        IConfiguration config,
+        IMediaStorageService mediaStorage,
+        IStoreEventPublisher eventPublisher,
+        ILogger<CurationService> logger)
     {
+        _mediaStorage = mediaStorage;
+        _eventPublisher = eventPublisher;
         _logger = logger;
-        try
-        {
-            if (_products.IsEmpty)
-            {
-                var candidatePaths = new[]
-                {
-                    Path.Combine(AppContext.BaseDirectory, "data", "in_store_curations.json"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "data", "in_store_curations.json"),
-                    "/home/krikan/productivity/deeplens/src/services/Store.Api/data/in_store_curations.json"
-                };
 
-                foreach (var path in candidatePaths)
-                {
-                    if (File.Exists(path))
-                    {
-                        var json = File.ReadAllText(path);
-                        var loaded = JsonSerializer.Deserialize<List<StoreProductDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        if (loaded != null && loaded.Count > 0)
-                        {
-                            foreach (var p in loaded)
-                            {
-                                _products[p.Id] = p;
-                            }
-                            _logger.LogInformation("Loaded {Count} curations from {Path}", loaded.Count, path);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not load persisted curations from disk");
-        }
+        _connectionString = config.GetConnectionString("StoreDb")
+            ?? config["ConnectionStrings:StoreDb"]
+            ?? config["ConnectionStrings__StoreDb"]
+            ?? "Host=192.168.0.170;Port=5432;Database=deeplens_store;Username=postgres;Password=Krikank1$";
     }
 
-    private void SaveToDisk()
+    public async Task<int> BatchPublishProductsAsync(List<PublishProductRequest> requests, string authorEmail)
     {
-        try
-        {
-            var dir = "/home/krikan/productivity/deeplens/src/services/Store.Api/data";
-            Directory.CreateDirectory(dir);
-            var file = Path.Combine(dir, "in_store_curations.json");
-            var json = JsonSerializer.Serialize(_products.Values.ToList(), new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(file, json);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not persist curations to disk");
-        }
-    }
+        if (requests == null || requests.Count == 0) return 0;
 
-    public Task<int> BatchPublishProductsAsync(List<PublishProductRequest> requests, string authorEmail)
-    {
         var count = 0;
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
         foreach (var req in requests)
         {
-            var existing = _products.Values.FirstOrDefault(p => p.VayyariProductId == req.VayyariProductId);
-            var id = existing?.Id ?? Guid.NewGuid();
+            // 1. Check existing product by vayyari_product_id
+            const string findSql = @"SELECT id, mrp, sale_price FROM products WHERE vayyari_product_id = @VayyariId LIMIT 1;";
+            var existing = await conn.QuerySingleOrDefaultAsync<(Guid Id, decimal Mrp, decimal SalePrice)?>(findSql, new { VayyariId = req.VayyariProductId });
+            var productId = existing?.Id ?? Guid.NewGuid();
 
-            var mediaList = req.MediaUrls.Select((url, idx) => new StoreMediaItemDto(
-                Id: $"m_{idx + 1}_{id:N}"[..12],
-                Url: url,
-                MediaType: 1,
-                Order: idx + 1,
-                DwellSeconds: 0.0,
-                IsCover: idx == 0
-            )).ToList();
+            // 2. Ingest media into MinIO store-assets & register in central media_assets
+            var mediaTasks = req.MediaUrls.Select((url, idx) => 
+                _mediaStorage.IngestProductMediaAsync(productId, req.ProductCode, url, idx + 1, idx == 0)
+            );
+            var mediaList = (await Task.WhenAll(mediaTasks)).ToList();
 
             var mrp = req.BaseCost > 0 ? Math.Round(req.BaseCost * 1.6m, 0) : 9999m;
             var salePrice = req.BaseCost > 0 ? Math.Round(req.BaseCost * 1.3m, 0) : 7999m;
 
-            var product = new StoreProductDto(
-                Id: id,
-                VayyariProductId: req.VayyariProductId,
-                ProductCode: req.ProductCode,
-                Title: req.Title,
-                Description: req.Description,
-                CategoryName: req.CategoryName,
-                Fabric: req.Fabric,
-                BaseCost: req.BaseCost,
-                Mrp: mrp,
-                SalePrice: salePrice,
-                LifecycleStatus: "available",
-                StockQuantity: 10,
-                ColorGroupId: null,
-                ColorwayName: "Standard",
-                ColorHex: "#1B4D3E",
-                MediaOrder: mediaList,
-                Tags: new List<string> { req.CategoryName, req.Fabric ?? "Ethnic" }.Where(t => !string.IsNullOrEmpty(t)).ToList(),
-                IsPublished: true,
-                PublishedAt: DateTime.UtcNow
-            );
+            var tags = new List<string> { req.CategoryName, req.Fabric ?? "Ethnic" }.Where(t => !string.IsNullOrEmpty(t)).ToList();
+            var mediaJson = JsonSerializer.Serialize(mediaList);
+            var tagsJson = JsonSerializer.Serialize(tags);
 
-            _products[id] = product;
+            // 3. Upsert product into deeplens_store.products
+            const string upsertSql = @"
+                INSERT INTO products (
+                    id, vayyari_product_id, product_code, title, description, category_name, fabric,
+                    base_cost, mrp, sale_price, lifecycle_status, stock_quantity,
+                    colorway_name, color_hex, swatch_template, media_order, tags, is_published, published_at,
+                    created_at, updated_at
+                ) VALUES (
+                    @Id, @VayyariProductId, @ProductCode, @Title, @Description, @CategoryName, @Fabric,
+                    @BaseCost, @Mrp, @SalePrice, 'available', 10,
+                    'Standard', '#1B4D3E', 'solid', @MediaOrder::jsonb, @Tags::jsonb, true, NOW(),
+                    NOW(), NOW()
+                )
+                ON CONFLICT (vayyari_product_id) DO UPDATE SET
+                    product_code = EXCLUDED.product_code,
+                    title = EXCLUDED.title,
+                    description = COALESCE(EXCLUDED.description, products.description),
+                    category_name = EXCLUDED.category_name,
+                    fabric = COALESCE(EXCLUDED.fabric, products.fabric),
+                    base_cost = EXCLUDED.base_cost,
+                    mrp = CASE WHEN products.mrp > 0 THEN products.mrp ELSE EXCLUDED.mrp END,
+                    sale_price = CASE WHEN products.sale_price > 0 THEN products.sale_price ELSE EXCLUDED.sale_price END,
+                    media_order = EXCLUDED.media_order,
+                    tags = EXCLUDED.tags,
+                    is_published = true,
+                    updated_at = NOW()
+                RETURNING id;";
 
-            var auditList = _auditLogs.GetOrAdd(id, _ => new List<StoreProductAuditDto>());
-            auditList.Add(new StoreProductAuditDto(
-                Id: Guid.NewGuid(),
-                StoreProductId: id,
-                ActionType: existing == null ? "created" : "re_synced",
-                FieldName: "publish",
-                OldValue: existing == null ? null : "synced",
-                NewValue: "published_in_store",
-                AuthorEmail: authorEmail,
-                CreatedAt: DateTime.UtcNow
-            ));
+            var savedId = await conn.ExecuteScalarAsync<Guid>(upsertSql, new
+            {
+                Id = productId,
+                VayyariProductId = req.VayyariProductId,
+                ProductCode = req.ProductCode,
+                Title = req.Title,
+                Description = req.Description,
+                CategoryName = req.CategoryName,
+                Fabric = req.Fabric,
+                BaseCost = req.BaseCost,
+                Mrp = mrp,
+                SalePrice = salePrice,
+                MediaOrder = mediaJson,
+                Tags = tagsJson
+            });
+
+            // 4. Record audit entry
+            const string auditSql = @"
+                INSERT INTO product_audits (
+                    id, product_id, action_type, field_name, old_value, new_value, author_email, created_at
+                ) VALUES (
+                    gen_random_uuid(), @ProductId, @ActionType, 'publish', @OldValue, 'published_in_store', @AuthorEmail, NOW()
+                );";
+
+            await conn.ExecuteAsync(auditSql, new
+            {
+                ProductId = savedId,
+                ActionType = existing == null ? "created" : "re_synced",
+                OldValue = existing == null ? null : "synced",
+                AuthorEmail = authorEmail
+            });
 
             count++;
         }
 
-        SaveToDisk();
-        _logger.LogInformation("Batch published {Count} products into Store by {Author}", count, authorEmail);
-        return Task.FromResult(count);
+        _logger.LogInformation("Batch published {Count} products directly into PostgreSQL & MinIO by {Author}", count, authorEmail);
+        return count;
     }
 
-    public Task<List<StoreProductDto>> GetInStoreProductsAsync(string? category = null, string? search = null, string? lifecycle = null)
+    public async Task<List<StoreProductDto>> GetInStoreProductsAsync(string? category = null, string? search = null, string? lifecycle = null)
     {
-        var query = _products.Values.AsEnumerable();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("All", StringComparison.OrdinalIgnoreCase))
+        var sql = @"
+            SELECT 
+                id, vayyari_product_id AS VayyariProductId, product_code AS ProductCode,
+                title, description, category_name AS CategoryName, fabric,
+                base_cost AS BaseCost, mrp, sale_price AS SalePrice,
+                lifecycle_status AS LifecycleStatus, stock_quantity AS StockQuantity,
+                color_group_id AS ColorGroupId, colorway_name AS ColorwayName, color_hex AS ColorHex,
+                swatch_template AS SwatchTemplate,
+                color_groups::text AS ColorGroupsJson,
+                media_order::text AS MediaOrderJson, tags::text AS TagsJson,
+                is_published AS IsPublished, published_at AS PublishedAt
+            FROM products
+            WHERE is_published = true
+              AND (@Category IS NULL OR LOWER(category_name) = LOWER(@Category) OR @Category = 'All')
+              AND (@Lifecycle IS NULL OR LOWER(lifecycle_status) = LOWER(@Lifecycle) OR @Lifecycle = 'All')
+              AND (@Search IS NULL OR 
+                   title ILIKE '%' || @Search || '%' OR 
+                   product_code ILIKE '%' || @Search || '%' OR 
+                   category_name ILIKE '%' || @Search || '%')
+            ORDER BY published_at DESC;";
+
+        var rows = await conn.QueryAsync<ProductDbRow>(sql, new
         {
-            query = query.Where(p => p.CategoryName.Equals(category, StringComparison.OrdinalIgnoreCase));
-        }
+            Category = string.IsNullOrWhiteSpace(category) ? null : category,
+            Lifecycle = string.IsNullOrWhiteSpace(lifecycle) ? null : lifecycle,
+            Search = string.IsNullOrWhiteSpace(search) ? null : search.Trim()
+        });
 
-        if (!string.IsNullOrWhiteSpace(lifecycle) && !lifecycle.Equals("All", StringComparison.OrdinalIgnoreCase))
-        {
-            query = query.Where(p => p.LifecycleStatus.Equals(lifecycle, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim();
-            query = query.Where(p =>
-                p.ProductCode.Contains(s, StringComparison.OrdinalIgnoreCase) ||
-                p.Title.Contains(s, StringComparison.OrdinalIgnoreCase) ||
-                p.CategoryName.Contains(s, StringComparison.OrdinalIgnoreCase)
-            );
-        }
-
-        return Task.FromResult(query.OrderByDescending(p => p.PublishedAt).ToList());
+        return rows.Select(MapToDto).ToList();
     }
 
-    public Task<StoreProductCurationDto?> GetProductCurationAsync(Guid id)
+    public async Task<StoreProductCurationDto?> GetProductCurationAsync(Guid id)
     {
-        if (!_products.TryGetValue(id, out var product))
-        {
-            // Also search by VayyariProductId
-            product = _products.Values.FirstOrDefault(p => p.VayyariProductId == id);
-            if (product == null) return Task.FromResult<StoreProductCurationDto?>(null);
-        }
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        _auditLogs.TryGetValue(product.Id, out var logs);
-        var auditHistory = logs ?? new List<StoreProductAuditDto>();
+        const string sql = @"
+            SELECT 
+                id, vayyari_product_id AS VayyariProductId, product_code AS ProductCode,
+                title, description, category_name AS CategoryName, fabric,
+                base_cost AS BaseCost, mrp, sale_price AS SalePrice,
+                lifecycle_status AS LifecycleStatus, stock_quantity AS StockQuantity,
+                color_group_id AS ColorGroupId, colorway_name AS ColorwayName, color_hex AS ColorHex,
+                swatch_template AS SwatchTemplate,
+                color_groups::text AS ColorGroupsJson,
+                media_order::text AS MediaOrderJson, tags::text AS TagsJson,
+                is_published AS IsPublished, published_at AS PublishedAt
+            FROM products
+            WHERE id = @Id OR vayyari_product_id = @Id
+            LIMIT 1;";
 
-        // Find smart dwell suggestions (e.g. if a non-cover image has higher dwell than cover)
+        var row = await conn.QuerySingleOrDefaultAsync<ProductDbRow>(sql, new { Id = id });
+        if (row == null) return null;
+
+        var product = MapToDto(row);
+
+        const string auditSql = @"
+            SELECT 
+                id, product_id AS StoreProductId, action_type AS ActionType,
+                field_name AS FieldName, old_value AS OldValue, new_value AS NewValue,
+                author_email AS AuthorEmail, created_at AS CreatedAt
+            FROM product_audits
+            WHERE product_id = @ProductId
+            ORDER BY created_at DESC;";
+
+        var audits = (await conn.QueryAsync<StoreProductAuditDto>(auditSql, new { ProductId = product.Id })).ToList();
+
+        // Calculate dwell suggestions
         var suggestions = new List<string>();
         var highestDwell = product.MediaOrder.OrderByDescending(m => m.DwellSeconds).FirstOrDefault();
         if (highestDwell != null && !highestDwell.IsCover && highestDwell.DwellSeconds > 3.0)
@@ -176,60 +204,190 @@ public class CurationService : ICurationService
             suggestions.Add($"Media Slide #{highestDwell.Order} has the highest dwell time ({highestDwell.DwellSeconds:F1}s). Suggest promoting to Cover Hero.");
         }
 
-        var dto = new StoreProductCurationDto(
+        return new StoreProductCurationDto(
             Product: product,
-            AuditHistory: auditHistory.OrderByDescending(a => a.CreatedAt).ToList(),
+            AuditHistory: audits,
             SmartDwellSuggestions: suggestions
         );
-
-        return Task.FromResult<StoreProductCurationDto?>(dto);
     }
 
-    public Task<bool> UpdateProductCurationAsync(Guid id, UpdateCurationRequest req, string authorEmail)
+    public async Task<bool> UpdateProductCurationAsync(Guid id, UpdateCurationRequest req, string authorEmail)
     {
-        if (!_products.TryGetValue(id, out var current))
-        {
-            current = _products.Values.FirstOrDefault(p => p.VayyariProductId == id);
-            if (current == null) return Task.FromResult(false);
-            id = current.Id;
-        }
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
 
-        var auditList = _auditLogs.GetOrAdd(id, _ => new List<StoreProductAuditDto>());
+        const string findSql = @"
+            SELECT 
+                id, vayyari_product_id AS VayyariProductId, product_code AS ProductCode,
+                title, description, category_name AS CategoryName, fabric,
+                base_cost AS BaseCost, mrp, sale_price AS SalePrice,
+                lifecycle_status AS LifecycleStatus, stock_quantity AS StockQuantity,
+                color_group_id AS ColorGroupId, colorway_name AS ColorwayName, color_hex AS ColorHex,
+                media_order::text AS MediaOrderJson, tags::text AS TagsJson,
+                is_published AS IsPublished, published_at AS PublishedAt
+            FROM products
+            WHERE id = @Id OR vayyari_product_id = @Id
+            LIMIT 1;";
 
-        // Log field level diffs
+        var current = await conn.QuerySingleOrDefaultAsync<ProductDbRow>(findSql, new { Id = id });
+        if (current == null) return false;
+
+        var realId = current.Id;
+
+        // Log field audits
         if (req.LifecycleStatus != null && req.LifecycleStatus != current.LifecycleStatus)
         {
-            auditList.Add(new(Guid.NewGuid(), id, "lifecycle_changed", "lifecycleStatus", current.LifecycleStatus, req.LifecycleStatus, authorEmail, DateTime.UtcNow));
+            await LogAuditAsync(conn, realId, "lifecycle_changed", "lifecycleStatus", current.LifecycleStatus, req.LifecycleStatus, authorEmail);
         }
         if (req.SalePrice.HasValue && req.SalePrice.Value != current.SalePrice)
         {
-            auditList.Add(new(Guid.NewGuid(), id, "price_updated", "salePrice", $"₹{current.SalePrice:N0}", $"₹{req.SalePrice.Value:N0}", authorEmail, DateTime.UtcNow));
+            await LogAuditAsync(conn, realId, "price_updated", "salePrice", $"₹{current.SalePrice:N0}", $"₹{req.SalePrice.Value:N0}", authorEmail);
         }
         if (req.Mrp.HasValue && req.Mrp.Value != current.Mrp)
         {
-            auditList.Add(new(Guid.NewGuid(), id, "price_updated", "mrp", $"₹{current.Mrp:N0}", $"₹{req.Mrp.Value:N0}", authorEmail, DateTime.UtcNow));
+            await LogAuditAsync(conn, realId, "price_updated", "mrp", $"₹{current.Mrp:N0}", $"₹{req.Mrp.Value:N0}", authorEmail);
         }
         if (req.ColorwayName != null && req.ColorwayName != current.ColorwayName)
         {
-            auditList.Add(new(Guid.NewGuid(), id, "colorway_updated", "colorwayName", current.ColorwayName, req.ColorwayName, authorEmail, DateTime.UtcNow));
+            await LogAuditAsync(conn, realId, "colorway_updated", "colorwayName", current.ColorwayName, req.ColorwayName, authorEmail);
         }
 
-        var updated = current with
-        {
-            LifecycleStatus = req.LifecycleStatus ?? current.LifecycleStatus,
-            StockQuantity = req.StockQuantity ?? current.StockQuantity,
-            Mrp = req.Mrp ?? current.Mrp,
-            SalePrice = req.SalePrice ?? current.SalePrice,
-            ColorGroupId = req.ColorGroupId ?? current.ColorGroupId,
-            ColorwayName = req.ColorwayName ?? current.ColorwayName,
-            ColorHex = req.ColorHex ?? current.ColorHex,
-            MediaOrder = req.MediaOrder ?? current.MediaOrder,
-            Tags = req.Tags ?? current.Tags,
-        };
+        string? mediaOrderJson = req.MediaOrder != null ? JsonSerializer.Serialize(req.MediaOrder) : null;
+        string? colorGroupsJson = req.ColorGroups != null ? JsonSerializer.Serialize(req.ColorGroups) : null;
+        string? tagsJson = req.Tags != null ? JsonSerializer.Serialize(req.Tags) : null;
 
-        _products[id] = updated;
-        SaveToDisk();
-        _logger.LogInformation("Updated curation for product {Id} ({Code}) by {Author}", id, updated.ProductCode, authorEmail);
-        return Task.FromResult(true);
+        const string updateSql = @"
+            UPDATE products SET
+                lifecycle_status = COALESCE(@LifecycleStatus, lifecycle_status),
+                stock_quantity = COALESCE(@StockQuantity, stock_quantity),
+                mrp = COALESCE(@Mrp, mrp),
+                sale_price = COALESCE(@SalePrice, sale_price),
+                description = COALESCE(@Description, description),
+                color_group_id = COALESCE(@ColorGroupId, color_group_id),
+                colorway_name = COALESCE(@ColorwayName, colorway_name),
+                color_hex = COALESCE(@ColorHex, color_hex),
+                swatch_template = COALESCE(@SwatchTemplate, swatch_template),
+                color_groups = CASE WHEN @ColorGroups::jsonb IS NOT NULL THEN @ColorGroups::jsonb ELSE color_groups END,
+                media_order = CASE WHEN @MediaOrder::jsonb IS NOT NULL THEN @MediaOrder::jsonb ELSE media_order END,
+                tags = CASE WHEN @Tags::jsonb IS NOT NULL THEN @Tags::jsonb ELSE tags END,
+                updated_at = NOW()
+            WHERE id = @Id;";
+
+        await conn.ExecuteAsync(updateSql, new
+        {
+            Id = realId,
+            LifecycleStatus = req.LifecycleStatus,
+            StockQuantity = req.StockQuantity,
+            Mrp = req.Mrp,
+            SalePrice = req.SalePrice,
+            Description = req.Description,
+            ColorGroupId = req.ColorGroupId,
+            ColorwayName = req.ColorwayName,
+            ColorHex = req.ColorHex,
+            SwatchTemplate = req.SwatchTemplate,
+            ColorGroups = colorGroupsJson,
+            MediaOrder = mediaOrderJson,
+            Tags = tagsJson
+        });
+
+        // Publish event to Kafka
+        await _eventPublisher.PublishAsync(
+            "store.product.curation.updated",
+            realId.ToString(),
+            new
+            {
+                productId = realId,
+                productCode = current.ProductCode,
+                updatedBy = authorEmail,
+                updatedAt = DateTime.UtcNow
+            }
+        );
+
+        _logger.LogInformation("Successfully updated curation in PostgreSQL for product {Id} ({Code}) by {Author}", realId, current.ProductCode, authorEmail);
+        return true;
+    }
+
+    private static async Task LogAuditAsync(NpgsqlConnection conn, Guid productId, string actionType, string fieldName, string? oldValue, string? newValue, string author)
+    {
+        const string sql = @"
+            INSERT INTO product_audits (
+                id, product_id, action_type, field_name, old_value, new_value, author_email, created_at
+            ) VALUES (
+                gen_random_uuid(), @ProductId, @ActionType, @FieldName, @OldValue, @NewValue, @Author, NOW()
+            );";
+
+        await conn.ExecuteAsync(sql, new
+        {
+            ProductId = productId,
+            ActionType = actionType,
+            FieldName = fieldName,
+            OldValue = oldValue,
+            NewValue = newValue,
+            Author = author
+        });
+    }
+
+    private static StoreProductDto MapToDto(ProductDbRow r)
+    {
+        var media = string.IsNullOrEmpty(r.MediaOrderJson)
+            ? new List<StoreMediaItemDto>()
+            : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(r.MediaOrderJson, JsonOptions) ?? new();
+
+        var colorGroups = string.IsNullOrEmpty(r.ColorGroupsJson)
+            ? null
+            : JsonSerializer.Deserialize<List<StoreColorGroupDto>>(r.ColorGroupsJson, JsonOptions);
+
+        var tags = string.IsNullOrEmpty(r.TagsJson)
+            ? new List<string>()
+            : JsonSerializer.Deserialize<List<string>>(r.TagsJson, JsonOptions) ?? new();
+
+        return new StoreProductDto(
+            Id: r.Id,
+            VayyariProductId: r.VayyariProductId,
+            ProductCode: r.ProductCode,
+            Title: r.Title,
+            Description: r.Description,
+            CategoryName: r.CategoryName,
+            Fabric: r.Fabric,
+            BaseCost: r.BaseCost,
+            Mrp: r.Mrp,
+            SalePrice: r.SalePrice,
+            LifecycleStatus: r.LifecycleStatus,
+            StockQuantity: r.StockQuantity,
+            ColorGroupId: r.ColorGroupId,
+            ColorwayName: r.ColorwayName,
+            ColorHex: r.ColorHex,
+            SwatchTemplate: r.SwatchTemplate,
+            ColorGroups: colorGroups,
+            MediaOrder: media,
+            Tags: tags,
+            IsPublished: r.IsPublished,
+            PublishedAt: r.PublishedAt
+        );
+    }
+
+    private class ProductDbRow
+    {
+        public Guid Id { get; set; }
+        public Guid VayyariProductId { get; set; }
+        public string ProductCode { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
+        public string? Fabric { get; set; }
+        public decimal BaseCost { get; set; }
+        public decimal Mrp { get; set; }
+        public decimal SalePrice { get; set; }
+        public string LifecycleStatus { get; set; } = string.Empty;
+        public int StockQuantity { get; set; }
+        public Guid? ColorGroupId { get; set; }
+        public string ColorwayName { get; set; } = string.Empty;
+        public string ColorHex { get; set; } = string.Empty;
+        public string? SwatchTemplate { get; set; }
+        public string? ColorGroupsJson { get; set; }
+        public string? MediaOrderJson { get; set; }
+        public string? TagsJson { get; set; }
+        public bool IsPublished { get; set; }
+        public DateTime PublishedAt { get; set; }
     }
 }

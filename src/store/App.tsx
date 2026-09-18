@@ -17,6 +17,7 @@ import { ToastProvider } from './src/context/ToastContext';
 
 // Master App Shell
 import { AppShell } from './src/app/AppShell';
+import { checkAndApplyStoreOTAUpdate } from './src/services/selfHostedOTA';
 
 // Web Viewport Lock: Guarantee zero horizontal scroll across all device form factors
 if (typeof document !== 'undefined') {
@@ -42,6 +43,13 @@ if (typeof document !== 'undefined') {
 }
 
 export default function App() {
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      checkAndApplyStoreOTAUpdate({ silent: false });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <SafeAreaProvider>
       <TamaguiProvider config={tamaguiConfig} defaultTheme="light">

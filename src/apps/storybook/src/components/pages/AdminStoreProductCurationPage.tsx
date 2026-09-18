@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Pressable,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuArrowLeft,
@@ -36,7 +37,11 @@ import {
   LuChevronLeft,
   LuPencil,
 } from 'react-icons/lu';
-import { ColorAssignmentPickerModal } from '../organisms/StoreCuration/ColorAssignmentPickerModal';
+import {
+  ColorAssignmentPickerModal,
+  getSlotLimits,
+  getInitialSlotColors,
+} from '../organisms/StoreCuration/ColorAssignmentPickerModal';
 import { useTheme } from '../../theme';
 import {
   CustomSwatchDot,
@@ -78,6 +83,7 @@ export interface AdminStoreProductCurationPageProps {
   initialColorPickerGroupId?: string | null;
   onBack?: () => void;
   onSave?: (curatedPayload: any) => void;
+  disableSafeArea?: boolean;
 }
 
 const TEMPLATE_OPTIONS: { id: SwatchTemplateType; label: string; desc: string }[] = [
@@ -98,16 +104,20 @@ export function AdminStoreProductCurationPage({
   initialSalePrice = 10999,
   initialLifecycleState = 'available',
   initialDescription = 'Woven on traditional pit looms in Varanasi, this Banarasi silk saree showcases intricate gold floral bootis, an opulent contrast zari pallu, and a scalloped border with matching unstitched blouse.',
-  initialScreen,
-  initialStage = 'qualification',
+  initialScreen = 'hub',
+  initialStage,
   initialShowPreview = false,
   initialMedia = MOCK_CURATION_MEDIA,
   initialColorGroups = INITIAL_COLOR_GROUPS,
   initialColorPickerGroupId = null,
   onBack,
   onSave,
+  disableSafeArea = false,
 }: AdminStoreProductCurationPageProps) {
   const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
+  const topInset = disableSafeArea ? 0 : insets.top;
+  const bottomInset = disableSafeArea ? 0 : insets.bottom;
 
   // ── STATE ──
   const resolveInitialScreen = (): CurationScreen => {
@@ -137,7 +147,22 @@ export function AdminStoreProductCurationPage({
   const [mediaList, setMediaList] = useState<StoreCurationMediaItem[]>(initialMedia);
   const [swatchTemplate, setSwatchTemplate] = useState<SwatchTemplateType>('contrast-border');
   const [swatchCount, setSwatchCount] = useState<number>(initialColorGroups.length || 2);
-  const [colorGroups, setColorGroups] = useState<StoreColorGroup[]>(initialColorGroups);
+  const [colorGroups, setColorGroups] = useState<StoreColorGroup[]>(() => {
+    return (initialColorGroups || []).map((g) => {
+      const tpl = g.template && g.template !== 'solid' ? g.template : 'contrast-border';
+      const initialSlots = getInitialSlotColors(g, tpl);
+      return {
+        ...g,
+        template: tpl,
+        slotA: initialSlots[0] || g.slotA,
+        slotB: initialSlots.length > 1 ? initialSlots[1] : (g.slotB || '#D4AF37'),
+        slotC: initialSlots.length > 2 ? initialSlots[2] : g.slotC,
+        slotD: initialSlots.length > 3 ? initialSlots[3] : g.slotD,
+        colors: initialSlots,
+        colorCount: initialSlots.length,
+      };
+    });
+  });
 
   // Grouping stage active selection: 'common' or specific group ID
   const [activeSwatchTab, setActiveSwatchTab] = useState<string>('common');
@@ -159,6 +184,56 @@ export function AdminStoreProductCurationPage({
   const [previewPlayingVideo, setPreviewPlayingVideo] = useState(false);
   const [previewBufferingVideo, setPreviewBufferingVideo] = useState(false);
 
+  // Sync state if props update dynamically
+  React.useEffect(() => {
+    setMediaList(initialMedia);
+  }, [initialMedia]);
+
+  React.useEffect(() => {
+    const syncedGroups = (initialColorGroups || []).map((g) => {
+      const tpl = g.template && g.template !== 'solid' ? g.template : swatchTemplate;
+      const initialSlots = getInitialSlotColors(g, tpl);
+      return {
+        ...g,
+        template: tpl,
+        slotA: initialSlots[0] || g.slotA,
+        slotB: initialSlots.length > 1 ? initialSlots[1] : (g.slotB || '#D4AF37'),
+        slotC: initialSlots.length > 2 ? initialSlots[2] : g.slotC,
+        slotD: initialSlots.length > 3 ? initialSlots[3] : g.slotD,
+        colors: initialSlots,
+        colorCount: initialSlots.length,
+      };
+    });
+    setColorGroups(syncedGroups);
+    setSwatchCount(syncedGroups.length || 1);
+    if (syncedGroups.length > 0) {
+      setPreviewActiveGroupId(syncedGroups[0].id);
+    }
+  }, [initialColorGroups, swatchTemplate]);
+
+  React.useEffect(() => {
+    setLifecycleState(initialLifecycleState);
+  }, [initialLifecycleState]);
+
+  React.useEffect(() => {
+    setDescription(initialDescription);
+  }, [initialDescription]);
+
+  React.useEffect(() => {
+    setMrp(initialMrp.toString());
+  }, [initialMrp]);
+
+  React.useEffect(() => {
+    setSalePrice(initialSalePrice.toString());
+  }, [initialSalePrice]);
+
+  React.useEffect(() => {
+    if (colorGroups.length > 0 && !colorGroups.some((g) => g.id === previewActiveGroupId)) {
+      setPreviewActiveGroupId(colorGroups[0].id);
+      setPreviewSlideIndex(0);
+    }
+  }, [colorGroups, previewActiveGroupId]);
+
   // Auto-extracted color centroids across media
   const extractedColors = useMemo(() => {
     const map = new Map<string, { hex: string; name: string; percentage: number }>();
@@ -176,9 +251,28 @@ export function AdminStoreProductCurationPage({
   const qualifiedMedia = useMemo(() => mediaList.filter((m) => m.isQualified), [mediaList]);
   const commonMedia = useMemo(() => qualifiedMedia.filter((m) => m.isCommon), [qualifiedMedia]);
 
+  // Horizontal scroll tracking for swatch swipe areas
+  const stage2ScrollRef = useRef<ScrollView>(null);
+  const stage3ScrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef<{ stage2: number; stage3: number }>({ stage2: 0, stage3: 0 });
+
   // Sync color groups count when stepper changes (supports up to 2 digits: 1 to 99)
   const handleSetSwatchCount = (newCount: number) => {
     if (newCount < 1 || newCount > 99) return;
+
+    // When swatch count is reduced, compressed swipe tiles automatically glide towards the left
+    // if the user had previously swiped/scrolled to the right
+    if (newCount < swatchCount) {
+      if (scrollOffsetRef.current.stage2 > 0) {
+        stage2ScrollRef.current?.scrollTo({ x: 0, animated: true });
+        scrollOffsetRef.current.stage2 = 0;
+      }
+      if (scrollOffsetRef.current.stage3 > 0) {
+        stage3ScrollRef.current?.scrollTo({ x: 0, animated: true });
+        scrollOffsetRef.current.stage3 = 0;
+      }
+    }
+
     setSwatchCount(newCount);
 
     if (newCount > colorGroups.length) {
@@ -203,6 +297,34 @@ export function AdminStoreProductCurationPage({
       if (!retained.some((g) => g.id === activeSwatchTab) && activeSwatchTab !== 'common') {
         setActiveSwatchTab('common');
       }
+    }
+  };
+
+  // Discard a specific swatch tile and immediately reflect on swatch count & counter
+  const handleDiscardSwatch = (groupId: string) => {
+    if (colorGroups.length <= 1) return;
+
+    const updated = colorGroups.filter((g) => g.id !== groupId);
+    setColorGroups(updated);
+    setSwatchCount(updated.length);
+
+    if (activeSwatchTab === groupId) {
+      setActiveSwatchTab('common');
+    }
+
+    if (previewActiveGroupId === groupId) {
+      setPreviewActiveGroupId(updated[0]?.id || '');
+    }
+
+    setMediaList((prev) => prev.map((m) => (m.colorGroupId === groupId ? { ...m, colorGroupId: undefined } : m)));
+
+    if (scrollOffsetRef.current.stage2 > 0) {
+      stage2ScrollRef.current?.scrollTo({ x: 0, animated: true });
+      scrollOffsetRef.current.stage2 = 0;
+    }
+    if (scrollOffsetRef.current.stage3 > 0) {
+      stage3ScrollRef.current?.scrollTo({ x: 0, animated: true });
+      scrollOffsetRef.current.stage3 = 0;
     }
   };
 
@@ -268,6 +390,7 @@ export function AdminStoreProductCurationPage({
       fabric,
       mrp: parseFloat(mrp) || 0,
       salePrice: parseFloat(salePrice) || 0,
+      lifecycleState,
       description,
       mediaList,
       colorGroups,
@@ -280,10 +403,20 @@ export function AdminStoreProductCurationPage({
   // ── PREVIEW FILTERED MEDIA ──
   const previewMedia = useMemo(() => {
     const activeGroup = colorGroups.find((g) => g.id === previewActiveGroupId) || colorGroups[0];
-    return qualifiedMedia
-      .filter((m) => m.isCommon || m.colorGroupId === activeGroup?.id)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const filtered = qualifiedMedia.filter((m) => {
+      if (m.isCommon) return true;
+      if (m.colorGroupId && activeGroup?.id) return m.colorGroupId === activeGroup.id;
+      return !m.colorGroupId || colorGroups.length <= 1;
+    });
+    const result = filtered.length > 0 ? filtered : qualifiedMedia;
+    return [...result].sort((a, b) => a.sortOrder - b.sortOrder);
   }, [qualifiedMedia, colorGroups, previewActiveGroupId]);
+
+  React.useEffect(() => {
+    if (previewSlideIndex >= previewMedia.length && previewMedia.length > 0) {
+      setPreviewSlideIndex(0);
+    }
+  }, [previewMedia.length, previewSlideIndex]);
 
   const currentPreviewMedia = previewMedia[previewSlideIndex] || previewMedia[0];
 
@@ -333,7 +466,8 @@ export function AdminStoreProductCurationPage({
           borderBottomWidth={1}
           borderBottomColor="#E2E8F0"
           paddingHorizontal={12}
-          paddingVertical={10}
+          paddingTop={topInset > 0 ? topInset + 6 : 10}
+          paddingBottom={10}
           alignItems="center"
           justifyContent="space-between"
           zIndex={30}
@@ -399,35 +533,41 @@ export function AdminStoreProductCurationPage({
             )}
 
             {/* Chevrons */}
-            <Pressable
-              onPress={() => {
-                setPreviewPlayingVideo(false);
-                setPreviewSlideIndex((prev) => (prev - 1 + previewMedia.length) % previewMedia.length);
-              }}
-              style={[styles.carouselChevron, { left: 8 }]}
-              hitSlop={8}
-            >
-              <LuChevronLeft size={18} color="#1E293B" />
-            </Pressable>
+            {previewMedia.length > 1 && (
+              <>
+                <Pressable
+                  onPress={() => {
+                    setPreviewPlayingVideo(false);
+                    setPreviewSlideIndex((prev) => (prev - 1 + previewMedia.length) % previewMedia.length);
+                  }}
+                  style={[styles.carouselChevron, { left: 8 }]}
+                  hitSlop={8}
+                >
+                  <LuChevronLeft size={18} color="#1E293B" />
+                </Pressable>
 
-            <Pressable
-              onPress={() => {
-                setPreviewPlayingVideo(false);
-                setPreviewSlideIndex((prev) => (prev + 1) % previewMedia.length);
-              }}
-              style={[styles.carouselChevron, { right: 8 }]}
-              hitSlop={8}
-            >
-              <LuChevronRight size={18} color="#1E293B" />
-            </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setPreviewPlayingVideo(false);
+                    setPreviewSlideIndex((prev) => (prev + 1) % previewMedia.length);
+                  }}
+                  style={[styles.carouselChevron, { right: 8 }]}
+                  hitSlop={8}
+                >
+                  <LuChevronRight size={18} color="#1E293B" />
+                </Pressable>
+              </>
+            )}
 
             {/* Top Badges */}
             <XStack position="absolute" top={10} left={10} zIndex={20} gap={6}>
-              <View style={styles.slideCounter}>
-                <Text fontSize={10} fontWeight="800" color="#FFFFFF">
-                  {previewSlideIndex + 1}/{previewMedia.length}
-                </Text>
-              </View>
+              {previewMedia.length > 0 && (
+                <View style={styles.slideCounter}>
+                  <Text fontSize={10} fontWeight="800" color="#FFFFFF">
+                    {previewSlideIndex + 1}/{previewMedia.length}
+                  </Text>
+                </View>
+              )}
               {currentPreviewMedia?.isCommon && (
                 <View style={styles.commonPreviewTag}>
                   <LuStar size={10} color="#B45309" />
@@ -439,27 +579,29 @@ export function AdminStoreProductCurationPage({
             </XStack>
 
             {/* Carousel Dots */}
-            <XStack
-              position="absolute"
-              bottom={12}
-              left={0}
-              right={0}
-              zIndex={20}
-              justifyContent="center"
-              alignItems="center"
-              gap={6}
-            >
-              {previewMedia.map((_, idx) => (
-                <CarouselDot
-                  key={idx}
-                  active={idx === previewSlideIndex}
-                  onPress={() => {
-                    setPreviewPlayingVideo(false);
-                    setPreviewSlideIndex(idx);
-                  }}
-                />
-              ))}
-            </XStack>
+            {previewMedia.length > 1 && (
+              <XStack
+                position="absolute"
+                bottom={12}
+                left={0}
+                right={0}
+                zIndex={20}
+                justifyContent="center"
+                alignItems="center"
+                gap={6}
+              >
+                {previewMedia.map((_, idx) => (
+                  <CarouselDot
+                    key={idx}
+                    active={idx === previewSlideIndex}
+                    onPress={() => {
+                      setPreviewPlayingVideo(false);
+                      setPreviewSlideIndex(idx);
+                    }}
+                  />
+                ))}
+              </XStack>
+            )}
           </View>
 
           {/* 2. Color Swatch Row Directly Below Carousel */}
@@ -469,7 +611,7 @@ export function AdminStoreProductCurationPage({
                 Colour: {colorGroups.find((g) => g.id === previewActiveGroupId)?.name || 'Standard'}
               </Text>
               <Text fontSize={10} color="#64748B">
-                {colorGroups.length} Swatches
+                {colorGroups.length} Swatch{colorGroups.length === 1 ? '' : 'es'}
               </Text>
             </XStack>
 
@@ -561,7 +703,8 @@ export function AdminStoreProductCurationPage({
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
         paddingHorizontal={14}
-        paddingVertical={12}
+        paddingTop={topInset + 8}
+        paddingBottom={10}
         alignItems="center"
         justifyContent="space-between"
       >
@@ -701,7 +844,11 @@ export function AdminStoreProductCurationPage({
       {/* ── SCROLLABLE STAGE CONTENT ── */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 12, paddingBottom: currentScreen === 'hub' ? 24 : 90 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{
+          padding: 12,
+          paddingBottom: currentScreen === 'hub' ? Math.max(bottomInset + 16, 24) : 90 + bottomInset,
+        }}
       >
         {/* =========================================================================
             STAGE 1: MEDIA QUALIFICATION (3 TILES PER ROW, VERTICAL SCROLL)
@@ -963,14 +1110,30 @@ export function AdminStoreProductCurationPage({
                     key={tpl.id}
                     onPress={() => {
                       setSwatchTemplate(tpl.id);
-                      setColorGroups(colorGroups.map((g) => ({ ...g, template: tpl.id })));
+                      setColorGroups((prev) =>
+                        prev.map((g) => {
+                          const initialSlots = getInitialSlotColors(g, tpl.id);
+                          return {
+                            ...g,
+                            template: tpl.id,
+                            slotA: initialSlots[0] || g.slotA,
+                            slotB: initialSlots.length > 1 ? initialSlots[1] : undefined,
+                            slotC: initialSlots.length > 2 ? initialSlots[2] : undefined,
+                            slotD: initialSlots.length > 3 ? initialSlots[3] : undefined,
+                            colors: initialSlots,
+                            colorCount: initialSlots.length,
+                          };
+                        })
+                      );
                     }}
-                    style={[
+                    hitSlop={8}
+                    style={({ pressed }) => [
                       styles.compactSwatchSquareTile,
                       {
                         backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surface,
                         borderColor: isSelected ? tokens.accent : tokens.border,
                         borderWidth: isSelected ? 2 : 1,
+                        opacity: pressed ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -1071,6 +1234,123 @@ export function AdminStoreProductCurationPage({
               </View>
             </XStack>
 
+            {/* Configured Swatches Preview & Customization (Tap or Long-Press to Edit Colors) */}
+            <YStack gap={8} marginTop={4}>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                  Configured Swatches ({swatchCount}):
+                </Text>
+                <Text fontSize={10} color={tokens.accent} fontWeight="700">
+                  Tap or long-press to customize colors
+                </Text>
+              </XStack>
+
+              <ScrollView
+                ref={stage2ScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                onScroll={(e) => {
+                  scrollOffsetRef.current.stage2 = e.nativeEvent.contentOffset.x;
+                }}
+                scrollEventThrottle={16}
+                onContentSizeChange={() => {
+                  // As tiles compress when swatch count reduces, glide towards left if swiped right
+                  if (scrollOffsetRef.current.stage2 > 0) {
+                    stage2ScrollRef.current?.scrollTo({ x: 0, animated: true });
+                    scrollOffsetRef.current.stage2 = 0;
+                  }
+                }}
+                contentContainerStyle={{ gap: 8, paddingVertical: 4, paddingHorizontal: 4 }}
+                style={{ marginHorizontal: -12 }}
+              >
+                {colorGroups.slice(0, swatchCount).map((cg, idx) => {
+                  return (
+                    <Pressable
+                      key={`stage2-${cg.id}`}
+                      onPress={() => {
+                        if (swatchTemplate !== 'multicolor') {
+                          setColorPickerModalGroupId(cg.id);
+                        }
+                      }}
+                      onLongPress={() => {
+                        if (swatchTemplate !== 'multicolor') {
+                          setColorPickerModalGroupId(cg.id);
+                        }
+                      }}
+                      delayLongPress={250}
+                      hitSlop={8}
+                      style={({ pressed }) => [
+                        styles.stage2SwatchCard,
+                        {
+                          backgroundColor: tokens.surface,
+                          borderColor: tokens.border,
+                          opacity: pressed ? 0.75 : 1,
+                        },
+                      ]}
+                    >
+                      {/* Small X button on top right to discard tile and reflect on counter */}
+                      {swatchCount > 1 && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            handleDiscardSwatch(cg.id);
+                          }}
+                          hitSlop={8}
+                          style={({ pressed: xPressed }) => [
+                            styles.discardSwatchBtn,
+                            {
+                              backgroundColor: xPressed ? `${tokens.textMuted}30` : `${tokens.textMuted}14`,
+                            },
+                          ]}
+                          accessibilityLabel={`Discard Swatch #${idx + 1}`}
+                        >
+                          <LuX size={10} color={tokens.textMuted} />
+                        </Pressable>
+                      )}
+
+                      {/* Swatch Dot with Edit Pencil Badge directly on the swatch itself */}
+                      <View style={styles.swatchDotWrapper}>
+                        <CustomSwatchDot
+                          template={swatchTemplate}
+                          primaryColor={cg.slotA}
+                          secondaryColor={cg.slotB || '#D4AF37'}
+                          tertiaryColor={cg.slotC}
+                          quaternaryColor={cg.slotD}
+                          colors={cg.colors}
+                          colorCount={cg.colorCount as any}
+                          size={42}
+                          selected={false}
+                        />
+                        {swatchTemplate !== 'multicolor' && (
+                          <View
+                            style={[
+                              styles.swatchEditBadge,
+                              {
+                                backgroundColor: tokens.surface,
+                                borderColor: tokens.border,
+                              },
+                            ]}
+                          >
+                            <LuPencil size={10} color={tokens.accent} />
+                          </View>
+                        )}
+                      </View>
+
+                      <YStack alignItems="center" gap={2}>
+                        <Text fontSize={11} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                          Swatch #{idx + 1}
+                        </Text>
+                        <Text fontSize={9} color={tokens.textMuted} numberOfLines={1}>
+                          {cg.name.split(' ')[0]}
+                        </Text>
+                      </YStack>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </YStack>
+
             {/* Media Reference (All Qualified Media) */}
             <YStack gap={6} marginTop={4}>
               <XStack alignItems="center" justifyContent="space-between">
@@ -1112,16 +1392,36 @@ export function AdminStoreProductCurationPage({
         {currentScreen === 'qualify_and_group' && currentStage === 'grouping' && (
           <YStack gap={8}>
             {/* Horizontal Swipable Swatch Heads Row - Edge to Edge */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2, paddingHorizontal: 4 }} style={{ marginHorizontal: -12 }}>
+            <ScrollView
+              ref={stage3ScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              onScroll={(e) => {
+                scrollOffsetRef.current.stage3 = e.nativeEvent.contentOffset.x;
+              }}
+              scrollEventThrottle={16}
+              onContentSizeChange={() => {
+                // As tiles compress when swatch count reduces, glide towards left if swiped right
+                if (scrollOffsetRef.current.stage3 > 0) {
+                  stage3ScrollRef.current?.scrollTo({ x: 0, animated: true });
+                  scrollOffsetRef.current.stage3 = 0;
+                }
+              }}
+              contentContainerStyle={{ gap: 8, paddingVertical: 2, paddingHorizontal: 4 }}
+              style={{ marginHorizontal: -12 }}
+            >
               {/* Head 0: Default Common Swatch [C] */}
               <Pressable
                 onPress={() => setActiveSwatchTab('common')}
-                style={[
+                hitSlop={8}
+                style={({ pressed }) => [
                   styles.swatchHeadCard,
                   {
                     backgroundColor: activeSwatchTab === 'common' ? '#FEF3C7' : tokens.surface,
                     borderColor: activeSwatchTab === 'common' ? '#D97706' : tokens.border,
                     borderWidth: activeSwatchTab === 'common' ? 2 : 1,
+                    opacity: pressed ? 0.75 : 1,
                   },
                 ]}
               >
@@ -1155,13 +1455,15 @@ export function AdminStoreProductCurationPage({
                         setColorPickerModalGroupId(cg.id);
                       }
                     }}
-                    delayLongPress={350}
-                    style={[
+                    delayLongPress={250}
+                    hitSlop={8}
+                    style={({ pressed }) => [
                       styles.swatchHeadCard,
                       {
                         backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surface,
                         borderColor: isSelected ? tokens.accent : tokens.border,
                         borderWidth: isSelected ? 2 : 1,
+                        opacity: pressed ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -1191,14 +1493,14 @@ export function AdminStoreProductCurationPage({
                       {swatchTemplate !== 'multicolor' && (
                         <Pressable
                           onPress={(e) => {
-                            e.stopPropagation();
+                            e.stopPropagation?.();
                             setColorPickerModalGroupId(cg.id);
                           }}
-                          hitSlop={6}
+                          hitSlop={8}
                           style={styles.swatchPencilBtn}
                           accessibilityLabel="Edit colors"
                         >
-                          <LuPencil size={8} color={tokens.textMuted} />
+                          <LuPencil size={9} color={tokens.accent} />
                         </Pressable>
                       )}
                     </XStack>
@@ -1418,71 +1720,104 @@ export function AdminStoreProductCurationPage({
 
       {/* ── FIXED BOTTOM NAVIGATION BAR: PREV & NEXT STAGE NAMES / SAVE ── */}
       {currentScreen === 'qualify_and_group' && (
-        <View style={[styles.fixedBottomBar, { backgroundColor: tokens.surface, borderTopColor: tokens.border }]}>
+        <View
+          style={[
+            styles.fixedBottomBar,
+            {
+              backgroundColor: tokens.surface,
+              borderTopColor: tokens.border,
+              paddingBottom: Math.max(bottomInset, 12),
+            },
+          ]}
+        >
           <XStack alignItems="center" justifyContent="space-between" width="100%">
-            {/* Left Button: Navigates to previous stage or Hub */}
+            {/* Left Action: Navigates to previous stage or Hub */}
             {currentStage === 'qualify' || (currentStage as any) === 'qualification' ? (
               <Pressable
                 onPress={() => setCurrentScreen('hub')}
-                style={[styles.bottomNavPrevBtn, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.bottomNavTextLink,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
               >
-                <LuChevronLeft size={15} color={tokens.text} />
-                <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                <LuChevronLeft size={22} color={tokens.textMuted} strokeWidth={2.5} />
+                <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
                   Store Curation
                 </Text>
               </Pressable>
             ) : currentStage === 'swatches' || (currentStage as any) === 'swatch_creation' ? (
               <Pressable
                 onPress={() => setCurrentStage('qualify')}
-                style={[styles.bottomNavPrevBtn, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.bottomNavTextLink,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
               >
-                <LuChevronLeft size={15} color={tokens.text} />
-                <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                <LuChevronLeft size={22} color={tokens.textMuted} strokeWidth={2.5} />
+                <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
                   Qualify
                 </Text>
               </Pressable>
             ) : (
               <Pressable
                 onPress={() => setCurrentStage('swatches')}
-                style={[styles.bottomNavPrevBtn, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.bottomNavTextLink,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
               >
-                <LuChevronLeft size={15} color={tokens.text} />
-                <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                <LuChevronLeft size={22} color={tokens.textMuted} strokeWidth={2.5} />
+                <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
                   Swatches
                 </Text>
               </Pressable>
             )}
 
-            {/* Right Button: Navigates to next stage or Save in last stage */}
+            {/* Right Action: Navigates to next stage or Save in last stage */}
             {currentStage === 'qualify' || (currentStage as any) === 'qualification' ? (
               <Pressable
                 onPress={() => setCurrentStage('swatches')}
-                style={[styles.bottomNavNextBtn, { backgroundColor: tokens.accent }]}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.bottomNavTextLink,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
               >
-                <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
+                <Text fontSize={15} fontWeight="800" color={tokens.accent}>
                   Swatches
                 </Text>
-                <LuChevronRight size={15} color={tokens.accentForeground} />
+                <LuChevronRight size={22} color={tokens.accent} strokeWidth={2.5} />
               </Pressable>
             ) : currentStage === 'swatches' || (currentStage as any) === 'swatch_creation' ? (
               <Pressable
                 onPress={() => setCurrentStage('grouping')}
-                style={[styles.bottomNavNextBtn, { backgroundColor: tokens.accent }]}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.bottomNavTextLink,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
               >
-                <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
+                <Text fontSize={15} fontWeight="800" color={tokens.accent}>
                   Grouping
                 </Text>
-                <LuChevronRight size={15} color={tokens.accentForeground} />
+                <LuChevronRight size={22} color={tokens.accent} strokeWidth={2.5} />
               </Pressable>
             ) : (
               <Pressable
                 onPress={handleSaveCuration}
-                style={[styles.bottomNavNextBtn, { backgroundColor: '#15803D' }]}
+                hitSlop={12}
+                style={({ pressed }) => [
+                  styles.bottomNavTextLink,
+                  { opacity: pressed ? 0.6 : 1 },
+                ]}
               >
-                <LuCheck size={15} color="#FFFFFF" strokeWidth={3} />
-                <Text fontSize={12} fontWeight="800" color="#FFFFFF">
+                <Text fontSize={15} fontWeight="800" color="#15803D">
                   Save
                 </Text>
+                <LuCheck size={20} color="#15803D" strokeWidth={3} />
               </Pressable>
             )}
           </XStack>
@@ -1491,26 +1826,43 @@ export function AdminStoreProductCurationPage({
 
       {/* ── FIXED BOTTOM BAR FOR METADATA SCREEN ── */}
       {currentScreen === 'metadata' && (
-        <View style={[styles.fixedBottomBar, { backgroundColor: tokens.surface, borderTopColor: tokens.border }]}>
+        <View
+          style={[
+            styles.fixedBottomBar,
+            {
+              backgroundColor: tokens.surface,
+              borderTopColor: tokens.border,
+              paddingBottom: Math.max(bottomInset, 12),
+            },
+          ]}
+        >
           <XStack alignItems="center" justifyContent="space-between" width="100%">
             <Pressable
               onPress={() => setCurrentScreen('hub')}
-              style={[styles.bottomNavPrevBtn, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.bottomNavTextLink,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
             >
-              <LuChevronLeft size={15} color={tokens.text} />
-              <Text fontSize={11} fontWeight="700" color={tokens.text}>
+              <LuChevronLeft size={22} color={tokens.textMuted} strokeWidth={2.5} />
+              <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
                 Store Curation
               </Text>
             </Pressable>
 
             <Pressable
               onPress={handleSaveCuration}
-              style={[styles.bottomNavNextBtn, { backgroundColor: '#15803D' }]}
+              hitSlop={12}
+              style={({ pressed }) => [
+                styles.bottomNavTextLink,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
             >
-              <LuCheck size={15} color="#FFFFFF" strokeWidth={3} />
-              <Text fontSize={12} fontWeight="800" color="#FFFFFF">
+              <Text fontSize={15} fontWeight="800" color="#15803D">
                 Save Metadata
               </Text>
+              <LuCheck size={20} color="#15803D" strokeWidth={3} />
             </Pressable>
           </XStack>
         </View>
@@ -1520,7 +1872,7 @@ export function AdminStoreProductCurationPage({
       <ColorAssignmentPickerModal
         visible={!!colorPickerModalGroupId && swatchTemplate !== 'multicolor'}
         colorGroup={colorGroups.find((g) => g.id === colorPickerModalGroupId) || null}
-        template={colorGroups.find((g) => g.id === colorPickerModalGroupId)?.template || swatchTemplate}
+        template={swatchTemplate}
         extractedColors={extractedColors}
         colorCount={colorGroups.find((g) => g.id === colorPickerModalGroupId)?.colorCount}
         onApply={(updatedGroup) => {
@@ -1598,6 +1950,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
+  },
+  bottomNavTextLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    cursor: 'pointer',
   },
   bottomNavPrevBtn: {
     flexDirection: 'row',
@@ -1767,6 +2127,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
+  },
+  stage2SwatchCard: {
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 84,
+    position: 'relative',
+  },
+  discardSwatchBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  swatchDotWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatchEditBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 1.5,
+    elevation: 3,
+  },
+  editBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   swatchHeadCard: {
     alignItems: 'center',

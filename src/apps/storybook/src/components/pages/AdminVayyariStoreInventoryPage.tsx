@@ -15,6 +15,20 @@ import { VayyariStarredProductItem } from './AdminVayyariStorePublishPage';
 
 export const MOCK_PUBLISHED_PRODUCTS: VayyariStarredProductItem[] = [
   {
+    id: 'prod-vf2b58',
+    productCode: 'VF2B58',
+    title: 'Banarasi Dupion Silk Zari Saree',
+    category: 'Saree',
+    fabric: 'Banarasi Dupion Silk',
+    color: 'Emerald & Gold',
+    mediaCount: 7,
+    primaryImageUri: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80',
+    descriptions: ['Woven on traditional pit looms in Varanasi with opulent contrast zari pallu.'],
+    isStarred: true,
+    isPublishedToStore: true,
+    publishedAt: 'Just now',
+  },
+  {
     id: 'p-101',
     productCode: 'SAR-PAI-880',
     title: 'Paithani Peacock Motif Saree',

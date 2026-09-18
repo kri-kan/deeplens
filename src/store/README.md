@@ -87,3 +87,26 @@ Generated binaries and checksums are placed into `publish/vayyari/`:
 adb install -r publish/vayyari/vayyari-store-latest.apk
 adb install -r publish/vayyari/vayyari-store-debug-latest.apk
 ```
+
+---
+
+## 🔄 Self-Hosted OTA Updates (MinIO + Nginx)
+
+The Store app features a 100% self-hosted Over-The-Air update system:
+
+```bash
+# Publish Store OTA bundle
+make push-store-ota
+# OR: ./infrastructure/deploy.sh store-ota
+# OR: ./scripts/store/push-store-update.sh --notes "Release description"
+```
+
+### How It Works:
+1. **Expo Hermes Export**: `push-store-update.sh` compiles Android Hermes bytecode (`.hbc`) using `npx expo export --platform android`.
+2. **Monotonic Subversioning**: Dynamically computes `<baseVersion>.<commitCount>[-dirty]` from git commits affecting `src/store/` (e.g., `1.0.0.11`).
+3. **MinIO Upload**: Uploads bundle and assets to MinIO bucket `store-updates` at `bundles/<subversion>/`.
+4. **Manifest**: Uploads `manifest.json` with SHA-256 and MD5 checksums, bundle size, and release notes.
+5. **Gateway Routing**: Proxied publicly via `http://<HOST>/store-updates/manifest.json`.
+6. **Automatic Git Hook**: Non-native changes committed under `src/store/` automatically push an OTA bundle in the background (bypass with `SKIP_OTA=1 git commit`).
+7. **Runtime Loading**: `MainApplication.kt` detects `ota/active/bundle.js` and dynamically loads the update on boot. Client checks for updates via `checkAndApplyStoreOTAUpdate()` in `App.tsx`.
+

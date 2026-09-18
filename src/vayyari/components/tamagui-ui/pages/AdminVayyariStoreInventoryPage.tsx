@@ -24,6 +24,7 @@ import {
   LuChevronUp,
   LuExternalLink,
   LuPencil,
+  LuSparkles,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -151,51 +152,74 @@ export function AdminVayyariStoreInventoryPage({
 
   const renderItem = ({ item: product }: { item: VayyariStarredProductItem }) => {
     return (
-      <View style={styles.gridTile}>
+      <View style={styles.gridCard}>
         <Pressable
           onPress={() => (onNavigateToStoreCuration ? onNavigateToStoreCuration(product.id) : onOpenPdp?.(product.id))}
           style={{ flex: 1 }}
         >
-          <Image
-            source={{ uri: product.primaryImageUri }}
-            style={styles.tileImage}
-            contentFit="cover"
-            transition={150}
-          />
+          {/* Product Image Tile */}
+          <View style={styles.cardImageContainer}>
+            <Image
+              source={{ uri: product.primaryImageUri }}
+              style={styles.cardImage}
+              contentFit="cover"
+              transition={150}
+            />
 
-          {/* Active Live Badge (Top-Left) */}
-          <View style={styles.liveBadge}>
-            <Text fontSize={9} fontWeight="800" color="#fff">
-              🟢 In Store
-            </Text>
+            {/* Active Live Badge (Top-Left) */}
+            <View style={styles.liveBadge}>
+              <Text fontSize={9} fontWeight="800" color="#fff">
+                🟢 In Store
+              </Text>
+            </View>
+
+            {/* Media Count Badge (Top-Right) */}
+            <View style={styles.mediaCountBadge}>
+              <Text fontSize={9} fontWeight="700" color="#fff">
+                📸 {product.mediaCount}
+              </Text>
+            </View>
           </View>
 
-          {/* Edit Curation Action Button (Top-Right) */}
-          <Pressable
-            hitSlop={8}
-            onPress={(e) => {
-              e.stopPropagation();
-              onNavigateToStoreCuration?.(product.id);
-            }}
-            style={styles.curateActionBadge}
-          >
-            <LuPencil size={11} color="#fff" />
-          </Pressable>
-
-          {/* Bottom Overlay Info */}
-          <View style={styles.bottomOverlay}>
+          {/* Card Details & Action */}
+          <YStack padding={8} gap={4} backgroundColor={tokens.surface}>
             <XStack alignItems="center" justifyContent="space-between">
-              <Text fontSize={10} fontWeight="900" color="#fff" numberOfLines={1}>
+              <Text fontSize={11} fontWeight="900" color={tokens.text} numberOfLines={1}>
                 {product.productCode}
               </Text>
-              <Text fontSize={9} fontWeight="700" color="rgba(255,255,255,0.9)">
+              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
                 ₹{(product.price || 8000).toLocaleString('en-IN')}
               </Text>
             </XStack>
-            <Text fontSize={9} color="rgba(255,255,255,0.85)" numberOfLines={1}>
-              📸 {product.mediaCount} · {product.category}
+
+            <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
+              {product.title}
             </Text>
-          </View>
+
+            {/* Prominent Qualify & Group CTA Button */}
+            <Pressable
+              hitSlop={4}
+              onPress={(e) => {
+                e.stopPropagation();
+                onNavigateToStoreCuration?.(product.id);
+              }}
+              style={({ pressed }) => [
+                styles.curateActionBtn,
+                {
+                  backgroundColor: pressed ? tokens.accentSubtle : tokens.surfaceRaised,
+                  borderColor: `${tokens.accent}60`,
+                  borderWidth: 1,
+                },
+              ]}
+            >
+              <XStack alignItems="center" justifyContent="center" gap={4}>
+                <LuSparkles size={11} color={tokens.accent} />
+                <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                  Curate in Store ➔
+                </Text>
+              </XStack>
+            </Pressable>
+          </YStack>
         </Pressable>
       </View>
     );
@@ -517,7 +541,7 @@ export function AdminVayyariStoreInventoryPage({
         <FlatList
           data={filteredProducts}
           keyExtractor={(item) => item.id}
-          numColumns={3}
+          numColumns={2}
           renderItem={renderItem}
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={{ padding: 6, paddingBottom: 60 }}
@@ -614,20 +638,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
   columnWrapper: {
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 8,
   },
-  gridTile: {
-    flex: 1 / 3,
-    aspectRatio: 3 / 4,
+  gridCard: {
+    flex: 0.5,
     borderRadius: 8,
     overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#eee',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
   },
-  tileImage: {
+  cardImageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    position: 'relative',
+    backgroundColor: '#f1f5f9',
+  },
+  cardImage: {
     width: '100%',
     height: '100%',
   },
@@ -641,17 +669,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.65)',
     zIndex: 2,
   },
-  curateActionBadge: {
+  mediaCountBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
     backgroundColor: 'rgba(0,0,0,0.65)',
+    zIndex: 2,
+  },
+  curateActionBtn: {
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
   },
   bottomOverlay: {
     position: 'absolute',

@@ -17,13 +17,22 @@ import expo.modules.ExpoReactHostFactory
 class MainApplication : Application(), ReactApplication {
 
   override val reactHost: ReactHost by lazy {
+    val otaBundle = java.io.File(applicationContext.filesDir, "ota/active/bundle.js")
+    val bundlePath = if (otaBundle.exists()) otaBundle.absolutePath else null
+    if (bundlePath != null) {
+      android.util.Log.i("VayyariStoreOTA", "Loading active OTA bundle from: $bundlePath")
+    } else {
+      android.util.Log.i("VayyariStoreOTA", "No active OTA bundle found, loading embedded asset bundle")
+    }
+
     ExpoReactHostFactory.getDefaultReactHost(
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
-        }
+        },
+      jsBundleFilePath = bundlePath
     )
   }
 

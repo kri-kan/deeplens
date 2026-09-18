@@ -20,6 +20,10 @@ export interface StoreMediaItem {
   order: number;
   dwellSeconds: number;
   isCover: boolean;
+  colorGroupId?: string | null;
+  isQualified?: boolean;
+  isCommon?: boolean;
+  title?: string;
 }
 
 export interface StoreProduct {
@@ -38,6 +42,8 @@ export interface StoreProduct {
   colorGroupId?: string | null;
   colorwayName: string;
   colorHex: string;
+  swatchTemplate?: string;
+  colorGroups?: any[];
   mediaOrder: StoreMediaItem[];
   tags: string[];
   isPublished: boolean;
@@ -66,9 +72,12 @@ export interface UpdateCurationPayload {
   stockQuantity?: number;
   mrp?: number;
   salePrice?: number;
+  description?: string;
   colorGroupId?: string | null;
   colorwayName?: string;
   colorHex?: string;
+  swatchTemplate?: string;
+  colorGroups?: any[];
   mediaOrder?: StoreMediaItem[];
   tags?: string[];
 }

@@ -206,3 +206,28 @@ export const LuSunrise: React.FC<IconProps> = ({ size = 16, color = "#333333", s
 export const LuMoon: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="moon" size={size} color={color} style={style} />
 );
+
+export const LuMinus: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="minus" size={size} color={color} style={style} />
+);
+export const LuEye: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="eye" size={size} color={color} style={style} />
+);
+export const LuSave: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="save" size={size} color={color} style={style} />
+);
+export const LuPalette: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Ionicons name="color-palette-outline" size={size} color={color} style={style} />
+);
+export const LuFileText: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="file-text" size={size} color={color} style={style} />
+);
+export const LuPause: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="pause" size={size} color={color} style={style} />
+);
+export const LuShieldCheck: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="shield-check-outline" size={size} color={color} style={style} />
+);
+export const LuHeart: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="heart" size={size} color={color} style={style} />
+);
