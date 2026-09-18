@@ -9,7 +9,7 @@ module.exports = defineConfig([
     plugins: {
       'unused-imports': unusedImports,
     },
-    ignores: ['dist/*'],
+    ignores: ['dist/*', 'node_modules/*', 'android/*', 'ios/*', '.expo/*'],
     rules: {
       'camelcase': ['error', { properties: 'always', ignoreDestructuring: false }],
       '@typescript-eslint/no-unused-vars': 'off',

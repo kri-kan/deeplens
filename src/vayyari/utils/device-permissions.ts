@@ -1,8 +1,17 @@
-import * as MediaLibrary from 'expo-media-library';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Linking, Platform } from 'react-native';
 
 const PERMISSION_PROMPTED_KEY = 'vayyari_device_permissions_prompted';
+
+function getMediaLibrary() {
+  if (Platform.OS === 'web') return null;
+  try {
+    return require('expo-media-library');
+  } catch (err) {
+    console.warn('[DevicePermissions] expo-media-library native module not available:', err);
+    return null;
+  }
+}
 
 /**
  * Just-in-time permission request when the user performs a media action (e.g. download/save).
@@ -12,6 +21,9 @@ export async function requestMediaLibraryPermission(): Promise<boolean> {
   if (Platform.OS === 'web') return true;
 
   try {
+    const MediaLibrary = getMediaLibrary();
+    if (!MediaLibrary?.getPermissionsAsync) return true;
+
     const current = await MediaLibrary.getPermissionsAsync();
     if (current.granted) return true;
 
@@ -45,6 +57,9 @@ export async function ensureInitialPermissions(): Promise<void> {
   try {
     const alreadyPrompted = await AsyncStorage.getItem(PERMISSION_PROMPTED_KEY);
     if (alreadyPrompted) return;
+
+    const MediaLibrary = getMediaLibrary();
+    if (!MediaLibrary?.getPermissionsAsync) return;
 
     const current = await MediaLibrary.getPermissionsAsync();
     if (!current.granted && current.canAskAgain) {

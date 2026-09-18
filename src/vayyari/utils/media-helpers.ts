@@ -1,8 +1,17 @@
 import { cacheDirectory, createDownloadResumable, getInfoAsync } from 'expo-file-system/legacy';
-import * as MediaLibrary from 'expo-media-library';
 import * as Clipboard from 'expo-clipboard';
 import { Alert, Platform } from 'react-native';
 import { requestMediaLibraryPermission } from './device-permissions';
+
+function getMediaLibrary() {
+  if (Platform.OS === 'web') return null;
+  try {
+    return require('expo-media-library');
+  } catch (err) {
+    console.warn('[MediaHelpers] expo-media-library native module not available:', err);
+    return null;
+  }
+}
 
 /**
  * Downloads media to the permanent device gallery (DCIM / Pictures / Vayyari) or browser downloads on Web.
@@ -55,14 +64,21 @@ export const downloadMedia = async (
       localUri = result.uri;
     }
 
+    const MediaLibrary = getMediaLibrary();
+    if (!MediaLibrary?.createAssetAsync) {
+      return localUri;
+    }
+
     const asset = await MediaLibrary.createAssetAsync(localUri);
 
     try {
-      const album = await MediaLibrary.getAlbumAsync('Vayyari');
-      if (!album) {
-        await MediaLibrary.createAlbumAsync('Vayyari', asset, false);
-      } else {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      if (MediaLibrary.getAlbumAsync && MediaLibrary.createAlbumAsync && MediaLibrary.addAssetsToAlbumAsync) {
+        const album = await MediaLibrary.getAlbumAsync('Vayyari');
+        if (!album) {
+          await MediaLibrary.createAlbumAsync('Vayyari', asset, false);
+        } else {
+          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        }
       }
     } catch {
       // Asset created in primary gallery even if custom album grouping fails
