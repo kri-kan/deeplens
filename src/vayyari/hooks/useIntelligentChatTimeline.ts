@@ -39,9 +39,9 @@ export function useIntelligentChatTimeline({
   }, []);
 
   // Initial Load / Re-anchoring
-  const initTimeline = useCallback(async () => {
+  const initTimeline = useCallback(async (showLoading = true) => {
     if (!jid) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       if (targetMessageId || targetTimestamp || highlightGroupId || searchQuery) {
         // Fetch anchored batch around target or highlighted group
@@ -77,7 +77,7 @@ export function useIntelligentChatTimeline({
     } catch (err) {
       console.error('Failed to initialize chat timeline:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [jid, targetMessageId, targetTimestamp, highlightGroupId, searchQuery, pageSize, mergeMessages]);
 
@@ -195,8 +195,17 @@ export function useIntelligentChatTimeline({
     }
   }, [jid, pageSize, mergeMessages]);
 
+  // Optimistically update the groupId of messages in memory
+  const updateMessageGroup = useCallback((fromGroupId: string, toGroupId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.groupId === fromGroupId ? { ...m, groupId: toGroupId } : m))
+    );
+  }, []);
+
   return {
     messages,
+    setMessages,
+    updateMessageGroup,
     loading,
     loadingOlder,
     loadingNewer,
