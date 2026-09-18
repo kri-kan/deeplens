@@ -23,6 +23,7 @@ import { uploadMedia, MediaType, setMinIOAvailability } from '../clients/media.c
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { getRedisClient } from '../clients/redis.client';
 import { saveMessage } from '../utils/messages';
+import { extractMediaPayload, clampBackfillLimit } from '../utils/media-extractor';
 import { getRateLimiter } from '../utils/rate-limiter';
 import { Server as SocketServer } from 'socket.io';
 import { mediaService } from './media.service';
@@ -1080,47 +1081,14 @@ export class WhatsAppService {
                 return { success: true, mediaUrl: row.media_url };
             }
 
-            const metadata = row.metadata || {};
-
-            // Extract media payload from metadata
-            let targetMsg = metadata.message || metadata;
-            if (targetMsg.ephemeralMessage?.message) targetMsg = targetMsg.ephemeralMessage.message;
-            if (targetMsg.viewOnceMessage?.message) targetMsg = targetMsg.viewOnceMessage.message;
-            if (targetMsg.viewOnceMessageV2?.message) targetMsg = targetMsg.viewOnceMessageV2.message;
-            if (targetMsg.documentWithCaptionMessage?.message) targetMsg = targetMsg.documentWithCaptionMessage.message;
-
-            let type: MediaType | null = null;
-            let mediaKeyName: string | null = null;
-            let payload: any = null;
-
-            if (targetMsg.imageMessage) {
-                type = 'photo';
-                mediaKeyName = 'imageMessage';
-                payload = targetMsg.imageMessage;
-            } else if (targetMsg.videoMessage) {
-                type = 'video';
-                mediaKeyName = 'videoMessage';
-                payload = targetMsg.videoMessage;
-            } else if (targetMsg.audioMessage) {
-                type = 'audio';
-                mediaKeyName = 'audioMessage';
-                payload = targetMsg.audioMessage;
-            } else if (targetMsg.documentMessage) {
-                type = 'document';
-                mediaKeyName = 'documentMessage';
-                payload = targetMsg.documentMessage;
-            } else if (targetMsg.stickerMessage) {
-                type = 'sticker';
-                mediaKeyName = 'stickerMessage';
-                payload = targetMsg.stickerMessage;
-            }
-
-            if (!type || !mediaKeyName || !payload) {
+            const extracted = extractMediaPayload(row.metadata);
+            if (!extracted) {
                 return {
                     success: false,
                     error: 'Message does not contain media keys or encrypted payload in metadata'
                 };
             }
+            const { type, mediaKeyName, payload } = extracted;
 
             // Construct synthetic WAMessage
             const syntheticWAMessage: WAMessage = {
@@ -1231,7 +1199,7 @@ export class WhatsAppService {
             throw new Error('Database client not available');
         }
 
-        const cappedLimit = Math.min(Math.max(1, limit), 200);
+        const cappedLimit = clampBackfillLimit(limit);
 
         const res = await client.query(
             `SELECT message_id

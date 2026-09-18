@@ -12,6 +12,7 @@
         "dev:server": "ts-node-dev --respawn --transpile-only src/index.ts",
         "dev:client": "cd client && npm run dev",
         "setup": "npm install && cd client && npm install && npm run build && cd .. && npm run build",
+        "test": "npx tsx --test tests/**/*.test.ts",
         "reset": "powershell -ExecutionPolicy Bypass -File ./reset-all.ps1"
     },
     "keywords": [],
