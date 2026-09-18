@@ -6,6 +6,22 @@ import { requestMediaLibraryPermission } from './device-permissions';
 function getMediaLibrary() {
   if (Platform.OS === 'web') return null;
   try {
+    let hasNativeModule: any = null;
+    try {
+      const { requireOptionalNativeModule } = require('expo-modules-core');
+      if (typeof requireOptionalNativeModule === 'function') {
+        hasNativeModule =
+          requireOptionalNativeModule('ExpoMediaLibraryNext') ??
+          requireOptionalNativeModule('ExpoMediaLibrary');
+      }
+    } catch {
+      hasNativeModule = null;
+    }
+
+    if (!hasNativeModule) {
+      return null;
+    }
+
     return require('expo-media-library');
   } catch (err) {
     console.warn('[MediaHelpers] expo-media-library native module not available:', err);
