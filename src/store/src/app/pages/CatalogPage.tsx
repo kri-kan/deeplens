@@ -145,7 +145,8 @@ export const CatalogPage: React.FC = () => {
   }, [filteredProducts, visibleCount]);
 
   const handleProductClick = (product: StoreProduct) => {
-    navigate('pdp', { id: product.id });
+    const productCode = product.code || product.id;
+    navigate('pdp', { id: productCode, code: productCode });
   };
 
   const handleAddToCart = (e: any, product: StoreProduct) => {

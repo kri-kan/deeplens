@@ -195,29 +195,21 @@ export const mockCatalogService = {
     return [];
   },
 
-  async getProductById(id: string): Promise<StoreProduct | null> {
+  async getProductByCode(code: string): Promise<StoreProduct | null> {
     try {
       const base = getStoreApiUrl();
-      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      let res: Response;
-      if (isGuid) {
-        // Direct GUID lookup avoids 404 on /products/code/{guid}
-        res = await fetch(`${base}/api/v1/products/${encodeURIComponent(id)}`);
-      } else {
-        // Dedicated product code endpoint first: /api/v1/products/code/{code}
-        res = await fetch(`${base}/api/v1/products/code/${encodeURIComponent(id)}`);
-        if (!res.ok) {
-          // Fallback to /api/v1/products/{id}
-          res = await fetch(`${base}/api/v1/products/${encodeURIComponent(id)}`);
-        }
-      }
+      const res = await fetch(`${base}/api/v1/products/code/${encodeURIComponent(code)}`);
       if (res.ok) {
         const p = await res.json();
-        return mapRawProduct(p, id);
+        return mapRawProduct(p, code);
       }
     } catch (err) {
-      console.warn('Failed to fetch live product by code/id from Store.Api:', err);
+      console.warn('Failed to fetch live product by code from Store.Api:', err);
     }
     return null;
+  },
+
+  async getProductById(idOrCode: string): Promise<StoreProduct | null> {
+    return this.getProductByCode(idOrCode);
   },
 };

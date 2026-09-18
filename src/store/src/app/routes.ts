@@ -12,6 +12,7 @@ export type RouteName =
 export interface RouteParams {
   category?: string;
   id?: string;
+  code?: string;
   phone?: string;
   searchQuery?: string;
   from?: RouteName;

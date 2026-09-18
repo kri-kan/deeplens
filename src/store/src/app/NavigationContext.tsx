@@ -36,10 +36,10 @@ export function parseStoreDeepLink(rawUrl: string): { route: RouteName; params: 
 
     // 1. Product / PDP path segment matching: /product/{code} or /pdp/{code}
     if (firstSegment === "product" || firstSegment === "pdp") {
-      const productCode = segments[1] || queryParams.id;
+      const productCode = segments[1] || queryParams.code || queryParams.id;
       return {
         route: "pdp",
-        params: { id: productCode, ...queryParams },
+        params: { id: productCode, code: productCode, ...queryParams },
       };
     }
 
@@ -176,8 +176,9 @@ export const NavigationProvider: React.FC<{ initialRoute?: RouteName; children: 
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const config = ROUTE_REGISTRY[route];
       let targetUrl = config.path;
-      if (route === "pdp" && newParams.id) {
-        targetUrl = `/product/${encodeURIComponent(newParams.id)}`;
+      if (route === "pdp" && (newParams.code || newParams.id)) {
+        const code = String(newParams.code || newParams.id);
+        targetUrl = `/product/${encodeURIComponent(code)}`;
       } else {
         const searchParams = new URLSearchParams();
         Object.entries(newParams).forEach(([k, v]) => {
@@ -205,8 +206,9 @@ export const NavigationProvider: React.FC<{ initialRoute?: RouteName; children: 
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const config = ROUTE_REGISTRY[route];
       let targetUrl = config.path;
-      if (route === "pdp" && newParams.id) {
-        targetUrl = `/product/${encodeURIComponent(newParams.id)}`;
+      if (route === "pdp" && (newParams.code || newParams.id)) {
+        const code = String(newParams.code || newParams.id);
+        targetUrl = `/product/${encodeURIComponent(code)}`;
       } else {
         const searchParams = new URLSearchParams();
         Object.entries(newParams).forEach(([k, v]) => {

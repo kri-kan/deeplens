@@ -35,11 +35,11 @@ export const ProductDetailPage: React.FC = () => {
   const [zoomModalVisible, setZoomModalVisible] = useState(false);
   const isDesktop = width >= 1024;
 
-  const targetId = params.id || "vf2b58";
+  const targetCode = params.code || params.id || "vf2b58";
 
   useEffect(() => {
     setLoading(true);
-    mockCatalogService.getProductById(targetId).then((p) => {
+    mockCatalogService.getProductByCode(targetCode).then((p) => {
       setProduct(p);
       if (p) {
         const initialCgId =
@@ -54,7 +54,7 @@ export const ProductDetailPage: React.FC = () => {
       setSelectedImage(0);
       setLoading(false);
     });
-  }, [targetId]);
+  }, [targetCode]);
 
   const activeColorGroup = useMemo(() => {
     if (!product?.colorGroups || product.colorGroups.length === 0) return null;
@@ -104,7 +104,7 @@ export const ProductDetailPage: React.FC = () => {
       <View style={styles.notFoundContainer}>
         <Text style={styles.notFoundTitle}>Product Not Found</Text>
         <Text style={styles.notFoundSub}>
-          Product with code '{targetId}' was not found in the live published catalog.
+          Product with code '{targetCode}' was not found in the live published catalog.
         </Text>
         <TouchableOpacity style={styles.backHomeBtn} onPress={() => navigate("catalog")}>
           <Text style={styles.backHomeBtnText}>← Return to Catalog</Text>

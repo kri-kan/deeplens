@@ -50,14 +50,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onOpenAuth, onOpenLocation }
   }, [activeCategory]);
 
   const handleProductPress = (product: StoreProduct) => {
+    const productCode = product.code || product.id;
     telemetry.trackEvent('product_viewed', {
-      productId: product.id,
+      productId: productCode,
       title: product.title,
       price: product.price,
       fabric: product.fabric,
       category: product.category,
     });
-    navigate('pdp', { id: product.id });
+    navigate('pdp', { id: productCode, code: productCode });
   };
 
   const handleAddToCart = (e: any, product: StoreProduct) => {
