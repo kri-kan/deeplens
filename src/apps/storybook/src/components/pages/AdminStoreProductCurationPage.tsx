@@ -58,6 +58,7 @@ import {
   StoreProductLifecycleState,
   ProductCurationSpecs,
   DEFAULT_SAREE_SPECS,
+  buildSpecsFromUnifiedAttributes,
 } from '../organisms/StoreCuration/types';
 import { StoreProductEnrichmentSection } from '../organisms/StoreCuration/StoreProductEnrichmentSection';
 import {
@@ -85,6 +86,9 @@ export interface AdminStoreProductCurationPageProps {
   initialMedia?: StoreCurationMediaItem[];
   initialColorGroups?: StoreColorGroup[];
   initialColorPickerGroupId?: string | null;
+  product?: any;
+  unified_attributes?: any;
+  initialSpecs?: ProductCurationSpecs;
   onBack?: () => void;
   onSave?: (curatedPayload: any) => void;
   disableSafeArea?: boolean;
@@ -114,6 +118,9 @@ export function AdminStoreProductCurationPage({
   initialMedia = MOCK_CURATION_MEDIA,
   initialColorGroups = INITIAL_COLOR_GROUPS,
   initialColorPickerGroupId = null,
+  product,
+  unified_attributes,
+  initialSpecs,
   onBack,
   onSave,
   disableSafeArea = false,
@@ -172,14 +179,38 @@ export function AdminStoreProductCurationPage({
   const [activeSwatchTab, setActiveSwatchTab] = useState<string>('common');
   const [colorPickerModalGroupId, setColorPickerModalGroupId] = useState<string | null>(initialColorPickerGroupId);
 
+  const effectiveUa = unified_attributes || product?.unified_attributes;
+  const resolvedInitialSpecs = useMemo(() => {
+    if (initialSpecs) return initialSpecs;
+    if (effectiveUa || fabric || title) {
+      return buildSpecsFromUnifiedAttributes(
+        effectiveUa,
+        { title, fabric, ...product },
+        DEFAULT_SAREE_SPECS
+      );
+    }
+    return DEFAULT_SAREE_SPECS;
+  }, [initialSpecs, effectiveUa, product, title, fabric]);
+
   // Metadata stage
   const [lifecycleState, setLifecycleState] = useState<StoreProductLifecycleState>(initialLifecycleState);
   const [description, setDescription] = useState(initialDescription);
   const [mrp, setMrp] = useState(initialMrp.toString());
   const [salePrice, setSalePrice] = useState(initialSalePrice.toString());
-  const [specs, setSpecs] = useState<ProductCurationSpecs>(DEFAULT_SAREE_SPECS);
+  const [specs, setSpecs] = useState<ProductCurationSpecs>(resolvedInitialSpecs);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
+
+  React.useEffect(() => {
+    if (effectiveUa) {
+      const derived = buildSpecsFromUnifiedAttributes(
+        effectiveUa,
+        { title, fabric, ...product },
+        specs
+      );
+      setSpecs(derived);
+    }
+  }, [effectiveUa, product]);
 
   // Preview PDP interactive state
   const [previewActiveGroupId, setPreviewActiveGroupId] = useState<string>(
@@ -1530,6 +1561,8 @@ export function AdminStoreProductCurationPage({
               mrp={mrp}
               salePrice={salePrice}
               specs={specs}
+              product={product}
+              unified_attributes={effectiveUa}
               onChangeDescription={setDescription}
               onChangeMrp={setMrp}
               onChangeSalePrice={setSalePrice}
