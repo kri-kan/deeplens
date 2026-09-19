@@ -360,8 +360,8 @@ export const ProductDetailPage: React.FC = () => {
             selectedColor={activeColorKey}
             onSelectColor={setSelectedColor}
           >
-            {/* Mobile & Tablet: Compact ColourSelector Card right below the Carousel */}
-            {isCompact && colourOptions.length > 0 ? (
+            {/* Mobile: Compact ColourSelector Card right below Carousel */}
+            {isMobile && colourOptions.length > 0 ? (
               <YStack
                 backgroundColor={tokens.surface}
                 borderColor={tokens.border}
@@ -377,6 +377,14 @@ export const ProductDetailPage: React.FC = () => {
                   format="dots"
                 />
               </YStack>
+            ) : isTablet && colourOptions.length > 0 ? (
+              /* Tablet: Raw ColourSelector embedded in the right side of tablet split card */
+              <ColourSelector
+                options={colourOptions}
+                selected={activeColorKey}
+                onSelect={setSelectedColor}
+                format="dots"
+              />
             ) : null}
           </ProductGallery>
         }
