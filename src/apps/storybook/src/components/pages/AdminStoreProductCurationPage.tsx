@@ -907,24 +907,24 @@ export function AdminStoreProductCurationPage({
                   },
                 ]}
               >
-                <YStack gap={8} flex={1} justifyContent="space-between">
-                  <XStack alignItems="center" justifyContent="space-between">
+                <YStack gap={10} flex={1} justifyContent="space-between">
+                  <XStack alignItems="center" gap={8} width="100%">
                     <View style={[styles.hubCompactIconWrapper, { backgroundColor: `${tokens.accent}14` }]}>
                       <LuLayers size={16} color={tokens.accent} />
                     </View>
-                    <LuChevronRight size={14} color={tokens.textMuted} />
-                  </XStack>
-
-                  <YStack width="100%" marginVertical={2}>
                     <Text
                       fontSize={13}
                       fontWeight="900"
+                      lineHeight={16}
                       color={tokens.text}
-                      style={{ display: 'flex', width: '100%' } as any}
+                      flex={1}
+                      flexWrap="wrap"
+                      style={{ flex: 1, minWidth: 0 } as any}
                     >
                       Qualify & Group
                     </Text>
-                  </YStack>
+                    <LuChevronRight size={14} color={tokens.textMuted} />
+                  </XStack>
 
                   {/* Compact Tags: Media Count & Swatch Component + Count */}
                   <XStack gap={6} alignItems="center" flexWrap="wrap">
@@ -964,24 +964,24 @@ export function AdminStoreProductCurationPage({
                   },
                 ]}
               >
-                <YStack gap={8} flex={1} justifyContent="space-between">
-                  <XStack alignItems="center" justifyContent="space-between">
+                <YStack gap={10} flex={1} justifyContent="space-between">
+                  <XStack alignItems="center" gap={8} width="100%">
                     <View style={[styles.hubCompactIconWrapper, { backgroundColor: '#F0FDF4' }]}>
                       <LuFileText size={16} color="#16A34A" />
                     </View>
-                    <LuChevronRight size={14} color={tokens.textMuted} />
-                  </XStack>
-
-                  <YStack width="100%" marginVertical={2}>
                     <Text
                       fontSize={13}
                       fontWeight="900"
+                      lineHeight={16}
                       color={tokens.text}
-                      style={{ display: 'flex', width: '100%' } as any}
+                      flex={1}
+                      flexWrap="wrap"
+                      style={{ flex: 1, minWidth: 0 } as any}
                     >
                       Metadata
                     </Text>
-                  </YStack>
+                    <LuChevronRight size={14} color={tokens.textMuted} />
+                  </XStack>
 
                   {/* Compact Tags: Selling Price & Discount */}
                   <XStack gap={6} alignItems="center" flexWrap="wrap">
@@ -1905,7 +1905,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
     cursor: 'pointer',
-    minHeight: 102,
+    minHeight: 88,
   },
   hubCompactIconWrapper: {
     width: 28,
