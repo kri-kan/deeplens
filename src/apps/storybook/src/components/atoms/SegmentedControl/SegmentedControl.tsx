@@ -46,7 +46,8 @@ export function SegmentedControl({
             onPress={() => onChange(option.id)}
           >
             <YStack
-              paddingVertical={option.subtitle ? 4 : 6}
+              minHeight={36}
+              paddingVertical={option.subtitle ? 3 : 6}
               paddingHorizontal={4}
               borderRadius={tokens.radius.xs}
               backgroundColor={isActive ? tokens.surface : 'transparent'}

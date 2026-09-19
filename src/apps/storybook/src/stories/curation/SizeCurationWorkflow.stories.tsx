@@ -315,7 +315,7 @@ export function SizeSettingWorkflowComponent({
         )}
 
         {/* Inner Controls Container */}
-        <YStack padding={isMobileAdmin ? 12 : 16} gap={14}>
+        <YStack padding={isMobileAdmin ? 6 : 14} gap={12}>
       {/* Step 1 Header */}
       <XStack justifyContent="space-between" alignItems="center">
         <XStack alignItems="center" gap={6}>
@@ -393,8 +393,10 @@ export function SizeSettingWorkflowComponent({
         </XStack>
       </ScrollView>
 
+      <View style={{ height: 1, backgroundColor: tokens.border, marginVertical: 6, width: '100%' }} />
+
       {/* Step 2: Sizing System Variant */}
-      <YStack gap={6} paddingTop={4}>
+      <YStack gap={6} paddingTop={2}>
         <XStack alignItems="center" gap={6}>
           <XStack
             width={22}
@@ -429,13 +431,15 @@ export function SizeSettingWorkflowComponent({
             setShopperSelectedSize(newCat === 'letter' ? 'M' : pool[0]?.id || '');
           }}
           options={[
-            { id: 'no-size', label: 'No Size', subtitle: 'Universal' },
-            { id: 'letter', label: 'Letter', subtitle: 'XS–5XL' },
-            { id: 'numeric', label: 'Bust', subtitle: '32–44"' },
-            { id: 'kids', label: 'Kids', subtitle: '0–16Y' },
+            { id: 'no-size', label: 'No Size' },
+            { id: 'letter', label: 'XS–5XL' },
+            { id: 'numeric', label: 'Bust 32–44' },
+            { id: 'kids', label: 'Kids 0–16Y' },
           ]}
         />
       </YStack>
+
+      <View style={{ height: 1, backgroundColor: tokens.border, marginVertical: 6, width: '100%' }} />
 
       {/* Step 3: Size Availability Matrix OR No Size Informational Options */}
       <YStack gap={8} paddingTop={4}>

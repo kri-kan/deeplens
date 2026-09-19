@@ -163,7 +163,7 @@ export const STITCH_TYPE_OPTIONS: TaxonomyOption[] = [
   { id: 'semi_stitched', label: 'Semi-Stitched (Custom Tailoring)', description: 'Pre-cut panels with customizable waist and bust seams' },
   { id: 'stitched_canvas_patta', label: 'Stitched with Canvas Patta / Lining', description: 'Heavy skirt/pallu reinforced with rigid canvas border for structured flare' },
   { id: 'fully_stitched_numeric', label: 'Fully Stitched (Numeric 32–44)', description: 'Finished garment with padded cups and side margin allowances' },
-  { id: 'fully_stitched_letter', label: 'Fully Stitched (Letter XS–5XL)', description: 'Standard ready-to-wear sizing with comfortable ease' },
+  { id: 'fully_stitched_letter', label: 'Fully Stitched XS–5XL', description: 'Standard ready-to-wear sizing with comfortable ease' },
   { id: 'free_size_adjustable', label: 'Free Size (Adjustable Drawstring)', description: 'Versatile drape fitting waist 26" to 44"' },
 ];
 
@@ -483,7 +483,7 @@ export function buildSpecsFromUnifiedAttributes(
     derivedSizeProfile = 'kids';
   } else if (rawCategory.includes('blouse') || fullText.includes('32-44') || normalizedStitchText.includes('numeric') || normalizedStitchText.includes('32')) {
     derivedSizeProfile = 'numeric';
-  } else if (rawCategory.includes('dress') || rawCategory.includes('suit') || rawCategory.includes('kurta') || normalizedStitchText.includes('letter') || fullText.includes('xs') || fullText.includes('3xl')) {
+  } else if (rawCategory.includes('dress') || rawCategory.includes('suit') || rawCategory.includes('kurta') || normalizedStitchText.includes('letter') || fullText.includes('xs') || fullText.includes('3xl') || fullText.includes('5xl')) {
     derivedSizeProfile = 'letter';
   } else {
     derivedSizeProfile = 'no-size';
