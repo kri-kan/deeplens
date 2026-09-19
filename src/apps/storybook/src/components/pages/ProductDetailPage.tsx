@@ -193,7 +193,7 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
           selectedColor={selectedColor}
           onSelectColor={setSelectedColor}
         >
-          {isCompact ? (
+          {isMobile ? (
             <YStack
               backgroundColor={tokens.surface}
               borderColor={tokens.border}
@@ -209,6 +209,13 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
                 format="dots"
               />
             </YStack>
+          ) : isTablet ? (
+            <ColourSelector
+              options={COLOUR_OPTIONS}
+              selected={selectedColor}
+              onSelect={setSelectedColor}
+              format="dots"
+            />
           ) : null}
         </ProductGallery>
       }

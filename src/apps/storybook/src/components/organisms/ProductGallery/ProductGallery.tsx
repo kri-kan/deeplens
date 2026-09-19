@@ -264,8 +264,93 @@ export function ProductGallery({
           </YStack>
         </View>
 
-        {/* Contextual Slot below Carousel: ColourSelector */}
-        {children}
+        {/* TABLET VIEW: Left Space = Scrollable Media Thumbnails, Right Space = Expanded Swatches */}
+        {isTablet ? (
+          <XStack
+            backgroundColor={tokens.surface}
+            borderColor={tokens.border}
+            borderWidth={1}
+            borderRadius={16}
+            padding={16}
+            gap={16}
+            alignItems="center"
+            width="100%"
+          >
+            {/* Left side: Media thumbnails for this active swatch */}
+            <YStack flex={1} minWidth={0} gap={8}>
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text
+                  fontSize={11}
+                  fontWeight="800"
+                  color={tokens.accent}
+                  textTransform="uppercase"
+                  letterSpacing={0.8}
+                >
+                  Media ({totalImages})
+                </Text>
+                <Text fontSize={11} fontWeight="600" color={tokens.textMuted}>
+                  {activeImageIndex + 1} of {totalImages}
+                </Text>
+              </XStack>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ gap: 10, alignItems: 'center', paddingVertical: 2 }}
+              >
+                {activeImages.map((img, idx) => {
+                  const isSelected = activeImageIndex === idx;
+                  return (
+                    <XStack
+                      key={img.id || idx}
+                      width={60}
+                      height={60}
+                      borderRadius={12}
+                      borderWidth={isSelected ? 2.5 : 1}
+                      borderColor={isSelected ? tokens.accent : tokens.border}
+                      overflow="hidden"
+                      cursor="pointer"
+                      onPress={() => setActiveImageIndex(idx)}
+                      hoverStyle={{ scale: 1.05, borderColor: tokens.accent }}
+                      pressStyle={{ scale: 0.95 }}
+                      backgroundColor={tokens.surfaceRaised}
+                    >
+                      {img.url ? (
+                        <Image
+                          source={{ uri: img.url }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <LinearGradient
+                          colors={img.gradient || ['#f3e6d8', '#d3aa75']}
+                          style={{ width: '100%', height: '100%' }}
+                        />
+                      )}
+                    </XStack>
+                  );
+                })}
+              </ScrollView>
+            </YStack>
+
+            {/* Vertical Divider */}
+            <YStack
+              width={1}
+              backgroundColor={tokens.border}
+              alignSelf="stretch"
+              marginVertical={2}
+            />
+
+            {/* Right side: Expanded Colour Swatches */}
+            <YStack flex={1.2} minWidth={280} gap={8} justifyContent="center">
+              {children}
+            </YStack>
+          </XStack>
+        ) : (
+          /* Mobile View: Standard children slot */
+          children
+        )}
       </YStack>
     );
   }
