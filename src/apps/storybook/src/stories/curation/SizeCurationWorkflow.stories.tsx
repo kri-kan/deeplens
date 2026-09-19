@@ -30,6 +30,7 @@ import {
   SizeCategoryType,
   SizeOption,
   LETTER_SIZE_PRESET,
+  DEFAULT_SELECTED_LETTER_SIZES,
   BLOUSE_NUMERIC_PRESET,
   KIDS_SIZE_PRESET,
   FREE_SIZE_PRESET,
@@ -103,10 +104,16 @@ export function SizeSettingWorkflowComponent({
 
   const [availableSizes, setAvailableSizes] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
-    activeProduct.sizeConfig.options.forEach((opt, idx) => {
-      // simulate first few in stock, last out of stock
-      init[opt.id] = idx < activeProduct.sizeConfig.options.length - 2;
-    });
+    if (activeProduct.sizeConfig.type === 'letter') {
+      activeProduct.sizeConfig.options.forEach((opt) => {
+        init[opt.id] = DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id);
+      });
+    } else {
+      activeProduct.sizeConfig.options.forEach((opt, idx) => {
+        // simulate first few in stock, last out of stock
+        init[opt.id] = idx < activeProduct.sizeConfig.options.length - 2;
+      });
+    }
     return init;
   });
 
@@ -116,7 +123,9 @@ export function SizeSettingWorkflowComponent({
 
   // Shopper's PDP selection in live preview
   const [shopperSelectedSize, setShopperSelectedSize] = useState<string>(
-    activeProduct.sizeConfig.defaultSelected || '20'
+    activeProduct.sizeConfig.type === 'letter'
+      ? 'M'
+      : activeProduct.sizeConfig.defaultSelected || '20'
   );
 
   // When product changes, sync curator controls
@@ -135,12 +144,20 @@ export function SizeSettingWorkflowComponent({
         );
       }
       const init: Record<string, boolean> = {};
-      prod.sizeConfig.options.forEach((opt, idx) => {
-        init[opt.id] = idx < prod.sizeConfig.options.length - 1;
-      });
+      if (prod.sizeConfig.type === 'letter') {
+        prod.sizeConfig.options.forEach((opt) => {
+          init[opt.id] = DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id);
+        });
+      } else {
+        prod.sizeConfig.options.forEach((opt, idx) => {
+          init[opt.id] = idx < prod.sizeConfig.options.length - 1;
+        });
+      }
       setAvailableSizes(init);
       setCustomNote(prod.sizeConfig.customNotes || '');
-      setShopperSelectedSize(prod.sizeConfig.defaultSelected || prod.sizeConfig.options[0]?.id || '');
+      setShopperSelectedSize(
+        prod.sizeConfig.type === 'letter' ? 'M' : prod.sizeConfig.defaultSelected || prod.sizeConfig.options[0]?.id || ''
+      );
     }
   };
 
@@ -403,15 +420,19 @@ export function SizeSettingWorkflowComponent({
             setActiveSizeCategory(newCat);
             const pool = getPoolForCategory(newCat);
             const init: Record<string, boolean> = {};
-            pool.forEach((opt, idx) => (init[opt.id] = idx < pool.length - 1));
+            if (newCat === 'letter') {
+              pool.forEach((opt) => (init[opt.id] = DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id)));
+            } else {
+              pool.forEach((opt, idx) => (init[opt.id] = idx < pool.length - 1));
+            }
             setAvailableSizes(init);
-            setShopperSelectedSize(pool[0]?.id || '');
+            setShopperSelectedSize(newCat === 'letter' ? 'M' : pool[0]?.id || '');
           }}
           options={[
-            { id: 'no-size', label: isMobile ? 'No Size' : 'No Size' },
-            { id: 'letter', label: isMobile ? 'Letter' : 'Letter (XS-3XL)' },
-            { id: 'numeric', label: isMobile ? 'Bust' : 'Bust 32-44' },
-            { id: 'kids', label: isMobile ? 'Kids' : 'Kids (0-16Y)' },
+            { id: 'no-size', label: 'No Size', subtitle: 'Universal' },
+            { id: 'letter', label: 'Letter', subtitle: 'XS–5XL' },
+            { id: 'numeric', label: 'Bust', subtitle: '32–44"' },
+            { id: 'kids', label: 'Kids', subtitle: '0–16Y' },
           ]}
         />
       </YStack>
@@ -439,6 +460,26 @@ export function SizeSettingWorkflowComponent({
 
           {!isNoSizeCategory && (
             <XStack gap={8} alignItems="center">
+              {activeSizeCategory === 'letter' && (
+                <>
+                  <Pressable
+                    onPress={() => {
+                      const next: Record<string, boolean> = {};
+                      currentPool.forEach((opt) => {
+                        next[opt.id] = DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id);
+                      });
+                      setAvailableSizes(next);
+                    }}
+                  >
+                    <Text fontSize={11} color={tokens.accent} fontWeight="700">
+                      M–3XL
+                    </Text>
+                  </Pressable>
+                  <Text fontSize={11} color={tokens.textMuted}>
+                    •
+                  </Text>
+                </>
+              )}
               <Pressable onPress={() => handleSelectAllSizes(true)}>
                 <Text fontSize={11} color={tokens.accent} fontWeight="700">
                   Select All

@@ -44,7 +44,12 @@ export const LETTER_SIZE_PRESET: SizeOption[] = [
   { id: 'XL', label: 'XL', subtitle: 'Bust 40"', measurement: 'Bust 40" · Waist 34"' },
   { id: '2XL', label: '2XL', subtitle: 'Bust 42"', measurement: 'Bust 42" · Waist 36"' },
   { id: '3XL', label: '3XL', subtitle: 'Bust 44"', measurement: 'Bust 44" · Waist 38"' },
+  { id: '4XL', label: '4XL', subtitle: 'Bust 46"', measurement: 'Bust 46" · Waist 40"' },
+  { id: '5XL', label: '5XL', subtitle: 'Bust 48"', measurement: 'Bust 48" · Waist 42"' },
 ];
+
+/** Default selected size range for letter sizing (M through 3XL) */
+export const DEFAULT_SELECTED_LETTER_SIZES: string[] = ['M', 'L', 'XL', '2XL', '3XL'];
 
 // -------------------------------------------------------------
 // 3. NUMERIC SIZES (Stitched Blouses, Bust / Chest Inches)
@@ -355,11 +360,11 @@ export const WOMEN_BLOUSE_CHART: SizeChartData = {
   },
 };
 
-/** 4. Kurtis, Anarkalis & Ethnic Dresses (Letter Sizes XS – 3XL) */
+/** 4. Kurtis, Anarkalis & Ethnic Dresses (Letter Sizes XS – 5XL) */
 export const KURTI_ANARKALI_CHART: SizeChartData = {
   id: 'chart-kurti-anarkali',
   category: 'kurti',
-  title: 'Kurti & Anarkali Suit Size Chart',
+  title: 'Kurti & Anarkali Suit Size Chart (XS – 5XL)',
   subtitle: 'Measurement specifications for Stitched Kurtas, Anarkali Gowns & Co-ord Sets with comfort ease.',
   unit: 'in',
   alterationNote: 'Garments include 2.5 to 3 inches of garment ease over body measurements for relaxed movement.',
@@ -483,6 +488,38 @@ export const KURTI_ANARKALI_CHART: SizeChartData = {
       lengthCm: '127 cm',
       flareInches: '140"',
       flareCm: '355 cm',
+    },
+    {
+      size: '4XL',
+      label: '4XL (48)',
+      chestInches: '48"',
+      chestCm: '122 cm',
+      bustInches: '48"',
+      bustCm: '122 cm',
+      waistInches: '44"',
+      waistCm: '112 cm',
+      hipInches: '50"',
+      hipCm: '127 cm',
+      lengthInches: '51"',
+      lengthCm: '130 cm',
+      flareInches: '145"',
+      flareCm: '368 cm',
+    },
+    {
+      size: '5XL',
+      label: '5XL (50)',
+      chestInches: '50"',
+      chestCm: '127 cm',
+      bustInches: '50"',
+      bustCm: '127 cm',
+      waistInches: '46"',
+      waistCm: '117 cm',
+      hipInches: '52"',
+      hipCm: '132 cm',
+      lengthInches: '51"',
+      lengthCm: '130 cm',
+      flareInches: '150"',
+      flareCm: '381 cm',
     },
   ],
   tips: [

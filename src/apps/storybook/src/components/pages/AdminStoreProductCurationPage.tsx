@@ -64,6 +64,7 @@ import { CurationHubTile } from '../molecules/CurationHubTile';
 import { SizeSelector } from '../organisms/SizeSelector/SizeSelector';
 import {
   LETTER_SIZE_PRESET,
+  DEFAULT_SELECTED_LETTER_SIZES,
   BLOUSE_NUMERIC_PRESET,
   KIDS_SIZE_PRESET,
   CatalogTestProduct,
@@ -596,7 +597,7 @@ export function AdminStoreProductCurationPage({
             ? KIDS_SIZE_PRESET[0]?.id
             : specs.sizeProfile === 'numeric'
             ? BLOUSE_NUMERIC_PRESET[0]?.id
-            : LETTER_SIZE_PRESET[0]?.id),
+            : 'M'),
       options: isNoSize
         ? [
             {
@@ -613,7 +614,9 @@ export function AdminStoreProductCurationPage({
             : LETTER_SIZE_PRESET
           ).map((opt) => ({
             ...opt,
-            disabled: specs.availableSizes ? specs.availableSizes[opt.id] === false : false,
+            disabled: specs.availableSizes
+              ? specs.availableSizes[opt.id] === false
+              : (specs.sizeProfile === 'letter' ? !DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id) : false),
           })),
     };
 
