@@ -15,6 +15,8 @@ const VALID_CAMPAIGNS: CampaignName[] = [
   "ramadan",
 ];
 
+import { FormFactorShell } from "../src/components/templates/FormFactorShell";
+
 function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; tamaguiTheme: string; context: any }) {
   const { tokens } = useTheme();
 
@@ -32,19 +34,55 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
     }
   }, [context?.id]);
 
+  // Standard architectural practice: starting from Organism level, present every story in 3 form factor shells
+  const storyTitle = context?.title || "";
+  const isOrganismOrAbove =
+    storyTitle.startsWith("Organisms") ||
+    storyTitle.startsWith("Templates") ||
+    storyTitle.startsWith("Pages") ||
+    storyTitle.startsWith("Curation") ||
+    context?.parameters?.formFactorShell === true;
+
+  const shouldWrapWithShell =
+    isOrganismOrAbove &&
+    context?.parameters?.formFactorShell !== false &&
+    context?.parameters?.formFactorShell?.disabled !== true;
+
+  const defaultFactor = context?.parameters?.formFactorShell?.defaultFactor || "desktop";
+
   return (
     <TamaguiTheme name={tamaguiTheme}>
-      <View
-        style={{
-          flex: 1,
-          minHeight: "100%",
-          backgroundColor: tokens.background,
-          padding: 16,
-          overflow: "auto" as any,
-        }}
-      >
-        <Story {...context} />
-      </View>
+      {shouldWrapWithShell ? (
+        <FormFactorShell
+          title={context?.name || context?.story}
+          category={storyTitle.split("/")[0]}
+          initialFactor={defaultFactor}
+        >
+          <View
+            style={{
+              flex: 1,
+              width: "100%",
+              backgroundColor: tokens.background,
+              padding: 12,
+              overflow: "auto" as any,
+            }}
+          >
+            <Story {...context} />
+          </View>
+        </FormFactorShell>
+      ) : (
+        <View
+          style={{
+            flex: 1,
+            minHeight: "100%",
+            backgroundColor: tokens.background,
+            padding: 16,
+            overflow: "auto" as any,
+          }}
+        >
+          <Story {...context} />
+        </View>
+      )}
     </TamaguiTheme>
   );
 }
