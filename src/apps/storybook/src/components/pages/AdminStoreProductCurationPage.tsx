@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Modal,
+  ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -49,7 +50,7 @@ import {
   getSlotLimits,
   getInitialSlotColors,
 } from '../organisms/StoreCuration/ColorAssignmentPickerModal';
-import { useTheme, FormFactorContext } from '../../theme';
+import { useTheme, useResponsive, FormFactorContext } from '../../theme';
 import { ProductDetailPage } from './ProductDetailPage';
 import {
   CustomSwatchDot,
@@ -144,9 +145,47 @@ export function AdminStoreProductCurationPage({
   disableSafeArea = false,
 }: AdminStoreProductCurationPageProps) {
   const { tokens } = useTheme();
+  const { factor, isMobile, isTablet, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const topInset = disableSafeArea ? 0 : insets.top;
   const bottomInset = disableSafeArea ? 0 : insets.bottom;
+
+  const mediaTileStyle: ViewStyle = useMemo(() => {
+    if (isDesktop) {
+      return {
+        flexBasis: '15.8%' as any,
+        maxWidth: '16.2%' as any,
+        height: 190,
+      };
+    }
+    if (isTablet) {
+      return {
+        flexBasis: '23.8%' as any,
+        maxWidth: '24.5%' as any,
+        height: 160,
+      };
+    }
+    return {
+      flexBasis: '32%' as any,
+      maxWidth: '32.6%' as any,
+      height: 114,
+    };
+  }, [isDesktop, isTablet]);
+
+  const swatchTileStyle: ViewStyle = useMemo(() => {
+    if (isDesktop) {
+      return {
+        flexBasis: '15.8%' as any,
+        maxWidth: '16.2%' as any,
+        height: 96,
+      };
+    }
+    return {
+      flexBasis: '32%' as any,
+      maxWidth: '32.6%' as any,
+      height: 84,
+    };
+  }, [isDesktop]);
 
   // ── STATE ──
   const resolveInitialScreen = (): CurationScreen => {
@@ -1011,13 +1050,13 @@ export function AdminStoreProductCurationPage({
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // VIEW: MAIN PROGRESSIVE CURATION WORKBENCH (390px MOBILE)
+  // VIEW: MAIN PROGRESSIVE CURATION WORKBENCH (RESPONSIVE MULTI-FORM FACTOR)
   // ──────────────────────────────────────────────────────────────────────────
   return (
     <YStack
       flex={1}
       width="100%"
-      maxWidth={400}
+      maxWidth={isMobile ? 440 : isTablet ? 768 : 1240}
       alignSelf="center"
       backgroundColor={tokens.background}
       position="relative"
@@ -1028,13 +1067,13 @@ export function AdminStoreProductCurationPage({
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
-        paddingHorizontal={14}
+        paddingHorizontal={isMobile ? 14 : isTablet ? 20 : 28}
         paddingTop={topInset + 8}
         paddingBottom={10}
         alignItems="center"
         justifyContent="space-between"
       >
-        <XStack alignItems="center" gap={8} flex={1}>
+        <XStack alignItems="center" gap={isMobile ? 8 : 12} flex={1}>
           {currentScreen === 'hub' ? (
             onBack ? (
               <Pressable onPress={onBack} hitSlop={8} style={styles.topIconBtn}>
@@ -1047,44 +1086,67 @@ export function AdminStoreProductCurationPage({
             </Pressable>
           )}
           <YStack flex={1} marginRight={6}>
-            <XStack alignItems="center" gap={5}>
-              <LuStore size={15} color={tokens.accent} />
-              <Text fontSize={15} fontWeight="900" color={tokens.text} numberOfLines={1}>
+            <XStack alignItems="center" gap={6} flexWrap="wrap">
+              <LuStore size={isMobile ? 15 : 18} color={tokens.accent} />
+              <Text fontSize={isMobile ? 15 : 18} fontWeight="900" color={tokens.text} numberOfLines={1}>
                 {currentScreen === 'hub'
                   ? 'Store Curation'
                   : currentScreen === 'qualify_and_group'
                   ? 'Qualify & Group'
                   : 'Product Metadata'}
               </Text>
+              {!isMobile && (
+                <View style={[styles.codePill, { backgroundColor: `${tokens.accent}14`, marginLeft: 4 }]}>
+                  <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                    {productCode}
+                  </Text>
+                </View>
+              )}
             </XStack>
-            <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
+            <Text fontSize={isMobile ? 10 : 12} color={tokens.textMuted} numberOfLines={1}>
               {currentScreen === 'hub'
-                ? `${productCode} · ${title}`
+                ? `${productCode} · ${title} · ${fabric}`
                 : currentScreen === 'qualify_and_group'
-                ? `Stage ${currentStageIndex + 1} of 3 · ${productCode}`
-                : `Story, AI & Commercial Margins · ${productCode}`}
+                ? `Stage ${currentStageIndex + 1} of 3 · ${productCode} · ${title}`
+                : `Story, AI & Commercial Margins · ${productCode} · ${title}`}
             </Text>
           </YStack>
         </XStack>
 
-        {/* Top-Right 2 Icons: Preview & Save */}
+        {/* Top-Right Actions: Preview & Save */}
         <XStack alignItems="center" gap={8}>
           <Pressable
             onPress={() => setShowPreview(true)}
             hitSlop={6}
-            style={[styles.topIconBtn, { backgroundColor: `${tokens.accent}14`, borderColor: tokens.accent }]}
+            style={[
+              isMobile ? styles.topIconBtn : styles.topActionBtn,
+              { backgroundColor: `${tokens.accent}14`, borderColor: tokens.accent },
+            ]}
             accessibilityLabel="Live PDP Preview"
           >
-            <LuEye size={18} color={tokens.accent} />
+            <LuEye size={16} color={tokens.accent} />
+            {!isMobile && (
+              <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                Storefront PDP Preview
+              </Text>
+            )}
           </Pressable>
 
           <Pressable
             onPress={handleSaveCuration}
             hitSlop={6}
-            style={[styles.topIconBtn, { backgroundColor: tokens.accent }]}
+            style={[
+              isMobile ? styles.topIconBtn : styles.topActionBtn,
+              { backgroundColor: tokens.accent, borderColor: tokens.accent },
+            ]}
             accessibilityLabel="Save Curation"
           >
-            <LuSave size={18} color={tokens.accentForeground} />
+            <LuSave size={16} color={tokens.accentForeground} />
+            {!isMobile && (
+              <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
+                Save Curation
+              </Text>
+            )}
           </Pressable>
         </XStack>
       </XStack>
@@ -1108,8 +1170,21 @@ export function AdminStoreProductCurationPage({
 
       {/* ── STAGE DELIVERY TIMELINE PROGRESS STEPPER (QUALIFY & GROUP: 3 STAGES) ── */}
       {currentScreen === 'qualify_and_group' && (
-        <YStack backgroundColor={tokens.surface} borderBottomWidth={1} borderBottomColor={tokens.border} paddingVertical={10} paddingHorizontal={12}>
-          <XStack alignItems="center" justifyContent="space-between" position="relative">
+        <YStack
+          backgroundColor={tokens.surface}
+          borderBottomWidth={1}
+          borderBottomColor={tokens.border}
+          paddingVertical={10}
+          paddingHorizontal={isMobile ? 12 : 24}
+        >
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            position="relative"
+            maxWidth={isMobile ? '100%' : 640}
+            width="100%"
+            alignSelf="center"
+          >
             {/* Background Track Line */}
             <View style={[styles.timelineTrack, { backgroundColor: tokens.border }]} />
 
@@ -1172,7 +1247,7 @@ export function AdminStoreProductCurationPage({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          padding: 12,
+          padding: isMobile ? 12 : isTablet ? 20 : 28,
           paddingBottom: currentScreen === 'hub' ? Math.max(bottomInset + 16, 24) : 90 + bottomInset,
         }}
       >
@@ -1183,52 +1258,72 @@ export function AdminStoreProductCurationPage({
             STORE CURATION HUB: 2 PROMINENT SELECTION TILES (QUALIFY & GROUP / METADATA)
            ========================================================================= */}
         {currentScreen === 'hub' && (
-          <YStack gap={14}>
+          <YStack gap={isMobile ? 14 : 20}>
             {/* Product Overview Card */}
-            <View style={styles.hubProductCard}>
-              <XStack alignItems="center" gap={12}>
+            <View style={[styles.hubProductCard, !isMobile && styles.hubProductCardWide]}>
+              <XStack alignItems="center" gap={isMobile ? 12 : 18}>
                 <Image
                   source={{ uri: mediaList[0]?.thumbnailUri || mediaList[0]?.uri }}
-                  style={styles.hubProductThumb}
+                  style={isMobile ? styles.hubProductThumb : isTablet ? styles.hubProductThumbTablet : styles.hubProductThumbDesktop}
                   resizeMode="cover"
                 />
-                <YStack flex={1}>
-                  <Text fontSize={10} fontWeight="800" color={tokens.accent} textTransform="uppercase">
-                    {productCode} · {fabric}
-                  </Text>
-                  <Text fontSize={14} fontWeight="900" color={tokens.text} numberOfLines={1}>
-                    {title}
-                  </Text>
-                  <XStack alignItems="center" gap={6} marginTop={4} flexWrap="wrap">
+                <YStack flex={1} gap={isMobile ? 2 : 4}>
+                  <XStack alignItems="center" gap={6} flexWrap="wrap">
+                    <Text fontSize={isMobile ? 10 : 12} fontWeight="800" color={tokens.accent} textTransform="uppercase">
+                      {productCode} · {fabric}
+                    </Text>
                     <View style={[styles.hubStatusPill, { backgroundColor: '#DCFCE7' }]}>
-                      <Text fontSize={9} fontWeight="800" color="#15803D">
+                      <Text fontSize={isMobile ? 9 : 11} fontWeight="800" color="#15803D">
                         {lifecycleState.toUpperCase()}
                       </Text>
                     </View>
-                    <Text fontSize={10} color={tokens.textMuted}>
-                      Sale: ₹{Number(salePrice).toLocaleString('en-IN')} · Cost: ₹{baseCostPrice.toLocaleString('en-IN')}
+                  </XStack>
+                  <Text fontSize={isMobile ? 14 : isTablet ? 17 : 20} fontWeight="900" color={tokens.text} numberOfLines={isMobile ? 1 : 2}>
+                    {title}
+                  </Text>
+                  {!isMobile && description && (
+                    <Text fontSize={12} color={tokens.textMuted} numberOfLines={2} marginTop={2} lineHeight={16}>
+                      {description}
                     </Text>
+                  )}
+                  <XStack alignItems="center" gap={isMobile ? 6 : 12} marginTop={isMobile ? 4 : 8} flexWrap="wrap">
+                    <Text fontSize={isMobile ? 11 : 13} fontWeight="700" color={tokens.text}>
+                      Sale: <Text fontWeight="900" color="#15803D">₹{Number(salePrice).toLocaleString('en-IN')}</Text>
+                    </Text>
+                    <Text fontSize={isMobile ? 10 : 12} color={tokens.textMuted} style={{ textDecorationLine: 'line-through' } as any}>
+                      MRP: ₹{Number(mrp).toLocaleString('en-IN')}
+                    </Text>
+                    <Text fontSize={isMobile ? 10 : 12} color={tokens.textMuted}>
+                      Landed Cost: ₹{baseCostPrice.toLocaleString('en-IN')}
+                    </Text>
+                    <View style={[styles.hubStatusPill, { backgroundColor: '#EFF6FF' }]}>
+                      <Text fontSize={isMobile ? 9 : 11} fontWeight="800" color="#2563EB">
+                        Margin: ₹{(Number(salePrice) - baseCostPrice).toLocaleString('en-IN')} ({Math.round(((Number(salePrice) - baseCostPrice) / Number(salePrice)) * 100)}%)
+                      </Text>
+                    </View>
                   </XStack>
                 </YStack>
               </XStack>
             </View>
 
-            <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+            <Text fontSize={isMobile ? 11 : 13} fontWeight="800" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
               Curation Sections
             </Text>
 
-            {/* 2-Column Compact Curation Tiles: Qualify & Group + Metadata */}
-            <XStack gap={10} alignItems="stretch">
+            {/* 2-Column Responsive Curation Tiles: Qualify & Group + Metadata */}
+            <XStack gap={isMobile ? 10 : 16} alignItems="stretch">
               {/* Tile 1: Qualify & Group */}
               <CurationHubTile
                 title="Qualify & Group"
-                icon={<LuLayers size={16} color={tokens.accent} />}
+                icon={<LuLayers size={isMobile ? 16 : 22} color={tokens.accent} />}
                 iconBg={`${tokens.accent}14`}
+                minHeight={isMobile ? 84 : isTablet ? 104 : 120}
                 metrics={[
                   {
-                    icon: <LuImage size={11} color={tokens.accent} />,
-                    label: qualifiedMedia.length,
+                    icon: <LuImage size={isMobile ? 11 : 14} color={tokens.accent} />,
+                    label: isMobile ? qualifiedMedia.length : `${qualifiedMedia.length} Qualified Media`,
                     fontWeight: '800',
+                    fontSize: isMobile ? 11 : 13,
                   },
                   {
                     icon: (
@@ -1240,12 +1335,20 @@ export function AdminStoreProductCurationPage({
                         quaternaryColor={colorGroups[0]?.slotD}
                         colors={colorGroups[0]?.colors}
                         colorCount={colorGroups[0]?.colorCount as any}
-                        size={11}
+                        size={isMobile ? 11 : 14}
                       />
                     ),
-                    label: swatchCount,
+                    label: isMobile ? swatchCount : `${swatchCount} Color Swatches`,
                     fontWeight: '800',
+                    fontSize: isMobile ? 11 : 13,
                   },
+                  ...(!isMobile ? [{
+                    icon: <LuVideo size={13} color="#64748B" />,
+                    label: `${mediaList.filter((m) => m.mediaType === 'video').length} Videos`,
+                    fontWeight: '700' as const,
+                    fontSize: 12,
+                    color: '#64748B',
+                  }] : []),
                 ]}
                 onPress={() => {
                   setCurrentScreen('qualify_and_group');
@@ -1255,20 +1358,29 @@ export function AdminStoreProductCurationPage({
 
               {/* Tile 2: Metadata */}
               <CurationHubTile
-                title="Metadata"
-                icon={<LuFileText size={16} color="#16A34A" />}
+                title={isMobile ? "Metadata" : "Product Metadata & Specs"}
+                icon={<LuFileText size={isMobile ? 16 : 22} color="#16A34A" />}
                 iconBg="#F0FDF4"
+                minHeight={isMobile ? 84 : isTablet ? 104 : 120}
                 metrics={[
                   {
                     label: `₹${Number(salePrice).toLocaleString('en-IN')}`,
                     fontWeight: '800',
                     color: tokens.text,
+                    fontSize: isMobile ? 11 : 13,
                   },
                   {
                     label: `${discountPercent}% OFF`,
                     fontWeight: '800',
                     color: '#16A34A',
+                    fontSize: isMobile ? 11 : 13,
                   },
+                  ...(!isMobile ? [{
+                    label: `Sizing: ${specs.sizeCategory === 'no-size' ? (specs.noSizeVariant === 'one-size' ? 'One Size' : 'Free Size') : (specs.sizeCategory ? specs.sizeCategory.toUpperCase() : 'STANDARD')}`,
+                    fontWeight: '700' as const,
+                    color: tokens.textMuted,
+                    fontSize: 12,
+                  }] : []),
                 ]}
                 onPress={() => setCurrentScreen('metadata')}
               />
@@ -1292,8 +1404,14 @@ export function AdminStoreProductCurationPage({
               </View>
             </XStack>
 
-            {/* 3 Tiles per Row Grid - Edge to Edge */}
-            <XStack flexWrap="wrap" gap={4} justifyContent="space-between" marginHorizontal={-12} paddingHorizontal={4}>
+            {/* Media Qualification Grid - Responsive Multi-Column */}
+            <XStack
+              flexWrap="wrap"
+              gap={isMobile ? 4 : 8}
+              justifyContent={isDesktop ? 'flex-start' : 'space-between'}
+              marginHorizontal={isMobile ? -12 : 0}
+              paddingHorizontal={isMobile ? 4 : 0}
+            >
               {mediaList.map((item) => {
                 return (
                   <Pressable
@@ -1301,6 +1419,7 @@ export function AdminStoreProductCurationPage({
                     onPress={() => toggleQualifyMedia(item.id)}
                     style={[
                       styles.mediaTile,
+                      mediaTileStyle,
                       {
                         borderColor: item.isQualified ? tokens.accent : tokens.border,
                         borderWidth: item.isQualified ? 2 : 1,
@@ -1359,8 +1478,14 @@ export function AdminStoreProductCurationPage({
            ========================================================================= */}
         {currentScreen === 'qualify_and_group' && (currentStage === 'swatches' || (currentStage as any) === 'swatch_creation') && (
           <YStack gap={10}>
-            {/* 2 Rows of 3 Compact Square Tiles - Edge to Edge without horizontal gaps */}
-            <XStack flexWrap="wrap" gap={4} justifyContent="space-between" marginHorizontal={-12} paddingHorizontal={4}>
+            {/* Swatch Template Tiles + Stepper: 2 Rows of 3 on Mobile/Tablet, 1 Row of 6 on Desktop */}
+            <XStack
+              flexWrap="wrap"
+              gap={isMobile ? 4 : 8}
+              justifyContent={isDesktop ? 'flex-start' : 'space-between'}
+              marginHorizontal={isMobile ? -12 : 0}
+              paddingHorizontal={isMobile ? 4 : 0}
+            >
               {TEMPLATE_OPTIONS.map((tpl) => {
                 const isSelected = swatchTemplate === tpl.id;
                 return (
@@ -1387,6 +1512,7 @@ export function AdminStoreProductCurationPage({
                     hitSlop={8}
                     style={({ pressed }) => [
                       styles.compactSwatchSquareTile,
+                      swatchTileStyle,
                       {
                         backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surface,
                         borderColor: isSelected ? tokens.accent : tokens.border,
@@ -1428,6 +1554,7 @@ export function AdminStoreProductCurationPage({
               <View
                 style={[
                   styles.compactSwatchSquareTile,
+                  swatchTileStyle,
                   {
                     backgroundColor: tokens.surfaceRaised,
                     borderColor: tokens.border,
@@ -1519,8 +1646,8 @@ export function AdminStoreProductCurationPage({
                     scrollOffsetRef.current.stage2 = 0;
                   }
                 }}
-                contentContainerStyle={{ gap: 8, paddingVertical: 4, paddingHorizontal: 4 }}
-                style={{ marginHorizontal: -12 }}
+                contentContainerStyle={{ gap: 8, paddingVertical: 4, paddingHorizontal: isMobile ? 4 : 0 }}
+                style={{ marginHorizontal: isMobile ? -12 : 0 }}
               >
                 {colorGroups.slice(0, swatchCount).map((cg, idx) => {
                   return (
@@ -1558,16 +1685,16 @@ export function AdminStoreProductCurationPage({
                           style={({ pressed: xPressed }) => [
                             styles.discardSwatchBtn,
                             {
-                              backgroundColor: xPressed ? `${tokens.textMuted}30` : `${tokens.textMuted}14`,
+                              backgroundColor: xPressed ? '#EF4444' : '#DC2626',
                             },
                           ]}
-                          accessibilityLabel={`Discard Swatch #${idx + 1}`}
+                          accessibilityLabel="Remove swatch"
                         >
-                          <LuX size={10} color={tokens.textMuted} />
+                          <LuX size={10} color="#FFFFFF" strokeWidth={3} />
                         </Pressable>
                       )}
 
-                      {/* Swatch Dot with Edit Pencil Badge directly on the swatch itself */}
+                      {/* Dot with subtle edit indicator */}
                       <View style={styles.swatchDotWrapper}>
                         <CustomSwatchDot
                           template={swatchTemplate}
@@ -1577,32 +1704,31 @@ export function AdminStoreProductCurationPage({
                           quaternaryColor={cg.slotD}
                           colors={cg.colors}
                           colorCount={cg.colorCount as any}
-                          size={42}
-                          selected={false}
+                          size={38}
                         />
                         {swatchTemplate !== 'multicolor' && (
                           <View
                             style={[
                               styles.swatchEditBadge,
-                              {
-                                backgroundColor: tokens.surface,
-                                borderColor: tokens.border,
-                              },
+                              { backgroundColor: tokens.accent, borderColor: tokens.surface },
                             ]}
                           >
-                            <LuPencil size={10} color={tokens.accent} />
+                            <LuPencil size={8} color={tokens.accentForeground} />
                           </View>
                         )}
                       </View>
 
-                      <YStack alignItems="center" gap={2}>
-                        <Text fontSize={11} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                          Swatch #{idx + 1}
-                        </Text>
-                        <Text fontSize={9} color={tokens.textMuted} numberOfLines={1}>
-                          {cg.name.split(' ')[0]}
-                        </Text>
-                      </YStack>
+                      <Text fontSize={10} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                        {cg.name.split(' ')[0]} #{idx + 1}
+                      </Text>
+
+                      {swatchTemplate !== 'multicolor' && (
+                        <View style={[styles.editBadgePill, { backgroundColor: `${tokens.accent}14` }]}>
+                          <Text fontSize={8} fontWeight="800" color={tokens.accent}>
+                            EDIT
+                          </Text>
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -1620,9 +1746,15 @@ export function AdminStoreProductCurationPage({
                 </Text>
               </XStack>
 
-              <XStack flexWrap="wrap" gap={4} justifyContent="space-between" marginHorizontal={-12} paddingHorizontal={4}>
+              <XStack
+                flexWrap="wrap"
+                gap={isMobile ? 4 : 8}
+                justifyContent={isDesktop ? 'flex-start' : 'space-between'}
+                marginHorizontal={isMobile ? -12 : 0}
+                paddingHorizontal={isMobile ? 4 : 0}
+              >
                 {qualifiedMedia.map((m) => (
-                  <View key={m.id} style={styles.miniRefTile}>
+                  <View key={m.id} style={[styles.miniRefTile, mediaTileStyle]}>
                     <Image source={{ uri: m.thumbnailUri || m.uri }} style={styles.tileImage} resizeMode="cover" />
                     {m.mediaType === 'video' && (
                       <View style={styles.tileVideoBadge}>
@@ -1666,8 +1798,8 @@ export function AdminStoreProductCurationPage({
                   scrollOffsetRef.current.stage3 = 0;
                 }
               }}
-              contentContainerStyle={{ gap: 8, paddingVertical: 2, paddingHorizontal: 4 }}
-              style={{ marginHorizontal: -12 }}
+              contentContainerStyle={{ gap: 8, paddingVertical: 2, paddingHorizontal: isMobile ? 4 : 0 }}
+              style={{ marginHorizontal: isMobile ? -12 : 0 }}
             >
               {/* Head 0: Default Common Swatch [C] */}
               <Pressable
@@ -1767,8 +1899,14 @@ export function AdminStoreProductCurationPage({
               })}
             </ScrollView>
 
-            {/* 3 Tiles per Row Media Assignment Grid - Edge to Edge */}
-            <XStack flexWrap="wrap" gap={4} justifyContent="space-between" marginHorizontal={-12} paddingHorizontal={4}>
+            {/* Media Assignment Grid - Responsive Multi-Column */}
+            <XStack
+              flexWrap="wrap"
+              gap={isMobile ? 4 : 8}
+              justifyContent={isDesktop ? 'flex-start' : 'space-between'}
+              marginHorizontal={isMobile ? -12 : 0}
+              paddingHorizontal={isMobile ? 4 : 0}
+            >
               {qualifiedMedia.map((m) => {
                 const isSelectedInActive =
                   activeSwatchTab === 'common'
@@ -1784,6 +1922,7 @@ export function AdminStoreProductCurationPage({
                     onPress={() => handleMediaTilePressInStage3(m.id)}
                     style={[
                       styles.mediaTile,
+                      mediaTileStyle,
                       {
                         borderColor: isSelectedInActive
                           ? activeSwatchTab === 'common'
@@ -1871,6 +2010,7 @@ export function AdminStoreProductCurationPage({
               backgroundColor: tokens.surface,
               borderTopColor: tokens.border,
               paddingBottom: Math.max(bottomInset, 12),
+              paddingHorizontal: isMobile ? 14 : isTablet ? 20 : 28,
             },
           ]}
         >
@@ -1977,6 +2117,7 @@ export function AdminStoreProductCurationPage({
               backgroundColor: tokens.surface,
               borderTopColor: tokens.border,
               paddingBottom: Math.max(bottomInset, 12),
+              paddingHorizontal: isMobile ? 14 : isTablet ? 20 : 28,
             },
           ]}
         >
@@ -2043,10 +2184,34 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  hubProductCardWide: {
+    padding: 18,
+    borderRadius: 14,
+  },
   hubProductThumb: {
     width: 60,
     height: 72,
     borderRadius: 8,
+  },
+  hubProductThumbTablet: {
+    width: 80,
+    height: 96,
+    borderRadius: 10,
+  },
+  hubProductThumbDesktop: {
+    width: 96,
+    height: 116,
+    borderRadius: 12,
+  },
+  topActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    cursor: 'pointer',
   },
   hubStatusPill: {
     paddingHorizontal: 6,
