@@ -373,6 +373,42 @@ public class ProductService : IProductService
             parameters.Add("Fabrics", filter.Fabrics);
         }
 
+        if (filter.Crafts != null && filter.Crafts.Length > 0)
+        {
+            whereClause += " AND (p.unified_attributes->>'craft_technique' = ANY(@Crafts) OR p.tags::text[] && @Crafts)";
+            parameters.Add("Crafts", filter.Crafts);
+        }
+
+        if (filter.Motifs != null && filter.Motifs.Length > 0)
+        {
+            whereClause += " AND (p.unified_attributes->>'motif_pattern' = ANY(@Motifs) OR p.tags::text[] && @Motifs)";
+            parameters.Add("Motifs", filter.Motifs);
+        }
+
+        if (filter.Borders != null && filter.Borders.Length > 0)
+        {
+            whereClause += " AND (p.unified_attributes->>'border_pallu' = ANY(@Borders) OR p.tags::text[] && @Borders)";
+            parameters.Add("Borders", filter.Borders);
+        }
+
+        if (filter.StitchTypes != null && filter.StitchTypes.Length > 0)
+        {
+            whereClause += " AND (p.stitch_type = ANY(@StitchTypes) OR p.unified_attributes->>'stitch_type' = ANY(@StitchTypes))";
+            parameters.Add("StitchTypes", filter.StitchTypes);
+        }
+
+        if (filter.Occasions != null && filter.Occasions.Length > 0)
+        {
+            whereClause += " AND (p.unified_attributes->'occasions' ?| @Occasions OR p.tags::text[] && @Occasions)";
+            parameters.Add("Occasions", filter.Occasions);
+        }
+
+        if (filter.BlouseTypes != null && filter.BlouseTypes.Length > 0)
+        {
+            whereClause += " AND (p.unified_attributes->>'blouse_format' = ANY(@BlouseTypes))";
+            parameters.Add("BlouseTypes", filter.BlouseTypes);
+        }
+
         if (filter.VendorNames != null && filter.VendorNames.Length > 0)
         {
             whereClause += @" AND EXISTS (
@@ -1509,14 +1545,150 @@ public class ProductService : IProductService
     {
         using var db = GetConnection();
 
-        var fabrics = (await db.QueryAsync<string>(
-            @"SELECT DISTINCT fabric FROM products
-              WHERE is_deleted = FALSE
-              AND fabric IS NOT NULL
-              AND fabric != 'Unknown'
-              AND fabric != ''
-              ORDER BY fabric ASC"
-        )).ToList();
+        var fabrics = new List<string>();
+        var crafts = new List<string>();
+        var motifs = new List<string>();
+        var borders = new List<string>();
+        var stitchTypes = new List<string>();
+        var occasions = new List<string>();
+        var blouseTypes = new List<string>();
+
+        try
+        {
+            var facets = (await db.QueryAsync<TaxonomyFacetRow>(
+                @"SELECT dimension AS Dimension, canonical_name AS CanonicalName
+                  FROM public.taxonomy_facets
+                  WHERE usage_count > 0
+                  ORDER BY usage_count DESC"
+            )).ToList();
+
+            if (facets.Count > 0)
+            {
+                fabrics = facets
+                    .Where(f => string.Equals(f.Dimension, "fabric", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+
+                crafts = facets
+                    .Where(f => string.Equals(f.Dimension, "craft", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+
+                motifs = facets
+                    .Where(f => string.Equals(f.Dimension, "motif", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+
+                borders = facets
+                    .Where(f => string.Equals(f.Dimension, "border", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+
+                stitchTypes = facets
+                    .Where(f => string.Equals(f.Dimension, "stitch", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+
+                occasions = facets
+                    .Where(f => string.Equals(f.Dimension, "occasion", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+
+                blouseTypes = facets
+                    .Where(f => string.Equals(f.Dimension, "blouse", StringComparison.OrdinalIgnoreCase))
+                    .Select(f => f.CanonicalName)
+                    .Distinct()
+                    .ToList();
+            }
+        }
+        catch
+        {
+            // Table missing or query error - proceed to fallbacks below
+        }
+
+        if (fabrics.Count == 0)
+        {
+            fabrics = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT fabric FROM products
+                  WHERE is_deleted = FALSE
+                  AND fabric IS NOT NULL
+                  AND fabric != 'Unknown'
+                  AND fabric != ''
+                  ORDER BY fabric ASC"
+            )).ToList();
+        }
+
+        if (crafts.Count == 0)
+        {
+            crafts = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT unified_attributes->>'craft_technique' FROM products
+                  WHERE is_deleted = FALSE
+                  AND unified_attributes->>'craft_technique' IS NOT NULL
+                  AND unified_attributes->>'craft_technique' != ''
+                  ORDER BY 1 ASC"
+            )).ToList();
+        }
+
+        if (motifs.Count == 0)
+        {
+            motifs = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT unified_attributes->>'motif_pattern' FROM products
+                  WHERE is_deleted = FALSE
+                  AND unified_attributes->>'motif_pattern' IS NOT NULL
+                  AND unified_attributes->>'motif_pattern' != ''
+                  ORDER BY 1 ASC"
+            )).ToList();
+        }
+
+        if (borders.Count == 0)
+        {
+            borders = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT unified_attributes->>'border_pallu' FROM products
+                  WHERE is_deleted = FALSE
+                  AND unified_attributes->>'border_pallu' IS NOT NULL
+                  AND unified_attributes->>'border_pallu' != ''
+                  ORDER BY 1 ASC"
+            )).ToList();
+        }
+
+        if (stitchTypes.Count == 0)
+        {
+            stitchTypes = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT COALESCE(NULLIF(unified_attributes->>'stitch_type', ''), stitch_type) FROM products
+                  WHERE is_deleted = FALSE
+                  AND COALESCE(NULLIF(unified_attributes->>'stitch_type', ''), stitch_type) IS NOT NULL
+                  AND COALESCE(NULLIF(unified_attributes->>'stitch_type', ''), stitch_type) != ''
+                  ORDER BY 1 ASC"
+            )).ToList();
+        }
+
+        if (occasions.Count == 0)
+        {
+            occasions = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT jsonb_array_elements_text(unified_attributes->'occasions') FROM products
+                  WHERE is_deleted = FALSE
+                  AND unified_attributes->'occasions' IS NOT NULL
+                  AND jsonb_typeof(unified_attributes->'occasions') = 'array'
+                  ORDER BY 1 ASC"
+            )).ToList();
+        }
+
+        if (blouseTypes.Count == 0)
+        {
+            blouseTypes = (await db.QueryAsync<string>(
+                @"SELECT DISTINCT unified_attributes->>'blouse_format' FROM products
+                  WHERE is_deleted = FALSE
+                  AND unified_attributes->>'blouse_format' IS NOT NULL
+                  AND unified_attributes->>'blouse_format' != ''
+                  ORDER BY 1 ASC"
+            )).ToList();
+        }
 
         var vendors = (await db.QueryAsync<string>(
             @"SELECT DISTINCT v.vendor_name FROM vendors v
@@ -1538,6 +1710,12 @@ public class ProductService : IProductService
         return new ProductFilterOptions
         {
             Fabrics = fabrics,
+            Crafts = crafts,
+            Motifs = motifs,
+            Borders = borders,
+            StitchTypes = stitchTypes,
+            Occasions = occasions,
+            BlouseTypes = blouseTypes,
             Vendors = vendors,
             MinPrice = (int)(priceRange?.MinPrice ?? 0),
             MaxPrice = (int)(priceRange?.MaxPrice ?? 20000)
@@ -1550,6 +1728,12 @@ public class ProductService : IProductService
         return await db.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM products WHERE is_deleted = FALSE AND (fabric IS NULL OR fabric = 'Unknown' OR fabric = '')"
         );
+    }
+
+    private class TaxonomyFacetRow
+    {
+        public string Dimension { get; set; } = string.Empty;
+        public string CanonicalName { get; set; } = string.Empty;
     }
 
     private record InstagramPostMetadata(string? StoragePath, string? Title, string? Description);

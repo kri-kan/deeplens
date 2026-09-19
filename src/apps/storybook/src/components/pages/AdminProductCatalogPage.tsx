@@ -55,6 +55,14 @@ export interface AdminProductCatalogPageProps {
   isLoading?: boolean;
   disableSafeArea?: boolean;
   columns?: number;
+  categoryOptions?: { id: string; label: string }[];
+  fabricOptions?: string[];
+  craftOptions?: string[];
+  motifOptions?: string[];
+  borderOptions?: string[];
+  stitchTypeOptions?: string[];
+  occasionOptions?: string[];
+  vendorOptions?: string[];
 }
 
 export function AdminProductCatalogPage({
@@ -81,6 +89,14 @@ export function AdminProductCatalogPage({
   isLoading = false,
   disableSafeArea = false,
   columns = 3,
+  categoryOptions,
+  fabricOptions,
+  craftOptions,
+  motifOptions,
+  borderOptions,
+  stitchTypeOptions,
+  occasionOptions,
+  vendorOptions,
 }: AdminProductCatalogPageProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -203,6 +219,21 @@ export function AdminProductCatalogPage({
     activeFilters.fabrics.forEach((fab) => {
       chips.push({ id: `f-fab-${fab}`, label: fab });
     });
+    activeFilters.crafts?.forEach((c) => {
+      chips.push({ id: `craft_${c}`, label: `Craft: ${c}` });
+    });
+    activeFilters.motifs?.forEach((m) => {
+      chips.push({ id: `motif_${m}`, label: `Motif: ${m}` });
+    });
+    activeFilters.borders?.forEach((b) => {
+      chips.push({ id: `border_${b}`, label: `Border: ${b}` });
+    });
+    activeFilters.stitchTypes?.forEach((s) => {
+      chips.push({ id: `stitch_${s}`, label: `Stitch: ${s}` });
+    });
+    activeFilters.occasions?.forEach((o) => {
+      chips.push({ id: `occasion_${o}`, label: `Occasion: ${o}` });
+    });
     activeFilters.vendorNames.forEach((v) => {
       chips.push({ id: `f-ven-${v}`, label: v });
     });
@@ -211,6 +242,45 @@ export function AdminProductCatalogPage({
     }
     return chips;
   }, [initialFilterChips, activeFilters]);
+
+  const handleRemoveFilterChip = (chipId: string) => {
+    setActiveFilters((prev) => {
+      const next = { ...prev };
+      if (chipId === 'f-star' || chipId === 'f-unstar') {
+        next.isStarred = null;
+      } else if (chipId === 'f-price' || chipId === 'f-minprice' || chipId === 'f-maxprice') {
+        next.minPrice = 0;
+        next.maxPrice = 0;
+      } else if (chipId.startsWith('f-fab-')) {
+        const fab = chipId.replace('f-fab-', '');
+        next.fabrics = (next.fabrics || []).filter((f) => f !== fab);
+      } else if (chipId.startsWith('craft_')) {
+        const c = chipId.replace('craft_', '');
+        next.crafts = (next.crafts || []).filter((item) => item !== c);
+      } else if (chipId.startsWith('motif_')) {
+        const m = chipId.replace('motif_', '');
+        next.motifs = (next.motifs || []).filter((item) => item !== m);
+      } else if (chipId.startsWith('border_')) {
+        const b = chipId.replace('border_', '');
+        next.borders = (next.borders || []).filter((item) => item !== b);
+      } else if (chipId.startsWith('stitch_')) {
+        const s = chipId.replace('stitch_', '');
+        next.stitchTypes = (next.stitchTypes || []).filter((item) => item !== s);
+      } else if (chipId.startsWith('occasion_')) {
+        const o = chipId.replace('occasion_', '');
+        next.occasions = (next.occasions || []).filter((item) => item !== o);
+      } else if (chipId.startsWith('f-ven-')) {
+        const ven = chipId.replace('f-ven-', '');
+        next.vendorNames = (next.vendorNames || []).filter((v) => v !== ven);
+      } else if (chipId === 'f-status') {
+        next.status = 'active';
+        next.includeArchived = false;
+      }
+      onApplyFilters?.(next);
+      return next;
+    });
+    onRemoveFilterChip?.(chipId);
+  };
 
   const totalFilterCount = activeFilterCount > 0 ? activeFilterCount : computedFilterChips.length;
 
@@ -425,7 +495,7 @@ export function AdminProductCatalogPage({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Remove filter ${chip.label}`}
-                  onPress={() => onRemoveFilterChip?.(chip.id)}
+                  onPress={() => handleRemoveFilterChip(chip.id)}
                   style={{ cursor: 'pointer' } as any}
                 >
                   <LuX size={11} color={tokens.accent} />
@@ -573,6 +643,14 @@ export function AdminProductCatalogPage({
         onClose={handleCloseFilters}
         current={activeFilters}
         onApply={handleApplyFilters}
+        categoryOptions={categoryOptions}
+        fabricOptions={fabricOptions}
+        craftOptions={craftOptions}
+        motifOptions={motifOptions}
+        borderOptions={borderOptions}
+        stitchTypeOptions={stitchTypeOptions}
+        occasionOptions={occasionOptions}
+        vendorOptions={vendorOptions}
       />
     </YStack>
   );

@@ -109,6 +109,11 @@ export default function ProductCatalogScreen() {
     endDate?: string;
     category?: string;
     categories?: string;
+    crafts?: string;
+    motifs?: string;
+    borders?: string;
+    stitchTypes?: string;
+    occasions?: string;
     isStarred?: string;
     minPrice?: string;
     maxPrice?: string;
@@ -124,10 +129,15 @@ export default function ProductCatalogScreen() {
   // Dynamic filter options from backend
   const [filterOptions, setFilterOptions] = useState<{
     fabrics: string[];
+    crafts?: string[];
+    motifs?: string[];
+    borders?: string[];
+    stitchTypes?: string[];
+    occasions?: string[];
     vendors: string[];
     minPrice: number;
     maxPrice: number;
-  }>({ fabrics: [], vendors: [], minPrice: 0, maxPrice: 0 });
+  }>({ fabrics: [], crafts: [], motifs: [], borders: [], stitchTypes: [], occasions: [], vendors: [], minPrice: 0, maxPrice: 0 });
 
   useEffect(() => {
     productService
@@ -159,6 +169,11 @@ export default function ProductCatalogScreen() {
       Boolean(params.endDate) ||
       Boolean(params.category) ||
       Boolean(params.categories) ||
+      Boolean(params.crafts) ||
+      Boolean(params.motifs) ||
+      Boolean(params.borders) ||
+      Boolean(params.stitchTypes) ||
+      Boolean(params.occasions) ||
       params.isStarred !== undefined ||
       Boolean(params.minPrice) ||
       Boolean(params.maxPrice) ||
@@ -172,16 +187,18 @@ export default function ProductCatalogScreen() {
     const starred =
       params.isStarred === 'true' ? true : params.isStarred === 'false' ? false : null;
 
-    let parsedCategories: string[] = [];
-    if (params.categories) {
-      parsedCategories =
-        typeof params.categories === 'string'
-          ? params.categories
-              .split(',')
-              .map((c) => c.trim())
-              .filter(Boolean)
-          : (params.categories as any);
-    }
+    const parseParamArray = (paramVal?: string | string[]) => {
+      if (!paramVal) return [];
+      if (Array.isArray(paramVal)) return paramVal;
+      return paramVal.split(',').map((s) => s.trim()).filter(Boolean);
+    };
+
+    const parsedCategories = parseParamArray(params.categories);
+    const parsedCrafts = parseParamArray(params.crafts);
+    const parsedMotifs = parseParamArray(params.motifs);
+    const parsedBorders = parseParamArray(params.borders);
+    const parsedStitchTypes = parseParamArray(params.stitchTypes);
+    const parsedOccasions = parseParamArray(params.occasions);
 
     setActiveFilters((prev) => ({
       ...prev,
@@ -191,6 +208,11 @@ export default function ProductCatalogScreen() {
       maxPrice: !isNaN(maxP) && maxP > 0 ? maxP : prev.maxPrice,
       isStarred: starred !== null ? starred : prev.isStarred,
       categories: parsedCategories.length > 0 ? parsedCategories : prev.categories,
+      crafts: parsedCrafts.length > 0 ? parsedCrafts : prev.crafts,
+      motifs: parsedMotifs.length > 0 ? parsedMotifs : prev.motifs,
+      borders: parsedBorders.length > 0 ? parsedBorders : prev.borders,
+      stitchTypes: parsedStitchTypes.length > 0 ? parsedStitchTypes : prev.stitchTypes,
+      occasions: parsedOccasions.length > 0 ? parsedOccasions : prev.occasions,
       status: (params.status as any) || prev.status,
       includeArchived: params.includeArchived === 'true' ? true : prev.includeArchived,
     }));
@@ -209,6 +231,11 @@ export default function ProductCatalogScreen() {
     params.endDate,
     params.category,
     params.categories,
+    params.crafts,
+    params.motifs,
+    params.borders,
+    params.stitchTypes,
+    params.occasions,
     params.isStarred,
     params.minPrice,
     params.maxPrice,
@@ -225,6 +252,12 @@ export default function ProductCatalogScreen() {
       startDate: activeFilters.startDate,
       endDate: activeFilters.endDate,
       fabrics: activeFilters.fabrics.length > 0 ? activeFilters.fabrics : undefined,
+      crafts: activeFilters.crafts && activeFilters.crafts.length > 0 ? activeFilters.crafts : undefined,
+      motifs: activeFilters.motifs && activeFilters.motifs.length > 0 ? activeFilters.motifs : undefined,
+      borders: activeFilters.borders && activeFilters.borders.length > 0 ? activeFilters.borders : undefined,
+      stitchTypes: activeFilters.stitchTypes && activeFilters.stitchTypes.length > 0 ? activeFilters.stitchTypes : undefined,
+      occasions: activeFilters.occasions && activeFilters.occasions.length > 0 ? activeFilters.occasions : undefined,
+      blouseTypes: activeFilters.blouseTypes && activeFilters.blouseTypes.length > 0 ? activeFilters.blouseTypes : undefined,
       vendorNames: activeFilters.vendorNames.length > 0 ? activeFilters.vendorNames : undefined,
       minPrice: activeFilters.minPrice > 0 ? activeFilters.minPrice : undefined,
       maxPrice: activeFilters.maxPrice > 0 ? activeFilters.maxPrice : undefined,
@@ -281,8 +314,14 @@ export default function ProductCatalogScreen() {
       (activeFilters.sortBy !== 'recent' ? 1 : 0) +
       (activeFilters.isStarred !== null && activeFilters.isStarred !== undefined ? 1 : 0) +
       (activeFilters.categories && activeFilters.categories.length > 0 ? 1 : 0) +
-      activeFilters.fabrics.length +
-      activeFilters.vendorNames.length +
+      (activeFilters.fabrics?.length || 0) +
+      (activeFilters.crafts?.length || 0) +
+      (activeFilters.motifs?.length || 0) +
+      (activeFilters.borders?.length || 0) +
+      (activeFilters.stitchTypes?.length || 0) +
+      (activeFilters.occasions?.length || 0) +
+      (activeFilters.blouseTypes?.length || 0) +
+      (activeFilters.vendorNames?.length || 0) +
       (activeFilters.minPrice > 0 || activeFilters.maxPrice > 0 ? 1 : 0) +
       (activeFilters.startDate || activeFilters.endDate ? 1 : 0) +
       ((activeFilters.status && activeFilters.status !== 'active') ||
@@ -313,6 +352,21 @@ export default function ProductCatalogScreen() {
     activeFilters.fabrics.forEach((fab) => {
       chips.push({ id: `f-fab-${fab}`, label: `🧵 ${fab}` });
     });
+    activeFilters.crafts?.forEach((c) => {
+      chips.push({ id: `craft_${c}`, label: `Craft: ${c}` });
+    });
+    activeFilters.motifs?.forEach((m) => {
+      chips.push({ id: `motif_${m}`, label: `Motif: ${m}` });
+    });
+    activeFilters.borders?.forEach((b) => {
+      chips.push({ id: `border_${b}`, label: `Border: ${b}` });
+    });
+    activeFilters.stitchTypes?.forEach((s) => {
+      chips.push({ id: `stitch_${s}`, label: `Stitch: ${s}` });
+    });
+    activeFilters.occasions?.forEach((o) => {
+      chips.push({ id: `occasion_${o}`, label: `Occasion: ${o}` });
+    });
     activeFilters.vendorNames.forEach((v) => {
       chips.push({ id: `f-ven-${v}`, label: `🏪 ${v}` });
     });
@@ -335,6 +389,36 @@ export default function ProductCatalogScreen() {
       setActiveFilters((prev) => ({
         ...prev,
         fabrics: prev.fabrics.filter((f) => f !== fab),
+      }));
+    } else if (chipId.startsWith('craft_')) {
+      const c = chipId.replace('craft_', '');
+      setActiveFilters((prev) => ({
+        ...prev,
+        crafts: (prev.crafts || []).filter((item) => item !== c),
+      }));
+    } else if (chipId.startsWith('motif_')) {
+      const m = chipId.replace('motif_', '');
+      setActiveFilters((prev) => ({
+        ...prev,
+        motifs: (prev.motifs || []).filter((item) => item !== m),
+      }));
+    } else if (chipId.startsWith('border_')) {
+      const b = chipId.replace('border_', '');
+      setActiveFilters((prev) => ({
+        ...prev,
+        borders: (prev.borders || []).filter((item) => item !== b),
+      }));
+    } else if (chipId.startsWith('stitch_')) {
+      const s = chipId.replace('stitch_', '');
+      setActiveFilters((prev) => ({
+        ...prev,
+        stitchTypes: (prev.stitchTypes || []).filter((item) => item !== s),
+      }));
+    } else if (chipId.startsWith('occasion_')) {
+      const o = chipId.replace('occasion_', '');
+      setActiveFilters((prev) => ({
+        ...prev,
+        occasions: (prev.occasions || []).filter((item) => item !== o),
       }));
     } else if (chipId.startsWith('f-ven-')) {
       const ven = chipId.replace('f-ven-', '');
@@ -521,6 +605,11 @@ export default function ProductCatalogScreen() {
         onToggleSelectAll={toggleSelectAll}
         onToggleSelectionMode={toggleSelectionMode}
         fabricOptions={filterOptions.fabrics.length > 0 ? filterOptions.fabrics : undefined}
+        craftOptions={filterOptions.crafts && filterOptions.crafts.length > 0 ? filterOptions.crafts : undefined}
+        motifOptions={filterOptions.motifs && filterOptions.motifs.length > 0 ? filterOptions.motifs : undefined}
+        borderOptions={filterOptions.borders && filterOptions.borders.length > 0 ? filterOptions.borders : undefined}
+        stitchTypeOptions={filterOptions.stitchTypes && filterOptions.stitchTypes.length > 0 ? filterOptions.stitchTypes : undefined}
+        occasionOptions={filterOptions.occasions && filterOptions.occasions.length > 0 ? filterOptions.occasions : undefined}
         vendorOptions={filterOptions.vendors.length > 0 ? filterOptions.vendors : undefined}
       />
 

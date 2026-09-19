@@ -143,6 +143,24 @@ public class ProductCatalogFilter
     [JsonPropertyName("fabrics")]
     public string[]? Fabrics { get; set; }
 
+    [JsonPropertyName("crafts")]
+    public string[]? Crafts { get; set; }
+
+    [JsonPropertyName("motifs")]
+    public string[]? Motifs { get; set; }
+
+    [JsonPropertyName("borders")]
+    public string[]? Borders { get; set; }
+
+    [JsonPropertyName("stitchTypes")]
+    public string[]? StitchTypes { get; set; }
+
+    [JsonPropertyName("occasions")]
+    public string[]? Occasions { get; set; }
+
+    [JsonPropertyName("blouseTypes")]
+    public string[]? BlouseTypes { get; set; }
+
     [JsonPropertyName("vendorNames")]
     public string[]? VendorNames { get; set; }
 
@@ -160,6 +178,24 @@ public class ProductFilterOptions
 {
     [JsonPropertyName("fabrics")]
     public List<string> Fabrics { get; set; } = new();
+
+    [JsonPropertyName("crafts")]
+    public List<string> Crafts { get; set; } = new();
+
+    [JsonPropertyName("motifs")]
+    public List<string> Motifs { get; set; } = new();
+
+    [JsonPropertyName("borders")]
+    public List<string> Borders { get; set; } = new();
+
+    [JsonPropertyName("stitchTypes")]
+    public List<string> StitchTypes { get; set; } = new();
+
+    [JsonPropertyName("occasions")]
+    public List<string> Occasions { get; set; } = new();
+
+    [JsonPropertyName("blouseTypes")]
+    public List<string> BlouseTypes { get; set; } = new();
 
     [JsonPropertyName("vendors")]
     public List<string> Vendors { get; set; } = new();

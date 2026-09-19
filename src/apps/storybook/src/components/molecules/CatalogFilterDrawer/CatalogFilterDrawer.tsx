@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   ScrollView,
@@ -13,6 +13,7 @@ import {
   LuCheck,
   LuSlidersHorizontal,
   LuRotateCcw,
+  LuSearch,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 
@@ -25,6 +26,12 @@ export interface FilterState {
   minPrice: number;
   maxPrice: number;
   fabrics: string[];
+  crafts: string[];
+  motifs: string[];
+  borders: string[];
+  stitchTypes: string[];
+  occasions: string[];
+  blouseTypes: string[];
   vendorNames: string[];
   isStarred?: boolean | null;
   status?: 'active' | 'archived' | 'all';
@@ -39,13 +46,32 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   minPrice: 0,
   maxPrice: 0,
   fabrics: [],
+  crafts: [],
+  motifs: [],
+  borders: [],
+  stitchTypes: [],
+  occasions: [],
+  blouseTypes: [],
   vendorNames: [],
   isStarred: null,
   status: 'active',
   includeArchived: false,
 };
 
-const SECTIONS = ['Sort', 'Starred', 'Category', 'Price', 'Fabric', 'Vendor', 'Status'] as const;
+const SECTIONS = [
+  'Sort',
+  'Starred',
+  'Category',
+  'Price',
+  'Fabric',
+  'Craft & Weave',
+  'Motif & Pattern',
+  'Border & Pallu',
+  'Stitch Profile',
+  'Occasion',
+  'Vendor',
+  'Status',
+] as const;
 type SectionKey = typeof SECTIONS[number];
 
 const SORT_OPTIONS = [
@@ -72,6 +98,65 @@ const CATEGORY_OPTIONS = [
 ];
 
 const FABRIC_OPTIONS = ['Silk', 'Cotton', 'Georgette', 'Chanderi', 'Velvet', 'Organza', 'Linen'];
+const DEFAULT_CRAFT_OPTIONS = [
+  'Handloom',
+  'Banarasi Weave',
+  'Zari Work',
+  'Bandhani',
+  'Chikankari',
+  'Kalamkari',
+  'Patola',
+  'Block Print',
+  'Embroidery',
+  'Paithani',
+  'Jamdani',
+  'Ikat',
+  'Chanderi Weave',
+  'Kantha',
+];
+const DEFAULT_MOTIF_OPTIONS = [
+  'Floral',
+  'Paisley',
+  'Peacock',
+  'Geometric',
+  'Temple Border',
+  'Buta / Buti',
+  'Animal Motif',
+  'Traditional',
+  'Checks',
+  'Stripes',
+  'Lotus',
+  'Elephant',
+];
+const DEFAULT_BORDER_OPTIONS = [
+  'Zari Border',
+  'Contrast Border',
+  'Temple Border',
+  'Broad Border',
+  'Small Border',
+  'Gota Patti',
+  'Cutwork',
+  'Scallop Border',
+  'Kaddi Border',
+  'Tissue Border',
+];
+const DEFAULT_STITCH_TYPE_OPTIONS = [
+  'Unstitched',
+  'Semi-Stitched',
+  'Ready to Wear',
+  'Custom Tailored',
+  'Stitched Blouse',
+];
+const DEFAULT_OCCASION_OPTIONS = [
+  'Bridal / Wedding',
+  'Festive',
+  'Party Wear',
+  'Casual Wear',
+  'Office / Formal',
+  'Daily Wear',
+  'Puja / Religious',
+  'Reception',
+];
 const VENDOR_OPTIONS = ['Jaipur Crafts', 'Varanasi Weavers', 'Surat Silks', 'Kanchipuram Co', 'Bengal Handlooms'];
 
 const STATUS_OPTIONS: { id: 'active' | 'archived' | 'all'; label: string }[] = [
@@ -85,24 +170,198 @@ export interface CatalogFilterDrawerProps {
   onClose: () => void;
   current?: FilterState;
   onApply: (filters: FilterState) => void;
+  categoryOptions?: { id: string; label: string }[];
+  fabricOptions?: string[];
+  craftOptions?: string[];
+  motifOptions?: string[];
+  borderOptions?: string[];
+  stitchTypeOptions?: string[];
+  occasionOptions?: string[];
+  vendorOptions?: string[];
 }
+
+interface FacetSectionViewProps {
+  title: string;
+  searchPlaceholder?: string;
+  options: string[];
+  selected: string[];
+  onToggle: (item: string) => void;
+  onClear: () => void;
+  tokens: any;
+}
+
+function FacetSectionView({
+  title,
+  searchPlaceholder,
+  options,
+  selected,
+  onToggle,
+  onClear,
+  tokens,
+}: FacetSectionViewProps) {
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return options;
+    const q = query.toLowerCase().trim();
+    return options.filter((opt) => opt.toLowerCase().includes(q));
+  }, [options, query]);
+
+  return (
+    <YStack gap={10}>
+      {/* Search Bar within Section */}
+      <XStack
+        height={36}
+        borderRadius={tokens.radius.sm}
+        borderWidth={1}
+        borderColor={tokens.border}
+        backgroundColor={tokens.surfaceRaised}
+        paddingHorizontal={10}
+        alignItems="center"
+        gap={6}
+      >
+        <LuSearch size={14} color={tokens.textMuted} />
+        <TextInput
+          accessibilityLabel={`Search ${title}`}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={searchPlaceholder || `Search ${title.toLowerCase()}...`}
+          placeholderTextColor={tokens.textMuted}
+          style={
+            {
+              flex: 1,
+              fontSize: 12,
+              color: tokens.text,
+              outlineStyle: 'none',
+            } as any
+          }
+        />
+        {query.length > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Clear search query`}
+            onPress={() => setQuery('')}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <LuX size={12} color={tokens.textMuted} />
+          </Pressable>
+        )}
+      </XStack>
+
+      {/* Selected count and Clear Section button */}
+      {selected.length > 0 && (
+        <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
+          <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+            {selected.length} selected
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Clear all selected ${title}`}
+            onPress={onClear}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+              Clear section
+            </Text>
+          </Pressable>
+        </XStack>
+      )}
+
+      {/* Options List */}
+      {filtered.length === 0 ? (
+        <YStack alignItems="center" justifyContent="center" paddingVertical={24}>
+          <Text fontSize={12} color={tokens.textMuted}>
+            No matching options
+          </Text>
+        </YStack>
+      ) : (
+        <YStack gap={6}>
+          {filtered.map((opt) => {
+            const isChecked = selected.includes(opt);
+            return (
+              <Pressable
+                key={opt}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isChecked }}
+                onPress={() => onToggle(opt)}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <XStack
+                  alignItems="center"
+                  gap={10}
+                  paddingVertical={8}
+                  paddingHorizontal={10}
+                  borderRadius={tokens.radius.sm}
+                  backgroundColor={isChecked ? `${tokens.accent}14` : 'transparent'}
+                >
+                  <XStack
+                    width={18}
+                    height={18}
+                    borderRadius={tokens.radius.xs}
+                    borderWidth={1.5}
+                    borderColor={isChecked ? tokens.accent : tokens.border}
+                    backgroundColor={isChecked ? tokens.accent : 'transparent'}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    {isChecked && <LuCheck size={12} color="#ffffff" />}
+                  </XStack>
+                  <Text
+                    fontSize={12}
+                    fontWeight={isChecked ? '700' : '500'}
+                    color={isChecked ? tokens.accent : tokens.text}
+                    flex={1}
+                  >
+                    {opt}
+                  </Text>
+                </XStack>
+              </Pressable>
+            );
+          })}
+        </YStack>
+      )}
+    </YStack>
+  );
+}
+
+const normalizeFilterState = (filters: FilterState): FilterState => ({
+  ...DEFAULT_FILTER_STATE,
+  ...filters,
+  categories: filters.categories || [],
+  fabrics: filters.fabrics || [],
+  crafts: filters.crafts || [],
+  motifs: filters.motifs || [],
+  borders: filters.borders || [],
+  stitchTypes: filters.stitchTypes || [],
+  occasions: filters.occasions || [],
+  blouseTypes: filters.blouseTypes || [],
+  vendorNames: filters.vendorNames || [],
+});
 
 export function CatalogFilterDrawer({
   visible,
   onClose,
   current = DEFAULT_FILTER_STATE,
   onApply,
+  categoryOptions = CATEGORY_OPTIONS,
+  fabricOptions = FABRIC_OPTIONS,
+  craftOptions = DEFAULT_CRAFT_OPTIONS,
+  motifOptions = DEFAULT_MOTIF_OPTIONS,
+  borderOptions = DEFAULT_BORDER_OPTIONS,
+  stitchTypeOptions = DEFAULT_STITCH_TYPE_OPTIONS,
+  occasionOptions = DEFAULT_OCCASION_OPTIONS,
+  vendorOptions = VENDOR_OPTIONS,
 }: CatalogFilterDrawerProps) {
   const { tokens } = useTheme();
 
   const [activeSection, setActiveSection] = useState<SectionKey>('Sort');
-  const [draft, setDraft] = useState<FilterState>(current);
+  const [draft, setDraft] = useState<FilterState>(normalizeFilterState(current));
   const [minPriceStr, setMinPriceStr] = useState(String(current.minPrice || ''));
   const [maxPriceStr, setMaxPriceStr] = useState(String(current.maxPrice || ''));
 
   useEffect(() => {
     if (visible) {
-      setDraft(current);
+      setDraft(normalizeFilterState(current));
       setMinPriceStr(String(current.minPrice || ''));
       setMaxPriceStr(String(current.maxPrice || ''));
     }
@@ -111,30 +370,109 @@ export function CatalogFilterDrawer({
   if (!visible) return null;
 
   const toggleCategory = (catId: string) => {
-    setDraft((d) => ({
-      ...d,
-      categories: d.categories.includes(catId)
-        ? d.categories.filter((c) => c !== catId)
-        : [...d.categories, catId],
-    }));
+    setDraft((d) => {
+      const list = d.categories || [];
+      return {
+        ...d,
+        categories: list.includes(catId)
+          ? list.filter((c) => c !== catId)
+          : [...list, catId],
+      };
+    });
   };
 
   const toggleFabric = (fabric: string) => {
-    setDraft((d) => ({
-      ...d,
-      fabrics: d.fabrics.includes(fabric)
-        ? d.fabrics.filter((f) => f !== fabric)
-        : [...d.fabrics, fabric],
-    }));
+    setDraft((d) => {
+      const list = d.fabrics || [];
+      return {
+        ...d,
+        fabrics: list.includes(fabric)
+          ? list.filter((f) => f !== fabric)
+          : [...list, fabric],
+      };
+    });
+  };
+
+  const toggleCraft = (craft: string) => {
+    setDraft((d) => {
+      const list = d.crafts || [];
+      return {
+        ...d,
+        crafts: list.includes(craft) ? list.filter((c) => c !== craft) : [...list, craft],
+      };
+    });
+  };
+
+  const clearCrafts = () => {
+    setDraft((d) => ({ ...d, crafts: [] }));
+  };
+
+  const toggleMotif = (motif: string) => {
+    setDraft((d) => {
+      const list = d.motifs || [];
+      return {
+        ...d,
+        motifs: list.includes(motif) ? list.filter((m) => m !== motif) : [...list, motif],
+      };
+    });
+  };
+
+  const clearMotifs = () => {
+    setDraft((d) => ({ ...d, motifs: [] }));
+  };
+
+  const toggleBorder = (border: string) => {
+    setDraft((d) => {
+      const list = d.borders || [];
+      return {
+        ...d,
+        borders: list.includes(border) ? list.filter((b) => b !== border) : [...list, border],
+      };
+    });
+  };
+
+  const clearBorders = () => {
+    setDraft((d) => ({ ...d, borders: [] }));
+  };
+
+  const toggleStitchType = (stitch: string) => {
+    setDraft((d) => {
+      const list = d.stitchTypes || [];
+      return {
+        ...d,
+        stitchTypes: list.includes(stitch) ? list.filter((s) => s !== stitch) : [...list, stitch],
+      };
+    });
+  };
+
+  const clearStitchTypes = () => {
+    setDraft((d) => ({ ...d, stitchTypes: [] }));
+  };
+
+  const toggleOccasion = (occasion: string) => {
+    setDraft((d) => {
+      const list = d.occasions || [];
+      return {
+        ...d,
+        occasions: list.includes(occasion) ? list.filter((o) => o !== occasion) : [...list, occasion],
+      };
+    });
+  };
+
+  const clearOccasions = () => {
+    setDraft((d) => ({ ...d, occasions: [] }));
   };
 
   const toggleVendor = (vendor: string) => {
-    setDraft((d) => ({
-      ...d,
-      vendorNames: d.vendorNames.includes(vendor)
-        ? d.vendorNames.filter((v) => v !== vendor)
-        : [...d.vendorNames, vendor],
-    }));
+    setDraft((d) => {
+      const list = d.vendorNames || [];
+      return {
+        ...d,
+        vendorNames: list.includes(vendor)
+          ? list.filter((v) => v !== vendor)
+          : [...list, vendor],
+      };
+    });
   };
 
   const handleClear = () => {
@@ -157,9 +495,15 @@ export function CatalogFilterDrawer({
   const activeCount =
     (draft.sortBy !== 'recent' ? 1 : 0) +
     (draft.isStarred !== null && draft.isStarred !== undefined ? 1 : 0) +
-    draft.categories.length +
-    draft.fabrics.length +
-    draft.vendorNames.length +
+    (draft.categories?.length || 0) +
+    (draft.fabrics?.length || 0) +
+    (draft.crafts?.length || 0) +
+    (draft.motifs?.length || 0) +
+    (draft.borders?.length || 0) +
+    (draft.stitchTypes?.length || 0) +
+    (draft.occasions?.length || 0) +
+    (draft.blouseTypes?.length || 0) +
+    (draft.vendorNames?.length || 0) +
     ((parseFloat(minPriceStr) || 0) > 0 || (parseFloat(maxPriceStr) || 0) > 0 ? 1 : 0) +
     (draft.status && draft.status !== 'active' ? 1 : 0);
 
@@ -170,13 +514,23 @@ export function CatalogFilterDrawer({
       case 'Starred':
         return draft.isStarred !== null && draft.isStarred !== undefined ? 1 : 0;
       case 'Category':
-        return draft.categories.length;
+        return draft.categories?.length || 0;
       case 'Price':
         return (parseFloat(minPriceStr) || 0) > 0 || (parseFloat(maxPriceStr) || 0) > 0 ? 1 : 0;
       case 'Fabric':
-        return draft.fabrics.length;
+        return draft.fabrics?.length || 0;
+      case 'Craft & Weave':
+        return draft.crafts?.length || 0;
+      case 'Motif & Pattern':
+        return draft.motifs?.length || 0;
+      case 'Border & Pallu':
+        return draft.borders?.length || 0;
+      case 'Stitch Profile':
+        return draft.stitchTypes?.length || 0;
+      case 'Occasion':
+        return draft.occasions?.length || 0;
       case 'Vendor':
-        return draft.vendorNames.length;
+        return draft.vendorNames?.length || 0;
       case 'Status':
         return draft.status && draft.status !== 'active' ? 1 : 0;
       default:
@@ -257,58 +611,64 @@ export function CatalogFilterDrawer({
           <XStack flex={1}>
             {/* Left Nav Rail */}
             <YStack
-              width={104}
+              width={114}
               height="100%"
               backgroundColor={tokens.surfaceRaised}
               borderRightWidth={1}
               borderRightColor={tokens.border}
             >
-              {SECTIONS.map((section) => {
-                const isActive = activeSection === section;
-                const badge = getSectionBadge(section);
-                return (
-                  <Pressable
-                    key={section}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${section} filters`}
-                    onPress={() => setActiveSection(section)}
-                    style={{ cursor: 'pointer' } as any}
-                  >
-                    <XStack
-                      height={44}
-                      alignItems="center"
-                      justifyContent="space-between"
-                      paddingHorizontal={10}
-                      backgroundColor={isActive ? tokens.surface : 'transparent'}
-                      borderLeftWidth={isActive ? 3.5 : 0}
-                      borderLeftColor={tokens.accent}
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                {SECTIONS.map((section) => {
+                  const isActive = activeSection === section;
+                  const badge = getSectionBadge(section);
+                  return (
+                    <Pressable
+                      key={section}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${section} filters`}
+                      onPress={() => setActiveSection(section)}
+                      style={{ cursor: 'pointer' } as any}
                     >
-                      <Text
-                        fontSize={12}
-                        fontWeight={isActive ? '800' : '600'}
-                        color={isActive ? tokens.accent : tokens.textMuted}
+                      <XStack
+                        height={44}
+                        alignItems="center"
+                        justifyContent="space-between"
+                        paddingHorizontal={8}
+                        gap={4}
+                        backgroundColor={isActive ? tokens.surface : 'transparent'}
+                        borderLeftWidth={isActive ? 3.5 : 0}
+                        borderLeftColor={tokens.accent}
                       >
-                        {section}
-                      </Text>
-
-                      {badge > 0 && (
-                        <XStack
-                          width={16}
-                          height={16}
-                          borderRadius={8}
-                          backgroundColor={tokens.accent}
-                          alignItems="center"
-                          justifyContent="center"
+                        <Text
+                          fontSize={11}
+                          fontWeight={isActive ? '800' : '600'}
+                          color={isActive ? tokens.accent : tokens.textMuted}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          flex={1}
                         >
-                          <Text fontSize={9} fontWeight="800" color="#ffffff">
-                            {badge}
-                          </Text>
-                        </XStack>
-                      )}
-                    </XStack>
-                  </Pressable>
-                );
-              })}
+                          {section}
+                        </Text>
+
+                        {badge > 0 && (
+                          <XStack
+                            width={16}
+                            height={16}
+                            borderRadius={8}
+                            backgroundColor={tokens.accent}
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            <Text fontSize={9} fontWeight="800" color="#ffffff">
+                              {badge}
+                            </Text>
+                          </XStack>
+                        )}
+                      </XStack>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </YStack>
 
             {/* Right Details Panel */}
@@ -537,7 +897,7 @@ export function CatalogFilterDrawer({
                 {/* FABRIC SECTION */}
                 {activeSection === 'Fabric' && (
                   <YStack gap={8}>
-                    {FABRIC_OPTIONS.map((fabric) => {
+                    {fabricOptions.map((fabric) => {
                       const isChecked = draft.fabrics.includes(fabric);
                       return (
                         <Pressable
@@ -577,6 +937,71 @@ export function CatalogFilterDrawer({
                       );
                     })}
                   </YStack>
+                )}
+
+                {/* CRAFT & WEAVE SECTION */}
+                {activeSection === 'Craft & Weave' && (
+                  <FacetSectionView
+                    title="Craft & Weave"
+                    searchPlaceholder="Search crafts, weaves..."
+                    options={craftOptions}
+                    selected={draft.crafts || []}
+                    onToggle={toggleCraft}
+                    onClear={clearCrafts}
+                    tokens={tokens}
+                  />
+                )}
+
+                {/* MOTIF & PATTERN SECTION */}
+                {activeSection === 'Motif & Pattern' && (
+                  <FacetSectionView
+                    title="Motif & Pattern"
+                    searchPlaceholder="Search motifs, patterns..."
+                    options={motifOptions}
+                    selected={draft.motifs || []}
+                    onToggle={toggleMotif}
+                    onClear={clearMotifs}
+                    tokens={tokens}
+                  />
+                )}
+
+                {/* BORDER & PALLU SECTION */}
+                {activeSection === 'Border & Pallu' && (
+                  <FacetSectionView
+                    title="Border & Pallu"
+                    searchPlaceholder="Search borders, pallu..."
+                    options={borderOptions}
+                    selected={draft.borders || []}
+                    onToggle={toggleBorder}
+                    onClear={clearBorders}
+                    tokens={tokens}
+                  />
+                )}
+
+                {/* STITCH PROFILE SECTION */}
+                {activeSection === 'Stitch Profile' && (
+                  <FacetSectionView
+                    title="Stitch Profile"
+                    searchPlaceholder="Search stitch types..."
+                    options={stitchTypeOptions}
+                    selected={draft.stitchTypes || []}
+                    onToggle={toggleStitchType}
+                    onClear={clearStitchTypes}
+                    tokens={tokens}
+                  />
+                )}
+
+                {/* OCCASION SECTION */}
+                {activeSection === 'Occasion' && (
+                  <FacetSectionView
+                    title="Occasion"
+                    searchPlaceholder="Search occasions..."
+                    options={occasionOptions}
+                    selected={draft.occasions || []}
+                    onToggle={toggleOccasion}
+                    onClear={clearOccasions}
+                    tokens={tokens}
+                  />
                 )}
 
                 {/* VENDOR SECTION */}

@@ -74,6 +74,12 @@ class ProductService {
     startDate?: string;
     endDate?: string;
     fabrics?: string[];
+    crafts?: string[];
+    motifs?: string[];
+    borders?: string[];
+    stitchTypes?: string[];
+    occasions?: string[];
+    blouseTypes?: string[];
     vendorNames?: string[];
     minPrice?: number;
     maxPrice?: number;
@@ -99,6 +105,12 @@ class ProductService {
     }
     if (params.isStarred !== undefined) searchParams.append('isStarred', String(params.isStarred));
     params.fabrics?.forEach(f => searchParams.append('fabrics', f));
+    params.crafts?.forEach(c => searchParams.append('crafts', c));
+    params.motifs?.forEach(m => searchParams.append('motifs', m));
+    params.borders?.forEach(b => searchParams.append('borders', b));
+    params.stitchTypes?.forEach(s => searchParams.append('stitchTypes', s));
+    params.occasions?.forEach(o => searchParams.append('occasions', o));
+    params.blouseTypes?.forEach(bt => searchParams.append('blouseTypes', bt));
     params.vendorNames?.forEach(v => searchParams.append('vendorNames', v));
     params.categories?.forEach(c => searchParams.append('categories', c));
     return productMgmtApiClient.get<{ products: VendorProduct[], totalCount: number }>(
@@ -106,7 +118,17 @@ class ProductService {
     );
   }
 
-  async getFilterOptions(): Promise<{ fabrics: string[]; vendors: string[]; minPrice: number; maxPrice: number }> {
+  async getFilterOptions(): Promise<{
+    fabrics: string[];
+    crafts?: string[];
+    motifs?: string[];
+    borders?: string[];
+    stitchTypes?: string[];
+    occasions?: string[];
+    vendors: string[];
+    minPrice: number;
+    maxPrice: number;
+  }> {
     return productMgmtApiClient.get(API_ROUTES.PRODUCT_CATALOG.LIST + '/catalog/filter-options');
   }
 

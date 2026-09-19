@@ -10,6 +10,12 @@ export interface ProductCatalogFilters {
   startDate?: string;
   endDate?: string;
   fabrics?: string[];
+  crafts?: string[];
+  motifs?: string[];
+  borders?: string[];
+  stitchTypes?: string[];
+  occasions?: string[];
+  blouseTypes?: string[];
   vendorNames?: string[];
   minPrice?: number;
   maxPrice?: number;
@@ -20,7 +26,27 @@ export interface ProductCatalogFilters {
 }
 
 export const useProductCatalog = (filters: ProductCatalogFilters) => {
-  const { categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, categories, includeArchived, status, isStarred } = filters;
+  const {
+    categoryId,
+    query,
+    sortBy,
+    startDate,
+    endDate,
+    fabrics,
+    crafts,
+    motifs,
+    borders,
+    stitchTypes,
+    occasions,
+    blouseTypes,
+    vendorNames,
+    minPrice,
+    maxPrice,
+    categories,
+    includeArchived,
+    status,
+    isStarred,
+  } = filters;
 
   const [products, setProducts] = useState<VendorProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +75,12 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         fabrics: fabrics && fabrics.length > 0 ? fabrics : undefined,
+        crafts: crafts && crafts.length > 0 ? crafts : undefined,
+        motifs: motifs && motifs.length > 0 ? motifs : undefined,
+        borders: borders && borders.length > 0 ? borders : undefined,
+        stitchTypes: stitchTypes && stitchTypes.length > 0 ? stitchTypes : undefined,
+        occasions: occasions && occasions.length > 0 ? occasions : undefined,
+        blouseTypes: blouseTypes && blouseTypes.length > 0 ? blouseTypes : undefined,
         vendorNames: vendorNames && vendorNames.length > 0 ? vendorNames : undefined,
         minPrice: minPrice,
         maxPrice: maxPrice,
@@ -78,16 +110,22 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [categoryId, query, sortBy, startDate, endDate, fabrics, vendorNames, minPrice, maxPrice, categories, includeArchived, status, isStarred, products.length, loading, refreshing, hasMore, error]);
+  }, [categoryId, query, sortBy, startDate, endDate, fabrics, crafts, motifs, borders, stitchTypes, occasions, blouseTypes, vendorNames, minPrice, maxPrice, categories, includeArchived, status, isStarred, products.length, loading, refreshing, hasMore, error]);
 
   const fabricsKey = JSON.stringify(fabrics);
+  const craftsKey = JSON.stringify(crafts);
+  const motifsKey = JSON.stringify(motifs);
+  const bordersKey = JSON.stringify(borders);
+  const stitchTypesKey = JSON.stringify(stitchTypes);
+  const occasionsKey = JSON.stringify(occasions);
+  const blouseTypesKey = JSON.stringify(blouseTypes);
   const vendorNamesKey = JSON.stringify(vendorNames);
   const categoriesKey = JSON.stringify(categories);
 
   useEffect(() => {
     fetchProducts(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived, status, isStarred]);
+  }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, craftsKey, motifsKey, bordersKey, stitchTypesKey, occasionsKey, blouseTypesKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived, status, isStarred]);
 
   const toggleStar = useCallback(async (productId: string, isStarred: boolean) => {
     try {
