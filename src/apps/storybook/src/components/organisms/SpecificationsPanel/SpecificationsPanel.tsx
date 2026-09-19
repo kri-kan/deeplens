@@ -16,6 +16,7 @@ import {
   LuInfo,
 } from 'react-icons/lu';
 import { SpecificationRow } from '../../molecules/SpecificationRow/SpecificationRow';
+import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
 import { useTheme, useResponsive } from '../../../theme';
 import {
   Spec,
@@ -405,83 +406,22 @@ export function SpecificationsPanel({
             </XStack>
           </ScrollView>
 
-          {/* View Mode Pills (Cards / Tabs / Accordion) */}
-          <XStack
-            backgroundColor={tokens.surfaceRaised}
-            borderRadius={10}
-            padding={3}
-            gap={3}
-            borderWidth={1}
-            borderColor={tokens.border}
-          >
-            <Pressable
-              onPress={() => setViewMode('cards')}
-              style={[
-                styles.modePill,
-                viewMode === 'cards' && {
-                  backgroundColor: tokens.surface,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.05,
-                  shadowRadius: 2,
-                },
-              ]}
-            >
-              <Text
-                fontSize={11}
-                fontWeight={viewMode === 'cards' ? '800' : '600'}
-                color={viewMode === 'cards' ? tokens.text : tokens.textSecondary}
-              >
-                Cards
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setViewMode('tabs');
-                if (activeCategoryTab === 'all' && resolvedGroups.length > 0) {
-                  setActiveCategoryTab(resolvedGroups[0].id);
-                }
-              }}
-              style={[
-                styles.modePill,
-                viewMode === 'tabs' && {
-                  backgroundColor: tokens.surface,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.05,
-                  shadowRadius: 2,
-                },
-              ]}
-            >
-              <Text
-                fontSize={11}
-                fontWeight={viewMode === 'tabs' ? '800' : '600'}
-                color={viewMode === 'tabs' ? tokens.text : tokens.textSecondary}
-              >
-                Tabs
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setViewMode('accordion')}
-              style={[
-                styles.modePill,
-                viewMode === 'accordion' && {
-                  backgroundColor: tokens.surface,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.05,
-                  shadowRadius: 2,
-                },
-              ]}
-            >
-              <Text
-                fontSize={11}
-                fontWeight={viewMode === 'accordion' ? '800' : '600'}
-                color={viewMode === 'accordion' ? tokens.text : tokens.textSecondary}
-              >
-                Accordion
-              </Text>
-            </Pressable>
-          </XStack>
+          {/* View Mode Switcher (reusing canonical SegmentedControl atom) */}
+          <SegmentedControl
+            activeId={viewMode}
+            onChange={(id) => {
+              const nextMode = id as SpecificationsPanelViewMode;
+              setViewMode(nextMode);
+              if (nextMode === 'tabs' && activeCategoryTab === 'all' && resolvedGroups.length > 0) {
+                setActiveCategoryTab(resolvedGroups[0].id);
+              }
+            }}
+            options={[
+              { id: 'cards', label: 'Cards' },
+              { id: 'tabs', label: 'Tabs' },
+              { id: 'accordion', label: 'Accordion' },
+            ]}
+          />
         </XStack>
       )}
 

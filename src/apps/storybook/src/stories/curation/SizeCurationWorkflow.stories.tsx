@@ -501,18 +501,15 @@ export function SizeSettingWorkflowComponent({
                     </Text>
                   </YStack>
 
-                  <XStack
-                    width={18}
-                    height={18}
-                    borderRadius={9}
-                    borderWidth={1.5}
-                    borderColor={noSizeOptionType === 'one-size' ? tokens.accent : tokens.border}
-                    backgroundColor={noSizeOptionType === 'one-size' ? tokens.accent : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {noSizeOptionType === 'one-size' && <LuCheck size={11} color="#FFFFFF" />}
-                  </XStack>
+                  <CustomCheckbox
+                    checked={noSizeOptionType === 'one-size'}
+                    onToggle={() => {
+                      setNoSizeOptionType('one-size');
+                      setNoSizeCustomSubtitle('5.5m Saree + 0.8m Unstitched Blouse Piece');
+                    }}
+                    size={18}
+                    accessibilityLabel="Select One Size"
+                  />
                 </XStack>
               </Pressable>
 
@@ -553,18 +550,15 @@ export function SizeSettingWorkflowComponent({
                     </Text>
                   </YStack>
 
-                  <XStack
-                    width={18}
-                    height={18}
-                    borderRadius={9}
-                    borderWidth={1.5}
-                    borderColor={noSizeOptionType === 'free-size' ? tokens.accent : tokens.border}
-                    backgroundColor={noSizeOptionType === 'free-size' ? tokens.accent : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {noSizeOptionType === 'free-size' && <LuCheck size={11} color="#FFFFFF" />}
-                  </XStack>
+                  <CustomCheckbox
+                    checked={noSizeOptionType === 'free-size'}
+                    onToggle={() => {
+                      setNoSizeOptionType('free-size');
+                      setNoSizeCustomSubtitle('Stitched Blouse with Free Size / Alterable Seams');
+                    }}
+                    size={18}
+                    accessibilityLabel="Select Free Size"
+                  />
                 </XStack>
               </Pressable>
             </XStack>

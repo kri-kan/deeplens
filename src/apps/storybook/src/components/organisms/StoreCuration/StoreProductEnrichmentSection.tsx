@@ -1119,7 +1119,12 @@ export function StoreProductEnrichmentSection({
                       Applicable for unstitched sarees &amp; dress materials
                     </Text>
                   </YStack>
-                  {noSizeVariant === 'one-size' && <LuCheck size={16} color={tokens.accent} />}
+                  <CustomCheckbox
+                    checked={noSizeVariant === 'one-size'}
+                    onToggle={() => handleNoSizeVariantChange('one-size')}
+                    size={18}
+                    accessibilityLabel="Select One Size"
+                  />
                 </Pressable>
 
                 <Pressable
@@ -1153,7 +1158,12 @@ export function StoreProductEnrichmentSection({
                       Applicable for stitched blouse sarees with free size
                     </Text>
                   </YStack>
-                  {noSizeVariant === 'free-size' && <LuCheck size={16} color={tokens.accent} />}
+                  <CustomCheckbox
+                    checked={noSizeVariant === 'free-size'}
+                    onToggle={() => handleNoSizeVariantChange('free-size')}
+                    size={18}
+                    accessibilityLabel="Select Free Size"
+                  />
                 </Pressable>
               </XStack>
 
@@ -1311,7 +1321,12 @@ export function StoreProductEnrichmentSection({
                           </View>
                         )}
                       </XStack>
-                      {isSelected && <LuCheck size={16} color={tokens.accent} />}
+                      <CustomCheckbox
+                        checked={isSelected}
+                        onToggle={() => handleStitchTypeSelect(opt)}
+                        size={18}
+                        accessibilityLabel={opt.label}
+                      />
                     </XStack>
                     {opt.description && (
                       <Text fontSize={11.5} color={tokens.textMuted} lineHeight={15}>

@@ -4,6 +4,7 @@ import { YStack, XStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramFill } from 'react-icons/ri';
 import { LuCopy, LuCheck, LuSparkles, LuPhone, LuTag } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
 import { openPlatformHandle, formatDisplayHandle } from '../../../utils/platformLink';
 
 export type GeneratorSource = 'whatsapp' | 'instagram' | null;
@@ -175,60 +176,16 @@ export function OrderIdGeneratorCard({
           </TouchableOpacity>
         </XStack>
 
-        {/* Payment Pills: COD & Prepaid */}
-        <XStack gap={8} alignItems="center">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Select COD payment mode"
-            onPress={() => onSelectPaymentMode(paymentMode === 'cod' ? null : 'cod')}
-            style={{ cursor: 'pointer' } as any}
-          >
-            <XStack
-              paddingVertical={8}
-              paddingHorizontal={14}
-              borderRadius={tokens.radius.full}
-              borderWidth={1}
-              borderColor={paymentMode === 'cod' ? tokens.accent : tokens.border}
-              backgroundColor={
-                paymentMode === 'cod' ? tokens.accent : tokens.surfaceRaised
-              }
-            >
-              <Text
-                fontSize={12}
-                fontWeight={paymentMode === 'cod' ? '700' : '500'}
-                color={paymentMode === 'cod' ? tokens.surface : tokens.text}
-              >
-                COD
-              </Text>
-            </XStack>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Select Prepaid payment mode"
-            onPress={() => onSelectPaymentMode(paymentMode === 'prepaid' ? null : 'prepaid')}
-            style={{ cursor: 'pointer' } as any}
-          >
-            <XStack
-              paddingVertical={8}
-              paddingHorizontal={14}
-              borderRadius={tokens.radius.full}
-              borderWidth={1}
-              borderColor={paymentMode === 'prepaid' ? tokens.accent : tokens.border}
-              backgroundColor={
-                paymentMode === 'prepaid' ? tokens.accent : tokens.surfaceRaised
-              }
-            >
-              <Text
-                fontSize={12}
-                fontWeight={paymentMode === 'prepaid' ? '700' : '500'}
-                color={paymentMode === 'prepaid' ? tokens.surface : tokens.text}
-              >
-                Prepaid
-              </Text>
-            </XStack>
-          </Pressable>
-        </XStack>
+        {/* Payment Mode (reusing canonical SegmentedControl atom) */}
+        <SegmentedControl
+          activeId={paymentMode || ''}
+          onChange={(id) => onSelectPaymentMode(id === paymentMode ? null : (id as GeneratorPaymentMode))}
+          options={[
+            { id: 'cod', label: 'COD' },
+            { id: 'prepaid', label: 'Prepaid' },
+          ]}
+          accessibilityLabel="Select payment mode"
+        />
       </XStack>
 
       {/* Dynamic Source Input Field */}

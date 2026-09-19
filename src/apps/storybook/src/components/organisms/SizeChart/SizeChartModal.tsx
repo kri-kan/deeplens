@@ -4,6 +4,7 @@ import { YStack, XStack, Text } from 'tamagui';
 import { LuX, LuRuler, LuSparkles, LuInfo, LuCheck, LuBookOpen } from 'react-icons/lu';
 import { useTheme, useResponsive } from '../../../theme';
 import { SizeChartModalProps, SizeChartTab, SizeChartFormFactor } from './types';
+import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
 import { SizeChartTable } from './SizeChartTable';
 import { MeasuringSilhouette } from './MeasuringSilhouette';
 import { resolveSizeChartForProduct } from '../../../data/catalog/sizePresets';
@@ -89,59 +90,18 @@ export function SizeChartModal({
     </XStack>
   );
 
-  // Tabs for Mobile & Tablet
+  // Tabs for Mobile & Tablet (reusing canonical SegmentedControl atom)
   const renderTabs = () => (
-    <XStack
-      backgroundColor={tokens.surfaceRaised}
-      borderRadius={10}
-      padding={3}
-      marginHorizontal={isMobile ? 16 : 24}
-      marginTop={12}
-      marginBottom={6}
-      borderWidth={1}
-      borderColor={tokens.border}
-      gap={4}
-    >
-      <Pressable
-        onPress={() => setActiveTab('table')}
-        style={{
-          flex: 1,
-          paddingVertical: 7,
-          borderRadius: 7,
-          backgroundColor: activeTab === 'table' ? tokens.accent : 'transparent',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text
-          fontSize={12}
-          fontWeight="800"
-          color={activeTab === 'table' ? tokens.accentForeground : tokens.textSecondary}
-        >
-          Size Chart
-        </Text>
-      </Pressable>
-
-      <Pressable
-        onPress={() => setActiveTab('measuring')}
-        style={{
-          flex: 1,
-          paddingVertical: 7,
-          borderRadius: 7,
-          backgroundColor: activeTab === 'measuring' ? tokens.accent : 'transparent',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Text
-          fontSize={12}
-          fontWeight="800"
-          color={activeTab === 'measuring' ? tokens.accentForeground : tokens.textSecondary}
-        >
-          {chartData.category === 'saree' ? 'Drape Guide' : 'How to Measure'}
-        </Text>
-      </Pressable>
-    </XStack>
+    <YStack marginHorizontal={isMobile ? 16 : 24} marginTop={12} marginBottom={6}>
+      <SegmentedControl
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as SizeChartTab)}
+        options={[
+          { id: 'table', label: 'Size Chart' },
+          { id: 'measuring', label: chartData.category === 'saree' ? 'Drape Guide' : 'How to Measure' },
+        ]}
+      />
+    </YStack>
   );
 
   // ── DESKTOP SPLIT VIEW (Side-by-side Dual Column) ──

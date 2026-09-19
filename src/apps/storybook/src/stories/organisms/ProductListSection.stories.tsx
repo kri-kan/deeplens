@@ -40,7 +40,9 @@ const MOCK_ITEMS: OrderItem[] = [
 const meta: Meta<typeof ProductListSection> = {
   title: 'Organisms/ProductListSection',
   component: ProductListSection,
-  decorators: [withFormFactor('mobile', 'Order Line Items Management Rail')],
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
   args: {
     products: MOCK_ITEMS,
     selectedIds: [],
@@ -61,7 +63,7 @@ type Story = StoryObj<typeof ProductListSection>;
 
 export const MultiItemOrder: Story = {
   render: (args: any) => (
-    <YStack width={390} padding={16}>
+    <YStack width="100%" padding={16}>
       <ProductListSection {...(args as ProductListSectionProps)} />
     </YStack>
   ),
@@ -74,7 +76,7 @@ export const BatchSelectedState: Story = {
     isCod: true,
   },
   render: (args: any) => (
-    <YStack width={390} padding={16}>
+    <YStack width="100%" padding={16}>
       <ProductListSection {...(args as ProductListSectionProps)} />
     </YStack>
   ),
@@ -87,7 +89,7 @@ export const PrepaidOrder: Story = {
     isCod: false,
   },
   render: (args: any) => (
-    <YStack width={390} padding={16}>
+    <YStack width="100%" padding={16}>
       <ProductListSection {...(args as ProductListSectionProps)} />
     </YStack>
   ),
@@ -145,7 +147,7 @@ export const Interactive: Story = {
     };
 
     return (
-      <YStack width={390} padding={16}>
+      <YStack width="100%" padding={16}>
         <ProductListSection
           products={products}
           selectedIds={selectedIds}

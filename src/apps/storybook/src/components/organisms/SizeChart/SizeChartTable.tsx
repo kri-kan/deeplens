@@ -3,6 +3,7 @@ import { View, ScrollView, Pressable } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuCheck, LuInfo } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
 import { SizeChartData, SizeChartRow } from '../../../data/catalog/types';
 
 export interface SizeChartTableProps {
@@ -73,50 +74,14 @@ export function SizeChartTable({
       {/* Top Controls: Unit Switcher & Selected Size Badge */}
       <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
         {hasUnitToggle ? (
-          <XStack
-            backgroundColor={tokens.surfaceRaised}
-            borderRadius={8}
-            padding={3}
-            gap={4}
-            borderWidth={1}
-            borderColor={tokens.border}
-          >
-            <Pressable onPress={() => setUnit('in')}>
-              <XStack
-                paddingHorizontal={12}
-                paddingVertical={5}
-                borderRadius={6}
-                backgroundColor={unit === 'in' ? tokens.accent : 'transparent'}
-                cursor="pointer"
-              >
-                <Text
-                  fontSize={11}
-                  fontWeight="800"
-                  color={unit === 'in' ? tokens.accentForeground : tokens.textSecondary}
-                >
-                  Inches (in)
-                </Text>
-              </XStack>
-            </Pressable>
-
-            <Pressable onPress={() => setUnit('cm')}>
-              <XStack
-                paddingHorizontal={12}
-                paddingVertical={5}
-                borderRadius={6}
-                backgroundColor={unit === 'cm' ? tokens.accent : 'transparent'}
-                cursor="pointer"
-              >
-                <Text
-                  fontSize={11}
-                  fontWeight="800"
-                  color={unit === 'cm' ? tokens.accentForeground : tokens.textSecondary}
-                >
-                  Centimeters (cm)
-                </Text>
-              </XStack>
-            </Pressable>
-          </XStack>
+          <SegmentedControl
+            activeId={unit}
+            onChange={(id) => setUnit(id as 'in' | 'cm')}
+            options={[
+              { id: 'in', label: 'Inches (in)' },
+              { id: 'cm', label: 'Centimeters (cm)' },
+            ]}
+          />
         ) : (
           <View />
         )}

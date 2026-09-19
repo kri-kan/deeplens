@@ -6,6 +6,7 @@ import { useTheme } from '../../../theme';
 import { BottomSheet } from '../../atoms/BottomSheet';
 import { SegmentedControl } from '../../atoms/SegmentedControl';
 import { OptionChip } from '../../atoms/OptionChip';
+import { SizeChip } from '../../atoms/SizeChip/SizeChip';
 
 export const SAREE_DRESS_SIZES = [
   'Free Size',
@@ -118,7 +119,7 @@ export function QuickPickerSheet({
           </XStack>
         )}
 
-        {/* Content: Size Picker — Sarees & Dresses using OptionChip Atom */}
+        {/* Content: Size Picker — Sarees & Dresses using SizeChip Atom */}
         {type === 'size' && sizeCategory === 'saree' && (
           <YStack gap={8}>
             <Text fontSize={11} color={tokens.textMuted}>
@@ -126,11 +127,11 @@ export function QuickPickerSheet({
             </Text>
             <XStack flexWrap="wrap" gap={8} paddingVertical={2}>
               {SAREE_DRESS_SIZES.map((opt) => (
-                <OptionChip
+                <SizeChip
                   key={opt}
                   label={opt}
                   selected={opt === selected}
-                  onSelect={() => {
+                  onPress={() => {
                     onSelect(opt);
                     onClose();
                   }}
@@ -140,11 +141,11 @@ export function QuickPickerSheet({
           </YStack>
         )}
 
-        {/* Content: Size Picker — Kids 0-15 Years with Chart Intervals */}
+        {/* Content: Size Picker — Kids 0-15 Years with Chart Intervals using SizeChip Atom */}
         {type === 'size' && sizeCategory === 'kids' && (
           <YStack gap={6}>
             <Text fontSize={11} color={tokens.textMuted}>
-              Lehenga-Choli & Kids ethnic wear (6 Month to 15 Years):
+              Lehenga-Choli &amp; Kids ethnic wear (6 Month to 15 Years):
             </Text>
             <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
               <XStack flexWrap="wrap" gap={6} paddingVertical={2}>
@@ -154,43 +155,18 @@ export function QuickPickerSheet({
                     selected === kid.size ||
                     selected.startsWith(`${kid.size} `);
                   return (
-                    <Pressable
+                    <SizeChip
                       key={kid.value}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isSelected }}
-                      accessibilityLabel={`Size ${kid.size}, age ${kid.age}, chest ${kid.chest}`}
+                      label={`Size ${kid.size}`}
+                      subtitle={`Chest ${kid.chest} · Len ${kid.length}`}
+                      badge={kid.age}
+                      variant="detailed"
+                      selected={isSelected}
                       onPress={() => {
                         onSelect(kid.value);
                         onClose();
                       }}
-                      style={{ width: '48%' }}
-                    >
-                      <XStack
-                        paddingHorizontal={10}
-                        paddingVertical={7}
-                        borderRadius={tokens.radius.sm}
-                        borderWidth={1.5}
-                        borderColor={isSelected ? tokens.accent : tokens.border}
-                        backgroundColor={isSelected ? `${tokens.accent}14` : tokens.surface}
-                        alignItems="center"
-                        justifyContent="space-between"
-                      >
-                        <YStack gap={1}>
-                          <XStack alignItems="center" gap={4}>
-                            <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                              Size {kid.size}
-                            </Text>
-                            <Text fontSize={10} fontWeight="700" color={tokens.accent}>
-                              ({kid.age})
-                            </Text>
-                          </XStack>
-                          <Text fontSize={9} color={tokens.textMuted}>
-                            Chest {kid.chest} · Len {kid.length}
-                          </Text>
-                        </YStack>
-                        {isSelected && <LuCheck size={13} color={tokens.accent} />}
-                      </XStack>
-                    </Pressable>
+                    />
                   );
                 })}
               </XStack>

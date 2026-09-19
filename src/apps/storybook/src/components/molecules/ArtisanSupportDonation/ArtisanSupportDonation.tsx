@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuCheck, LuHeart } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 
 export type ArtisanSupportDonationProps = {
   selectedAmount?: number;
@@ -48,18 +49,12 @@ export function ArtisanSupportDonation({
       </XStack>
 
       <XStack alignItems="center" gap={10} cursor="pointer" onPress={handleToggle}>
-        <XStack
-          width={18}
-          height={18}
-          borderRadius={4}
-          borderWidth={1.5}
-          borderColor={isChecked ? '#e53935' : tokens.borderStrong}
-          backgroundColor={isChecked ? '#e53935' : 'transparent'}
-          alignItems="center"
-          justifyContent="center"
-        >
-          {isChecked && <LuCheck size={12} color="#ffffff" strokeWidth={3} />}
-        </XStack>
+        <CustomCheckbox
+          checked={isChecked}
+          onToggle={handleToggle}
+          size={18}
+          accessibilityLabel="Donate to preserve heritage weaver clusters"
+        />
         <Text fontSize={12} fontWeight="600" color={tokens.text}>
           Donate to preserve heritage weaver clusters
         </Text>

@@ -3,6 +3,7 @@ import { ScrollView, TextInput } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuFilter, LuSearch, LuCheck } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 
 export type FilterOption = {
   id: string;
@@ -233,20 +234,12 @@ export function FilterDrawer({
                       onPress={() => toggleOption(activeFacet.id, opt.id)}
                     >
                       <XStack alignItems="center" gap={10} flex={1}>
-                        <XStack
-                          width={20}
-                          height={20}
-                          borderRadius={4}
-                          borderWidth={1.5}
-                          borderColor={isChecked ? tokens.accent : tokens.borderStrong}
-                          backgroundColor={isChecked ? tokens.accent : 'transparent'}
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          {isChecked ? (
-                            <LuCheck size={13} color={tokens.accentForeground} strokeWidth={3} />
-                          ) : null}
-                        </XStack>
+                        <CustomCheckbox
+                          checked={isChecked}
+                          onToggle={() => toggleOption(activeFacet.id, opt.id)}
+                          size={20}
+                          accessibilityLabel={opt.label}
+                        />
                         <Text
                           fontSize={13}
                           fontWeight={isChecked ? '700' : '500'}

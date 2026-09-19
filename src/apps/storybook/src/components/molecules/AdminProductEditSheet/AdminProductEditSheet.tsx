@@ -9,6 +9,7 @@ import {
 import { YStack, XStack, Text } from 'tamagui';
 import { LuX, LuCheck, LuSparkles } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 
 export interface AdminProductEditSheetProps {
   visible: boolean;
@@ -278,18 +279,12 @@ export function AdminProductEditSheet({
                   </YStack>
                 </XStack>
 
-                <XStack
-                  width={20}
-                  height={20}
-                  borderRadius={tokens.radius.xs}
-                  borderWidth={1.5}
-                  borderColor={useForTraining ? tokens.accent : tokens.border}
-                  backgroundColor={useForTraining ? tokens.accent : 'transparent'}
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  {useForTraining && <LuCheck size={14} color="#ffffff" />}
-                </XStack>
+                <CustomCheckbox
+                  checked={useForTraining}
+                  onToggle={() => setUseForTraining((prev) => !prev)}
+                  size={20}
+                  accessibilityLabel="Use for AI Training"
+                />
               </XStack>
             </Pressable>
           </ScrollView>

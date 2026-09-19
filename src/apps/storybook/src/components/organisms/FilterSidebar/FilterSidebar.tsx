@@ -3,6 +3,7 @@ import { ScrollView, TextInput } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuFilter, LuMenu, LuCheck, LuChevronDown, LuChevronUp, LuX, LuSearch } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 import { FilterFacet } from '../FilterDrawer/FilterDrawer';
 
 export type FilterSidebarProps = {
@@ -245,24 +246,12 @@ export function FilterSidebar({
                             hoverStyle={{ opacity: 0.85 }}
                           >
                             <XStack alignItems="center" gap={9} flex={1}>
-                              <XStack
-                                width={18}
-                                height={18}
-                                borderRadius={4}
-                                borderWidth={1.5}
-                                borderColor={isChecked ? tokens.accent : tokens.borderStrong}
-                                backgroundColor={isChecked ? tokens.accent : 'transparent'}
-                                alignItems="center"
-                                justifyContent="center"
-                              >
-                                {isChecked ? (
-                                  <LuCheck
-                                    size={12}
-                                    color={tokens.accentForeground}
-                                    strokeWidth={3}
-                                  />
-                                ) : null}
-                              </XStack>
+                              <CustomCheckbox
+                                checked={isChecked}
+                                onToggle={() => onToggleOption(facet.id, opt.id)}
+                                size={18}
+                                accessibilityLabel={opt.label}
+                              />
                               <Text
                                 fontSize={13}
                                 fontWeight={isChecked ? '700' : '500'}

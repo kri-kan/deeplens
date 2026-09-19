@@ -32,10 +32,10 @@ const meta: Meta<any> = {
 };
 export default meta;
 
-export const MobileWithColorSelection = (args: any) => {
+export const MobileWithColorSelection: any = (args: any) => {
   const [color, setColor] = useState('ivory');
   return (
-    <View style={{ width: 390, padding: 16, backgroundColor: '#f9f9f9', borderRadius: 24, borderWidth: 1, borderColor: '#eee' }}>
+    <YStack gap={12} padding={16} width="100%">
       <YStack gap={8} marginBottom={12}>
         <Text fontSize={13} fontWeight="800" color="#333">
           📱 Mobile PDP Carousel with Color Selection Below
@@ -64,14 +64,17 @@ export const MobileWithColorSelection = (args: any) => {
           />
         </YStack>
       </ProductGallery>
-    </View>
+    </YStack>
   );
 };
+MobileWithColorSelection.parameters = {
+  formFactorShell: { defaultFactor: 'mobile' },
+};
 
-export const TabletCarouselWithColorSelection = (args: any) => {
+export const TabletCarouselWithColorSelection: any = (args: any) => {
   const [color, setColor] = useState('ivory');
   return (
-    <View style={{ width: 680, padding: 20, backgroundColor: '#f9f9f9', borderRadius: 24, borderWidth: 1, borderColor: '#eee' }}>
+    <YStack gap={12} padding={20} width="100%">
       <YStack gap={8} marginBottom={12}>
         <Text fontSize={14} fontWeight="800" color="#333">
           📱 Tablet PDP Carousel with Color Selection Below
@@ -100,20 +103,26 @@ export const TabletCarouselWithColorSelection = (args: any) => {
           />
         </YStack>
       </ProductGallery>
-    </View>
+    </YStack>
   );
 };
+TabletCarouselWithColorSelection.parameters = {
+  formFactorShell: { defaultFactor: 'tablet' },
+};
 
-export const DesktopInteractive = (args: any) => {
+export const DesktopInteractive: any = (args: any) => {
   const [color, setColor] = useState('ivory');
   return (
-    <View style={{ maxWidth: 740, padding: 16 }}>
+    <YStack padding={16} width="100%">
       <ProductGallery
         swatches={SWATCHES}
         selectedColor={color}
         onSelectColor={setColor}
         isMobile={false}
       />
-    </View>
+    </YStack>
   );
+};
+DesktopInteractive.parameters = {
+  formFactorShell: { defaultFactor: 'desktop' },
 };

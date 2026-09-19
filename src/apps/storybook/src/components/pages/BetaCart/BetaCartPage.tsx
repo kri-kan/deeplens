@@ -16,6 +16,7 @@ import {
 } from 'react-icons/lu';
 import { RiWhatsappLine } from 'react-icons/ri';
 import { useTheme, useResponsive } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 import { MyntraStyleCartItem, CartItemData } from '../../molecules/CartItem/MyntraStyleCartItem';
 export type { CartItemData };
 
@@ -346,18 +347,12 @@ export function BetaCartPage({
                   cursor="pointer"
                   onPress={handleToggleSelectAll}
                 >
-                  <XStack
-                    width={18}
-                    height={18}
-                    borderRadius={4}
-                    borderWidth={1.5}
-                    borderColor={isAllSelected ? tokens.accent : tokens.border}
-                    backgroundColor={isAllSelected ? tokens.accent : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {isAllSelected && <LuCheck size={12} color="#ffffff" />}
-                  </XStack>
+                  <CustomCheckbox
+                    checked={isAllSelected}
+                    onToggle={handleToggleSelectAll}
+                    size={18}
+                    accessibilityLabel="Select all cart items"
+                  />
                   <Text fontSize={13} fontWeight="700" color={tokens.text}>
                     {selectedItems.length}/{items.length} ITEMS SELECTED
                   </Text>

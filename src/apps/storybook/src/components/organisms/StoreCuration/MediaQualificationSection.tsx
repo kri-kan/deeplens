@@ -15,6 +15,7 @@ import {
   LuLayers,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 import { StoreCurationMediaItem, StoreColorGroup } from './types';
 
 export interface MediaQualificationSectionProps {
@@ -333,25 +334,17 @@ export function MediaQualificationSection({
                 gap={8}
               >
                 {/* 1. Qualify Checkbox */}
-                <Pressable
-                  onPress={() => onToggleQualify(item.id)}
-                  style={styles.actionCheckbox}
-                >
-                  <View
-                    style={[
-                      styles.checkboxSquare,
-                      {
-                        backgroundColor: item.isQualified ? tokens.accent : 'transparent',
-                        borderColor: item.isQualified ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    {item.isQualified && <LuCheck size={11} color="#fff" strokeWidth={3} />}
-                  </View>
+                <XStack alignItems="center" gap={8} cursor="pointer" onPress={() => onToggleQualify(item.id)}>
+                  <CustomCheckbox
+                    checked={item.isQualified}
+                    onToggle={() => onToggleQualify(item.id)}
+                    size={16}
+                    accessibilityLabel={item.isQualified ? 'Qualified for Store' : 'Excluded from Store'}
+                  />
                   <Text fontSize={11} fontWeight={item.isQualified ? '700' : '500'} color={tokens.text}>
                     {item.isQualified ? 'Qualified for Store' : 'Excluded from Store'}
                   </Text>
-                </Pressable>
+                </XStack>
 
                 {/* 2. Common Media Toggle */}
                 {item.isQualified && (

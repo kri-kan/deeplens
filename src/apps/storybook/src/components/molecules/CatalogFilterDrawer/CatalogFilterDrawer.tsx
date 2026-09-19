@@ -16,6 +16,7 @@ import {
   LuSearch,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.88, 380);
@@ -294,18 +295,12 @@ function FacetSectionView({
                   borderRadius={tokens.radius.sm}
                   backgroundColor={isChecked ? `${tokens.accent}14` : 'transparent'}
                 >
-                  <XStack
-                    width={18}
-                    height={18}
-                    borderRadius={tokens.radius.xs}
-                    borderWidth={1.5}
-                    borderColor={isChecked ? tokens.accent : tokens.border}
-                    backgroundColor={isChecked ? tokens.accent : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {isChecked && <LuCheck size={12} color="#ffffff" />}
-                  </XStack>
+                  <CustomCheckbox
+                    checked={isChecked}
+                    onToggle={() => onToggle(opt)}
+                    size={18}
+                    accessibilityLabel={opt}
+                  />
                   <Text
                     fontSize={12}
                     fontWeight={isChecked ? '700' : '500'}
@@ -799,18 +794,12 @@ export function CatalogFilterDrawer({
                             borderRadius={tokens.radius.sm}
                             backgroundColor={isChecked ? `${tokens.accent}14` : 'transparent'}
                           >
-                            <XStack
-                              width={18}
-                              height={18}
-                              borderRadius={tokens.radius.xs}
-                              borderWidth={1.5}
-                              borderColor={isChecked ? tokens.accent : tokens.border}
-                              backgroundColor={isChecked ? tokens.accent : 'transparent'}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              {isChecked && <LuCheck size={12} color="#ffffff" />}
-                            </XStack>
+                            <CustomCheckbox
+                              checked={isChecked}
+                              onToggle={() => toggleCategory(cat.id)}
+                              size={18}
+                              accessibilityLabel={cat.label}
+                            />
                             <Text
                               fontSize={12}
                               fontWeight={isChecked ? '700' : '500'}
@@ -913,18 +902,12 @@ export function CatalogFilterDrawer({
                             borderRadius={tokens.radius.sm}
                             backgroundColor={isChecked ? `${tokens.accent}14` : 'transparent'}
                           >
-                            <XStack
-                              width={18}
-                              height={18}
-                              borderRadius={tokens.radius.xs}
-                              borderWidth={1.5}
-                              borderColor={isChecked ? tokens.accent : tokens.border}
-                              backgroundColor={isChecked ? tokens.accent : 'transparent'}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              {isChecked && <LuCheck size={12} color="#ffffff" />}
-                            </XStack>
+                            <CustomCheckbox
+                              checked={isChecked}
+                              onToggle={() => toggleFabric(fabric)}
+                              size={18}
+                              accessibilityLabel={fabric}
+                            />
                             <Text
                               fontSize={12}
                               fontWeight={isChecked ? '700' : '500'}
@@ -1023,18 +1006,12 @@ export function CatalogFilterDrawer({
                             borderRadius={tokens.radius.sm}
                             backgroundColor={isChecked ? `${tokens.accent}14` : 'transparent'}
                           >
-                            <XStack
-                              width={18}
-                              height={18}
-                              borderRadius={tokens.radius.xs}
-                              borderWidth={1.5}
-                              borderColor={isChecked ? tokens.accent : tokens.border}
-                              backgroundColor={isChecked ? tokens.accent : 'transparent'}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              {isChecked && <LuCheck size={12} color="#ffffff" />}
-                            </XStack>
+                            <CustomCheckbox
+                              checked={isChecked}
+                              onToggle={() => toggleVendor(vendor)}
+                              size={18}
+                              accessibilityLabel={vendor}
+                            />
                             <Text
                               fontSize={12}
                               fontWeight={isChecked ? '700' : '500'}

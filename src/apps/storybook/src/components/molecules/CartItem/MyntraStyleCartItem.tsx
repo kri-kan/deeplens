@@ -4,6 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { LuX, LuChevronDown, LuRotateCcw, LuCheck, LuInfo } from 'react-icons/lu';
 import { useTheme, useResponsive } from '../../../theme';
 import { CustomSwatchDot, SwatchTemplateType } from '../../atoms/SwatchDot/CustomSwatchDot';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
+import { SizeChip } from '../../atoms/SizeChip/SizeChip';
 
 export type CartItemData = {
   id: string;
@@ -88,21 +90,14 @@ export function MyntraStyleCartItem({
 
       <XStack gap={isMobile ? 10 : 14} alignItems="flex-start">
         {/* Checkbox */}
-        <XStack
-          cursor="pointer"
-          width={20}
-          height={20}
-          borderRadius={4}
-          borderWidth={1.5}
-          borderColor={item.selected ? '#e53935' : tokens.borderStrong}
-          backgroundColor={item.selected ? '#e53935' : 'transparent'}
-          alignItems="center"
-          justifyContent="center"
-          marginTop={6}
-          onPress={() => onToggleSelect?.(item.id)}
-        >
-          {item.selected && <LuCheck size={14} color="#ffffff" strokeWidth={3} />}
-        </XStack>
+        <YStack marginTop={6}>
+          <CustomCheckbox
+            checked={!!item.selected}
+            onToggle={() => onToggleSelect?.(item.id)}
+            size={20}
+            accessibilityLabel={`Select ${item.name || item.brand}`}
+          />
+        </YStack>
 
         {/* 3:4 Product Photograph Gradient Thumbnail */}
         <YStack
@@ -273,28 +268,15 @@ export function MyntraStyleCartItem({
           </Text>
           <XStack gap={8} flexWrap="wrap">
             {availableSizes.map((s) => (
-              <XStack
+              <SizeChip
                 key={s}
-                paddingHorizontal={12}
-                paddingVertical={6}
-                borderRadius={6}
-                cursor="pointer"
-                backgroundColor={item.size === s ? tokens.accent : tokens.surface}
-                borderWidth={1}
-                borderColor={item.size === s ? tokens.accent : tokens.border}
+                label={s}
+                selected={item.size === s}
                 onPress={() => {
                   onSizeChange?.(item.id, s);
                   setIsSizePickerOpen(false);
                 }}
-              >
-                <Text
-                  fontSize={12}
-                  fontWeight="700"
-                  color={item.size === s ? tokens.accentForeground : tokens.text}
-                >
-                  {s}
-                </Text>
-              </XStack>
+              />
             ))}
           </XStack>
         </YStack>

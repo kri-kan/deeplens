@@ -9,6 +9,7 @@ import {
   SwatchTemplateType,
   STANDARD_PALETTE,
 } from '../../components/atoms/SwatchDot/CustomSwatchDot';
+import { CustomCheckbox } from '../../components/atoms/CustomCheckbox/CustomCheckbox';
 
 const meta: Meta<any> = {
   args: {
@@ -290,18 +291,12 @@ export const CurationPortalWireframe = (args: any) => {
                   cursor="pointer"
                   onPress={() => togglePhoto(photo.id)}
                 >
-                  <XStack
-                    width={18}
-                    height={18}
-                    borderRadius={4}
-                    borderWidth={1.5}
-                    borderColor={isChecked ? '#D4AF37' : '#999'}
-                    backgroundColor={isChecked ? '#D4AF37' : 'transparent'}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    {isChecked ? <LuCheck size={12} color="#ffffff" strokeWidth={3} /> : null}
-                  </XStack>
+                  <CustomCheckbox
+                    checked={isChecked}
+                    onToggle={() => togglePhoto(photo.id)}
+                    size={18}
+                    accessibilityLabel={photo.title}
+                  />
                   <Text fontSize={13} color="#333" fontWeight={isChecked ? '700' : '500'}>
                     {photo.title}
                   </Text>

@@ -623,25 +623,16 @@ export const Interactive_MultiDevice_Playground: Story = {
  * 10. Mobile Viewport Simulation (390px iPhone Frame)
  */
 export const Mobile_Viewport_390px: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
   render: () => (
-    <FormFactorContext.Provider
-      value={{
-        factor: 'mobile',
-        isMobile: true,
-        isTablet: false,
-        isDesktop: false,
-        containerWidth: 390,
-      }}
-    >
-      <View style={{ width: 390, maxWidth: '100%', alignSelf: 'center', borderWidth: 2, borderColor: '#334155', borderRadius: 24, overflow: 'hidden' }}>
-        <SpecificationsPanel
-          title="Specifications & Craft Details"
-          sku="VF2B56-01"
-          groupedSpecs={SAREE_GROUPED_SPECS}
-          defaultViewMode="accordion"
-        />
-      </View>
-    </FormFactorContext.Provider>
+    <SpecificationsPanel
+      title="Specifications & Craft Details"
+      sku="VF2B56-01"
+      groupedSpecs={SAREE_GROUPED_SPECS}
+      defaultViewMode="accordion"
+    />
   ),
 };
 
@@ -649,25 +640,16 @@ export const Mobile_Viewport_390px: Story = {
  * 11. Tablet Viewport Simulation (768px iPad Frame)
  */
 export const Tablet_Viewport_768px: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'tablet' },
+  },
   render: () => (
-    <FormFactorContext.Provider
-      value={{
-        factor: 'tablet',
-        isMobile: false,
-        isTablet: true,
-        isDesktop: false,
-        containerWidth: 768,
-      }}
-    >
-      <View style={{ width: 768, maxWidth: '100%', alignSelf: 'center', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 16, overflow: 'hidden' }}>
-        <SpecificationsPanel
-          title="Specifications & Craft Details"
-          sku="VF2B56-01"
-          groupedSpecs={SAREE_GROUPED_SPECS}
-          defaultViewMode="cards"
-        />
-      </View>
-    </FormFactorContext.Provider>
+    <SpecificationsPanel
+      title="Specifications & Craft Details"
+      sku="VF2B56-01"
+      groupedSpecs={SAREE_GROUPED_SPECS}
+      defaultViewMode="cards"
+    />
   ),
 };
 

@@ -69,13 +69,9 @@ const meta: Meta<any> = {
   },
   title: 'Organisms/FilterDrawer',
   component: FilterDrawer,
-  decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 680, position: 'relative', overflow: 'hidden', borderWidth: 1, borderColor: '#ddd', borderRadius: 20 }}>
-        <Story />
-      </View>
-    ),
-  ],
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
   argTypes: {
     ...THEME_ARG_TYPES,
   },
