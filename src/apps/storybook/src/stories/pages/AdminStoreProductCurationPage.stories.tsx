@@ -47,13 +47,13 @@ export default meta;
 type Story = StoryObj;
 
 /**
- * 0. Store Curation: Main Hub (2 Selection Tiles):
- * Entry hub displaying 2 prominent selection tiles:
- * 1. Qualify & Group (3 Stages: Qualify > Swatches > Grouping)
- * 2. Metadata (Story, AI Narrative & Commercial Pricing Margins)
+ * 0. Store Curation: Main Hub (2-Column Compact Selection Tiles):
+ * Entry hub displaying 2 compact selection tiles in a 2-column grid:
+ * 1. Qualify & Group (Media qualification, swatches & variant grouping)
+ * 2. Metadata (Commercial pricing margins, story & craft narrative)
  */
 export const StoreCurationMainHub: Story = {
-  name: '0. Store Curation: Main Hub (Qualify & Group + Metadata Tiles)',
+  name: '0. Store Curation: Main Hub (2-Column Compact Tiles)',
   args: {
     initialScreen: 'hub',
     initialShowPreview: false,
