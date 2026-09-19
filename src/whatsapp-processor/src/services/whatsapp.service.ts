@@ -19,7 +19,7 @@ import { SESSION_ID, SYNC_NEWSLETTERS, RATE_LIMIT_CONFIG } from '../config';
 import { isExcluded, updateLastProcessedMessage, upsertChat } from '../utils/whitelist';
 import { isProcessingPaused, getProcessingState } from '../utils/processing-state';
 import { ensureBucketExists } from '../clients/minio.client';
-import { uploadMedia, MediaType, setMinIOAvailability } from '../clients/media.client';
+import { uploadMedia, MediaType, setMinIOAvailability, getPresignedUrl } from '../clients/media.client';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { getRedisClient } from '../clients/redis.client';
 import { saveMessage } from '../utils/messages';
@@ -1076,9 +1076,17 @@ export class WhatsAppService {
 
             const row = res.rows[0];
 
-            // If already downloaded, return existing url
+            // If already downloaded, return existing url (presigned if minio/bucket URL)
             if (row.media_url) {
-                return { success: true, mediaUrl: row.media_url };
+                let resolvedUrl = row.media_url;
+                if (resolvedUrl.startsWith('minio://') || resolvedUrl.startsWith('whatsapp-data/') || resolvedUrl.startsWith('general/')) {
+                    try {
+                        resolvedUrl = await getPresignedUrl(resolvedUrl);
+                    } catch (e) {
+                        // ignore and return original
+                    }
+                }
+                return { success: true, mediaUrl: resolvedUrl };
             }
 
             const extracted = extractMediaPayload(row.metadata);
@@ -1182,7 +1190,14 @@ export class WhatsAppService {
 
             logger.info({ messageId, jid: row.jid, mediaUrl, size: buffer.length }, 'Successfully retried and downloaded media');
 
-            return { success: true, mediaUrl };
+            let presignedMediaUrl = mediaUrl;
+            try {
+                presignedMediaUrl = await getPresignedUrl(mediaUrl);
+            } catch (e) {
+                // ignore
+            }
+
+            return { success: true, mediaUrl: presignedMediaUrl };
         } catch (err: any) {
             logger.error({ err: err.message, stack: err.stack, messageId }, 'Error retrying media download');
             return { success: false, error: err.message || 'Unknown error' };

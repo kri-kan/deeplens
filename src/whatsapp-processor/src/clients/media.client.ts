@@ -141,18 +141,45 @@ export async function uploadMedia(
 }
 
 /**
- * Gets a presigned URL for a media object with configurable TTL
+ * Gets a presigned URL for a media object with configurable TTL and dynamic bucket.
+ * Supports:
+ * - Direct objectName with optional bucket parameter
+ * - Full minio URI: minio://{bucket}/{objectName}
+ * - Bucket-prefixed paths: whatsapp-data/... or general/...
  */
-export async function getPresignedUrl(objectName: string, expirySeconds: number = 3600): Promise<string> {
+export async function getPresignedUrl(
+    objectName: string,
+    bucket?: string,
+    expirySeconds: number = 3600
+): Promise<string> {
     try {
+        let targetBucket = bucket || MINIO_CONFIG.bucket;
+        let cleanObjectName = objectName;
+
+        if (cleanObjectName.startsWith('minio://')) {
+            const match = cleanObjectName.match(/^minio:\/\/([^\/]+)\/(.+)$/);
+            if (match) {
+                targetBucket = match[1];
+                cleanObjectName = match[2];
+            } else {
+                cleanObjectName = cleanObjectName.replace(/^minio:\/\/[^\/]+\//, '');
+            }
+        } else if (cleanObjectName.startsWith('whatsapp-data/')) {
+            targetBucket = 'whatsapp-data';
+            cleanObjectName = cleanObjectName.replace(/^whatsapp-data\//, '');
+        } else if (cleanObjectName.startsWith('general/')) {
+            targetBucket = 'general';
+            cleanObjectName = cleanObjectName.replace(/^general\//, '');
+        }
+
         const url = await minioClient.presignedGetObject(
-            MINIO_CONFIG.bucket,
-            objectName,
+            targetBucket,
+            cleanObjectName,
             expirySeconds
         );
         return url;
     } catch (err) {
-        logger.error({ err, objectName }, 'Failed to generate presigned URL');
+        logger.error({ err, objectName, bucket }, 'Failed to generate presigned URL');
         throw err;
     }
 }
