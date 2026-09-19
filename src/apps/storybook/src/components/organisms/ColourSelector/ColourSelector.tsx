@@ -29,6 +29,8 @@ export type ColourSelectorProps = {
   onSelect: (key: string) => void;
   format?: 'cards' | 'dots';
   showCardLabel?: boolean;
+  mediaSlot?: React.ReactNode;
+  swatchesAlign?: 'left' | 'right';
 };
 
 export function ColourSelector({
@@ -37,6 +39,8 @@ export function ColourSelector({
   onSelect,
   format = 'cards',
   showCardLabel = false,
+  mediaSlot,
+  swatchesAlign = 'left',
 }: ColourSelectorProps) {
   const { tokens } = useTheme();
 
@@ -122,9 +126,49 @@ export function ColourSelector({
             ))}
           </XStack>
         </ScrollView>
+      ) : mediaSlot ? (
+        /* Format 2 with MediaSlot: 2nd Row has media thumbnails on left and swatches aligned to right-most */
+        <XStack width="100%" alignItems="center" justifyContent="space-between" gap={16}>
+          {/* Left: Scrollable Media Tiles */}
+          <XStack flex={1} minWidth={0} alignItems="center">
+            {mediaSlot}
+          </XStack>
+
+          {/* Right: Colour Swatches aligned to the right-most */}
+          <XStack
+            flexWrap="wrap"
+            gap={12}
+            alignItems="center"
+            justifyContent="flex-end"
+            marginLeft="auto"
+            flexShrink={0}
+          >
+            {options.map((o) => (
+              <CustomSwatchDot
+                key={o.key}
+                template={o.template}
+                primaryColor={o.primaryColor || (o.gradient ? o.gradient[0] : '#f3e6d8')}
+                secondaryColor={o.secondaryColor || (o.gradient ? o.gradient[1] : '#d3aa75')}
+                tertiaryColor={o.tertiaryColor}
+                quaternaryColor={o.quaternaryColor}
+                colors={o.colors}
+                colorCount={o.colorCount}
+                size={36}
+                selected={selected === o.key}
+                onPress={() => onSelect(o.key)}
+              />
+            ))}
+          </XStack>
+        </XStack>
       ) : (
-        /* Format 2: Compact Swatch Dots Row */
-        <XStack flexWrap="wrap" gap={12} alignItems="center" paddingVertical={4}>
+        /* Format 2 standard: Compact Swatch Dots Row */
+        <XStack
+          flexWrap="wrap"
+          gap={12}
+          alignItems="center"
+          justifyContent={swatchesAlign === 'right' ? 'flex-end' : 'flex-start'}
+          paddingVertical={4}
+        >
           {options.map((o) => (
             <CustomSwatchDot
               key={o.key}
