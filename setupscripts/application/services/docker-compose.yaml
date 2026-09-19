@@ -18,7 +18,7 @@ services:
       - deeplens-network
 
   worker-service:
-    image: mcr.microsoft.com/dotnet/runtime:9.0
+    image: mcr.microsoft.com/dotnet/aspnet:9.0
     container_name: deeplens-worker
     restart: unless-stopped
     volumes:

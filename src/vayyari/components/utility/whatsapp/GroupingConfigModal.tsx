@@ -123,8 +123,8 @@ export function GroupingConfigModal({
                     color={theme.colors.primary}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyLarge">Sticker Separator</Text>
-                    <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use a sticker as a &quot;break&quot; between groups</Text>
+                    <Text variant="bodyLarge">Sticker &amp; Emoji Separator</Text>
+                    <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use stickers or standalone emojis (e.g. 🔚, 🛑) as a break between groups</Text>
                   </View>
                 </View>
                 <Divider style={styles.divider} />

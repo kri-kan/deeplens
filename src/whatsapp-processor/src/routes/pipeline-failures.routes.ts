@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getWhatsAppDbClient } from '../clients/db.client';
 import { groupReadinessService } from '../services/group-readiness.service';
+import { isStandaloneEmoji } from '../services/zoning.service';
 import { logger } from '../utils/logger';
 import { randomUUID } from 'crypto';
 
@@ -271,7 +272,7 @@ export function createPipelineFailuresRoutes(): Router {
                 let isFirstMsgInGroup = true;
 
                 for (const msg of messages) {
-                    const isCurSticker = msg.media_type === 'sticker';
+                    const isCurSticker = msg.media_type === 'sticker' || (strategy !== 'time_gap' && isStandaloneEmoji(msg.content));
 
                     if (isCurSticker) {
                         currentGroupId = `sticker_${randomUUID()}`;
@@ -313,8 +314,8 @@ export function createPipelineFailuresRoutes(): Router {
                     'staging',
                     c.auto_process_products,
                     COUNT(CASE WHEN m.media_type IN ('image', 'photo', 'video') THEN 1 END),
-                    COUNT(CASE WHEN m.media_type NOT IN ('image', 'photo', 'video', 'sticker') AND m.content IS NOT NULL THEN 1 END),
-                    STRING_AGG(CASE WHEN m.media_type NOT IN ('sticker') THEN m.content END, E'\n'),
+                    COUNT(CASE WHEN m.media_type NOT IN ('image', 'photo', 'video', 'sticker') AND NOT (m.group_id LIKE 'sticker_%') AND m.content IS NOT NULL THEN 1 END),
+                    STRING_AGG(CASE WHEN m.media_type NOT IN ('sticker') AND NOT (m.group_id LIKE 'sticker_%') THEN m.content END, E'\n'),
                     COALESCE(TO_TIMESTAMP(MAX(m.timestamp)), NOW()),
                     NOW(),
                     NOW()
