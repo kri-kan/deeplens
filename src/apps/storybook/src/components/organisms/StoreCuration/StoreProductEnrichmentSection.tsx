@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Pressable, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
@@ -9,10 +9,8 @@ import {
   LuCheck,
   LuRuler,
   LuTag,
-  LuShieldCheck,
-  LuPackage,
-  LuRefreshCw,
-  LuInfo,
+  LuPlus,
+  LuScissors,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 import {
@@ -23,11 +21,13 @@ import {
   CRAFT_ORIGIN_OPTIONS,
   MOTIF_PATTERN_OPTIONS,
   BORDER_PALLU_OPTIONS,
+  BLOUSE_TYPE_OPTIONS,
   ZARI_MATERIAL_OPTIONS,
   WORK_HEAVINESS_OPTIONS,
   OCCASION_OPTIONS,
   STITCH_TYPE_OPTIONS,
   TaxonomyOption,
+  buildSpecsFromUnifiedAttributes,
 } from './taxonomy';
 
 export type MetadataActiveTab = 'commercials' | 'craft_specs' | 'sizing' | 'occasions_tags';
@@ -40,12 +40,201 @@ export interface StoreProductEnrichmentSectionProps {
   mrp: string;
   salePrice: string;
   specs?: ProductCurationSpecs;
+  product?: {
+    id?: string;
+    title?: string;
+    fabric?: string;
+    stitch_type?: string;
+    description?: string;
+    unified_attributes?: any;
+    [key: string]: any;
+  };
+  unified_attributes?: any;
   onChangeDescription: (desc: string) => void;
   onChangeMrp: (mrp: string) => void;
   onChangeSalePrice: (price: string) => void;
   onChangeSpecs?: (specs: ProductCurationSpecs) => void;
 }
 
+// ── REUSABLE TAXONOMY CHIP & FREE-TEXT COMBOBOX SELECTOR ──────────────────────
+interface TaxonomyFacetChipSelectorProps {
+  label: string;
+  options: TaxonomyOption[];
+  selectedId: string;
+  selectedName?: string;
+  onSelect: (id: string, name: string) => void;
+  customPlaceholder?: string;
+  tokens: any;
+}
+
+function TaxonomyFacetChipSelector({
+  label,
+  options,
+  selectedId,
+  selectedName,
+  onSelect,
+  customPlaceholder,
+  tokens,
+}: TaxonomyFacetChipSelectorProps) {
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const [customList, setCustomList] = useState<TaxonomyOption[]>([]);
+  const scrollRef = useRef<any>(null);
+
+  // Sync custom items if selectedId is not in preset options
+  useEffect(() => {
+    if (selectedId && !options.some((o) => o.id === selectedId)) {
+      if (!customList.some((o) => o.id === selectedId)) {
+        setCustomList((prev) => [
+          ...prev,
+          {
+            id: selectedId,
+            label: selectedName || selectedId.replace('custom_', '').replace(/_/g, ' '),
+            badge: 'Custom',
+            isCustom: true,
+          },
+        ]);
+      }
+    }
+  }, [selectedId, selectedName, options, customList]);
+
+  const handleWheel = (e: any) => {
+    const el = scrollRef.current?.getScrollableNode?.() || scrollRef.current;
+    if (!el) return;
+    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    el.scrollLeft += delta;
+  };
+
+  const handleCommitCustom = () => {
+    if (!customText.trim()) {
+      setIsAddingCustom(false);
+      return;
+    }
+    const cleanText = customText.trim();
+    const slug = cleanText
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .trim()
+      .replace(/[\s_-]+/g, '_');
+    const newId = `custom_${slug}`;
+    const newOption: TaxonomyOption = {
+      id: newId,
+      label: cleanText,
+      badge: 'Custom',
+      isCustom: true,
+    };
+    setCustomList((prev) => (prev.some((p) => p.id === newId) ? prev : [...prev, newOption]));
+    onSelect(newId, cleanText);
+    setCustomText('');
+    setIsAddingCustom(false);
+  };
+
+  const combinedOptions = [...customList, ...options];
+
+  return (
+    <YStack gap={4}>
+      <XStack alignItems="center" justifyContent="space-between">
+        <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+          {label}
+        </Text>
+        <Pressable
+          onPress={() => setIsAddingCustom(!isAddingCustom)}
+          style={styles.customToggleBtn}
+        >
+          <LuPlus size={11} color={tokens.accent} />
+          <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+            {isAddingCustom ? 'Cancel' : '+ Custom Tag'}
+          </Text>
+        </Pressable>
+      </XStack>
+
+      {isAddingCustom && (
+        <XStack gap={6} alignItems="center" marginBottom={4}>
+          <TextInput
+            value={customText}
+            onChangeText={setCustomText}
+            placeholder={customPlaceholder || `Type custom ${label.toLowerCase().replace(':', '')}...`}
+            placeholderTextColor={tokens.textMuted}
+            onSubmitEditing={handleCommitCustom}
+            autoFocus
+            style={styles.customTextInput}
+          />
+          <Pressable
+            onPress={handleCommitCustom}
+            style={[styles.customConfirmBtn, { backgroundColor: tokens.accent }]}
+          >
+            <LuCheck size={12} color="#FFFFFF" />
+            <Text fontSize={10} fontWeight="800" color="#FFFFFF">
+              Add
+            </Text>
+          </Pressable>
+        </XStack>
+      )}
+
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.horizontalScrollWrapper}
+        contentContainerStyle={styles.chipRow}
+        {...({ onWheel: handleWheel } as any)}
+      >
+        {combinedOptions.map((opt) => {
+          const isSelected = selectedId === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              onPress={() => onSelect(opt.id, opt.label)}
+              style={[
+                styles.specChip,
+                {
+                  backgroundColor: isSelected ? `${tokens.accent}16` : tokens.surfaceRaised,
+                  borderColor: isSelected ? tokens.accent : tokens.border,
+                },
+              ]}
+            >
+              <Text
+                fontSize={10}
+                fontWeight={isSelected ? '800' : '600'}
+                color={isSelected ? tokens.accent : tokens.text}
+              >
+                {opt.label}
+              </Text>
+              {opt.badge && (
+                <View
+                  style={[
+                    styles.chipPill,
+                    opt.badge === 'Custom'
+                      ? { backgroundColor: '#FEE2E2' }
+                      : opt.badge === 'GI Tagged' || opt.badge === 'Census #1'
+                      ? { backgroundColor: '#FEF3C7' }
+                      : { backgroundColor: '#EDE9FE' },
+                  ]}
+                >
+                  <Text
+                    fontSize={8}
+                    fontWeight="800"
+                    color={
+                      opt.badge === 'Custom'
+                        ? '#DC2626'
+                        : opt.badge === 'GI Tagged' || opt.badge === 'Census #1'
+                        ? '#B45309'
+                        : '#7C3AED'
+                    }
+                  >
+                    {opt.badge}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </YStack>
+  );
+}
+
+// ── MAIN ENRICHMENT SECTION COMPONENT ─────────────────────────────────────────
 export function StoreProductEnrichmentSection({
   title,
   fabric,
@@ -53,7 +242,9 @@ export function StoreProductEnrichmentSection({
   baseCostPrice,
   mrp,
   salePrice,
-  specs = DEFAULT_SAREE_SPECS,
+  specs: controlledSpecs,
+  product,
+  unified_attributes,
   onChangeDescription,
   onChangeMrp,
   onChangeSalePrice,
@@ -63,6 +254,43 @@ export function StoreProductEnrichmentSection({
   const [activeTab, setActiveTab] = useState<MetadataActiveTab>('craft_specs');
   const [isAiDeriving, setIsAiDeriving] = useState(false);
   const [tagInput, setTagInput] = useState('');
+  const [customOccasionInput, setCustomOccasionInput] = useState('');
+  const [isAddingOccasion, setIsAddingOccasion] = useState(false);
+
+  // ── UNIFIED ATTRIBUTES SPEC RESOLUTION & PREFILL ────────────────────────────
+  const effectiveUa = unified_attributes || product?.unified_attributes;
+  const initialSpecs = useMemo(() => {
+    if (controlledSpecs && controlledSpecs !== DEFAULT_SAREE_SPECS) {
+      return controlledSpecs;
+    }
+    if (effectiveUa || fabric || title) {
+      return buildSpecsFromUnifiedAttributes(
+        effectiveUa,
+        { title, fabric, ...product },
+        controlledSpecs || DEFAULT_SAREE_SPECS
+      );
+    }
+    return controlledSpecs || DEFAULT_SAREE_SPECS;
+  }, [controlledSpecs, effectiveUa, product, title, fabric]);
+
+  const [internalSpecs, setInternalSpecs] = useState<ProductCurationSpecs>(initialSpecs);
+  const specs = controlledSpecs || internalSpecs;
+
+  // Reactively prefill when dynamic product or unified_attributes arrive
+  useEffect(() => {
+    if (effectiveUa) {
+      const derived = buildSpecsFromUnifiedAttributes(
+        effectiveUa,
+        { title, fabric, ...product },
+        specs
+      );
+      if (onChangeSpecs) {
+        onChangeSpecs(derived);
+      } else {
+        setInternalSpecs(derived);
+      }
+    }
+  }, [effectiveUa, product]);
 
   const parsedMrp = parseFloat(mrp) || 0;
   const parsedSalePrice = parseFloat(salePrice) || 0;
@@ -74,13 +302,52 @@ export function StoreProductEnrichmentSection({
   const marginPercent =
     parsedSalePrice > 0 ? Math.round((estimatedMargin / parsedSalePrice) * 100) : 0;
 
+  // ── TAB BAR DRAG & WHEEL SCROLL LOGIC ──────────────────────────────────────
+  const tabScrollRef = useRef<any>(null);
+  const isTabDraggingRef = useRef(false);
+  const tabStartXRef = useRef(0);
+  const tabScrollLeftRef = useRef(0);
+  const hasTabDraggedRef = useRef(false);
+
+  const handleTabWheel = (e: any) => {
+    const el = tabScrollRef.current?.getScrollableNode?.() || tabScrollRef.current;
+    if (!el) return;
+    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    el.scrollLeft += delta;
+  };
+
+  const handleTabMouseDown = (e: any) => {
+    const el = tabScrollRef.current?.getScrollableNode?.() || tabScrollRef.current;
+    if (!el) return;
+    isTabDraggingRef.current = true;
+    hasTabDraggedRef.current = false;
+    tabStartXRef.current = e.pageX || e.clientX || 0;
+    tabScrollLeftRef.current = el.scrollLeft;
+  };
+
+  const handleTabMouseMove = (e: any) => {
+    if (!isTabDraggingRef.current) return;
+    const el = tabScrollRef.current?.getScrollableNode?.() || tabScrollRef.current;
+    if (!el) return;
+    const currentX = e.pageX || e.clientX || 0;
+    const diff = currentX - tabStartXRef.current;
+    if (Math.abs(diff) > 4) {
+      hasTabDraggedRef.current = true;
+    }
+    el.scrollLeft = tabScrollLeftRef.current - diff;
+  };
+
+  const handleTabMouseUpOrLeave = () => {
+    isTabDraggingRef.current = false;
+  };
+
   // ── ONE-CLICK AI AUTO-DERIVE ALL ENGINE ─────────────────────────────────────
   const handleAiAutoDeriveAll = () => {
     setIsAiDeriving(true);
     setTimeout(() => {
       // 1. Synthesize craft story
       onChangeDescription(
-        `Woven on heirloom pit looms in Varanasi, this authentic ${specs.fabricName} saree showcases exquisite ${specs.weaveTechniqueName} with ${specs.motifPatternName} and a rich ${specs.borderPalluName}. Paired with an attached ${specs.blousePieceLengthMetres}m blouse piece, the fluid drape offers royal festive presence and luminous heritage elegance.`
+        `Woven on heirloom pit looms in ${specs.craftOriginName || 'Varanasi'}, this authentic ${specs.fabricName} saree showcases exquisite ${specs.weaveTechniqueName} with ${specs.motifPatternName} and a rich ${specs.borderPalluName}. Paired with an attached ${specs.blousePieceLengthMetres}m ${specs.blouseTypeName || 'blouse piece'}, the fluid drape offers royal festive presence and luminous heritage elegance.`
       );
 
       // 2. Intelligent retail pricing rules (if unset or zero)
@@ -98,18 +365,29 @@ export function StoreProductEnrichmentSection({
         derivedAt: new Date().toISOString(),
         confidenceScore: 98,
       };
-      onChangeSpecs?.(updatedSpecs);
+      if (onChangeSpecs) {
+        onChangeSpecs(updatedSpecs);
+      } else {
+        setInternalSpecs(updatedSpecs);
+      }
 
       setIsAiDeriving(false);
-    }, 800);
+    }, 600);
   };
 
-  const updateSpecField = <K extends keyof ProductCurationSpecs>(field: K, value: ProductCurationSpecs[K]) => {
-    if (!onChangeSpecs) return;
-    onChangeSpecs({
+  const updateSpecField = <K extends keyof ProductCurationSpecs>(
+    field: K,
+    value: ProductCurationSpecs[K]
+  ) => {
+    const updated = {
       ...specs,
       [field]: value,
-    });
+    };
+    if (onChangeSpecs) {
+      onChangeSpecs(updated);
+    } else {
+      setInternalSpecs(updated);
+    }
   };
 
   const toggleOccasion = (id: string) => {
@@ -117,6 +395,22 @@ export function StoreProductEnrichmentSection({
     const exists = current.includes(id);
     const updated = exists ? current.filter((item) => item !== id) : [...current, id];
     updateSpecField('occasions', updated);
+  };
+
+  const handleAddCustomOccasion = () => {
+    if (!customOccasionInput.trim()) {
+      setIsAddingOccasion(false);
+      return;
+    }
+    const cleanOccasion = customOccasionInput.trim();
+    const slug = cleanOccasion.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '_');
+    const occId = `custom_${slug}`;
+    const current = specs.occasions || [];
+    if (!current.includes(occId)) {
+      updateSpecField('occasions', [...current, occId]);
+    }
+    setCustomOccasionInput('');
+    setIsAddingOccasion(false);
   };
 
   const handleAddSearchTag = () => {
@@ -157,7 +451,7 @@ export function StoreProductEnrichmentSection({
               </Text>
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
-              Configure craft specs, pricing margins, tailoring dimensions &amp; search facets.
+              Configure authentic craft specs, pricing margins, tailoring dimensions &amp; search facets.
             </Text>
           </YStack>
 
@@ -192,20 +486,38 @@ export function StoreProductEnrichmentSection({
           >
             <LuCheck size={12} color="#16A34A" />
             <Text fontSize={10} fontWeight="700" color="#15803D">
-              AI Derivation Active ({specs.confidenceScore || 96}% confidence) • Click any spec to override
+              Census AI Taxonomy Active ({specs.confidenceScore || 96}% confidence) • Click any facet to override
             </Text>
           </XStack>
         )}
       </YStack>
 
-      {/* ── 4-SECTION TAB SELECTOR BAR ── */}
+      {/* ── 4-SECTION TAB SELECTOR BAR (HORIZONTAL SCROLL/SWIPE & MOUSE DRAG) ── */}
       <ScrollView
+        ref={tabScrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          maxWidth: '100%',
+          display: 'flex',
+          userSelect: 'none',
+          cursor: 'grab',
+        } as any}
         contentContainerStyle={styles.tabScrollContainer}
+        {...({
+          onWheel: handleTabWheel,
+          onMouseDown: handleTabMouseDown,
+          onMouseMove: handleTabMouseMove,
+          onMouseUp: handleTabMouseUpOrLeave,
+          onMouseLeave: handleTabMouseUpOrLeave,
+        } as any)}
       >
         <Pressable
-          onPress={() => setActiveTab('craft_specs')}
+          onPress={() => {
+            if (!hasTabDraggedRef.current) setActiveTab('craft_specs');
+          }}
           style={[
             styles.tabButton,
             {
@@ -225,7 +537,9 @@ export function StoreProductEnrichmentSection({
         </Pressable>
 
         <Pressable
-          onPress={() => setActiveTab('commercials')}
+          onPress={() => {
+            if (!hasTabDraggedRef.current) setActiveTab('commercials');
+          }}
           style={[
             styles.tabButton,
             {
@@ -245,7 +559,9 @@ export function StoreProductEnrichmentSection({
         </Pressable>
 
         <Pressable
-          onPress={() => setActiveTab('sizing')}
+          onPress={() => {
+            if (!hasTabDraggedRef.current) setActiveTab('sizing');
+          }}
           style={[
             styles.tabButton,
             {
@@ -265,7 +581,9 @@ export function StoreProductEnrichmentSection({
         </Pressable>
 
         <Pressable
-          onPress={() => setActiveTab('occasions_tags')}
+          onPress={() => {
+            if (!hasTabDraggedRef.current) setActiveTab('occasions_tags');
+          }}
           style={[
             styles.tabButton,
             {
@@ -293,7 +611,7 @@ export function StoreProductEnrichmentSection({
           borderWidth={1}
           borderColor={tokens.border}
           padding={14}
-          gap={12}
+          gap={14}
         >
           <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={12} fontWeight="900" color={tokens.text} textTransform="uppercase">
@@ -307,210 +625,82 @@ export function StoreProductEnrichmentSection({
           </XStack>
 
           {/* Fabric Base Selection */}
-          <YStack gap={4}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Fabric Base:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {ETHNIC_FABRIC_OPTIONS.map((opt) => {
-                const isSelected = specs.fabricId === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => {
-                      updateSpecField('fabricId', opt.id);
-                      updateSpecField('fabricName', opt.label);
-                    }}
-                    style={[
-                      styles.specChip,
-                      {
-                        backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
-                    </Text>
-                    {opt.badge && (
-                      <View style={styles.chipPill}>
-                        <Text fontSize={8} fontWeight="800" color="#7C3AED">
-                          {opt.badge}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </YStack>
+          <TaxonomyFacetChipSelector
+            label="Fabric Base:"
+            options={ETHNIC_FABRIC_OPTIONS}
+            selectedId={specs.fabricId}
+            selectedName={specs.fabricName}
+            onSelect={(id, name) => {
+              updateSpecField('fabricId', id);
+              updateSpecField('fabricName', name);
+            }}
+            tokens={tokens}
+          />
 
           {/* Weave Technique Selection */}
-          <YStack gap={4}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Weave Technique:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {WEAVE_TECHNIQUE_OPTIONS.map((opt) => {
-                const isSelected = specs.weaveTechniqueId === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => {
-                      updateSpecField('weaveTechniqueId', opt.id);
-                      updateSpecField('weaveTechniqueName', opt.label);
-                    }}
-                    style={[
-                      styles.specChip,
-                      {
-                        backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </YStack>
+          <TaxonomyFacetChipSelector
+            label="Weave Technique &amp; Craft:"
+            options={WEAVE_TECHNIQUE_OPTIONS}
+            selectedId={specs.weaveTechniqueId}
+            selectedName={specs.weaveTechniqueName}
+            onSelect={(id, name) => {
+              updateSpecField('weaveTechniqueId', id);
+              updateSpecField('weaveTechniqueName', name);
+            }}
+            tokens={tokens}
+          />
 
           {/* Craft Heritage & Regional Origin */}
-          <YStack gap={4}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Regional Origin &amp; Heritage:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {CRAFT_ORIGIN_OPTIONS.map((opt) => {
-                const isSelected = specs.craftOriginId === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => {
-                      updateSpecField('craftOriginId', opt.id);
-                      updateSpecField('craftOriginName', opt.label);
-                    }}
-                    style={[
-                      styles.specChip,
-                      {
-                        backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
-                    </Text>
-                    {opt.badge && (
-                      <View style={[styles.chipPill, { backgroundColor: '#FEF3C7' }]}>
-                        <Text fontSize={8} fontWeight="800" color="#B45309">
-                          {opt.badge}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </YStack>
+          <TaxonomyFacetChipSelector
+            label="Regional Origin &amp; Heritage:"
+            options={CRAFT_ORIGIN_OPTIONS}
+            selectedId={specs.craftOriginId}
+            selectedName={specs.craftOriginName}
+            onSelect={(id, name) => {
+              updateSpecField('craftOriginId', id);
+              updateSpecField('craftOriginName', name);
+            }}
+            tokens={tokens}
+          />
 
           {/* Motif & Pattern Selection */}
-          <YStack gap={4}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Motif &amp; Pattern:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {MOTIF_PATTERN_OPTIONS.map((opt) => {
-                const isSelected = specs.motifPatternId === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => {
-                      updateSpecField('motifPatternId', opt.id);
-                      updateSpecField('motifPatternName', opt.label);
-                    }}
-                    style={[
-                      styles.specChip,
-                      {
-                        backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </YStack>
+          <TaxonomyFacetChipSelector
+            label="Motif &amp; Pattern:"
+            options={MOTIF_PATTERN_OPTIONS}
+            selectedId={specs.motifPatternId}
+            selectedName={specs.motifPatternName}
+            onSelect={(id, name) => {
+              updateSpecField('motifPatternId', id);
+              updateSpecField('motifPatternName', name);
+            }}
+            tokens={tokens}
+          />
 
           {/* Border & Pallu Type */}
-          <YStack gap={4}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Border &amp; Pallu:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {BORDER_PALLU_OPTIONS.map((opt) => {
-                const isSelected = specs.borderPalluId === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => {
-                      updateSpecField('borderPalluId', opt.id);
-                      updateSpecField('borderPalluName', opt.label);
-                    }}
-                    style={[
-                      styles.specChip,
-                      {
-                        backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </YStack>
+          <TaxonomyFacetChipSelector
+            label="Border &amp; Pallu:"
+            options={BORDER_PALLU_OPTIONS}
+            selectedId={specs.borderPalluId}
+            selectedName={specs.borderPalluName}
+            onSelect={(id, name) => {
+              updateSpecField('borderPalluId', id);
+              updateSpecField('borderPalluName', name);
+            }}
+            tokens={tokens}
+          />
 
           {/* Zari & Thread Material */}
-          <YStack gap={4}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Zari / Thread Inlay:
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-              {ZARI_MATERIAL_OPTIONS.map((opt) => {
-                const isSelected = specs.zariMaterialId === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    onPress={() => {
-                      updateSpecField('zariMaterialId', opt.id);
-                      updateSpecField('zariMaterialName', opt.label);
-                    }}
-                    style={[
-                      styles.specChip,
-                      {
-                        backgroundColor: isSelected ? `${tokens.accent}14` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
-                      },
-                    ]}
-                  >
-                    <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </YStack>
+          <TaxonomyFacetChipSelector
+            label="Zari / Thread Inlay:"
+            options={ZARI_MATERIAL_OPTIONS}
+            selectedId={specs.zariMaterialId}
+            selectedName={specs.zariMaterialName}
+            onSelect={(id, name) => {
+              updateSpecField('zariMaterialId', id);
+              updateSpecField('zariMaterialName', name);
+            }}
+            tokens={tokens}
+          />
 
           {/* Work Heaviness */}
           <YStack gap={4}>
@@ -666,11 +856,11 @@ export function StoreProductEnrichmentSection({
           borderWidth={1}
           borderColor={tokens.border}
           padding={14}
-          gap={12}
+          gap={14}
         >
           <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={12} fontWeight="900" color={tokens.text} textTransform="uppercase">
-              3. Sizing &amp; Tailoring Profile
+              3. Sizing, Tailoring &amp; Blouse Profile
             </Text>
             <View style={[styles.microBadge, { backgroundColor: '#F0FDF4' }]}>
               <Text fontSize={9} fontWeight="800" color="#16A34A">
@@ -703,9 +893,18 @@ export function StoreProductEnrichmentSection({
                     ]}
                   >
                     <XStack alignItems="center" justifyContent="space-between" width="100%">
-                      <Text fontSize={11} fontWeight={isSelected ? '800' : '600'} color={tokens.text}>
-                        {opt.label}
-                      </Text>
+                      <XStack alignItems="center" gap={6}>
+                        <Text fontSize={11} fontWeight={isSelected ? '800' : '600'} color={tokens.text}>
+                          {opt.label}
+                        </Text>
+                        {opt.badge && (
+                          <View style={[styles.chipPill, { backgroundColor: '#FEF3C7' }]}>
+                            <Text fontSize={8} fontWeight="800" color="#B45309">
+                              {opt.badge}
+                            </Text>
+                          </View>
+                        )}
+                      </XStack>
                       {isSelected && <LuCheck size={14} color={tokens.accent} />}
                     </XStack>
                     {opt.description && (
@@ -719,11 +918,25 @@ export function StoreProductEnrichmentSection({
             </YStack>
           </YStack>
 
+          {/* Blouse Format & Construction Selection */}
+          <TaxonomyFacetChipSelector
+            label="Blouse Format &amp; Construction:"
+            options={BLOUSE_TYPE_OPTIONS}
+            selectedId={specs.blouseTypeId || specs.blouseType}
+            selectedName={specs.blouseTypeName}
+            onSelect={(id, name) => {
+              updateSpecField('blouseTypeId', id);
+              updateSpecField('blouseTypeName', name);
+              updateSpecField('blouseType', id as any);
+            }}
+            tokens={tokens}
+          />
+
           {/* Saree & Blouse Dimensions */}
           <XStack gap={10}>
             <YStack flex={1} gap={4}>
               <Text fontSize={10} color={tokens.textMuted}>
-                Saree Drape Length:
+                Saree Drape Length (m):
               </Text>
               <TextInput
                 value={specs.sareeLengthMetres.toString()}
@@ -735,7 +948,7 @@ export function StoreProductEnrichmentSection({
 
             <YStack flex={1} gap={4}>
               <Text fontSize={10} color={tokens.textMuted}>
-                Blouse Piece Length:
+                Blouse Piece Length (m):
               </Text>
               <TextInput
                 value={specs.blousePieceLengthMetres.toString()}
@@ -781,11 +994,46 @@ export function StoreProductEnrichmentSection({
             </View>
           </XStack>
 
-          {/* Occasion Chips (Multi-Select) */}
+          {/* Occasion Chips (Multi-Select with Custom Occasion Entry) */}
           <YStack gap={6}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-              Occasion Tags (Select all that apply):
-            </Text>
+            <XStack alignItems="center" justifyContent="space-between">
+              <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                Occasion Tags (Select all that apply):
+              </Text>
+              <Pressable
+                onPress={() => setIsAddingOccasion(!isAddingOccasion)}
+                style={styles.customToggleBtn}
+              >
+                <LuPlus size={11} color={tokens.accent} />
+                <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+                  {isAddingOccasion ? 'Cancel' : '+ Custom Occasion'}
+                </Text>
+              </Pressable>
+            </XStack>
+
+            {isAddingOccasion && (
+              <XStack gap={6} alignItems="center" marginBottom={4}>
+                <TextInput
+                  value={customOccasionInput}
+                  onChangeText={setCustomOccasionInput}
+                  placeholder="e.g. Sangeet Night, Housewarming Puja..."
+                  placeholderTextColor={tokens.textMuted}
+                  onSubmitEditing={handleAddCustomOccasion}
+                  autoFocus
+                  style={styles.customTextInput}
+                />
+                <Pressable
+                  onPress={handleAddCustomOccasion}
+                  style={[styles.customConfirmBtn, { backgroundColor: tokens.accent }]}
+                >
+                  <LuCheck size={12} color="#FFFFFF" />
+                  <Text fontSize={10} fontWeight="800" color="#FFFFFF">
+                    Add
+                  </Text>
+                </Pressable>
+              </XStack>
+            )}
+
             <XStack flexWrap="wrap" gap={6}>
               {OCCASION_OPTIONS.map((opt) => {
                 const isSelected = specs.occasions?.includes(opt.id);
@@ -804,10 +1052,42 @@ export function StoreProductEnrichmentSection({
                     <Text fontSize={10} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
                       {opt.label}
                     </Text>
+                    {opt.badge && (
+                      <View style={[styles.chipPill, { backgroundColor: '#EDE9FE' }]}>
+                        <Text fontSize={8} fontWeight="800" color="#7C3AED">
+                          {opt.badge}
+                        </Text>
+                      </View>
+                    )}
                     {isSelected && <LuCheck size={11} color={tokens.accent} />}
                   </Pressable>
                 );
               })}
+
+              {/* Any custom occasions */}
+              {specs.occasions?.filter((id) => id.startsWith('custom_')).map((customId) => (
+                <Pressable
+                  key={customId}
+                  onPress={() => toggleOccasion(customId)}
+                  style={[
+                    styles.specChip,
+                    {
+                      backgroundColor: `${tokens.accent}16`,
+                      borderColor: tokens.accent,
+                    },
+                  ]}
+                >
+                  <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                    {customId.replace('custom_', '').replace(/_/g, ' ')}
+                  </Text>
+                  <View style={[styles.chipPill, { backgroundColor: '#FEE2E2' }]}>
+                    <Text fontSize={8} fontWeight="800" color="#DC2626">
+                      Custom
+                    </Text>
+                  </View>
+                  <LuCheck size={11} color={tokens.accent} />
+                </Pressable>
+              ))}
             </XStack>
           </YStack>
 
@@ -822,6 +1102,7 @@ export function StoreProductEnrichmentSection({
                 onChangeText={setTagInput}
                 onSubmitEditing={handleAddSearchTag}
                 placeholder="e.g. pattu saree, wedding wear..."
+                placeholderTextColor={tokens.textMuted}
                 style={[styles.singleLineInput, { flex: 1 }]}
               />
               <Pressable
@@ -882,7 +1163,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     paddingVertical: 2,
-  },
+    flexShrink: 0,
+  } as any,
   tabButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -892,17 +1174,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     cursor: 'pointer',
-  },
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  } as any,
   microBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
+  horizontalScrollWrapper: {
+    overflowX: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    maxWidth: '100%',
+  } as any,
   chipRow: {
     flexDirection: 'row',
     gap: 6,
     paddingVertical: 2,
-  },
+    flexShrink: 0,
+  } as any,
   specChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -912,12 +1202,43 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     cursor: 'pointer',
-  },
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  } as any,
   chipPill: {
     backgroundColor: '#EDE9FE',
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 3,
+  },
+  customToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    cursor: 'pointer',
+  },
+  customTextInput: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 11,
+    color: '#1E293B',
+  },
+  customConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    cursor: 'pointer',
   },
   specListCard: {
     padding: 8,

@@ -212,6 +212,38 @@ export const Stage4MetadataAndPricing: Story = {
 };
 
 /**
+ * 4b. Stage 4b: Prefilled from Unified Attributes:
+ * Demonstrates automatic specs prefilling and authentic census taxonomy facets from product.unified_attributes.
+ */
+export const Stage4bPrefilledFromUnifiedAttributes: Story = {
+  name: '4b. Metadata & Specs: Prefilled from Unified Attributes',
+  args: {
+    initialScreen: 'metadata',
+    initialShowPreview: false,
+    title: 'Soft Linen Printed Running Blouse With Latkan Print',
+    fabric: 'Soft Linen',
+    baseCostPrice: 380,
+    initialMrp: 999,
+    initialSalePrice: 550,
+    product: {
+      id: 'prod-linen-latkan-6e912dbb',
+      title: 'Soft Linen Printed Running Blouse With Latkan Print',
+      fabric: 'Soft Linen',
+      stitch_type: 'Unstitched',
+      unified_attributes: {
+        price: 550,
+        fabric: 'Linen, Digital Print',
+        stitch_type: 'Unstitched',
+        craft_technique: 'Foil & Digital Fusion Print',
+        border_pallu: 'Rich Pallu with Tassels (Latkan)',
+        blouse_format: 'Attached Unstitched Running Blouse',
+        occasions: ['festive_diwali_puja', 'daily_handloom'],
+      },
+    },
+  },
+};
+
+/**
  * 5. Live Customer Storefront PDP Simulation:
  * Isolates the customer-facing 390px mobile PDP view with carousel dots, bottom ethnic swatches,
  * dynamic photo switching, and video buffering on play tap.
