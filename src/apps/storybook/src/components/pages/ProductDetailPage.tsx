@@ -20,10 +20,12 @@ import {
   CatalogTestProduct,
   DIVERSE_CATALOG_PRODUCTS,
 } from '../../data/catalog';
+import { ProductCurationSpecs } from '../organisms/StoreCuration/types';
 import { useTheme, useResponsive } from '../../theme';
 
 export type ProductDetailPageProps = {
   product?: CatalogTestProduct;
+  curatedSpecs?: ProductCurationSpecs;
   onNavigateHome?: () => void;
   onNavigateCatalog?: () => void;
 };
@@ -36,6 +38,7 @@ const SIMILAR_PRODUCTS = [
 
 export function ProductDetailPage({
   product: productProp,
+  curatedSpecs,
   onNavigateHome,
   onNavigateCatalog,
 }: ProductDetailPageProps) {
@@ -91,6 +94,37 @@ export function ProductDetailPage({
     ]);
     setCartOpen(true);
   };
+
+  const resolvedSpecs = React.useMemo(() => {
+    if (curatedSpecs) {
+      return [
+        { label: 'Fabric Base', value: curatedSpecs.fabricName },
+        { label: 'Weave Technique', value: curatedSpecs.weaveTechniqueName },
+        { label: 'Regional Craft Origin', value: curatedSpecs.craftOriginName },
+        { label: 'Motif & Patterns', value: curatedSpecs.motifPatternName },
+        { label: 'Border & Pallu Detail', value: curatedSpecs.borderPalluName },
+        { label: 'Zari / Inlay Material', value: curatedSpecs.zariMaterialName },
+        { label: 'Work Heaviness', value: curatedSpecs.workHeavinessName },
+        { label: 'Stitch & Sizing Profile', value: curatedSpecs.sizeDrapeText || curatedSpecs.stitchTypeName },
+        { label: 'Blouse Format', value: curatedSpecs.blouseTypeName || 'Attached Unstitched Running Blouse' },
+        { label: 'Saree Drape Length', value: `${curatedSpecs.sareeLengthMetres} metres` },
+        { label: 'Blouse Piece Length', value: `${curatedSpecs.blousePieceLengthMetres} metres` },
+        { label: 'Package Contents', value: curatedSpecs.packageContents },
+        { label: 'Wash Care & Preservation', value: curatedSpecs.careInstructions },
+        {
+          label: 'Occasion & Styling',
+          value: curatedSpecs.occasions?.map((o) => o.replace(/_/g, ' ')).join(', '),
+        },
+      ].filter((s) => Boolean(s.value));
+    }
+    return [
+      { label: 'Fabric Composition', value: activeProduct.fabric },
+      { label: 'Weave Technique', value: activeProduct.highlights?.[0] || 'Handloom Pitloom Weave' },
+      { label: 'Regional Origin', value: activeProduct.weaveOrigin || 'Varanasi, Uttar Pradesh' },
+      { label: 'Stitch Profile', value: activeProduct.stitchType },
+      { label: 'Wash Care Instructions', value: 'Dry Clean Only, Store in Muslin Bag' },
+    ];
+  }, [curatedSpecs, activeProduct]);
 
   return (
     <ProductDetailTemplate
@@ -274,16 +308,7 @@ export function ProductDetailPage({
         />
       }
       specifications={
-        <SpecificationsPanel
-          specs={[
-            { label: 'Fabric Composition', value: '100% Pure Mulberry Silk' },
-            { label: 'Zari Material', value: 'Electroplated Tested Gold Zari' },
-            { label: 'Length & Width', value: '5.5 Meters Saree + 0.8M Blouse' },
-            { label: 'Weave Technique', value: 'Handloom Jacquard Weave' },
-            { label: 'Silk Mark Certification', value: 'Certified SM/IND/2026/9102' },
-            { label: 'Wash Care Instructions', value: 'Dry Clean Only, Store in Muslin Bag' },
-          ]}
-        />
+        <SpecificationsPanel specs={resolvedSpecs} />
       }
       reviews={
         <RatingsPanel
