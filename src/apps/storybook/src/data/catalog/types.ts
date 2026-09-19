@@ -17,23 +17,48 @@ export interface SizeChartRow {
   label: string;
   chestInches?: string;
   chestCm?: string;
+  bustInches?: string;
+  bustCm?: string;
+  underbustInches?: string;
+  underbustCm?: string;
   waistInches?: string;
   waistCm?: string;
+  hipInches?: string;
+  hipCm?: string;
   lengthInches?: string;
   lengthCm?: string;
   shoulderInches?: string;
   shoulderCm?: string;
+  armholeInches?: string;
+  armholeCm?: string;
+  sleeveInches?: string;
+  sleeveCm?: string;
+  flareInches?: string;
+  flareCm?: string;
+  heightCm?: string;
   age?: string;
   notes?: string;
 }
 
 export interface SizeChartData {
+  id?: string;
+  category?: 'saree' | 'blouse' | 'kurti' | 'dress' | 'kids' | 'lehenga';
   title: string;
   subtitle?: string;
   unit: 'in' | 'cm';
-  columns: { key: string; label: string }[];
+  columns: { key: string; label: string; minWidth?: number }[];
   rows: SizeChartRow[];
   tips?: string[];
+  alterationNote?: string;
+  drapeGuide?: {
+    sareeLength: string;
+    blousePiece: string;
+    width: string;
+    steps: { title: string; desc: string }[];
+  };
+  measuringGuide?: {
+    points: { name: string; desc: string }[];
+  };
 }
 
 export interface ProductSizeConfig {
