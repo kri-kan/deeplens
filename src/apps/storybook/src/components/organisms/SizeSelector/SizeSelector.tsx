@@ -56,16 +56,18 @@ export function SizeSelector({
     };
   });
 
-  const isFreeSize =
+  const isNoSize =
+    variant === 'no-size' ||
     variant === 'free-size' ||
     (normalizedSizes.length === 1 &&
-      normalizedSizes[0].label.toLowerCase().includes('free size'));
+      (normalizedSizes[0].label.toLowerCase().includes('free size') ||
+        normalizedSizes[0].label.toLowerCase().includes('one size')));
 
   // Select appropriate chart
   const resolvedChart: SizeChartData =
     variant === 'kids' || category?.toLowerCase().includes('kid')
       ? KIDS_WEAR_CHART
-      : isFreeSize || category?.toLowerCase().includes('saree')
+      : isNoSize || category?.toLowerCase().includes('saree')
       ? SAREE_DRAPE_CHART
       : WOMEN_BLOUSE_CHART;
 
@@ -81,10 +83,10 @@ export function SizeSelector({
             color={tokens.textMuted}
             fontWeight="800"
           >
-            {isFreeSize ? 'Garment Size' : 'Select Size'}
+            {isNoSize ? 'Garment Size' : 'Select Size'}
           </Text>
 
-          {selected ? (
+          {selected && !isNoSize ? (
             <Text fontSize={12} fontWeight="800" color={tokens.accent}>
               : {selected}
             </Text>
@@ -113,24 +115,49 @@ export function SizeSelector({
       </XStack>
 
       {/* Chips Row */}
-      {isFreeSize ? (
-        /* Free Size / Unstitched Presentation */
+      {isNoSize ? (
+        /* No Size: Informational Non-Selectable Badges / Buttons (One Size / Free Size) */
         <XStack flexWrap="wrap" gap={8} alignItems="center">
-          {normalizedSizes.map((opt) => {
-            const isSelected = selected === opt.id || selected === opt.label || !selected;
-            return (
-              <SizeChip
-                key={opt.id}
-                label={opt.label}
-                subtitle={opt.subtitle || 'Universal Fit'}
-                badge={opt.badge}
-                variant="wide"
-                selected={isSelected}
-                disabled={opt.disabled}
-                onPress={() => onSelect?.(opt.id)}
-              />
-            );
-          })}
+          {normalizedSizes.map((opt) => (
+            <XStack
+              key={opt.id}
+              alignItems="center"
+              gap={8}
+              paddingHorizontal={12}
+              paddingVertical={8}
+              borderRadius={10}
+              borderWidth={1.5}
+              borderColor={tokens.accent}
+              backgroundColor={`${tokens.accent}10`}
+              cursor="default"
+            >
+              <LuInfo size={14} color={tokens.accent} />
+              <YStack gap={1}>
+                <XStack alignItems="center" gap={6}>
+                  <Text fontSize={13} fontWeight="800" color={tokens.accent}>
+                    {opt.label}
+                  </Text>
+                  {opt.badge && (
+                    <XStack
+                      backgroundColor="#FEF3C7"
+                      paddingHorizontal={6}
+                      paddingVertical={1.5}
+                      borderRadius={4}
+                    >
+                      <Text fontSize={9} fontWeight="800" color="#B45309">
+                        {opt.badge}
+                      </Text>
+                    </XStack>
+                  )}
+                </XStack>
+                {opt.subtitle && (
+                  <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                    {opt.subtitle}
+                  </Text>
+                )}
+              </YStack>
+            </XStack>
+          ))}
         </XStack>
       ) : (
         /* Multi-size Selection Row (Letter, Numeric, Kids) */

@@ -1,7 +1,7 @@
 import { SwatchTemplateType } from '../../components/atoms/SwatchDot/CustomSwatchDot';
 import { GalleryImage, SwatchItem } from '../../components/organisms/ProductGallery/ProductGallery';
 
-export type SizeCategoryType = 'free-size' | 'letter' | 'numeric' | 'kids' | 'custom';
+export type SizeCategoryType = 'no-size' | 'free-size' | 'letter' | 'numeric' | 'kids' | 'custom';
 
 export interface SizeOption {
   id: string;

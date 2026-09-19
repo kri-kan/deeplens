@@ -1,23 +1,33 @@
 import { SizeOption, SizeChartData } from './types';
 
 // -------------------------------------------------------------
-// 1. FREE SIZE / UNSTITCHED PRESETS (Sarees, Dress Materials)
+// 1. NO SIZE PRESETS: ONE SIZE (UNSTITCHED) & FREE SIZE (STITCHED BLOUSE)
 // -------------------------------------------------------------
+export const ONE_SIZE_PRESET: SizeOption[] = [
+  {
+    id: 'one_size',
+    label: 'One Size',
+    subtitle: '5.5m Saree + 0.8m Unstitched Blouse Piece',
+    measurement: 'Length 5.5m · Blouse 80cm',
+    badge: 'Unstitched Drape',
+  },
+];
+
 export const FREE_SIZE_PRESET: SizeOption[] = [
   {
     id: 'free_size',
     label: 'Free Size',
-    subtitle: '5.5m Saree + 0.8m Blouse',
-    measurement: 'Length 5.5m · Blouse 80cm',
-    badge: 'Universal Drape',
+    subtitle: 'Stitched Blouse with Free Size / Alterable Seams',
+    measurement: 'Universal Drape · Alterable Seams (Bust 34"-42")',
+    badge: 'Alterable Fit',
   },
 ];
 
 export const UNSTITCHED_DRESS_PRESET: SizeOption[] = [
   {
-    id: 'free_size',
-    label: 'Free Size',
-    subtitle: 'Unstitched Material',
+    id: 'one_size',
+    label: 'One Size',
+    subtitle: 'Unstitched Dress Material',
     measurement: 'Top 2.5m · Bottom 2.0m · Dupatta 2.25m',
     badge: 'Custom Tailorable',
   },
