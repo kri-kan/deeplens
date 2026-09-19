@@ -11,10 +11,9 @@ export class ConversationService {
     }
 
     private async resolveProfilePic(url: string | null): Promise<string | null> {
-        if (url && url.startsWith('minio://')) {
+        if (url && (url.startsWith('minio://') || url.startsWith('whatsapp-data/') || url.startsWith('general/'))) {
             try {
-                const objectName = url.replace(/^minio:\/\/[^\/]+\//, '');
-                return await getPresignedUrl(objectName);
+                return await getPresignedUrl(url);
             } catch (err) {
                 logger.warn({ err, url }, 'Failed to get presigned URL for profile pic');
             }
@@ -87,10 +86,9 @@ export class ConversationService {
         const total = await this.repository.countMessages(jid);
 
         const resolvedMessages = await Promise.all(messages.map(async msg => {
-            if (msg.mediaUrl && msg.mediaUrl.startsWith('minio://')) {
+            if (msg.mediaUrl && (msg.mediaUrl.startsWith('minio://') || msg.mediaUrl.startsWith('whatsapp-data/') || msg.mediaUrl.startsWith('general/'))) {
                 try {
-                    const objectName = msg.mediaUrl.replace(/^minio:\/\/[^\/]+\//, '');
-                    msg.mediaUrl = await getPresignedUrl(objectName);
+                    msg.mediaUrl = await getPresignedUrl(msg.mediaUrl);
                 } catch (err) {
                     logger.error({ err, id: msg.messageId }, 'Failed to get presigned URL');
                 }
