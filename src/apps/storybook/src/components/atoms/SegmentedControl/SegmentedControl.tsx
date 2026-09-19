@@ -6,6 +6,7 @@ import { useTheme } from '../../../theme';
 export interface SegmentOption {
   id: string;
   label: string;
+  subtitle?: string;
   badge?: string;
 }
 
@@ -45,7 +46,8 @@ export function SegmentedControl({
             onPress={() => onChange(option.id)}
           >
             <YStack
-              paddingVertical={6}
+              paddingVertical={option.subtitle ? 4 : 6}
+              paddingHorizontal={4}
               borderRadius={tokens.radius.xs}
               backgroundColor={isActive ? tokens.surface : 'transparent'}
               alignItems="center"
@@ -54,11 +56,12 @@ export function SegmentedControl({
               borderColor={tokens.border}
               hoverStyle={{ opacity: 0.9 }}
             >
-              <XStack alignItems="center" gap={4}>
+              <XStack alignItems="center" gap={4} justifyContent="center">
                 <Text
                   fontSize={12}
                   fontWeight={isActive ? '800' : '600'}
                   color={isActive ? tokens.text : tokens.textMuted}
+                  numberOfLines={1}
                 >
                   {option.label}
                 </Text>
@@ -75,6 +78,17 @@ export function SegmentedControl({
                   </YStack>
                 )}
               </XStack>
+              {option.subtitle && (
+                <Text
+                  fontSize={9.5}
+                  fontWeight="600"
+                  color={isActive ? tokens.accent : tokens.textMuted}
+                  numberOfLines={1}
+                  marginTop={1}
+                >
+                  {option.subtitle}
+                </Text>
+              )}
             </YStack>
           </Pressable>
         );

@@ -13,12 +13,13 @@ import {
   LuScissors,
   LuInfo,
 } from 'react-icons/lu';
-import { useTheme } from '../../../theme';
+import { useTheme, useResponsive } from '../../../theme';
 import { SizeSelector } from '../SizeSelector/SizeSelector';
 import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
 import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 import {
   LETTER_SIZE_PRESET,
+  DEFAULT_SELECTED_LETTER_SIZES,
   BLOUSE_NUMERIC_PRESET,
   KIDS_SIZE_PRESET,
   FREE_SIZE_PRESET,
@@ -324,6 +325,7 @@ export function StoreProductEnrichmentSection({
   onChangeSpecs,
 }: StoreProductEnrichmentSectionProps) {
   const { tokens } = useTheme();
+  const { isMobile } = useResponsive();
   const [activeTab, setActiveTab] = useState<MetadataActiveTab>('craft_specs');
   const [isAiDeriving, setIsAiDeriving] = useState(false);
   const [tagInput, setTagInput] = useState('');
@@ -377,6 +379,18 @@ export function StoreProductEnrichmentSection({
 
   // ── TAB BAR DRAG & WHEEL SCROLL LOGIC ──────────────────────────────────────
   const { scrollRef: tabScrollRef, hasDraggedRef: hasTabDraggedRef } = useSwipeableHorizontalScroll();
+
+  // Auto-scroll active tab into center view to eliminate edge clipping on mobile
+  useEffect(() => {
+    if (tabScrollRef.current) {
+      const activeEl = (tabScrollRef.current as any).querySelector?.(
+        `#tab-${activeTab}`
+      ) as HTMLElement | null;
+      if (activeEl && typeof activeEl.scrollIntoView === 'function') {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [activeTab]);
 
   // ── ONE-CLICK AI AUTO-DERIVE ALL ENGINE ─────────────────────────────────────
   const handleAiAutoDeriveAll = () => {
@@ -492,7 +506,7 @@ export function StoreProductEnrichmentSection({
       }
     } else if (newCat === 'letter') {
       matchingStitchId = 'fully_stitched_letter';
-      matchingStitchName = 'Fully Stitched (Letter XS–3XL)';
+      matchingStitchName = 'Fully Stitched (Letter XS–5XL)';
     } else if (newCat === 'numeric') {
       matchingStitchId = 'fully_stitched_numeric';
       matchingStitchName = 'Fully Stitched (Numeric 32–44)';
@@ -501,7 +515,9 @@ export function StoreProductEnrichmentSection({
     let newAvailableSizes = { ...specs.availableSizes };
     if (newCat === 'letter' && (!specs.availableSizes || Object.keys(specs.availableSizes).length <= 1)) {
       newAvailableSizes = {};
-      LETTER_SIZE_PRESET.forEach((opt) => (newAvailableSizes[opt.id] = true));
+      LETTER_SIZE_PRESET.forEach((opt) => {
+        newAvailableSizes[opt.id] = DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id);
+      });
     } else if (newCat === 'numeric' && (!specs.availableSizes || Object.keys(specs.availableSizes).length <= 1)) {
       newAvailableSizes = {};
       BLOUSE_NUMERIC_PRESET.forEach((opt) => (newAvailableSizes[opt.id] = true));
@@ -551,13 +567,39 @@ export function StoreProductEnrichmentSection({
     }
   };
 
+  const isSizeAvailable = (optId: string): boolean => {
+    if (specs.availableSizes && optId in specs.availableSizes) {
+      return Boolean(specs.availableSizes[optId]);
+    }
+    if (activeSizeCategory === 'letter') {
+      return DEFAULT_SELECTED_LETTER_SIZES.includes(optId);
+    }
+    return true;
+  };
+
   const toggleSizeAvailability = (sizeId: string) => {
-    const currentMap = specs.availableSizes || {};
+    const currentStatus = isSizeAvailable(sizeId);
     const updatedMap = {
-      ...currentMap,
-      [sizeId]: currentMap[sizeId] === false ? true : false,
+      ...(specs.availableSizes || {}),
+      [sizeId]: !currentStatus,
     };
     updateSpecField('availableSizes', updatedMap);
+  };
+
+  const handleSelectAllSizes = (enable: boolean) => {
+    const next: Record<string, boolean> = {};
+    getPoolForCategory(activeSizeCategory).forEach((opt) => {
+      next[opt.id] = enable;
+    });
+    updateSpecField('availableSizes', next);
+  };
+
+  const handleSelectDefaultLetterSizes = () => {
+    const next: Record<string, boolean> = {};
+    LETTER_SIZE_PRESET.forEach((opt) => {
+      next[opt.id] = DEFAULT_SELECTED_LETTER_SIZES.includes(opt.id);
+    });
+    updateSpecField('availableSizes', next);
   };
 
   const handleStitchTypeSelect = (opt: typeof STITCH_TYPE_OPTIONS[number]) => {
@@ -707,6 +749,7 @@ export function StoreProductEnrichmentSection({
         contentContainerStyle={styles.tabScrollContainer}
       >
         <Pressable
+          nativeID="tab-craft_specs"
           onPress={() => {
             if (!hasTabDraggedRef.current) setActiveTab('craft_specs');
           }}
@@ -723,12 +766,14 @@ export function StoreProductEnrichmentSection({
             fontSize={12}
             fontWeight="800"
             color={activeTab === 'craft_specs' ? '#FFFFFF' : tokens.text}
+            numberOfLines={1}
           >
-            Craft &amp; Fabric Specs
+            {isMobile ? 'Craft & Fabric' : 'Craft & Fabric Specs'}
           </Text>
         </Pressable>
 
         <Pressable
+          nativeID="tab-commercials"
           onPress={() => {
             if (!hasTabDraggedRef.current) setActiveTab('commercials');
           }}
@@ -745,12 +790,14 @@ export function StoreProductEnrichmentSection({
             fontSize={12}
             fontWeight="800"
             color={activeTab === 'commercials' ? '#FFFFFF' : tokens.text}
+            numberOfLines={1}
           >
-            Pricing &amp; Margins
+            {isMobile ? 'Pricing' : 'Pricing & Margins'}
           </Text>
         </Pressable>
 
         <Pressable
+          nativeID="tab-sizing"
           onPress={() => {
             if (!hasTabDraggedRef.current) setActiveTab('sizing');
           }}
@@ -767,12 +814,14 @@ export function StoreProductEnrichmentSection({
             fontSize={12}
             fontWeight="800"
             color={activeTab === 'sizing' ? '#FFFFFF' : tokens.text}
+            numberOfLines={1}
           >
             Sizing &amp; Drape
           </Text>
         </Pressable>
 
         <Pressable
+          nativeID="tab-occasions_tags"
           onPress={() => {
             if (!hasTabDraggedRef.current) setActiveTab('occasions_tags');
           }}
@@ -789,8 +838,9 @@ export function StoreProductEnrichmentSection({
             fontSize={12}
             fontWeight="800"
             color={activeTab === 'occasions_tags' ? '#FFFFFF' : tokens.text}
+            numberOfLines={1}
           >
-            Occasions &amp; Facets
+            {isMobile ? 'Occasions' : 'Occasions & Facets'}
           </Text>
         </Pressable>
       </ScrollView>
@@ -1070,10 +1120,10 @@ export function StoreProductEnrichmentSection({
               activeId={isNoSize ? 'no-size' : activeSizeCategory}
               onChange={(id) => handleSizeCategoryChange(id as SizeCategoryType)}
               options={[
-                { id: 'no-size', label: 'No Size' },
-                { id: 'letter', label: 'Letter (XS-3XL)' },
-                { id: 'numeric', label: 'Bust 32-44' },
-                { id: 'kids', label: 'Kids (0-16Y)' },
+                { id: 'no-size', label: 'No Size', subtitle: 'Universal' },
+                { id: 'letter', label: 'Letter', subtitle: 'XS–5XL' },
+                { id: 'numeric', label: 'Bust', subtitle: '32–44"' },
+                { id: 'kids', label: 'Kids', subtitle: '0–16Y' },
               ]}
             />
           </YStack>
@@ -1204,18 +1254,40 @@ export function StoreProductEnrichmentSection({
           ) : (
             /* ── MULTI-SIZE: SIZE AVAILABILITY MATRIX (LETTER, NUMERIC, KIDS) ── */
             <YStack gap={8} backgroundColor={tokens.surfaceRaised} padding={10} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
-                  Size Availability &amp; Stock
-                </Text>
-                <Text fontSize={11} color={tokens.textMuted}>
-                  Uncheck to mark Out of Stock on PDP
-                </Text>
+              <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={6}>
+                <XStack alignItems="center" gap={6}>
+                  <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
+                    Size Availability &amp; Stock
+                  </Text>
+                </XStack>
+                <XStack alignItems="center" gap={8}>
+                  {activeSizeCategory === 'letter' && (
+                    <>
+                      <Pressable onPress={handleSelectDefaultLetterSizes}>
+                        <Text fontSize={11} color={tokens.accent} fontWeight="700">
+                          M–3XL (Default)
+                        </Text>
+                      </Pressable>
+                      <Text fontSize={11} color={tokens.textMuted}>•</Text>
+                    </>
+                  )}
+                  <Pressable onPress={() => handleSelectAllSizes(true)}>
+                    <Text fontSize={11} color={tokens.accent} fontWeight="700">
+                      All
+                    </Text>
+                  </Pressable>
+                  <Text fontSize={11} color={tokens.textMuted}>•</Text>
+                  <Pressable onPress={() => handleSelectAllSizes(false)}>
+                    <Text fontSize={11} color={tokens.textMuted} fontWeight="700">
+                      Clear
+                    </Text>
+                  </Pressable>
+                </XStack>
               </XStack>
 
               <XStack flexWrap="wrap" gap={8}>
                 {getPoolForCategory(activeSizeCategory).map((opt) => {
-                  const isAvailable = specs.availableSizes ? specs.availableSizes[opt.id] !== false : true;
+                  const isAvailable = isSizeAvailable(opt.id);
                   return (
                     <Pressable
                       key={opt.id}
@@ -1277,9 +1349,14 @@ export function StoreProductEnrichmentSection({
                   variant={activeSizeCategory}
                   showHeader={false}
                   showSizeChart={false}
+                  selected={
+                    activeSizeCategory === 'letter'
+                      ? 'M'
+                      : getPoolForCategory(activeSizeCategory).find((opt) => isSizeAvailable(opt.id))?.id
+                  }
                   sizes={getPoolForCategory(activeSizeCategory).map((opt) => ({
                     ...opt,
-                    disabled: specs.availableSizes ? specs.availableSizes[opt.id] === false : false,
+                    disabled: !isSizeAvailable(opt.id),
                   }))}
                   customNotes={specs.customNotes}
                 />
