@@ -8,7 +8,7 @@ echo "=== DeepLens Store Quality & Typecheck Gate ==="
 
 echo "1. Checking Vayyari Storefront App TypeScript..."
 cd "${ROOT_DIR}/src/store"
-npx tsc --noEmit
+node --stack-size=8192 ./node_modules/.bin/tsc --noEmit
 echo "   -> Vayyari Storefront App: PASSED"
 
 echo "2. Checking Storybook Workbench TypeScript..."

@@ -22,6 +22,7 @@ export type HorizontalProductStripProps = {
   badgeLabel?: string;
   products: HProduct[];
   showAddToBag?: boolean;
+  onProductPress?: (id: string) => void;
 };
 
 export function HorizontalProductStrip({
@@ -30,6 +31,7 @@ export function HorizontalProductStrip({
   badgeLabel,
   products,
   showAddToBag = false,
+  onProductPress,
 }: HorizontalProductStripProps) {
   const { tokens } = useTheme();
 
@@ -65,6 +67,7 @@ export function HorizontalProductStrip({
             rating={p.rating}
             gradient={p.gradient}
             showAddToBag={showAddToBag}
+            onPress={() => onProductPress?.(p.id)}
           />
         ))}
       </ScrollView>
