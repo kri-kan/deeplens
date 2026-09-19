@@ -14,6 +14,7 @@ import {
   LuInfo,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { SizeSelector } from '../SizeSelector/SizeSelector';
 import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
 import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
 import {
@@ -1156,30 +1157,24 @@ export function StoreProductEnrichmentSection({
                 </Pressable>
               </XStack>
 
-              {/* Live Informational Badge Preview */}
-              <YStack gap={4} paddingTop={2}>
+              {/* Live Informational Badge Preview (Reusing SizeSelector Organism) */}
+              <YStack gap={4} paddingTop={2} width="100%">
                 <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
                   Informational Button (Non-Selectable for Shopper on PDP):
                 </Text>
-                <XStack
-                  alignItems="center"
-                  gap={8}
-                  paddingHorizontal={12}
-                  paddingVertical={8}
-                  borderRadius={10}
-                  borderWidth={1.5}
-                  borderColor={tokens.accent}
-                  backgroundColor={`${tokens.accent}10`}
-                  alignSelf="flex-start"
-                >
-                  <LuInfo size={14} color={tokens.accent} />
-                  <Text fontSize={13} fontWeight="800" color={tokens.accent}>
-                    {noSizeVariant === 'one-size' ? 'One Size' : 'Free Size'}
-                  </Text>
-                  <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                    • {sizeDrapeText}
-                  </Text>
-                </XStack>
+                <SizeSelector
+                  variant="no-size"
+                  showHeader={false}
+                  showSizeChart={false}
+                  sizes={[
+                    {
+                      id: noSizeVariant === 'free-size' ? 'free_size' : 'one_size',
+                      label: noSizeVariant === 'free-size' ? 'Free Size' : 'One Size',
+                      subtitle: sizeDrapeText,
+                      badge: noSizeVariant === 'free-size' ? 'Stitched Blouse' : 'Unstitched Drape',
+                    },
+                  ]}
+                />
               </YStack>
 
               {/* Optional Editable Drape / Specification Text */}
@@ -1260,6 +1255,23 @@ export function StoreProductEnrichmentSection({
                   placeholder="e.g. Includes 2-inch alteration allowance in side seams."
                   placeholderTextColor={tokens.textMuted}
                   style={styles.singleLineInput}
+                />
+              </YStack>
+
+              {/* Shopper Size Selector Live Preview */}
+              <YStack gap={4} paddingTop={4} width="100%">
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                  Shopper Size Selector Live Preview:
+                </Text>
+                <SizeSelector
+                  variant={activeSizeCategory}
+                  showHeader={false}
+                  showSizeChart={false}
+                  sizes={getPoolForCategory(activeSizeCategory).map((opt) => ({
+                    ...opt,
+                    disabled: specs.availableSizes ? specs.availableSizes[opt.id] === false : false,
+                  }))}
+                  customNotes={specs.customNotes}
                 />
               </YStack>
             </YStack>

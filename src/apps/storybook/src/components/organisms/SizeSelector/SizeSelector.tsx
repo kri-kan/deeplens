@@ -19,6 +19,7 @@ export type SizeSelectorProps = {
   onSelect?: (size: string) => void;
   variant?: SizeCategoryType;
   showSizeChart?: boolean;
+  showHeader?: boolean;
   customNotes?: string;
   category?: string;
 };
@@ -30,6 +31,7 @@ export function SizeSelector({
   onSelect,
   variant = 'letter',
   showSizeChart = true,
+  showHeader = true,
   customNotes,
   category,
 }: SizeSelectorProps) {
@@ -65,50 +67,52 @@ export function SizeSelector({
   return (
     <YStack gap={10} width="100%">
       {/* Header Row */}
-      <XStack justifyContent="space-between" alignItems="center">
-        <XStack alignItems="center" gap={6}>
-          <Text
-            fontSize={12}
-            letterSpacing={1.2}
-            textTransform="uppercase"
-            color={tokens.textMuted}
-            fontWeight="800"
-          >
-            {isNoSize ? 'Garment Size' : 'Select Size'}
-          </Text>
-
-          {selected && !isNoSize ? (
-            <Text fontSize={12} fontWeight="800" color={tokens.accent}>
-              : {selected}
-            </Text>
-          ) : null}
-        </XStack>
-
-        {showSizeChart && (
-          <XStack
-            alignItems="center"
-            gap={4}
-            cursor="pointer"
-            onPress={() => setChartOpen(true)}
-            hoverStyle={{ opacity: 0.8 }}
-          >
-            <LuRuler size={13} color={tokens.accent} />
+      {showHeader && (
+        <XStack justifyContent="space-between" alignItems="center">
+          <XStack alignItems="center" gap={6}>
             <Text
               fontSize={12}
-              color={tokens.accent}
-              fontWeight="700"
-              hoverStyle={{ textDecorationLine: 'underline' }}
+              letterSpacing={1.2}
+              textTransform="uppercase"
+              color={tokens.textMuted}
+              fontWeight="800"
             >
-              Size Chart
+              {isNoSize ? 'Garment Size' : 'Select Size'}
             </Text>
+
+            {selected && !isNoSize ? (
+              <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                : {selected}
+              </Text>
+            ) : null}
           </XStack>
-        )}
-      </XStack>
+
+          {showSizeChart && (
+            <XStack
+              alignItems="center"
+              gap={4}
+              cursor="pointer"
+              onPress={() => setChartOpen(true)}
+              hoverStyle={{ opacity: 0.8 }}
+            >
+              <LuRuler size={13} color={tokens.accent} />
+              <Text
+                fontSize={12}
+                color={tokens.accent}
+                fontWeight="700"
+                hoverStyle={{ textDecorationLine: 'underline' }}
+              >
+                Size Chart
+              </Text>
+            </XStack>
+          )}
+        </XStack>
+      )}
 
       {/* Chips Row */}
       {isNoSize ? (
         /* No Size: Informational Non-Selectable Badges / Buttons (One Size / Free Size) */
-        <XStack flexWrap="wrap" gap={8} alignItems="center">
+        <XStack flexWrap="wrap" gap={8} alignItems="center" width="100%">
           {normalizedSizes.map((opt) => (
             <XStack
               key={opt.id}
@@ -121,10 +125,11 @@ export function SizeSelector({
               borderColor={tokens.accent}
               backgroundColor={`${tokens.accent}10`}
               cursor="default"
+              maxWidth="100%"
             >
               <LuInfo size={14} color={tokens.accent} />
-              <YStack gap={1}>
-                <XStack alignItems="center" gap={6}>
+              <YStack gap={1} flex={1}>
+                <XStack alignItems="center" gap={6} flexWrap="wrap">
                   <Text fontSize={13} fontWeight="800" color={tokens.accent}>
                     {opt.label}
                   </Text>
@@ -142,7 +147,7 @@ export function SizeSelector({
                   )}
                 </XStack>
                 {opt.subtitle && (
-                  <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  <Text fontSize={11} color={tokens.textMuted} fontWeight="600" lineHeight={15}>
                     {opt.subtitle}
                   </Text>
                 )}

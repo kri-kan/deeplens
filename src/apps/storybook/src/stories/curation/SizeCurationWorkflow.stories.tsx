@@ -569,30 +569,24 @@ export function SizeSettingWorkflowComponent({
               </Pressable>
             </XStack>
 
-            {/* Informational Badge Live Pill */}
-            <YStack gap={4} paddingTop={2}>
+            {/* Informational Badge Live Pill (Reusing SizeSelector Organism) */}
+            <YStack gap={4} paddingTop={2} width="100%">
               <Text fontSize={10.5} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
                 Storefront Shopper Pill:
               </Text>
-              <XStack
-                alignItems="center"
-                gap={8}
-                paddingHorizontal={12}
-                paddingVertical={7}
-                borderRadius={8}
-                borderWidth={1}
-                borderColor={tokens.accent}
-                backgroundColor={`${tokens.accent}10`}
-                alignSelf="flex-start"
-              >
-                <LuInfo size={13} color={tokens.accent} />
-                <Text fontSize={12} fontWeight="800" color={tokens.accent}>
-                  {noSizeOptionType === 'one-size' ? 'One Size' : 'Free Size'}
-                </Text>
-                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                  • {noSizeCustomSubtitle}
-                </Text>
-              </XStack>
+              <SizeSelector
+                variant="no-size"
+                showHeader={false}
+                showSizeChart={false}
+                sizes={[
+                  {
+                    id: noSizeOptionType === 'free-size' ? 'free_size' : 'one_size',
+                    label: noSizeOptionType === 'free-size' ? 'Free Size' : 'One Size',
+                    subtitle: noSizeCustomSubtitle,
+                    badge: noSizeOptionType === 'free-size' ? 'Stitched Blouse' : 'Universal Drape',
+                  },
+                ]}
+              />
             </YStack>
 
             {/* Optional Editable Drape Text */}
