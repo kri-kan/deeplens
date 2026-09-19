@@ -45,3 +45,5 @@ export interface StoreAuditLogEntry {
   author: string;
   actionText: string;
 }
+
+export * from './taxonomy';
