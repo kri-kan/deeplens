@@ -167,6 +167,8 @@ export function ColourSelector({
           gap={12}
           alignItems="center"
           justifyContent={swatchesAlign === 'right' ? 'flex-end' : 'flex-start'}
+          width="100%"
+          marginLeft={swatchesAlign === 'right' ? 'auto' : undefined}
           paddingVertical={4}
         >
           {options.map((o) => (

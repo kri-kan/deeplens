@@ -413,6 +413,7 @@ benchmark_results/
 performance_logs/
 # Development environment data
 data/
+!src/apps/storybook/src/data/
 worker.err
 worker.log
 RESET_SUMMARY.md

@@ -28,6 +28,12 @@ import { PriceTag } from '../../components/atoms/PriceTag/PriceTag';
 import { RatingBadge } from '../../components/atoms/RatingBadge/RatingBadge';
 import { HeartButton } from '../../components/atoms/HeartButton/HeartButton';
 import { ShareButton } from '../../components/atoms/ShareButton/ShareButton';
+import {
+  FREE_SIZE_PRESET,
+  LETTER_SIZE_PRESET,
+  BLOUSE_NUMERIC_PRESET,
+  KIDS_SIZE_PRESET,
+} from '../../data/catalog/sizePresets';
 import { useTheme, useResponsive } from '../../theme';
 
 export const ProductDetailPage: React.FC = () => {
@@ -58,6 +64,23 @@ export const ProductDetailPage: React.FC = () => {
           (p.colorGroups && p.colorGroups.length > 0 ? p.colorGroups[0].id : '') ||
           (p.swatches && p.swatches.length > 0 ? p.swatches[0].id : 'default');
         setSelectedColor(initialCgId);
+
+        const cat = (p.category || '').toLowerCase();
+        const title = (p.title || '').toLowerCase();
+        if (cat.includes('kid') || title.match(/\b(kid|boy|girl|baby|toddler)\b/)) {
+          setSelectedSize('20');
+        } else if (cat.includes('blouse') || title.match(/\b(blouse|choli)\b/)) {
+          setSelectedSize('36');
+        } else if (
+          cat.includes('dress') ||
+          cat.includes('kurta') ||
+          cat.includes('suit') ||
+          title.match(/\b(dress|kurti|kurta|suit|anarkali|gown)\b/)
+        ) {
+          setSelectedSize('M');
+        } else {
+          setSelectedSize('Free Size');
+        }
       }
       setLoading(false);
     });
@@ -225,6 +248,40 @@ export const ProductDetailPage: React.FC = () => {
     }));
   }, [product, swatchesMap, activeColorKey]);
 
+  // Dynamic Size Configuration based on category & title heuristics
+  const { sizeVariant, sizeOptions } = useMemo(() => {
+    const cat = (product?.category || '').toLowerCase();
+    const title = (product?.title || '').toLowerCase();
+
+    if (cat.includes('kid') || title.match(/\b(kid|boy|girl|baby|toddler)\b/)) {
+      return {
+        sizeVariant: 'kids' as const,
+        sizeOptions: KIDS_SIZE_PRESET,
+      };
+    }
+    if (cat.includes('blouse') || title.match(/\b(blouse|choli)\b/)) {
+      return {
+        sizeVariant: 'numeric' as const,
+        sizeOptions: BLOUSE_NUMERIC_PRESET,
+      };
+    }
+    if (
+      cat.includes('dress') ||
+      cat.includes('kurta') ||
+      cat.includes('suit') ||
+      title.match(/\b(dress|kurti|kurta|suit|anarkali|gown)\b/)
+    ) {
+      return {
+        sizeVariant: 'letter' as const,
+        sizeOptions: LETTER_SIZE_PRESET,
+      };
+    }
+    return {
+      sizeVariant: 'free-size' as const,
+      sizeOptions: FREE_SIZE_PRESET,
+    };
+  }, [product]);
+
   if (loading) {
     return (
       <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" gap={12}>
@@ -277,9 +334,9 @@ export const ProductDetailPage: React.FC = () => {
       accentHex: activeOption?.tertiaryColor,
     };
 
-    addItem(product, swatch);
+    addItem(product, swatch, selectedSize);
     showToast({
-      message: `Added ${product.title.slice(0, 24)}... to Bag`,
+      message: `Added ${product.title.slice(0, 24)}... (${selectedSize}) to Bag`,
       type: 'success',
     });
     openDrawer();
@@ -352,30 +409,14 @@ export const ProductDetailPage: React.FC = () => {
             selectedColor={activeColorKey}
             onSelectColor={setSelectedColor}
           >
-            {/* Mobile: Compact ColourSelector Card right below Carousel */}
-            {isMobile && colourOptions.length > 0 ? (
-              <YStack
-                backgroundColor={tokens.surface}
-                borderColor={tokens.border}
-                borderWidth={1}
-                borderRadius={16}
-                padding={16}
-                gap={10}
-              >
-                <ColourSelector
-                  options={colourOptions}
-                  selected={activeColorKey}
-                  onSelect={setSelectedColor}
-                  format="dots"
-                />
-              </YStack>
-            ) : isTablet && colourOptions.length > 0 ? (
-              /* Tablet: Raw ColourSelector embedded in the right side of tablet split card */
+            {/* Mobile & Tablet: ColourSelector embedded directly in gallery's compact card */}
+            {isCompact && colourOptions.length > 0 ? (
               <ColourSelector
                 options={colourOptions}
                 selected={activeColorKey}
                 onSelect={setSelectedColor}
                 format="dots"
+                swatchesAlign="right"
               />
             ) : null}
           </ProductGallery>
@@ -446,9 +487,11 @@ export const ProductDetailPage: React.FC = () => {
 
             {/* Size Selector */}
             <SizeSelector
-              sizes={['Free Size', 'Custom Tailored Blouse']}
+              sizes={sizeOptions}
               selected={selectedSize}
               onSelect={setSelectedSize}
+              variant={sizeVariant}
+              category={product.category}
             />
 
             {/* Call to Actions */}

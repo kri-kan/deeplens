@@ -16,6 +16,7 @@ import { PriceTag } from '../atoms/PriceTag/PriceTag';
 import { RatingBadge } from '../atoms/RatingBadge/RatingBadge';
 import { HeartButton } from '../atoms/HeartButton/HeartButton';
 import { ShareButton } from '../atoms/ShareButton/ShareButton';
+import { FREE_SIZE_PRESET } from '../../data/catalog/sizePresets';
 import { useTheme, useResponsive } from '../../theme';
 
 export type ProductDetailPageProps = {
@@ -193,28 +194,13 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
           selectedColor={selectedColor}
           onSelectColor={setSelectedColor}
         >
-          {isMobile ? (
-            <YStack
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
-              borderWidth={1}
-              borderRadius={16}
-              padding={16}
-              gap={10}
-            >
-              <ColourSelector
-                options={COLOUR_OPTIONS}
-                selected={selectedColor}
-                onSelect={setSelectedColor}
-                format="dots"
-              />
-            </YStack>
-          ) : isTablet ? (
+          {isCompact ? (
             <ColourSelector
               options={COLOUR_OPTIONS}
               selected={selectedColor}
               onSelect={setSelectedColor}
               format="dots"
+              swatchesAlign="right"
             />
           ) : null}
         </ProductGallery>
@@ -272,9 +258,10 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
 
           {/* Size Selector */}
           <SizeSelector
-            sizes={['Free Size', 'Custom Tailored Blouse']}
+            sizes={FREE_SIZE_PRESET}
             selected={selectedSize}
             onSelect={setSelectedSize}
+            variant="free-size"
           />
 
           {/* CTA Buttons */}

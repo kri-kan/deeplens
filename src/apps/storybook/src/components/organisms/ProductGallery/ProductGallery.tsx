@@ -264,8 +264,8 @@ export function ProductGallery({
           </YStack>
         </View>
 
-        {/* TABLET VIEW: Row 1 = Color Title spanning left to right; Row 2 = Media Tiles (Left) + Swatches (Right-most) */}
-        {isTablet ? (
+        {/* COMPACT VIEW (Mobile & Tablet): Row 1 = Color Title spanning left to right; Row 2 = Media Tiles (Left) + Swatches (Right-most) */}
+        {children ? (
           <YStack
             backgroundColor={tokens.surface}
             borderColor={tokens.border}
@@ -277,21 +277,21 @@ export function ProductGallery({
           >
             {React.isValidElement(children)
               ? React.cloneElement(children as React.ReactElement<any>, {
-                  mediaSlot: (
+                  mediaSlot: activeImages.length > 0 ? (
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      style={{ flexGrow: 0, maxWidth: '100%' }}
-                      contentContainerStyle={{ gap: 10, alignItems: 'center', paddingVertical: 2 }}
+                      style={{ flexGrow: 0, maxWidth: isMobile ? '50%' : '65%' }}
+                      contentContainerStyle={{ gap: 8, alignItems: 'center', paddingVertical: 2 }}
                     >
                       {activeImages.map((img, idx) => {
                         const isSelected = activeImageIndex === idx;
                         return (
                           <XStack
                             key={img.id || idx}
-                            width={54}
-                            height={54}
-                            borderRadius={12}
+                            width={isMobile ? 44 : 54}
+                            height={isMobile ? 44 : 54}
+                            borderRadius={10}
                             borderWidth={isSelected ? 2.5 : 1}
                             borderColor={isSelected ? tokens.accent : tokens.border}
                             overflow="hidden"
@@ -317,15 +317,12 @@ export function ProductGallery({
                         );
                       })}
                     </ScrollView>
-                  ),
+                  ) : undefined,
                   swatchesAlign: 'right',
                 })
               : children}
           </YStack>
-        ) : (
-          /* Mobile View: Standard children slot */
-          children
-        )}
+        ) : null}
       </YStack>
     );
   }
