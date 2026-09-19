@@ -11,8 +11,20 @@ import {
   LuTag,
   LuPlus,
   LuScissors,
+  LuInfo,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
+import { SegmentedControl } from '../../atoms/SegmentedControl/SegmentedControl';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox/CustomCheckbox';
+import {
+  LETTER_SIZE_PRESET,
+  BLOUSE_NUMERIC_PRESET,
+  KIDS_SIZE_PRESET,
+  FREE_SIZE_PRESET,
+  ONE_SIZE_PRESET,
+  SizeCategoryType,
+  SizeOption,
+} from '../../../data/catalog';
 import {
   ProductCurationSpecs,
   DEFAULT_SAREE_SPECS,
@@ -455,6 +467,174 @@ export function StoreProductEnrichmentSection({
     );
   };
 
+  // ── SIZING VARIANT & FIT LOGIC ──────────────────────────────────────────────
+  const activeSizeCategory: SizeCategoryType = (specs.sizeCategory || specs.sizeProfile || 'no-size') as SizeCategoryType;
+  const isNoSize = activeSizeCategory === 'no-size' || activeSizeCategory === 'free-size';
+  const noSizeVariant = specs.noSizeVariant || (specs.category === 'blouse' ? 'free-size' : 'one-size');
+  const sizeDrapeText =
+    specs.sizeDrapeText ||
+    (noSizeVariant === 'free-size'
+      ? 'Stitched Blouse with Free Size / Alterable Seams'
+      : `${specs.sareeLengthMetres || 5.5}m Saree + ${specs.blousePieceLengthMetres || 0.8}m Unstitched Blouse Piece`);
+
+  const handleSizeCategoryChange = (newCat: SizeCategoryType) => {
+    let matchingStitchId = specs.stitchTypeId;
+    let matchingStitchName = specs.stitchTypeName;
+
+    if (newCat === 'no-size') {
+      if (noSizeVariant === 'free-size') {
+        matchingStitchId = 'unstitched_stitched_blouse';
+        matchingStitchName = 'Unstitched Saree with Stitched Blouse';
+      } else {
+        matchingStitchId = 'unstitched_saree_blouse';
+        matchingStitchName = 'Unstitched (Saree + Blouse Piece)';
+      }
+    } else if (newCat === 'letter') {
+      matchingStitchId = 'fully_stitched_letter';
+      matchingStitchName = 'Fully Stitched (Letter XS–3XL)';
+    } else if (newCat === 'numeric') {
+      matchingStitchId = 'fully_stitched_numeric';
+      matchingStitchName = 'Fully Stitched (Numeric 32–44)';
+    }
+
+    let newAvailableSizes = { ...specs.availableSizes };
+    if (newCat === 'letter' && (!specs.availableSizes || Object.keys(specs.availableSizes).length <= 1)) {
+      newAvailableSizes = {};
+      LETTER_SIZE_PRESET.forEach((opt) => (newAvailableSizes[opt.id] = true));
+    } else if (newCat === 'numeric' && (!specs.availableSizes || Object.keys(specs.availableSizes).length <= 1)) {
+      newAvailableSizes = {};
+      BLOUSE_NUMERIC_PRESET.forEach((opt) => (newAvailableSizes[opt.id] = true));
+    } else if (newCat === 'kids' && (!specs.availableSizes || Object.keys(specs.availableSizes).length <= 1)) {
+      newAvailableSizes = {};
+      KIDS_SIZE_PRESET.forEach((opt) => (newAvailableSizes[opt.id] = true));
+    }
+
+    const updated: ProductCurationSpecs = {
+      ...specs,
+      sizeCategory: newCat,
+      sizeProfile: newCat,
+      stitchTypeId: matchingStitchId,
+      stitchTypeName: matchingStitchName,
+      availableSizes: newAvailableSizes,
+    };
+    if (onChangeSpecs) {
+      onChangeSpecs(updated);
+    } else {
+      setInternalSpecs(updated);
+    }
+  };
+
+  const handleNoSizeVariantChange = (variant: 'one-size' | 'free-size') => {
+    const defaultText =
+      variant === 'free-size'
+        ? 'Stitched Blouse with Free Size / Alterable Seams'
+        : `${specs.sareeLengthMetres || 5.5}m Saree + ${specs.blousePieceLengthMetres || 0.8}m Unstitched Blouse Piece`;
+
+    const stitchId = variant === 'free-size' ? 'unstitched_stitched_blouse' : 'unstitched_saree_blouse';
+    const stitchName = variant === 'free-size' ? 'Unstitched Saree with Stitched Blouse' : 'Unstitched (Saree + Blouse Piece)';
+
+    const updated: ProductCurationSpecs = {
+      ...specs,
+      noSizeVariant: variant,
+      sizeProfile: 'no-size',
+      sizeCategory: 'no-size',
+      sizeDrapeText: defaultText,
+      stitchTypeId: stitchId,
+      stitchTypeName: stitchName,
+      availableSizes: { [variant === 'free-size' ? 'free_size' : 'one_size']: true },
+    };
+    if (onChangeSpecs) {
+      onChangeSpecs(updated);
+    } else {
+      setInternalSpecs(updated);
+    }
+  };
+
+  const toggleSizeAvailability = (sizeId: string) => {
+    const currentMap = specs.availableSizes || {};
+    const updatedMap = {
+      ...currentMap,
+      [sizeId]: currentMap[sizeId] === false ? true : false,
+    };
+    updateSpecField('availableSizes', updatedMap);
+  };
+
+  const handleStitchTypeSelect = (opt: typeof STITCH_TYPE_OPTIONS[number]) => {
+    let cat: SizeCategoryType = activeSizeCategory;
+    let nsv: 'one-size' | 'free-size' = noSizeVariant;
+
+    if (opt.id === 'fully_stitched_letter') {
+      cat = 'letter';
+    } else if (opt.id === 'fully_stitched_numeric') {
+      cat = 'numeric';
+    } else if (opt.id === 'unstitched_stitched_blouse') {
+      cat = 'no-size';
+      nsv = 'free-size';
+    } else if (opt.id === 'unstitched_saree_blouse' || opt.id === 'ready_to_drape_pre_pleated' || opt.id === 'free_size_adjustable') {
+      cat = 'no-size';
+      nsv = 'one-size';
+    }
+
+    const updated: ProductCurationSpecs = {
+      ...specs,
+      stitchTypeId: opt.id,
+      stitchTypeName: opt.label,
+      sizeCategory: cat,
+      sizeProfile: cat,
+      noSizeVariant: nsv,
+    };
+    if (onChangeSpecs) {
+      onChangeSpecs(updated);
+    } else {
+      setInternalSpecs(updated);
+    }
+  };
+
+  const getPoolForCategory = (cat: SizeCategoryType): SizeOption[] => {
+    switch (cat) {
+      case 'kids':
+        return KIDS_SIZE_PRESET;
+      case 'numeric':
+        return BLOUSE_NUMERIC_PRESET;
+      case 'letter':
+        return LETTER_SIZE_PRESET;
+      case 'no-size':
+      case 'free-size':
+      default:
+        return noSizeVariant === 'free-size' ? FREE_SIZE_PRESET : ONE_SIZE_PRESET;
+    }
+  };
+
+  const handleSareeLengthChange = (val: string) => {
+    const len = parseFloat(val) || 5.5;
+    const isDefaultDrape = !specs.sizeDrapeText || specs.sizeDrapeText.includes('Saree +');
+    const updated: ProductCurationSpecs = {
+      ...specs,
+      sareeLengthMetres: len,
+      sizeDrapeText:
+        isDefaultDrape && noSizeVariant === 'one-size'
+          ? `${len}m Saree + ${specs.blousePieceLengthMetres || 0.8}m Unstitched Blouse Piece`
+          : specs.sizeDrapeText,
+    };
+    if (onChangeSpecs) onChangeSpecs(updated);
+    else setInternalSpecs(updated);
+  };
+
+  const handleBlouseLengthChange = (val: string) => {
+    const len = parseFloat(val) || 0.8;
+    const isDefaultDrape = !specs.sizeDrapeText || specs.sizeDrapeText.includes('Saree +');
+    const updated: ProductCurationSpecs = {
+      ...specs,
+      blousePieceLengthMetres: len,
+      sizeDrapeText:
+        isDefaultDrape && noSizeVariant === 'one-size'
+          ? `${specs.sareeLengthMetres || 5.5}m Saree + ${len}m Unstitched Blouse Piece`
+          : specs.sizeDrapeText,
+    };
+    if (onChangeSpecs) onChangeSpecs(updated);
+    else setInternalSpecs(updated);
+  };
+
   return (
     <YStack gap={10}>
       {/* ── TOP HEADER WITH AI AUTO-DERIVE BANNER ── */}
@@ -867,11 +1047,11 @@ export function StoreProductEnrichmentSection({
           borderWidth={1}
           borderColor={tokens.border}
           padding={12}
-          gap={10}
+          gap={12}
         >
           <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
-              3. Sizing, Tailoring &amp; Blouse Profile
+              3. Sizing, Drape &amp; Tailoring Profile
             </Text>
             <View style={[styles.microBadge, { backgroundColor: '#F0FDF4' }]}>
               <Text fontSize={10} fontWeight="800" color="#16A34A">
@@ -880,7 +1060,212 @@ export function StoreProductEnrichmentSection({
             </View>
           </XStack>
 
-          {/* Stitch Type Presets */}
+          {/* 1. Sizing System Variant Selector */}
+          <YStack gap={6}>
+            <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
+              Sizing System Variant
+            </Text>
+            <SegmentedControl
+              activeId={isNoSize ? 'no-size' : activeSizeCategory}
+              onChange={(id) => handleSizeCategoryChange(id as SizeCategoryType)}
+              options={[
+                { id: 'no-size', label: 'No Size' },
+                { id: 'letter', label: 'Letter (XS-3XL)' },
+                { id: 'numeric', label: 'Bust 32-44' },
+                { id: 'kids', label: 'Kids (0-16Y)' },
+              ]}
+            />
+          </YStack>
+
+          {/* 2. Sizing Configuration: No-Size Informational vs Multi-Size Availability */}
+          {isNoSize ? (
+            /* ── NO SIZE: ONE SIZE VS FREE SIZE SUB-VARIANTS & INFORMATIONAL BADGE ── */
+            <YStack gap={10} backgroundColor={tokens.surfaceRaised} padding={10} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+              <Text fontSize={12} color={tokens.textSecondary} lineHeight={16}>
+                Apparel with universal drape does not require multi-size shopper selection. Choose whether this is unstitched (One Size) or a stitched blouse (Free Size). These render as non-selectable informational badges on the PDP.
+              </Text>
+
+              {/* Sub-variant Informational Selection Cards */}
+              <XStack gap={8} flexWrap="wrap">
+                <Pressable
+                  onPress={() => handleNoSizeVariantChange('one-size')}
+                  style={{
+                    flex: 1,
+                    minWidth: 160,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: noSizeVariant === 'one-size' ? tokens.accent : tokens.border,
+                    backgroundColor: noSizeVariant === 'one-size' ? `${tokens.accent}12` : tokens.surface,
+                  }}
+                >
+                  <YStack gap={2} flex={1}>
+                    <XStack alignItems="center" gap={6}>
+                      <Text fontSize={13} fontWeight="800" color={noSizeVariant === 'one-size' ? tokens.accent : tokens.text}>
+                        One Size
+                      </Text>
+                      <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text fontSize={9} fontWeight="800" color="#0369A1">
+                          Unstitched
+                        </Text>
+                      </View>
+                    </XStack>
+                    <Text fontSize={11} color={tokens.textMuted} lineHeight={14}>
+                      Applicable for unstitched sarees &amp; dress materials
+                    </Text>
+                  </YStack>
+                  {noSizeVariant === 'one-size' && <LuCheck size={16} color={tokens.accent} />}
+                </Pressable>
+
+                <Pressable
+                  onPress={() => handleNoSizeVariantChange('free-size')}
+                  style={{
+                    flex: 1,
+                    minWidth: 160,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: noSizeVariant === 'free-size' ? tokens.accent : tokens.border,
+                    backgroundColor: noSizeVariant === 'free-size' ? `${tokens.accent}12` : tokens.surface,
+                  }}
+                >
+                  <YStack gap={2} flex={1}>
+                    <XStack alignItems="center" gap={6}>
+                      <Text fontSize={13} fontWeight="800" color={noSizeVariant === 'free-size' ? tokens.accent : tokens.text}>
+                        Free Size
+                      </Text>
+                      <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text fontSize={9} fontWeight="800" color="#B45309">
+                          Stitched Blouse
+                        </Text>
+                      </View>
+                    </XStack>
+                    <Text fontSize={11} color={tokens.textMuted} lineHeight={14}>
+                      Applicable for stitched blouse sarees with free size
+                    </Text>
+                  </YStack>
+                  {noSizeVariant === 'free-size' && <LuCheck size={16} color={tokens.accent} />}
+                </Pressable>
+              </XStack>
+
+              {/* Live Informational Badge Preview */}
+              <YStack gap={4} paddingTop={2}>
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                  Informational Button (Non-Selectable for Shopper on PDP):
+                </Text>
+                <XStack
+                  alignItems="center"
+                  gap={8}
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  borderRadius={10}
+                  borderWidth={1.5}
+                  borderColor={tokens.accent}
+                  backgroundColor={`${tokens.accent}10`}
+                  alignSelf="flex-start"
+                >
+                  <LuInfo size={14} color={tokens.accent} />
+                  <Text fontSize={13} fontWeight="800" color={tokens.accent}>
+                    {noSizeVariant === 'one-size' ? 'One Size' : 'Free Size'}
+                  </Text>
+                  <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                    • {sizeDrapeText}
+                  </Text>
+                </XStack>
+              </YStack>
+
+              {/* Optional Editable Drape / Specification Text */}
+              <YStack gap={4} paddingTop={2}>
+                <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                  Garment Drape &amp; Specification Subtitle (Editable):
+                </Text>
+                <TextInput
+                  value={sizeDrapeText}
+                  onChangeText={(val) => updateSpecField('sizeDrapeText', val)}
+                  placeholder="e.g. 5.5m Saree + 0.8m Unstitched Blouse Piece"
+                  placeholderTextColor={tokens.textMuted}
+                  style={styles.singleLineInput}
+                />
+              </YStack>
+            </YStack>
+          ) : (
+            /* ── MULTI-SIZE: SIZE AVAILABILITY MATRIX (LETTER, NUMERIC, KIDS) ── */
+            <YStack gap={8} backgroundColor={tokens.surfaceRaised} padding={10} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
+                  Size Availability &amp; Stock
+                </Text>
+                <Text fontSize={11} color={tokens.textMuted}>
+                  Uncheck to mark Out of Stock on PDP
+                </Text>
+              </XStack>
+
+              <XStack flexWrap="wrap" gap={8}>
+                {getPoolForCategory(activeSizeCategory).map((opt) => {
+                  const isAvailable = specs.availableSizes ? specs.availableSizes[opt.id] !== false : true;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      onPress={() => toggleSizeAvailability(opt.id)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        borderWidth: 1.5,
+                        borderColor: isAvailable ? tokens.accent : tokens.border,
+                        backgroundColor: isAvailable ? `${tokens.accent}12` : tokens.surface,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <CustomCheckbox
+                        checked={isAvailable}
+                        onToggle={() => toggleSizeAvailability(opt.id)}
+                        size={16}
+                        accessibilityLabel={`Toggle ${opt.label}`}
+                      />
+                      <YStack gap={1}>
+                        <Text fontSize={12.5} fontWeight={isAvailable ? '800' : '600'} color={isAvailable ? tokens.text : tokens.textMuted}>
+                          {opt.label}
+                        </Text>
+                        {opt.subtitle && (
+                          <Text fontSize={10} color={tokens.textMuted} fontWeight="600">
+                            {opt.subtitle}
+                          </Text>
+                        )}
+                      </YStack>
+                    </Pressable>
+                  );
+                })}
+              </XStack>
+
+              {/* Custom Notes */}
+              <YStack gap={4} paddingTop={4}>
+                <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                  Custom Alteration Margin &amp; Fit Notes:
+                </Text>
+                <TextInput
+                  value={specs.customNotes || ''}
+                  onChangeText={(val) => updateSpecField('customNotes', val)}
+                  placeholder="e.g. Includes 2-inch alteration allowance in side seams."
+                  placeholderTextColor={tokens.textMuted}
+                  style={styles.singleLineInput}
+                />
+              </YStack>
+            </YStack>
+          )}
+
+          {/* 3. Stitch Type Presets */}
           <YStack gap={4}>
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
               Stitch &amp; Construction State:
@@ -891,10 +1276,7 @@ export function StoreProductEnrichmentSection({
                 return (
                   <Pressable
                     key={opt.id}
-                    onPress={() => {
-                      updateSpecField('stitchTypeId', opt.id);
-                      updateSpecField('stitchTypeName', opt.label);
-                    }}
+                    onPress={() => handleStitchTypeSelect(opt)}
                     style={[
                       styles.specListCard,
                       {
@@ -930,7 +1312,7 @@ export function StoreProductEnrichmentSection({
             </YStack>
           </YStack>
 
-          {/* Blouse Format & Construction Selection */}
+          {/* 4. Blouse Format & Construction Selection */}
           <TaxonomyFacetChipSelector
             label="Blouse Format &amp; Construction:"
             options={BLOUSE_TYPE_OPTIONS}
@@ -944,7 +1326,7 @@ export function StoreProductEnrichmentSection({
             tokens={tokens}
           />
 
-          {/* Saree & Blouse Dimensions */}
+          {/* 5. Saree & Blouse Dimensions */}
           <XStack gap={10}>
             <YStack flex={1} gap={4}>
               <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
@@ -952,7 +1334,7 @@ export function StoreProductEnrichmentSection({
               </Text>
               <TextInput
                 value={specs.sareeLengthMetres.toString()}
-                onChangeText={(val) => updateSpecField('sareeLengthMetres', parseFloat(val) || 5.5)}
+                onChangeText={handleSareeLengthChange}
                 keyboardType="numeric"
                 style={styles.dimensionInput}
               />
@@ -964,14 +1346,14 @@ export function StoreProductEnrichmentSection({
               </Text>
               <TextInput
                 value={specs.blousePieceLengthMetres.toString()}
-                onChangeText={(val) => updateSpecField('blousePieceLengthMetres', parseFloat(val) || 0.8)}
+                onChangeText={handleBlouseLengthChange}
                 keyboardType="numeric"
                 style={styles.dimensionInput}
               />
             </YStack>
           </XStack>
 
-          {/* Package Contents */}
+          {/* 6. Package Contents */}
           <YStack gap={4}>
             <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
               Package Contents Description:

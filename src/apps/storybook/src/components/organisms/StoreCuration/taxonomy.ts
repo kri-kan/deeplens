@@ -194,7 +194,12 @@ export interface ProductCurationSpecs {
   blouseTypeId?: string;
   blouseTypeName?: string;
   blouseType: 'unstitched_running' | 'unstitched_contrast' | 'exclusive_brocade' | 'heavy_embroidered' | 'stitched_padded' | 'plain_satin_contrast' | 'without_blouse' | string;
-  sizeProfile: 'free-size' | 'numeric' | 'letter' | 'custom';
+  sizeProfile: 'no-size' | 'free-size' | 'numeric' | 'letter' | 'kids' | 'custom';
+  sizeCategory?: 'no-size' | 'free-size' | 'numeric' | 'letter' | 'kids' | 'custom';
+  noSizeVariant?: 'one-size' | 'free-size';
+  sizeDrapeText?: string;
+  availableSizes?: Record<string, boolean>;
+  customNotes?: string;
   
   // Occasions, Filters & Relevance
   occasions: string[];
@@ -232,7 +237,12 @@ export const DEFAULT_SAREE_SPECS: ProductCurationSpecs = {
   blouseTypeId: 'unstitched_running',
   blouseTypeName: 'Attached Unstitched Running Blouse',
   blouseType: 'unstitched_running',
-  sizeProfile: 'free-size',
+  sizeProfile: 'no-size',
+  sizeCategory: 'no-size',
+  noSizeVariant: 'one-size',
+  sizeDrapeText: '5.5m Saree + 0.8m Unstitched Blouse Piece',
+  availableSizes: { one_size: true },
+  customNotes: '',
   occasions: ['wedding_bridal', 'festive_diwali_puja', 'reception_cocktail'],
   searchTags: [
     'banarasi saree',
@@ -462,6 +472,33 @@ export function buildSpecsFromUnifiedAttributes(
   const blouseLen = typeof ua.blouse_length === 'number' ? ua.blouse_length : fallback.blousePieceLengthMetres || 0.8;
   const packageContents = `1 Authentic Handloom Saree (${sareeLen}m) with attached ${blouseMatch?.name || 'blouse piece'} (${blouseLen}m)`;
 
+  // 10. Sizing System Profile & Informational Badge Derivation
+  let derivedSizeProfile: 'no-size' | 'free-size' | 'numeric' | 'letter' | 'kids' = 'no-size';
+  let derivedNoSizeVariant: 'one-size' | 'free-size' = 'one-size';
+
+  const rawCategory = (fallback.category || product?.category || '').toLowerCase();
+  const normalizedStitchText = (stitchMatch?.name || ua.stitch_type || product?.stitch_type || '').toLowerCase();
+
+  if (rawCategory.includes('kid') || fullText.includes('kids') || fullText.includes('girl') || fullText.includes('boy')) {
+    derivedSizeProfile = 'kids';
+  } else if (rawCategory.includes('blouse') || fullText.includes('32-44') || normalizedStitchText.includes('numeric') || normalizedStitchText.includes('32')) {
+    derivedSizeProfile = 'numeric';
+  } else if (rawCategory.includes('dress') || rawCategory.includes('suit') || rawCategory.includes('kurta') || normalizedStitchText.includes('letter') || fullText.includes('xs') || fullText.includes('3xl')) {
+    derivedSizeProfile = 'letter';
+  } else {
+    derivedSizeProfile = 'no-size';
+    if (normalizedStitchText.includes('stitched blouse') || blouseMatch?.id === 'stitched_padded') {
+      derivedNoSizeVariant = 'free-size';
+    } else {
+      derivedNoSizeVariant = 'one-size';
+    }
+  }
+
+  const derivedSizeDrapeText =
+    derivedNoSizeVariant === 'free-size'
+      ? 'Stitched Blouse with Free Size / Alterable Seams'
+      : `${sareeLen}m Saree + ${blouseLen}m Unstitched Blouse Piece`;
+
   return {
     ...fallback,
     fabricId: fabricMatch ? fabricMatch.id : fallback.fabricId,
@@ -477,6 +514,12 @@ export function buildSpecsFromUnifiedAttributes(
     blouseTypeId: blouseMatch ? blouseMatch.id : fallback.blouseTypeId || 'unstitched_running',
     blouseTypeName: blouseMatch ? blouseMatch.name : fallback.blouseTypeName || 'Attached Unstitched Running Blouse',
     blouseType: (blouseMatch ? blouseMatch.id : fallback.blouseType) as any,
+    sizeProfile: derivedSizeProfile,
+    sizeCategory: derivedSizeProfile,
+    noSizeVariant: derivedNoSizeVariant,
+    sizeDrapeText: derivedSizeDrapeText,
+    availableSizes: fallback.availableSizes || { one_size: true },
+    customNotes: fallback.customNotes || '',
     occasions: resolvedOccasions,
     searchTags: Array.from(synthesizedTags).slice(0, 15),
     careInstructions: ua.care_instructions || care,

@@ -244,6 +244,19 @@ export const Stage4bPrefilledFromUnifiedAttributes: Story = {
 };
 
 /**
+ * 4c. Stage 4c: Sizing & Drape Parity (No-Size Informational vs Multi-Size):
+ * Demonstrates the canonical Sizing System Variant (No Size with One Size/Free Size informational badge,
+ * editable subtitle, and Letter/Numeric/Kids multi-size availability matrix).
+ */
+export const Stage4cSizingAndDrapeAlignment: Story = {
+  name: '4c. Metadata & Specs: Sizing & Drape Parity with Size Setting Workflow',
+  args: {
+    initialScreen: 'metadata',
+    initialShowPreview: false,
+  },
+};
+
+/**
  * 5. Live Customer Storefront PDP Simulation:
  * Isolates the customer-facing 390px mobile PDP view with carousel dots, bottom ethnic swatches,
  * dynamic photo switching, and video buffering on play tap.
