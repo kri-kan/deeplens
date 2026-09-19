@@ -39,6 +39,11 @@ export function FormFactorPreview({
   allowSwitching = true,
   title,
 }: FormFactorPreviewProps) {
+  const existingContext = React.useContext(FormFactorContext);
+  if (existingContext) {
+    return <>{children}</>;
+  }
+
   const [factor, setFactor] = useState<FormFactor>(initialFactor);
   const { tokens } = useTheme();
   const spec = FACTOR_SPECS[factor];

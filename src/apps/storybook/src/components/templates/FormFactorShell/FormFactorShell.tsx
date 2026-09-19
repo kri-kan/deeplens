@@ -77,7 +77,7 @@ export function FormFactorShell({
   const isDesktop = factor === 'desktop';
 
   return (
-    <YStack flex={1} minHeight="100%" backgroundColor={tokens.background}>
+    <YStack flex={1} minHeight={"100vh" as any} backgroundColor={tokens.background}>
       {/* ================================================================= */}
       {/* 1. TOP EXTERNAL SELECTOR TOOLBAR (Outside the device shell frame) */}
       {/* ================================================================= */}
@@ -258,7 +258,7 @@ export function FormFactorShell({
                 styles.mobileChassis,
                 {
                   width: dimensions.width,
-                  minHeight: dimensions.height,
+                  height: dimensions.height,
                   borderRadius: showBezel ? 36 : 14,
                   borderWidth: showBezel ? 4 : 1,
                   borderColor: showBezel ? '#1E293B' : tokens.border,
@@ -316,7 +316,7 @@ export function FormFactorShell({
                 styles.tabletChassis,
                 {
                   width: dimensions.width,
-                  minHeight: dimensions.height,
+                  height: dimensions.height,
                   borderRadius: showBezel ? 24 : 14,
                   borderWidth: showBezel ? 3 : 1,
                   borderColor: showBezel ? '#334155' : tokens.border,
@@ -354,8 +354,6 @@ export function FormFactorShell({
               style={[
                 styles.desktopWindow,
                 {
-                  width: '100%',
-                  maxWidth: 1280,
                   borderColor: tokens.border,
                   backgroundColor: tokens.surface,
                 },
@@ -441,21 +439,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#334155',
   },
   canvasBackground: {
+    flex: 1,
+    width: '100%',
+    minHeight: 'calc(100vh - 65px)' as any,
     overflow: 'visible' as any,
+    display: 'flex' as any,
+    flexDirection: 'column' as any,
   },
   mobileChassis: {
     overflow: 'hidden',
     alignSelf: 'center',
+    display: 'flex' as any,
+    flexDirection: 'column' as any,
+    maxHeight: '90vh' as any,
   },
   tabletChassis: {
     overflow: 'hidden',
     alignSelf: 'center',
+    display: 'flex' as any,
+    flexDirection: 'column' as any,
+    maxHeight: '90vh' as any,
   },
   desktopWindow: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 1280,
+    minHeight: 'calc(100vh - 100px)' as any,
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
     alignSelf: 'center',
+    display: 'flex' as any,
+    flexDirection: 'column' as any,
   },
   bezelShadow: {
     shadowColor: '#000000',
@@ -472,5 +487,9 @@ const styles = StyleSheet.create({
   shellContentContainer: {
     flex: 1,
     width: '100%',
+    minHeight: 0,
+    display: 'flex' as any,
+    flexDirection: 'column' as any,
+    overflow: 'auto' as any,
   },
 });

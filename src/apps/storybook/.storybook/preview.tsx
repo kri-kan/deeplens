@@ -48,7 +48,17 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
     context?.parameters?.formFactorShell !== false &&
     context?.parameters?.formFactorShell?.disabled !== true;
 
-  const defaultFactor = context?.parameters?.formFactorShell?.defaultFactor || "desktop";
+  let defaultFactor = context?.parameters?.formFactorShell?.defaultFactor;
+  if (!defaultFactor) {
+    const storyName = (context?.name || context?.story || "").toLowerCase();
+    if (storyName.includes("mobile") || storyName.includes("phone")) {
+      defaultFactor = "mobile";
+    } else if (storyName.includes("tablet") || storyName.includes("ipad")) {
+      defaultFactor = "tablet";
+    } else {
+      defaultFactor = "desktop";
+    }
+  }
 
   return (
     <TamaguiTheme name={tamaguiTheme}>
@@ -62,9 +72,10 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
             style={{
               flex: 1,
               width: "100%",
+              minHeight: 0,
+              display: "flex" as any,
+              flexDirection: "column" as any,
               backgroundColor: tokens.background,
-              padding: 12,
-              overflow: "auto" as any,
             }}
           >
             <Story {...context} />
@@ -74,7 +85,7 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
         <View
           style={{
             flex: 1,
-            minHeight: "100%",
+            minHeight: "100vh" as any,
             backgroundColor: tokens.background,
             padding: 16,
             overflow: "auto" as any,
