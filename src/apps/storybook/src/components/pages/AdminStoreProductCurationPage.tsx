@@ -1059,7 +1059,7 @@ export function AdminStoreProductCurationPage({
     <YStack
       flex={1}
       width="100%"
-      maxWidth={isMobile ? 440 : isTablet ? 768 : 1240}
+      maxWidth={isMobile ? '100%' : isTablet ? 768 : 1240}
       alignSelf="center"
       backgroundColor={tokens.background}
       position="relative"
@@ -1070,7 +1070,7 @@ export function AdminStoreProductCurationPage({
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
-        paddingHorizontal={isMobile ? 14 : isTablet ? 20 : 28}
+        paddingHorizontal={isMobile ? 10 : isTablet ? 20 : 28}
         paddingTop={topInset + 8}
         paddingBottom={10}
         alignItems="center"
@@ -1250,7 +1250,8 @@ export function AdminStoreProductCurationPage({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          padding: isMobile ? 12 : isTablet ? 20 : 28,
+          paddingHorizontal: currentScreen === 'metadata' ? (isMobile ? 0 : isTablet ? 8 : 16) : (isMobile ? 12 : isTablet ? 20 : 28),
+          paddingTop: isMobile ? 8 : 14,
           paddingBottom: currentScreen === 'hub' ? Math.max(bottomInset + 16, 24) : 90 + bottomInset,
         }}
       >

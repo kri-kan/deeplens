@@ -10,6 +10,7 @@ import {
   LuRuler,
   LuTag,
   LuPlus,
+  LuX,
   LuScissors,
   LuInfo,
 } from 'react-icons/lu';
@@ -212,15 +213,19 @@ function TaxonomyFacetChipSelector({
           onPress={() => setIsAddingCustom(!isAddingCustom)}
           style={styles.customToggleBtn}
         >
-          <LuPlus size={11} color={tokens.accent} />
-          <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-            {isAddingCustom ? 'Cancel' : '+ Custom Tag'}
+          {isAddingCustom ? (
+            <LuX size={13} color={tokens.accent} />
+          ) : (
+            <LuPlus size={13} color={tokens.accent} />
+          )}
+          <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+            {isAddingCustom ? 'Cancel' : 'Custom Tag'}
           </Text>
         </Pressable>
       </XStack>
 
       {isAddingCustom && (
-        <XStack gap={6} alignItems="center" marginBottom={4}>
+        <XStack gap={8} alignItems="center" marginBottom={6} width="100%">
           <TextInput
             value={customText}
             onChangeText={setCustomText}
@@ -234,8 +239,8 @@ function TaxonomyFacetChipSelector({
             onPress={handleCommitCustom}
             style={[styles.customConfirmBtn, { backgroundColor: tokens.accent }]}
           >
-            <LuCheck size={12} color="#FFFFFF" />
-            <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+            <LuCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
+            <Text fontSize={12} fontWeight="800" color="#FFFFFF">
               Add
             </Text>
           </Pressable>
@@ -506,7 +511,7 @@ export function StoreProductEnrichmentSection({
       }
     } else if (newCat === 'letter') {
       matchingStitchId = 'fully_stitched_letter';
-      matchingStitchName = 'Fully Stitched (Letter XS–5XL)';
+      matchingStitchName = 'Fully Stitched XS–5XL';
     } else if (newCat === 'numeric') {
       matchingStitchId = 'fully_stitched_numeric';
       matchingStitchName = 'Fully Stitched (Numeric 32–44)';
@@ -679,14 +684,14 @@ export function StoreProductEnrichmentSection({
   };
 
   return (
-    <YStack gap={10}>
+    <YStack gap={8} width="100%">
       {/* ── TOP HEADER WITH AI AUTO-DERIVE BANNER ── */}
       <YStack
         backgroundColor={tokens.surface}
-        borderRadius={14}
-        borderWidth={1}
-        borderColor={tokens.border}
-        padding={12}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+        paddingVertical={10}
+        paddingHorizontal={isMobile ? 4 : 8}
         gap={8}
       >
         <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8}>
@@ -849,11 +854,13 @@ export function StoreProductEnrichmentSection({
       {activeTab === 'craft_specs' && (
         <YStack
           backgroundColor={tokens.surface}
-          borderRadius={14}
-          borderWidth={1}
+          borderTopWidth={1}
+          borderBottomWidth={1}
           borderColor={tokens.border}
-          padding={14}
-          gap={14}
+          paddingVertical={12}
+          paddingHorizontal={isMobile ? 4 : 8}
+          gap={12}
+          width="100%"
         >
           <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={12} fontWeight="900" color={tokens.text} textTransform="uppercase">
@@ -984,11 +991,13 @@ export function StoreProductEnrichmentSection({
       {activeTab === 'commercials' && (
         <YStack
           backgroundColor={tokens.surface}
-          borderRadius={14}
-          borderWidth={1}
+          borderTopWidth={1}
+          borderBottomWidth={1}
           borderColor={tokens.border}
-          padding={12}
-          gap={10}
+          paddingVertical={12}
+          paddingHorizontal={isMobile ? 4 : 8}
+          gap={12}
+          width="100%"
         >
           <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
             2. Commercial Pricing &amp; Landed Margins
@@ -1094,11 +1103,13 @@ export function StoreProductEnrichmentSection({
       {activeTab === 'sizing' && (
         <YStack
           backgroundColor={tokens.surface}
-          borderRadius={14}
-          borderWidth={1}
+          borderTopWidth={1}
+          borderBottomWidth={1}
           borderColor={tokens.border}
-          padding={12}
+          paddingVertical={12}
+          paddingHorizontal={isMobile ? 4 : 8}
           gap={12}
+          width="100%"
         >
           <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
@@ -1120,18 +1131,20 @@ export function StoreProductEnrichmentSection({
               activeId={isNoSize ? 'no-size' : activeSizeCategory}
               onChange={(id) => handleSizeCategoryChange(id as SizeCategoryType)}
               options={[
-                { id: 'no-size', label: 'No Size', subtitle: 'Universal' },
-                { id: 'letter', label: 'Letter', subtitle: 'XS–5XL' },
-                { id: 'numeric', label: 'Bust', subtitle: '32–44"' },
-                { id: 'kids', label: 'Kids', subtitle: '0–16Y' },
+                { id: 'no-size', label: 'No Size' },
+                { id: 'letter', label: 'XS–5XL' },
+                { id: 'numeric', label: 'Bust 32–44' },
+                { id: 'kids', label: 'Kids 0–16Y' },
               ]}
             />
           </YStack>
 
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
+
           {/* 2. Sizing Configuration: No-Size Informational vs Multi-Size Availability */}
           {isNoSize ? (
             /* ── NO SIZE: ONE SIZE VS FREE SIZE SUB-VARIANTS & INFORMATIONAL BADGE ── */
-            <YStack gap={10} backgroundColor={tokens.surfaceRaised} padding={10} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+            <YStack gap={10} width="100%">
               <Text fontSize={12} color={tokens.textSecondary} lineHeight={16}>
                 Apparel with universal drape does not require multi-size shopper selection. Choose whether this is unstitched (One Size) or a stitched blouse (Free Size). These render as non-selectable informational badges on the PDP.
               </Text>
@@ -1252,8 +1265,8 @@ export function StoreProductEnrichmentSection({
               </YStack>
             </YStack>
           ) : (
-            /* ── MULTI-SIZE: SIZE AVAILABILITY MATRIX (LETTER, NUMERIC, KIDS) ── */
-            <YStack gap={8} backgroundColor={tokens.surfaceRaised} padding={10} borderRadius={10} borderWidth={1} borderColor={tokens.border}>
+            /* ── MULTI-SIZE: SIZE AVAILABILITY MATRIX (XS-5XL, NUMERIC, KIDS) ── */
+            <YStack gap={8} width="100%">
               <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={6}>
                 <XStack alignItems="center" gap={6}>
                   <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
@@ -1364,6 +1377,8 @@ export function StoreProductEnrichmentSection({
             </YStack>
           )}
 
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
+
           {/* 3. Stitch Type Presets */}
           <YStack gap={4}>
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
@@ -1416,6 +1431,8 @@ export function StoreProductEnrichmentSection({
             </YStack>
           </YStack>
 
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
+
           {/* 4. Blouse Format & Construction Selection */}
           <TaxonomyFacetChipSelector
             label="Blouse Format &amp; Construction:"
@@ -1429,6 +1446,8 @@ export function StoreProductEnrichmentSection({
             }}
             tokens={tokens}
           />
+
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 5. Saree & Blouse Dimensions */}
           <XStack gap={10}>
@@ -1471,25 +1490,22 @@ export function StoreProductEnrichmentSection({
         </YStack>
       )}
 
-      {/* ── TAB 4: OCCASIONS, FILTER FACETS & RELEVANCE TAGS ── */}
+      {/* ── TAB 4: OCCASIONS, SEARCH & CARE ── */}
       {activeTab === 'occasions_tags' && (
         <YStack
           backgroundColor={tokens.surface}
-          borderRadius={14}
-          borderWidth={1}
+          borderTopWidth={1}
+          borderBottomWidth={1}
           borderColor={tokens.border}
-          padding={12}
-          gap={10}
+          paddingVertical={12}
+          paddingHorizontal={isMobile ? 4 : 8}
+          gap={12}
+          width="100%"
         >
           <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
               4. Occasion Facets &amp; Search Relevance
             </Text>
-            <View style={[styles.microBadge, { backgroundColor: '#FEF3C7' }]}>
-              <Text fontSize={10} fontWeight="800" color="#B45309">
-                Powers FilterDrawer
-              </Text>
-            </View>
           </XStack>
 
           {/* Occasion Chips (Multi-Select with Custom Occasion Entry) */}
@@ -1502,15 +1518,19 @@ export function StoreProductEnrichmentSection({
                 onPress={() => setIsAddingOccasion(!isAddingOccasion)}
                 style={styles.customToggleBtn}
               >
-                <LuPlus size={11} color={tokens.accent} />
-                <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                  {isAddingOccasion ? 'Cancel' : '+ Custom Occasion'}
+                {isAddingOccasion ? (
+                  <LuX size={13} color={tokens.accent} />
+                ) : (
+                  <LuPlus size={13} color={tokens.accent} />
+                )}
+                <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+                  {isAddingOccasion ? 'Cancel' : 'Custom Occasion'}
                 </Text>
               </Pressable>
             </XStack>
 
             {isAddingOccasion && (
-              <XStack gap={6} alignItems="center" marginBottom={4}>
+              <XStack gap={8} alignItems="center" marginBottom={6} width="100%">
                 <TextInput
                   value={customOccasionInput}
                   onChangeText={setCustomOccasionInput}
@@ -1524,8 +1544,8 @@ export function StoreProductEnrichmentSection({
                   onPress={handleAddCustomOccasion}
                   style={[styles.customConfirmBtn, { backgroundColor: tokens.accent }]}
                 >
-                  <LuCheck size={12} color="#FFFFFF" />
-                  <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+                  <LuCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text fontSize={12} fontWeight="800" color="#FFFFFF">
                     Add
                   </Text>
                 </Pressable>
@@ -1589,6 +1609,8 @@ export function StoreProductEnrichmentSection({
             </XStack>
           </YStack>
 
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
+
           {/* Search Relevance Tags */}
           <YStack gap={6}>
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
@@ -1601,11 +1623,11 @@ export function StoreProductEnrichmentSection({
                 onSubmitEditing={handleAddSearchTag}
                 placeholder="e.g. pattu saree, wedding wear..."
                 placeholderTextColor={tokens.textMuted}
-                style={[styles.singleLineInput, { flex: 1 }]}
+                style={[styles.singleLineInput, { flex: 1, height: 34, fontSize: 13 }]}
               />
               <Pressable
                 onPress={handleAddSearchTag}
-                style={[styles.addTagBtn, { backgroundColor: tokens.accent }]}
+                style={[styles.addTagBtn, { backgroundColor: tokens.accent, height: 34, paddingHorizontal: 14, justifyContent: 'center' }]}
               >
                 <Text fontSize={12} fontWeight="800" color="#FFFFFF">
                   Add Tag
@@ -1628,6 +1650,8 @@ export function StoreProductEnrichmentSection({
               ))}
             </XStack>
           </YStack>
+
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Care Instructions */}
           <YStack gap={4}>
@@ -1719,32 +1743,39 @@ const styles = StyleSheet.create({
     paddingVertical: 1.5,
     borderRadius: 4,
   },
+  sectionSeparator: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 12,
+    width: '100%',
+  },
   customToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    cursor: 'pointer',
-  },
-  customTextInput: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    fontSize: 12,
-    color: '#1E293B',
-  },
-  customConfirmBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  customTextInput: {
+    flex: 1,
+    height: 34,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#1E293B',
+  },
+  customConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    height: 34,
+    paddingHorizontal: 14,
     borderRadius: 6,
     cursor: 'pointer',
   },
