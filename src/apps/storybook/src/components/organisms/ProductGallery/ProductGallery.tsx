@@ -166,37 +166,6 @@ export function ProductGallery({
               />
             )}
 
-            {/* Slide Count Badge (Top Left) */}
-            <XStack
-              position="absolute"
-              top={14}
-              left={14}
-              backgroundColor="rgba(0,0,0,0.4)"
-              paddingHorizontal={10}
-              paddingVertical={4}
-              borderRadius={9999}
-            >
-              <Text fontSize={11} fontWeight="800" color="#ffffff">
-                {activeImageIndex + 1} / {totalImages}
-              </Text>
-            </XStack>
-
-            {/* Photo Label / Color Tag Badge (Top Right) */}
-            <XStack
-              position="absolute"
-              top={14}
-              right={14}
-              backgroundColor="rgba(0,0,0,0.45)"
-              paddingHorizontal={12}
-              paddingVertical={4}
-              borderRadius={9999}
-              maxWidth="65%"
-            >
-              <Text fontSize={11} fontWeight="700" color="#ffffff" numberOfLines={1}>
-                {currentImage.label}
-              </Text>
-            </XStack>
-
             {/* Left Chevron Button (Circular Prev Image) */}
             {totalImages > 1 ? (
               <XStack
@@ -271,8 +240,8 @@ export function ProductGallery({
             borderColor={tokens.border}
             borderWidth={1}
             borderRadius={16}
-            padding={16}
-            gap={12}
+            padding={isMobile ? 12 : 16}
+            gap={10}
             width="100%"
           >
             {React.isValidElement(children)
@@ -281,18 +250,18 @@ export function ProductGallery({
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      style={{ flexGrow: 0, maxWidth: isMobile ? '50%' : '65%' }}
-                      contentContainerStyle={{ gap: 8, alignItems: 'center', paddingVertical: 2 }}
+                      style={{ flexGrow: 0, maxWidth: isMobile ? '55%' : '65%' }}
+                      contentContainerStyle={{ gap: 6, alignItems: 'center', paddingVertical: 2 }}
                     >
                       {activeImages.map((img, idx) => {
                         const isSelected = activeImageIndex === idx;
                         return (
                           <XStack
                             key={img.id || idx}
-                            width={isMobile ? 44 : 54}
-                            height={isMobile ? 44 : 54}
-                            borderRadius={10}
-                            borderWidth={isSelected ? 2.5 : 1}
+                            width={isMobile ? 38 : 46}
+                            height={isMobile ? 38 : 46}
+                            borderRadius={8}
+                            borderWidth={isSelected ? 2 : 1}
                             borderColor={isSelected ? tokens.accent : tokens.border}
                             overflow="hidden"
                             cursor="pointer"

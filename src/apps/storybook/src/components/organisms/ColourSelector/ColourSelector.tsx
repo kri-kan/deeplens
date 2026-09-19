@@ -66,10 +66,10 @@ export function ColourSelector({
   };
 
   return (
-    <YStack gap={12} alignSelf="flex-start" width="100%">
-      {/* Active Color Info Header */}
-      <XStack alignItems="center" justifyContent="space-between" width="100%">
-        <XStack alignItems="baseline" gap={8} flexWrap="wrap">
+    <YStack gap={10} alignSelf="flex-start" width="100%">
+      {/* Active Color Info Header: Color title and badge alone take the whole row */}
+      <XStack alignItems="center" justifyContent={format === 'cards' ? 'space-between' : 'flex-start'} gap={8} width="100%">
+        <XStack alignItems="baseline" gap={8} flexWrap="wrap" flex={1}>
           <Text fontSize={14} color={tokens.textSecondary} fontWeight="600">
             Colour:{' '}
             <Text color={tokens.text} fontWeight="800">
@@ -93,9 +93,11 @@ export function ColourSelector({
           ) : null}
         </XStack>
 
-        <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-          {options.length} curated weaves
-        </Text>
+        {format === 'cards' ? (
+          <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+            {options.length} curated weaves
+          </Text>
+        ) : null}
       </XStack>
 
       {/* Format 1: Rich Cards Scroll */}
@@ -127,17 +129,17 @@ export function ColourSelector({
           </XStack>
         </ScrollView>
       ) : mediaSlot ? (
-        /* Format 2 with MediaSlot: 2nd Row has media thumbnails on left and swatches aligned to right-most */
-        <XStack width="100%" alignItems="center" justifyContent="space-between" gap={16}>
+        /* Format 2 with MediaSlot: 2nd Row has media thumbnails on left and swatches aligned to right edge */
+        <XStack width="100%" alignItems="center" justifyContent="space-between" gap={10}>
           {/* Left: Scrollable Media Tiles */}
           <XStack flex={1} minWidth={0} alignItems="center">
             {mediaSlot}
           </XStack>
 
-          {/* Right: Colour Swatches aligned to the right-most */}
+          {/* Right: Colour Swatches aligned to the right-most edge */}
           <XStack
             flexWrap="wrap"
-            gap={12}
+            gap={8}
             alignItems="center"
             justifyContent="flex-end"
             marginLeft="auto"
@@ -153,7 +155,7 @@ export function ColourSelector({
                 quaternaryColor={o.quaternaryColor}
                 colors={o.colors}
                 colorCount={o.colorCount}
-                size={36}
+                size={32}
                 selected={selected === o.key}
                 onPress={() => onSelect(o.key)}
               />
@@ -161,15 +163,15 @@ export function ColourSelector({
           </XStack>
         </XStack>
       ) : (
-        /* Format 2 standard: Compact Swatch Dots Row */
+        /* Format 2 standard: Compact Swatch Dots Row aligned to right edge */
         <XStack
           flexWrap="wrap"
-          gap={12}
+          gap={8}
           alignItems="center"
           justifyContent={swatchesAlign === 'right' ? 'flex-end' : 'flex-start'}
           width="100%"
           marginLeft={swatchesAlign === 'right' ? 'auto' : undefined}
-          paddingVertical={4}
+          paddingVertical={2}
         >
           {options.map((o) => (
             <CustomSwatchDot
@@ -181,7 +183,7 @@ export function ColourSelector({
               quaternaryColor={o.quaternaryColor}
               colors={o.colors}
               colorCount={o.colorCount}
-              size={36}
+              size={32}
               selected={selected === o.key}
               onPress={() => onSelect(o.key)}
             />
