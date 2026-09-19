@@ -915,32 +915,31 @@ export function AdminStoreProductCurationPage({
                     <LuChevronRight size={14} color={tokens.textMuted} />
                   </XStack>
 
-                  <YStack gap={2}>
-                    <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
-                      Qualify &amp; Group
-                    </Text>
-                    <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
-                      Media &amp; Swatches
-                    </Text>
-                  </YStack>
+                  <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
+                    Qualify &amp; Group
+                  </Text>
 
-                  {/* 3 Compact Tags */}
-                  <XStack gap={4} flexWrap="wrap" marginTop={2}>
+                  {/* Compact Tags: Media Count & Swatch Component + Count */}
+                  <XStack gap={6} alignItems="center" flexWrap="wrap">
                     <View style={styles.hubCompactChip}>
-                      <LuImage size={9} color={tokens.textMuted} />
-                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
-                        {qualifiedMedia.length} Media
+                      <LuImage size={11} color={tokens.accent} />
+                      <Text fontSize={10} fontWeight="800" color={tokens.text}>
+                        {qualifiedMedia.length}
                       </Text>
                     </View>
                     <View style={styles.hubCompactChip}>
-                      <LuPalette size={9} color={tokens.textMuted} />
-                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
-                        {swatchCount} Swatches
-                      </Text>
-                    </View>
-                    <View style={styles.hubCompactChip}>
-                      <Text fontSize={9} fontWeight="700" color={tokens.accent}>
-                        {swatchTemplate.toUpperCase()}
+                      <CustomSwatchDot
+                        template={swatchTemplate}
+                        primaryColor={colorGroups[0]?.slotA || '#E91E63'}
+                        secondaryColor={colorGroups[0]?.slotB || '#7A2E8C'}
+                        tertiaryColor={colorGroups[0]?.slotC}
+                        quaternaryColor={colorGroups[0]?.slotD}
+                        colors={colorGroups[0]?.colors}
+                        colorCount={colorGroups[0]?.colorCount as any}
+                        size={12}
+                      />
+                      <Text fontSize={10} fontWeight="800" color={tokens.text}>
+                        {swatchCount}
                       </Text>
                     </View>
                   </XStack>
@@ -966,31 +965,20 @@ export function AdminStoreProductCurationPage({
                     <LuChevronRight size={14} color={tokens.textMuted} />
                   </XStack>
 
-                  <YStack gap={2}>
-                    <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
-                      Metadata
-                    </Text>
-                    <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
-                      Pricing &amp; Story
-                    </Text>
-                  </YStack>
+                  <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
+                    Metadata
+                  </Text>
 
-                  {/* 3 Compact Tags */}
-                  <XStack gap={4} flexWrap="wrap" marginTop={2}>
+                  {/* Compact Tags: Selling Price & Discount */}
+                  <XStack gap={6} alignItems="center" flexWrap="wrap">
                     <View style={styles.hubCompactChip}>
-                      <LuDollarSign size={9} color="#16A34A" />
-                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                      <LuDollarSign size={10} color="#16A34A" />
+                      <Text fontSize={10} fontWeight="800" color={tokens.text}>
                         ₹{Number(salePrice).toLocaleString('en-IN')}
                       </Text>
                     </View>
-                    <View style={styles.hubCompactChip}>
-                      <LuSparkles size={9} color={tokens.accent} />
-                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
-                        {marginPercent}% Margin
-                      </Text>
-                    </View>
                     <View style={[styles.hubCompactChip, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
-                      <Text fontSize={9} fontWeight="800" color="#15803D">
+                      <Text fontSize={10} fontWeight="800" color="#15803D">
                         {discountPercent}% OFF
                       </Text>
                     </View>
@@ -1903,7 +1891,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
     cursor: 'pointer',
-    minHeight: 110,
+    minHeight: 96,
+    overflow: 'hidden',
   },
   hubCompactIconWrapper: {
     width: 28,
@@ -1915,13 +1904,13 @@ const styles = StyleSheet.create({
   hubCompactChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   hubFeatureTile: {
     borderRadius: 14,
