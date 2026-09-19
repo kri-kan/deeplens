@@ -891,130 +891,113 @@ export function AdminStoreProductCurationPage({
               Curation Sections
             </Text>
 
-            {/* Tile 1: Qualify & Group (3 Stages: Qualify > Swatches > Grouping) */}
-            <Pressable
-              onPress={() => {
-                setCurrentScreen('qualify_and_group');
-                setCurrentStage('qualify');
-              }}
-              style={({ pressed }) => [
-                styles.hubFeatureTile,
-                {
-                  borderColor: tokens.border,
-                  backgroundColor: pressed ? `${tokens.accent}08` : tokens.surface,
-                },
-              ]}
-            >
-              <XStack alignItems="flex-start" justifyContent="space-between">
-                <XStack gap={12} flex={1}>
-                  <View style={[styles.hubTileIconWrapper, { backgroundColor: `${tokens.accent}14` }]}>
-                    <LuLayers size={22} color={tokens.accent} />
-                  </View>
-                  <YStack flex={1} gap={3}>
-                    <XStack alignItems="center" gap={6}>
-                      <Text fontSize={15} fontWeight="900" color={tokens.text}>
-                        Qualify &amp; Group
-                      </Text>
-                      <View style={[styles.hubTileBadge, { backgroundColor: '#FEF3C7' }]}>
-                        <Text fontSize={9} fontWeight="800" color="#B45309">
-                          3 Stages
-                        </Text>
-                      </View>
-                    </XStack>
-                    <Text fontSize={11} color={tokens.textMuted} lineHeight={16}>
-                      Qualify storefront media, configure ethnic swatches &amp; map variant photos.
+            {/* 2-Column Compact Curation Tiles: Qualify & Group + Metadata */}
+            <XStack gap={10} alignItems="stretch">
+              {/* Tile 1: Qualify & Group */}
+              <Pressable
+                onPress={() => {
+                  setCurrentScreen('qualify_and_group');
+                  setCurrentStage('qualify');
+                }}
+                style={({ pressed }) => [
+                  styles.hubCompactTile,
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: pressed ? `${tokens.accent}08` : tokens.surface,
+                  },
+                ]}
+              >
+                <YStack gap={8} flex={1} justifyContent="space-between">
+                  <XStack alignItems="center" justifyContent="space-between">
+                    <View style={[styles.hubCompactIconWrapper, { backgroundColor: `${tokens.accent}14` }]}>
+                      <LuLayers size={16} color={tokens.accent} />
+                    </View>
+                    <LuChevronRight size={14} color={tokens.textMuted} />
+                  </XStack>
+
+                  <YStack gap={2}>
+                    <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
+                      Qualify &amp; Group
                     </Text>
-
-                    {/* Flow Steps Breadcrumb */}
-                    <XStack alignItems="center" gap={4} marginTop={4}>
-                      <Text fontSize={10} fontWeight="700" color={tokens.accent}>
-                        Qualify ➔ Swatches ➔ Grouping
-                      </Text>
-                    </XStack>
-
-                    {/* Metric Chips */}
-                    <XStack alignItems="center" gap={6} marginTop={6} flexWrap="wrap">
-                      <View style={styles.hubMetricChip}>
-                        <LuImage size={11} color={tokens.textMuted} />
-                        <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                          {qualifiedMedia.length} Qualified
-                        </Text>
-                      </View>
-                      <View style={styles.hubMetricChip}>
-                        <LuPalette size={11} color={tokens.textMuted} />
-                        <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                          {swatchCount} Swatches
-                        </Text>
-                      </View>
-                      <View style={styles.hubMetricChip}>
-                        <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                          {swatchTemplate.toUpperCase()}
-                        </Text>
-                      </View>
-                    </XStack>
-                  </YStack>
-                </XStack>
-
-                <View style={styles.hubTileChevron}>
-                  <LuChevronRight size={18} color={tokens.textMuted} />
-                </View>
-              </XStack>
-            </Pressable>
-
-            {/* Tile 2: Metadata (Story, AI & Commercial Pricing Margins) */}
-            <Pressable
-              onPress={() => setCurrentScreen('metadata')}
-              style={({ pressed }) => [
-                styles.hubFeatureTile,
-                {
-                  borderColor: tokens.border,
-                  backgroundColor: pressed ? `${tokens.accent}08` : tokens.surface,
-                },
-              ]}
-            >
-              <XStack alignItems="flex-start" justifyContent="space-between">
-                <XStack gap={12} flex={1}>
-                  <View style={[styles.hubTileIconWrapper, { backgroundColor: '#F0FDF4' }]}>
-                    <LuFileText size={22} color="#16A34A" />
-                  </View>
-                  <YStack flex={1} gap={3}>
-                    <XStack alignItems="center" gap={6}>
-                      <Text fontSize={15} fontWeight="900" color={tokens.text}>
-                        Metadata
-                      </Text>
-                      <View style={[styles.hubTileBadge, { backgroundColor: '#DCFCE7' }]}>
-                        <Text fontSize={9} fontWeight="800" color="#15803D">
-                          AI &amp; Pricing
-                        </Text>
-                      </View>
-                    </XStack>
-                    <Text fontSize={11} color={tokens.textMuted} lineHeight={16}>
-                      Craft story narrative, AI synthesis, commercial pricing margins &amp; lifecycle state.
+                    <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
+                      Media &amp; Swatches
                     </Text>
-
-                    {/* Pricing / Margin Summary Chips */}
-                    <XStack alignItems="center" gap={6} marginTop={6} flexWrap="wrap">
-                      <View style={styles.hubMetricChip}>
-                        <LuDollarSign size={11} color="#16A34A" />
-                        <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                          ₹{Number(salePrice).toLocaleString('en-IN')} ({discountPercent}% OFF)
-                        </Text>
-                      </View>
-                      <View style={styles.hubMetricChip}>
-                        <LuSparkles size={11} color={tokens.accent} />
-                        <Text fontSize={10} fontWeight="700" color={tokens.text}>
-                          {marginPercent}% Margin
-                        </Text>
-                      </View>
-                    </XStack>
                   </YStack>
-                </XStack>
 
-                <View style={styles.hubTileChevron}>
-                  <LuChevronRight size={18} color={tokens.textMuted} />
-                </View>
-              </XStack>
-            </Pressable>
+                  {/* 3 Compact Tags */}
+                  <XStack gap={4} flexWrap="wrap" marginTop={2}>
+                    <View style={styles.hubCompactChip}>
+                      <LuImage size={9} color={tokens.textMuted} />
+                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                        {qualifiedMedia.length} Media
+                      </Text>
+                    </View>
+                    <View style={styles.hubCompactChip}>
+                      <LuPalette size={9} color={tokens.textMuted} />
+                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                        {swatchCount} Swatches
+                      </Text>
+                    </View>
+                    <View style={styles.hubCompactChip}>
+                      <Text fontSize={9} fontWeight="700" color={tokens.accent}>
+                        {swatchTemplate.toUpperCase()}
+                      </Text>
+                    </View>
+                  </XStack>
+                </YStack>
+              </Pressable>
+
+              {/* Tile 2: Metadata */}
+              <Pressable
+                onPress={() => setCurrentScreen('metadata')}
+                style={({ pressed }) => [
+                  styles.hubCompactTile,
+                  {
+                    borderColor: tokens.border,
+                    backgroundColor: pressed ? `${tokens.accent}08` : tokens.surface,
+                  },
+                ]}
+              >
+                <YStack gap={8} flex={1} justifyContent="space-between">
+                  <XStack alignItems="center" justifyContent="space-between">
+                    <View style={[styles.hubCompactIconWrapper, { backgroundColor: '#F0FDF4' }]}>
+                      <LuFileText size={16} color="#16A34A" />
+                    </View>
+                    <LuChevronRight size={14} color={tokens.textMuted} />
+                  </XStack>
+
+                  <YStack gap={2}>
+                    <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
+                      Metadata
+                    </Text>
+                    <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
+                      Pricing &amp; Story
+                    </Text>
+                  </YStack>
+
+                  {/* 3 Compact Tags */}
+                  <XStack gap={4} flexWrap="wrap" marginTop={2}>
+                    <View style={styles.hubCompactChip}>
+                      <LuDollarSign size={9} color="#16A34A" />
+                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                        ₹{Number(salePrice).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={styles.hubCompactChip}>
+                      <LuSparkles size={9} color={tokens.accent} />
+                      <Text fontSize={9} fontWeight="700" color={tokens.text}>
+                        {marginPercent}% Margin
+                      </Text>
+                    </View>
+                    <View style={[styles.hubCompactChip, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                      <Text fontSize={9} fontWeight="800" color="#15803D">
+                        {discountPercent}% OFF
+                      </Text>
+                    </View>
+                  </XStack>
+                </YStack>
+              </Pressable>
+            </XStack>
           </YStack>
         )}
 
@@ -1906,6 +1889,37 @@ const styles = StyleSheet.create({
   },
   hubStatusPill: {
     paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  hubCompactTile: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    padding: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+    cursor: 'pointer',
+    minHeight: 110,
+  },
+  hubCompactIconWrapper: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hubCompactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
   },
