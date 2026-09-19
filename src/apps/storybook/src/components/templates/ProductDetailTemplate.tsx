@@ -4,7 +4,7 @@ import { YStack, XStack } from 'tamagui';
 import { useTheme, useResponsive } from '../../theme';
 
 export type ProductDetailTemplateProps = {
-  header: ReactNode;
+  header?: ReactNode;
   breadcrumbs?: ReactNode;
   gallery: ReactNode;
   purchasePanel: ReactNode;
