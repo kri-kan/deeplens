@@ -413,6 +413,24 @@ export function FormFactorShell({
   );
 }
 
+export function withFormFactorShell(initialFactor: FormFactor = 'desktop', title?: string) {
+  return (Story: any, context: any) => {
+    const existingContext = React.useContext(FormFactorContext);
+    if (existingContext) {
+      return <Story {...context} />;
+    }
+    return (
+      <FormFactorShell
+        initialFactor={initialFactor}
+        title={title || context?.name || context?.story}
+        category={context?.title?.split('/')[0]}
+      >
+        <Story {...context} />
+      </FormFactorShell>
+    );
+  };
+}
+
 const styles = StyleSheet.create({
   topBarShadow: {
     shadowColor: '#000000',

@@ -18,7 +18,6 @@ import {
   LuTag,
   LuWifi,
   LuBattery,
-  LuRotateCcw,
   LuCheckCheck,
 } from 'react-icons/lu';
 import { SizeSelector } from '../../components/organisms/SizeSelector/SizeSelector';
@@ -51,24 +50,16 @@ export default meta;
 
 export interface CurationWorkflowProps {
   overrideFactor?: FormFactor;
-  hideToolbar?: boolean;
 }
 
 export function SizeSettingWorkflowComponent({
   overrideFactor,
-  hideToolbar = false,
 }: CurationWorkflowProps) {
   const { tokens } = useTheme();
   const responsive = useResponsive();
 
-  // Active form factor state (Auto or manual override)
-  const [selectedFactor, setSelectedFactor] = useState<FormFactor | 'auto'>(
-    overrideFactor || 'auto'
-  );
-
   const effectiveFactor: FormFactor =
-    overrideFactor ||
-    (selectedFactor === 'auto' ? responsive.factor : selectedFactor);
+    overrideFactor || responsive.factor || 'desktop';
 
   const isMobile = effectiveFactor === 'mobile';
   const isTablet = effectiveFactor === 'tablet';
@@ -867,85 +858,6 @@ export function SizeSettingWorkflowComponent({
         </Text>
       </YStack>
 
-      {/* Global In-Story Device Viewport Simulator Toolbar (Optional, hidden if locked to a story preset) */}
-      {!hideToolbar && (
-        <XStack
-          backgroundColor="#0F172A"
-          paddingHorizontal={12}
-          paddingVertical={8}
-          borderRadius={10}
-          justifyContent="space-between"
-          alignItems="center"
-          flexWrap="wrap"
-          gap={8}
-        >
-          <XStack alignItems="center" gap={6}>
-            <LuMonitor size={14} color="#E2E8F0" />
-            <Text fontSize={11.5} fontWeight="800" color="#F8FAFC" letterSpacing={0.5}>
-              WORKSPACE VIEWPORT:
-            </Text>
-          </XStack>
-
-          <XStack backgroundColor="#1E293B" borderRadius={8} padding={3} gap={4}>
-            <Pressable
-              onPress={() => setSelectedFactor('mobile')}
-              style={[
-                styles.toolbarButton,
-                effectiveFactor === 'mobile' && styles.toolbarButtonActive,
-              ]}
-            >
-              <XStack alignItems="center" gap={4}>
-                <LuSmartphone size={12} color={effectiveFactor === 'mobile' ? '#FFF' : '#94A3B8'} />
-                <Text
-                  fontSize={10.5}
-                  fontWeight={effectiveFactor === 'mobile' ? '800' : '600'}
-                  color={effectiveFactor === 'mobile' ? '#FFF' : '#94A3B8'}
-                >
-                  Mobile (390px)
-                </Text>
-              </XStack>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setSelectedFactor('tablet')}
-              style={[
-                styles.toolbarButton,
-                effectiveFactor === 'tablet' && styles.toolbarButtonActive,
-              ]}
-            >
-              <XStack alignItems="center" gap={4}>
-                <LuTablet size={12} color={effectiveFactor === 'tablet' ? '#FFF' : '#94A3B8'} />
-                <Text
-                  fontSize={10.5}
-                  fontWeight={effectiveFactor === 'tablet' ? '800' : '600'}
-                  color={effectiveFactor === 'tablet' ? '#FFF' : '#94A3B8'}
-                >
-                  Tablet (768px)
-                </Text>
-              </XStack>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setSelectedFactor('desktop')}
-              style={[
-                styles.toolbarButton,
-                effectiveFactor === 'desktop' && styles.toolbarButtonActive,
-              ]}
-            >
-              <XStack alignItems="center" gap={4}>
-                <LuMonitor size={12} color={effectiveFactor === 'desktop' ? '#FFF' : '#94A3B8'} />
-                <Text
-                  fontSize={10.5}
-                  fontWeight={effectiveFactor === 'desktop' ? '800' : '600'}
-                  color={effectiveFactor === 'desktop' ? '#FFF' : '#94A3B8'}
-                >
-                  Desktop (1100px)
-                </Text>
-              </XStack>
-            </Pressable>
-          </XStack>
-        </XStack>
-      )}
 
       {/* MOBILE-SPECIFIC PRESENTATION TOGGLE (Curation Settings vs Live PDP Preview vs Split) */}
       {isMobile ? (
@@ -1145,21 +1057,10 @@ export const InteractiveCurationWorkflow: StoryObj<any> = {
  * full-width sub-variant cards, and sticky bottom preview action bar.
  */
 export const MobileCurationView_390px: StoryObj<any> = {
-  render: () => (
-    <FormFactorContext.Provider
-      value={{
-        factor: 'mobile',
-        isMobile: true,
-        isTablet: false,
-        isDesktop: false,
-        containerWidth: 390,
-      }}
-    >
-      <View style={{ width: 390, maxWidth: '100%', alignSelf: 'center' }}>
-        <SizeSettingWorkflowComponent overrideFactor="mobile" hideToolbar={true} />
-      </View>
-    </FormFactorContext.Provider>
-  ),
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
+  render: () => <SizeSettingWorkflowComponent overrideFactor="mobile" />,
 };
 
 /**
@@ -1167,21 +1068,10 @@ export const MobileCurationView_390px: StoryObj<any> = {
  * Demonstrates balanced 2-column workspace layout for tablet screens.
  */
 export const TabletCurationView_768px: StoryObj<any> = {
-  render: () => (
-    <FormFactorContext.Provider
-      value={{
-        factor: 'tablet',
-        isMobile: false,
-        isTablet: true,
-        isDesktop: false,
-        containerWidth: 768,
-      }}
-    >
-      <View style={{ width: 768, maxWidth: '100%', alignSelf: 'center' }}>
-        <SizeSettingWorkflowComponent overrideFactor="tablet" hideToolbar={true} />
-      </View>
-    </FormFactorContext.Provider>
-  ),
+  parameters: {
+    formFactorShell: { defaultFactor: 'tablet' },
+  },
+  render: () => <SizeSettingWorkflowComponent overrideFactor="tablet" />,
 };
 
 /**
@@ -1189,21 +1079,10 @@ export const TabletCurationView_768px: StoryObj<any> = {
  * Demonstrates the full workstation layout with phone device mockup frame.
  */
 export const DesktopCurationWorkspace_1100px: StoryObj<any> = {
-  render: () => (
-    <FormFactorContext.Provider
-      value={{
-        factor: 'desktop',
-        isMobile: false,
-        isTablet: false,
-        isDesktop: true,
-        containerWidth: 1100,
-      }}
-    >
-      <View style={{ width: 1100, maxWidth: '100%', alignSelf: 'center' }}>
-        <SizeSettingWorkflowComponent overrideFactor="desktop" hideToolbar={true} />
-      </View>
-    </FormFactorContext.Provider>
-  ),
+  parameters: {
+    formFactorShell: { defaultFactor: 'desktop' },
+  },
+  render: () => <SizeSettingWorkflowComponent overrideFactor="desktop" />,
 };
 
 const styles = StyleSheet.create({
@@ -1247,14 +1126,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'space-between',
     gap: 4,
-  },
-  toolbarButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  toolbarButtonActive: {
-    backgroundColor: '#0F766E',
   },
   deviceModePill: {
     paddingHorizontal: 6,
