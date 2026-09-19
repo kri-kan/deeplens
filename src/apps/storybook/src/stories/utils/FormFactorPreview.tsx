@@ -1,5 +1,5 @@
 import React from 'react';
-import { FormFactor } from '../../theme';
+import { FormFactor, FormFactorContext } from '../../theme';
 import {
   FormFactorShell,
   withFormFactorShell,
@@ -26,6 +26,10 @@ export function FormFactorPreview({
   title,
   category,
 }: FormFactorPreviewProps) {
+  const existingContext = React.useContext(FormFactorContext);
+  if (existingContext) {
+    return <>{children}</>;
+  }
   return (
     <FormFactorShell initialFactor={initialFactor} title={title} category={category}>
       {children}

@@ -5,7 +5,7 @@ import {
   MockImage,
   AddressData,
 } from '../../components/pages/AdminOrderFormPage';
-import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
+import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 // ─────────────────────────────────────────────
@@ -130,11 +130,10 @@ export const WithAddressSheetOpen: Story = {
  */
 export const InteractiveFormFactors: Story = {
   name: 'Form Factors',
-  render: (args) => (
-    <FormFactorPreview title="Admin Order Form" initialFactor="mobile">
-      <AdminOrderFormPage {...args} />
-    </FormFactorPreview>
-  ),
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
+  render: (args) => <AdminOrderFormPage {...args} />,
   args: {
     initialSource: 'whatsapp',
     initialPaymentType: 'cod',

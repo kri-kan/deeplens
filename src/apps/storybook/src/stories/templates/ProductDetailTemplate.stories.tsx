@@ -2,7 +2,6 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { YStack, Text } from 'tamagui';
 import { ProductDetailTemplate } from '../../components/templates/ProductDetailTemplate';
-import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
 import { useTheme } from '../../theme';
 
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
@@ -60,24 +59,26 @@ export default meta;
 type Story = StoryObj<typeof ProductDetailTemplate>;
 
 export const InteractiveFormFactors: Story = {
-  render: () => (
-    <FormFactorPreview title="ProductDetailTemplate" initialFactor="desktop">
-      {renderWireframe()}
-    </FormFactorPreview>
-  ),
+  render: renderWireframe,
 };
 
 export const DesktopView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'desktop' },
+  },
   render: renderWireframe,
-  decorators: [withFormFactor('desktop', 'Desktop View (1200px)')],
 };
 
 export const TabletView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'tablet' },
+  },
   render: renderWireframe,
-  decorators: [withFormFactor('tablet', 'Tablet View (768px)')],
 };
 
 export const MobileView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
   render: renderWireframe,
-  decorators: [withFormFactor('mobile', 'Mobile View (390px)')],
 };
