@@ -915,9 +915,16 @@ export function AdminStoreProductCurationPage({
                     <LuChevronRight size={14} color={tokens.textMuted} />
                   </XStack>
 
-                  <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
-                    Qualify &amp; Group
-                  </Text>
+                  <YStack width="100%" marginVertical={2}>
+                    <Text
+                      fontSize={13}
+                      fontWeight="900"
+                      color={tokens.text}
+                      style={{ display: 'flex', width: '100%' } as any}
+                    >
+                      Qualify & Group
+                    </Text>
+                  </YStack>
 
                   {/* Compact Tags: Media Count & Swatch Component + Count */}
                   <XStack gap={6} alignItems="center" flexWrap="wrap">
@@ -965,9 +972,16 @@ export function AdminStoreProductCurationPage({
                     <LuChevronRight size={14} color={tokens.textMuted} />
                   </XStack>
 
-                  <Text fontSize={13} fontWeight="900" color={tokens.text} numberOfLines={1}>
-                    Metadata
-                  </Text>
+                  <YStack width="100%" marginVertical={2}>
+                    <Text
+                      fontSize={13}
+                      fontWeight="900"
+                      color={tokens.text}
+                      style={{ display: 'flex', width: '100%' } as any}
+                    >
+                      Metadata
+                    </Text>
+                  </YStack>
 
                   {/* Compact Tags: Selling Price & Discount */}
                   <XStack gap={6} alignItems="center" flexWrap="wrap">
@@ -1891,8 +1905,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
     cursor: 'pointer',
-    minHeight: 96,
-    overflow: 'hidden',
+    minHeight: 102,
   },
   hubCompactIconWrapper: {
     width: 28,
