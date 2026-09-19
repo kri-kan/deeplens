@@ -15,7 +15,6 @@ import { FullscreenMediaViewer, FullscreenMediaItem } from '../../components/med
 
 // Design System Components shared directly with Storybook
 import { ProductDetailTemplate } from '../../components/templates/ProductDetailTemplate';
-import { Header } from '../../components/organisms/Header/Header';
 import { ProductGallery, SwatchItem, GalleryImage } from '../../components/organisms/ProductGallery/ProductGallery';
 import { ColourSelector, ColourOption } from '../../components/organisms/ColourSelector/ColourSelector';
 import { SizeSelector } from '../../components/organisms/SizeSelector/SizeSelector';
@@ -329,13 +328,6 @@ export const ProductDetailPage: React.FC = () => {
   return (
     <>
       <ProductDetailTemplate
-        header={
-          <Header
-            onOpenCart={openDrawer}
-            onOpenWishlist={() => navigate('wishlist')}
-            onOpenSearch={() => navigate('catalog')}
-          />
-        }
         breadcrumbs={
           <Breadcrumbs
             items={[
