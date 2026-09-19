@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { PanResponder, View, ScrollView } from 'react-native';
+import { PanResponder, View, ScrollView, Image } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LuChevronLeft, LuChevronRight } from 'react-icons/lu';
@@ -10,7 +10,8 @@ import { useTheme, useResponsive } from '../../../theme';
 export type GalleryImage = {
   id: string;
   label: string;
-  gradient: [string, string];
+  gradient?: [string, string];
+  url?: string;
 };
 
 export type SwatchItem = {
@@ -150,12 +151,20 @@ export function ProductGallery({
             position="relative"
             cursor="grab"
           >
-            <LinearGradient
-              colors={currentImage.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ width: '100%', height: '100%' }}
-            />
+            {currentImage.url ? (
+              <Image
+                source={{ uri: currentImage.url }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            ) : (
+              <LinearGradient
+                colors={currentImage.gradient || ['#f3e6d8', '#d3aa75']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ width: '100%', height: '100%' }}
+              />
+            )}
 
             {/* Slide Count Badge (Top Left) */}
             <XStack
@@ -282,10 +291,18 @@ export function ProductGallery({
               onPress={() => setActiveImageIndex(idx)}
               hoverStyle={{ scale: 1.04, borderColor: tokens.accent }}
             >
-              <LinearGradient
-                colors={img.gradient}
-                style={{ width: '100%', height: '100%' }}
-              />
+              {img.url ? (
+                <Image
+                  source={{ uri: img.url }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <LinearGradient
+                  colors={img.gradient || ['#f3e6d8', '#d3aa75']}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              )}
             </XStack>
           );
         })}
@@ -301,12 +318,20 @@ export function ProductGallery({
         borderColor={tokens.border}
         position="relative"
       >
-        <LinearGradient
-          colors={currentImage.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: '100%', height: '100%', minHeight: 580 }}
-        />
+        {currentImage.url ? (
+          <Image
+            source={{ uri: currentImage.url }}
+            style={{ width: '100%', height: '100%', minHeight: 580 }}
+            resizeMode="cover"
+          />
+        ) : (
+          <LinearGradient
+            colors={currentImage.gradient || ['#f3e6d8', '#d3aa75']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ width: '100%', height: '100%', minHeight: 580 }}
+          />
+        )}
 
         {/* Desktop Left / Right Navigation Chevrons */}
         {totalImages > 1 ? (

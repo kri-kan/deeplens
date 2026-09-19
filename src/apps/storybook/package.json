@@ -38,7 +38,8 @@
     "web": "EXPO_PUBLIC_STORYBOOK_ENABLED=true expo start --web --port 6006",
     "android": "EXPO_PUBLIC_STORYBOOK_ENABLED=true expo start --android --port 6006",
     "ios": "EXPO_PUBLIC_STORYBOOK_ENABLED=true expo start --ios --port 6006",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/patch-react-icons.js"
   },
   "private": true
 }
