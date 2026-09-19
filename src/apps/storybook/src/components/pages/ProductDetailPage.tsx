@@ -308,7 +308,11 @@ export function ProductDetailPage({
         />
       }
       specifications={
-        <SpecificationsPanel specs={resolvedSpecs} />
+        <SpecificationsPanel
+          specs={resolvedSpecs}
+          sku={activeProduct.sku}
+          showSilkMarkBadge={true}
+        />
       }
       reviews={
         <RatingsPanel
