@@ -31,8 +31,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
-  // For non-GET or cross-origin analytics/APIs, pass through
-  if (request.method !== 'GET') return;
+  // For non-GET or non-http(s) requests (e.g. chrome-extension, file), pass through
+  if (request.method !== 'GET' || !request.url.startsWith('http')) return;
 
   // Stale-While-Revalidate / Cache-first strategy for offline resilience
   event.respondWith(
