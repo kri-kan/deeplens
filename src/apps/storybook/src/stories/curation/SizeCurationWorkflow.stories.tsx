@@ -19,6 +19,7 @@ import {
   LuWifi,
   LuBattery,
   LuCheckCheck,
+  LuLock,
 } from 'react-icons/lu';
 import { SizeSelector } from '../../components/organisms/SizeSelector/SizeSelector';
 import { SegmentedControl } from '../../components/atoms/SegmentedControl/SegmentedControl';
@@ -39,6 +40,9 @@ import { useTheme, useResponsive, FormFactorContext, FormFactor } from '../../th
 
 const meta: Meta<any> = {
   title: 'Curation/SizeSettingWorkflow',
+  parameters: {
+    formFactorShell: false, // Dual-App Workstation: independent device frames for Merchant Console & Customer Storefront
+  },
   args: {
     ...THEME_ARGS,
   },
@@ -68,8 +72,16 @@ export function SizeSettingWorkflowComponent({
   // Mobile navigation tab: 'settings' | 'preview' | 'split'
   const [mobileTab, setMobileTab] = useState<'settings' | 'preview' | 'split'>('settings');
 
+  // Merchant Admin Console Form Factor: 'desktop' | 'tablet' | 'mobile'
+  const [adminFactor, setAdminFactor] = useState<FormFactor>(
+    overrideFactor || 'desktop'
+  );
+
   // Preview device frame selector for desktop/tablet view: 'phone' (390px) | 'tablet' (540px) | 'full'
   const [previewDeviceMode, setPreviewDeviceMode] = useState<'phone' | 'tablet' | 'full'>('phone');
+
+  // Layout arrangement mode: 'auto' | 'side-by-side' | 'stacked'
+  const [layoutMode, setLayoutMode] = useState<'auto' | 'side-by-side' | 'stacked'>('auto');
 
   const allProducts = getAllCatalogProducts();
 
@@ -175,22 +187,118 @@ export function SizeSettingWorkflowComponent({
         disabled: availableSizes[opt.id] === false,
       }));
 
-  // Container width calculation
-  const workspaceWidth = isMobile ? 390 : isTablet ? 768 : 1100;
+  // Layout arrangement calculation: Auto switches based on responsive width or mobile state
+  const isStacked =
+    layoutMode === 'stacked'
+      ? true
+      : layoutMode === 'side-by-side'
+      ? false
+      : isMobile || Number(responsive.containerWidth) < 1180;
 
-  // Render Curator Configuration Controls (Container 1)
-  const renderCuratorControls = () => (
-    <YStack
-      flex={isMobile ? undefined : 1}
-      width={isMobile ? '100%' : undefined}
-      backgroundColor={tokens.surface}
-      borderColor={tokens.border}
-      borderWidth={1}
-      borderRadius={16}
-      padding={isMobile ? 12 : 16}
-      gap={14}
-      style={styles.containerShadow}
-    >
+  // Render Curator Configuration Controls (Container 1 in Frame 1)
+  const renderCuratorControls = () => {
+    const adminMode = adminFactor as string;
+    const isMobileAdmin = adminMode === 'mobile';
+    const isTabletAdmin = adminMode === 'tablet';
+
+    return (
+      <YStack
+        flex={isStacked ? undefined : 1}
+        width={
+          isMobileAdmin
+            ? 390
+            : isTabletAdmin
+            ? 620
+            : isStacked
+            ? '100%'
+            : undefined
+        }
+        minWidth={isMobile ? '100%' : isMobileAdmin ? 360 : 440}
+        maxWidth={isMobileAdmin ? 390 : isTabletAdmin ? 640 : isStacked ? 760 : '100%'}
+        alignSelf="center"
+        borderRadius={isMobileAdmin ? 32 : isTabletAdmin ? 24 : 14}
+        borderWidth={isMobileAdmin ? 4 : 1}
+        borderColor={isMobileAdmin ? '#1E293B' : tokens.border}
+        overflow="hidden"
+        backgroundColor={tokens.surface}
+        style={styles.containerShadow}
+      >
+        {/* Frame 1 Header: macOS window titlebar or mobile status bar */}
+        {isMobileAdmin ? (
+          <YStack backgroundColor="#0F172A" paddingHorizontal={14} paddingVertical={8} gap={4}>
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={11} fontWeight="800" color="#F8FAFC">
+                9:41
+              </Text>
+              <XStack width={60} height={12} borderRadius={6} backgroundColor="#020617" />
+              <XStack alignItems="center" gap={6}>
+                <Text fontSize={10} fontWeight="800" color="#38BDF8">
+                  ADMIN APP
+                </Text>
+                <Pressable onPress={() => setAdminFactor('desktop')}>
+                  <LuMonitor size={12} color="#94A3B8" />
+                </Pressable>
+              </XStack>
+            </XStack>
+          </YStack>
+        ) : (
+          <XStack
+            backgroundColor="#0F172A"
+            paddingHorizontal={14}
+            paddingVertical={9}
+            justifyContent="space-between"
+            alignItems="center"
+            borderBottomWidth={1}
+            borderBottomColor="#1E293B"
+          >
+            {/* macOS traffic light controls */}
+            <XStack alignItems="center" gap={6}>
+              <XStack width={10} height={10} borderRadius={5} backgroundColor="#FF5F56" />
+              <XStack width={10} height={10} borderRadius={5} backgroundColor="#FFBD2E" />
+              <XStack width={10} height={10} borderRadius={5} backgroundColor="#27C93F" />
+            </XStack>
+
+            {/* Simulated Admin URL Pill */}
+            <XStack
+              backgroundColor="#1E293B"
+              paddingHorizontal={12}
+              paddingVertical={3}
+              borderRadius={6}
+              alignItems="center"
+              gap={6}
+            >
+              <LuLock size={10} color="#10B981" />
+              <Text fontSize={10.5} fontWeight="600" color="#E2E8F0">
+                admin.vayyari.com/curation/sizing
+              </Text>
+            </XStack>
+
+            {/* Admin App Device Mode Switcher */}
+            <XStack alignItems="center" gap={4} backgroundColor="#1E293B" borderRadius={6} padding={2}>
+              <Pressable
+                onPress={() => setAdminFactor('desktop')}
+                style={[styles.miniDevicePill, adminMode === 'desktop' && styles.miniDevicePillActive]}
+              >
+                <LuMonitor size={11} color={adminMode === 'desktop' ? '#FFF' : '#94A3B8'} />
+              </Pressable>
+              <Pressable
+                onPress={() => setAdminFactor('tablet')}
+                style={[styles.miniDevicePill, adminMode === 'tablet' && styles.miniDevicePillActive]}
+              >
+                <LuTablet size={11} color={adminMode === 'tablet' ? '#FFF' : '#94A3B8'} />
+              </Pressable>
+              <Pressable
+                onPress={() => setAdminFactor('mobile')}
+                style={[styles.miniDevicePill, adminMode === 'mobile' && styles.miniDevicePillActive]}
+              >
+                <LuSmartphone size={11} color={adminMode === 'mobile' ? '#FFF' : '#94A3B8'} />
+              </Pressable>
+            </XStack>
+          </XStack>
+        )}
+
+        {/* Inner Controls Container */}
+        <YStack padding={isMobileAdmin ? 12 : 16} gap={14}>
       {/* Step 1 Header */}
       <XStack justifyContent="space-between" alignItems="center">
         <XStack alignItems="center" gap={6}>
@@ -659,76 +767,137 @@ export function SizeSettingWorkflowComponent({
           ))}
         </XStack>
       </YStack>
-    </YStack>
-  );
+        </YStack>
+      </YStack>
+    );
+  };
 
-  // Render Storefront PDP Preview (Container 2)
-  const renderStorePdpPreview = () => (
-    <YStack
-      flex={isMobile ? undefined : 1}
-      width={isMobile ? '100%' : undefined}
-      alignItems={isMobile ? 'stretch' : 'center'}
-    >
-      {/* Device Frame Simulation */}
+  // Render Storefront PDP Preview (Container 2 in Frame 2)
+  const renderStorePdpPreview = () => {
+    const pdpMode = previewDeviceMode as string;
+    const isPdpPhone = pdpMode === 'phone';
+    const isPdpTablet = pdpMode === 'tablet';
+    const isPdpDesktop = pdpMode === 'full';
+
+    return (
       <YStack
+        flex={isStacked ? undefined : isPdpDesktop ? 1 : undefined}
         width={
           isMobile
             ? '100%'
-            : previewDeviceMode === 'phone'
+            : isPdpPhone
             ? 390
-            : previewDeviceMode === 'tablet'
+            : isPdpTablet
             ? 520
-            : '100%'
+            : isStacked
+            ? '100%'
+            : 560
         }
-        maxWidth="100%"
-        backgroundColor={tokens.surface}
-        borderColor={tokens.border}
-        borderWidth={1}
-        borderRadius={isMobile ? 16 : 24}
+        minWidth={isMobile ? '100%' : 360}
+        maxWidth={isPdpPhone ? 390 : isPdpTablet ? 540 : isStacked ? 760 : '100%'}
+        alignSelf="center"
+        borderRadius={isPdpPhone ? 32 : isPdpTablet ? 24 : 14}
+        borderWidth={isPdpPhone ? 4 : 1}
+        borderColor={isPdpPhone ? '#1E293B' : tokens.border}
         overflow="hidden"
+        backgroundColor={tokens.surface}
         style={styles.deviceFrameShadow}
       >
-        {/* Device Top Chassis Header */}
-        <YStack backgroundColor="#0F172A" paddingHorizontal={14} paddingVertical={8} gap={6}>
-          {/* Status Bar */}
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text fontSize={11} fontWeight="800" color="#F8FAFC">
-              9:41
-            </Text>
-            {/* Dynamic Island / Speaker Pill */}
-            <XStack
-              width={70}
-              height={12}
-              borderRadius={6}
-              backgroundColor="#020617"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <XStack width={6} height={6} borderRadius={3} backgroundColor="#1E293B" />
+        {/* Frame 2 Header: macOS browser or iPhone/iPad chassis */}
+        {isPdpDesktop ? (
+          <XStack
+            backgroundColor="#0F172A"
+            paddingHorizontal={14}
+            paddingVertical={9}
+            justifyContent="space-between"
+            alignItems="center"
+            borderBottomWidth={1}
+            borderBottomColor="#1E293B"
+          >
+            {/* macOS traffic light controls */}
+            <XStack alignItems="center" gap={6}>
+              <XStack width={10} height={10} borderRadius={5} backgroundColor="#FF5F56" />
+              <XStack width={10} height={10} borderRadius={5} backgroundColor="#FFBD2E" />
+              <XStack width={10} height={10} borderRadius={5} backgroundColor="#27C93F" />
             </XStack>
-            <XStack alignItems="center" gap={5}>
-              <LuWifi size={11} color="#F8FAFC" />
-              <LuBattery size={13} color="#F8FAFC" />
-            </XStack>
-          </XStack>
 
-          {/* Shopper Mode Banner with Device Frame Controls */}
-          <XStack justifyContent="space-between" alignItems="center" paddingTop={2}>
-            <XStack alignItems="center" gap={5}>
-              <XStack width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
-              <Text fontSize={10} fontWeight="800" color="#E2E8F0" letterSpacing={0.8}>
-                LIVE PDP PREVIEW • {activeProduct.sku}
+            {/* Simulated Shopper URL Pill */}
+            <XStack
+              backgroundColor="#1E293B"
+              paddingHorizontal={12}
+              paddingVertical={3}
+              borderRadius={6}
+              alignItems="center"
+              gap={6}
+            >
+              <LuLock size={10} color="#10B981" />
+              <Text fontSize={10.5} fontWeight="600" color="#E2E8F0">
+                store.vayyari.com/pdp/{activeProduct.sku.toLowerCase()}
               </Text>
             </XStack>
 
-            {/* If on desktop/tablet, allow toggling the preview frame size */}
-            {!isMobile && (
+            {/* Shopper Device Switcher */}
+            <XStack alignItems="center" gap={4} backgroundColor="#1E293B" borderRadius={6} padding={2}>
+              <Pressable
+                onPress={() => setPreviewDeviceMode('phone')}
+                style={styles.miniDevicePill}
+              >
+                <LuSmartphone size={11} color="#94A3B8" />
+              </Pressable>
+              <Pressable
+                onPress={() => setPreviewDeviceMode('tablet')}
+                style={styles.miniDevicePill}
+              >
+                <LuTablet size={11} color="#94A3B8" />
+              </Pressable>
+              <Pressable
+                onPress={() => setPreviewDeviceMode('full')}
+                style={[styles.miniDevicePill, styles.miniDevicePillActive]}
+              >
+                <LuMonitor size={11} color="#FFF" />
+              </Pressable>
+            </XStack>
+          </XStack>
+        ) : (
+          <YStack backgroundColor="#0F172A" paddingHorizontal={14} paddingVertical={8} gap={6}>
+            {/* Status Bar */}
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text fontSize={11} fontWeight="800" color="#F8FAFC">
+                9:41
+              </Text>
+              {/* Dynamic Island / Speaker Pill */}
+              <XStack
+                width={70}
+                height={12}
+                borderRadius={6}
+                backgroundColor="#020617"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <XStack width={6} height={6} borderRadius={3} backgroundColor="#1E293B" />
+              </XStack>
+              <XStack alignItems="center" gap={5}>
+                <LuWifi size={11} color="#F8FAFC" />
+                <LuBattery size={13} color="#F8FAFC" />
+              </XStack>
+            </XStack>
+
+            {/* Shopper Mode Banner with Device Frame Controls */}
+            <XStack justifyContent="space-between" alignItems="center" paddingTop={2}>
+              <XStack alignItems="center" gap={5}>
+                <XStack width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
+                <Text fontSize={10} fontWeight="800" color="#E2E8F0" letterSpacing={0.8}>
+                  LIVE PDP PREVIEW • {activeProduct.sku}
+                </Text>
+              </XStack>
+
+              {/* Device Mode Switcher */}
               <XStack backgroundColor="#1E293B" borderRadius={6} padding={2} gap={2}>
                 <Pressable
                   onPress={() => setPreviewDeviceMode('phone')}
                   style={[
-                    styles.deviceModePill,
-                    previewDeviceMode === 'phone' && styles.deviceModePillActive,
+                    styles.miniDevicePill,
+                    previewDeviceMode === 'phone' && styles.miniDevicePillActive,
                   ]}
                 >
                   <LuSmartphone size={10} color={previewDeviceMode === 'phone' ? '#FFF' : '#94A3B8'} />
@@ -736,25 +905,22 @@ export function SizeSettingWorkflowComponent({
                 <Pressable
                   onPress={() => setPreviewDeviceMode('tablet')}
                   style={[
-                    styles.deviceModePill,
-                    previewDeviceMode === 'tablet' && styles.deviceModePillActive,
+                    styles.miniDevicePill,
+                    previewDeviceMode === 'tablet' && styles.miniDevicePillActive,
                   ]}
                 >
                   <LuTablet size={10} color={previewDeviceMode === 'tablet' ? '#FFF' : '#94A3B8'} />
                 </Pressable>
                 <Pressable
                   onPress={() => setPreviewDeviceMode('full')}
-                  style={[
-                    styles.deviceModePill,
-                    previewDeviceMode === 'full' && styles.deviceModePillActive,
-                  ]}
+                  style={styles.miniDevicePill}
                 >
-                  <LuMonitor size={10} color={previewDeviceMode === 'full' ? '#FFF' : '#94A3B8'} />
+                  <LuMonitor size={10} color="#94A3B8" />
                 </Pressable>
               </XStack>
-            )}
-          </XStack>
-        </YStack>
+            </XStack>
+          </YStack>
+        )}
 
         {/* Inner Phone Screen Content */}
         <YStack padding={isMobile ? 14 : 16} gap={14}>
@@ -823,41 +989,154 @@ export function SizeSettingWorkflowComponent({
           </YStack>
         </YStack>
       </YStack>
-    </YStack>
-  );
+    );
+  };
 
   return (
-    <YStack padding={isMobile ? 8 : 16} gap={14} width="100%" maxWidth={workspaceWidth} alignSelf="center">
-      {/* Top Header & Instructions */}
-      <YStack gap={4}>
+    <YStack padding={isMobile ? 8 : 16} gap={16} width="100%" maxWidth={1440} alignSelf="center">
+      {/* Top Header & Dual-App Simulation Control Bar */}
+      <YStack
+        backgroundColor="#0F172A"
+        borderRadius={12}
+        padding={12}
+        gap={10}
+        borderWidth={1}
+        borderColor="#1E293B"
+        style={styles.topBarShadow}
+      >
         <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
+          {/* Workstation Title & Status */}
           <XStack alignItems="center" gap={8}>
-            <LuSlidersHorizontal size={18} color={tokens.accent} />
-            <Text fontSize={isMobile ? 16 : 18} fontWeight="900" color={tokens.text}>
-              Product Size Curation & Live PDP Sync
+            <LuSlidersHorizontal size={16} color="#38BDF8" />
+            <Text fontSize={13} fontWeight="900" color="#F8FAFC" letterSpacing={0.5}>
+              DUAL-APP SIMULATION WORKSTATION
             </Text>
+            <XStack backgroundColor="#1E293B" paddingHorizontal={7} paddingVertical={2} borderRadius={4} gap={5} alignItems="center">
+              <XStack width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
+              <Text fontSize={9.5} fontWeight="800" color="#34D399">
+                REAL-TIME SYNC ACTIVE
+              </Text>
+            </XStack>
           </XStack>
 
-          {/* Active SKU Indicator */}
-          <XStack
-            backgroundColor={tokens.surfaceRaised}
-            paddingHorizontal={8}
-            paddingVertical={3}
-            borderRadius={8}
-            borderWidth={1}
-            borderColor={tokens.border}
-          >
-            <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-              SKU: {activeProduct.sku} ({activeSizeCategory.toUpperCase()})
+          {/* Layout Arrangement Switcher: Auto / Side-by-Side / Stacked */}
+          <XStack alignItems="center" gap={6}>
+            <Text fontSize={10.5} fontWeight="700" color="#94A3B8">
+              LAYOUT:
             </Text>
+            <XStack backgroundColor="#1E293B" borderRadius={8} padding={2} gap={2}>
+              <Pressable
+                onPress={() => setLayoutMode('auto')}
+                style={[styles.layoutPill, layoutMode === 'auto' && styles.layoutPillActive]}
+              >
+                <Text fontSize={10} fontWeight="800" color={layoutMode === 'auto' ? '#FFF' : '#94A3B8'}>
+                  Auto ({isStacked ? 'Stacked' : 'Side-by-Side'})
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setLayoutMode('side-by-side')}
+                style={[styles.layoutPill, layoutMode === 'side-by-side' && styles.layoutPillActive]}
+              >
+                <Text fontSize={10} fontWeight="800" color={layoutMode === 'side-by-side' ? '#FFF' : '#94A3B8'}>
+                  Side-by-Side ↔
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setLayoutMode('stacked')}
+                style={[styles.layoutPill, layoutMode === 'stacked' && styles.layoutPillActive]}
+              >
+                <Text fontSize={10} fontWeight="800" color={layoutMode === 'stacked' ? '#FFF' : '#94A3B8'}>
+                  Stacked ↕
+                </Text>
+              </Pressable>
+            </XStack>
           </XStack>
         </XStack>
 
-        <Text fontSize={12} color={tokens.textSecondary} lineHeight={16}>
-          Curators configure apparel sizing systems, stock availability, and drape notes. Changes synchronize in real time to the live customer PDP preview.
-        </Text>
-      </YStack>
+        {/* Quick Simulation Presets */}
+        <XStack alignItems="center" gap={6} flexWrap="wrap" paddingTop={2}>
+          <Text fontSize={10.5} fontWeight="700" color="#94A3B8">
+            PRESETS:
+          </Text>
+          <Pressable
+            onPress={() => {
+              setAdminFactor('desktop');
+              setPreviewDeviceMode('phone');
+              setLayoutMode('side-by-side');
+            }}
+            style={[
+              styles.presetPill,
+              adminFactor === 'desktop' && previewDeviceMode === 'phone' && styles.presetPillActive,
+            ]}
+          >
+            <Text
+              fontSize={10.5}
+              fontWeight="700"
+              color={adminFactor === 'desktop' && previewDeviceMode === 'phone' ? '#38BDF8' : '#CBD5E1'}
+            >
+              💻 Merchant Desktop + 📱 Shopper Phone
+            </Text>
+          </Pressable>
 
+          <Pressable
+            onPress={() => {
+              setAdminFactor('tablet');
+              setPreviewDeviceMode('phone');
+            }}
+            style={[
+              styles.presetPill,
+              adminFactor === 'tablet' && previewDeviceMode === 'phone' && styles.presetPillActive,
+            ]}
+          >
+            <Text
+              fontSize={10.5}
+              fontWeight="700"
+              color={adminFactor === 'tablet' && previewDeviceMode === 'phone' ? '#38BDF8' : '#CBD5E1'}
+            >
+              📟 Merchant Tablet + 📱 Shopper Phone
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setAdminFactor('mobile');
+              setPreviewDeviceMode('phone');
+              setLayoutMode('stacked');
+            }}
+            style={[
+              styles.presetPill,
+              adminFactor === 'mobile' && previewDeviceMode === 'phone' && styles.presetPillActive,
+            ]}
+          >
+            <Text
+              fontSize={10.5}
+              fontWeight="700"
+              color={adminFactor === 'mobile' && previewDeviceMode === 'phone' ? '#38BDF8' : '#CBD5E1'}
+            >
+              📱 Both Mobile (Stacked)
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setAdminFactor('desktop');
+              setPreviewDeviceMode('full');
+            }}
+            style={[
+              styles.presetPill,
+              adminFactor === 'desktop' && previewDeviceMode === 'full' && styles.presetPillActive,
+            ]}
+          >
+            <Text
+              fontSize={10.5}
+              fontWeight="700"
+              color={adminFactor === 'desktop' && previewDeviceMode === 'full' ? '#38BDF8' : '#CBD5E1'}
+            >
+              💻 Both Desktop
+            </Text>
+          </Pressable>
+        </XStack>
+      </YStack>
 
       {/* MOBILE-SPECIFIC PRESENTATION TOGGLE (Curation Settings vs Live PDP Preview vs Split) */}
       {isMobile ? (
@@ -1027,15 +1306,24 @@ export function SizeSettingWorkflowComponent({
           )}
         </YStack>
       ) : (
-        /* DESKTOP & TABLET: DUAL-COLUMN SIDE-BY-SIDE PRESENTATION */
-        <XStack
-          gap={18}
-          alignItems="flex-start"
-          width="100%"
-        >
-          {renderCuratorControls()}
-          {renderStorePdpPreview()}
-        </XStack>
+        /* DESKTOP & TABLET: ADAPTIVE SIDE-BY-SIDE OR STACKED PRESENTATION BASED ON AVAILABLE SPACE */
+        isStacked ? (
+          <YStack gap={24} width="100%" alignItems="center">
+            {renderCuratorControls()}
+            {renderStorePdpPreview()}
+          </YStack>
+        ) : (
+          <XStack
+            gap={24}
+            alignItems="flex-start"
+            justifyContent="center"
+            width="100%"
+            flexWrap={layoutMode === 'side-by-side' ? 'nowrap' : 'wrap'}
+          >
+            {renderCuratorControls()}
+            {renderStorePdpPreview()}
+          </XStack>
+        )
       )}
     </YStack>
   );
@@ -1154,5 +1442,38 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     alignSelf: 'flex-start',
+  },
+  topBarShadow: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+  },
+  presetPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  presetPillActive: {
+    backgroundColor: '#0B2942',
+    borderColor: '#38BDF8',
+  },
+  layoutPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  layoutPillActive: {
+    backgroundColor: '#334155',
+  },
+  miniDevicePill: {
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  miniDevicePillActive: {
+    backgroundColor: '#334155',
   },
 });
