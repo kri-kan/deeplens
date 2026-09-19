@@ -3,7 +3,6 @@ import {
   ScrollView,
   Pressable,
   Modal,
-  Dimensions,
 } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,8 +37,6 @@ import {
 import {
   AdminProductEditSheet,
 } from '../molecules/AdminProductEditSheet';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export interface AdminProductDetailData {
   id: string;

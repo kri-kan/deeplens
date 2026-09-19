@@ -16,120 +16,17 @@ import { PriceTag } from '../atoms/PriceTag/PriceTag';
 import { RatingBadge } from '../atoms/RatingBadge/RatingBadge';
 import { HeartButton } from '../atoms/HeartButton/HeartButton';
 import { ShareButton } from '../atoms/ShareButton/ShareButton';
-import { FREE_SIZE_PRESET } from '../../data/catalog/sizePresets';
+import {
+  CatalogTestProduct,
+  DIVERSE_CATALOG_PRODUCTS,
+} from '../../data/catalog';
 import { useTheme, useResponsive } from '../../theme';
 
 export type ProductDetailPageProps = {
+  product?: CatalogTestProduct;
   onNavigateHome?: () => void;
   onNavigateCatalog?: () => void;
 };
-
-const SWATCHES: Record<string, SwatchItem> = {
-  navy_pink: {
-    label: 'Navy & Rani Pink',
-    template: 'contrast-border',
-    primaryColor: '#1565C0',
-    secondaryColor: '#E91E63',
-    gradient: ['#1a2a4e', '#d81b60'],
-    images: [
-      { id: '1', label: 'Front Drape - Rani Pink Contrast Border', gradient: ['#1a2a4e', '#d81b60'] },
-      { id: '2', label: 'Border Close-up - Electroplated Gold Zari', gradient: ['#d81b60', '#ffd54f'] },
-      { id: '3', label: 'Pleats & Fall Texture', gradient: ['#1a2a4e', '#283593'] },
-      { id: '4', label: 'Matching Blouse Piece Fabric', gradient: ['#c2185b', '#e91e63'] },
-    ],
-  },
-  purple_emerald: {
-    label: 'Violet & Emerald Dhup-Chhaon',
-    template: 'multi-tone',
-    primaryColor: '#6A1B9A',
-    secondaryColor: '#2E7D32',
-    gradient: ['#4a148c', '#1b5e20'],
-    images: [
-      { id: '1', label: 'Iridescent Silk Drape - Multi-Tone', gradient: ['#4a148c', '#1b5e20'] },
-      { id: '2', label: 'Weft & Warp Shimmer Reflection', gradient: ['#7b1fa2', '#2e7d32'] },
-      { id: '3', label: 'Intricate Pallu Motifs', gradient: ['#311b92', '#004d40'] },
-      { id: '4', label: 'Back Drape Silhouette', gradient: ['#4a148c', '#388e3c'] },
-    ],
-  },
-  mustard_green: {
-    label: 'Mustard & Bottle Green',
-    template: 'multi-shade',
-    primaryColor: '#FBC02D',
-    secondaryColor: '#1B5E20',
-    colorCount: 2,
-    gradient: ['#fbc02d', '#1b5e20'],
-    images: [
-      { id: '1', label: 'Multi-Shade - Pleats & Body Split', gradient: ['#fbc02d', '#1b5e20'] },
-      { id: '2', label: 'Center Seam & Zari Piping', gradient: ['#f9a825', '#2e7d32'] },
-      { id: '3', label: 'Full Ensemble Presentation', gradient: ['#fff176', '#1b5e20'] },
-    ],
-  },
-  bandhani_multi: {
-    label: 'Festive Bandhani Multi',
-    template: 'multicolor',
-    primaryColor: '#C62828',
-    secondaryColor: '#FBC02D',
-    tertiaryColor: '#2E7D32',
-    quaternaryColor: '#1565C0',
-    gradient: ['#c62828', '#1565c0'],
-    images: [
-      { id: '1', label: 'Traditional Bandhani Print - Multi Hues', gradient: ['#c62828', '#1565c0'] },
-      { id: '2', label: 'Handcrafted Tie-Dye Texture Close-up', gradient: ['#e53935', '#fbc02d'] },
-      { id: '3', label: 'Festive Drape with Tassel Embellishments', gradient: ['#43a047', '#1e88e5'] },
-    ],
-  },
-  ivory_gold: {
-    label: 'Pure Ivory Gold',
-    template: 'solid',
-    primaryColor: '#D4AF37',
-    gradient: ['#f3e6d8', '#d3aa75'],
-    images: [
-      { id: '1', label: 'Pure Mulberry Silk Drape', gradient: ['#f3e6d8', '#d3aa75'] },
-      { id: '2', label: 'Handwoven Tested Zari Pallu', gradient: ['#fff8e1', '#d4af37'] },
-      { id: '3', label: 'Fabric Weave & Certified Silk Mark', gradient: ['#edd9c5', '#c9a063'] },
-    ],
-  },
-};
-
-const COLOUR_OPTIONS: ColourOption[] = [
-  {
-    key: 'navy_pink',
-    label: 'Navy & Rani Pink',
-    template: 'contrast-border',
-    primaryColor: '#1565C0',
-    secondaryColor: '#E91E63',
-  },
-  {
-    key: 'purple_emerald',
-    label: 'Violet & Emerald',
-    template: 'multi-tone',
-    primaryColor: '#6A1B9A',
-    secondaryColor: '#2E7D32',
-  },
-  {
-    key: 'mustard_green',
-    label: 'Mustard & Green',
-    template: 'multi-shade',
-    primaryColor: '#FBC02D',
-    secondaryColor: '#1B5E20',
-    colorCount: 2,
-  },
-  {
-    key: 'bandhani_multi',
-    label: 'Bandhani Multi',
-    template: 'multicolor',
-    primaryColor: '#C62828',
-    secondaryColor: '#FBC02D',
-    tertiaryColor: '#2E7D32',
-    quaternaryColor: '#1565C0',
-  },
-  {
-    key: 'ivory_gold',
-    label: 'Pure Ivory Gold',
-    template: 'solid',
-    primaryColor: '#D4AF37',
-  },
-];
 
 const SIMILAR_PRODUCTS = [
   { id: '1', brand: 'VAANYA LUXE', name: 'Rose Mist Handloom Saree', price: 2432, originalPrice: 4499, offPercent: 46, rating: 4.5, gradient: ['#f0d5d1', '#bf7b71'] as [string, string] },
@@ -137,34 +34,59 @@ const SIMILAR_PRODUCTS = [
   { id: '3', brand: 'VAANYA WEAVES', name: 'Celestial Organza Ensemble', price: 3499, originalPrice: 5299, offPercent: 34, rating: 4.2, gradient: ['#dfe4f2', '#8aa0d7'] as [string, string] },
 ];
 
-export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: ProductDetailPageProps) {
+export function ProductDetailPage({
+  product: productProp,
+  onNavigateHome,
+  onNavigateCatalog,
+}: ProductDetailPageProps) {
+  const activeProduct = productProp || DIVERSE_CATALOG_PRODUCTS[0];
   const { tokens } = useTheme();
   const { isMobile, isTablet } = useResponsive();
   const isCompact = isMobile || isTablet;
-  const [selectedColor, setSelectedColor] = useState<string>('navy_pink');
-  const [selectedSize, setSelectedSize] = useState('M');
-  const [wishlisted, setWishlisted] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: '1',
-      name: 'Ivory Flow Mulberry Silk Saree',
-      color: 'Ivory Gold',
-      size: 'M',
-      price: '₹3,299',
-      gradient: ['#f3e6d8', '#d3aa75'],
-    },
-  ]);
+
+  const [selectedColor, setSelectedColor] = React.useState<string>(activeProduct.selectedColorDefault);
+  const [selectedSize, setSelectedSize] = React.useState<string>(
+    activeProduct.sizeConfig.defaultSelected || activeProduct.sizeConfig.options[0]?.id || 'Free Size'
+  );
+  const [wishlisted, setWishlisted] = React.useState(false);
+  const [cartOpen, setCartOpen] = React.useState(false);
+  const [cartItems, setCartItems] = React.useState<CartItem[]>([]);
+
+  // Synchronize color and size when product changes
+  React.useEffect(() => {
+    setSelectedColor(activeProduct.selectedColorDefault);
+    setSelectedSize(
+      activeProduct.sizeConfig.defaultSelected || activeProduct.sizeConfig.options[0]?.id || 'Free Size'
+    );
+  }, [activeProduct.id]);
+
+  const swatches = activeProduct.swatches;
+
+  const colourOptions: ColourOption[] = React.useMemo(() => {
+    return Object.entries(swatches).map(([key, sw]) => ({
+      key,
+      label: sw.label,
+      template: sw.template || 'solid',
+      primaryColor: sw.primaryColor || (sw.gradient ? sw.gradient[0] : '#f3e6d8'),
+      secondaryColor: sw.secondaryColor || (sw.gradient ? sw.gradient[1] : '#d3aa75'),
+      tertiaryColor: sw.tertiaryColor,
+      quaternaryColor: sw.quaternaryColor,
+      colors: sw.colors,
+      colorCount: sw.colorCount,
+      gradient: sw.gradient,
+    }));
+  }, [swatches]);
 
   const handleAddToBag = () => {
+    const activeSwatch = swatches[selectedColor] || Object.values(swatches)[0];
     setCartItems([
       {
         id: Date.now().toString(),
-        name: 'Ivory Flow Mulberry Silk Saree',
-        color: SWATCHES[selectedColor as keyof typeof SWATCHES]?.label || selectedColor,
+        name: activeProduct.title,
+        color: activeSwatch?.label || selectedColor,
         size: selectedSize,
-        price: '₹3,299',
-        gradient: SWATCHES[selectedColor as keyof typeof SWATCHES]?.gradient || ['#f3e6d8', '#d3aa75'],
+        price: `₹${activeProduct.price.toLocaleString('en-IN')}`,
+        gradient: activeSwatch?.gradient || ['#f3e6d8', '#d3aa75'],
       },
     ]);
     setCartOpen(true);
@@ -182,21 +104,24 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
         <Breadcrumbs
           items={[
             { label: 'Home', onPress: onNavigateHome },
-            { label: 'Women', onPress: onNavigateCatalog },
-            { label: 'Handloom Sarees', onPress: onNavigateCatalog },
-            { label: 'Ivory Flow Mulberry Silk Saree' },
+            { label: activeProduct.categoryLabel, onPress: onNavigateCatalog },
+            {
+              label: activeProduct.weaveOrigin || `${activeProduct.fabric} Collection`,
+              onPress: onNavigateCatalog,
+            },
+            { label: activeProduct.title },
           ]}
         />
       }
       gallery={
         <ProductGallery
-          swatches={SWATCHES}
+          swatches={swatches}
           selectedColor={selectedColor}
           onSelectColor={setSelectedColor}
         >
           {isCompact ? (
             <ColourSelector
-              options={COLOUR_OPTIONS}
+              options={colourOptions}
               selected={selectedColor}
               onSelect={setSelectedColor}
               format="dots"
@@ -218,9 +143,9 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
           <YStack gap={6}>
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize={12} fontWeight="800" color={tokens.accent} letterSpacing={1.2} textTransform="uppercase">
-                VAANYA LUXE HERITAGE
+                {activeProduct.brand}
               </Text>
-              <RatingBadge rating={4.8} count={248} />
+              <RatingBadge rating={activeProduct.rating} count={activeProduct.reviewCount} />
             </XStack>
 
             <Text
@@ -230,17 +155,22 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
               letterSpacing={-0.5}
               lineHeight={isMobile ? 26 : 30}
             >
-              Ivory Flow Mulberry Silk Saree
+              {activeProduct.title}
             </Text>
 
             <Text fontSize={13} color={tokens.textSecondary} lineHeight={20}>
-              Handwoven with tested electroplated gold zari and certified 100% natural silk mark guarantee.
+              {activeProduct.description}
             </Text>
           </YStack>
 
           {/* Pricing */}
           <YStack paddingVertical={4}>
-            <PriceTag price={3299} originalPrice={4999} offPercent={34} size={isMobile ? 'md' : 'lg'} />
+            <PriceTag
+              price={activeProduct.price}
+              originalPrice={activeProduct.originalPrice > activeProduct.price ? activeProduct.originalPrice : undefined}
+              offPercent={activeProduct.discountPercent > 0 ? activeProduct.discountPercent : undefined}
+              size={isMobile ? 'md' : 'lg'}
+            />
             <Text fontSize={11} color={tokens.textMuted} marginTop={4}>
               Inclusive of all taxes. Free express shipping applied at checkout.
             </Text>
@@ -249,7 +179,7 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
           {/* Color Selector (Desktop only; on mobile & tablet it is located right below the carousel) */}
           {!isCompact ? (
             <ColourSelector
-              options={COLOUR_OPTIONS}
+              options={colourOptions}
               selected={selectedColor}
               onSelect={setSelectedColor}
               format="cards"
@@ -258,10 +188,12 @@ export function ProductDetailPage({ onNavigateHome, onNavigateCatalog }: Product
 
           {/* Size Selector */}
           <SizeSelector
-            sizes={FREE_SIZE_PRESET}
+            sizes={activeProduct.sizeConfig.options}
             selected={selectedSize}
             onSelect={setSelectedSize}
-            variant="free-size"
+            variant={activeProduct.sizeConfig.type}
+            customNotes={activeProduct.sizeConfig.customNotes}
+            category={activeProduct.category}
           />
 
           {/* CTA Buttons */}
