@@ -152,7 +152,7 @@ const ChatMediaItem = React.memo(({
                 Fetching...
               </Text>
             </>
-          ) : (
+          ) : onRetry ? (
             <>
               <IconButton 
                 icon={loadFailed ? "refresh" : isVideo ? "video-off-outline" : "image-off-outline"} 
@@ -162,6 +162,18 @@ const ChatMediaItem = React.memo(({
               />
               <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#475569', fontWeight: '600', textAlign: 'center', marginTop: 2 }}>
                 {loadFailed ? 'Failed (Tap)' : isVideo ? 'Video (Tap)' : 'Photo (Tap)'}
+              </Text>
+            </>
+          ) : (
+            <>
+              <IconButton 
+                icon={isVideo ? "video-off-outline" : "image-off-outline"} 
+                size={size > 120 ? 24 : 18} 
+                iconColor="#94a3b8" 
+                style={{ margin: 0 }} 
+              />
+              <Text style={{ fontSize: size > 120 ? 10 : 8, color: '#64748b', fontWeight: '500', textAlign: 'center', marginTop: 2 }}>
+                {isVideo ? 'Video' : 'Photo'}
               </Text>
             </>
           )}
@@ -298,7 +310,7 @@ export default function FullMessageBrowser() {
   const [retryingGroupId, setRetryingGroupId] = useState<string | null>(null);
   const [isBackfilling, setIsBackfilling] = useState(false);
 
-  const handleRetryMedia = useCallback(async (messageId: string): Promise<string | null> => {
+  const handleRetryMedia = useCallback(async (messageId: string, suppressAlert: boolean = false): Promise<string | null> => {
     setRetryingMessageId(messageId);
     try {
       const res = await waProcessorService.retryMediaDownload(messageId);
@@ -306,11 +318,15 @@ export default function FullMessageBrowser() {
         setMessages(prev => prev.map(m => m.messageId === messageId ? { ...m, mediaUrl: res.mediaUrl! } : m));
         return res.mediaUrl;
       } else {
-        Alert.alert('Media Download Failed', res.error || 'WhatsApp could not deliver the media file.');
+        if (!suppressAlert) {
+          Alert.alert('Media Download Failed', res.error || 'WhatsApp could not deliver the media file.');
+        }
         return null;
       }
     } catch (err: any) {
-      Alert.alert('Retry Error', err.message || 'Failed to retry download');
+      if (!suppressAlert) {
+        Alert.alert('Retry Error', err.message || 'Failed to retry download');
+      }
       return null;
     } finally {
       setRetryingMessageId(null);
@@ -318,11 +334,24 @@ export default function FullMessageBrowser() {
   }, [setMessages]);
 
   const handleRetryGroup = useCallback(async (group: MediaGroup) => {
-    setRetryingGroupId(group.groupId || 'group');
+    const key = group.id || group.groupId || 'group';
+    setRetryingGroupId(key);
+    let successCount = 0;
+    let failCount = 0;
     try {
-      const missingMsgs = group.messages.filter(m => !m.mediaUrl);
-      for (const m of missingMsgs) {
-        await handleRetryMedia(m.messageId);
+      // Find all messages in the group that lack active media (including hidden items)
+      const missingMsgs = group.messages.filter(m => !hasActiveMedia(m));
+      const toRetry = missingMsgs.length > 0 ? missingMsgs : group.messages;
+      for (const m of toRetry) {
+        const url = await handleRetryMedia(m.messageId, true);
+        if (url) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+      if (failCount > 0 && successCount === 0) {
+        Alert.alert('Group Media Retry', `Could not download media for ${failCount} item(s) from WhatsApp.`);
       }
     } finally {
       setRetryingGroupId(null);
@@ -879,7 +908,12 @@ export default function FullMessageBrowser() {
     );
   };
 
-  const renderMediaContent = useCallback((msg: Message, size: number, onPressOverride?: () => void) => (
+  const renderMediaContent = useCallback((
+    msg: Message, 
+    size: number, 
+    onPressOverride?: () => void,
+    allowIndividualRetry: boolean = true
+  ) => (
     <ChatMediaItem
       key={msg.messageId}
       msg={msg}
@@ -889,7 +923,7 @@ export default function FullMessageBrowser() {
           setPreviewData({ urls: [msg.mediaUrl], index: 0 });
         }
       })}
-      onRetry={handleRetryMedia}
+      onRetry={allowIndividualRetry ? handleRetryMedia : undefined}
     />
   ), [handleRetryMedia]);
 
@@ -916,8 +950,12 @@ export default function FullMessageBrowser() {
       const group = item as MediaGroup;
       const firstMsgId = group.messages[0]?.messageId;
       const activeMessages = group.messages.filter(hasActiveMedia);
-      const archivedCount = group.messages.length - activeMessages.length;
+      const missingMessages = group.messages.filter(m => !hasActiveMedia(m));
+      const archivedCount = missingMessages.length;
       const activeMediaUrls = activeMessages.map(m => m.mediaUrl).filter(Boolean) as string[];
+      const isGroupRetrying = retryingGroupId === (group.id || group.groupId || 'group');
+      const totalCount = group.messages.length;
+      const hiddenTotal = Math.max(0, totalCount - 4);
       
       // Collect any unique non-empty caption text across messages in the group
       const groupCaptions = Array.from(
@@ -950,14 +988,16 @@ export default function FullMessageBrowser() {
           <View style={[styles.messageRow, isFromMe ? styles.myMessageRow : styles.theirMessageRow]}>
             <TouchableOpacity 
               activeOpacity={0.9} 
-              onLongPress={() => zoningMode && firstMsgId && setHoveredMessageId(firstMsgId)}
+              onLongPress={() => firstMsgId && setHoveredMessageId(firstMsgId)}
               onPress={() => {
-                if (zoningMode && firstMsgId) {
+                if (firstMsgId) {
                   setHoveredMessageId(hoveredMessageId === firstMsgId ? null : firstMsgId);
-                } else {
-                  setHoveredMessageId(null);
                 }
               }}
+              {...(Platform.OS === 'web' ? {
+                onMouseEnter: () => firstMsgId && setHoveredMessageId(firstMsgId),
+                onMouseLeave: () => !zoningMode && setHoveredMessageId(null),
+              } : {})}
             >
               <Surface 
                 style={[
@@ -978,7 +1018,7 @@ export default function FullMessageBrowser() {
                 {activeMessages.length > 0 ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', maxWidth: 250, justifyContent: 'center' }}>
                     {activeMessages.slice(0, 4).map((msg, idx) => {
-                      const isFourthAndMore = idx === 3 && activeMessages.length > 4;
+                      const isFourthAndMore = idx === 3 && totalCount > 4;
                       return (
                         <View key={msg.messageId} style={{ position: 'relative' }}>
                           {renderMediaContent(
@@ -988,7 +1028,8 @@ export default function FullMessageBrowser() {
                               if (activeMediaUrls.length > 0) {
                                 setPreviewData({ urls: activeMediaUrls, index: idx });
                               }
-                            }
+                            },
+                            false // Individual sub-tiles inside group container do not show retry button
                           )}
                           {isFourthAndMore && (
                             <TouchableOpacity 
@@ -1000,7 +1041,7 @@ export default function FullMessageBrowser() {
                                 }
                               }}
                             >
-                              <Text style={styles.moreOverlayText}>+{activeMessages.length - 4}</Text>
+                              <Text style={styles.moreOverlayText}>+{hiddenTotal}</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -1012,7 +1053,7 @@ export default function FullMessageBrowser() {
                     <IconButton icon="image-off-outline" size={22} iconColor="#6366f1" style={{ margin: 0 }} />
                     <View style={{ flex: 1, marginLeft: 6 }}>
                       <Text style={styles.allArchivedTitle}>
-                        {group.messages.length} {group.messages.length === 1 ? 'photo/video' : 'photos/videos'} not downloaded
+                        {totalCount} {totalCount === 1 ? 'photo/video' : 'photos/videos'} not downloaded
                       </Text>
                       <Text style={styles.allArchivedSubtext}>
                         Original media is available on WhatsApp
@@ -1021,33 +1062,35 @@ export default function FullMessageBrowser() {
                     <Button 
                       mode="contained-tonal"
                       compact
-                      loading={retryingGroupId === (group.groupId || 'group')}
-                      disabled={retryingGroupId === (group.groupId || 'group')}
+                      loading={isGroupRetrying}
+                      disabled={isGroupRetrying}
                       onPress={() => handleRetryGroup(group)}
                       buttonColor="#e0e7ff"
                       textColor="#4338ca"
                       labelStyle={{ fontSize: 11, fontWeight: '700' }}
                     >
-                      {retryingGroupId === (group.groupId || 'group') ? 'Fetching...' : 'Fetch Media'}
+                      {isGroupRetrying ? 'Fetching...' : 'Fetch Media'}
                     </Button>
                   </View>
                 )}
 
                 {archivedCount > 0 && activeMessages.length > 0 && (
                   <TouchableOpacity 
-                    style={styles.archivedMediaBadge}
+                    style={styles.groupRetryBadge}
                     activeOpacity={0.7}
-                    disabled={retryingGroupId === (group.groupId || 'group')}
+                    disabled={isGroupRetrying}
                     onPress={() => handleRetryGroup(group)}
                   >
                     <IconButton 
-                      icon={retryingGroupId === (group.groupId || 'group') ? "loading" : "cloud-download-outline"} 
-                      size={14} 
+                      icon={isGroupRetrying ? "loading" : "cloud-download-outline"} 
+                      size={15} 
                       iconColor="#4338ca" 
-                      style={{ margin: 0, width: 16, height: 16 }} 
+                      style={{ margin: 0, width: 18, height: 18 }} 
                     />
-                    <Text style={[styles.archivedMediaBadgeText, { color: '#4338ca', fontWeight: '600' }]}>
-                      {retryingGroupId === (group.groupId || 'group') ? 'Fetching...' : `Fetch remaining ${archivedCount} ${archivedCount === 1 ? 'item' : 'items'}`}
+                    <Text style={styles.groupRetryBadgeText}>
+                      {isGroupRetrying 
+                        ? `Fetching ${archivedCount} media...` 
+                        : `Retry ${archivedCount} missing in group (${hiddenTotal > 0 ? `${hiddenTotal} hidden` : 'all'})`}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1060,25 +1103,35 @@ export default function FullMessageBrowser() {
               </Surface>
             </TouchableOpacity>
 
-            {zoningMode && firstMsgId && hoveredMessageId === firstMsgId && (
+            {firstMsgId && hoveredMessageId === firstMsgId && (
               <View style={[styles.controls, isFromMe ? styles.myControls : styles.theirControls]}>
                 <IconButton 
-                  icon="arrow-up-bold" 
+                  icon={isGroupRetrying ? "loading" : "cloud-sync-outline"} 
                   size={16} 
-                  onPress={() => handleMoveGroup(firstMsgId, group.groupId, 'prev')} 
-                  disabled={!hasPreviousGroup(group.groupId || '')}
+                  onPress={() => handleRetryGroup(group)} 
+                  disabled={isGroupRetrying}
                 />
-                <IconButton 
-                  icon="content-cut" 
-                  size={16} 
-                  onPress={() => handleSplitGroup(firstMsgId, group.groupId)} 
-                />
-                <IconButton 
-                  icon="arrow-down-bold" 
-                  size={16} 
-                  onPress={() => handleMoveGroup(firstMsgId, group.groupId, 'next')} 
-                  disabled={groupIndexForId(group.groupId || '') <= 0}
-                />
+                {zoningMode && (
+                  <>
+                    <IconButton 
+                      icon="arrow-up-bold" 
+                      size={16} 
+                      onPress={() => handleMoveGroup(firstMsgId, group.groupId, 'prev')} 
+                      disabled={!hasPreviousGroup(group.groupId || '')}
+                    />
+                    <IconButton 
+                      icon="content-cut" 
+                      size={16} 
+                      onPress={() => handleSplitGroup(firstMsgId, group.groupId)} 
+                    />
+                    <IconButton 
+                      icon="arrow-down-bold" 
+                      size={16} 
+                      onPress={() => handleMoveGroup(firstMsgId, group.groupId, 'next')} 
+                      disabled={groupIndexForId(group.groupId || '') <= 0}
+                    />
+                  </>
+                )}
               </View>
             )}
           </View>
@@ -1560,6 +1613,26 @@ const styles = StyleSheet.create({
   archivedMediaBadgeText: {
     fontSize: 11,
     color: '#475569',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  groupRetryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginTop: 6,
+    marginBottom: 2,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  groupRetryBadgeText: {
+    fontSize: 11,
+    color: '#3730A3',
     fontWeight: '600',
     marginLeft: 4,
   },
