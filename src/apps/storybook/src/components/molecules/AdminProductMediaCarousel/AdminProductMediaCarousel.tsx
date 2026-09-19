@@ -1,10 +1,8 @@
-import React from 'react';
-import { ScrollView, Pressable, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, Pressable } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuImage, LuPlay, LuLayoutGrid, LuLayers } from 'react-icons/lu';
-import { useTheme } from '../../../theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { useTheme, useResponsive } from '../../../theme';
 
 export interface MediaSlideItem {
   id: string;
@@ -31,9 +29,25 @@ export function AdminProductMediaCarousel({
   viewMode,
   onToggleViewMode,
   onMediaPress,
-  height = Math.round(SCREEN_WIDTH * 1.15),
+  height: heightProp,
 }: AdminProductMediaCarouselProps) {
   const { tokens } = useTheme();
+  const responsive = useResponsive();
+  const [layoutWidth, setLayoutWidth] = useState<number>(0);
+
+  const containerWidth =
+    layoutWidth > 0
+      ? layoutWidth
+      : typeof responsive.containerWidth === 'number' && responsive.containerWidth > 0
+      ? Number(responsive.containerWidth)
+      : 390;
+
+  const carouselHeight =
+    heightProp ??
+    Math.min(
+      Math.round(containerWidth * 1.05),
+      responsive.isMobile ? 400 : 500
+    );
 
   if (viewMode === 'gallery') {
     return (
@@ -161,10 +175,16 @@ export function AdminProductMediaCarousel({
   return (
     <YStack
       width="100%"
-      height={height}
+      height={carouselHeight}
       backgroundColor="#0a0a0a"
       position="relative"
       overflow="hidden"
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && w !== layoutWidth) {
+          setLayoutWidth(w);
+        }
+      }}
     >
       {/* Media Scroll Pager */}
       <ScrollView
@@ -173,7 +193,7 @@ export function AdminProductMediaCarousel({
         showsHorizontalScrollIndicator={false}
         onScroll={(e) => {
           const offsetX = e.nativeEvent.contentOffset.x;
-          const idx = Math.round(offsetX / (SCREEN_WIDTH || 1));
+          const idx = Math.round(offsetX / (containerWidth || 1));
           if (idx !== activeMediaIndex && idx >= 0 && idx < mediaList.length) {
             onMediaIndexChange(idx);
           }
@@ -183,8 +203,8 @@ export function AdminProductMediaCarousel({
       >
         {mediaList.length === 0 ? (
           <YStack
-            width={SCREEN_WIDTH}
-            height={height}
+            width={containerWidth}
+            height={carouselHeight}
             alignItems="center"
             justifyContent="center"
             gap={8}
@@ -204,8 +224,8 @@ export function AdminProductMediaCarousel({
               onPress={() => onMediaPress(idx)}
               style={
                 {
-                  width: SCREEN_WIDTH,
-                  height: height,
+                  width: containerWidth,
+                  height: carouselHeight,
                   cursor: 'pointer',
                   position: 'relative',
                   backgroundColor: '#0a0a0a',

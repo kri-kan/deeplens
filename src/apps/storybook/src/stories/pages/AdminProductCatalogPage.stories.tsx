@@ -7,103 +7,26 @@ import {
 import { ProductGridTileData } from '../../components/molecules/ProductGridTile';
 import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
+import { DIVERSE_CATALOG_PRODUCTS } from '../../data/catalog';
 
 // ─────────────────────────────────────────────
-// Mock Catalog Data
+// Authentic Catalog Data
 // ─────────────────────────────────────────────
 
-const MOCK_PRODUCTS: ProductGridTileData[] = [
-  {
-    id: 'sku-001',
-    productCode: 'SAR-KAN-901',
-    title: 'Kanjivaram Silk Saree',
-    price: 8499,
-    category: 'saree',
-    imageUri: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400&q=80',
-    isStarred: true,
-    timeAgo: '12m ago',
-  },
-  {
-    id: 'sku-002',
-    productCode: 'SAR-BAN-402',
-    title: 'Banarasi Zari Tissue',
-    price: 11200,
-    category: 'saree',
-    imageUri: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=400&q=80',
-    isStarred: false,
-    timeAgo: '45m ago',
-  },
-  {
-    id: 'sku-003',
-    productCode: 'DRS-ANA-103',
-    title: 'Floor Length Anarkali Gown',
-    price: 4599,
-    category: 'dress',
-    imageUri: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=400&q=80',
-    isStarred: true,
-    timeAgo: '2h ago',
-  },
-  {
-    id: 'sku-004',
-    productCode: 'LEH-BRD-504',
-    title: 'Crimson Velvet Bridal Lehanga',
-    price: 18500,
-    category: 'lehanga',
-    imageUri: 'https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=400&q=80',
-    isStarred: true,
-    timeAgo: '3h ago',
-  },
-  {
-    id: 'sku-005',
-    productCode: 'KID-KUR-205',
-    title: 'Boys Silk Kurta Pajama',
-    price: 1899,
-    category: 'kids',
-    imageUri: 'https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=400&q=80',
-    isStarred: false,
-    timeAgo: '5h ago',
-  },
-  {
-    id: 'sku-006',
-    productCode: 'SAR-COT-306',
-    title: 'Handloom Chanderi Cotton',
-    price: 2650,
-    category: 'saree',
-    imageUri: 'https://images.unsplash.com/photo-1609357605129-26f69add5d6e?w=400&q=80',
-    isStarred: false,
-    timeAgo: '1d ago',
-  },
-  {
-    id: 'sku-007',
-    productCode: 'DRS-MAX-707',
-    title: 'Floral Georgette Maxi Dress',
-    price: 3200,
-    category: 'dress',
-    imageUri: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400&q=80',
-    isStarred: false,
-    timeAgo: '1d ago',
-  },
-  {
-    id: 'sku-008',
-    productCode: 'GEN-DUP-808',
-    title: 'Phulkari Embroidered Dupatta',
-    price: 1450,
-    category: 'general',
-    imageUri: 'https://images.unsplash.com/photo-1601121141461-9d6647bca1ed?w=400&q=80',
-    isStarred: true,
-    timeAgo: '2d ago',
-  },
-  {
-    id: 'sku-009',
-    productCode: 'LEH-PAS-909',
-    title: 'Pastel Mint Party Lehanga',
-    price: 14200,
-    category: 'lehanga',
-    imageUri: 'https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=400&q=80',
-    isStarred: false,
-    timeAgo: '3d ago',
-  },
-];
+const MOCK_PRODUCTS: ProductGridTileData[] = DIVERSE_CATALOG_PRODUCTS.map((p, idx) => ({
+  id: p.id,
+  productCode: p.sku,
+  title: p.title,
+  price: p.price,
+  category: p.category,
+  imageUri:
+    p.mediaGallery[0] ||
+    Object.values(p.swatches)[0]?.images?.[0]?.url ||
+    '',
+  isStarred: idx % 2 === 0,
+  timeAgo: `${(idx + 1) * 15}m ago`,
+}));
+
 
 // ─────────────────────────────────────────────
 // Meta
