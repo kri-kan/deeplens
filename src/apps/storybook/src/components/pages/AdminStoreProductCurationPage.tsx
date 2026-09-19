@@ -39,6 +39,10 @@ import {
   LuSmartphone,
   LuTablet,
   LuMonitor,
+  LuSignal,
+  LuWifi,
+  LuLock,
+  LuExternalLink,
 } from 'react-icons/lu';
 import {
   ColorAssignmentPickerModal,
@@ -628,14 +632,18 @@ export function AdminStoreProductCurationPage({
   if (showPreview) {
     return (
       <YStack
-        width="100%"
-        flex={1}
-        minHeight="100vh"
-        backgroundColor="#090D16"
-        alignSelf="center"
-        position="relative"
+        position="fixed"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        width="100vw"
+        height="100vh"
+        backgroundColor="#070A11"
+        zIndex={99999}
+        overflow="hidden"
       >
-        {/* Sticky Curation Viewport Bar */}
+        {/* Sticky External Curation Viewport Bar (Completely Outside the Device Frame) */}
         <XStack
           backgroundColor="#0F172A"
           borderBottomWidth={1}
@@ -647,7 +655,10 @@ export function AdminStoreProductCurationPage({
           zIndex={50}
           width="100%"
           flexWrap="wrap"
-          gap={8}
+          gap={10}
+          shadowColor="#000000"
+          shadowOpacity={0.4}
+          shadowRadius={8}
         >
           {/* Left: Brand & Curated SKU Badge */}
           <XStack alignItems="center" gap={8}>
@@ -664,18 +675,27 @@ export function AdminStoreProductCurationPage({
                 LIVE CURATION
               </Text>
             </View>
+            <View style={{ backgroundColor: 'rgba(51,65,85,0.6)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 5 }}>
+              <Text fontSize={10} fontWeight="700" color="#94A3B8">
+                {previewDevice === 'mobile'
+                  ? '390 × 844 px · Mobile Phone'
+                  : previewDevice === 'tablet'
+                  ? '768 × 960 px · iPad Tablet'
+                  : '1240 × 880 px · macOS Browser'}
+              </Text>
+            </View>
           </XStack>
 
-          {/* Center: Responsive Device Switcher */}
-          <XStack alignItems="center" gap={4} backgroundColor="#1E293B" padding={3} borderRadius={8}>
+          {/* Center: Device Size Switcher Controls (OUTSIDE Device Frame) */}
+          <XStack alignItems="center" gap={4} backgroundColor="#1E293B" padding={3} borderRadius={8} borderWidth={1} borderColor="#334155">
             <Pressable
               onPress={() => setPreviewDevice('mobile')}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
                 borderRadius: 6,
                 backgroundColor: previewDevice === 'mobile' ? '#FFFFFF' : 'transparent',
               }}
@@ -692,8 +712,8 @@ export function AdminStoreProductCurationPage({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
                 borderRadius: 6,
                 backgroundColor: previewDevice === 'tablet' ? '#FFFFFF' : 'transparent',
               }}
@@ -710,8 +730,8 @@ export function AdminStoreProductCurationPage({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 5,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
                 borderRadius: 6,
                 backgroundColor: previewDevice === 'desktop' ? '#FFFFFF' : 'transparent',
               }}
@@ -749,40 +769,242 @@ export function AdminStoreProductCurationPage({
           width="100%"
           alignItems="center"
           justifyContent="flex-start"
-          paddingVertical={previewDevice === 'desktop' ? 0 : 20}
-          paddingHorizontal={previewDevice === 'desktop' ? 0 : 16}
+          overflowY="auto"
+          paddingVertical={28}
+          paddingHorizontal={16}
         >
-          <YStack
-            width={previewDevice === 'mobile' ? 390 : previewDevice === 'tablet' ? 768 : '100%'}
-            maxWidth="100%"
-            minHeight={previewDevice === 'desktop' ? '100vh' : 844}
-            backgroundColor="#FFFFFF"
-            borderRadius={previewDevice === 'desktop' ? 0 : 24}
-            borderWidth={previewDevice === 'desktop' ? 0 : 3}
-            borderColor={previewDevice === 'desktop' ? 'transparent' : '#334155'}
-            overflow="hidden"
-            shadowColor="#000000"
-            shadowOpacity={0.4}
-            shadowRadius={24}
-            elevation={12}
-          >
-            <FormFactorContext.Provider
-              value={{
-                factor: previewDevice,
-                isMobile: previewDevice === 'mobile',
-                isTablet: previewDevice === 'tablet',
-                isDesktop: previewDevice === 'desktop',
-                containerWidth: previewDevice === 'mobile' ? 390 : previewDevice === 'tablet' ? 768 : 1240,
-              }}
+          {/* ── 1. MOBILE HARDWARE FRAME (Dynamic Island & Smartphone Bezel) ── */}
+          {previewDevice === 'mobile' && (
+            <YStack
+              width={390}
+              maxWidth="100%"
+              height={844}
+              backgroundColor="#000000"
+              borderRadius={48}
+              borderWidth={10}
+              borderColor="#1E293B"
+              shadowColor="#000000"
+              shadowOpacity={0.65}
+              shadowRadius={36}
+              shadowOffset={{ width: 0, height: 18 }}
+              overflow="hidden"
+              position="relative"
             >
-              <ProductDetailPage
-                product={adaptedCatalogProduct}
-                curatedSpecs={specs}
-                onNavigateHome={() => setShowPreview(false)}
-                onNavigateCatalog={() => setShowPreview(false)}
-              />
-            </FormFactorContext.Provider>
-          </YStack>
+              {/* Dynamic Island Status Bar */}
+              <XStack
+                height={44}
+                backgroundColor="#000000"
+                paddingHorizontal={22}
+                alignItems="center"
+                justifyContent="space-between"
+                zIndex={30}
+              >
+                <Text fontSize={12} fontWeight="800" color="#FFFFFF" letterSpacing={-0.2}>
+                  9:41
+                </Text>
+                {/* Dynamic Island Capsule */}
+                <XStack
+                  width={110}
+                  height={26}
+                  borderRadius={13}
+                  backgroundColor="#0A0A0A"
+                  alignItems="center"
+                  justifyContent="flex-end"
+                  paddingHorizontal={8}
+                  gap={6}
+                >
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155' }} />
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#334155' }} />
+                </XStack>
+                {/* Signal, WiFi, Battery */}
+                <XStack alignItems="center" gap={5}>
+                  <LuSignal size={12} color="#FFFFFF" />
+                  <LuWifi size={12} color="#FFFFFF" />
+                  <XStack width={19} height={10} borderRadius={2.5} borderWidth={1} borderColor="#FFFFFF" padding={1} alignItems="center">
+                    <View style={{ width: '85%', height: '100%', borderRadius: 1.5, backgroundColor: '#10B981' }} />
+                  </XStack>
+                </XStack>
+              </XStack>
+
+              {/* Screen Viewport */}
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+                <FormFactorContext.Provider
+                  value={{
+                    factor: 'mobile',
+                    isMobile: true,
+                    isTablet: false,
+                    isDesktop: false,
+                    containerWidth: 390,
+                  }}
+                >
+                  <ProductDetailPage
+                    product={adaptedCatalogProduct}
+                    curatedSpecs={specs}
+                    onNavigateHome={() => setShowPreview(false)}
+                    onNavigateCatalog={() => setShowPreview(false)}
+                  />
+                </FormFactorContext.Provider>
+              </View>
+
+              {/* Bottom Home Indicator */}
+              <XStack height={20} backgroundColor="#FFFFFF" alignItems="center" justifyContent="center" zIndex={30}>
+                <View style={{ width: 134, height: 4, borderRadius: 2, backgroundColor: '#0F172A' }} />
+              </XStack>
+            </YStack>
+          )}
+
+          {/* ── 2. TABLET HARDWARE FRAME (iPad Bezel with Camera Dot) ── */}
+          {previewDevice === 'tablet' && (
+            <YStack
+              width={768}
+              maxWidth="100%"
+              height={960}
+              backgroundColor="#000000"
+              borderRadius={32}
+              borderWidth={14}
+              borderColor="#1E293B"
+              shadowColor="#000000"
+              shadowOpacity={0.6}
+              shadowRadius={36}
+              shadowOffset={{ width: 0, height: 18 }}
+              overflow="hidden"
+              position="relative"
+            >
+              {/* Tablet Top Bezel with Camera */}
+              <XStack
+                height={34}
+                backgroundColor="#0F172A"
+                paddingHorizontal={20}
+                alignItems="center"
+                justifyContent="space-between"
+                zIndex={30}
+              >
+                <Text fontSize={11} fontWeight="700" color="#94A3B8">
+                  9:41 AM  Mon Sep 19
+                </Text>
+                {/* Center Bezel Camera Lens */}
+                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#334155', borderWidth: 1, borderColor: '#475569' }} />
+                <XStack alignItems="center" gap={6}>
+                  <LuWifi size={12} color="#94A3B8" />
+                  <Text fontSize={10} fontWeight="700" color="#94A3B8">100%</Text>
+                  <XStack width={18} height={9} borderRadius={2.5} borderWidth={1} borderColor="#94A3B8" padding={1} alignItems="center">
+                    <View style={{ width: '100%', height: '100%', borderRadius: 1, backgroundColor: '#10B981' }} />
+                  </XStack>
+                </XStack>
+              </XStack>
+
+              {/* Screen Viewport */}
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+                <FormFactorContext.Provider
+                  value={{
+                    factor: 'tablet',
+                    isMobile: false,
+                    isTablet: true,
+                    isDesktop: false,
+                    containerWidth: 768,
+                  }}
+                >
+                  <ProductDetailPage
+                    product={adaptedCatalogProduct}
+                    curatedSpecs={specs}
+                    onNavigateHome={() => setShowPreview(false)}
+                    onNavigateCatalog={() => setShowPreview(false)}
+                  />
+                </FormFactorContext.Provider>
+              </View>
+
+              {/* Bottom Tablet Home Indicator */}
+              <XStack height={16} backgroundColor="#FFFFFF" alignItems="center" justifyContent="center" zIndex={30}>
+                <View style={{ width: 180, height: 4, borderRadius: 2, backgroundColor: '#0F172A' }} />
+              </XStack>
+            </YStack>
+          )}
+
+          {/* ── 3. DESKTOP HARDWARE FRAME (macOS Browser Window Frame) ── */}
+          {previewDevice === 'desktop' && (
+            <YStack
+              width="100%"
+              maxWidth={1240}
+              height={880}
+              backgroundColor="#0F172A"
+              borderRadius={14}
+              borderWidth={1}
+              borderColor="#334155"
+              shadowColor="#000000"
+              shadowOpacity={0.65}
+              shadowRadius={40}
+              shadowOffset={{ width: 0, height: 20 }}
+              overflow="hidden"
+              position="relative"
+            >
+              {/* macOS Browser Header Chrome */}
+              <XStack
+                height={42}
+                backgroundColor="#1E293B"
+                borderBottomWidth={1}
+                borderBottomColor="#334155"
+                paddingHorizontal={14}
+                alignItems="center"
+                justifyContent="space-between"
+                zIndex={30}
+                gap={12}
+              >
+                {/* Traffic Lights */}
+                <XStack alignItems="center" gap={7}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444' }} />
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#F59E0B' }} />
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#10B981' }} />
+                </XStack>
+
+                {/* Address Bar */}
+                <XStack
+                  flex={1}
+                  maxWidth={540}
+                  height={28}
+                  backgroundColor="#0F172A"
+                  borderRadius={6}
+                  borderWidth={1}
+                  borderColor="#334155"
+                  paddingHorizontal={10}
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={6}
+                >
+                  <LuLock size={11} color="#10B981" />
+                  <Text fontSize={11} color="#94A3B8" fontFamily="monospace">
+                    https://store.vayyari.com/p/{productCode}
+                  </Text>
+                </XStack>
+
+                {/* Right: External Link */}
+                <XStack alignItems="center" gap={8}>
+                  <View style={{ padding: 4, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.06)' }}>
+                    <LuExternalLink size={12} color="#94A3B8" />
+                  </View>
+                </XStack>
+              </XStack>
+
+              {/* Screen Viewport */}
+              <View style={{ flex: 1, backgroundColor: '#FFFFFF', overflow: 'hidden' }}>
+                <FormFactorContext.Provider
+                  value={{
+                    factor: 'desktop',
+                    isMobile: false,
+                    isTablet: false,
+                    isDesktop: true,
+                    containerWidth: 1240,
+                  }}
+                >
+                  <ProductDetailPage
+                    product={adaptedCatalogProduct}
+                    curatedSpecs={specs}
+                    onNavigateHome={() => setShowPreview(false)}
+                    onNavigateCatalog={() => setShowPreview(false)}
+                  />
+                </FormFactorContext.Provider>
+              </View>
+            </YStack>
+          )}
         </YStack>
       </YStack>
     );

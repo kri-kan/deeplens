@@ -5,13 +5,11 @@ import {
   INITIAL_COLOR_GROUPS,
   MOCK_CURATION_MEDIA,
 } from '../../components/organisms/StoreCuration/mockCurationData';
-import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 const meta: Meta<any> = {
   title: 'Pages/Admin/Store - Product Curation Workbench',
   component: AdminStoreProductCurationPage,
-  decorators: [withFormFactor('mobile', 'Store Product Curation (Mobile 390px)')],
   args: {
     ...THEME_ARGS,
     productId: 'prod-vf2b58',
