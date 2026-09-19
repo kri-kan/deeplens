@@ -262,7 +262,9 @@ export default function FullMessageBrowser() {
   const [loadingAudit, setLoadingAudit] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
-  const hasScrolledToTargetRef = useRef(false);
+  const initialLandingCompletedRef = useRef(false);
+  const userInteractedRef = useRef(false);
+  const initialScrollTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   const fetchMeta = useCallback(async (showLoading = false) => {
     if (!jid) return;
@@ -672,6 +674,7 @@ export default function FullMessageBrowser() {
   }, [groupedMessages, highlightGroupId, targetMessageId, matchesGroupId]);
 
   const scrollToTarget = useCallback((animated: boolean = false) => {
+    if (userInteractedRef.current) return;
     const targetIndex = findTargetIndex();
     if (targetIndex === -1 || !flatListRef.current) return;
 
@@ -689,38 +692,42 @@ export default function FullMessageBrowser() {
   const targetKey = useMemo(() => `${highlightGroupId || ''}_${targetMessageId || ''}`, [highlightGroupId, targetMessageId]);
 
   useEffect(() => {
-    hasScrolledToTargetRef.current = false;
+    initialLandingCompletedRef.current = false;
+    userInteractedRef.current = false;
+    initialScrollTimersRef.current.forEach(t => clearTimeout(t));
+    initialScrollTimersRef.current = [];
   }, [targetKey]);
 
-  // Initial scroll anchoring to target message: trigger as soon as messages are loaded and target is located
+  // One-shot initial scroll anchoring: lands user on target product/message exactly once on screen entry.
+  // As soon as the user scrolls away or the initial landing completes, scroll lock is permanently released.
   useEffect(() => {
     if (timelineLoading || groupedMessages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
-    if (hasScrolledToTargetRef.current) return;
+    if (initialLandingCompletedRef.current || userInteractedRef.current) return;
 
     const targetIndex = findTargetIndex();
     if (targetIndex !== -1) {
+      initialLandingCompletedRef.current = true;
       const timer = setTimeout(() => {
-        scrollToTarget(false);
-        hasScrolledToTargetRef.current = true;
-        // Secondary alignment after DOM/layout stabilizes
-        const secondaryTimer = setTimeout(() => {
+        if (!userInteractedRef.current) {
           scrollToTarget(false);
-        }, 100);
-        return () => clearTimeout(secondaryTimer);
+        }
       }, 50);
-      return () => clearTimeout(timer);
+
+      // Micro-alignment after initial layout stabilizes
+      const secondaryTimer = setTimeout(() => {
+        if (!userInteractedRef.current) {
+          scrollToTarget(false);
+        }
+      }, 150);
+
+      initialScrollTimersRef.current = [timer, secondaryTimer];
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(secondaryTimer);
+      };
     }
   }, [timelineLoading, groupedMessages, highlightGroupId, targetMessageId, findTargetIndex, scrollToTarget]);
-
-  // Re-anchor if zoningMode is toggled or groups change while targeting is active
-  useEffect(() => {
-    if ((highlightGroupId || targetMessageId) && !timelineLoading && !metaLoading && hasScrolledToTargetRef.current) {
-      const timer = setTimeout(() => {
-        scrollToTarget(false);
-      }, 60);
-      return () => clearTimeout(timer);
-    }
-  }, [zoningMode, groups, highlightGroupId, targetMessageId, timelineLoading, metaLoading, scrollToTarget]);
 
   const renderZoneCard = (groupId: string) => {
     const group = groupsMap.get(groupId);
@@ -1288,6 +1295,19 @@ export default function FullMessageBrowser() {
               windowSize={15}
               removeClippedSubviews={Platform.OS === 'android'}
               maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              onScrollBeginDrag={() => {
+                userInteractedRef.current = true;
+                initialLandingCompletedRef.current = true;
+                initialScrollTimersRef.current.forEach(t => clearTimeout(t));
+                initialScrollTimersRef.current = [];
+                setPulseActive(false);
+              }}
+              onMomentumScrollBegin={() => {
+                userInteractedRef.current = true;
+                initialLandingCompletedRef.current = true;
+                initialScrollTimersRef.current.forEach(t => clearTimeout(t));
+                initialScrollTimersRef.current = [];
+              }}
               onScroll={(e) => {
                 const y = e.nativeEvent.contentOffset.y;
                 if (y > 200 || !isLatestLoaded) {
@@ -1300,9 +1320,11 @@ export default function FullMessageBrowser() {
                 }
               }}
               onScrollToIndexFailed={(info) => {
+                if (userInteractedRef.current) return;
                 console.log("[DEBUG] onScrollToIndexFailed triggered. Target:", info.index, "Average Length:", info.averageItemLength);
                 flatListRef.current?.scrollToOffset({ offset: Math.max(0, info.averageItemLength * info.index), animated: false });
                 setTimeout(() => {
+                  if (userInteractedRef.current) return;
                   try {
                     flatListRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0.5 });
                   } catch (e) {
