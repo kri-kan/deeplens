@@ -199,11 +199,12 @@ export const Stage3eFourSlotQuadColorPickerModalOpen: Story = {
 };
 
 /**
- * 4. Stage 4: Metadata, AI Story & Pricing:
- * AI craft description generation and commercial pricing margin calculator.
+ * 4. Stage 4: Metadata, Specifications & AI Derivation:
+ * 4-section modular editor (Craft & Fabric Specs, Commercial Pricing & Margins, Sizing & Tailoring, Occasions & Facets)
+ * with One-Click '✨ AI Auto-Derive All' engine.
  */
 export const Stage4MetadataAndPricing: Story = {
-  name: '4. Dedicated Product Metadata Screen (Story, AI & Margins)',
+  name: '4. Metadata & Specs: 4-Section Editor with AI Auto-Derivation',
   args: {
     initialScreen: 'metadata',
     initialShowPreview: false,

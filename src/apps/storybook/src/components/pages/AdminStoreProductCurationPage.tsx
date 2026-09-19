@@ -56,7 +56,10 @@ import {
   StoreCurationMediaItem,
   StoreColorGroup,
   StoreProductLifecycleState,
+  ProductCurationSpecs,
+  DEFAULT_SAREE_SPECS,
 } from '../organisms/StoreCuration/types';
+import { StoreProductEnrichmentSection } from '../organisms/StoreCuration/StoreProductEnrichmentSection';
 import {
   INITIAL_COLOR_GROUPS,
   MOCK_CURATION_MEDIA,
@@ -174,6 +177,7 @@ export function AdminStoreProductCurationPage({
   const [description, setDescription] = useState(initialDescription);
   const [mrp, setMrp] = useState(initialMrp.toString());
   const [salePrice, setSalePrice] = useState(initialSalePrice.toString());
+  const [specs, setSpecs] = useState<ProductCurationSpecs>(DEFAULT_SAREE_SPECS);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
 
@@ -1518,135 +1522,19 @@ export function AdminStoreProductCurationPage({
            ========================================================================= */}
         {currentScreen === 'metadata' && (
           <YStack gap={14}>
-            <YStack gap={2}>
-              <Text fontSize={13} fontWeight="800" color={tokens.text}>
-                4. Story &amp; Commercial Margins
-              </Text>
-              <Text fontSize={11} color={tokens.textMuted}>
-                Set craft narrative and commercial pricing margins for the live PDP.
-              </Text>
-            </YStack>
-
-            {/* AI Craft Description Generator */}
-            <YStack
-              backgroundColor={tokens.surface}
-              borderRadius={tokens.radius.md}
-              borderWidth={1}
-              borderColor={tokens.border}
-              padding={12}
-              gap={8}
-            >
-              <XStack alignItems="center" justifyContent="space-between">
-                <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
-                  Weave &amp; Craft Narrative:
-                </Text>
-                <Pressable
-                  onPress={handleAiGenerateDescription}
-                  disabled={isAiGenerating}
-                  style={styles.aiGenBtn}
-                >
-                  <LuSparkles size={12} color={tokens.accent} />
-                  <Text fontSize={10} fontWeight="800" color={tokens.accent}>
-                    {isAiGenerating ? 'Synthesizing...' : '✨ AI Generate'}
-                  </Text>
-                </Pressable>
-              </XStack>
-
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={3}
-                style={styles.descriptionInput}
-                placeholder="Enter weaver narrative, zari details, and drape feel..."
-              />
-            </YStack>
-
-            {/* Pricing & Margin Calculator */}
-            <YStack
-              backgroundColor={tokens.surface}
-              borderRadius={tokens.radius.md}
-              borderWidth={1}
-              borderColor={tokens.border}
-              padding={12}
-              gap={10}
-            >
-              <Text fontSize={11} fontWeight="800" color={tokens.text} textTransform="uppercase">
-                Commercial Pricing Engine:
-              </Text>
-
-              <XStack gap={10}>
-                <YStack flex={1} gap={4}>
-                  <Text fontSize={10} color={tokens.textMuted}>
-                    MRP (Strikethrough):
-                  </Text>
-                  <XStack alignItems="center" style={styles.currencyInputBox}>
-                    <Text fontSize={12} color={tokens.textMuted}>
-                      ₹
-                    </Text>
-                    <TextInput
-                      value={mrp}
-                      onChangeText={setMrp}
-                      keyboardType="numeric"
-                      style={styles.currencyTextInput}
-                    />
-                  </XStack>
-                </YStack>
-
-                <YStack flex={1} gap={4}>
-                  <Text fontSize={10} color={tokens.textMuted}>
-                    Sale Price (Selling Rate):
-                  </Text>
-                  <XStack alignItems="center" style={styles.currencyInputBox}>
-                    <Text fontSize={12} fontWeight="800" color={tokens.accent}>
-                      ₹
-                    </Text>
-                    <TextInput
-                      value={salePrice}
-                      onChangeText={setSalePrice}
-                      keyboardType="numeric"
-                      style={[styles.currencyTextInput, { fontWeight: '800', color: tokens.text }]}
-                    />
-                  </XStack>
-                </YStack>
-              </XStack>
-
-              {/* Profit Margin Summary */}
-              <XStack
-                backgroundColor={tokens.surfaceRaised}
-                borderRadius={6}
-                padding={8}
-                alignItems="center"
-                justifyContent="space-between"
-              >
-                <YStack>
-                  <Text fontSize={9} color={tokens.textMuted}>
-                    Base Landed Cost:
-                  </Text>
-                  <Text fontSize={11} fontWeight="700" color={tokens.text}>
-                    ₹{baseCostPrice.toLocaleString('en-IN')}
-                  </Text>
-                </YStack>
-
-                <YStack alignItems="center">
-                  <Text fontSize={9} color={tokens.textMuted}>
-                    Discount:
-                  </Text>
-                  <Text fontSize={11} fontWeight="800" color="#10B981">
-                    {discountPercent}% OFF
-                  </Text>
-                </YStack>
-
-                <YStack alignItems="flex-end">
-                  <Text fontSize={9} color={tokens.textMuted}>
-                    Gross Margin:
-                  </Text>
-                  <Text fontSize={11} fontWeight="800" color={tokens.accent}>
-                    ₹{grossMargin.toLocaleString('en-IN')} ({marginPercent}%)
-                  </Text>
-                </YStack>
-              </XStack>
-            </YStack>
+            <StoreProductEnrichmentSection
+              title={title}
+              fabric={specs.fabricName}
+              description={description}
+              baseCostPrice={baseCostPrice}
+              mrp={mrp}
+              salePrice={salePrice}
+              specs={specs}
+              onChangeDescription={setDescription}
+              onChangeMrp={setMrp}
+              onChangeSalePrice={setSalePrice}
+              onChangeSpecs={setSpecs}
+            />
           </YStack>
         )}
       </ScrollView>
