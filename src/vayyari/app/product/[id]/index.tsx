@@ -145,18 +145,24 @@ export default function ProductDetailScreen() {
   };
 
   // Open WhatsApp Source Chat
-  const handleOpenWhatsAppListing = (listing: VendorListingItemData) => {
-    if (listing.sourceJid) {
-      router.push({
-        pathname: '/utilities/whatsapp/messages/[jid]',
-        params: {
-          jid: listing.sourceJid,
-          name: 'Source Chat',
-          highlightGroupId: listing.sourceGroupId || '',
-          initialZoningMode: 'true',
-        },
-      } as any);
+  const handleOpenWhatsAppListing = (listing?: VendorListingItemData) => {
+    const targetJid = listing?.sourceJid || product?.sourceJid;
+    const targetGroupId = listing?.sourceGroupId || product?.sourceGroupId;
+
+    if (!targetJid) {
+      Alert.alert('No WhatsApp Source', 'This product does not have an associated WhatsApp chat.');
+      return;
     }
+
+    router.push({
+      pathname: '/utilities/whatsapp/messages/[jid]',
+      params: {
+        jid: targetJid,
+        name: listing?.vendorName || product?.title || 'Source Chat',
+        highlightGroupId: targetGroupId || '',
+        initialZoningMode: 'true',
+      },
+    } as any);
   };
 
   // Format product data for presentation

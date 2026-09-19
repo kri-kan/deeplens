@@ -13,6 +13,19 @@ import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEnd
 const BASE_URL = getWhatsappProcessorUrl() ?? 'http://localhost:3005';
 const PAGE_SIZE = 50;
 
+async function handleResponseError(res: Response): Promise<never> {
+  let errorText = '';
+  try {
+    errorText = await res.text();
+  } catch {
+    errorText = res.statusText || 'Unknown error';
+  }
+  if (res.status === 502 || res.status === 503 || res.status === 504 || errorText.includes('<html')) {
+    throw new Error(`WhatsApp processor service is temporarily unavailable (${res.status}). Please try again.`);
+  }
+  throw new Error(`WA Processor ${res.status}: ${errorText}`);
+}
+
 async function get<T>(path: string): Promise<T> {
   const token = await identityService.getAccessTokenWithRefresh();
   const res = await fetch(`${BASE_URL}/api${path}`, {
@@ -21,7 +34,7 @@ async function get<T>(path: string): Promise<T> {
       'Authorization': `Bearer ${token}`
     },
   });
-  if (!res.ok) throw new Error(`WA Processor ${res.status}: ${await res.text()}`);
+  if (!res.ok) await handleResponseError(res);
   return res.json() as Promise<T>;
 }
 
@@ -35,7 +48,7 @@ async function post<T = void>(path: string, body?: object): Promise<T> {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`WA Processor ${res.status}: ${await res.text()}`);
+  if (!res.ok) await handleResponseError(res);
   if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -49,7 +62,7 @@ async function del<T = void>(path: string): Promise<T> {
       'Authorization': `Bearer ${token}`
     },
   });
-  if (!res.ok) throw new Error(`WA Processor ${res.status}: ${await res.text()}`);
+  if (!res.ok) await handleResponseError(res);
   if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return res.json() as Promise<T>;
 }
@@ -64,7 +77,7 @@ async function patch<T = void>(path: string, body?: object): Promise<T> {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`WA Processor ${res.status}: ${await res.text()}`);
+  if (!res.ok) await handleResponseError(res);
   if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
   return res.json() as Promise<T>;
 }

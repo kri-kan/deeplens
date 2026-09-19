@@ -61,7 +61,16 @@ export function useIntelligentChatTimeline({
         setIsLatestLoaded(!isHistoricalTarget);
 
         if (targetMessageId) {
-          const idx = res.messages.findIndex((m) => m.messageId === targetMessageId);
+          const idx = res.messages.findIndex((m) => 
+            m.messageId === targetMessageId || 
+            m.messageId?.toLowerCase() === targetMessageId.toLowerCase()
+          );
+          setTargetIndex(idx);
+        } else if (highlightGroupId) {
+          const idx = res.messages.findIndex((m) => 
+            m.groupId === highlightGroupId || 
+            (m.groupId && (m.groupId.includes(highlightGroupId) || highlightGroupId.includes(m.groupId)))
+          );
           setTargetIndex(idx);
         } else {
           setTargetIndex(-1);

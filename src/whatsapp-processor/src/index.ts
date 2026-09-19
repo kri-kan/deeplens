@@ -45,7 +45,8 @@ async function initializeServices() {
     app.use(cors(corsOptions));
     app.use(express.json());
 
-    // --- Health Check ---
+    // --- Health & Root Check ---
+    app.get('/', (req, res) => res.json({ status: 'ok', service: 'whatsapp-processor', tenant: TENANT_NAME }));
     app.get('/health', (req, res) => res.json({ status: 'ok', tenant: TENANT_NAME }));
 
     // --- Swagger Docs ---
@@ -62,17 +63,7 @@ async function initializeServices() {
     const { groupReadinessService } = await import('./services/group-readiness.service');
     groupReadinessService.setSocketIo(io);
 
-    // Initialize DeepLens integration service
-    const { deepLensIntegration } = await import('./services/deeplens-integration.service');
-    await deepLensIntegration.start();
-    logger.info('DeepLens integration service started');
-
     const waService = new WhatsAppService(io);
-    await waService.start();
-
-    // Initialize product created write-back consumer
-    const { productCreatedConsumer } = await import('./services/product-created-consumer.service');
-    await productCreatedConsumer.start(io);
 
     // --- API Routes ---
     const apiRouter = Router();
@@ -88,17 +79,35 @@ async function initializeServices() {
 
     app.use('/api', apiRouter);
 
-    // Verify DB Sync
-    const client = getWhatsAppDbClient();
-    if (client) {
-        const res = await client.query('SELECT COUNT(*) FROM wa.chats');
-        logger.info(`Database Sync: ${res.rows[0].count} chats in 'chats' table.`);
-    }
-
-    // --- Start Server ---
-    server.listen(API_PORT, () => {
+    // --- Start Server Early ---
+    server.listen(API_PORT, '0.0.0.0', () => {
         logger.info(`Dashboard running on port ${API_PORT} for Tenant: ${TENANT_NAME}`);
     });
+
+    // --- Background Services Initialization (non-blocking) ---
+    (async () => {
+        try {
+            // Initialize DeepLens integration service
+            const { deepLensIntegration } = await import('./services/deeplens-integration.service');
+            await deepLensIntegration.start();
+            logger.info('DeepLens integration service started');
+
+            await waService.start();
+
+            // Initialize product created write-back consumer
+            const { productCreatedConsumer } = await import('./services/product-created-consumer.service');
+            await productCreatedConsumer.start(io);
+
+            // Verify DB Sync
+            const client = getWhatsAppDbClient();
+            if (client) {
+                const res = await client.query('SELECT COUNT(*) FROM wa.chats');
+                logger.info(`Database Sync: ${res.rows[0].count} chats in 'chats' table.`);
+            }
+        } catch (bgErr: any) {
+            logger.error({ err: bgErr }, 'Error starting background WhatsApp services');
+        }
+    })();
 }
 
 // --- Start Application ---

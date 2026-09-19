@@ -205,21 +205,44 @@ const ChatMediaItem = React.memo(({
 
 export default function FullMessageBrowser() {
   const theme = useTheme();
-  const { 
-    jid, 
-    name, 
-    highlightGroupId, 
-    initialZoningMode,
-    targetMessageId,
-    targetTimestamp 
-  } = useLocalSearchParams<{ 
+  const rawParams = useLocalSearchParams<{ 
     jid: string, 
     name?: string, 
     highlightGroupId?: string, 
+    targetGroupId?: string,
+    sourceGroupId?: string,
     initialZoningMode?: string,
     targetMessageId?: string,
     targetTimestamp?: string
   }>();
+
+  const rawJid = Array.isArray(rawParams.jid) ? rawParams.jid[0] : rawParams.jid;
+  const jid = rawJid ? (() => {
+    try {
+      return decodeURIComponent(rawJid);
+    } catch {
+      return rawJid;
+    }
+  })() : '';
+
+  const name = Array.isArray(rawParams.name) ? rawParams.name[0] : rawParams.name;
+
+  // Resilient group / message targeting: accept highlightGroupId, targetGroupId, and sourceGroupId
+  const rawTargetGroup = rawParams.highlightGroupId || rawParams.targetGroupId || rawParams.sourceGroupId;
+  const rawTargetMessage = rawParams.targetMessageId;
+
+  // Auto-detect if targetMessageId was passed as a group ID (e.g. product_... or sticker_... or ...@g.us_...)
+  const isMessageIdActuallyGroup = rawTargetMessage && (
+    rawTargetMessage.startsWith('product_') || 
+    rawTargetMessage.startsWith('sticker_') || 
+    rawTargetMessage.includes('@g.us_')
+  );
+
+  const highlightGroupId = isMessageIdActuallyGroup ? rawTargetMessage : rawTargetGroup;
+  const targetMessageId = isMessageIdActuallyGroup ? undefined : rawTargetMessage;
+  const targetTimestamp = rawParams.targetTimestamp;
+  const initialZoningMode = rawParams.initialZoningMode;
+
   const [pulseActive, setPulseActive] = useState(true);
 
   useEffect(() => {
@@ -276,6 +299,7 @@ export default function FullMessageBrowser() {
   const flatListRef = useRef<FlatList>(null);
   const initialLandingCompletedRef = useRef(false);
   const userInteractedRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
   const initialScrollTimersRef = useRef<NodeJS.Timeout[]>([]);
 
   const fetchMeta = useCallback(async (showLoading = false) => {
@@ -651,13 +675,22 @@ export default function FullMessageBrowser() {
   }, [messages]);
 
   const matchesGroupId = useCallback((itemGroupId?: string, targetGroupId?: string, itemTs?: number) => {
-    if (!targetGroupId) return false;
-    if (itemGroupId && (
+    if (!targetGroupId || !itemGroupId) return false;
+    if (
       itemGroupId === targetGroupId || 
+      itemGroupId.toLowerCase() === targetGroupId.toLowerCase() ||
       itemGroupId.endsWith(targetGroupId) || 
       targetGroupId.endsWith(itemGroupId) || 
       itemGroupId.includes(targetGroupId) || 
       targetGroupId.includes(itemGroupId)
+    ) {
+      return true;
+    }
+    // Check if groupsMap maps this group to targetGroupId as deeplensProductId
+    const grp = groupsMap.get(itemGroupId);
+    if (grp?.deeplensProductId && (
+      grp.deeplensProductId === targetGroupId || 
+      grp.deeplensProductId.toLowerCase() === targetGroupId.toLowerCase()
     )) {
       return true;
     }
@@ -669,11 +702,11 @@ export default function FullMessageBrowser() {
       }
     }
     return false;
-  }, []);
+  }, [groupsMap]);
 
   const isItemHighlighted = useCallback((groupId?: string, msgId?: string, timestamp?: number) => {
     if (!pulseActive) return false;
-    if (targetMessageId && msgId === targetMessageId) return true;
+    if (targetMessageId && msgId && (msgId === targetMessageId || msgId.toLowerCase() === targetMessageId.toLowerCase())) return true;
     if (highlightGroupId && matchesGroupId(groupId, highlightGroupId, timestamp)) return true;
     return false;
   }, [pulseActive, targetMessageId, highlightGroupId, matchesGroupId]);
@@ -690,14 +723,38 @@ export default function FullMessageBrowser() {
   const findTargetIndex = useCallback(() => {
     if (!highlightGroupId && !targetMessageId) return -1;
     return groupedMessages.findIndex(item => {
-      if (targetMessageId && 'messageId' in item && item.messageId === targetMessageId) return true;
-      if (highlightGroupId && matchesGroupId(item.groupId, highlightGroupId, item.timestamp)) return true;
-      if ('messages' in item && Array.isArray(item.messages)) {
-        return item.messages.some((m: any) => 
-          (targetMessageId && m.messageId === targetMessageId) ||
-          (highlightGroupId && matchesGroupId(m.groupId, highlightGroupId, m.timestamp))
-        );
+      // 1. Direct message ID match (case-insensitive)
+      if (targetMessageId) {
+        if ('messageId' in item && (
+          item.messageId === targetMessageId || 
+          item.messageId?.toLowerCase() === targetMessageId.toLowerCase()
+        )) {
+          return true;
+        }
+        if ('messages' in item && Array.isArray(item.messages)) {
+          if (item.messages.some((m: any) => 
+            m.messageId === targetMessageId || 
+            m.messageId?.toLowerCase() === targetMessageId.toLowerCase()
+          )) {
+            return true;
+          }
+        }
       }
+
+      // 2. Group ID match
+      if (highlightGroupId) {
+        if (item.groupId && matchesGroupId(item.groupId, highlightGroupId, item.timestamp)) {
+          return true;
+        }
+        if ('messages' in item && Array.isArray(item.messages)) {
+          if (item.messages.some((m: any) => 
+            matchesGroupId(m.groupId, highlightGroupId, m.timestamp)
+          )) {
+            return true;
+          }
+        }
+      }
+
       return false;
     });
   }, [groupedMessages, highlightGroupId, targetMessageId, matchesGroupId]);
@@ -708,12 +765,17 @@ export default function FullMessageBrowser() {
     if (targetIndex === -1 || !flatListRef.current) return;
 
     try {
+      isProgrammaticScrollRef.current = true;
       flatListRef.current.scrollToIndex({
         index: targetIndex,
         animated,
         viewPosition: 0.5,
       });
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 350);
     } catch (e) {
+      isProgrammaticScrollRef.current = false;
       console.warn("[FullMessageBrowser] scrollToIndex attempt failed:", e);
     }
   }, [findTargetIndex]);
@@ -740,14 +802,14 @@ export default function FullMessageBrowser() {
         if (!userInteractedRef.current) {
           scrollToTarget(false);
         }
-      }, 50);
+      }, 60);
 
       // Micro-alignment after initial layout stabilizes
       const secondaryTimer = setTimeout(() => {
         if (!userInteractedRef.current) {
           scrollToTarget(false);
         }
-      }, 150);
+      }, 250);
 
       initialScrollTimersRef.current = [timer, secondaryTimer];
 
@@ -1343,7 +1405,15 @@ export default function FullMessageBrowser() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               ListFooterComponent={loadingOlder ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
               ListHeaderComponent={loadingNewer ? <ActivityIndicator style={{ margin: 10 }} color="#25D366" /> : null}
-              initialNumToRender={(highlightGroupId || targetMessageId) && groupedMessages.length > 0 ? Math.min(25, groupedMessages.length) : 25}
+              initialNumToRender={(() => {
+                const targetIdx = findTargetIndex();
+                if (targetIdx !== -1) {
+                  return Math.max(30, targetIdx + 10);
+                }
+                return (highlightGroupId || targetMessageId) && groupedMessages.length > 0
+                  ? Math.min(30, groupedMessages.length)
+                  : 25;
+              })()}
               maxToRenderPerBatch={30}
               windowSize={15}
               removeClippedSubviews={Platform.OS === 'android'}
@@ -1356,6 +1426,9 @@ export default function FullMessageBrowser() {
                 setPulseActive(false);
               }}
               onMomentumScrollBegin={() => {
+                if (isProgrammaticScrollRef.current) {
+                  return;
+                }
                 userInteractedRef.current = true;
                 initialLandingCompletedRef.current = true;
                 initialScrollTimersRef.current.forEach(t => clearTimeout(t));
@@ -1375,15 +1448,30 @@ export default function FullMessageBrowser() {
               onScrollToIndexFailed={(info) => {
                 if (userInteractedRef.current) return;
                 console.log("[DEBUG] onScrollToIndexFailed triggered. Target:", info.index, "Average Length:", info.averageItemLength);
-                flatListRef.current?.scrollToOffset({ offset: Math.max(0, info.averageItemLength * info.index), animated: false });
-                setTimeout(() => {
+                isProgrammaticScrollRef.current = true;
+                flatListRef.current?.scrollToOffset({
+                  offset: Math.max(0, info.averageItemLength * info.index),
+                  animated: false,
+                });
+                const retryTimer = setTimeout(() => {
+                  isProgrammaticScrollRef.current = false;
                   if (userInteractedRef.current) return;
                   try {
-                    flatListRef.current?.scrollToIndex({ index: info.index, animated: false, viewPosition: 0.5 });
+                    isProgrammaticScrollRef.current = true;
+                    flatListRef.current?.scrollToIndex({
+                      index: info.index,
+                      animated: false,
+                      viewPosition: 0.5,
+                    });
+                    setTimeout(() => {
+                      isProgrammaticScrollRef.current = false;
+                    }, 350);
                   } catch (e) {
+                    isProgrammaticScrollRef.current = false;
                     console.warn("[DEBUG] Retry scroll failed", e);
                   }
-                }, 100);
+                }, 150);
+                initialScrollTimersRef.current.push(retryTimer);
               }}
             />
 
