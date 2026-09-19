@@ -52,6 +52,12 @@ import {
 } from '../atoms/SwatchDot/CustomSwatchDot';
 import { CarouselDot } from '../atoms/CarouselDot/CarouselDot';
 import { CurationHubTile } from '../molecules/CurationHubTile';
+import { SizeSelector } from '../organisms/SizeSelector/SizeSelector';
+import {
+  LETTER_SIZE_PRESET,
+  BLOUSE_NUMERIC_PRESET,
+  KIDS_SIZE_PRESET,
+} from '../../data/catalog';
 import {
   StoreCurationMediaItem,
   StoreColorGroup,
@@ -714,6 +720,35 @@ export function AdminStoreProductCurationPage({
             <Text fontSize={12} color="#475569" lineHeight={18}>
               {description}
             </Text>
+          </YStack>
+
+          {/* 4. Sizing & Drape Section */}
+          <YStack paddingHorizontal={14} paddingVertical={8} borderTopWidth={1} borderTopColor="#F1F5F9">
+            <SizeSelector
+              sizes={
+                specs.sizeProfile === 'no-size' || specs.sizeProfile === 'free-size'
+                  ? [
+                      {
+                        id: specs.noSizeVariant === 'free-size' ? 'free_size' : 'one_size',
+                        label: specs.noSizeVariant === 'free-size' ? 'Free Size' : 'One Size',
+                        subtitle: specs.sizeDrapeText || '5.5m Saree + 0.8m Unstitched Blouse Piece',
+                        badge: specs.noSizeVariant === 'free-size' ? 'Free Size Stitched' : 'Universal Drape',
+                      },
+                    ]
+                  : (specs.sizeProfile === 'kids'
+                      ? KIDS_SIZE_PRESET
+                      : specs.sizeProfile === 'numeric'
+                      ? BLOUSE_NUMERIC_PRESET
+                      : LETTER_SIZE_PRESET
+                    ).map((opt) => ({
+                      ...opt,
+                      disabled: specs.availableSizes ? specs.availableSizes[opt.id] === false : false,
+                    }))
+              }
+              variant={specs.sizeProfile || 'no-size'}
+              customNotes={specs.customNotes}
+              category={specs.category}
+            />
           </YStack>
         </ScrollView>
       </YStack>
