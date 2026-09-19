@@ -23,27 +23,33 @@ export async function initializeMessageQueue() {
             );
             logger.info(`Startup recovery completed. Reset ${recoveryRes.rowCount} stuck messages.`);
 
-            // Recovery of stuck product creation events
-            logger.info('Re-emitting stuck product create events for groups in product_create_sent...');
-            const stuckGroupsRes = await client.query(
-                `SELECT group_id FROM wa.message_groups 
-                 WHERE status = 'product_create_sent' AND deeplens_product_id IS NULL`
-            );
-            if (stuckGroupsRes.rows.length > 0) {
-                const { groupReadinessService } = await import('./services/group-readiness.service');
-                for (const row of stuckGroupsRes.rows) {
-                    try {
-                        logger.info({ groupId: row.group_id }, 'Re-emitting stuck product creation');
-                        await client.query(
-                            `UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`,
-                            [row.group_id]
-                        );
-                        await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
-                    } catch (rowErr: any) {
-                        logger.warn({ err: rowErr.message, groupId: row.group_id }, 'Could not re-emit stuck product creation during startup');
+            // Recovery of stuck product creation events (run asynchronously in background to avoid blocking HTTP listen)
+            setImmediate(async () => {
+                try {
+                    logger.info('Re-emitting stuck product create events for groups in product_create_sent...');
+                    const stuckGroupsRes = await client.query(
+                        `SELECT group_id FROM wa.message_groups 
+                         WHERE status = 'product_create_sent' AND deeplens_product_id IS NULL`
+                    );
+                    if (stuckGroupsRes.rows.length > 0) {
+                        const { groupReadinessService } = await import('./services/group-readiness.service');
+                        for (const row of stuckGroupsRes.rows) {
+                            try {
+                                logger.info({ groupId: row.group_id }, 'Re-emitting stuck product creation');
+                                await client.query(
+                                    `UPDATE wa.message_groups SET status = 'staging' WHERE group_id = $1`,
+                                    [row.group_id]
+                                );
+                                await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
+                            } catch (rowErr: any) {
+                                logger.warn({ err: rowErr.message, groupId: row.group_id }, 'Could not re-emit stuck product creation during startup');
+                            }
+                        }
                     }
+                } catch (bgRecoveryErr: any) {
+                    logger.error({ err: bgRecoveryErr.message }, 'Failed background recovery of stuck product creations');
                 }
-            }
+            });
         }
     } catch (err: any) {
         logger.error({ err: err.message }, 'Failed to run startup recovery check');

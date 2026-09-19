@@ -20,6 +20,7 @@ import {
   LuDownload,
   LuLayers,
   LuStore,
+  LuExternalLink,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -450,6 +451,27 @@ export function AdminProductDetailPage({
                   </XStack>
                 </TouchableOpacity>
               )
+            )}
+
+            {/* View Source WhatsApp Chat */}
+            {onOpenWhatsAppListing && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Open WhatsApp source chat"
+                activeOpacity={0.7}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  const firstListing = listings.length > 0 ? listings[0] : undefined;
+                  onOpenWhatsAppListing(firstListing as any);
+                }}
+              >
+                <XStack alignItems="center" gap={12} paddingVertical={12}>
+                  <LuExternalLink size={18} color="#25D366" />
+                  <Text fontSize={14} fontWeight="700" color={tokens.text}>
+                    View Source WhatsApp Chat
+                  </Text>
+                </XStack>
+              </TouchableOpacity>
             )}
 
             {/* Edit Metadata */}

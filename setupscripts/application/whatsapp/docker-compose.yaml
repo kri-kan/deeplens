@@ -7,13 +7,13 @@ services:
       context: ../../../src/whatsapp-processor
       dockerfile: Dockerfile
     image: deeplens-whatsapp-processor:latest
-    container_name: deeplens-whatsapp-${SESSION_ID:-default}-${TENANT_NAME}
+    container_name: deeplens-whatsapp-${SESSION_ID:-default}-${TENANT_NAME:-vayyari}
     restart: unless-stopped
     command: node dist/index.js
     environment:
       # Identity & Session
       SESSION_ID: ${SESSION_ID:-default}
-      TENANT_NAME: ${TENANT_NAME}
+      TENANT_NAME: ${TENANT_NAME:-vayyari}
       
       # Database Connection (Unified Vayyari Metadata DB)
       VAYYARI_WA_DB_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD:-Krikank1%24}@${INFRA_HOST:-192.168.0.170}:${POSTGRES_PORT:-5432}/deeplens_platform
@@ -42,10 +42,14 @@ services:
       # Application Code mapped from host (build cycle)
       - ${WHATSAPP_HOSTING_PATH}:/usr/src/app
       # Persist Session Authentication & Configuration
-      - ../../../data/whatsapp/${TENANT_NAME}/${SESSION_ID:-default}:/usr/src/app/data
+      - ../../../data/whatsapp/${TENANT_NAME:-vayyari}/${SESSION_ID:-default}:/usr/src/app/data
     
     networks:
-      - deeplens-network
+      deeplens-network:
+        aliases:
+          - deeplens-whatsapp-default-vayyari
+          - deeplens-whatsapp-default-
+          - whatsapp-processor
     
     ports:
       # Managed dynamic port mapping
