@@ -1,8 +1,8 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { ProductDetailPage } from '../../components/pages/ProductDetailPage';
-import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
 import { DIVERSE_CATALOG_PRODUCTS, getProductBySku } from '../../data/catalog';
+import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 const meta: Meta<any> = {
@@ -12,6 +12,7 @@ const meta: Meta<any> = {
     ...THEME_ARGS,
     product: DIVERSE_CATALOG_PRODUCTS[0],
     onNavigateHome: () => alert('Navigating to Home'),
+    onAddToCart: (p: any) => alert(`Added ${p.title} to bag!`),
     onNavigateCatalog: () => alert('Navigating to Catalog'),
   },
   argTypes: {
@@ -22,23 +23,28 @@ export default meta;
 type Story = StoryObj<typeof ProductDetailPage>;
 
 export const InteractiveFormFactors: Story = {
-  render: (args) => (
-    <FormFactorPreview title="ProductDetailPage" initialFactor="desktop">
-      <ProductDetailPage {...args} />
-    </FormFactorPreview>
-  ),
+  render: (args) => <ProductDetailPage {...args} />,
 };
 
 export const DesktopView: Story = {
-  decorators: [withFormFactor('desktop', 'Desktop View (1200px)')],
+  parameters: {
+    formFactorShell: { defaultFactor: 'desktop' },
+  },
+  render: (args) => <ProductDetailPage {...args} />,
 };
 
 export const TabletView: Story = {
-  decorators: [withFormFactor('tablet', 'Tablet View (768px)')],
+  parameters: {
+    formFactorShell: { defaultFactor: 'tablet' },
+  },
+  render: (args) => <ProductDetailPage {...args} />,
 };
 
 export const MobileView: Story = {
-  decorators: [withFormFactor('mobile', 'Mobile View (390px)')],
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
+  render: (args) => <ProductDetailPage {...args} />,
 };
 
 /**

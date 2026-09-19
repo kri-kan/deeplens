@@ -8,7 +8,6 @@ import { TopNav } from '../../components/organisms/TopNav/TopNav';
 import { WishlistCard } from '../../components/molecules/WishlistCard/WishlistCard';
 import { WishlistFilterPills } from '../../components/molecules/WishlistFilterPills/WishlistFilterPills';
 import { INITIAL_WISHLIST_ITEMS } from '../../components/pages/WishlistPage';
-import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 const meta: Meta<any> = {
@@ -57,19 +56,19 @@ const renderTemplate = (args: any) => (
 );
 
 export const InteractiveFormFactors: Story = {
-  render: (args) => (
-    <FormFactorPreview title="Wishlist Template" initialFactor="desktop">
-      {renderTemplate(args)}
-    </FormFactorPreview>
-  ),
+  render: (args) => renderTemplate(args),
 };
 
 export const DesktopView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'desktop' },
+  },
   render: renderTemplate,
-  decorators: [withFormFactor('desktop', 'Wishlist Template Desktop')],
 };
 
 export const MobileView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
   render: renderTemplate,
-  decorators: [withFormFactor('mobile', 'Wishlist Template Mobile')],
 };

@@ -26,8 +26,16 @@ export function FormFactorShell({
   allowOrientationToggle = true,
   allowBezelToggle = true,
   defaultBezel = true,
+  forceStandalone = false,
   onFactorChange,
 }: FormFactorShellProps) {
+  // Context Guard: If already running inside an existing FormFactorShell / FormFactorContext,
+  // do NOT double-wrap with an inner toolbar and inner chassis.
+  const parentContext = React.useContext(FormFactorContext);
+  if (parentContext && !forceStandalone) {
+    return <>{children}</>;
+  }
+
   const { tokens } = useTheme();
 
   const [factor, setFactor] = useState<FormFactor>(initialFactor);

@@ -10,7 +10,6 @@ import { ArtisanSupportDonation } from '../../components/molecules/ArtisanSuppor
 import { PriceDetailsCard } from '../../components/molecules/PriceDetailsCard/PriceDetailsCard';
 import { CrossSellRecommendationsRail } from '../../components/organisms/CrossSellRecommendationsRail/CrossSellRecommendationsRail';
 import { INITIAL_CART_ITEMS } from '../../components/pages/CartPage';
-import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 const meta: Meta<any> = {
@@ -52,19 +51,19 @@ const renderTemplate = (args: any) => (
 );
 
 export const InteractiveFormFactors: Story = {
-  render: (args) => (
-    <FormFactorPreview title="Cart Template" initialFactor="desktop">
-      {renderTemplate(args)}
-    </FormFactorPreview>
-  ),
+  render: (args) => renderTemplate(args),
 };
 
 export const DesktopView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'desktop' },
+  },
   render: renderTemplate,
-  decorators: [withFormFactor('desktop', 'Cart Template Desktop')],
 };
 
 export const MobileView: Story = {
+  parameters: {
+    formFactorShell: { defaultFactor: 'mobile' },
+  },
   render: renderTemplate,
-  decorators: [withFormFactor('mobile', 'Cart Template Mobile')],
 };

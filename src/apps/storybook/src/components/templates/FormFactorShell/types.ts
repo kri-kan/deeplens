@@ -11,6 +11,7 @@ export interface FormFactorShellProps {
   allowOrientationToggle?: boolean;
   allowBezelToggle?: boolean;
   defaultBezel?: boolean;
+  forceStandalone?: boolean;
   onFactorChange?: (factor: FormFactor) => void;
 }
 

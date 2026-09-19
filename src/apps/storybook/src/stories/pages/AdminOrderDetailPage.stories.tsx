@@ -5,7 +5,7 @@ import {
   OrderItem,
 } from '../../components/pages/AdminOrderDetailPage';
 import { AddressData } from '../../components/pages/AdminOrderFormPage';
-import { FormFactorPreview, withFormFactor } from '../utils/FormFactorPreview';
+import { withFormFactor } from '../utils/FormFactorPreview';
 import { THEME_ARG_TYPES, THEME_ARGS } from '../../utils/storyTheme';
 
 // ─────────────────────────────────────────────
