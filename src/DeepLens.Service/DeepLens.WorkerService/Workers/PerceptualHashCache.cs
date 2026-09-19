@@ -135,6 +135,15 @@ public class PerceptualHashCache
         }
     }
 
+    public void RemoveMedia(IEnumerable<Guid> mediaIds)
+    {
+        var idSet = mediaIds.ToHashSet();
+        lock (_lock)
+        {
+            _cache.RemoveAll(e => idSet.Contains(e.MediaId));
+        }
+    }
+
     public void MergeProducts(Guid sourceProductId, Guid targetProductId)
     {
         lock (_lock)

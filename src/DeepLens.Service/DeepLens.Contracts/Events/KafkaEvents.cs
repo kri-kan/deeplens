@@ -903,6 +903,9 @@ public class ProductMergedEvent
     [JsonPropertyName("targetProductId")]
     public Guid TargetProductId { get; set; }
 
+    [JsonPropertyName("deduplicatedMediaIds")]
+    public List<Guid>? DeduplicatedMediaIds { get; set; }
+
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; set; }
 }

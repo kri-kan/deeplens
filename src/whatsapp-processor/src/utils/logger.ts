@@ -13,7 +13,8 @@ if (!fs.existsSync(logsDir)) {
 // We skip the complex multi-target worker in development/debug mode
 // to avoid conflicts with the VS Code debugger and ts-node.
 const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
-const skipRotation = process.env.NO_LOG_ROTATION === 'true';
+const isTest = process.env.NODE_ENV === 'test';
+const skipRotation = process.env.NO_LOG_ROTATION === 'true' || isTest;
 
 // Use transport unless explicitly skipped (prevents conflicts in some debuggers)
 const transport = skipRotation

@@ -7,6 +7,71 @@ export interface ZoneAssignmentResult {
     strategyUsed: 'sticker_first' | 'time_fallback';
 }
 
+/**
+ * Detects if a text message consists exclusively of standalone emojis (e.g. '🔚', '🛑', '🔶🔶🔶🔶')
+ * or single/few emoji boundary text messages, optionally formatted with WhatsApp markdown (*, _, ~, `).
+ */
+export function isStandaloneEmoji(text: string | null | undefined): boolean {
+    if (!text || typeof text !== 'string') return false;
+    // Strip WhatsApp markdown formatting (*, _, ~, `) and whitespace
+    const cleaned = text.replace(/[\s*_~`]+/gu, '');
+    if (!cleaned) return false;
+
+    // Must match emoji characters, variation selectors, ZWJ, skin tones, regional indicators, keycaps
+    const emojiOnlyRegex = /^[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uFE0E\uFE0F\u200D\u20E3#*0-9]+$/u;
+    if (!emojiOnlyRegex.test(cleaned)) return false;
+
+    // Must contain at least one extended pictographic or regional indicator symbol
+    if (!/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/u.test(cleaned)) return false;
+
+    try {
+        if (typeof (Intl as any)?.Segmenter === 'function') {
+            const segmenter = new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' });
+            const segments = Array.from(segmenter.segment(cleaned));
+            // Boundary emojis are typically 1 to 10 emojis
+            return segments.length >= 1 && segments.length <= 10;
+        }
+        return cleaned.length <= 30;
+    } catch {
+        return cleaned.length <= 30;
+    }
+}
+
+/**
+ * Checks if a message qualifies as a sticker or delimiter under the sticker rule.
+ * Under the sticker separator rule, standalone emoji messages (e.g. '🔚', '🛑')
+ * inherently act as boundary delimiters just like stickers!
+ */
+export function isBoundaryDelimiter(
+    message: {
+        media_type?: string | null;
+        message_type?: string | null;
+        content?: string | null;
+        metadata?: any;
+    },
+    isStickerChat: boolean = true
+): boolean {
+    const isSticker = message.media_type === 'sticker'
+        || message.message_type === 'sticker'
+        || message.metadata?.stickerMessage !== undefined
+        || (typeof message.metadata === 'string' && message.metadata.includes('stickerMessage'));
+
+    if (isSticker) return true;
+
+    // When sticker separation applies, standalone emojis act as boundary cuts
+    if (isStickerChat) {
+        const content = message.content 
+            ?? (message as any).message_text
+            ?? message.metadata?.conversation 
+            ?? message.metadata?.extendedTextMessage?.text;
+        if (content && isStandaloneEmoji(content)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 export class ZoningService {
     /**
      * Determines whether a chat uses Sticker-First zoning or Time-Based fallback.
@@ -19,12 +84,17 @@ export class ZoningService {
         if (groupingConfig?.strategy === 'time_gap') {
             return false;
         }
-        // Default / Hybrid: Check if chat contains any sticker messages
+        // Default / Hybrid: Check if chat contains any sticker messages, sticker zones, or standalone emoji separators
         const res = await client.query(
             `SELECT EXISTS (
                 SELECT 1 FROM wa.messages 
                 WHERE jid = $1 
-                  AND (media_type = 'sticker' OR (metadata->>'stickerMessage') IS NOT NULL)
+                  AND (
+                      media_type = 'sticker' 
+                      OR (metadata->>'stickerMessage') IS NOT NULL
+                      OR group_id LIKE 'sticker_%'
+                      OR content IN ('🔚', '🛑', '⛔', '🚫', '⏹️', '🔶🔶🔶🔶')
+                  )
              ) AS has_stickers`,
             [jid]
         );
@@ -44,21 +114,42 @@ export class ZoningService {
             media_type: string | null;
             timestamp: number;
             metadata?: any;
+            content?: string | null;
         },
         groupingConfig: any,
         client: any
     ): Promise<ZoneAssignmentResult> {
+        let content = message.content ?? (message as any).message_text;
+        if (content === undefined && message.message_id) {
+            try {
+                const rowRes = await client.query('SELECT content FROM wa.messages WHERE message_id = $1', [message.message_id]);
+                content = rowRes.rows[0]?.content;
+            } catch {
+                // ignore
+            }
+        }
+
         const isSticker = message.media_type === 'sticker' 
             || message.metadata?.stickerMessage !== undefined
             || (typeof message.metadata === 'string' && message.metadata.includes('stickerMessage'));
 
-        // CASE 1: The message is a Sticker -> It is a Zone boundary delimiter
-        if (isSticker) {
-            // Check if there is an adjacent sticker within 5 seconds to avoid micro-splitting duplicate sticker bursts
+        // Check if chat is sticker-delimited
+        const isStickerChat = await this.isStickerDelimitedChat(message.jid, groupingConfig, client);
+
+        const isEmojiBoundary = isStickerChat && isStandaloneEmoji(content);
+        const isDelimiter = isSticker || isEmojiBoundary;
+
+        // CASE 1: The message is a Sticker or Standalone Emoji -> It is a Zone boundary delimiter
+        if (isDelimiter) {
+            // Check if there is an adjacent delimiter within 5 seconds to avoid micro-splitting duplicate bursts
             const adjRes = await client.query(
                 `SELECT group_id FROM wa.messages 
                  WHERE jid = $1 
-                   AND (media_type = 'sticker' OR (metadata->>'stickerMessage') IS NOT NULL)
+                   AND (
+                       media_type = 'sticker' 
+                       OR (metadata->>'stickerMessage') IS NOT NULL
+                       OR group_id LIKE 'sticker_%'
+                   )
                    AND group_id LIKE 'sticker_%'
                    AND ABS(timestamp - $2) <= 5
                  ORDER BY timestamp DESC LIMIT 1`,
@@ -74,24 +165,33 @@ export class ZoningService {
                 isNewGroup = true;
             }
 
-            await client.query(
-                `UPDATE wa.messages SET group_id = $1, media_type = 'sticker' WHERE message_id = $2`,
-                [groupId, message.message_id]
-            );
+            if (isSticker) {
+                await client.query(
+                    `UPDATE wa.messages SET group_id = $1, media_type = 'sticker' WHERE message_id = $2`,
+                    [groupId, message.message_id]
+                );
+            } else {
+                await client.query(
+                    `UPDATE wa.messages SET group_id = $1 WHERE message_id = $2`,
+                    [groupId, message.message_id]
+                );
+            }
 
             return { groupId, isNewGroup, strategyUsed: 'sticker_first' };
         }
 
-        // Check if chat is sticker-delimited
-        const isStickerChat = await this.isStickerDelimitedChat(message.jid, groupingConfig, client);
-
         if (isStickerChat) {
             // STICKER-FIRST ZONING:
-            // Find the bounding stickers (S_prev and S_next) in chronological order
+            // Find the bounding delimiters (S_prev and S_next) in chronological order
+            // Delimiters can be stickers or standalone emojis (group_id LIKE 'sticker_%')
             const prevStickerRes = await client.query(
                 `SELECT timestamp, id FROM wa.messages 
                  WHERE jid = $1 
-                   AND (media_type = 'sticker' OR (metadata->>'stickerMessage') IS NOT NULL)
+                   AND (
+                       media_type = 'sticker' 
+                       OR (metadata->>'stickerMessage') IS NOT NULL
+                       OR group_id LIKE 'sticker_%'
+                   )
                    AND (timestamp < $2 OR (timestamp = $2 AND id < COALESCE($3, 2147483647)))
                  ORDER BY timestamp DESC, id DESC LIMIT 1`,
                 [message.jid, message.timestamp, message.id || null]
@@ -100,7 +200,11 @@ export class ZoningService {
             const nextStickerRes = await client.query(
                 `SELECT timestamp, id FROM wa.messages 
                  WHERE jid = $1 
-                   AND (media_type = 'sticker' OR (metadata->>'stickerMessage') IS NOT NULL)
+                   AND (
+                       media_type = 'sticker' 
+                       OR (metadata->>'stickerMessage') IS NOT NULL
+                       OR group_id LIKE 'sticker_%'
+                   )
                    AND (timestamp > $2 OR (timestamp = $2 AND id > COALESCE($3, 0)))
                  ORDER BY timestamp ASC, id ASC LIMIT 1`,
                 [message.jid, message.timestamp, message.id || null]
@@ -109,13 +213,14 @@ export class ZoningService {
             const prevSticker = prevStickerRes.rows[0];
             const nextSticker = nextStickerRes.rows[0];
 
-            // Search for an existing product group_id within this sticker-bounded zone
+            // Search for an existing product group_id within this sticker/emoji-bounded zone
             const existingGroupRes = await client.query(
                 `SELECT group_id FROM wa.messages 
                  WHERE jid = $1 
                    AND group_id IS NOT NULL 
                    AND group_id LIKE 'product_%'
                    AND (media_type != 'sticker' OR media_type IS NULL)
+                   AND NOT (group_id LIKE 'sticker_%')
                    AND ($2::bigint IS NULL OR timestamp > $2 OR (timestamp = $2 AND id > $3))
                    AND ($4::bigint IS NULL OR timestamp < $4 OR (timestamp = $4 AND id < $5))
                  ORDER BY timestamp ASC, id ASC LIMIT 1`,
@@ -144,7 +249,7 @@ export class ZoningService {
                 [groupId, message.message_id]
             );
 
-            // Auto-heal / unify ALL non-sticker messages in this sticker-bounded interval
+            // Auto-heal / unify ALL non-delimiter messages in this delimiter-bounded interval
             await client.query(
                 `UPDATE wa.messages 
                  SET group_id = $1 
@@ -213,7 +318,7 @@ export class ZoningService {
         const { grouping_config } = chatRes.rows[0] || {};
 
         const messagesRes = await client.query(
-            `SELECT id, message_id, jid, media_type, timestamp, metadata 
+            `SELECT id, message_id, jid, content, media_type, timestamp, metadata 
              FROM wa.messages 
              WHERE jid = $1 AND is_deleted = false 
              ORDER BY timestamp ASC, id ASC`,
@@ -228,7 +333,7 @@ export class ZoningService {
         const isStickerChat = await this.isStickerDelimitedChat(jid, grouping_config, client);
         let currentGroupId = `product_${randomUUID()}`;
         let zonesCreated = 0;
-        let stickersFound = 0;
+        let delimitersFound = 0;
         const processedGroupIds = new Set<string>();
 
         for (let i = 0; i < messages.length; i++) {
@@ -236,14 +341,23 @@ export class ZoningService {
             const isSticker = msg.media_type === 'sticker' 
                 || msg.metadata?.stickerMessage !== undefined
                 || (typeof msg.metadata === 'string' && msg.metadata.includes('stickerMessage'));
+            const isEmojiBoundary = isStickerChat && isStandaloneEmoji(msg.content);
+            const isDelimiter = isSticker || isEmojiBoundary;
 
-            if (isSticker) {
-                stickersFound++;
-                const stickerGroupId = `sticker_${randomUUID()}`;
-                await client.query(
-                    `UPDATE wa.messages SET group_id = $1, media_type = 'sticker' WHERE id = $2`,
-                    [stickerGroupId, msg.id]
-                );
+            if (isDelimiter) {
+                delimitersFound++;
+                const delimiterGroupId = `sticker_${randomUUID()}`;
+                if (isSticker) {
+                    await client.query(
+                        `UPDATE wa.messages SET group_id = $1, media_type = 'sticker' WHERE id = $2`,
+                        [delimiterGroupId, msg.id]
+                    );
+                } else {
+                    await client.query(
+                        `UPDATE wa.messages SET group_id = $1 WHERE id = $2`,
+                        [delimiterGroupId, msg.id]
+                    );
+                }
                 // Start a fresh product zone for subsequent messages
                 currentGroupId = `product_${randomUUID()}`;
             } else {
@@ -283,8 +397,8 @@ export class ZoningService {
             [jid]
         );
 
-        logger.info({ jid, totalMessages: messages.length, zonesCreated, stickersFound }, 'Chat re-zoning completed.');
-        return { totalMessages: messages.length, zonesCreated, stickersFound };
+        logger.info({ jid, totalMessages: messages.length, zonesCreated, stickersFound: delimitersFound }, 'Chat re-zoning completed.');
+        return { totalMessages: messages.length, zonesCreated, stickersFound: delimitersFound };
     }
 }
 

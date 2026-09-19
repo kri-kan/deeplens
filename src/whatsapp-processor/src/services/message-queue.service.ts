@@ -19,12 +19,14 @@ export interface ProcessableMessage {
     id: number;
     message_id: string;
     jid: string;
+    content?: string | null;
     message_text: string | null;
     media_type: string | null;
     media_url: string | null;
     timestamp: number;
     is_from_me: boolean;
     sender: string | null;
+    metadata?: any;
     status: MessageStatus;
 }
 

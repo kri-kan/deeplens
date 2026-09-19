@@ -17,14 +17,13 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="Npgsql" Version="8.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.Contracts\DeepLens.Contracts.csproj" />
     <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.SearchApi\DeepLens.SearchApi.csproj" />
     <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.Infrastructure\DeepLens.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DeepLens.Service\DeepLens.WorkerService\DeepLens.WorkerService.csproj" />
   </ItemGroup>
 
   <ItemGroup>

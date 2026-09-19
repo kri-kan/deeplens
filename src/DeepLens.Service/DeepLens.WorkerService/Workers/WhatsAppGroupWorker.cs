@@ -33,6 +33,34 @@ public class WhatsAppGroupWorker : BackgroundService
     private DateTime _lastArchiveCheck = DateTime.MinValue;
     private readonly TimeSpan _archiveCheckInterval = TimeSpan.FromHours(1);
 
+    public const int AUTO_MERGE_MIN_VOTES = 2;
+    public const double AUTO_MERGE_MIN_RATIO = 0.60;
+    public const decimal MAX_PRICE_TOLERANCE = 0.20m;
+
+    private record MediaRecord(Guid Id, string StoragePath, string? OriginalFilename, string? Phash, bool IsPrimary);
+
+    public static bool IsPriceCompatible(decimal? priceA, decimal? priceB, decimal maxTolerance = MAX_PRICE_TOLERANCE)
+    {
+        if (!priceA.HasValue || !priceB.HasValue || priceA.Value <= 0 || priceB.Value <= 0)
+        {
+            return true;
+        }
+
+        decimal maxPrice = Math.Max(priceA.Value, priceB.Value);
+        decimal minPrice = Math.Min(priceA.Value, priceB.Value);
+        return ((maxPrice - minPrice) / maxPrice) <= maxTolerance;
+    }
+
+    private async Task<decimal?> GetProductPriceAsync(NpgsqlConnection conn, Guid productId, NpgsqlTransaction? trans = null)
+    {
+        const string sql = @"
+            SELECT COALESCE(
+                (SELECT current_price FROM public.vendor_listings WHERE product_id = @ProductId AND is_active = true AND current_price > 0 ORDER BY updated_at DESC LIMIT 1),
+                (SELECT NULLIF(unified_attributes->>'price', '')::numeric FROM public.products WHERE id = @ProductId)
+            )";
+        return await conn.QuerySingleOrDefaultAsync<decimal?>(new CommandDefinition(sql, new { ProductId = productId }, transaction: trans));
+    }
+
     public WhatsAppGroupWorker(
         ILogger<WhatsAppGroupWorker> logger,
         IServiceProvider serviceProvider,
@@ -322,11 +350,7 @@ public class WhatsAppGroupWorker : BackgroundService
                 Guid reviewSourceProductId = Guid.Empty;
                 int matchDistance = int.MaxValue;
 
-                // ── Any-to-any visual duplicate check (≥2 matching image pairs required) ──
-                // Compute phashes for all images in the incoming group, then vote across
-                // products in the cache. A product needs ≥ MATCH_VOTE_THRESHOLD matching
-                // pairs to be treated as a duplicate.
-                const int MATCH_VOTE_THRESHOLD = 2;
+                // ── Any-to-any visual duplicate check with hardened auto-merge criteria ──
                 var incomingPhashes = await ComputeIncomingPhashesAsync(evt.MediaFiles, storage, ct);
 
                 if (incomingPhashes.Count > 0)
@@ -340,6 +364,7 @@ public class WhatsAppGroupWorker : BackgroundService
 
                         Guid bestProductId = Guid.Empty;
                         int bestProductVotes = 0;
+                        int bestProductCloseVotes = 0;
                         int bestProductDistance = int.MaxValue;
                         string bestProductCategory = string.Empty;
 
@@ -347,6 +372,7 @@ public class WhatsAppGroupWorker : BackgroundService
                         {
                             // For each incoming hash find its best match in this candidate product
                             int votes = 0;
+                            int closeVotes = 0;
                             int closestDistance = int.MaxValue;
 
                             foreach (var incomingHash in incomingPhashes)
@@ -362,34 +388,60 @@ public class WhatsAppGroupWorker : BackgroundService
                                 if (pairBestDist <= 4)
                                 {
                                     votes++;
+                                    if (pairBestDist <= 2) closeVotes++;
                                     if (pairBestDist < closestDistance) closestDistance = pairBestDist;
                                 }
                             }
 
-                            if (votes > bestProductVotes ||
-                                (votes == bestProductVotes && closestDistance < bestProductDistance))
+                            if (closeVotes > bestProductCloseVotes ||
+                                (closeVotes == bestProductCloseVotes && votes > bestProductVotes) ||
+                                (closeVotes == bestProductCloseVotes && votes == bestProductVotes && closestDistance < bestProductDistance))
                             {
                                 bestProductVotes = votes;
+                                bestProductCloseVotes = closeVotes;
                                 bestProductDistance = closestDistance;
                                 bestProductId = candidateProductId;
                                 bestProductCategory = candidateEntries[0].Category;
                             }
                         }
 
-                        if (bestProductVotes >= MATCH_VOTE_THRESHOLD && bestProductId != Guid.Empty)
+                        if (bestProductVotes >= 1 && bestProductId != Guid.Empty)
                         {
                             matchDistance = bestProductDistance;
-                            _logger.LogInformation(
-                                "Any-to-any visual match: Product {MatchProductId}, votes={Votes}, bestDist={Distance}, categories: Current={CurrentCat}, Matched={MatchedCat}",
-                                bestProductId, bestProductVotes, bestProductDistance, extracted.Category, bestProductCategory);
+                            double ratio = (double)bestProductCloseVotes / incomingPhashes.Count;
 
-                            // Rule 1: Auto-merge (best distance ≤ 2 AND categories match)
-                            if (bestProductDistance <= 2 && string.Equals(extracted.Category, bestProductCategory, StringComparison.OrdinalIgnoreCase))
+                            _logger.LogInformation(
+                                "Any-to-any visual match: Product {MatchProductId}, closeVotes={CloseVotes}, totalVotes={Votes}, totalIncoming={Total}, ratio={Ratio:P1}, bestDist={Distance}, categories: Current={CurrentCat}, Matched={MatchedCat}",
+                                bestProductId, bestProductCloseVotes, bestProductVotes, incomingPhashes.Count, ratio, bestProductDistance, extracted.Category, bestProductCategory);
+
+                            // Hardened Auto-merge criteria:
+                            // 1. Minimum close votes floor (>= 2)
+                            // 2. Minimum ratio of source group photos matching (>= 60%)
+                            // 3. Best distance <= 2
+                            // 4. Category matches
+                            bool meetsThreshold = incomingPhashes.Count >= AUTO_MERGE_MIN_VOTES &&
+                                                 bestProductCloseVotes >= AUTO_MERGE_MIN_VOTES &&
+                                                 ratio >= AUTO_MERGE_MIN_RATIO &&
+                                                 bestProductDistance <= 2 &&
+                                                 string.Equals(extracted.Category, bestProductCategory, StringComparison.OrdinalIgnoreCase);
+
+                            if (meetsThreshold)
                             {
-                                isAutoMerge = true;
-                                productId = bestProductId;
+                                var targetPrice = await GetProductPriceAsync(conn, bestProductId, trans);
+                                if (IsPriceCompatible(extracted.Price, targetPrice, MAX_PRICE_TOLERANCE))
+                                {
+                                    isAutoMerge = true;
+                                    productId = bestProductId;
+                                }
+                                else
+                                {
+                                    isReviewCandidate = true;
+                                    reviewSourceProductId = bestProductId;
+                                    _logger.LogWarning(
+                                        "Auto-merge rejected between incoming group {GroupId} (price {SourcePrice}) and Product {BestProductId} (price {TargetPrice}) due to price discrepancy exceeding {Tolerance:P0}. Enqueuing for review.",
+                                        evt.GroupId, extracted.Price, bestProductId, targetPrice, MAX_PRICE_TOLERANCE);
+                                }
                             }
-                            // Rule 2: Review queue (distance 3-4, OR ≤2 with category mismatch)
                             else if (bestProductDistance <= 4)
                             {
                                 isReviewCandidate = true;
@@ -399,8 +451,8 @@ public class WhatsAppGroupWorker : BackgroundService
                         else
                         {
                             _logger.LogDebug(
-                                "No sufficient visual match found (best votes={Votes}, threshold={Threshold}).",
-                                bestProductVotes, MATCH_VOTE_THRESHOLD);
+                                "No sufficient visual match found (best votes={Votes}).",
+                                bestProductVotes);
                         }
                     }
                     catch (Exception ex)
@@ -671,43 +723,190 @@ public class WhatsAppGroupWorker : BackgroundService
                 }
             }
 
-            // 3. Process Media Files (idempotent migration)
-            if (!isAutoMerge)
-            {
-                string cleanCategory = "general";
+            // 3. Process Media Files (idempotent migration and bi-directional media remapping)
+            string cleanCategory = "general";
 
-                foreach (var mediaFile in evt.MediaFiles)
+            // If auto-merging, retrieve existing target product media to detect duplicates and remap to canonical survivors
+            List<MediaRecord> existingTargetMedia = new();
+            if (isAutoMerge)
+            {
+                existingTargetMedia = (await conn.QueryAsync<MediaRecord>(
+                    new CommandDefinition(@"
+                        SELECT m.id, m.storage_path, m.original_filename, m.phash, ml.is_primary
+                        FROM public.media_links ml
+                        JOIN public.media m ON m.id = ml.media_id
+                        WHERE ml.entity_id = @ProductId AND ml.entity_type = 'product'",
+                        new { ProductId = productId }, transaction: trans, cancellationToken: ct)
+                )).ToList();
+            }
+
+            foreach (var mediaFile in evt.MediaFiles)
+            {
+                try
                 {
-                    try
+                    string sourcePath = mediaFile.MediaUrl;
+                    if (sourcePath.StartsWith("minio://"))
                     {
-                        string sourcePath = mediaFile.MediaUrl;
-                        if (sourcePath.StartsWith("minio://"))
+                        sourcePath = sourcePath.Substring(8);
+                        var parts = sourcePath.Split('/', 2);
+                        if (parts.Length > 1)
                         {
-                            sourcePath = sourcePath.Substring(8);
-                            var parts = sourcePath.Split('/', 2);
-                            if (parts.Length > 1)
+                            sourcePath = parts[0] + "/" + parts[1];
+                        }
+                    }
+
+                    string fileName = Path.GetFileName(sourcePath);
+                    string targetPath = $"{cleanCategory}/{evt.GroupId}/{fileName}";
+
+                    Guid mediaId = Guid.Parse(mediaFile.MediaId);
+                    // Document messages in WhatsApp are videos sent via iPhone Files/Documents
+                    // (mimetype = video/mp4, video/quicktime). Classify correctly as video (2).
+                    var mediaType = (mediaFile.MediaType == "video" || 
+                                    (mediaFile.MediaType == "document" && 
+                                     !string.IsNullOrEmpty(mediaFile.MimeType) && 
+                                     mediaFile.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))) ? 2 : 1;
+                    bool isSticker = string.Equals(mediaFile.MimeType, "image/webp", StringComparison.OrdinalIgnoreCase);
+
+                    // Check for duplicate on canonical product if auto-merging
+                    MediaRecord? canonicalSurvivor = null;
+                    if (isAutoMerge && existingTargetMedia.Count > 0)
+                    {
+                        canonicalSurvivor = existingTargetMedia.FirstOrDefault(em =>
+                            em.Id == mediaId ||
+                            (!string.IsNullOrEmpty(em.OriginalFilename) && string.Equals(em.OriginalFilename, fileName, StringComparison.OrdinalIgnoreCase))
+                        );
+                    }
+
+                    var mediaExists = await conn.QuerySingleOrDefaultAsync<Guid?>(
+                        "SELECT id FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
+
+                    string? phash = null;
+
+                    if (!mediaExists.HasValue)
+                    {
+                        using (var stream = await storage.GetFileAsync(sourcePath))
+                        {
+                            using var memStream = new MemoryStream();
+                            await stream.CopyToAsync(memStream, ct);
+                            memStream.Position = 0;
+
+                            // Don't hash stickers (arrive as image/webp) — they're common
+                            // across all groups and would produce false-positive duplicate matches.
+                            if (mediaType == 1 && !isSticker) // image, non-sticker
                             {
-                                sourcePath = parts[0] + "/" + parts[1];
+                                try
+                                {
+                                    phash = PerceptualHashHelper.ComputeDHash(memStream);
+                                    memStream.Position = 0;
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(ex, "Failed to compute dHash for media {MediaId}", mediaId);
+                                }
                             }
+
+                            // If auto-merging and not matched by filename, check by phash
+                            if (isAutoMerge && canonicalSurvivor == null && !string.IsNullOrEmpty(phash))
+                            {
+                                canonicalSurvivor = existingTargetMedia.FirstOrDefault(em =>
+                                    !string.IsNullOrEmpty(em.Phash) && PerceptualHashHelper.GetHammingDistance(phash, em.Phash) <= 2
+                                );
+                            }
+
+                            if (canonicalSurvivor != null)
+                            {
+                                // Duplicate media found: Remap wa.messages to canonical survivor
+                                string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
+                                await conn.ExecuteAsync(
+                                    @"UPDATE wa.messages 
+                                      SET media_url = @CanonicalUrl, updated_at = NOW() 
+                                      WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                                    new { 
+                                        CanonicalUrl = canonicalUrl, 
+                                        GroupId = evt.GroupId, 
+                                        OldSourceUrl = mediaFile.MediaUrl,
+                                        OldFileNamePattern = $"%{fileName}"
+                                    }, trans);
+
+                                try
+                                {
+                                    await storage.DeleteFileAsync(sourcePath);
+                                }
+                                catch { }
+
+                                // Ensure canonical survivor is linked to listing
+                                await LinkMedia(conn, canonicalSurvivor.Id, listingId, "vendor_listing", canonicalSurvivor.IsPrimary, trans);
+                                continue;
+                            }
+
+                            await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
                         }
 
-                        string fileName = Path.GetFileName(sourcePath);
-                        string targetPath = $"{cleanCategory}/{evt.GroupId}/{fileName}";
+                        string newMediaUrl = $"minio://{targetPath}";
+                        await conn.ExecuteAsync(
+                            @"UPDATE wa.messages 
+                              SET media_url = @NewMediaUrl, updated_at = NOW() 
+                              WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                            new { 
+                                NewMediaUrl = newMediaUrl, 
+                                GroupId = evt.GroupId, 
+                                OldSourceUrl = mediaFile.MediaUrl,
+                                OldFileNamePattern = $"%{fileName}"
+                            }, trans);
 
-                        Guid mediaId = Guid.Parse(mediaFile.MediaId);
-                        // Document messages in WhatsApp are videos sent via iPhone Files/Documents
-                        // (mimetype = video/mp4, video/quicktime). Classify correctly as video (2).
-                        var mediaType = (mediaFile.MediaType == "video" || 
-                                        (mediaFile.MediaType == "document" && 
-                                         !string.IsNullOrEmpty(mediaFile.MimeType) && 
-                                         mediaFile.MimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))) ? 2 : 1;
+                        try
+                        {
+                            await storage.DeleteFileAsync(sourcePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Could not delete original WhatsApp raw file {SourcePath} after copy to general", sourcePath);
+                        }
 
-                        var mediaExists = await conn.QuerySingleOrDefaultAsync<Guid?>(
-                            "SELECT id FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
+                        const string insertMediaSql = @"
+                            INSERT INTO public.media (id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, category, subcategory, phash, uploaded_at)
+                            VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, 0, @MimeType, 0, @Category, @SubCategory, @Phash, NOW())";
+                        
+                        await conn.ExecuteAsync(insertMediaSql, new
+                        {
+                            Id = mediaId,
+                            StoragePath = targetPath,
+                            MediaType = mediaType,
+                            OriginalFilename = fileName,
+                            MimeType = mediaFile.MimeType,
+                            Category = cleanCategory,
+                            SubCategory = CleanBucketName(extracted.SubCategory),
+                            Phash = phash
+                        }, trans);
+                    }
+                    else
+                    {
+                        // Check if file copy needed (if path changed)
+                        var currentMedia = await conn.QuerySingleAsync<dynamic>(
+                            "SELECT storage_path, phash FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
+                        
+                        string currentPath = currentMedia.storage_path;
+                        phash = currentMedia.phash;
 
-                        string? phash = null;
+                        if (canonicalSurvivor != null && canonicalSurvivor.Id != mediaId)
+                        {
+                            string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
+                            await conn.ExecuteAsync(
+                                @"UPDATE wa.messages 
+                                  SET media_url = @CanonicalUrl, updated_at = NOW() 
+                                  WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                                new { 
+                                    CanonicalUrl = canonicalUrl, 
+                                    GroupId = evt.GroupId, 
+                                    OldSourceUrl = mediaFile.MediaUrl,
+                                    OldFileNamePattern = $"%{fileName}"
+                                }, trans);
 
-                        if (!mediaExists.HasValue)
+                            await LinkMedia(conn, canonicalSurvivor.Id, listingId, "vendor_listing", canonicalSurvivor.IsPrimary, trans);
+                            continue;
+                        }
+
+                        if (currentPath != targetPath)
                         {
                             using (var stream = await storage.GetFileAsync(sourcePath))
                             {
@@ -715,10 +914,7 @@ public class WhatsAppGroupWorker : BackgroundService
                                 await stream.CopyToAsync(memStream, ct);
                                 memStream.Position = 0;
 
-                                // Don't hash stickers (arrive as image/webp) — they're common
-                                // across all groups and would produce false-positive duplicate matches.
-                                bool isSticker = string.Equals(mediaFile.MimeType, "image/webp", StringComparison.OrdinalIgnoreCase);
-                                if (mediaType == 1 && !isSticker) // image, non-sticker
+                                if (mediaType == 1 && string.IsNullOrEmpty(phash) && !isSticker)
                                 {
                                     try
                                     {
@@ -727,7 +923,7 @@ public class WhatsAppGroupWorker : BackgroundService
                                     }
                                     catch (Exception ex)
                                     {
-                                        _logger.LogError(ex, "Failed to compute dHash for media {MediaId}", mediaId);
+                                        _logger.LogError(ex, "Failed to compute dHash for existing media {MediaId}", mediaId);
                                     }
                                 }
 
@@ -755,99 +951,27 @@ public class WhatsAppGroupWorker : BackgroundService
                                 _logger.LogWarning(ex, "Could not delete original WhatsApp raw file {SourcePath} after copy to general", sourcePath);
                             }
 
-                            const string insertMediaSql = @"
-                                INSERT INTO public.media (id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, category, subcategory, phash, uploaded_at)
-                                VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, 0, @MimeType, 0, @Category, @SubCategory, @Phash, NOW())";
-                            
-                            await conn.ExecuteAsync(insertMediaSql, new
-                            {
-                                Id = mediaId,
-                                StoragePath = targetPath,
-                                MediaType = mediaType,
-                                OriginalFilename = fileName,
-                                MimeType = mediaFile.MimeType,
-                                Category = cleanCategory,
-                                SubCategory = CleanBucketName(extracted.SubCategory),
-                                Phash = phash
-                            }, trans);
+                            await conn.ExecuteAsync(
+                                "UPDATE public.media SET storage_path = @StoragePath, category = @Category, subcategory = @SubCategory, phash = @Phash WHERE id = @Id",
+                                new { Id = mediaId, StoragePath = targetPath, Category = cleanCategory, SubCategory = CleanBucketName(extracted.SubCategory), Phash = phash },
+                                trans
+                            );
                         }
-                        else
-                        {
-                            // Check if file copy needed (if path changed)
-                            var currentMedia = await conn.QuerySingleAsync<dynamic>(
-                                "SELECT storage_path, phash FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
-                            
-                            string currentPath = currentMedia.storage_path;
-                            phash = currentMedia.phash;
-
-                            if (currentPath != targetPath)
-                            {
-                                using (var stream = await storage.GetFileAsync(sourcePath))
-                                {
-                                    using var memStream = new MemoryStream();
-                                    await stream.CopyToAsync(memStream, ct);
-                                    memStream.Position = 0;
-
-                                    if (mediaType == 1 && string.IsNullOrEmpty(phash) && 
-                                        !string.Equals(mediaFile.MimeType, "image/webp", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        try
-                                        {
-                                            phash = PerceptualHashHelper.ComputeDHash(memStream);
-                                            memStream.Position = 0;
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            _logger.LogError(ex, "Failed to compute dHash for existing media {MediaId}", mediaId);
-                                        }
-                                    }
-
-                                    await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
-                                }
-
-                                string newMediaUrl = $"minio://{targetPath}";
-                                await conn.ExecuteAsync(
-                                    @"UPDATE wa.messages 
-                                      SET media_url = @NewMediaUrl, updated_at = NOW() 
-                                      WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
-                                    new { 
-                                        NewMediaUrl = newMediaUrl, 
-                                        GroupId = evt.GroupId, 
-                                        OldSourceUrl = mediaFile.MediaUrl,
-                                        OldFileNamePattern = $"%{fileName}"
-                                    }, trans);
-
-                                try
-                                {
-                                    await storage.DeleteFileAsync(sourcePath);
-                                }
-                                catch (Exception ex)
-                                {
-                                    _logger.LogWarning(ex, "Could not delete original WhatsApp raw file {SourcePath} after copy to general", sourcePath);
-                                }
-
-                                await conn.ExecuteAsync(
-                                    "UPDATE public.media SET storage_path = @StoragePath, category = @Category, subcategory = @SubCategory, phash = @Phash WHERE id = @Id",
-                                    new { Id = mediaId, StoragePath = targetPath, Category = cleanCategory, SubCategory = CleanBucketName(extracted.SubCategory), Phash = phash },
-                                    trans
-                                );
-                            }
-                        }
-
-                        await LinkMedia(conn, mediaId, productId, "product", true, trans);
-                        await LinkMedia(conn, mediaId, listingId, "vendor_listing", true, trans);
-
-                        // Add to in-memory cache if phash computed (stickers are excluded upstream)
-                        if (mediaType == 1 && !string.IsNullOrEmpty(phash))
-                        {
-                            _hashCache.Add(mediaId, productId, phash, extracted.Category);
-                        }
-
                     }
-                    catch (Exception ex)
+
+                    await LinkMedia(conn, mediaId, productId, "product", true, trans);
+                    await LinkMedia(conn, mediaId, listingId, "vendor_listing", true, trans);
+
+                    // Add to in-memory cache if phash computed (stickers are excluded upstream)
+                    if (mediaType == 1 && !string.IsNullOrEmpty(phash))
                     {
-                        _logger.LogError(ex, "Failed to migrate media file: {MediaUrl}", mediaFile.MediaUrl);
+                        _hashCache.Add(mediaId, productId, phash, extracted.Category);
                     }
+
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to migrate media file: {MediaUrl}", mediaFile.MediaUrl);
                 }
             }
 
@@ -1670,8 +1794,9 @@ public class WhatsAppGroupWorker : BackgroundService
 
     /// <summary>
     /// After media is added to a product, checks whether the updated image set for
-    /// <paramref name="thisProductId"/> now produces ≥2 matching pairs against any other
-    /// product in the cache. If so, inserts a pending merge candidate for human review.
+    /// <paramref name="thisProductId"/> now produces sufficient matching pairs against any other
+    /// product in the cache (>= 60% ratio, >= 2 close votes, price guard).
+    /// If auto-merge criteria are met, merges automatically. Otherwise enqueues for human review.
     /// </summary>
     private async Task<bool> CheckAndEnqueueCrossProductCandidatesAsync(
         Guid thisProductId,
@@ -1679,8 +1804,6 @@ public class WhatsAppGroupWorker : BackgroundService
         NpgsqlConnection conn,
         CancellationToken ct)
     {
-        const int MATCH_VOTE_THRESHOLD = 2;
-
         try
         {
             // Collect this product's phashes from the cache
@@ -1700,6 +1823,7 @@ public class WhatsAppGroupWorker : BackgroundService
             foreach (var (candidateId, candidateEntries) in otherProducts)
             {
                 int votes = 0;
+                int closeVotes = 0;
                 int closestDistance = int.MaxValue;
 
                 foreach (var incomingHash in thisProductHashes)
@@ -1714,39 +1838,63 @@ public class WhatsAppGroupWorker : BackgroundService
                     if (pairBestDist <= 4)
                     {
                         votes++;
+                        if (pairBestDist <= 2) closeVotes++;
                         if (pairBestDist < closestDistance) closestDistance = pairBestDist;
                     }
                 }
 
                 if (votes >= 1)
                 {
+                    double ratio = (double)closeVotes / thisProductHashes.Count;
                     _logger.LogInformation(
-                        "Cross-product match after media add: Product {ThisId} vs {CandidateId}, votes={Votes}, bestDist={Distance}",
-                        thisProductId, candidateId, votes, closestDistance);
+                        "Cross-product match after media add: Product {ThisId} ({TotalCount} photos) vs {CandidateId}, totalVotes={Votes}, closeVotes={CloseVotes}, ratio={Ratio:P1}, bestDist={Distance}",
+                        thisProductId, thisProductHashes.Count, candidateId, votes, closeVotes, ratio, closestDistance);
 
-                    if (votes >= MATCH_VOTE_THRESHOLD && closestDistance <= 2)
-                    {
-                        _logger.LogInformation("Distance <= 2, executing delayed auto-merge.");
-                        await ExecuteAutoMergeAsync(conn, candidateId, thisProductId, ct);
-                        return true;
-                    }
-                    else
-                    {
-                        // Always use canonical ordering (lower GUID first) to avoid duplicates
-                        Guid productAId = thisProductId < candidateId ? thisProductId : candidateId;
-                        Guid productBId = thisProductId < candidateId ? candidateId : thisProductId;
+                    // Auto-merge requires:
+                    // 1. Minimum count of source photos matching floor (>= 2)
+                    // 2. Minimum percentage of source photos matching (>= 60%)
+                    // 3. Closest distance <= 2
+                    bool meetsThreshold = thisProductHashes.Count >= AUTO_MERGE_MIN_VOTES &&
+                                         closeVotes >= AUTO_MERGE_MIN_VOTES &&
+                                         ratio >= AUTO_MERGE_MIN_RATIO &&
+                                         closestDistance <= 2;
 
-                        await conn.ExecuteAsync(@"
-                            INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                            VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                            ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                            new
-                            {
-                                ProductAId = productAId,
-                                ProductBId = productBId,
-                                SimilarityScore = (double)closestDistance
-                            });
+                    if (meetsThreshold)
+                    {
+                        var thisPrice = await GetProductPriceAsync(conn, thisProductId);
+                        var candidatePrice = await GetProductPriceAsync(conn, candidateId);
+
+                        if (IsPriceCompatible(thisPrice, candidatePrice, MAX_PRICE_TOLERANCE))
+                        {
+                            _logger.LogInformation(
+                                "Criteria met for cross-product auto-merge (closeVotes={CloseVotes}, ratio={Ratio:P1}, dist={Dist}, thisPrice={ThisPrice}, candPrice={CandPrice}). Executing auto-merge.",
+                                closeVotes, ratio, closestDistance, thisPrice, candidatePrice);
+
+                            bool merged = await ExecuteAutoMergeAsync(conn, candidateId, thisProductId, ct);
+                            if (merged) return true;
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Auto-merge rejected between Product {ThisId} (price {ThisPrice}) and {CandidateId} (price {CandPrice}) due to price discrepancy exceeding {Tolerance:P0}. Enqueuing for review.",
+                                thisProductId, thisPrice, candidateId, candidatePrice, MAX_PRICE_TOLERANCE);
+                        }
                     }
+
+                    // Always use canonical ordering (lower GUID first) to avoid duplicates in review queue
+                    Guid productAId = thisProductId < candidateId ? thisProductId : candidateId;
+                    Guid productBId = thisProductId < candidateId ? candidateId : thisProductId;
+
+                    await conn.ExecuteAsync(@"
+                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                        new
+                        {
+                            ProductAId = productAId,
+                            ProductBId = productBId,
+                            SimilarityScore = (double)closestDistance
+                        });
                 }
             }
         }
@@ -1798,11 +1946,10 @@ public class WhatsAppGroupWorker : BackgroundService
             .GroupBy(e => e.ProductId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        const int MATCH_VOTE_THRESHOLD = 2;
-
         foreach (var (candidateProductId, candidateEntries) in candidateEntriesByProduct)
         {
             int votes = 0;
+            int closeVotes = 0;
             int closestDistance = int.MaxValue;
 
             foreach (var targetHash in productEntries)
@@ -1817,32 +1964,55 @@ public class WhatsAppGroupWorker : BackgroundService
                 if (pairBestDist <= 4)
                 {
                     votes++;
+                    if (pairBestDist <= 2) closeVotes++;
                     if (pairBestDist < closestDistance) closestDistance = pairBestDist;
                 }
             }
 
             if (votes >= 1)
             {
-                _logger.LogInformation("Category change re-eval: Found match between {ProductA} and {ProductB} with dist {Dist} and votes {Votes}", candidateProductId, evt.ProductId, closestDistance, votes);
+                double ratio = (double)closeVotes / productEntries.Count;
+                _logger.LogInformation(
+                    "Category change re-eval: Found match between {ProductA} and {ProductB} with dist {Dist}, totalVotes={Votes}, closeVotes={CloseVotes}, ratio={Ratio:P1}",
+                    candidateProductId, evt.ProductId, closestDistance, votes, closeVotes, ratio);
 
-                if (votes >= MATCH_VOTE_THRESHOLD && closestDistance <= 2)
+                bool meetsThreshold = productEntries.Count >= AUTO_MERGE_MIN_VOTES &&
+                                     closeVotes >= AUTO_MERGE_MIN_VOTES &&
+                                     ratio >= AUTO_MERGE_MIN_RATIO &&
+                                     closestDistance <= 2;
+
+                if (meetsThreshold)
                 {
-                    _logger.LogInformation("Distance <= 2, executing delayed auto-merge.");
-                    await ExecuteAutoMergeAsync(conn, candidateProductId, evt.ProductId, ct);
+                    var productPrice = await GetProductPriceAsync(conn, evt.ProductId);
+                    var candidatePrice = await GetProductPriceAsync(conn, candidateProductId);
+
+                    if (IsPriceCompatible(productPrice, candidatePrice, MAX_PRICE_TOLERANCE))
+                    {
+                        _logger.LogInformation(
+                            "Category change auto-merge criteria met (closeVotes={CloseVotes}, ratio={Ratio:P1}, dist={Dist}): executing auto-merge of {SourceProductId} into {TargetProductId}",
+                            closeVotes, ratio, closestDistance, evt.ProductId, candidateProductId);
+
+                        bool merged = await ExecuteAutoMergeAsync(conn, candidateProductId, evt.ProductId, ct);
+                        if (merged) continue;
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Category change auto-merge rejected between {ProductA} and {ProductB} due to price discrepancy ({PriceA} vs {PriceB}, tolerance: {Tolerance:P0})",
+                            evt.ProductId, candidateProductId, productPrice, candidatePrice, MAX_PRICE_TOLERANCE);
+                    }
                 }
-                else
-                {
-                    await conn.ExecuteAsync(@"
-                        INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
-                        VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
-                        ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
-                        new
-                        {
-                            ProductAId = candidateProductId,
-                            ProductBId = evt.ProductId,
-                            SimilarityScore = (double)closestDistance
-                        });
-                }
+
+                await conn.ExecuteAsync(@"
+                    INSERT INTO public.product_merge_candidates (product_a_id, product_b_id, similarity_score, status, detected_at)
+                    VALUES (@ProductAId, @ProductBId, @SimilarityScore, 'pending', NOW())
+                    ON CONFLICT (product_a_id, product_b_id) DO NOTHING",
+                    new
+                    {
+                        ProductAId = candidateProductId < evt.ProductId ? candidateProductId : evt.ProductId,
+                        ProductBId = candidateProductId < evt.ProductId ? evt.ProductId : candidateProductId,
+                        SimilarityScore = (double)closestDistance
+                    });
             }
         }
     }
@@ -1856,6 +2026,10 @@ public class WhatsAppGroupWorker : BackgroundService
 
         try
         {
+            if (evt.DeduplicatedMediaIds != null && evt.DeduplicatedMediaIds.Count > 0)
+            {
+                _hashCache.RemoveMedia(evt.DeduplicatedMediaIds);
+            }
             // Update in-memory cache to merge the source product hashes into the target product
             _hashCache.MergeProducts(evt.SourceProductId, evt.TargetProductId);
             // Purge the source product from the cache since it's deleted
@@ -1869,11 +2043,24 @@ public class WhatsAppGroupWorker : BackgroundService
         await Task.CompletedTask;
     }
 
-    private async Task ExecuteAutoMergeAsync(NpgsqlConnection conn, Guid targetProductId, Guid sourceProductId, CancellationToken ct)
+    private async Task<bool> ExecuteAutoMergeAsync(NpgsqlConnection conn, Guid targetProductId, Guid sourceProductId, CancellationToken ct)
     {
         using var trans = await conn.BeginTransactionAsync(ct);
         try
         {
+            // 0. Price Guard Check
+            var sourcePrice = await GetProductPriceAsync(conn, sourceProductId, trans);
+            var targetPrice = await GetProductPriceAsync(conn, targetProductId, trans);
+
+            if (!IsPriceCompatible(sourcePrice, targetPrice, MAX_PRICE_TOLERANCE))
+            {
+                _logger.LogWarning(
+                    "ExecuteAutoMergeAsync aborted between Source {SourceId} (price {SourcePrice}) and Target {TargetId} (price {TargetPrice}) due to price discrepancy exceeding tolerance ({Tolerance:P0}).",
+                    sourceProductId, sourcePrice, targetProductId, targetPrice, MAX_PRICE_TOLERANCE);
+                await trans.RollbackAsync(ct);
+                return false;
+            }
+
             var sourceListingId = await conn.QuerySingleOrDefaultAsync<Guid?>(
                 new CommandDefinition("SELECT id FROM public.vendor_listings WHERE product_id = @SourceProductId LIMIT 1",
                 new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct)
@@ -1897,28 +2084,145 @@ public class WhatsAppGroupWorker : BackgroundService
                       new { TargetProductId = targetProductId, SourceSku = sourceSku }, transaction: trans, cancellationToken: ct));
             }
 
-            await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links 
-                  WHERE entity_id = @SourceProductId AND entity_type = 'product' 
-                  AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetProductId AND entity_type = 'product')", 
-                  new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+            // Bi-directional Media Remapping:
+            // Load media from target product (survivor candidates) and source product
+            var targetMedia = (await conn.QueryAsync<MediaRecord>(new CommandDefinition(@"
+                SELECT m.id, m.storage_path, m.original_filename, m.phash, ml.is_primary
+                FROM public.media_links ml
+                JOIN public.media m ON m.id = ml.media_id
+                WHERE ml.entity_id = @TargetProductId AND ml.entity_type = 'product'",
+                new { TargetProductId = targetProductId }, transaction: trans, cancellationToken: ct))).ToList();
 
-            await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
-                  SET entity_id = @TargetProductId 
-                  WHERE entity_id = @SourceProductId AND entity_type = 'product'", 
-                  new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
+            var sourceMedia = (await conn.QueryAsync<MediaRecord>(new CommandDefinition(@"
+                SELECT m.id, m.storage_path, m.original_filename, m.phash, ml.is_primary
+                FROM public.media_links ml
+                JOIN public.media m ON m.id = ml.media_id
+                WHERE ml.entity_id = @SourceProductId AND ml.entity_type = 'product'",
+                new { SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct))).ToList();
+
+            var duplicateSourceMediaIds = new List<Guid>();
+
+            foreach (var src in sourceMedia)
+            {
+                // Find duplicate in target media
+                var canonicalSurvivor = targetMedia.FirstOrDefault(tgt =>
+                    tgt.Id == src.Id ||
+                    (!string.IsNullOrEmpty(src.StoragePath) && string.Equals(src.StoragePath, tgt.StoragePath, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(src.Phash) && !string.IsNullOrEmpty(tgt.Phash) && PerceptualHashHelper.GetHammingDistance(src.Phash, tgt.Phash) <= 2)
+                );
+
+                if (canonicalSurvivor != null)
+                {
+                    duplicateSourceMediaIds.Add(src.Id);
+                    string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
+                    string oldSourceUrl = $"minio://{src.StoragePath}";
+                    string oldFilenamePattern = $"%{src.OriginalFilename}";
+
+                    // Remap wa.messages to canonical survivor media record
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        UPDATE wa.messages
+                        SET media_url = @CanonicalUrl, updated_at = NOW()
+                        WHERE media_url = @OldSourceUrl
+                           OR (group_id IN (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id IN (@SourceProductId, @TargetProductId))
+                               AND (media_url LIKE @OldFilenamePattern OR media_url = @OldSourceUrl))",
+                        new {
+                            CanonicalUrl = canonicalUrl,
+                            OldSourceUrl = oldSourceUrl,
+                            OldFilenamePattern = oldFilenamePattern,
+                            SourceProductId = sourceProductId,
+                            TargetProductId = targetProductId
+                        }, transaction: trans, cancellationToken: ct));
+
+                    _logger.LogInformation(
+                        "Auto-merge media remapped: Source media {SrcId} ({SrcPath}) -> Canonical survivor {TgtId} ({TgtPath})",
+                        src.Id, src.StoragePath, canonicalSurvivor.Id, canonicalSurvivor.StoragePath);
+                }
+                else
+                {
+                    // Non-duplicate media: keep link, ensure wa.messages has valid URL
+                    string canonicalUrl = $"minio://{src.StoragePath}";
+                    string oldFilenamePattern = $"%{src.OriginalFilename}";
+
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        UPDATE wa.messages
+                        SET media_url = @CanonicalUrl, updated_at = NOW()
+                        WHERE group_id IN (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = @SourceProductId)
+                          AND media_url LIKE @OldFilenamePattern
+                          AND media_url != @CanonicalUrl",
+                        new {
+                            CanonicalUrl = canonicalUrl,
+                            OldFilenamePattern = oldFilenamePattern,
+                            SourceProductId = sourceProductId
+                        }, transaction: trans, cancellationToken: ct));
+                }
+            }
+
+            // Remove duplicate source media links
+            if (duplicateSourceMediaIds.Count > 0)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    DELETE FROM public.media_links
+                    WHERE entity_id = @SourceProductId AND entity_type = 'product' AND media_id = ANY(@DuplicateIds)",
+                    new { SourceProductId = sourceProductId, DuplicateIds = duplicateSourceMediaIds.ToArray() },
+                    transaction: trans, cancellationToken: ct));
+
+                if (sourceListingId.HasValue)
+                {
+                    await conn.ExecuteAsync(new CommandDefinition(@"
+                        DELETE FROM public.media_links
+                        WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing' AND media_id = ANY(@DuplicateIds)",
+                        new { SourceListingId = sourceListingId.Value, DuplicateIds = duplicateSourceMediaIds.ToArray() },
+                        transaction: trans, cancellationToken: ct));
+                }
+
+                // Mark redundant media records as deduplicated (status = 98) if not referenced elsewhere
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    UPDATE public.media
+                    SET status = 98
+                    WHERE id = ANY(@DuplicateIds)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM public.media_links
+                          WHERE media_id = public.media.id
+                            AND entity_id NOT IN (@SourceProductId, @TargetProductId)
+                      )",
+                    new { DuplicateIds = duplicateSourceMediaIds.ToArray(), SourceProductId = sourceProductId, TargetProductId = targetProductId },
+                    transaction: trans, cancellationToken: ct));
+            }
+
+            // Re-link remaining distinct media links to target product
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                UPDATE public.media_links 
+                SET entity_id = @TargetProductId 
+                WHERE entity_id = @SourceProductId AND entity_type = 'product'", 
+                new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
 
             if (sourceListingId.HasValue && targetListingId.HasValue)
             {
-                await conn.ExecuteAsync(new CommandDefinition(@"DELETE FROM public.media_links 
-                      WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing' 
-                      AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetListingId AND entity_type = 'vendor_listing')", 
-                      new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    DELETE FROM public.media_links 
+                    WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing' 
+                    AND media_id IN (SELECT media_id FROM public.media_links WHERE entity_id = @TargetListingId AND entity_type = 'vendor_listing')", 
+                    new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
 
-                await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.media_links 
-                      SET entity_id = @TargetListingId 
-                      WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'", 
-                      new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
+                await conn.ExecuteAsync(new CommandDefinition(@"
+                    UPDATE public.media_links 
+                    SET entity_id = @TargetListingId 
+                    WHERE entity_id = @SourceListingId AND entity_type = 'vendor_listing'", 
+                    new { TargetListingId = targetListingId.Value, SourceListingId = sourceListingId.Value }, transaction: trans, cancellationToken: ct));
             }
+
+            // Remap any remaining raw WhatsApp media URLs for groups of merged products
+            await conn.ExecuteAsync(new CommandDefinition(@"
+                UPDATE wa.messages m
+                SET media_url = 'minio://' || med.storage_path, updated_at = NOW()
+                FROM public.media_links ml
+                JOIN public.media med ON med.id = ml.media_id
+                WHERE ml.entity_id = @TargetProductId AND ml.entity_type = 'product'
+                  AND m.group_id IN (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id IN (@SourceProductId, @TargetProductId))
+                  AND (m.media_url LIKE 'minio://whatsapp-data/%' OR m.media_url LIKE 'minio://whatsapp-raw/%')
+                  AND (m.media_url LIKE '%' || med.original_filename OR m.content LIKE '%' || med.original_filename)",
+                new { TargetProductId = targetProductId, SourceProductId = sourceProductId },
+                transaction: trans, cancellationToken: ct));
 
             await conn.ExecuteAsync(new CommandDefinition(@"UPDATE public.vendor_listings SET product_id = @TargetProductId, updated_at = NOW() WHERE product_id = @SourceProductId", 
                 new { TargetProductId = targetProductId, SourceProductId = sourceProductId }, transaction: trans, cancellationToken: ct));
@@ -1949,6 +2253,14 @@ public class WhatsAppGroupWorker : BackgroundService
 
             await trans.CommitAsync(ct);
 
+            // Update in-memory hash cache for current worker instance
+            if (duplicateSourceMediaIds.Count > 0)
+            {
+                _hashCache.RemoveMedia(duplicateSourceMediaIds);
+            }
+            _hashCache.MergeProducts(sourceProductId, targetProductId);
+            _hashCache.RemoveProduct(sourceProductId);
+
             // Publish message to Kafka to keep cache synced across multiple worker instances
             var _producer = _serviceProvider.GetRequiredService<IProducer<string, string>>();
             var mergeEvent = new DeepLens.Contracts.Events.ProductMergedEvent
@@ -1956,6 +2268,7 @@ public class WhatsAppGroupWorker : BackgroundService
                 EventId = Guid.NewGuid(),
                 SourceProductId = sourceProductId,
                 TargetProductId = targetProductId,
+                DeduplicatedMediaIds = duplicateSourceMediaIds,
                 Timestamp = DateTime.UtcNow
             };
             await _producer.ProduceAsync(DeepLens.Contracts.Events.KafkaTopics.ProductMerged, new Confluent.Kafka.Message<string, string>
@@ -1965,6 +2278,7 @@ public class WhatsAppGroupWorker : BackgroundService
             }, ct);
 
             _logger.LogInformation("Successfully executed delayed auto-merge of {SourceProductId} into {TargetProductId}", sourceProductId, targetProductId);
+            return true;
         }
         catch (Exception ex)
         {

@@ -1,5 +1,6 @@
 import { getWhatsAppDbClient, initializeDbClient } from '../clients/db.client';
 import { groupReadinessService } from '../services/group-readiness.service';
+import { isStandaloneEmoji } from '../services/zoning.service';
 import { logger } from '../utils/logger';
 import { randomUUID } from 'crypto';
 
@@ -51,7 +52,7 @@ export async function runConsolidation(): Promise<StickerConsolidationStats> {
 
             // Fetch all messages chronologically
             const messagesRes = await client.query(
-                `SELECT id, message_id, jid, media_type, timestamp, group_id, metadata 
+                `SELECT id, message_id, jid, content, media_type, timestamp, group_id, metadata 
                  FROM wa.messages 
                  WHERE jid = $1 AND is_deleted = false 
                  ORDER BY timestamp ASC, id ASC`,
@@ -61,7 +62,7 @@ export async function runConsolidation(): Promise<StickerConsolidationStats> {
             const messages = messagesRes.rows;
             if (messages.length === 0) continue;
 
-            // Partition messages into sticker-bounded intervals
+            // Partition messages into sticker/emoji-bounded intervals
             const intervals: Array<{
                 stickerMsg?: any;
                 items: any[];
@@ -73,8 +74,10 @@ export async function runConsolidation(): Promise<StickerConsolidationStats> {
                 const isSticker = msg.media_type === 'sticker' 
                     || msg.metadata?.stickerMessage !== undefined
                     || (typeof msg.metadata === 'string' && msg.metadata.includes('stickerMessage'));
+                const isEmojiBoundary = isStandaloneEmoji(msg.content);
+                const isDelimiter = isSticker || isEmojiBoundary;
 
-                if (isSticker) {
+                if (isDelimiter) {
                     if (currentIntervalItems.length > 0) {
                         intervals.push({ items: currentIntervalItems });
                         currentIntervalItems = [];
@@ -93,14 +96,21 @@ export async function runConsolidation(): Promise<StickerConsolidationStats> {
             for (const interval of intervals) {
                 stats.totalIntervals++;
 
-                // Handle sticker delimiter message itself
+                // Handle delimiter message itself (sticker or standalone emoji)
                 if (interval.stickerMsg) {
                     if (!interval.stickerMsg.group_id || !interval.stickerMsg.group_id.startsWith('sticker_')) {
                         const stickerGroupId = `sticker_${randomUUID()}`;
-                        await client.query(
-                            `UPDATE wa.messages SET group_id = $1, media_type = 'sticker' WHERE id = $2`,
-                            [stickerGroupId, interval.stickerMsg.id]
-                        );
+                        if (interval.stickerMsg.media_type === 'sticker' || interval.stickerMsg.metadata?.stickerMessage !== undefined) {
+                            await client.query(
+                                `UPDATE wa.messages SET group_id = $1, media_type = 'sticker' WHERE id = $2`,
+                                [stickerGroupId, interval.stickerMsg.id]
+                            );
+                        } else {
+                            await client.query(
+                                `UPDATE wa.messages SET group_id = $1 WHERE id = $2`,
+                                [stickerGroupId, interval.stickerMsg.id]
+                            );
+                        }
                     }
                     continue;
                 }
