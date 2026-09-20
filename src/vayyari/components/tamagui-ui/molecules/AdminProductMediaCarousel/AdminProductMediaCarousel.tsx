@@ -1,5 +1,5 @@
-import React from 'react';
-import { ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { FlatList, TouchableOpacity, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuImage, LuPlay, LuLayoutGrid, LuLayers } from '../../icons/lu';
@@ -35,10 +35,22 @@ export function AdminProductMediaCarousel({
   height = Math.round(SCREEN_WIDTH * 1.15),
 }: AdminProductMediaCarouselProps) {
   const { tokens } = useTheme();
+  const carouselRef = useRef<FlatList<MediaSlideItem>>(null);
+
+  // Sync carousel position when active index changes (e.g. from gallery selection)
+  useEffect(() => {
+    if (viewMode === 'carousel' && activeMediaIndex >= 0 && activeMediaIndex < mediaList.length) {
+      try {
+        carouselRef.current?.scrollToIndex({ index: activeMediaIndex, animated: false });
+      } catch {
+        // Safe fallback if layout not yet calculated
+      }
+    }
+  }, [activeMediaIndex, viewMode, mediaList.length]);
 
   if (viewMode === 'gallery') {
     return (
-      <YStack backgroundColor="#000000" width="100%">
+      <YStack backgroundColor="#000000" width="100%" height={height * 1.4}>
         {/* Toggle Mode Button Bar */}
         <XStack
           position="absolute"
@@ -64,25 +76,32 @@ export function AdminProductMediaCarousel({
           </TouchableOpacity>
         </XStack>
 
-        {/* 3-Column Grid View */}
-        <XStack flexWrap="wrap" padding={1.5} paddingTop={48}>
-          {mediaList.length === 0 ? (
-            <YStack
-              width="100%"
-              height={260}
-              alignItems="center"
-              justifyContent="center"
-              gap={8}
-            >
-              <LuImage size={40} color="#666666" />
-              <Text fontSize={12} color="#888888">
-                No media available
-              </Text>
-            </YStack>
-          ) : (
-            mediaList.map((m, idx) => (
+        {mediaList.length === 0 ? (
+          <YStack
+            width="100%"
+            height={260}
+            alignItems="center"
+            justifyContent="center"
+            gap={8}
+            paddingTop={48}
+          >
+            <LuImage size={40} color="#666666" />
+            <Text fontSize={12} color="#888888">
+              No media available
+            </Text>
+          </YStack>
+        ) : (
+          <FlatList
+            data={mediaList}
+            numColumns={3}
+            keyExtractor={(m, idx) => (m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? `${m.id}-${idx}` : String(idx))}
+            initialNumToRender={15}
+            maxToRenderPerBatch={15}
+            windowSize={5}
+            removeClippedSubviews={true}
+            contentContainerStyle={{ padding: 1.5, paddingTop: 48 }}
+            renderItem={({ item: m, index: idx }) => (
               <YStack
-                key={m.id || idx}
                 width="33.333333%"
                 aspectRatio={4 / 5}
                 padding={1.5}
@@ -148,9 +167,9 @@ export function AdminProductMediaCarousel({
                   </YStack>
                 </TouchableOpacity>
               </YStack>
-            ))
-          )}
-        </XStack>
+            )}
+          />
+        )}
       </YStack>
     );
   }
@@ -164,39 +183,48 @@ export function AdminProductMediaCarousel({
       position="relative"
       overflow="hidden"
     >
-      {/* Media Scroll Pager */}
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={(e) => {
-          const offsetX = e.nativeEvent.contentOffset.x;
-          const idx = Math.round(offsetX / (SCREEN_WIDTH || 1));
-          if (idx !== activeMediaIndex && idx >= 0 && idx < mediaList.length) {
-            onMediaIndexChange(idx);
-          }
-        }}
-        scrollEventThrottle={16}
-        style={{ width: '100%', height: '100%' }}
-      >
-        {mediaList.length === 0 ? (
-          <YStack
-            width={SCREEN_WIDTH}
-            height={height}
-            alignItems="center"
-            justifyContent="center"
-            gap={8}
-            backgroundColor="#141414"
-          >
-            <LuImage size={48} color="#555555" />
-            <Text fontSize={13} color="#888888">
-              No media available for this product
-            </Text>
-          </YStack>
-        ) : (
-          mediaList.map((m, idx) => (
+      {mediaList.length === 0 ? (
+        <YStack
+          width={SCREEN_WIDTH}
+          height={height}
+          alignItems="center"
+          justifyContent="center"
+          gap={8}
+          backgroundColor="#141414"
+        >
+          <LuImage size={48} color="#555555" />
+          <Text fontSize={13} color="#888888">
+            No media available for this product
+          </Text>
+        </YStack>
+      ) : (
+        <FlatList
+          ref={carouselRef}
+          data={mediaList}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(m, idx) => (m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? `${m.id}-${idx}` : String(idx))}
+          getItemLayout={(_, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          removeClippedSubviews={true}
+          onMomentumScrollEnd={(e) => {
+            const offsetX = e.nativeEvent.contentOffset.x;
+            const idx = Math.round(offsetX / (SCREEN_WIDTH || 1));
+            if (idx !== activeMediaIndex && idx >= 0 && idx < mediaList.length) {
+              onMediaIndexChange(idx);
+            }
+          }}
+          onScrollToIndexFailed={() => {}}
+          style={{ width: '100%', height: '100%' }}
+          renderItem={({ item: m, index: idx }) => (
             <TouchableOpacity
-              key={m.id || idx}
               accessibilityRole="button"
               accessibilityLabel={`Fullscreen media ${idx + 1}`}
               activeOpacity={0.9}
@@ -242,9 +270,9 @@ export function AdminProductMediaCarousel({
                 </YStack>
               )}
             </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+          )}
+        />
+      )}
 
       {/* Floating Gallery Switch Button (Top Right) */}
       <XStack
@@ -271,29 +299,48 @@ export function AdminProductMediaCarousel({
         </TouchableOpacity>
       </XStack>
 
-      {/* Paging Dots Indicator (Bottom Center) */}
+      {/* Adaptive Paging Indicator (Bottom Center): Dots for <= 8, Counter pill for > 8 */}
       {mediaList.length > 1 && (
-        <XStack
-          position="absolute"
-          bottom={14}
-          alignSelf="center"
-          backgroundColor="rgba(0,0,0,0.5)"
-          paddingHorizontal={10}
-          paddingVertical={5}
-          borderRadius={tokens.radius.full}
-          gap={6}
-          alignItems="center"
-        >
-          {mediaList.map((_, i) => (
-            <YStack
-              key={i}
-              width={i === activeMediaIndex ? 18 : 6}
-              height={6}
-              borderRadius={3}
-              backgroundColor={i === activeMediaIndex ? '#ffffff' : 'rgba(255,255,255,0.45)'}
-            />
-          ))}
-        </XStack>
+        mediaList.length <= 8 ? (
+          <XStack
+            position="absolute"
+            bottom={14}
+            alignSelf="center"
+            backgroundColor="rgba(0,0,0,0.5)"
+            paddingHorizontal={10}
+            paddingVertical={5}
+            borderRadius={tokens.radius.full}
+            gap={6}
+            alignItems="center"
+          >
+            {mediaList.map((_, i) => (
+              <YStack
+                key={i}
+                width={i === activeMediaIndex ? 18 : 6}
+                height={6}
+                borderRadius={3}
+                backgroundColor={i === activeMediaIndex ? '#ffffff' : 'rgba(255,255,255,0.45)'}
+              />
+            ))}
+          </XStack>
+        ) : (
+          <XStack
+            position="absolute"
+            bottom={14}
+            alignSelf="center"
+            backgroundColor="rgba(0,0,0,0.65)"
+            paddingHorizontal={12}
+            paddingVertical={5}
+            borderRadius={tokens.radius.full}
+            gap={6}
+            alignItems="center"
+          >
+            <LuImage size={12} color="#ffffff" />
+            <Text fontSize={11} fontWeight="700" color="#ffffff">
+              {activeMediaIndex + 1} / {mediaList.length}
+            </Text>
+          </XStack>
+        )
       )}
     </YStack>
   );

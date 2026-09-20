@@ -299,29 +299,48 @@ export function AdminProductMediaCarousel({
         </Pressable>
       </XStack>
 
-      {/* Paging Dots Indicator (Bottom Center) */}
+      {/* Adaptive Paging Indicator (Bottom Center): Dots for <= 8, Counter pill for > 8 */}
       {mediaList.length > 1 && (
-        <XStack
-          position="absolute"
-          bottom={14}
-          alignSelf="center"
-          backgroundColor="rgba(0,0,0,0.5)"
-          paddingHorizontal={10}
-          paddingVertical={5}
-          borderRadius={tokens.radius.full}
-          gap={6}
-          alignItems="center"
-        >
-          {mediaList.map((_, i) => (
-            <YStack
-              key={i}
-              width={i === activeMediaIndex ? 18 : 6}
-              height={6}
-              borderRadius={3}
-              backgroundColor={i === activeMediaIndex ? '#ffffff' : 'rgba(255,255,255,0.45)'}
-            />
-          ))}
-        </XStack>
+        mediaList.length <= 8 ? (
+          <XStack
+            position="absolute"
+            bottom={14}
+            alignSelf="center"
+            backgroundColor="rgba(0,0,0,0.5)"
+            paddingHorizontal={10}
+            paddingVertical={5}
+            borderRadius={tokens.radius.full}
+            gap={6}
+            alignItems="center"
+          >
+            {mediaList.map((_, i) => (
+              <YStack
+                key={i}
+                width={i === activeMediaIndex ? 18 : 6}
+                height={6}
+                borderRadius={3}
+                backgroundColor={i === activeMediaIndex ? '#ffffff' : 'rgba(255,255,255,0.45)'}
+              />
+            ))}
+          </XStack>
+        ) : (
+          <XStack
+            position="absolute"
+            bottom={14}
+            alignSelf="center"
+            backgroundColor="rgba(0,0,0,0.65)"
+            paddingHorizontal={12}
+            paddingVertical={5}
+            borderRadius={tokens.radius.full}
+            gap={6}
+            alignItems="center"
+          >
+            <LuImage size={12} color="#ffffff" />
+            <Text fontSize={11} fontWeight="700" color="#ffffff">
+              {activeMediaIndex + 1} / {mediaList.length}
+            </Text>
+          </XStack>
+        )
       )}
     </YStack>
   );
