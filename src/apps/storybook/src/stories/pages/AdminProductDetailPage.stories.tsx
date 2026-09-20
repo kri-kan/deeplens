@@ -14,6 +14,96 @@ import { DIVERSE_CATALOG_PRODUCTS, CatalogTestProduct } from '../../data/catalog
 // Authentic Catalog Data Helpers
 // ─────────────────────────────────────────────
 
+const AI_PDP_FACETS: Record<string, Partial<AdminProductDetailData>> = {
+  VF2B56: {
+    craft: 'Banarasi Kadwa Pitloom',
+    motif: 'Floral Kadwa Bootis & Jaal',
+    border: 'Zari Contrast Border with Latkan Pallu',
+    stitchType: 'Ready to Drape',
+    blouseFormat: 'Attached Unstitched Running Blouse (80cm)',
+    occasions: ['Wedding & Bridal', 'Festive Diwali & Puja', 'Reception & Cocktail'],
+    confidenceScore: 0.95,
+    taxonomyVersion: 'v2.1',
+    taxonomyDerivedAt: 'Today, 2:45 PM',
+    unifiedAttributes: {
+      craft_technique: 'Banarasi Kadwa Pitloom Weave',
+      regional_origin: 'Varanasi (Banaras), Uttar Pradesh',
+      motif_pattern: 'Floral Kadwa Bootis & Royal Jaal',
+      border_pallu: 'Tested Zari Contrast Border with Hand-Crafted Latkans',
+      zari_type: 'Tested Gold & Silver Metallic Zari',
+      work_heaviness: 'Bridal Heavy',
+      fabric_base: 'Dupion Mulberry Silk',
+      stitch_type: 'Ready to Drape (Pre-Pleated)',
+      blouse_format: 'Attached Unstitched Running Blouse (80cm)',
+      dimensions: 'Saree: 5.5m • Blouse: 0.8m',
+      occasions: ['Wedding & Bridal', 'Festive Diwali & Puja', 'Reception & Cocktail'],
+      tags: ['banarasi silk', 'handloom saree', 'kadwa booti', 'bridal wear', 'zari brocade'],
+      wash_care: 'Dry Clean Only • Store wrapped in pure muslin cloth',
+      confidence_score: 0.95,
+      taxonomy_version: 'v2.1',
+      taxonomy_derived_at: 'Today, 2:45 PM',
+    },
+  },
+  VF189B: {
+    craft: 'Banarasi Jacquard Brocade',
+    motif: 'Royal Floral Jaal',
+    border: 'Contrast Gold Piping',
+    stitchType: 'Stitched Padded',
+    blouseFormat: 'Designer Ready-to-Wear Princess Cut',
+    occasions: ['Sangeet Night', 'Festive Celebration', 'Reception Cocktail'],
+    confidenceScore: 0.92,
+    taxonomyVersion: 'v2.1',
+    taxonomyDerivedAt: 'Yesterday, 5:15 PM',
+    unifiedAttributes: {
+      craft_technique: 'Banarasi Jacquard Brocade',
+      regional_origin: 'Varanasi, Uttar Pradesh',
+      motif_pattern: 'Royal Floral Jaal',
+      border_pallu: 'Contrast Gold Piping with Back Latkan Dori',
+      zari_type: 'Tested Metallic Gold Zari',
+      work_heaviness: 'Medium Festive',
+      fabric_base: 'Banarasi Brocade Silk',
+      stitch_type: 'Stitched Padded with 2-inch margins',
+      blouse_format: 'Princess Cut Padded Blouse',
+      dimensions: 'Bust Size 36 • Alterable to 40',
+      occasions: ['Sangeet Night', 'Festive Celebration', 'Reception Cocktail'],
+      tags: ['brocade blouse', 'princess cut', 'padded blouse', 'festive wear'],
+      wash_care: 'Gentle Dry Clean Only',
+      confidence_score: 0.92,
+      taxonomy_version: 'v2.1',
+      taxonomy_derived_at: 'Yesterday, 5:15 PM',
+    },
+  },
+  VF2F4A: {
+    craft: 'Foil & Digital Fusion Print',
+    motif: 'Mughal Botanical Arabesque',
+    border: 'Scalloped Embroidered Border',
+    stitchType: 'Ready to Wear 3-Piece Set',
+    blouseFormat: 'Flared Anarkali Kurta with Churidar',
+    occasions: ['Haldi & Mehendi', 'Festive Family Gathering'],
+    confidenceScore: 0.89,
+    taxonomyVersion: 'v2.1',
+    taxonomyDerivedAt: '2 days ago',
+    unifiedAttributes: {
+      craft_technique: 'Foil & Digital Fusion Print',
+      regional_origin: 'Surat, Gujarat',
+      motif_pattern: 'Mughal Botanical Arabesque',
+      border_pallu: 'Scalloped Embroidered Border with Gota Detailing',
+      zari_type: 'Metallic Foil Accents',
+      work_heaviness: 'Lightweight Festive',
+      fabric_base: 'Fendy Pure Silk',
+      stitch_type: 'Full Stitched Flare Set',
+      blouse_format: 'Anarkali Kurti with Dupatta & Pants',
+      dimensions: 'Kurti Length: 52" • Flare: 3.5m',
+      occasions: ['Haldi & Mehendi', 'Festive Family Gathering'],
+      tags: ['anarkali suit', 'fendy silk', 'digital print', 'haldi wear'],
+      wash_care: 'Dry Clean or Cold Hand Wash',
+      confidence_score: 0.89,
+      taxonomy_version: 'v2.1',
+      taxonomy_derived_at: '2 days ago',
+    },
+  },
+};
+
 export function toAdminProductDetail(product: CatalogTestProduct): AdminProductDetailData {
   const media: MediaSlideItem[] = [];
   const seenUrls = new Set<string>();
@@ -48,6 +138,33 @@ export function toAdminProductDetail(product: CatalogTestProduct): AdminProductD
     }
   });
 
+  const aiFacetData = AI_PDP_FACETS[product.sku] || {
+    craft: 'Artisanal Handloom',
+    motif: 'Traditional Booti Motifs',
+    border: 'Zari Edge Work',
+    stitchType: 'Ready to Wear',
+    blouseFormat: 'Standard Fit',
+    occasions: ['Festive & Celebrations'],
+    confidenceScore: 0.88,
+    taxonomyVersion: 'v2.1',
+    taxonomyDerivedAt: 'Today, 2:45 PM',
+    unifiedAttributes: {
+      craft_technique: 'Artisanal Handloom',
+      regional_origin: 'Varanasi / Surat',
+      motif_pattern: 'Traditional Booti Motifs',
+      border_pallu: 'Zari Edge Work',
+      fabric_base: product.fabric || 'Silk Blend',
+      stitch_type: 'Ready to Wear',
+      blouse_format: 'Standard Fit',
+      occasions: ['Festive & Celebrations'],
+      tags: ['ethnic wear', 'traditional'],
+      wash_care: 'Dry Clean Only',
+      confidence_score: 0.88,
+      taxonomy_version: 'v2.1',
+      taxonomy_derived_at: 'Today, 2:45 PM',
+    },
+  };
+
   return {
     id: product.id,
     title: product.title,
@@ -59,6 +176,7 @@ export function toAdminProductDetail(product: CatalogTestProduct): AdminProductD
     exclusiveDescription: product.description,
     isArchived: false,
     media,
+    ...aiFacetData,
     listings: [
       {
         id: `lst-${product.sku}-1`,
@@ -270,3 +388,18 @@ export const BrocadeBlouse: Story = {
     product: BLOUSE_PRODUCT,
   },
 };
+
+/**
+ * 8. AI-Derived Taxonomy Facets Inspector
+ * Highlights the dedicated rich AI vision inspection card, displaying confidence
+ * score pill, derivation timestamp, Craft Heritage & Weave specs, Garment &
+ * Tailoring specs, and interactive Occasion & Search Keyword tags.
+ */
+export const AiDerivedTaxonomyInspector: Story = {
+  name: '8. AI-Derived Taxonomy Facets Inspector',
+  decorators: [withFormFactor('mobile', 'Product Detail - AI Taxonomy Facets')],
+  args: {
+    product: SAREE_PRODUCT,
+  },
+};
+

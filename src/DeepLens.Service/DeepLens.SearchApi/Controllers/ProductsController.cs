@@ -15,6 +15,7 @@ namespace DeepLens.SearchApi.Controllers;
 
 [ApiController]
 [Route("api/v1/products")]
+[Route("api/products")]
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;

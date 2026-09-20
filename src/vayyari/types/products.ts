@@ -60,6 +60,12 @@ export interface VendorProduct {
   isStarred?: boolean;
   /** Whether this product has been archived */
   isArchived?: boolean;
+  unifiedAttributes?: Record<string, any>;
+  craft?: string;
+  motif?: string;
+  border?: string;
+  occasions?: string[];
+  confidenceScore?: number;
 }
 
 export interface MediaEntry {

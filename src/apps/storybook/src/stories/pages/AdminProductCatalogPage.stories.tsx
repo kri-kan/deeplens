@@ -13,6 +13,106 @@ import { DIVERSE_CATALOG_PRODUCTS } from '../../data/catalog';
 // Authentic Catalog Data
 // ─────────────────────────────────────────────
 
+const AI_FACET_PRESETS: Partial<ProductGridTileData>[] = [
+  {
+    craft: 'Banarasi Kadwa',
+    fabric: 'Dupion Mulberry Silk',
+    motif: 'Floral Booti & Jaal',
+    border: 'Tested Zari Contrast',
+    stitchType: 'Ready to Drape',
+    occasions: ['Wedding & Bridal', 'Festive Diwali'],
+    confidenceScore: 0.94,
+    unifiedAttributes: {
+      craft_technique: 'Banarasi Kadwa',
+      craft_techniques: ['Banarasi Kadwa', 'Pitloom Weave'],
+      fabric_base: 'Dupion Mulberry Silk',
+      motif_pattern: 'Floral Booti & Jaal',
+      motif_patterns: ['Floral Booti & Jaal', 'Kalka Paisley'],
+      border_pallu: 'Tested Zari Contrast',
+      border_pallus: ['Tested Zari Contrast', 'Latkan Tassels'],
+      stitch_type: 'Ready to Drape',
+      occasions: ['Wedding & Bridal', 'Festive Diwali'],
+      confidence_score: 0.94,
+    },
+  },
+  {
+    craft: 'Chanderi Weave',
+    fabric: 'Chanderi Silk Cotton',
+    motif: 'Royal Peacock (Mayur)',
+    border: 'Gold Tissue Border',
+    stitchType: 'Stitched Blouse',
+    occasions: ['Festive Puja', 'Haldi Ceremony'],
+    confidenceScore: 0.88,
+    unifiedAttributes: {
+      craft_technique: 'Chanderi Weave',
+      craft_techniques: ['Chanderi Weave', 'Handloom'],
+      fabric_base: 'Chanderi Silk Cotton',
+      motif_pattern: 'Royal Peacock (Mayur)',
+      motif_patterns: ['Royal Peacock (Mayur)'],
+      border_pallu: 'Gold Tissue Border',
+      border_pallus: ['Gold Tissue Border'],
+      stitch_type: 'Stitched Blouse',
+      occasions: ['Festive Puja', 'Haldi Ceremony'],
+      confidence_score: 0.88,
+    },
+  },
+  {
+    craft: 'Double Ikat Patola',
+    fabric: 'Pure Mulberry Silk',
+    motif: 'Geometric Chevron',
+    border: 'Contrast Temple Border',
+    stitchType: 'Semi-Stitched',
+    occasions: ['Reception Cocktail', 'Evening Gala'],
+    confidenceScore: 0.96,
+    unifiedAttributes: {
+      craft_technique: 'Double Ikat Patola',
+      craft_techniques: ['Double Ikat Patola'],
+      fabric_base: 'Pure Mulberry Silk',
+      motif_pattern: 'Geometric Chevron',
+      border_pallu: 'Contrast Temple Border',
+      stitch_type: 'Semi-Stitched',
+      occasions: ['Reception Cocktail', 'Evening Gala'],
+      confidence_score: 0.96,
+    },
+  },
+  {
+    craft: 'Lucknowi Chikankari',
+    fabric: 'Viscose Georgette',
+    motif: 'Jangla Floral Vines',
+    border: 'Embroidered Scallop',
+    stitchType: 'Ready to Drape',
+    occasions: ['Sangeet Night', 'Mehendi Ceremony'],
+    confidenceScore: 0.91,
+    unifiedAttributes: {
+      craft_technique: 'Lucknowi Chikankari',
+      fabric_base: 'Viscose Georgette',
+      motif_pattern: 'Jangla Floral Vines',
+      border_pallu: 'Embroidered Scallop',
+      stitch_type: 'Ready to Drape',
+      occasions: ['Sangeet Night', 'Mehendi Ceremony'],
+      confidence_score: 0.91,
+    },
+  },
+  {
+    craft: 'Kutch Bandhani',
+    fabric: 'Gajji Silk',
+    motif: 'Shikargah Wildlife',
+    border: 'Gota Patti Dori',
+    stitchType: 'Unstitched',
+    occasions: ['Wedding & Bridal', 'Festive Celebration'],
+    confidenceScore: 0.89,
+    unifiedAttributes: {
+      craft_technique: 'Kutch Bandhani',
+      fabric_base: 'Gajji Silk',
+      motif_pattern: 'Shikargah Wildlife',
+      border_pallu: 'Gota Patti Dori',
+      stitch_type: 'Unstitched',
+      occasions: ['Wedding & Bridal', 'Festive Celebration'],
+      confidence_score: 0.89,
+    },
+  },
+];
+
 const MOCK_PRODUCTS: ProductGridTileData[] = DIVERSE_CATALOG_PRODUCTS.map((p, idx) => ({
   id: p.id,
   productCode: p.sku,
@@ -25,6 +125,7 @@ const MOCK_PRODUCTS: ProductGridTileData[] = DIVERSE_CATALOG_PRODUCTS.map((p, id
     '',
   isStarred: idx % 2 === 0,
   timeAgo: `${(idx + 1) * 15}m ago`,
+  ...AI_FACET_PRESETS[idx % AI_FACET_PRESETS.length],
 }));
 
 
@@ -259,3 +360,23 @@ export const TabletViewport: Story = {
     products: [...MOCK_PRODUCTS, ...MOCK_PRODUCTS],
   },
 };
+
+/**
+ * 9. AI Facet Filtering & Visualization Story:
+ * Demonstrates active multi-dimensional filtering across craft (Banarasi Kadwa),
+ * motif, and fabric, with dynamic filter chips and AI badges rendered on tiles.
+ */
+export const AiFacetFilteringAndMatrix: Story = {
+  name: '9. AI Facet Filtering & Visualization',
+  decorators: [withFormFactor('mobile', 'Product Catalog - AI Facets')],
+  args: {
+    disableSafeArea: true,
+    products: MOCK_PRODUCTS,
+    activeFilterCount: 2,
+    filterChips: [
+      { id: 'craft_Banarasi Kadwa', label: 'Craft: Banarasi Kadwa' },
+      { id: 'f-fab-Dupion Mulberry Silk', label: 'Dupion Mulberry Silk' },
+    ],
+  },
+};
+

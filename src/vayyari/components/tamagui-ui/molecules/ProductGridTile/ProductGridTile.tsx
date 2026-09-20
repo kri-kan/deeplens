@@ -13,9 +13,18 @@ export interface ProductGridTileData {
   category?: string;
   imageUri?: string;
   isStarred?: boolean;
+  isPublishedToStore?: boolean;
   listingCount?: number;
   timeAgo?: string;
   rawItem?: any;
+  craft?: string;
+  fabric?: string;
+  motif?: string;
+  border?: string;
+  stitchType?: string;
+  occasions?: string[];
+  confidenceScore?: number;
+  unifiedAttributes?: Record<string, any>;
 }
 
 export interface ProductGridTileProps {
@@ -38,6 +47,32 @@ export function ProductGridTile({
   onQuickEdit,
 }: ProductGridTileProps) {
   const { tokens } = useTheme();
+
+  const hasAiFacets = Boolean(
+    item.craft ||
+    item.fabric ||
+    item.motif ||
+    item.border ||
+    (item.occasions && item.occasions.length > 0) ||
+    item.confidenceScore != null ||
+    (item.unifiedAttributes && Object.keys(item.unifiedAttributes).length > 0)
+  );
+
+  const aiFacetLabel =
+    item.craft ||
+    item.fabric ||
+    item.motif ||
+    item.border ||
+    item.unifiedAttributes?.craft_technique ||
+    item.unifiedAttributes?.fabric_base ||
+    item.unifiedAttributes?.motif_pattern ||
+    (hasAiFacets ? 'AI Enriched' : '');
+
+  const confidencePercent = item.confidenceScore != null
+    ? (item.confidenceScore <= 1 ? Math.round(item.confidenceScore * 100) : Math.round(item.confidenceScore))
+    : (item.unifiedAttributes?.confidence_score != null
+      ? (item.unifiedAttributes.confidence_score <= 1 ? Math.round(item.unifiedAttributes.confidence_score * 100) : Math.round(item.unifiedAttributes.confidence_score))
+      : null);
 
   return (
     <TouchableOpacity
@@ -70,6 +105,34 @@ export function ProductGridTile({
           <YStack flex={1} alignItems="center" justifyContent="center" backgroundColor={tokens.surfaceRaised}>
             <Text fontSize={11} color={tokens.textMuted}>No Media</Text>
           </YStack>
+        )}
+
+        {/* AI Enrichment Badge */}
+        {hasAiFacets && !!aiFacetLabel && (
+          <XStack
+            position="absolute"
+            top={selectionMode ? 32 : (item.isPublishedToStore ? 30 : 6)}
+            left={6}
+            maxWidth="75%"
+            backgroundColor="rgba(15, 23, 42, 0.82)"
+            paddingHorizontal={6}
+            paddingVertical={2.5}
+            borderRadius={4}
+            alignItems="center"
+            gap={3.5}
+            zIndex={9}
+            borderWidth={0.5}
+            borderColor="rgba(255, 255, 255, 0.2)"
+          >
+            <Text fontSize={9} fontWeight="700" color="#FCD34D" numberOfLines={1}>
+              ✨ {aiFacetLabel}
+            </Text>
+            {confidencePercent != null && (
+              <Text fontSize={8} fontWeight="700" color="#FFFFFF" opacity={0.9}>
+                {confidencePercent}%
+              </Text>
+            )}
+          </XStack>
         )}
 
         {/* Multi-Selection Overlay & Checkbox */}

@@ -275,6 +275,7 @@ public class ProductService : IProductService
                 p.fabric as ""Fabric"",
                 p.stitch_type as ""StitchType"",
                 p.work_heaviness as ""WorkHeaviness"",
+                p.unified_attributes::text as ""UnifiedAttributesJson"",
                 COALESCE((SELECT last_message_at FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT to_timestamp(m.timestamp) AT TIME ZONE 'UTC' FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1), p.created_at) as ""CreatedAt"",
                 p.is_starred as ""IsStarred"",
                 p.description as ""Description"",
@@ -465,6 +466,8 @@ public class ProductService : IProductService
                 ListingCount = r.ListingCount,
                 IsStarred = r.IsStarred
             };
+
+            PopulateUnifiedAttributes(vp, r.UnifiedAttributesJson, r.MasterProductId);
 
             if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
             {
@@ -1093,6 +1096,7 @@ public class ProductService : IProductService
                 p.stitch_type as ""StitchType"",
                 p.work_heaviness as ""WorkHeaviness"",
                 p.description as ""Description"",
+                p.unified_attributes::text as ""UnifiedAttributesJson"",
                 c.name as ""Category"",
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
@@ -1148,6 +1152,8 @@ public class ProductService : IProductService
             SourceGroupId = r.SourceGroupId,
             IsStarred = r.IsStarred
         };
+
+        PopulateUnifiedAttributes(vp, r.UnifiedAttributesJson, r.MasterProductId);
 
         if (r.Tags != null && string.IsNullOrEmpty(vp.Category))
         {
@@ -1747,6 +1753,7 @@ public class ProductService : IProductService
         public string? Fabric { get; init; }
         public string? StitchType { get; init; }
         public string? WorkHeaviness { get; init; }
+        public string? UnifiedAttributesJson { get; set; }
         public DateTime CreatedAt { get; init; }
         public bool IsStarred { get; init; }
         public string? Description { get; init; }
@@ -1758,6 +1765,71 @@ public class ProductService : IProductService
         public string? SourceJid { get; init; }
         public string? SourceGroupId { get; init; }
         public int ListingCount { get; init; }
+    }
+
+    private void PopulateUnifiedAttributes(VendorProduct vp, string? unifiedAttributesJson, Guid productId)
+    {
+        if (string.IsNullOrWhiteSpace(unifiedAttributesJson))
+            return;
+
+        try
+        {
+            vp.UnifiedAttributes = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                unifiedAttributesJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            using var doc = JsonDocument.Parse(unifiedAttributesJson);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("craft_technique", out var craftElem) && craftElem.ValueKind == JsonValueKind.String)
+                {
+                    vp.Craft = craftElem.GetString();
+                }
+                if (root.TryGetProperty("motif_pattern", out var motifElem) && motifElem.ValueKind == JsonValueKind.String)
+                {
+                    vp.Motif = motifElem.GetString();
+                }
+                if (root.TryGetProperty("border_pallu", out var borderElem) && borderElem.ValueKind == JsonValueKind.String)
+                {
+                    vp.Border = borderElem.GetString();
+                }
+                if (root.TryGetProperty("confidence_score", out var confElem))
+                {
+                    if (confElem.ValueKind == JsonValueKind.Number && confElem.TryGetInt32(out var confScore))
+                    {
+                        vp.ConfidenceScore = confScore;
+                    }
+                    else if (confElem.ValueKind == JsonValueKind.Number && confElem.TryGetDouble(out var confDouble))
+                    {
+                        vp.ConfidenceScore = (int)Math.Round(confDouble);
+                    }
+                }
+                if (root.TryGetProperty("occasions", out var occElem) && occElem.ValueKind == JsonValueKind.Array)
+                {
+                    var occasions = new List<string>();
+                    foreach (var item in occElem.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.String)
+                        {
+                            var val = item.GetString();
+                            if (!string.IsNullOrWhiteSpace(val))
+                            {
+                                occasions.Add(val);
+                            }
+                        }
+                    }
+                    if (occasions.Count > 0)
+                    {
+                        vp.Occasions = occasions;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to deserialize UnifiedAttributesJson for product {ProductId}", productId);
+        }
     }
 
     public async Task<ProductShareLogDto> RecordShareAsync(Guid productId, string platform, string? descriptionUsed, CancellationToken ct = default)

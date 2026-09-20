@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ScrollView, TextInput, Pressable } from 'react-native';
+import { ScrollView, TextInput, Pressable, Image } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -8,6 +8,8 @@ import {
   LuSlidersHorizontal,
   LuPackage,
   LuCheckCheck,
+  LuSparkles,
+  LuLayoutGrid,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
@@ -111,6 +113,8 @@ export function AdminProductCatalogPage({
   const [editingProduct, setEditingProduct] = useState<ProductGridTileData | null>(null);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(isFilterDrawerOpen);
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
+
+  const [catalogViewMode, setCatalogViewMode] = useState<'grid' | 'ai_matrix'>('grid');
 
   useEffect(() => {
     setInternalQuery(searchQuery || '');
@@ -284,7 +288,7 @@ export function AdminProductCatalogPage({
 
   const totalFilterCount = activeFilterCount > 0 ? activeFilterCount : computedFilterChips.length;
 
-  // Filter products by search, category, and filter drawer state
+  // Multi-dimensional client-side filtering matching top-level and unifiedAttributes
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       // Category filter
@@ -299,17 +303,118 @@ export function AdminProductCatalogPage({
       if (activeFilters.minPrice > 0 && (p.price || 0) < activeFilters.minPrice) return false;
       if (activeFilters.maxPrice > 0 && (p.price || 0) > activeFilters.maxPrice) return false;
 
+      // 1. Fabrics filter: matches p.fabric or p.unifiedAttributes?.fabric_base or p.unifiedAttributes?.fabric
+      if (activeFilters.fabrics && activeFilters.fabrics.length > 0) {
+        const pFab = (p.fabric || p.unifiedAttributes?.fabric_base || p.unifiedAttributes?.fabric || '').toLowerCase();
+        const matches = activeFilters.fabrics.some((f) => {
+          const fLower = f.toLowerCase();
+          return pFab.includes(fLower) || fLower.includes(pFab);
+        });
+        if (!matches) return false;
+      }
+
+      // 2. Crafts filter: matches p.craft or p.unifiedAttributes?.craft_technique or p.unifiedAttributes?.craft_techniques
+      if (activeFilters.crafts && activeFilters.crafts.length > 0) {
+        const pCraft = (p.craft || p.unifiedAttributes?.craft_technique || '').toLowerCase();
+        const pCraftsArr = Array.isArray(p.unifiedAttributes?.craft_techniques)
+          ? p.unifiedAttributes.craft_techniques.map((c: any) => String(c).toLowerCase())
+          : [];
+        const matches = activeFilters.crafts.some((c) => {
+          const cLower = c.toLowerCase();
+          return (
+            (pCraft && (pCraft.includes(cLower) || cLower.includes(pCraft))) ||
+            pCraftsArr.some((item: string) => item.includes(cLower) || cLower.includes(item))
+          );
+        });
+        if (!matches) return false;
+      }
+
+      // 3. Motifs filter: matches p.motif or p.unifiedAttributes?.motif_pattern or p.unifiedAttributes?.motif_patterns
+      if (activeFilters.motifs && activeFilters.motifs.length > 0) {
+        const pMotif = (p.motif || p.unifiedAttributes?.motif_pattern || '').toLowerCase();
+        const pMotifsArr = Array.isArray(p.unifiedAttributes?.motif_patterns)
+          ? p.unifiedAttributes.motif_patterns.map((m: any) => String(m).toLowerCase())
+          : [];
+        const matches = activeFilters.motifs.some((m) => {
+          const mLower = m.toLowerCase();
+          return (
+            (pMotif && (pMotif.includes(mLower) || mLower.includes(pMotif))) ||
+            pMotifsArr.some((item: string) => item.includes(mLower) || mLower.includes(item))
+          );
+        });
+        if (!matches) return false;
+      }
+
+      // 4. Borders filter: matches p.border or p.unifiedAttributes?.border_pallu or p.unifiedAttributes?.border_pallus
+      if (activeFilters.borders && activeFilters.borders.length > 0) {
+        const pBorder = (p.border || p.unifiedAttributes?.border_pallu || '').toLowerCase();
+        const pBordersArr = Array.isArray(p.unifiedAttributes?.border_pallus)
+          ? p.unifiedAttributes.border_pallus.map((b: any) => String(b).toLowerCase())
+          : [];
+        const matches = activeFilters.borders.some((b) => {
+          const bLower = b.toLowerCase();
+          return (
+            (pBorder && (pBorder.includes(bLower) || bLower.includes(pBorder))) ||
+            pBordersArr.some((item: string) => item.includes(bLower) || bLower.includes(item))
+          );
+        });
+        if (!matches) return false;
+      }
+
+      // 5. StitchTypes filter: matches p.stitchType or p.unifiedAttributes?.stitch_type
+      if (activeFilters.stitchTypes && activeFilters.stitchTypes.length > 0) {
+        const pStitch = (p.stitchType || (p as any).stitch_type || p.unifiedAttributes?.stitch_type || '').toLowerCase();
+        const matches = activeFilters.stitchTypes.some((s) => {
+          const sLower = s.toLowerCase();
+          return pStitch && (pStitch.includes(sLower) || sLower.includes(pStitch));
+        });
+        if (!matches) return false;
+      }
+
+      // 6. Occasions filter: matches any in p.occasions or p.unifiedAttributes?.occasions
+      if (activeFilters.occasions && activeFilters.occasions.length > 0) {
+        const pOcc: string[] = Array.isArray(p.occasions)
+          ? p.occasions.map((o) => String(o).toLowerCase())
+          : (typeof p.occasions === 'string' ? [(p.occasions as string).toLowerCase()] : []);
+        const pUaOcc: string[] = Array.isArray(p.unifiedAttributes?.occasions)
+          ? p.unifiedAttributes.occasions.map((o: any) => String(o).toLowerCase())
+          : (typeof p.unifiedAttributes?.occasions === 'string' ? [(p.unifiedAttributes.occasions as string).toLowerCase()] : []);
+        const allOcc = [...pOcc, ...pUaOcc];
+        const matches = activeFilters.occasions.some((o) => {
+          const oLower = o.toLowerCase();
+          return allOcc.some((item) => item.includes(oLower) || oLower.includes(item));
+        });
+        if (!matches) return false;
+      }
+
       // Search query
       if (internalQuery.trim()) {
         const q = internalQuery.toLowerCase();
         const codeMatch = p.productCode?.toLowerCase().includes(q);
         const titleMatch = p.title?.toLowerCase().includes(q);
         const catMatch = p.category?.toLowerCase().includes(q);
-        if (!codeMatch && !titleMatch && !catMatch) return false;
+        const craftMatch = p.craft?.toLowerCase().includes(q) || p.unifiedAttributes?.craft_technique?.toLowerCase().includes(q);
+        const fabricMatch = p.fabric?.toLowerCase().includes(q) || p.unifiedAttributes?.fabric_base?.toLowerCase().includes(q);
+        const motifMatch = p.motif?.toLowerCase().includes(q) || p.unifiedAttributes?.motif_pattern?.toLowerCase().includes(q);
+        if (!codeMatch && !titleMatch && !catMatch && !craftMatch && !fabricMatch && !motifMatch) return false;
       }
       return true;
     });
   }, [products, selectedCat, internalQuery, activeFilters]);
+
+  // AI enrichment count across the catalog
+  const aiEnrichedCount = useMemo(() => {
+    return products.filter((p) =>
+      Boolean(
+        p.craft ||
+        p.motif ||
+        p.border ||
+        (p.occasions && p.occasions.length > 0) ||
+        p.confidenceScore != null ||
+        (p.unifiedAttributes && Object.keys(p.unifiedAttributes).length > 0)
+      )
+    ).length;
+  }, [products]);
 
   const cellWidthPercent = columns === 3 ? "33.333333%" : `${100 / columns}%`;
 
@@ -333,9 +438,54 @@ export function AdminProductCatalogPage({
           <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
             ({filteredProducts.length})
           </Text>
+          {/* AI Enriched Summary Pill */}
+          <XStack
+            backgroundColor={`${tokens.accent}14`}
+            borderWidth={1}
+            borderColor={`${tokens.accent}35`}
+            borderRadius={tokens.radius.full}
+            paddingHorizontal={7}
+            paddingVertical={2.5}
+            alignItems="center"
+            gap={3.5}
+          >
+            <LuSparkles size={11} color={tokens.accent} />
+            <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+              {aiEnrichedCount}/{products.length} AI
+            </Text>
+          </XStack>
         </XStack>
 
         <XStack alignItems="center" gap={6}>
+          {/* View Mode Toggle (Grid vs AI Facet Matrix) */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={catalogViewMode === 'grid' ? 'Switch to AI Facet Matrix view' : 'Switch to Grid view'}
+            onPress={() => setCatalogViewMode((m) => (m === 'grid' ? 'ai_matrix' : 'grid'))}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <XStack
+              paddingHorizontal={8}
+              height={30}
+              borderRadius={tokens.radius.full}
+              backgroundColor={catalogViewMode === 'ai_matrix' ? `${tokens.accent}18` : tokens.surfaceRaised}
+              borderWidth={catalogViewMode === 'ai_matrix' ? 1 : 0}
+              borderColor={tokens.accent}
+              alignItems="center"
+              justifyContent="center"
+              gap={4}
+            >
+              {catalogViewMode === 'ai_matrix' ? (
+                <LuLayoutGrid size={13} color={tokens.accent} />
+              ) : (
+                <LuSparkles size={13} color={tokens.textMuted} />
+              )}
+              <Text fontSize={11} fontWeight="700" color={catalogViewMode === 'ai_matrix' ? tokens.accent : tokens.text}>
+                {catalogViewMode === 'ai_matrix' ? 'Matrix' : 'Grid'}
+              </Text>
+            </XStack>
+          </Pressable>
+
           {/* Filter Drawer Toggle */}
           <Pressable
             accessibilityRole="button"
@@ -579,6 +729,158 @@ export function AdminProductCatalogPage({
                 ? `No items match "${internalQuery}". Try adjusting your search keyword or filters.`
                 : 'No products in this category yet. Click Add to create one.'}
             </Text>
+          </YStack>
+        ) : catalogViewMode === 'ai_matrix' ? (
+          /* AI Facet Matrix Detailed View */
+          <YStack paddingHorizontal={12} paddingTop={6} paddingBottom={16} gap={10}>
+            {/* Quick Inspection Banner */}
+            <YStack
+              padding={10}
+              borderRadius={tokens.radius.sm}
+              backgroundColor={`${tokens.accent}10`}
+              borderWidth={1}
+              borderColor={`${tokens.accent}30`}
+              gap={4}
+            >
+              <XStack alignItems="center" justifyContent="space-between">
+                <XStack alignItems="center" gap={6}>
+                  <LuSparkles size={14} color={tokens.accent} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                    AI Facet Inspection Matrix ({filteredProducts.length})
+                  </Text>
+                </XStack>
+                <XStack
+                  backgroundColor={tokens.accent}
+                  paddingHorizontal={6}
+                  paddingVertical={2}
+                  borderRadius={10}
+                >
+                  <Text fontSize={9} fontWeight="800" color={tokens.accentForeground}>
+                    Active Taxonomies
+                  </Text>
+                </XStack>
+              </XStack>
+              <Text fontSize={10} color={tokens.textMuted}>
+                Inspecting multi-dimensional vision facets (Craft, Motif, Border, Stitch, Fabric & Occasion)
+              </Text>
+            </YStack>
+
+            {/* AI Matrix Cards */}
+            {filteredProducts.map((item) => {
+              const craftVal = item.craft || item.unifiedAttributes?.craft_technique;
+              const fabricVal = item.fabric || item.unifiedAttributes?.fabric_base || item.unifiedAttributes?.fabric;
+              const motifVal = item.motif || item.unifiedAttributes?.motif_pattern;
+              const borderVal = item.border || item.unifiedAttributes?.border_pallu;
+              const stitchVal = item.stitchType || item.unifiedAttributes?.stitch_type;
+              const occasionsArr = item.occasions || item.unifiedAttributes?.occasions || [];
+              const conf = item.confidenceScore ?? item.unifiedAttributes?.confidence_score;
+              const confPct = conf != null ? (conf <= 1 ? Math.round(conf * 100) : Math.round(conf)) : null;
+
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => onProductPress?.(item.id)}
+                  style={{ cursor: 'pointer' } as any}
+                >
+                  <YStack
+                    backgroundColor={tokens.surface}
+                    borderRadius={tokens.radius.md}
+                    borderWidth={1}
+                    borderColor={tokens.border}
+                    padding={10}
+                    gap={8}
+                  >
+                    <XStack gap={10} alignItems="center">
+                      {/* Thumbnail */}
+                      <YStack
+                        width={60}
+                        height={75}
+                        borderRadius={tokens.radius.xs}
+                        overflow="hidden"
+                        backgroundColor={tokens.surfaceRaised}
+                        borderWidth={0.5}
+                        borderColor={tokens.border}
+                      >
+                        {item.imageUri ? (
+                          <Image
+                            source={{ uri: item.imageUri }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <YStack flex={1} alignItems="center" justifyContent="center">
+                            <Text fontSize={9} color={tokens.textMuted}>No Media</Text>
+                          </YStack>
+                        )}
+                      </YStack>
+
+                      {/* Header Info */}
+                      <YStack flex={1} gap={2}>
+                        <XStack alignItems="center" justifyContent="space-between">
+                          <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                            {item.productCode || 'SKU'}
+                          </Text>
+                          {confPct != null && (
+                            <XStack
+                              backgroundColor="rgba(245, 158, 11, 0.15)"
+                              paddingHorizontal={6}
+                              paddingVertical={2}
+                              borderRadius={8}
+                              borderWidth={0.5}
+                              borderColor="rgba(245, 158, 11, 0.4)"
+                            >
+                              <Text fontSize={9} fontWeight="700" color="#D97706">
+                                ✨ {confPct}% Conf
+                              </Text>
+                            </XStack>
+                          )}
+                        </XStack>
+                        <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                          {item.title || item.productCode || 'Product'}
+                        </Text>
+                        <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                          ₹{item.price ? item.price.toLocaleString('en-IN') : '---'}
+                        </Text>
+                      </YStack>
+                    </XStack>
+
+                    {/* AI Facet Tags Row */}
+                    <XStack flexWrap="wrap" gap={4} paddingTop={4} borderTopWidth={0.5} borderTopColor={tokens.border}>
+                      {craftVal && (
+                        <XStack backgroundColor={`${tokens.accent}12`} paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                          <Text fontSize={9} fontWeight="700" color={tokens.accent}>🎨 Craft: {craftVal}</Text>
+                        </XStack>
+                      )}
+                      {fabricVal && (
+                        <XStack backgroundColor={tokens.surfaceRaised} paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                          <Text fontSize={9} fontWeight="600" color={tokens.text}>🧵 Fabric: {fabricVal}</Text>
+                        </XStack>
+                      )}
+                      {motifVal && (
+                        <XStack backgroundColor={tokens.surfaceRaised} paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                          <Text fontSize={9} fontWeight="600" color={tokens.text}>🌸 Motif: {motifVal}</Text>
+                        </XStack>
+                      )}
+                      {borderVal && (
+                        <XStack backgroundColor={tokens.surfaceRaised} paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                          <Text fontSize={9} fontWeight="600" color={tokens.text}>📐 Border: {borderVal}</Text>
+                        </XStack>
+                      )}
+                      {stitchVal && (
+                        <XStack backgroundColor={tokens.surfaceRaised} paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                          <Text fontSize={9} fontWeight="600" color={tokens.text}>🪡 {stitchVal}</Text>
+                        </XStack>
+                      )}
+                      {Array.isArray(occasionsArr) && occasionsArr.slice(0, 3).map((occ: string, idx: number) => (
+                        <XStack key={idx} backgroundColor="rgba(16, 185, 129, 0.12)" paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                          <Text fontSize={9} fontWeight="600" color="#059669">🌟 {occ}</Text>
+                        </XStack>
+                      ))}
+                    </XStack>
+                  </YStack>
+                </Pressable>
+              );
+            })}
           </YStack>
         ) : (
           /* Populated 3-Column Grid - Edge to Edge Fill */

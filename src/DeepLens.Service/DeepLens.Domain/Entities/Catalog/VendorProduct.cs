@@ -66,6 +66,24 @@ public class VendorProduct
 
     [JsonPropertyName("isStarred")]
     public bool IsStarred { get; set; } = false;
+
+    [JsonPropertyName("unifiedAttributes")]
+    public Dictionary<string, object>? UnifiedAttributes { get; set; }
+
+    [JsonPropertyName("craft")]
+    public string? Craft { get; set; }
+
+    [JsonPropertyName("motif")]
+    public string? Motif { get; set; }
+
+    [JsonPropertyName("border")]
+    public string? Border { get; set; }
+
+    [JsonPropertyName("occasions")]
+    public List<string> Occasions { get; set; } = new();
+
+    [JsonPropertyName("confidenceScore")]
+    public int? ConfidenceScore { get; set; }
 }
 
 public class MediaEntry

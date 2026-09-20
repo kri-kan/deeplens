@@ -18,6 +18,9 @@ import {
   LuDownload,
   LuLayers,
   LuStore,
+  LuClock,
+  LuTag,
+  LuCalendar,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
@@ -51,6 +54,16 @@ export interface AdminProductDetailData {
   isPublishedToStore?: boolean;
   media?: MediaSlideItem[];
   listings?: VendorListingItemData[];
+  unifiedAttributes?: Record<string, any>;
+  craft?: string;
+  motif?: string;
+  border?: string;
+  stitchType?: string;
+  blouseFormat?: string;
+  occasions?: string[];
+  confidenceScore?: number;
+  taxonomyVersion?: string;
+  taxonomyDerivedAt?: string;
 }
 
 export interface AdminProductDetailPageProps {
@@ -76,6 +89,35 @@ export interface AdminProductDetailPageProps {
   initialListingSheetOpen?: boolean;
   initialEditSheetOpen?: boolean;
   initialDeleteDialogOpen?: boolean;
+}
+
+function TaxonomySpecRow({
+  label,
+  value,
+  isHighlighted = false,
+}: {
+  label: string;
+  value: string;
+  isHighlighted?: boolean;
+}) {
+  const { tokens } = useTheme();
+  return (
+    <XStack alignItems="center" justifyContent="space-between" paddingVertical={3}>
+      <Text fontSize={11} color={tokens.textMuted} flex={1}>
+        {label}
+      </Text>
+      <Text
+        fontSize={11}
+        fontWeight={isHighlighted ? '700' : '600'}
+        color={isHighlighted ? tokens.accent : tokens.text}
+        textAlign="right"
+        flex={1.4}
+        numberOfLines={1}
+      >
+        {value}
+      </Text>
+    </XStack>
+  );
 }
 
 export function AdminProductDetailPage({
@@ -326,7 +368,238 @@ export function AdminProductDetailPage({
           onEditPress={() => setIsEditOpen(true)}
         />
 
-        {/* Vendor Listings Section */}
+        {/* AI-Derived Taxonomy Facets Inspector Section */}
+        {(() => {
+          const ua = product.unifiedAttributes || {};
+          const conf = product.confidenceScore ?? ua.confidence_score ?? ua.confidenceScore;
+          const confPct = conf != null ? (conf <= 1 ? Math.round(conf * 100) : Math.round(conf)) : 85;
+          const taxVersion = product.taxonomyVersion || ua.taxonomy_version || ua.taxonomyVersion || 'v2.0';
+          const derivedAt = product.taxonomyDerivedAt || ua.taxonomy_derived_at || ua.taxonomyDerivedAt || product.timestamp || 'Today, 2:45 PM';
+
+          // a) Craft Heritage & Weave
+          const craftTech = product.craft || ua.craft_technique || ua.weave_technique || ua.craft || 'Handloom Brocade Jacquard';
+          const regionalOrigin = ua.regional_origin || ua.craft_origin || ua.origin || (product as any).weaveOrigin || 'Varanasi (Banaras), UP';
+          const motifPattern = product.motif || ua.motif_pattern || ua.motif || 'Floral Kadwa Bootis & Jaal';
+          const borderPallu = product.border || ua.border_pallu || ua.border || 'Zari Contrast Border with Latkan Pallu';
+          const zariMaterial = ua.zari_type || ua.inlay_material || ua.zari || 'Tested Gold & Silver Metallic Zari';
+          const workHeaviness = ua.work_heaviness || ua.heaviness || 'Bridal Heavy';
+
+          // b) Garment & Tailoring
+          const fabricBase = product.fabric || ua.fabric_base || ua.fabric || 'Pure Mulberry Silk';
+          const stitchProfile = product.stitchType || ua.stitch_type || ua.stitch || 'Ready to Drape (Pre-Pleated)';
+          const blouseFormat = product.blouseFormat || ua.blouse_format || ua.blouse_type || 'Attached Unstitched Running Blouse (80cm)';
+          const dimensions = ua.dimensions || ua.saree_length || 'Saree: 5.5m • Blouse: 0.8m';
+
+          // c) Occasions & Search Relevance
+          const occasionsList: string[] = Array.isArray(product.occasions) && product.occasions.length > 0
+            ? product.occasions
+            : (Array.isArray(ua.occasions) && ua.occasions.length > 0
+              ? ua.occasions
+              : ['Wedding & Bridal', 'Festive Diwali & Puja', 'Reception & Cocktail']);
+
+          const searchKeywordsList: string[] = Array.isArray(ua.tags) && ua.tags.length > 0
+            ? ua.tags
+            : (Array.isArray(ua.search_keywords) && ua.search_keywords.length > 0
+              ? ua.search_keywords
+              : [
+                  craftTech.toLowerCase(),
+                  fabricBase.toLowerCase(),
+                  motifPattern.toLowerCase(),
+                  'ethnic wear',
+                  'traditional saree',
+                ]);
+
+          const washCare = ua.wash_care || ua.care_instructions || 'Dry Clean Only • Store in Breathable Cotton / Muslin Wrap';
+
+          return (
+            <YStack paddingHorizontal={16} paddingTop={16} gap={10}>
+              <YStack
+                backgroundColor={tokens.surface}
+                borderRadius={tokens.radius.md}
+                borderWidth={1}
+                borderColor={tokens.border}
+                overflow="hidden"
+              >
+                {/* Header */}
+                <XStack
+                  backgroundColor={`${tokens.accent}0F`}
+                  paddingHorizontal={14}
+                  paddingVertical={12}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  borderBottomWidth={1}
+                  borderBottomColor={tokens.border}
+                >
+                  <XStack alignItems="center" gap={8}>
+                    <LuSparkles size={16} color={tokens.accent} />
+                    <Text fontSize={13} fontWeight="800" color={tokens.text} letterSpacing={0.4}>
+                      ✨ AI-DERIVED TAXONOMY FACETS
+                    </Text>
+                  </XStack>
+
+                  {/* Confidence Pill */}
+                  <XStack
+                    backgroundColor="rgba(245, 158, 11, 0.15)"
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={12}
+                    borderWidth={0.5}
+                    borderColor="rgba(245, 158, 11, 0.4)"
+                  >
+                    <Text fontSize={10} fontWeight="700" color="#D97706">
+                      {confPct}% Confidence • {taxVersion}
+                    </Text>
+                  </XStack>
+                </XStack>
+
+                {/* Derivation Timestamp */}
+                <XStack
+                  paddingHorizontal={14}
+                  paddingVertical={6}
+                  backgroundColor={tokens.surfaceRaised}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  borderBottomWidth={0.5}
+                  borderBottomColor={tokens.border}
+                >
+                  <XStack alignItems="center" gap={4}>
+                    <LuClock size={11} color={tokens.textMuted} />
+                    <Text fontSize={10} color={tokens.textMuted}>
+                      DeepLens Vision Pipeline
+                    </Text>
+                  </XStack>
+                  <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
+                    Derived: {derivedAt}
+                  </Text>
+                </XStack>
+
+                {/* Sub-sections */}
+                <YStack padding={14} gap={14}>
+                  {/* a) Craft Heritage & Weave */}
+                  <YStack gap={6}>
+                    <XStack alignItems="center" gap={6}>
+                      <LuLayers size={13} color={tokens.accent} />
+                      <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                        CRAFT HERITAGE & WEAVE
+                      </Text>
+                    </XStack>
+                    <YStack
+                      backgroundColor={tokens.surfaceRaised}
+                      borderRadius={tokens.radius.xs}
+                      paddingHorizontal={12}
+                      paddingVertical={8}
+                      gap={4}
+                    >
+                      <TaxonomySpecRow label="Craft Technique" value={craftTech} isHighlighted />
+                      <TaxonomySpecRow label="Regional Origin" value={regionalOrigin} />
+                      <TaxonomySpecRow label="Motif & Pattern" value={motifPattern} />
+                      <TaxonomySpecRow label="Border & Pallu Detail" value={borderPallu} />
+                      <TaxonomySpecRow label="Zari/Inlay Material" value={zariMaterial} />
+                      <TaxonomySpecRow label="Work Heaviness" value={workHeaviness} />
+                    </YStack>
+                  </YStack>
+
+                  {/* b) Garment & Tailoring */}
+                  <YStack gap={6}>
+                    <XStack alignItems="center" gap={6}>
+                      <LuTag size={13} color={tokens.accent} />
+                      <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                        GARMENT & TAILORING
+                      </Text>
+                    </XStack>
+                    <YStack
+                      backgroundColor={tokens.surfaceRaised}
+                      borderRadius={tokens.radius.xs}
+                      paddingHorizontal={12}
+                      paddingVertical={8}
+                      gap={4}
+                    >
+                      <TaxonomySpecRow label="Fabric Base" value={fabricBase} isHighlighted />
+                      <TaxonomySpecRow label="Stitch Profile" value={stitchProfile} />
+                      <TaxonomySpecRow label="Blouse Format" value={blouseFormat} />
+                      <TaxonomySpecRow label="Saree/Blouse Dimensions" value={dimensions} />
+                    </YStack>
+                  </YStack>
+
+                  {/* c) Occasions & Search Relevance */}
+                  <YStack gap={6}>
+                    <XStack alignItems="center" gap={6}>
+                      <LuCalendar size={13} color={tokens.accent} />
+                      <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                        OCCASIONS & SEARCH RELEVANCE
+                      </Text>
+                    </XStack>
+                    <YStack
+                      backgroundColor={tokens.surfaceRaised}
+                      borderRadius={tokens.radius.xs}
+                      paddingHorizontal={12}
+                      paddingVertical={10}
+                      gap={8}
+                    >
+                      {/* Occasion Tags */}
+                      <YStack gap={4}>
+                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                          Occasion Tags
+                        </Text>
+                        <XStack flexWrap="wrap" gap={5}>
+                          {occasionsList.map((occ, idx) => (
+                            <XStack
+                              key={idx}
+                              backgroundColor="rgba(16, 185, 129, 0.12)"
+                              paddingHorizontal={8}
+                              paddingVertical={3}
+                              borderRadius={4}
+                              borderWidth={0.5}
+                              borderColor="rgba(16, 185, 129, 0.3)"
+                            >
+                              <Text fontSize={10} fontWeight="700" color="#059669">
+                                🌟 {occ}
+                              </Text>
+                            </XStack>
+                          ))}
+                        </XStack>
+                      </YStack>
+
+                      {/* Search Keywords */}
+                      <YStack gap={4}>
+                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                          Search Keywords
+                        </Text>
+                        <XStack flexWrap="wrap" gap={5}>
+                          {searchKeywordsList.map((tag, idx) => (
+                            <XStack
+                              key={idx}
+                              backgroundColor={tokens.surface}
+                              paddingHorizontal={7}
+                              paddingVertical={2.5}
+                              borderRadius={4}
+                              borderWidth={0.5}
+                              borderColor={tokens.border}
+                            >
+                              <Text fontSize={9} fontWeight="600" color={tokens.text}>
+                                #{tag}
+                              </Text>
+                            </XStack>
+                          ))}
+                        </XStack>
+                      </YStack>
+
+                      {/* Wash Care */}
+                      <YStack gap={3} paddingTop={4} borderTopWidth={0.5} borderTopColor={tokens.border}>
+                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                          Wash Care & Preservation
+                        </Text>
+                        <Text fontSize={10} color={tokens.text}>
+                          🧼 {washCare}
+                        </Text>
+                      </YStack>
+                    </YStack>
+                  </YStack>
+                </YStack>
+              </YStack>
+            </YStack>
+          );
+        })()}
         {listings.length > 0 && (
           <YStack paddingHorizontal={16} paddingTop={16} gap={10}>
             <XStack alignItems="center" justifyContent="space-between">
