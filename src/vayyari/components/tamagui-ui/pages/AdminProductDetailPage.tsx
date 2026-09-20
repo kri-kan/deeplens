@@ -24,6 +24,8 @@ import {
   LuClock,
   LuTag,
   LuCalendar,
+  LuChevronDown,
+  LuChevronUp,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -96,6 +98,7 @@ export interface AdminProductDetailPageProps {
   initialListingSheetOpen?: boolean;
   initialEditSheetOpen?: boolean;
   initialDeleteDialogOpen?: boolean;
+  initialTaxonomyExpanded?: boolean;
 }
 
 function toDisplayString(val: any, fallback: string = '---'): string {
@@ -171,6 +174,7 @@ export function AdminProductDetailPage({
   initialListingSheetOpen = false,
   initialEditSheetOpen = false,
   initialDeleteDialogOpen = false,
+  initialTaxonomyExpanded = false,
 }: AdminProductDetailPageProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -179,6 +183,7 @@ export function AdminProductDetailPage({
 
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'carousel' | 'gallery'>(initialViewMode);
+  const [isTaxonomyExpanded, setIsTaxonomyExpanded] = useState(initialTaxonomyExpanded);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(initialEditSheetOpen);
   const [isDeleteOpen, setIsDeleteOpen] = useState(initialDeleteDialogOpen);
@@ -537,210 +542,296 @@ export function AdminProductDetailPage({
                 borderColor={tokens.border}
                 overflow="hidden"
               >
-                {/* Header */}
-                <XStack
-                  backgroundColor={`${tokens.accent}0F`}
-                  paddingHorizontal={14}
-                  paddingVertical={12}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  borderBottomWidth={1}
-                  borderBottomColor={tokens.border}
+                {/* Header (Accordion Toggle) */}
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={isTaxonomyExpanded ? 'Collapse AI-Derived Taxonomy Facets' : 'Expand AI-Derived Taxonomy Facets'}
+                  onPress={() => setIsTaxonomyExpanded((prev) => !prev)}
+                  activeOpacity={0.7}
                 >
-                  <XStack alignItems="center" gap={8}>
-                    <LuSparkles size={16} color={tokens.accent} />
-                    <Text fontSize={13} fontWeight="800" color={tokens.text} letterSpacing={0.4}>
-                      ✨ AI-DERIVED TAXONOMY FACETS
-                    </Text>
-                  </XStack>
-
-                  <XStack alignItems="center" gap={8}>
-                    {/* Confidence Pill */}
-                    <XStack
-                      backgroundColor="rgba(245, 158, 11, 0.15)"
-                      paddingHorizontal={8}
-                      paddingVertical={3}
-                      borderRadius={12}
-                      borderWidth={0.5}
-                      borderColor="rgba(245, 158, 11, 0.4)"
-                    >
-                      <Text fontSize={10} fontWeight="700" color="#D97706">
-                        {confPct}% Confidence • {taxVersion}
+                  <XStack
+                    backgroundColor={`${tokens.accent}0F`}
+                    paddingHorizontal={14}
+                    paddingVertical={12}
+                    alignItems="center"
+                    justifyContent="space-between"
+                    borderBottomWidth={isTaxonomyExpanded ? 1 : 0}
+                    borderBottomColor={tokens.border}
+                  >
+                    <XStack alignItems="center" gap={8} flex={1}>
+                      <LuSparkles size={16} color={tokens.accent} />
+                      <Text fontSize={13} fontWeight="800" color={tokens.text} letterSpacing={0.4}>
+                        ✨ AI-DERIVED TAXONOMY FACETS
                       </Text>
                     </XStack>
 
-                    {/* Enrich with AI Action Button */}
-                    {onReevaluateLLM && (
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Enrich product facets with AI"
-                        onPress={onReevaluateLLM}
-                        activeOpacity={0.7}
+                    <XStack alignItems="center" gap={8}>
+                      {/* Confidence Pill */}
+                      <XStack
+                        backgroundColor="rgba(245, 158, 11, 0.15)"
+                        paddingHorizontal={8}
+                        paddingVertical={3}
+                        borderRadius={12}
+                        borderWidth={0.5}
+                        borderColor="rgba(245, 158, 11, 0.4)"
                       >
-                        <XStack
-                          alignItems="center"
-                          gap={4}
-                          paddingHorizontal={9}
-                          paddingVertical={4}
-                          borderRadius={tokens.radius.full}
-                          backgroundColor={`${tokens.accent}18`}
-                          borderWidth={1}
-                          borderColor={`${tokens.accent}40`}
+                        <Text fontSize={10} fontWeight="700" color="#D97706">
+                          {confPct}% Confidence • {taxVersion}
+                        </Text>
+                      </XStack>
+
+                      {/* Enrich with AI Action Button */}
+                      {onReevaluateLLM && (
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel="Enrich product facets with AI"
+                          onPress={(e) => {
+                            e?.stopPropagation?.();
+                            onReevaluateLLM();
+                          }}
+                          activeOpacity={0.7}
                         >
-                          <LuSparkles size={12} color={tokens.accent} />
-                          <Text fontSize={10} fontWeight="800" color={tokens.accent}>
-                            Enrich with AI
+                          <XStack
+                            alignItems="center"
+                            gap={4}
+                            paddingHorizontal={9}
+                            paddingVertical={4}
+                            borderRadius={tokens.radius.full}
+                            backgroundColor={`${tokens.accent}18`}
+                            borderWidth={1}
+                            borderColor={`${tokens.accent}40`}
+                          >
+                            <LuSparkles size={12} color={tokens.accent} />
+                            <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                              Enrich with AI
+                            </Text>
+                          </XStack>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Chevron Expand/Collapse Indicator */}
+                      <XStack
+                        width={24}
+                        height={24}
+                        borderRadius={12}
+                        backgroundColor={tokens.surfaceRaised}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        {isTaxonomyExpanded ? (
+                          <LuChevronUp size={14} color={tokens.textMuted} />
+                        ) : (
+                          <LuChevronDown size={14} color={tokens.textMuted} />
+                        )}
+                      </XStack>
+                    </XStack>
+                  </XStack>
+                </TouchableOpacity>
+
+                {/* Compact Summary Strip when Collapsed */}
+                {!isTaxonomyExpanded && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Expand to view full taxonomy specifications"
+                    onPress={() => setIsTaxonomyExpanded(true)}
+                    activeOpacity={0.7}
+                  >
+                    <XStack
+                      paddingHorizontal={14}
+                      paddingVertical={9}
+                      backgroundColor={tokens.surfaceRaised}
+                      alignItems="center"
+                      justifyContent="space-between"
+                      borderTopWidth={0.5}
+                      borderTopColor={tokens.border}
+                    >
+                      <XStack alignItems="center" gap={6} flex={1} overflow="hidden" marginRight={8}>
+                        <Text fontSize={11} fontWeight="600" color={tokens.text} numberOfLines={1}>
+                          🎨 {craftTech} • 🧵 {fabricBase} • 🪡 {stitchProfile}
+                        </Text>
+                      </XStack>
+                      <XStack alignItems="center" gap={4}>
+                        <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+                          View 14+ Specs
+                        </Text>
+                        <LuChevronDown size={12} color={tokens.accent} />
+                      </XStack>
+                    </XStack>
+                  </TouchableOpacity>
+                )}
+
+                {/* Expanded Full Inspector Content */}
+                {isTaxonomyExpanded && (
+                  <>
+                    {/* Derivation Timestamp */}
+                    <XStack
+                      paddingHorizontal={14}
+                      paddingVertical={6}
+                      backgroundColor={tokens.surfaceRaised}
+                      alignItems="center"
+                      justifyContent="space-between"
+                      borderBottomWidth={0.5}
+                      borderBottomColor={tokens.border}
+                    >
+                      <XStack alignItems="center" gap={4}>
+                        <LuClock size={11} color={tokens.textMuted} />
+                        <Text fontSize={10} color={tokens.textMuted}>
+                          DeepLens Vision Pipeline
+                        </Text>
+                      </XStack>
+                      <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
+                        Derived: {derivedAt}
+                      </Text>
+                    </XStack>
+
+                    {/* Sub-sections */}
+                    <YStack padding={14} gap={14}>
+                      {/* a) Craft Heritage & Weave */}
+                      <YStack gap={6}>
+                        <XStack alignItems="center" gap={6}>
+                          <LuLayers size={13} color={tokens.accent} />
+                          <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                            CRAFT HERITAGE & WEAVE
                           </Text>
                         </XStack>
-                      </TouchableOpacity>
-                    )}
-                  </XStack>
-                </XStack>
+                        <YStack
+                          backgroundColor={tokens.surfaceRaised}
+                          borderRadius={tokens.radius.xs}
+                          paddingHorizontal={12}
+                          paddingVertical={8}
+                          gap={4}
+                        >
+                          <TaxonomySpecRow label="Craft Technique" value={craftTech} isHighlighted />
+                          <TaxonomySpecRow label="Regional Origin" value={regionalOrigin} />
+                          <TaxonomySpecRow label="Motif & Pattern" value={motifPattern} />
+                          <TaxonomySpecRow label="Border & Pallu Detail" value={borderPallu} />
+                          <TaxonomySpecRow label="Zari/Inlay Material" value={zariMaterial} />
+                          <TaxonomySpecRow label="Work Heaviness" value={workHeaviness} />
+                        </YStack>
+                      </YStack>
 
-                {/* Derivation Timestamp */}
-                <XStack
-                  paddingHorizontal={14}
-                  paddingVertical={6}
-                  backgroundColor={tokens.surfaceRaised}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  borderBottomWidth={0.5}
-                  borderBottomColor={tokens.border}
-                >
-                  <XStack alignItems="center" gap={4}>
-                    <LuClock size={11} color={tokens.textMuted} />
-                    <Text fontSize={10} color={tokens.textMuted}>
-                      DeepLens Vision Pipeline
-                    </Text>
-                  </XStack>
-                  <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
-                    Derived: {derivedAt}
-                  </Text>
-                </XStack>
-
-                {/* Sub-sections */}
-                <YStack padding={14} gap={14}>
-                  {/* a) Craft Heritage & Weave */}
-                  <YStack gap={6}>
-                    <XStack alignItems="center" gap={6}>
-                      <LuLayers size={13} color={tokens.accent} />
-                      <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
-                        CRAFT HERITAGE & WEAVE
-                      </Text>
-                    </XStack>
-                    <YStack
-                      backgroundColor={tokens.surfaceRaised}
-                      borderRadius={tokens.radius.xs}
-                      paddingHorizontal={12}
-                      paddingVertical={8}
-                      gap={4}
-                    >
-                      <TaxonomySpecRow label="Craft Technique" value={craftTech} isHighlighted />
-                      <TaxonomySpecRow label="Regional Origin" value={regionalOrigin} />
-                      <TaxonomySpecRow label="Motif & Pattern" value={motifPattern} />
-                      <TaxonomySpecRow label="Border & Pallu Detail" value={borderPallu} />
-                      <TaxonomySpecRow label="Zari/Inlay Material" value={zariMaterial} />
-                      <TaxonomySpecRow label="Work Heaviness" value={workHeaviness} />
-                    </YStack>
-                  </YStack>
-
-                  {/* b) Garment & Tailoring */}
-                  <YStack gap={6}>
-                    <XStack alignItems="center" gap={6}>
-                      <LuTag size={13} color={tokens.accent} />
-                      <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
-                        GARMENT & TAILORING
-                      </Text>
-                    </XStack>
-                    <YStack
-                      backgroundColor={tokens.surfaceRaised}
-                      borderRadius={tokens.radius.xs}
-                      paddingHorizontal={12}
-                      paddingVertical={8}
-                      gap={4}
-                    >
-                      <TaxonomySpecRow label="Fabric Base" value={fabricBase} isHighlighted />
-                      <TaxonomySpecRow label="Stitch Profile" value={stitchProfile} />
-                      <TaxonomySpecRow label="Blouse Format" value={blouseFormat} />
-                      <TaxonomySpecRow label="Saree/Blouse Dimensions" value={dimensions} />
-                    </YStack>
-                  </YStack>
-
-                  {/* c) Occasions & Search Relevance */}
-                  <YStack gap={6}>
-                    <XStack alignItems="center" gap={6}>
-                      <LuCalendar size={13} color={tokens.accent} />
-                      <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
-                        OCCASIONS & SEARCH RELEVANCE
-                      </Text>
-                    </XStack>
-                    <YStack
-                      backgroundColor={tokens.surfaceRaised}
-                      borderRadius={tokens.radius.xs}
-                      paddingHorizontal={12}
-                      paddingVertical={10}
-                      gap={8}
-                    >
-                      {/* Occasion Tags */}
-                      <YStack gap={4}>
-                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                          Occasion Tags
-                        </Text>
-                        <XStack flexWrap="wrap" gap={5}>
-                          {occasionsList.map((occ, idx) => (
-                            <XStack
-                              key={idx}
-                              backgroundColor="rgba(16, 185, 129, 0.12)"
-                              paddingHorizontal={8}
-                              paddingVertical={3}
-                              borderRadius={4}
-                              borderWidth={0.5}
-                              borderColor="rgba(16, 185, 129, 0.3)"
-                            >
-                              <Text fontSize={10} fontWeight="700" color="#059669">
-                                🌟 {occ}
-                              </Text>
-                            </XStack>
-                          ))}
+                      {/* b) Garment & Tailoring */}
+                      <YStack gap={6}>
+                        <XStack alignItems="center" gap={6}>
+                          <LuTag size={13} color={tokens.accent} />
+                          <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                            GARMENT & TAILORING
+                          </Text>
                         </XStack>
+                        <YStack
+                          backgroundColor={tokens.surfaceRaised}
+                          borderRadius={tokens.radius.xs}
+                          paddingHorizontal={12}
+                          paddingVertical={8}
+                          gap={4}
+                        >
+                          <TaxonomySpecRow label="Fabric Base" value={fabricBase} isHighlighted />
+                          <TaxonomySpecRow label="Stitch Profile" value={stitchProfile} />
+                          <TaxonomySpecRow label="Blouse Format" value={blouseFormat} />
+                          <TaxonomySpecRow label="Saree/Blouse Dimensions" value={dimensions} />
+                        </YStack>
                       </YStack>
 
-                      {/* Search Keywords */}
-                      <YStack gap={4}>
-                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                          Search Keywords
-                        </Text>
-                        <XStack flexWrap="wrap" gap={5}>
-                          {searchKeywordsList.map((tag, idx) => (
-                            <XStack
-                              key={idx}
-                              backgroundColor={tokens.surface}
-                              paddingHorizontal={7}
-                              paddingVertical={2.5}
-                              borderRadius={4}
-                              borderWidth={0.5}
-                              borderColor={tokens.border}
-                            >
-                              <Text fontSize={9} fontWeight="600" color={tokens.text}>
-                                #{tag}
-                              </Text>
-                            </XStack>
-                          ))}
+                      {/* c) Occasions & Search Relevance */}
+                      <YStack gap={6}>
+                        <XStack alignItems="center" gap={6}>
+                          <LuCalendar size={13} color={tokens.accent} />
+                          <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                            OCCASIONS & SEARCH RELEVANCE
+                          </Text>
                         </XStack>
-                      </YStack>
+                        <YStack
+                          backgroundColor={tokens.surfaceRaised}
+                          borderRadius={tokens.radius.xs}
+                          paddingHorizontal={12}
+                          paddingVertical={10}
+                          gap={8}
+                        >
+                          {/* Occasion Tags */}
+                          <YStack gap={4}>
+                            <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                              Occasion Tags
+                            </Text>
+                            <XStack flexWrap="wrap" gap={5}>
+                              {occasionsList.map((occ, idx) => (
+                                <XStack
+                                  key={idx}
+                                  backgroundColor="rgba(16, 185, 129, 0.12)"
+                                  paddingHorizontal={8}
+                                  paddingVertical={3}
+                                  borderRadius={4}
+                                  borderWidth={0.5}
+                                  borderColor="rgba(16, 185, 129, 0.3)"
+                                >
+                                  <Text fontSize={10} fontWeight="700" color="#059669">
+                                    🌟 {occ}
+                                  </Text>
+                                </XStack>
+                              ))}
+                            </XStack>
+                          </YStack>
 
-                      {/* Wash Care */}
-                      <YStack gap={3} paddingTop={4} borderTopWidth={0.5} borderTopColor={tokens.border}>
-                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                          Wash Care & Preservation
-                        </Text>
-                        <Text fontSize={10} color={tokens.text}>
-                          🧼 {washCare}
-                        </Text>
+                          {/* Search Keywords */}
+                          <YStack gap={4}>
+                            <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                              Search Keywords
+                            </Text>
+                            <XStack flexWrap="wrap" gap={5}>
+                              {searchKeywordsList.map((tag, idx) => (
+                                <XStack
+                                  key={idx}
+                                  backgroundColor={tokens.surface}
+                                  paddingHorizontal={7}
+                                  paddingVertical={2.5}
+                                  borderRadius={4}
+                                  borderWidth={0.5}
+                                  borderColor={tokens.border}
+                                >
+                                  <Text fontSize={9} fontWeight="600" color={tokens.text}>
+                                    #{tag}
+                                  </Text>
+                                </XStack>
+                              ))}
+                            </XStack>
+                          </YStack>
+
+                          {/* Wash Care */}
+                          <YStack gap={3} paddingTop={4} borderTopWidth={0.5} borderTopColor={tokens.border}>
+                            <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                              Wash Care & Preservation
+                            </Text>
+                            <Text fontSize={10} color={tokens.text}>
+                              🧼 {washCare}
+                            </Text>
+                          </YStack>
+                        </YStack>
                       </YStack>
                     </YStack>
-                  </YStack>
-                </YStack>
+
+                    {/* Collapse Footer Strip */}
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Collapse AI-Derived Taxonomy Facets"
+                      onPress={() => setIsTaxonomyExpanded(false)}
+                      activeOpacity={0.7}
+                    >
+                      <XStack
+                        alignItems="center"
+                        justifyContent="center"
+                        gap={4}
+                        paddingVertical={8}
+                        backgroundColor={tokens.surfaceRaised}
+                        borderTopWidth={0.5}
+                        borderTopColor={tokens.border}
+                      >
+                        <LuChevronUp size={13} color={tokens.textMuted} />
+                        <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                          Collapse AI Taxonomy Specs
+                        </Text>
+                      </XStack>
+                    </TouchableOpacity>
+                  </>
+                )}
               </YStack>
             </YStack>
           );
