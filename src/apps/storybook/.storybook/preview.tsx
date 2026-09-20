@@ -51,12 +51,12 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
   let defaultFactor = context?.parameters?.formFactorShell?.defaultFactor;
   if (!defaultFactor) {
     const storyName = (context?.name || context?.story || "").toLowerCase();
-    if (storyName.includes("mobile") || storyName.includes("phone")) {
-      defaultFactor = "mobile";
+    if (storyName.includes("desktop") || storyName.includes("pc")) {
+      defaultFactor = "desktop";
     } else if (storyName.includes("tablet") || storyName.includes("ipad")) {
       defaultFactor = "tablet";
     } else {
-      defaultFactor = "desktop";
+      defaultFactor = "mobile";
     }
   }
 
