@@ -177,6 +177,13 @@ export default function ProductDetailScreen() {
         timestamp: formatISTTimestamp(product.createdAt, product.sourceGroupId),
         exclusiveDescription: product.exclusiveDescription,
         isArchived: product.isArchived,
+        unifiedAttributes: product.unifiedAttributes,
+        craft: product.craft,
+        motif: product.motif,
+        border: product.border,
+        stitchType: product.stitchType,
+        occasions: product.occasions,
+        confidenceScore: product.confidenceScore,
         media: (product.media || []).map((m) => ({
           id: m.id,
           url:
