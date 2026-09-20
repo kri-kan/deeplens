@@ -20,7 +20,8 @@ export * from './types';
 
 export function FormFactorShell({
   children,
-  initialFactor = 'desktop',
+  initialFactor = 'mobile',
+  defaultFactor,
   title,
   category,
   allowOrientationToggle = true,
@@ -38,7 +39,7 @@ export function FormFactorShell({
 
   const { tokens } = useTheme();
 
-  const [factor, setFactor] = useState<FormFactor>(initialFactor);
+  const [factor, setFactor] = useState<FormFactor>(defaultFactor || initialFactor);
   const [orientation, setOrientation] = useState<Orientation>('portrait');
   const [showBezel, setShowBezel] = useState<boolean>(defaultBezel);
 
@@ -421,7 +422,7 @@ export function FormFactorShell({
   );
 }
 
-export function withFormFactorShell(initialFactor: FormFactor = 'desktop', title?: string) {
+export function withFormFactorShell(initialFactor: FormFactor = 'mobile', title?: string) {
   return (Story: any, context: any) => {
     const existingContext = React.useContext(FormFactorContext);
     if (existingContext) {

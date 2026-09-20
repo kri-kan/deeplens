@@ -6,6 +6,7 @@ export type Orientation = 'portrait' | 'landscape';
 export interface FormFactorShellProps {
   children: React.ReactNode;
   initialFactor?: FormFactor;
+  defaultFactor?: FormFactor;
   title?: string;
   category?: string;
   allowOrientationToggle?: boolean;

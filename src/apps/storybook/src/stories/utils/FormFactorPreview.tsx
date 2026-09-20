@@ -11,6 +11,7 @@ export type { FormFactor };
 export interface FormFactorPreviewProps {
   children: React.ReactNode;
   initialFactor?: FormFactor;
+  defaultFactor?: FormFactor;
   allowSwitching?: boolean;
   title?: string;
   category?: string;
@@ -22,7 +23,8 @@ export interface FormFactorPreviewProps {
  */
 export function FormFactorPreview({
   children,
-  initialFactor = 'desktop',
+  initialFactor = 'mobile',
+  defaultFactor,
   title,
   category,
 }: FormFactorPreviewProps) {
@@ -31,7 +33,7 @@ export function FormFactorPreview({
     return <>{children}</>;
   }
   return (
-    <FormFactorShell initialFactor={initialFactor} title={title} category={category}>
+    <FormFactorShell initialFactor={defaultFactor || initialFactor} title={title} category={category}>
       {children}
     </FormFactorShell>
   );
@@ -41,7 +43,7 @@ export function FormFactorPreview({
  * Legacy withFormFactor decorator adapter that delegates directly to canonical withFormFactorShell.
  * @deprecated Use story parameter { formFactorShell: { defaultFactor } } or withFormFactorShell
  */
-export function withFormFactor(factor: FormFactor, title?: string) {
+export function withFormFactor(factor: FormFactor = 'mobile', title?: string) {
   return withFormFactorShell(factor, title);
 }
 
