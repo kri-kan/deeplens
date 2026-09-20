@@ -144,6 +144,7 @@ const meta: Meta<StoryProps> = {
     products: MOCK_PRODUCTS,
     activeCategoryId: 'all',
     searchQuery: '',
+    onBulkReevaluate: (ids: string[]) => alert(`✨ AI Re-evaluation triggered for ${ids.length} product(s)!`),
   },
   argTypes: {
     ...THEME_ARG_TYPES,

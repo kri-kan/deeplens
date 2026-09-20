@@ -1072,6 +1072,7 @@ export function AdminProductCatalogPage({
           onBulkDelete?.(Array.from(selectedIds));
           clearSelection();
         }}
+        onBulkReevaluate={onBulkReevaluate ? () => onBulkReevaluate(Array.from(selectedIds)) : undefined}
       />
 
       {/* Quick Edit Sheet */}

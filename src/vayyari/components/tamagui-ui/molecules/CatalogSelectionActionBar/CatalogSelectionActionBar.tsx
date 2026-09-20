@@ -7,6 +7,7 @@ import {
   LuLayers,
   LuArchive,
   LuTrash2,
+  LuSparkles,
 } from '../../icons/lu';
 import { useTheme } from '@/theme';
 
@@ -20,6 +21,7 @@ export interface CatalogSelectionActionBarProps {
   onBulkMoveCategory?: () => void;
   onBulkArchive?: () => void;
   onBulkDelete?: () => void;
+  onBulkReevaluate?: () => void;
 }
 
 export function CatalogSelectionActionBar({
@@ -32,6 +34,7 @@ export function CatalogSelectionActionBar({
   onBulkMoveCategory,
   onBulkArchive,
   onBulkDelete,
+  onBulkReevaluate,
 }: CatalogSelectionActionBarProps) {
   const { tokens } = useTheme();
 
@@ -113,6 +116,32 @@ export function CatalogSelectionActionBar({
 
       {/* Right: Action Buttons */}
       <XStack alignItems="center" gap={6}>
+        {onBulkReevaluate && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Enrich selected items with AI"
+            onPress={onBulkReevaluate}
+            activeOpacity={0.7}
+          >
+            <XStack
+              height={34}
+              paddingHorizontal={10}
+              borderRadius={tokens.radius.md}
+              backgroundColor={`${tokens.accent}18`}
+              borderWidth={1}
+              borderColor={`${tokens.accent}40`}
+              alignItems="center"
+              justifyContent="center"
+              gap={6}
+            >
+              <LuSparkles size={15} color={tokens.accent} />
+              <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                Enrich with AI
+              </Text>
+            </XStack>
+          </TouchableOpacity>
+        )}
+
         {onBulkStar && (
           <TouchableOpacity
             accessibilityRole="button"

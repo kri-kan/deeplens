@@ -328,6 +328,27 @@ export function AdminProductDetailPage({
             </XStack>
           </TouchableOpacity>
 
+          {/* Quick Enrich with AI Button */}
+          {onReevaluateLLM && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Enrich with AI"
+              activeOpacity={0.7}
+              onPress={onReevaluateLLM}
+            >
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor="rgba(0,0,0,0.55)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuSparkles size={16} color="#fbbf24" />
+              </XStack>
+            </TouchableOpacity>
+          )}
+
           {/* 3-Dots Context Menu Button */}
           <TouchableOpacity
             accessibilityRole="button"
@@ -451,18 +472,46 @@ export function AdminProductDetailPage({
                     </Text>
                   </XStack>
 
-                  {/* Confidence Pill */}
-                  <XStack
-                    backgroundColor="rgba(245, 158, 11, 0.15)"
-                    paddingHorizontal={8}
-                    paddingVertical={3}
-                    borderRadius={12}
-                    borderWidth={0.5}
-                    borderColor="rgba(245, 158, 11, 0.4)"
-                  >
-                    <Text fontSize={10} fontWeight="700" color="#D97706">
-                      {confPct}% Confidence • {taxVersion}
-                    </Text>
+                  <XStack alignItems="center" gap={8}>
+                    {/* Confidence Pill */}
+                    <XStack
+                      backgroundColor="rgba(245, 158, 11, 0.15)"
+                      paddingHorizontal={8}
+                      paddingVertical={3}
+                      borderRadius={12}
+                      borderWidth={0.5}
+                      borderColor="rgba(245, 158, 11, 0.4)"
+                    >
+                      <Text fontSize={10} fontWeight="700" color="#D97706">
+                        {confPct}% Confidence • {taxVersion}
+                      </Text>
+                    </XStack>
+
+                    {/* Enrich with AI Action Button */}
+                    {onReevaluateLLM && (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Enrich product facets with AI"
+                        onPress={onReevaluateLLM}
+                        activeOpacity={0.7}
+                      >
+                        <XStack
+                          alignItems="center"
+                          gap={4}
+                          paddingHorizontal={9}
+                          paddingVertical={4}
+                          borderRadius={tokens.radius.full}
+                          backgroundColor={`${tokens.accent}18`}
+                          borderWidth={1}
+                          borderColor={`${tokens.accent}40`}
+                        >
+                          <LuSparkles size={12} color={tokens.accent} />
+                          <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                            Enrich with AI
+                          </Text>
+                        </XStack>
+                      </TouchableOpacity>
+                    )}
                   </XStack>
                 </XStack>
 

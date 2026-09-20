@@ -53,6 +53,7 @@ export interface AdminProductCatalogPageProps {
   onBulkStar?: (ids: string[]) => void;
   onBulkArchive?: (ids: string[]) => void;
   onBulkDelete?: (ids: string[]) => void;
+  onBulkReevaluate?: (ids: string[]) => void;
   onSaveQuickEdit?: (id: string, updates: { price?: number; category?: string }) => void;
   isLoading?: boolean;
   disableSafeArea?: boolean;
@@ -87,6 +88,7 @@ export function AdminProductCatalogPage({
   onBulkStar,
   onBulkArchive,
   onBulkDelete,
+  onBulkReevaluate,
   onSaveQuickEdit,
   isLoading = false,
   disableSafeArea = false,
@@ -927,6 +929,7 @@ export function AdminProductCatalogPage({
           onBulkDelete?.(Array.from(selectedIds));
           clearSelection();
         }}
+        onBulkReevaluate={onBulkReevaluate ? () => onBulkReevaluate(Array.from(selectedIds)) : undefined}
       />
 
       {/* Quick Edit Sheet */}
