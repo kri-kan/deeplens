@@ -691,58 +691,60 @@ export function StoreProductEnrichmentSection({
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
         paddingVertical={10}
-        paddingHorizontal={isMobile ? 4 : 8}
-        gap={8}
+        paddingHorizontal={0}
+        width="100%"
       >
-        <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8}>
-          <YStack gap={2}>
-            <XStack alignItems="center" gap={6}>
-              <LuFileText size={16} color={tokens.accent} />
-              <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase" letterSpacing={0.5}>
-                Product Specifications &amp; Taxonomy
+        <YStack paddingHorizontal={isMobile ? 4 : 8} gap={8} width="100%">
+          <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8}>
+            <YStack gap={2}>
+              <XStack alignItems="center" gap={6}>
+                <LuFileText size={16} color={tokens.accent} />
+                <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase" letterSpacing={0.5}>
+                  Product Specifications &amp; Taxonomy
+                </Text>
+              </XStack>
+              <Text fontSize={11} color={tokens.textMuted}>
+                Curate fabric dimensions, weave origin, retail pricing and size specifications.
+              </Text>
+            </YStack>
+
+            {/* AI Auto-Derive Button */}
+            <Pressable
+              onPress={handleAiAutoDeriveAll}
+              disabled={isAiDeriving}
+              style={[
+                styles.aiDeriveBtn,
+                {
+                  backgroundColor: isAiDeriving ? tokens.surfaceRaised : `${tokens.accent}14`,
+                  borderColor: tokens.accent,
+                },
+              ]}
+            >
+              <LuSparkles size={14} color={tokens.accent} />
+              <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                {isAiDeriving ? 'Deriving Specs & Pricing...' : '✨ AI Auto-Derive All'}
+              </Text>
+            </Pressable>
+          </XStack>
+
+          {specs.isAiDerived && (
+            <XStack
+              alignItems="center"
+              gap={6}
+              backgroundColor="#F0FDF4"
+              paddingVertical={4}
+              paddingHorizontal={8}
+              borderRadius={6}
+              borderWidth={1}
+              borderColor="#DCFCE7"
+            >
+              <LuCheck size={12} color="#16A34A" />
+              <Text fontSize={11} fontWeight="700" color="#15803D">
+                Census AI Taxonomy Active ({specs.confidenceScore || 96}% confidence) • Click any facet to override
               </Text>
             </XStack>
-            <Text fontSize={11} color={tokens.textMuted}>
-              Curate fabric dimensions, weave origin, retail pricing and size specifications.
-            </Text>
-          </YStack>
-
-          {/* AI Auto-Derive Button */}
-          <Pressable
-            onPress={handleAiAutoDeriveAll}
-            disabled={isAiDeriving}
-            style={[
-              styles.aiDeriveBtn,
-              {
-                backgroundColor: isAiDeriving ? tokens.surfaceRaised : `${tokens.accent}14`,
-                borderColor: tokens.accent,
-              },
-            ]}
-          >
-            <LuSparkles size={14} color={tokens.accent} />
-            <Text fontSize={12} fontWeight="800" color={tokens.accent}>
-              {isAiDeriving ? 'Deriving Specs & Pricing...' : '✨ AI Auto-Derive All'}
-            </Text>
-          </Pressable>
-        </XStack>
-
-        {specs.isAiDerived && (
-          <XStack
-            alignItems="center"
-            gap={6}
-            backgroundColor="#F0FDF4"
-            paddingVertical={4}
-            paddingHorizontal={8}
-            borderRadius={6}
-            borderWidth={1}
-            borderColor="#DCFCE7"
-          >
-            <LuCheck size={12} color="#16A34A" />
-            <Text fontSize={11} fontWeight="700" color="#15803D">
-              Census AI Taxonomy Active ({specs.confidenceScore || 96}% confidence) • Click any facet to override
-            </Text>
-          </XStack>
-        )}
+          )}
+        </YStack>
       </YStack>
 
       {/* ── 4-SECTION TAB SELECTOR BAR (HORIZONTAL SCROLL/SWIPE & MOUSE DRAG) ── */}
@@ -751,7 +753,7 @@ export function StoreProductEnrichmentSection({
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.tabScrollWrapper}
-        contentContainerStyle={styles.tabScrollContainer}
+        contentContainerStyle={[styles.tabScrollContainer, { paddingHorizontal: isMobile ? 4 : 8 }]}
       >
         <Pressable
           nativeID="tab-craft_specs"
@@ -858,11 +860,11 @@ export function StoreProductEnrichmentSection({
           borderBottomWidth={1}
           borderColor={tokens.border}
           paddingVertical={12}
-          paddingHorizontal={isMobile ? 4 : 8}
-          gap={12}
+          paddingHorizontal={0}
           width="100%"
         >
-          <XStack alignItems="center" justifyContent="space-between">
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+            <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={12} fontWeight="900" color={tokens.text} textTransform="uppercase">
               1. Fabric &amp; Weaving Dimensions (PDP Specs Table)
             </Text>
@@ -985,6 +987,7 @@ export function StoreProductEnrichmentSection({
             </XStack>
           </YStack>
         </YStack>
+      </YStack>
       )}
 
       {/* ── TAB 2: PRICING & COMMERCIAL MARGINS ── */}
@@ -995,92 +998,96 @@ export function StoreProductEnrichmentSection({
           borderBottomWidth={1}
           borderColor={tokens.border}
           paddingVertical={12}
-          paddingHorizontal={isMobile ? 4 : 8}
-          gap={12}
+          paddingHorizontal={0}
           width="100%"
         >
-          <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
-            2. Commercial Pricing &amp; Landed Margins
-          </Text>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+            <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
+              2. Commercial Pricing &amp; Landed Margins
+            </Text>
 
-          <XStack gap={10} flexWrap="wrap">
-            {/* MRP Input */}
-            <YStack flex={1} gap={6}>
-              <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
-                MRP (Strikethrough Price):
-              </Text>
-              <XStack alignItems="center" style={styles.currencyInputContainer}>
-                <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
-                  ₹
+            <XStack gap={10} flexWrap="wrap">
+              {/* MRP Input */}
+              <YStack flex={1} gap={6}>
+                <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
+                  MRP (Strikethrough Price):
                 </Text>
-                <TextInput
-                  value={mrp}
-                  onChangeText={onChangeMrp}
-                  keyboardType="numeric"
-                  style={styles.currencyInput}
-                />
-              </XStack>
-            </YStack>
+                <XStack alignItems="center" style={styles.currencyInputContainer}>
+                  <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
+                    ₹
+                  </Text>
+                  <TextInput
+                    value={mrp}
+                    onChangeText={onChangeMrp}
+                    keyboardType="numeric"
+                    style={styles.currencyInput}
+                  />
+                </XStack>
+              </YStack>
 
-            {/* Sale Price Input */}
-            <YStack flex={1} gap={6}>
-              <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
-                Sale Price (Selling Rate):
-              </Text>
-              <XStack alignItems="center" style={styles.currencyInputContainer}>
-                <Text fontSize={15} fontWeight="800" color={tokens.accent}>
-                  ₹
+              {/* Sale Price Input */}
+              <YStack flex={1} gap={6}>
+                <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
+                  Sale Price (Selling Rate):
                 </Text>
-                <TextInput
-                  value={salePrice}
-                  onChangeText={onChangeSalePrice}
-                  keyboardType="numeric"
-                  style={[styles.currencyInput, { fontWeight: '800', color: tokens.text }]}
-                />
-              </XStack>
-            </YStack>
-          </XStack>
+                <XStack alignItems="center" style={styles.currencyInputContainer}>
+                  <Text fontSize={15} fontWeight="800" color={tokens.accent}>
+                    ₹
+                  </Text>
+                  <TextInput
+                    value={salePrice}
+                    onChangeText={onChangeSalePrice}
+                    keyboardType="numeric"
+                    style={[styles.currencyInput, { fontWeight: '800', color: tokens.text }]}
+                  />
+                </XStack>
+              </YStack>
+            </XStack>
 
-          {/* Commercial KPIs Summary Bar */}
-          <XStack
-            backgroundColor={tokens.surfaceRaised}
-            borderRadius={8}
-            padding={10}
-            justifyContent="space-between"
-            alignItems="center"
-            flexWrap="wrap"
-            gap={8}
-          >
-            <YStack>
-              <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                Base Landed Cost:
-              </Text>
-              <Text fontSize={13} fontWeight="800" color={tokens.text}>
-                ₹{baseCostPrice.toLocaleString('en-IN')}
-              </Text>
-            </YStack>
+            {/* Commercial KPIs Summary Bar */}
+            <XStack
+              backgroundColor={tokens.surfaceRaised}
+              borderRadius={8}
+              padding={10}
+              justifyContent="space-between"
+              alignItems="center"
+              flexWrap="wrap"
+              gap={8}
+            >
+              <YStack>
+                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  Base Landed Cost:
+                </Text>
+                <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                  ₹{baseCostPrice.toLocaleString('en-IN')}
+                </Text>
+              </YStack>
 
-            <YStack alignItems="center">
-              <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                Storefront Discount:
-              </Text>
-              <Text fontSize={13} fontWeight="800" color="#10B981">
-                {discountPercent}% OFF
-              </Text>
-            </YStack>
+              <YStack alignItems="center">
+                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  Storefront Discount:
+                </Text>
+                <Text fontSize={13} fontWeight="800" color="#10B981">
+                  {discountPercent}% OFF
+                </Text>
+              </YStack>
 
-            <YStack alignItems="flex-end">
-              <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                Gross Margin:
-              </Text>
-              <Text fontSize={13} fontWeight="800" color={tokens.accent}>
-                ₹{estimatedMargin.toLocaleString('en-IN')} ({marginPercent}%)
-              </Text>
-            </YStack>
-          </XStack>
+              <YStack alignItems="flex-end">
+                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  Gross Margin:
+                </Text>
+                <Text fontSize={13} fontWeight="800" color={tokens.accent}>
+                  ₹{estimatedMargin.toLocaleString('en-IN')} ({marginPercent}%)
+                </Text>
+              </YStack>
+            </XStack>
+          </YStack>
+
+          {/* Full-Bleed End-to-End Separator Line */}
+          <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Story Description Input */}
-          <YStack gap={6} borderTopWidth={1} borderTopColor={tokens.border} paddingTop={8}>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={6} width="100%">
             <Text fontSize={12} fontWeight="700" color={tokens.text}>
               About the Weave (PDP Narrative):
             </Text>
@@ -1107,42 +1114,44 @@ export function StoreProductEnrichmentSection({
           borderBottomWidth={1}
           borderColor={tokens.border}
           paddingVertical={12}
-          paddingHorizontal={isMobile ? 4 : 8}
-          gap={12}
+          paddingHorizontal={0}
           width="100%"
         >
-          <XStack alignItems="center" justifyContent="space-between">
-            <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
-              3. Sizing, Drape &amp; Tailoring Profile
-            </Text>
-            <View style={[styles.microBadge, { backgroundColor: '#F0FDF4' }]}>
-              <Text fontSize={10} fontWeight="800" color="#16A34A">
-                Powers SizeSelector
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+            <XStack alignItems="center" justifyContent="space-between">
+              <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
+                3. Sizing, Drape &amp; Tailoring Profile
               </Text>
-            </View>
-          </XStack>
+              <View style={[styles.microBadge, { backgroundColor: '#F0FDF4' }]}>
+                <Text fontSize={10} fontWeight="800" color="#16A34A">
+                  Powers SizeSelector
+                </Text>
+              </View>
+            </XStack>
 
-          {/* 1. Sizing System Variant Selector */}
-          <YStack gap={6}>
-            <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
-              Sizing System Variant
-            </Text>
-            <SegmentedControl
-              activeId={isNoSize ? 'no-size' : activeSizeCategory}
-              onChange={(id) => handleSizeCategoryChange(id as SizeCategoryType)}
-              options={[
-                { id: 'no-size', label: 'No Size' },
-                { id: 'letter', label: 'XS–5XL' },
-                { id: 'numeric', label: 'Bust 32–44' },
-                { id: 'kids', label: 'Kids 0–16Y' },
-              ]}
-            />
+            {/* 1. Sizing System Variant Selector */}
+            <YStack gap={6}>
+              <Text fontSize={12} fontWeight="800" letterSpacing={0.8} color={tokens.accent} textTransform="uppercase">
+                Sizing System Variant
+              </Text>
+              <SegmentedControl
+                activeId={isNoSize ? 'no-size' : activeSizeCategory}
+                onChange={(id) => handleSizeCategoryChange(id as SizeCategoryType)}
+                options={[
+                  { id: 'no-size', label: 'No Size' },
+                  { id: 'letter', label: 'XS–5XL' },
+                  { id: 'numeric', label: 'Bust 32–44' },
+                  { id: 'kids', label: 'Kids 0–16Y' },
+                ]}
+              />
+            </YStack>
           </YStack>
 
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 2. Sizing Configuration: No-Size Informational vs Multi-Size Availability */}
-          {isNoSize ? (
+          <YStack paddingHorizontal={isMobile ? 4 : 8} width="100%">
+            {isNoSize ? (
             /* ── NO SIZE: ONE SIZE VS FREE SIZE SUB-VARIANTS & INFORMATIONAL BADGE ── */
             <YStack gap={10} width="100%">
               <Text fontSize={12} color={tokens.textSecondary} lineHeight={16}>
@@ -1376,11 +1385,12 @@ export function StoreProductEnrichmentSection({
               </YStack>
             </YStack>
           )}
+          </YStack>
 
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 3. Stitch Type Presets */}
-          <YStack gap={4}>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={4} width="100%">
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
               Stitch &amp; Construction State:
             </Text>
@@ -1434,58 +1444,62 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 4. Blouse Format & Construction Selection */}
-          <TaxonomyFacetChipSelector
-            label="Blouse Format &amp; Construction:"
-            options={BLOUSE_TYPE_OPTIONS}
-            selectedId={specs.blouseTypeId || specs.blouseType}
-            selectedName={specs.blouseTypeName}
-            onSelect={(id, name) => {
-              updateSpecField('blouseTypeId', id);
-              updateSpecField('blouseTypeName', name);
-              updateSpecField('blouseType', id as any);
-            }}
-            tokens={tokens}
-          />
+          <YStack paddingHorizontal={isMobile ? 4 : 8} width="100%">
+            <TaxonomyFacetChipSelector
+              label="Blouse Format &amp; Construction:"
+              options={BLOUSE_TYPE_OPTIONS}
+              selectedId={specs.blouseTypeId || specs.blouseType}
+              selectedName={specs.blouseTypeName}
+              onSelect={(id, name) => {
+                updateSpecField('blouseTypeId', id);
+                updateSpecField('blouseTypeName', name);
+                updateSpecField('blouseType', id as any);
+              }}
+              tokens={tokens}
+            />
+          </YStack>
 
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 5. Saree & Blouse Dimensions */}
-          <XStack gap={10}>
-            <YStack flex={1} gap={4}>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={10} width="100%">
+            <XStack gap={10}>
+              <YStack flex={1} gap={4}>
+                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  Saree Drape Length (m):
+                </Text>
+                <TextInput
+                  value={specs.sareeLengthMetres.toString()}
+                  onChangeText={handleSareeLengthChange}
+                  keyboardType="numeric"
+                  style={styles.dimensionInput}
+                />
+              </YStack>
+
+              <YStack flex={1} gap={4}>
+                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                  Blouse Piece Length (m):
+                </Text>
+                <TextInput
+                  value={specs.blousePieceLengthMetres.toString()}
+                  onChangeText={handleBlouseLengthChange}
+                  keyboardType="numeric"
+                  style={styles.dimensionInput}
+                />
+              </YStack>
+            </XStack>
+
+            {/* 6. Package Contents */}
+            <YStack gap={4}>
               <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                Saree Drape Length (m):
+                Package Contents Description:
               </Text>
               <TextInput
-                value={specs.sareeLengthMetres.toString()}
-                onChangeText={handleSareeLengthChange}
-                keyboardType="numeric"
-                style={styles.dimensionInput}
+                value={specs.packageContents}
+                onChangeText={(val) => updateSpecField('packageContents', val)}
+                style={styles.singleLineInput}
               />
             </YStack>
-
-            <YStack flex={1} gap={4}>
-              <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                Blouse Piece Length (m):
-              </Text>
-              <TextInput
-                value={specs.blousePieceLengthMetres.toString()}
-                onChangeText={handleBlouseLengthChange}
-                keyboardType="numeric"
-                style={styles.dimensionInput}
-              />
-            </YStack>
-          </XStack>
-
-          {/* 6. Package Contents */}
-          <YStack gap={4}>
-            <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-              Package Contents Description:
-            </Text>
-            <TextInput
-              value={specs.packageContents}
-              onChangeText={(val) => updateSpecField('packageContents', val)}
-              style={styles.singleLineInput}
-            />
           </YStack>
         </YStack>
       )}
@@ -1498,121 +1512,123 @@ export function StoreProductEnrichmentSection({
           borderBottomWidth={1}
           borderColor={tokens.border}
           paddingVertical={12}
-          paddingHorizontal={isMobile ? 4 : 8}
-          gap={12}
+          paddingHorizontal={0}
           width="100%"
         >
-          <XStack alignItems="center" justifyContent="space-between">
-            <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
-              4. Occasion Facets &amp; Search Relevance
-            </Text>
-          </XStack>
-
-          {/* Occasion Chips (Multi-Select with Custom Occasion Entry) */}
-          <YStack gap={6}>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
             <XStack alignItems="center" justifyContent="space-between">
-              <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
-                Occasion Tags (Select all that apply):
+              <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
+                4. Occasion Facets &amp; Search Relevance
               </Text>
-              <Pressable
-                onPress={() => setIsAddingOccasion(!isAddingOccasion)}
-                style={styles.customToggleBtn}
-              >
-                {isAddingOccasion ? (
-                  <LuX size={13} color={tokens.accent} />
-                ) : (
-                  <LuPlus size={13} color={tokens.accent} />
-                )}
-                <Text fontSize={12} fontWeight="700" color={tokens.accent}>
-                  {isAddingOccasion ? 'Cancel' : 'Custom Occasion'}
-                </Text>
-              </Pressable>
             </XStack>
 
-            {isAddingOccasion && (
-              <XStack gap={8} alignItems="center" marginBottom={6} width="100%">
-                <TextInput
-                  value={customOccasionInput}
-                  onChangeText={setCustomOccasionInput}
-                  placeholder="e.g. Sangeet Night, Housewarming Puja..."
-                  placeholderTextColor={tokens.textMuted}
-                  onSubmitEditing={handleAddCustomOccasion}
-                  autoFocus
-                  style={styles.customTextInput}
-                />
+            {/* Occasion Chips (Multi-Select with Custom Occasion Entry) */}
+            <YStack gap={6}>
+              <XStack alignItems="center" justifyContent="space-between">
+                <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
+                  Occasion Tags (Select all that apply):
+                </Text>
                 <Pressable
-                  onPress={handleAddCustomOccasion}
-                  style={[styles.customConfirmBtn, { backgroundColor: tokens.accent }]}
+                  onPress={() => setIsAddingOccasion(!isAddingOccasion)}
+                  style={styles.customToggleBtn}
                 >
-                  <LuCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text fontSize={12} fontWeight="800" color="#FFFFFF">
-                    Add
+                  {isAddingOccasion ? (
+                    <LuX size={13} color={tokens.accent} />
+                  ) : (
+                    <LuPlus size={13} color={tokens.accent} />
+                  )}
+                  <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+                    {isAddingOccasion ? 'Cancel' : 'Custom Occasion'}
                   </Text>
                 </Pressable>
               </XStack>
-            )}
 
-            <XStack flexWrap="wrap" gap={6}>
-              {OCCASION_OPTIONS.map((opt) => {
-                const isSelected = specs.occasions?.includes(opt.id);
-                return (
+              {isAddingOccasion && (
+                <XStack gap={8} alignItems="center" marginBottom={6} width="100%">
+                  <TextInput
+                    value={customOccasionInput}
+                    onChangeText={setCustomOccasionInput}
+                    placeholder="e.g. Sangeet Night, Housewarming Puja..."
+                    placeholderTextColor={tokens.textMuted}
+                    onSubmitEditing={handleAddCustomOccasion}
+                    autoFocus
+                    style={styles.customTextInput}
+                  />
                   <Pressable
-                    key={opt.id}
-                    onPress={() => toggleOccasion(opt.id)}
+                    onPress={handleAddCustomOccasion}
+                    style={[styles.customConfirmBtn, { backgroundColor: tokens.accent }]}
+                  >
+                    <LuCheck size={14} color="#FFFFFF" strokeWidth={2.5} />
+                    <Text fontSize={12} fontWeight="800" color="#FFFFFF">
+                      Add
+                    </Text>
+                  </Pressable>
+                </XStack>
+              )}
+
+              <XStack flexWrap="wrap" gap={6}>
+                {OCCASION_OPTIONS.map((opt) => {
+                  const isSelected = specs.occasions?.includes(opt.id);
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      onPress={() => toggleOccasion(opt.id)}
+                      style={[
+                        styles.specChip,
+                        {
+                          backgroundColor: isSelected ? `${tokens.accent}16` : tokens.surfaceRaised,
+                          borderColor: isSelected ? tokens.accent : tokens.border,
+                        },
+                      ]}
+                    >
+                      <Text fontSize={12} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
+                        {opt.label}
+                      </Text>
+                      {opt.badge && (
+                        <View style={[styles.chipPill, { backgroundColor: '#EDE9FE' }]}>
+                          <Text fontSize={9.5} fontWeight="800" color="#7C3AED">
+                            {opt.badge}
+                          </Text>
+                        </View>
+                      )}
+                      {isSelected && <LuCheck size={12} color={tokens.accent} />}
+                    </Pressable>
+                  );
+                })}
+
+                {/* Any custom occasions */}
+                {specs.occasions?.filter((id) => id.startsWith('custom_')).map((customId) => (
+                  <Pressable
+                    key={customId}
+                    onPress={() => toggleOccasion(customId)}
                     style={[
                       styles.specChip,
                       {
-                        backgroundColor: isSelected ? `${tokens.accent}16` : tokens.surfaceRaised,
-                        borderColor: isSelected ? tokens.accent : tokens.border,
+                        backgroundColor: `${tokens.accent}16`,
+                        borderColor: tokens.accent,
                       },
                     ]}
                   >
-                    <Text fontSize={12} fontWeight={isSelected ? '800' : '600'} color={isSelected ? tokens.accent : tokens.text}>
-                      {opt.label}
+                    <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                      {customId.replace('custom_', '').replace(/_/g, ' ')}
                     </Text>
-                    {opt.badge && (
-                      <View style={[styles.chipPill, { backgroundColor: '#EDE9FE' }]}>
-                        <Text fontSize={9.5} fontWeight="800" color="#7C3AED">
-                          {opt.badge}
-                        </Text>
-                      </View>
-                    )}
-                    {isSelected && <LuCheck size={12} color={tokens.accent} />}
+                    <View style={[styles.chipPill, { backgroundColor: '#FEE2E2' }]}>
+                      <Text fontSize={9.5} fontWeight="800" color="#DC2626">
+                        Custom
+                      </Text>
+                    </View>
+                    <LuCheck size={12} color={tokens.accent} />
                   </Pressable>
-                );
-              })}
-
-              {/* Any custom occasions */}
-              {specs.occasions?.filter((id) => id.startsWith('custom_')).map((customId) => (
-                <Pressable
-                  key={customId}
-                  onPress={() => toggleOccasion(customId)}
-                  style={[
-                    styles.specChip,
-                    {
-                      backgroundColor: `${tokens.accent}16`,
-                      borderColor: tokens.accent,
-                    },
-                  ]}
-                >
-                  <Text fontSize={12} fontWeight="800" color={tokens.accent}>
-                    {customId.replace('custom_', '').replace(/_/g, ' ')}
-                  </Text>
-                  <View style={[styles.chipPill, { backgroundColor: '#FEE2E2' }]}>
-                    <Text fontSize={9.5} fontWeight="800" color="#DC2626">
-                      Custom
-                    </Text>
-                  </View>
-                  <LuCheck size={12} color={tokens.accent} />
-                </Pressable>
-              ))}
-            </XStack>
+                ))}
+              </XStack>
+            </YStack>
           </YStack>
 
+          {/* Full-Bleed End-to-End Separator Line */}
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Search Relevance Tags */}
-          <YStack gap={6}>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={6} width="100%">
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
               Search Relevance Keywords &amp; Synonyms:
             </Text>
@@ -1651,10 +1667,11 @@ export function StoreProductEnrichmentSection({
             </XStack>
           </YStack>
 
+          {/* Full-Bleed End-to-End Separator Line */}
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Care Instructions */}
-          <YStack gap={4}>
+          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={4} width="100%">
             <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
               Care &amp; Wash Instructions:
             </Text>
