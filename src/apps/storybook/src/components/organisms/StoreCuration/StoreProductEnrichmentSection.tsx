@@ -1005,12 +1005,12 @@ export function StoreProductEnrichmentSection({
 
           <XStack gap={10} flexWrap="wrap">
             {/* MRP Input */}
-            <YStack flex={1} gap={4}>
+            <YStack flex={1} gap={6}>
               <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
                 MRP (Strikethrough Price):
               </Text>
               <XStack alignItems="center" style={styles.currencyInputContainer}>
-                <Text fontSize={14} fontWeight="700" color={tokens.textMuted}>
+                <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
                   ₹
                 </Text>
                 <TextInput
@@ -1023,12 +1023,12 @@ export function StoreProductEnrichmentSection({
             </YStack>
 
             {/* Sale Price Input */}
-            <YStack flex={1} gap={4}>
+            <YStack flex={1} gap={6}>
               <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
                 Sale Price (Selling Rate):
               </Text>
               <XStack alignItems="center" style={styles.currencyInputContainer}>
-                <Text fontSize={14} fontWeight="800" color={tokens.accent}>
+                <Text fontSize={15} fontWeight="800" color={tokens.accent}>
                   ₹
                 </Text>
                 <TextInput
@@ -1790,49 +1790,54 @@ const styles = StyleSheet.create({
   currencyInputContainer: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 42,
+    gap: 6,
   },
   currencyInput: {
     flex: 1,
-    fontSize: 15,
+    height: '100%',
+    fontSize: 16,
     color: '#1E293B',
     padding: 0,
+    outlineStyle: 'none' as any,
   },
   textArea: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     borderRadius: 8,
-    padding: 8,
-    fontSize: 12,
+    padding: 10,
+    fontSize: 13,
     color: '#1E293B',
     lineHeight: 18,
-    minHeight: 70,
+    minHeight: 74,
     textAlignVertical: 'top',
+    outlineStyle: 'none' as any,
   },
   dimensionInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    fontSize: 13,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38,
+    fontSize: 14,
     color: '#1E293B',
+    outlineStyle: 'none' as any,
   },
   singleLineInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    fontSize: 12,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38,
+    fontSize: 13,
     color: '#1E293B',
+    outlineStyle: 'none' as any,
   },
   addTagBtn: {
     paddingHorizontal: 12,

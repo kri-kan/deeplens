@@ -1645,12 +1645,12 @@ export function AdminStoreProductCurationPage({
               </Text>
 
               <XStack gap={10}>
-                <YStack flex={1} gap={4}>
-                  <Text fontSize={10} color={tokens.textMuted}>
+                <YStack flex={1} gap={6}>
+                  <Text fontSize={12} fontWeight="600" color={tokens.textMuted}>
                     MRP (Strikethrough):
                   </Text>
                   <XStack alignItems="center" style={styles.currencyInputBox}>
-                    <Text fontSize={12} color={tokens.textMuted}>
+                    <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
                       ₹
                     </Text>
                     <TextInput
@@ -1662,12 +1662,12 @@ export function AdminStoreProductCurationPage({
                   </XStack>
                 </YStack>
 
-                <YStack flex={1} gap={4}>
-                  <Text fontSize={10} color={tokens.textMuted}>
+                <YStack flex={1} gap={6}>
+                  <Text fontSize={12} fontWeight="600" color={tokens.textMuted}>
                     Sale Price (Selling Rate):
                   </Text>
                   <XStack alignItems="center" style={styles.currencyInputBox}>
-                    <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                    <Text fontSize={15} fontWeight="800" color={tokens.accent}>
                       ₹
                     </Text>
                     <TextInput
@@ -2270,19 +2270,21 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   currencyInputBox: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 42,
+    gap: 6,
   },
   currencyTextInput: {
     flex: 1,
-    fontSize: 12,
+    height: '100%',
+    fontSize: 15,
     color: '#1E293B',
     padding: 0,
+    outlineStyle: 'none' as any,
   },
   fixedBottomBar: {
     position: 'absolute',
