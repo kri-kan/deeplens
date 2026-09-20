@@ -45,26 +45,12 @@ export default meta;
 type Story = StoryObj;
 
 /**
- * 0. Store Curation: Main Hub (Adaptive Responsive Multi-Form Factor):
- * Entry hub adapting dynamically across Mobile (390px), Tablet (768px), and Desktop (1240px Fluid).
- * Features responsive header with action buttons, expanded product overview banner with margin pills,
- * and 2-column curation tiles with rich metrics.
+ * 0. Store Curation: Main Hub (Mobile View - 390px):
+ * Master curation entry hub adapting dynamically across Mobile (390px), Tablet (768px), and Desktop (1240px Fluid).
+ * Defaults to Mobile View (390px) with interactive 1-tap form factor switching in the top FormFactorShell toolbar.
  */
 export const StoreCurationMainHub: Story = {
-  name: '0. Store Curation: Main Hub (Responsive Multi-Form Factor)',
-  args: {
-    initialScreen: 'hub',
-    initialShowPreview: false,
-  },
-};
-
-/**
- * 0a. Store Curation: Main Hub - Mobile Phone (390px):
- * Demonstrates compact mobile viewport layout with 60x72 thumbnail, streamlined header icons,
- * and compact 84px curation hub tiles.
- */
-export const MainHubMobileView_390px: Story = {
-  name: '0a. Main Hub: Mobile View (390px)',
+  name: '0. Store Curation: Main Hub (Mobile View - 390px)',
   args: {
     initialScreen: 'hub',
     initialShowPreview: false,
@@ -72,42 +58,6 @@ export const MainHubMobileView_390px: Story = {
   parameters: {
     formFactorShell: {
       defaultFactor: 'mobile',
-    },
-  },
-};
-
-/**
- * 0b. Store Curation: Main Hub - Tablet iPad (768px):
- * Demonstrates balanced 768px tablet layout with 80x96 thumbnail, descriptive overview,
- * and 104px curation hub tiles with expanded metrics.
- */
-export const MainHubTabletView_768px: Story = {
-  name: '0b. Main Hub: Tablet View (768px)',
-  args: {
-    initialScreen: 'hub',
-    initialShowPreview: false,
-  },
-  parameters: {
-    formFactorShell: {
-      defaultFactor: 'tablet',
-    },
-  },
-};
-
-/**
- * 0c. Store Curation: Main Hub - Desktop Console (1240px Fluid):
- * Demonstrates spacious widescreen merchant console with 96x116 thumbnail, full commercial margins,
- * desktop header action buttons, and 120px curation hub tiles.
- */
-export const MainHubDesktopView_Fluid: Story = {
-  name: '0c. Main Hub: Desktop Console (Fluid)',
-  args: {
-    initialScreen: 'hub',
-    initialShowPreview: false,
-  },
-  parameters: {
-    formFactorShell: {
-      defaultFactor: 'desktop',
     },
   },
 };
