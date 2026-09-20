@@ -176,14 +176,14 @@ export function AdminProductInfoSection({
               fontWeight="700"
               color={category ? tokens.accent : tokens.textMuted}
             >
-              {category ? category.toUpperCase() : 'Add Category'}
+              {category ? String(category).toUpperCase() : 'Add Category'}
             </Text>
           </XStack>
         </Pressable>
       </XStack>
 
       {/* Fabric / Specs Tag Row */}
-      {fabric && (
+      {fabric ? (
         <XStack alignItems="center" gap={6}>
           <XStack
             paddingHorizontal={8}
@@ -192,11 +192,11 @@ export function AdminProductInfoSection({
             backgroundColor={tokens.surfaceRaised}
           >
             <Text fontSize={11} fontWeight="600" color={tokens.textMuted}>
-              Fabric: {fabric}
+              Fabric: {typeof fabric === 'object' ? JSON.stringify(fabric) : String(fabric)}
             </Text>
           </XStack>
         </XStack>
-      )}
+      ) : null}
 
       {/* Description Section */}
       <YStack gap={4} marginTop={4}>
@@ -209,7 +209,7 @@ export function AdminProductInfoSection({
           color={tokens.text}
           opacity={description ? 0.9 : 0.5}
         >
-          {description || 'No description available for this product.'}
+          {typeof description === 'object' ? JSON.stringify(description) : (description || 'No description available for this product.')}
         </Text>
       </YStack>
     </YStack>

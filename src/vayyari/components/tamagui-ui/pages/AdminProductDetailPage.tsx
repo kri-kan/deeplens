@@ -98,16 +98,40 @@ export interface AdminProductDetailPageProps {
   initialDeleteDialogOpen?: boolean;
 }
 
+function toDisplayString(val: any, fallback: string = '---'): string {
+  if (val === undefined || val === null) return fallback;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof val === 'number') {
+    return String(val);
+  }
+  if (Array.isArray(val)) {
+    const items = val
+      .map((v) => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '').trim()))
+      .filter((s) => s.length > 0);
+    return items.length > 0 ? items.join(', ') : fallback;
+  }
+  if (typeof val === 'object') {
+    const keys = Object.keys(val);
+    return keys.length > 0 ? JSON.stringify(val) : fallback;
+  }
+  return String(val);
+}
+
 function TaxonomySpecRow({
   label,
   value,
   isHighlighted = false,
 }: {
   label: string;
-  value: string;
+  value: any;
   isHighlighted?: boolean;
 }) {
   const { tokens } = useTheme();
+  const displayValue = toDisplayString(value, '---');
+
   return (
     <XStack alignItems="center" justifyContent="space-between" paddingVertical={3}>
       <Text fontSize={11} color={tokens.textMuted} flex={1}>
@@ -121,7 +145,7 @@ function TaxonomySpecRow({
         flex={1.4}
         numberOfLines={1}
       >
-        {value}
+        {displayValue}
       </Text>
     </XStack>
   );
@@ -412,27 +436,78 @@ export function AdminProductDetailPage({
           const derivedAt = product.taxonomyDerivedAt || ua.taxonomy_derived_at || ua.taxonomyDerivedAt || product.timestamp || 'Today, 2:45 PM';
 
           // a) Craft Heritage & Weave
-          const craftTech = product.craft || ua.craft_technique || ua.weave_technique || ua.craft || 'Handloom Brocade Jacquard';
-          const regionalOrigin = ua.regional_origin || ua.craft_origin || ua.origin || (product as any).weaveOrigin || 'Varanasi (Banaras), UP';
-          const motifPattern = product.motif || ua.motif_pattern || ua.motif || 'Floral Kadwa Bootis & Jaal';
-          const borderPallu = product.border || ua.border_pallu || ua.border || 'Zari Contrast Border with Latkan Pallu';
-          const zariMaterial = ua.zari_type || ua.inlay_material || ua.zari || 'Tested Gold & Silver Metallic Zari';
-          const workHeaviness = ua.work_heaviness || ua.heaviness || 'Bridal Heavy';
+          const craftTech = toDisplayString(
+            product.craft || ua.craft_technique || (Array.isArray(ua.craft_techniques) && ua.craft_techniques[0]) || ua.weave_technique || ua.craft,
+            'Handloom Brocade Jacquard'
+          );
+          const regionalOrigin = toDisplayString(
+            ua.regional_origin || ua.craft_origin || ua.origin || (product as any).weaveOrigin,
+            'Varanasi (Banaras), UP'
+          );
+          const motifPattern = toDisplayString(
+            product.motif || ua.motif_pattern || (Array.isArray(ua.motif_patterns) && ua.motif_patterns[0]) || ua.motif,
+            'Floral Kadwa Bootis & Jaal'
+          );
+          const borderPallu = toDisplayString(
+            product.border || ua.border_pallu || (Array.isArray(ua.border_pallus) && ua.border_pallus[0]) || ua.border,
+            'Zari Contrast Border with Latkan Pallu'
+          );
+          const zariMaterial = toDisplayString(
+            ua.zari_type || ua.inlay_material || ua.zari,
+            'Tested Gold & Silver Metallic Zari'
+          );
+          const workHeaviness = toDisplayString(
+            ua.work_heaviness || ua.heaviness,
+            'Bridal Heavy'
+          );
 
           // b) Garment & Tailoring
-          const fabricBase = product.fabric || ua.fabric_base || ua.fabric || 'Pure Mulberry Silk';
-          const stitchProfile = product.stitchType || ua.stitch_type || ua.stitch || 'Ready to Drape (Pre-Pleated)';
-          const blouseFormat = product.blouseFormat || ua.blouse_format || ua.blouse_type || 'Attached Unstitched Running Blouse (80cm)';
-          const dimensions = ua.dimensions || ua.saree_length || 'Saree: 5.5m • Blouse: 0.8m';
+          const fabricBase = toDisplayString(
+            product.fabric || ua.fabric_base || ua.fabric,
+            'Pure Mulberry Silk'
+          );
+          const stitchProfile = toDisplayString(
+            product.stitchType || ua.stitch_type || ua.stitch,
+            'Ready to Drape (Pre-Pleated)'
+          );
+          const blouseFormat = toDisplayString(
+            product.blouseFormat || ua.blouse_format || ua.blouse_type,
+            'Attached Unstitched Running Blouse (80cm)'
+          );
+
+          let dimensions = 'Saree: 5.5m • Blouse: 0.8m';
+          if (typeof ua.dimensions === 'string' && ua.dimensions.trim()) {
+            dimensions = ua.dimensions.trim();
+          } else if (ua.dimensions && typeof ua.dimensions === 'object' && !Array.isArray(ua.dimensions)) {
+            const parts: string[] = [];
+            const sLen = ua.dimensions.saree_length || ua.dimensions.sareeLength || ua.saree_length;
+            const bLen = ua.dimensions.blouse_length || ua.dimensions.blouseLength || ua.blouse_length;
+            if (sLen) parts.push(`Saree: ${sLen}m`);
+            if (bLen) parts.push(`Blouse: ${bLen}m`);
+            if (parts.length > 0) {
+              dimensions = parts.join(' • ');
+            }
+          } else if (ua.saree_length || ua.blouse_length) {
+            const parts: string[] = [];
+            if (ua.saree_length) parts.push(`Saree: ${ua.saree_length}m`);
+            if (ua.blouse_length) parts.push(`Blouse: ${ua.blouse_length}m`);
+            if (parts.length > 0) {
+              dimensions = parts.join(' • ');
+            }
+          }
 
           // c) Occasions & Search Relevance
-          const occasionsList: string[] = Array.isArray(product.occasions) && product.occasions.length > 0
+          const rawOccasions: any[] = Array.isArray(product.occasions) && product.occasions.length > 0
             ? product.occasions
             : (Array.isArray(ua.occasions) && ua.occasions.length > 0
               ? ua.occasions
-              : ['Wedding & Bridal', 'Festive Diwali & Puja', 'Reception & Cocktail']);
+              : (product.occasions || ua.occasions ? [product.occasions || ua.occasions] : ['Wedding & Bridal', 'Festive Diwali & Puja', 'Reception & Cocktail']));
 
-          const searchKeywordsList: string[] = Array.isArray(ua.tags) && ua.tags.length > 0
+          const occasionsList: string[] = rawOccasions
+            .map((occ) => toDisplayString(occ, ''))
+            .filter((occ) => occ.length > 0);
+
+          const rawKeywords: any[] = Array.isArray(ua.tags) && ua.tags.length > 0
             ? ua.tags
             : (Array.isArray(ua.search_keywords) && ua.search_keywords.length > 0
               ? ua.search_keywords
@@ -444,7 +519,14 @@ export function AdminProductDetailPage({
                   'traditional saree',
                 ]);
 
-          const washCare = ua.wash_care || ua.care_instructions || 'Dry Clean Only • Store in Breathable Cotton / Muslin Wrap';
+          const searchKeywordsList: string[] = rawKeywords
+            .map((k) => toDisplayString(k, ''))
+            .filter((k) => k.length > 0);
+
+          const washCare = toDisplayString(
+            ua.wash_care || ua.care_instructions,
+            'Dry Clean Only • Store in Breathable Cotton / Muslin Wrap'
+          );
 
           return (
             <YStack paddingHorizontal={16} paddingTop={16} gap={10}>
