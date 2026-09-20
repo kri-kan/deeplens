@@ -331,6 +331,7 @@ export function StoreProductEnrichmentSection({
 }: StoreProductEnrichmentSectionProps) {
   const { tokens } = useTheme();
   const { isMobile } = useResponsive();
+  const contentPadding = isMobile ? 12 : 16;
   const [activeTab, setActiveTab] = useState<MetadataActiveTab>('craft_specs');
   const [isAiDeriving, setIsAiDeriving] = useState(false);
   const [tagInput, setTagInput] = useState('');
@@ -694,7 +695,7 @@ export function StoreProductEnrichmentSection({
         paddingHorizontal={0}
         width="100%"
       >
-        <YStack paddingHorizontal={isMobile ? 4 : 8} gap={8} width="100%">
+        <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={8} width="100%">
           <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8}>
             <YStack gap={2}>
               <XStack alignItems="center" gap={6}>
@@ -753,7 +754,7 @@ export function StoreProductEnrichmentSection({
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.tabScrollWrapper}
-        contentContainerStyle={[styles.tabScrollContainer, { paddingHorizontal: isMobile ? 4 : 8 }]}
+        contentContainerStyle={[styles.tabScrollContainer, { paddingHorizontal: contentPadding }]}
       >
         <Pressable
           nativeID="tab-craft_specs"
@@ -863,7 +864,7 @@ export function StoreProductEnrichmentSection({
           paddingHorizontal={0}
           width="100%"
         >
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={12} width="100%">
             <XStack alignItems="center" justifyContent="space-between">
             <Text fontSize={12} fontWeight="900" color={tokens.text} textTransform="uppercase">
               1. Fabric &amp; Weaving Dimensions (PDP Specs Table)
@@ -1001,7 +1002,7 @@ export function StoreProductEnrichmentSection({
           paddingHorizontal={0}
           width="100%"
         >
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={12} width="100%">
             <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
               2. Commercial Pricing &amp; Landed Margins
             </Text>
@@ -1087,7 +1088,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Story Description Input */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={6} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={6} width="100%">
             <Text fontSize={12} fontWeight="700" color={tokens.text}>
               About the Weave (PDP Narrative):
             </Text>
@@ -1117,7 +1118,7 @@ export function StoreProductEnrichmentSection({
           paddingHorizontal={0}
           width="100%"
         >
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={12} width="100%">
             <XStack alignItems="center" justifyContent="space-between">
               <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
                 3. Sizing, Drape &amp; Tailoring Profile
@@ -1150,7 +1151,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 2. Sizing Configuration: No-Size Informational vs Multi-Size Availability */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} width="100%">
             {isNoSize ? (
             /* ── NO SIZE: ONE SIZE VS FREE SIZE SUB-VARIANTS & INFORMATIONAL BADGE ── */
             <YStack gap={10} width="100%">
@@ -1390,7 +1391,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 3. Stitch Type Presets */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={4} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={4} width="100%">
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
               Stitch &amp; Construction State:
             </Text>
@@ -1444,7 +1445,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 4. Blouse Format & Construction Selection */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} width="100%">
             <TaxonomyFacetChipSelector
               label="Blouse Format &amp; Construction:"
               options={BLOUSE_TYPE_OPTIONS}
@@ -1462,7 +1463,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* 5. Saree & Blouse Dimensions */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={10} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={10} width="100%">
             <XStack gap={10}>
               <YStack flex={1} gap={4}>
                 <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
@@ -1515,7 +1516,7 @@ export function StoreProductEnrichmentSection({
           paddingHorizontal={0}
           width="100%"
         >
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={12} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={12} width="100%">
             <XStack alignItems="center" justifyContent="space-between">
               <Text fontSize={13} fontWeight="900" color={tokens.text} textTransform="uppercase">
                 4. Occasion Facets &amp; Search Relevance
@@ -1628,7 +1629,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Search Relevance Tags */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={6} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={6} width="100%">
             <Text fontSize={12} fontWeight="700" color={tokens.textMuted}>
               Search Relevance Keywords &amp; Synonyms:
             </Text>
@@ -1671,7 +1672,7 @@ export function StoreProductEnrichmentSection({
           <View style={[styles.sectionSeparator, { backgroundColor: tokens.border }]} />
 
           {/* Care Instructions */}
-          <YStack paddingHorizontal={isMobile ? 4 : 8} gap={4} width="100%">
+          <YStack paddingHorizontal={contentPadding} style={{ paddingHorizontal: contentPadding }} gap={4} width="100%">
             <Text fontSize={12} color={tokens.textMuted} fontWeight="600">
               Care &amp; Wash Instructions:
             </Text>
