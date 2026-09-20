@@ -390,16 +390,30 @@ export const BrocadeBlouse: Story = {
 };
 
 /**
- * 8. AI-Derived Taxonomy Facets Inspector
- * Highlights the dedicated rich AI vision inspection card, displaying confidence
+ * 8. AI-Derived Taxonomy Facets Inspector (Collapsed by Default)
+ * Highlights the compact collapsed card with summary preview strip and chevron toggle.
+ */
+export const AiDerivedTaxonomyInspector: Story = {
+  name: '8. AI-Derived Taxonomy Facets (Collapsed Default)',
+  decorators: [withFormFactor('mobile', 'Product Detail - AI Taxonomy (Collapsed)')],
+  args: {
+    product: SAREE_PRODUCT,
+    initialTaxonomyExpanded: false,
+  },
+};
+
+/**
+ * 8a. AI-Derived Taxonomy Facets Inspector (Expanded)
+ * Highlights the fully expanded AI vision inspection card, displaying confidence
  * score pill, derivation timestamp, Craft Heritage & Weave specs, Garment &
  * Tailoring specs, and interactive Occasion & Search Keyword tags.
  */
-export const AiDerivedTaxonomyInspector: Story = {
-  name: '8. AI-Derived Taxonomy Facets Inspector',
-  decorators: [withFormFactor('mobile', 'Product Detail - AI Taxonomy Facets')],
+export const AiDerivedTaxonomyInspectorExpanded: Story = {
+  name: '8a. AI-Derived Taxonomy Facets (Expanded)',
+  decorators: [withFormFactor('mobile', 'Product Detail - AI Taxonomy (Expanded)')],
   args: {
     product: SAREE_PRODUCT,
+    initialTaxonomyExpanded: true,
   },
 };
 
