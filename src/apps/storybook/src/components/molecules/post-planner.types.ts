@@ -1,3 +1,11 @@
+export interface PlannedProductCollabInfo {
+  collabChannelId?: string;
+  collabChannelUsername?: string;
+  collabStatus?: 'none' | 'invite_pending' | 'collab_accepted' | 'collab_declined';
+  publishedShortcode?: string;
+  publishedUrl?: string;
+}
+
 export interface PlannedProductInfo {
   id: string;
   productCode: string;
@@ -9,6 +17,9 @@ export interface PlannedProductInfo {
   isStarred?: boolean;
   assignedChannelIds?: string[];
   planningStatus?: 'complete' | 'in_progress';
+  collabInfo?: PlannedProductCollabInfo;
+  targetCollabUsername?: string;
+  collabStatus?: 'none' | 'invite_pending' | 'collab_accepted' | 'collab_declined';
 }
 
 export interface TargetChannelOption {
@@ -24,3 +35,4 @@ export interface ChannelSharingQueueItem extends PlannedProductInfo {
   status: 'assigned' | 'scheduled' | 'shared' | 'excluded';
   scheduledTimeLabel?: string;
 }
+

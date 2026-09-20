@@ -1,0 +1,205 @@
+appId: com.instagram.android
+---
+# ==============================================================================
+# Instagram Collab Automation: Switch Profile & Accept Collaboration Invite
+#
+# Parameters:
+#   COLLAB_HANDLE: Target account to switch to and accept collab (e.g. "dressbyvayyari")
+#   CREATOR_ACCOUNT: (Optional) Source creator account handle (e.g. "vayyari_fashions")
+#   SHORTCODE: Instagram post shortcode (e.g. "DAxyz123")
+# ==============================================================================
+
+# Step 1: Force cold start of Instagram to land on Home Feed
+- stopApp:
+    appId: com.instagram.android
+- launchApp:
+    appId: com.instagram.android
+
+# Allow initial load
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 4000);
+
+# Step 2: Open account switcher via long-press on Profile navigation tab
+- longPressOn:
+    text: "Profile"
+    waitToSettleTimeoutMs: 0
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 2000);
+
+# Wait for account switcher bottom sheet to reveal the target collaborator profile
+- extendedWaitUntil:
+    visible: "${COLLAB_HANDLE}"
+    timeout: 8000
+
+# Tap target profile to switch active session
+- tapOn: "${COLLAB_HANDLE}"
+
+# Allow session switch transition to complete
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 3500);
+
+# Step 3: Open the post directly via explicit Android Intent Deep Link
+- openLink: "intent://www.instagram.com/p/${SHORTCODE}/#Intent;package=com.instagram.android;scheme=https;end"
+
+# Wait for post media and metadata to render
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 3500);
+
+# Step 4: Dynamic detection loop for Collaboration Review prompt
+- evalScript: ${output.review_detected = 'false'}
+- evalScript: ${output.wait_count = 0}
+
+- repeat:
+    while:
+      true: ${output.review_detected == 'false' && output.wait_count < 15}
+    commands:
+      # Check 1: Inline post banner action button "Review" / "Review invite"
+      - runFlow:
+          when:
+            visible: "Review invite"
+          commands:
+            - tapOn: "Review invite"
+            - evalScript: ${output.review_detected = 'banner'}
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+            visible: "Review"
+          commands:
+            - tapOn: "Review"
+            - evalScript: ${output.review_detected = 'banner'}
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+            visible:
+              id: "com.instagram.android:id/row_feed_button_review_invite"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/row_feed_button_review_invite"
+            - evalScript: ${output.review_detected = 'banner'}
+      # Check 2: Already a collaborator? (Idempotent exit)
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+            visible: "You're a collaborator"
+          commands:
+            - evalScript: ${output.review_detected = 'already_accepted'}
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+            visible: "You're now a collaborator"
+          commands:
+            - evalScript: ${output.review_detected = 'already_accepted'}
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+          commands:
+            - evalScript: |
+                var start = new Date().getTime();
+                while (new Date().getTime() < start + 1000);
+            - evalScript: ${output.wait_count = output.wait_count + 1}
+
+# Step 5: Fallback via Post 3-Dots Menu if top banner was not directly visible
+- runFlow:
+    when:
+      true: ${output.review_detected == 'false'}
+    commands:
+      - runFlow:
+          when:
+            visible: "More options"
+          commands:
+            - tapOn: "More options"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/button_more"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/button_more"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      - runFlow:
+          when:
+            visible: "Review collaboration invite"
+          commands:
+            - tapOn: "Review collaboration invite"
+            - evalScript: ${output.review_detected = 'menu'}
+      - runFlow:
+          when:
+            visible: "Review invite"
+          commands:
+            - tapOn: "Review invite"
+            - evalScript: ${output.review_detected = 'menu'}
+
+# Step 6: Fallback via Activity / Notifications Feed if post menu did not have invite
+- runFlow:
+    when:
+      true: ${output.review_detected == 'false'}
+    commands:
+      - stopApp:
+          appId: com.instagram.android
+      - launchApp:
+          appId: com.instagram.android
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 3000);
+      # Tap notifications / Activity feed
+      - runFlow:
+          when:
+            visible: "Notifications"
+          commands:
+            - tapOn: "Notifications"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/news_tab"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/news_tab"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+      # Tap on the collaborator invite notification
+      - runFlow:
+          when:
+            visible: ".*invited you to be a collaborator.*"
+          commands:
+            - tapOn: ".*invited you to be a collaborator.*"
+            - evalScript: ${output.review_detected = 'notification'}
+
+# Step 7: Handle Collaboration Confirmation Bottom Sheet / Dialog
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 2000);
+
+- runFlow:
+    when:
+      visible: "Accept"
+    commands:
+      - tapOn: "Accept"
+      - evalScript: ${output.accepted = 'true'}
+- runFlow:
+    when:
+      true: ${output.accepted !== 'true'}
+      visible:
+        id: "com.instagram.android:id/primary_button"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/primary_button"
+      - evalScript: ${output.accepted = 'true'}
+
+# Step 8: Settle and verify collaboration status
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 3000);
+
+# If already accepted or freshly accepted, finish cleanly
+- runFlow:
+    when:
+      true: ${output.review_detected == 'already_accepted' || output.accepted == 'true'}
+    commands:
+      - evalScript: console.log("Collab successfully established for " + COLLAB_HANDLE);

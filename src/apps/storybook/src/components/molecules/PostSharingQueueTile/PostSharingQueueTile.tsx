@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Pressable, StyleSheet, Image } from 'react-native';
 import { XStack, Text } from 'tamagui';
-import { LuClock, LuCheck, LuBan, LuStar } from 'react-icons/lu';
+import { LuClock, LuCheck, LuBan, LuStar, LuUsers } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 import { ChannelSharingQueueItem } from '../post-planner.types';
 
@@ -77,6 +77,30 @@ export function PostSharingQueueTile({
         </XStack>
       </View>
 
+      {/* Collaborator Partner Badge Overlay */}
+      {(item.targetCollabUsername || item.collabInfo?.collabChannelUsername) ? (
+        <View
+          style={[
+            styles.collabPill,
+            {
+              backgroundColor:
+                item.collabStatus === 'collab_accepted'
+                  ? 'rgba(22, 101, 52, 0.85)'
+                  : item.collabStatus === 'invite_pending'
+                  ? 'rgba(180, 83, 9, 0.85)'
+                  : 'rgba(15, 23, 42, 0.80)',
+            },
+          ]}
+        >
+          <XStack alignItems="center" gap={3}>
+            <LuUsers size={9} color="#FFFFFF" />
+            <Text fontSize={8} fontWeight="700" color="#FFFFFF" numberOfLines={1}>
+              🤝 @{item.targetCollabUsername || item.collabInfo?.collabChannelUsername}
+            </Text>
+          </XStack>
+        </View>
+      ) : null}
+
       {/* Bottom Bar */}
       <View style={styles.bottomBar}>
         <Text fontSize={10} fontWeight="800" color="#FFFFFF" numberOfLines={1}>
@@ -127,7 +151,16 @@ const styles = StyleSheet.create({
     right: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 4,
+  },
+  collabPill: {
+    position: 'absolute',
+    bottom: 38,
+    left: 4,
+    right: 4,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
   bottomBar: {
     position: 'absolute',

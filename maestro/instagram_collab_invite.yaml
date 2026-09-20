@@ -1,0 +1,211 @@
+appId: com.instagram.android
+---
+# ==============================================================================
+# Instagram Collab Automation: Invite Collaborator (Creator Flow)
+#
+# Parameters:
+#   CREATOR_ACCOUNT: Source account handle (e.g. "vayyari_fashions")
+#   COLLAB_HANDLE: Target account to invite as co-author (e.g. "dressbyvayyari")
+#   SHORTCODE: (Optional) Instagram post shortcode for an existing published post.
+#              If omitted, assumes user is on the Post/Reel sharing composer screen.
+# ==============================================================================
+
+# Step 1: Verify / Switch to Creator Account if CREATOR_ACCOUNT is specified
+- runFlow:
+    when:
+      true: ${typeof CREATOR_ACCOUNT !== 'undefined' && CREATOR_ACCOUNT !== ''}
+    commands:
+      - stopApp:
+          appId: com.instagram.android
+      - launchApp:
+          appId: com.instagram.android
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 3500);
+      - longPressOn:
+          text: "Profile"
+          waitToSettleTimeoutMs: 0
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2000);
+      - extendedWaitUntil:
+          visible: "${CREATOR_ACCOUNT}"
+          timeout: 8000
+      - tapOn: "${CREATOR_ACCOUNT}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 3000);
+
+# Step 2: If SHORTCODE is provided, open the existing post and enter Edit mode
+- runFlow:
+    when:
+      true: ${typeof SHORTCODE !== 'undefined' && SHORTCODE !== ''}
+    commands:
+      - openLink: "intent://www.instagram.com/p/${SHORTCODE}/#Intent;package=com.instagram.android;scheme=https;end"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 3500);
+      # Tap 3-dots options menu on the post
+      - runFlow:
+          when:
+            visible: "More options"
+          commands:
+            - tapOn: "More options"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/button_more"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/button_more"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      # Tap Edit option
+      - extendedWaitUntil:
+          visible: "Edit"
+          timeout: 6000
+      - tapOn: "Edit"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+
+# Step 3: Tap "Tag people" row
+- runFlow:
+    when:
+      visible: "Tag people"
+    commands:
+      - tapOn: "Tag people"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/tag_people_row"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/tag_people_row"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/row_feed_tag_people"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/row_feed_tag_people"
+
+# Settle tagging screen animation
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 2000);
+
+# Step 4: Tap "Invite collaborator"
+- runFlow:
+    when:
+      visible: "Invite collaborator"
+    commands:
+      - tapOn: "Invite collaborator"
+- runFlow:
+    when:
+      visible: "Invite Collaborator"
+    commands:
+      - tapOn: "Invite Collaborator"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/invite_collaborator_button"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/invite_collaborator_button"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+
+# Settle search screen transition
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1500);
+
+# Step 5: Search for target collaborator handle
+- runFlow:
+    when:
+      visible: "Search for a user"
+    commands:
+      - tapOn: "Search for a user"
+      - inputText: "${COLLAB_HANDLE}"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/search_edit_text"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/search_edit_text"
+      - inputText: "${COLLAB_HANDLE}"
+
+# Debounce search results from network
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 2500);
+
+# Step 6: Select collaborator account from search list
+- extendedWaitUntil:
+    visible: "${COLLAB_HANDLE}"
+    timeout: 8000
+- tapOn:
+    text: "${COLLAB_HANDLE}"
+
+# Settle collaborator addition
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 1500);
+
+# Step 7: Confirm Done / Checkmark in Tag People screen
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/action_bar_button_done"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/action_bar_button_done"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/action_bar_action_button"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/action_bar_action_button"
+
+# Settle back to composer / edit screen
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 2000);
+
+# Step 8: Save or Share post
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- runFlow:
+    when:
+      visible: "Share"
+    commands:
+      - tapOn: "Share"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/share_footer_button"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/share_footer_button"
+
+# Final pause to allow network dispatch
+- evalScript: |
+    var start = new Date().getTime();
+    while (new Date().getTime() < start + 3000);

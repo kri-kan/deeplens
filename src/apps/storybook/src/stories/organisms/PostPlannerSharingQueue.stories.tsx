@@ -87,3 +87,31 @@ export const EmptyQueue: Story = {
     channelItems: [],
   },
 };
+
+export const CollabQueue: Story = {
+  name: '3. Queue with Instagram Collab Pairing (Maestro Ready)',
+  args: {
+    activeChannelId: 'ch-1',
+    channelItems: [
+      {
+        ...MOCK_QUEUE_ITEMS[0],
+        targetCollabUsername: 'theblouseedition',
+        collabStatus: 'invite_pending',
+        publishedShortcode: 'CX9kLa2',
+      },
+      {
+        ...MOCK_QUEUE_ITEMS[1],
+        targetCollabUsername: 'vayyari_prive',
+        collabStatus: 'collab_accepted',
+        publishedShortcode: 'CX7mNb4',
+      },
+      {
+        ...MOCK_QUEUE_ITEMS[2],
+        targetCollabUsername: 'everydayvayyari',
+        collabStatus: 'collab_accepted',
+        publishedShortcode: 'CX5qPz1',
+      },
+    ],
+  },
+};
+
