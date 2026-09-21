@@ -989,6 +989,35 @@ class InstagramService {
   classifyChannel = async (payload: ClassifyChannelPayload): Promise<{ success: boolean; watchlistId: string; channelType: string }> => {
     return searchApiClient.post(API_ROUTES.INSTAGRAM.POST_PLANNER_CLASSIFY_CHANNEL, payload);
   };
+
+  getCollabChannels = async (): Promise<CollabPlannerChannelDto[]> => {
+    return searchApiClient.get<CollabPlannerChannelDto[]>(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_CHANNELS);
+  };
+
+  getCollabPosts = async (options?: {
+    username?: string;
+    includeCurated?: boolean;
+    take?: number;
+    skip?: number;
+  }): Promise<CollabPlannerPostDto[]> => {
+    return searchApiClient.get<CollabPlannerPostDto[]>(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_POSTS(options));
+  };
+
+  curateCollabPost = async (postId: string): Promise<{ success: boolean; postId: string; status: string }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_CURATE, { postId });
+  };
+
+  queueCollabPost = async (postId: string, targetCollabAccounts: string[]): Promise<CollabPlannerPostDto> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_QUEUE, { postId, targetCollabAccounts });
+  };
+
+  getCollabQueue = async (): Promise<CollabPlannerPostDto[]> => {
+    return searchApiClient.get<CollabPlannerPostDto[]>(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_QUEUE);
+  };
+
+  completeCollabPost = async (postId: string, collaborators: any[]): Promise<{ success: boolean; postId: string; status: string }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_COMPLETE, { postId, collaborators });
+  };
 }
 
 export interface UnifiedPlannerItem {
@@ -1121,5 +1150,41 @@ export interface ClassifyChannelPayload {
   targetDemography?: string;
 }
 
+export interface CollabPlannerChannelDto {
+  id: string;
+  username: string;
+  displayName?: string;
+  profilePicUrl?: string;
+  storagePath?: string;
+  channelType: 'focus' | 'dump';
+  followerCount: number;
+}
+
+export interface CollabPlannerPostDto {
+  id: string;
+  platformVideoId: string;
+  title?: string;
+  videoUrl?: string;
+  storagePath?: string;
+  thumbnailUrl?: string;
+  caption?: string;
+  likeCount: number;
+  commentCount: number;
+  postedAt: string;
+  collabCurationStatus: 'pending' | 'collab_curated' | 'queued' | 'in_progress' | 'completed';
+  targetCollabAccounts: string[];
+  collaborators: Array<{
+    id?: string;
+    username: string;
+    fullName?: string;
+    isVerified?: boolean;
+    profilePictureUrl?: string;
+  }>;
+  ownerUsername: string;
+  ownerDisplayName?: string;
+  ownerProfilePicUrl?: string;
+}
+
 export const instagramService = new InstagramService();
+
 

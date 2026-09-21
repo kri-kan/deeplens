@@ -25,6 +25,7 @@ export interface PlannedProductInfo {
 export interface TargetChannelOption {
   id: string;
   username: string;
+  displayName?: string;
   channelType: 'focus' | 'dump';
   niche?: string;
   avatarUri?: string;

@@ -3730,7 +3730,7 @@ public class InstaController : ControllerBase
                 created_at AS CreatedAt,
                 updated_at AS UpdatedAt
             FROM competitor_watchlist 
-            WHERE is_competitor = false AND is_active = true 
+            WHERE (profile_category = 'My Business' OR (is_competitor = false AND (profile_category IS NULL OR profile_category NOT IN ('Competitors', 'Competitor')))) AND enabled = true
             ORDER BY follower_count DESC NULLS LAST";
 
         var channels = (await conn.QueryAsync<CollabPlannerChannelDto>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
@@ -3768,7 +3768,7 @@ public class InstaController : ControllerBase
                 cw.profile_pic_url AS OwnerProfilePicUrl
             FROM competitor_videos cv
             JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-            WHERE cw.is_competitor = false");
+            WHERE (cw.profile_category = 'My Business' OR (cw.is_competitor = false AND (cw.profile_category IS NULL OR cw.profile_category NOT IN ('Competitors', 'Competitor')))) AND cw.enabled = true");
 
         var parameters = new DynamicParameters();
 

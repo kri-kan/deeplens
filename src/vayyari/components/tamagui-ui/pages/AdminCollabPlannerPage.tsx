@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Pressable,
   StyleSheet,
   Switch,
   ScrollView,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
@@ -29,73 +31,63 @@ import {
 
 export const DEFAULT_COLLAB_ACCOUNTS: TargetCollabAccount[] = [
   {
-    id: 'p-1',
+    id: 'vayyari_fashions',
     username: 'vayyari_fashions',
     displayName: 'Vayyari Fashions',
-    avatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     channelType: 'focus',
   },
   {
-    id: 'p-2',
-    username: 'dressbyvayyari',
-    displayName: 'Dress by Vayyari',
-    avatarUri: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&q=80',
-    channelType: 'focus',
-  },
-  {
-    id: 'p-3',
-    username: 'eclipsevayyari',
-    displayName: 'Eclipse Vayyari',
-    avatarUri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&q=80',
-    channelType: 'focus',
-  },
-  {
-    id: 'p-4',
+    id: 'editionsbyvayyari',
     username: 'editionsbyvayyari',
     displayName: 'Editions by Vayyari',
-    avatarUri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80',
     channelType: 'focus',
   },
   {
-    id: 'p-5',
-    username: 'everydayvayyari',
-    displayName: 'Everyday Vayyari',
-    avatarUri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200&q=80',
-    channelType: 'focus',
-  },
-  {
-    id: 'p-6',
+    id: 'theblouseedition',
     username: 'theblouseedition',
     displayName: 'The Blouse Edition',
-    avatarUri: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=200&q=80',
     channelType: 'focus',
   },
   {
-    id: 'p-7',
+    id: 'dressbyvayyari',
+    username: 'dressbyvayyari',
+    displayName: 'Dress by Vayyari',
+    channelType: 'focus',
+  },
+  {
+    id: 'vayyari_littles',
     username: 'vayyari_littles',
     displayName: 'Vayyari Littles',
-    avatarUri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
     channelType: 'focus',
   },
   {
-    id: 'p-8',
-    username: 'vayyariplusyou',
-    displayName: 'Vayyari Plus You',
-    avatarUri: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&q=80',
-    channelType: 'focus',
-  },
-  {
-    id: 'p-9',
-    username: 'vayyari_prive',
-    displayName: 'Vayyari Privé',
-    avatarUri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&q=80',
-    channelType: 'focus',
-  },
-  {
-    id: 'p-10',
+    id: 'vayyaristudio',
     username: 'vayyaristudio',
     displayName: 'Vayyari Studio',
-    avatarUri: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&q=80',
+    channelType: 'focus',
+  },
+  {
+    id: 'vayyari_prive',
+    username: 'vayyari_prive',
+    displayName: 'Vayyari Privé',
+    channelType: 'focus',
+  },
+  {
+    id: 'everydayvayyari',
+    username: 'everydayvayyari',
+    displayName: 'Everyday Vayyari',
+    channelType: 'focus',
+  },
+  {
+    id: 'vayyariplusyou',
+    username: 'vayyariplusyou',
+    displayName: 'Vayyari Plus You',
+    channelType: 'focus',
+  },
+  {
+    id: 'eclipsevayyari',
+    username: 'eclipsevayyari',
+    displayName: 'Eclipse Vayyari',
     channelType: 'focus',
   },
 ];
@@ -104,7 +96,7 @@ export const DEFAULT_COLLAB_CHANNELS: TargetChannelOption[] = [
   {
     id: 'all',
     username: 'all_channels',
-    displayName: 'All Business Channels',
+    displayName: 'All Channels',
     channelType: 'focus',
   },
   ...DEFAULT_COLLAB_ACCOUNTS.map((acc) => ({
@@ -121,7 +113,6 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     id: 'post-101',
     thumbnailUrl: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Pure Kanjivaram silk saree with hand-woven tested gold zari border and rich pallu.',
     postedAt: '1h ago',
     likes: 1240,
@@ -134,7 +125,6 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     id: 'post-102',
     thumbnailUrl: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Banarasi tissue zari festive saree in radiant royal gold and antique finish.',
     postedAt: '4h ago',
     likes: 2180,
@@ -147,20 +137,18 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     id: 'post-103',
     thumbnailUrl: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Bridal floor-length anarkali featuring hand-cut velvet appliques and intricate zardozi.',
     postedAt: '1d ago',
     likes: 950,
     comments: 31,
     collaborators: ['theblouseedition'],
-    targetCollabAccounts: ['p-6'],
+    targetCollabAccounts: ['theblouseedition'],
     curationStatus: 'pending',
   },
   {
     id: 'post-104',
     thumbnailUrl: 'https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Crimson velvet lehenga with handcrafted cutwork and heritage embroidery.',
     postedAt: '2d ago',
     likes: 3120,
@@ -173,59 +161,54 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     id: 'post-105',
     thumbnailUrl: 'https://images.unsplash.com/photo-1609357605129-26f69add5d6e?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Authentic Patola double ikat silk weave with geometric elephant and floral motifs.',
     postedAt: '3d ago',
     likes: 1840,
     comments: 62,
     collaborators: ['theblouseedition', 'editionsbyvayyari'],
-    targetCollabAccounts: ['p-4', 'p-6'],
+    targetCollabAccounts: ['theblouseedition', 'editionsbyvayyari'],
     curationStatus: 'curated',
   },
   {
     id: 'post-106',
     thumbnailUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Pastel Organza drape with pearl-encrusted scallops and sheer elegance.',
     postedAt: '4d ago',
     likes: 2490,
     comments: 97,
     collaborators: ['vayyari_prive'],
-    targetCollabAccounts: ['p-9'],
+    targetCollabAccounts: ['vayyari_prive'],
     curationStatus: 'curated',
   },
   {
     id: 'post-107',
     thumbnailUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Chanderi silk festive kurti set in mint green with silver gota patti lace.',
     postedAt: '5d ago',
     likes: 4120,
     comments: 204,
     collaborators: ['dressbyvayyari', 'vayyari_littles'],
-    targetCollabAccounts: ['p-2', 'p-7'],
+    targetCollabAccounts: ['dressbyvayyari', 'vayyari_littles'],
     curationStatus: 'queued',
   },
   {
     id: 'post-108',
     thumbnailUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&q=80',
     ownerUsername: 'vayyari_fashions',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
     caption: 'Heritage Zardozi bridal edition launched live across cross-channel network.',
     postedAt: '1w ago',
     likes: 5600,
     comments: 310,
     collaborators: ['vayyari_prive', 'vayyaristudio', 'editionsbyvayyari'],
-    targetCollabAccounts: ['p-4', 'p-9', 'p-10'],
+    targetCollabAccounts: ['vayyari_prive', 'vayyaristudio', 'editionsbyvayyari'],
     curationStatus: 'completed',
   },
   {
     id: 'post-201',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&q=80',
     ownerUsername: 'theblouseedition',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=200&q=80',
     caption: 'Heavy maggam work bridal blouse with ruby and emerald gemstone latkans.',
     postedAt: '2h ago',
     likes: 3100,
@@ -235,10 +218,21 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     curationStatus: 'pending',
   },
   {
+    id: 'post-202',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80',
+    ownerUsername: 'theblouseedition',
+    caption: 'Aari hand embroidery designer blouse piece with gold beadwork accents.',
+    postedAt: '1d ago',
+    likes: 1950,
+    comments: 72,
+    collaborators: ['vayyari_fashions'],
+    targetCollabAccounts: ['vayyari_fashions'],
+    curationStatus: 'curated',
+  },
+  {
     id: 'post-301',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1610030469668-932d59f33878?w=600&q=80',
     ownerUsername: 'vayyari_littles',
-    ownerAvatarUri: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80',
     caption: 'Pattu pavadai festive wear for little princesses in pure mulberry silk.',
     postedAt: '6h ago',
     likes: 1890,
@@ -247,7 +241,50 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     targetCollabAccounts: [],
     curationStatus: 'pending',
   },
+  {
+    id: 'post-401',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80',
+    ownerUsername: 'editionsbyvayyari',
+    caption: 'Special handloom festive edition curated with heritage hand-block motifs.',
+    postedAt: '3h ago',
+    likes: 1540,
+    comments: 52,
+    collaborators: ['vayyari_fashions'],
+    targetCollabAccounts: ['vayyari_fashions'],
+    curationStatus: 'pending',
+  },
+  {
+    id: 'post-402',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=600&q=80',
+    ownerUsername: 'editionsbyvayyari',
+    caption: 'Limited edition gold zari organza drape with hand-embossed borders.',
+    postedAt: '1d ago',
+    likes: 2840,
+    comments: 94,
+    collaborators: [],
+    targetCollabAccounts: [],
+    curationStatus: 'curated',
+  },
 ];
+
+export const CHANNEL_COLORS = [
+  '#7E22CE',
+  '#2563EB',
+  '#059669',
+  '#D97706',
+  '#DC2626',
+  '#DB2777',
+  '#4F46E5',
+  '#0891B2',
+];
+
+export const getChannelColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return CHANNEL_COLORS[Math.abs(hash) % CHANNEL_COLORS.length];
+};
 
 export interface AdminCollabPlannerPageProps {
   channels?: TargetChannelOption[];
@@ -261,6 +298,9 @@ export interface AdminCollabPlannerPageProps {
   curationModalOpen?: boolean;
   initialModalSelectedAccountIds?: string[];
   isAutomationQueueActive?: boolean;
+  loading?: boolean;
+  refreshing?: boolean;
+  onRefresh?: () => void;
   onSelectPost?: (post: CollabPostItem) => void;
   onCloseModal?: () => void;
   onMarkCurated?: (postId: string, selectedAccountIds: string[]) => void;
@@ -280,6 +320,9 @@ export function AdminCollabPlannerPage({
   curationModalOpen: controlledModalOpen,
   initialModalSelectedAccountIds,
   isAutomationQueueActive = false,
+  loading = false,
+  refreshing = false,
+  onRefresh,
   onSelectPost,
   onCloseModal,
   onMarkCurated,
@@ -288,8 +331,8 @@ export function AdminCollabPlannerPage({
 }: AdminCollabPlannerPageProps) {
   const { tokens } = useTheme();
 
-  // Internal Channel State
-  const [internalChannelId, setInternalChannelId] = useState<string>('vayyari_fashions');
+  // Internal Channel State — default to 'all' so curators immediately see posts across channels
+  const [internalChannelId, setInternalChannelId] = useState<string>('all');
   const activeChannelId =
     controlledChannelId !== undefined ? controlledChannelId : internalChannelId;
 
@@ -308,8 +351,12 @@ export function AdminCollabPlannerPage({
     onToggleShowCurated?.(value);
   };
 
-  // Internal Posts List State
+  // Internal Posts List State synchronized with initialPosts prop
   const [postsList, setPostsList] = useState<CollabPostItem[]>(initialPosts);
+
+  useEffect(() => {
+    setPostsList(initialPosts);
+  }, [initialPosts]);
 
   // Modal State
   const [internalModalOpen, setInternalModalOpen] = useState<boolean>(false);
@@ -365,28 +412,38 @@ export function AdminCollabPlannerPage({
     handleCloseModal();
   };
 
+  // Status helper predicates
+  const isPending = (status?: string) => !status || status === 'pending';
+  const isCurated = (status?: string) => status === 'curated' || status === 'collab_curated';
+  const isQueued = (status?: string) => status === 'queued';
+  const isCompleted = (status?: string) => status === 'completed';
+
   // Filter posts by active channel and curation toggle
   const channelFilteredPosts = useMemo(() => {
     return postsList.filter((p) => {
-      if (activeChannelId === 'all') return true;
-      return p.ownerUsername === activeChannelId;
+      if (activeChannelId === 'all' || !activeChannelId) return true;
+      const ch = channels.find(
+        (c) => c.id === activeChannelId || c.username === activeChannelId
+      );
+      const targetUser = ch?.username || activeChannelId;
+      return p.ownerUsername.toLowerCase() === targetUser.toLowerCase();
     });
-  }, [postsList, activeChannelId]);
+  }, [postsList, activeChannelId, channels]);
 
   const visiblePosts = useMemo(() => {
     if (showCurated) {
       return channelFilteredPosts;
     }
-    return channelFilteredPosts.filter((p) => p.curationStatus === 'pending');
+    return channelFilteredPosts.filter((p) => isPending(p.curationStatus));
   }, [channelFilteredPosts, showCurated]);
 
   // Status counts for active channel
   const counts = useMemo(() => {
     const total = channelFilteredPosts.length;
-    const pending = channelFilteredPosts.filter((p) => p.curationStatus === 'pending').length;
-    const curated = channelFilteredPosts.filter((p) => p.curationStatus === 'curated').length;
-    const queued = channelFilteredPosts.filter((p) => p.curationStatus === 'queued').length;
-    const completed = channelFilteredPosts.filter((p) => p.curationStatus === 'completed').length;
+    const pending = channelFilteredPosts.filter((p) => isPending(p.curationStatus)).length;
+    const curated = channelFilteredPosts.filter((p) => isCurated(p.curationStatus)).length;
+    const queued = channelFilteredPosts.filter((p) => isQueued(p.curationStatus)).length;
+    const completed = channelFilteredPosts.filter((p) => isCompleted(p.curationStatus)).length;
     const nonPending = total - pending;
     return { total, pending, curated, queued, completed, nonPending };
   }, [channelFilteredPosts]);
@@ -498,8 +555,10 @@ export function AdminCollabPlannerPage({
           contentContainerStyle={styles.carouselContainer}
         >
           {channels.map((ch) => {
-            const isSelected = ch.id === activeChannelId;
             const isAll = ch.id === 'all';
+            const isSelected = isAll
+              ? activeChannelId === 'all' || !activeChannelId
+              : ch.id === activeChannelId || ch.username === activeChannelId;
             const ringColor = isSelected ? '#7E22CE' : tokens.border;
 
             return (
@@ -532,9 +591,14 @@ export function AdminCollabPlannerPage({
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={styles.avatarFallback}>
-                      <Text fontSize={11} fontWeight="800" color="#7E22CE">
-                        {ch.username.substring(0, 2).toUpperCase()}
+                    <View
+                      style={[
+                        styles.avatarFallback,
+                        { backgroundColor: getChannelColor(ch.username) + '1A' },
+                      ]}
+                    >
+                      <Text fontSize={11} fontWeight="800" color={getChannelColor(ch.username)}>
+                        {ch.username.replace(/[^a-zA-Z0-9]/g, '').substring(0, 2).toUpperCase() || 'CH'}
                       </Text>
                     </View>
                   )}
@@ -556,7 +620,14 @@ export function AdminCollabPlannerPage({
       </View>
 
       {/* ── Media Grid (3 Columns) ── */}
-      {visiblePosts.length === 0 ? (
+      {loading && visiblePosts.length === 0 ? (
+        <YStack flex={1} alignItems="center" justifyContent="center" padding={32} gap={12}>
+          <ActivityIndicator size="large" color="#7E22CE" />
+          <Text fontSize={13} fontWeight="600" color={tokens.textSecondary}>
+            Loading posts...
+          </Text>
+        </YStack>
+      ) : visiblePosts.length === 0 ? (
         <YStack
           flex={1}
           alignItems="center"
@@ -592,7 +663,19 @@ export function AdminCollabPlannerPage({
           </Pressable>
         </YStack>
       ) : (
-        <ScrollView contentContainerStyle={styles.gridContent}>
+        <ScrollView
+          contentContainerStyle={styles.gridContent}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#7E22CE']}
+                tintColor="#7E22CE"
+              />
+            ) : undefined
+          }
+        >
           <View style={styles.mediaGrid}>
             {visiblePosts.map((post) => {
               const statusColors: Record<string, { bg: string; text: string }> = {

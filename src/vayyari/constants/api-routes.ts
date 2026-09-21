@@ -146,6 +146,19 @@ export const API_ROUTES = {
     POST_PLANNER_MATCH_CHANNELS: '/api/v1/Insta/post-planner/match-channels',
     POST_PLANNER_RECORD_ACTION: '/api/v1/Insta/post-planner/record-action',
     POST_PLANNER_CLASSIFY_CHANNEL: '/api/v1/Insta/post-planner/channels/classify',
+    COLLAB_PLANNER_CHANNELS: '/api/v1/Insta/collab-planner/channels',
+    COLLAB_PLANNER_POSTS: (options?: { username?: string; includeCurated?: boolean; take?: number; skip?: number }) => {
+      const q = new URLSearchParams();
+      if (options?.username) q.append('username', options.username);
+      if (options?.includeCurated !== undefined) q.append('includeCurated', String(options.includeCurated));
+      if (options?.take) q.append('take', String(options.take));
+      if (options?.skip) q.append('skip', String(options.skip));
+      const qs = q.toString();
+      return `/api/v1/Insta/collab-planner/posts${qs ? `?${qs}` : ''}`;
+    },
+    COLLAB_PLANNER_CURATE: '/api/v1/Insta/collab-planner/curate',
+    COLLAB_PLANNER_QUEUE: '/api/v1/Insta/collab-planner/queue',
+    COLLAB_PLANNER_COMPLETE: '/api/v1/Insta/collab-planner/complete',
   },
 
   // Common / Master Data

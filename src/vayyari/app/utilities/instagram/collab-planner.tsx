@@ -1,10 +1,127 @@
-import React from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { CollabPlannerScreen } from '@/components/tamagui-ui/pages/CollabPlannerScreen';
+import { AdminCollabPlannerPage } from '@/components/tamagui-ui/pages/AdminCollabPlannerPage';
+import {
+  instagramService,
+  CollabPlannerChannelDto,
+  CollabPlannerPostDto,
+} from '@/services/instagram.service';
+import { TargetChannelOption } from '@/components/tamagui-ui/molecules/TargetChannelAvatar';
+import { TargetCollabAccount } from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
+import { CollabPostItem } from '@/components/tamagui-ui/organisms/CollabCurationModal';
+import { getSearchApiUrl } from '@/utils/api-config';
+import { getMediaUri } from '@/utils/instagram-helpers';
 
 export default function CollabPlannerRoute() {
   const router = useRouter();
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [channels, setChannels] = useState<TargetChannelOption[]>([]);
+  const [accounts, setAccounts] = useState<TargetCollabAccount[]>([]);
+  const [posts, setPosts] = useState<CollabPostItem[]>([]);
+  const [activeChannelId, setActiveChannelId] = useState<string>('all');
+  const [showCurated, setShowCurated] = useState<boolean>(false);
+  const [isQueueActive, setIsQueueActive] = useState<boolean>(false);
+
+  const loadData = useCallback(async (isPullRefresh = false) => {
+    if (isPullRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const baseUrl = getSearchApiUrl() || '';
+      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+      // 1. Fetch active owned business accounts from real database
+      const dbChannels: CollabPlannerChannelDto[] = await instagramService.getCollabChannels();
+
+      const mappedChannels: TargetChannelOption[] = [
+        {
+          id: 'all',
+          username: 'all_channels',
+          displayName: 'All Channels',
+          channelType: 'focus',
+        },
+        ...dbChannels.map((ch) => ({
+          id: ch.username,
+          username: ch.username,
+          displayName: ch.displayName || ch.username,
+          channelType: ch.channelType || 'focus',
+          avatarUri: ch.storagePath
+            ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(ch.storagePath)}`
+            : ch.profilePicUrl,
+        })),
+      ];
+
+      const mappedAccounts: TargetCollabAccount[] = dbChannels.map((ch) => ({
+        id: ch.username,
+        username: ch.username,
+        displayName: ch.displayName || ch.username,
+        channelType: ch.channelType || 'focus',
+        avatarUri: ch.storagePath
+          ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(ch.storagePath)}`
+          : ch.profilePicUrl,
+      }));
+
+      setChannels(mappedChannels);
+      setAccounts(mappedAccounts);
+
+      // 2. Fetch posts across all owned business accounts
+      const dbPosts: CollabPlannerPostDto[] = await instagramService.getCollabPosts({
+        includeCurated: true,
+        take: 150,
+      });
+
+      const mappedPosts: CollabPostItem[] = dbPosts.map((p) => {
+        const mediaUri = getMediaUri(p, 'medium') || p.thumbnailUrl || p.videoUrl || '';
+        return {
+          id: p.id,
+          thumbnailUrl: mediaUri,
+          mediaUrl: p.videoUrl || mediaUri,
+          ownerUsername: p.ownerUsername,
+          ownerAvatarUri: p.ownerProfilePicUrl,
+          caption: p.caption || p.title || '',
+          postedAt: p.postedAt
+            ? new Date(p.postedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            : undefined,
+          likes: p.likeCount || 0,
+          comments: p.commentCount || 0,
+          collaborators: (p.collaborators || []).map((c: any) =>
+            typeof c === 'string' ? c : c.username
+          ),
+          targetCollabAccounts: p.targetCollabAccounts || [],
+          curationStatus:
+            p.collabCurationStatus === 'collab_curated'
+              ? 'curated'
+              : (p.collabCurationStatus as any) || 'pending',
+        };
+      });
+
+      setPosts(mappedPosts);
+
+      // 3. Check queue count
+      try {
+        const queueItems = await instagramService.getCollabQueue();
+        setIsQueueActive(queueItems.length > 0);
+      } catch {
+        // queue count check is non-fatal
+      }
+    } catch (err: any) {
+      console.error('Failed to load Collab Planner data', err);
+      Alert.alert('Error', err.message || 'Failed to load Collab Planner data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -14,23 +131,64 @@ export default function CollabPlannerRoute() {
     }
   };
 
-  const handleMarkCurated = (postId: string, selectedAccountIds: string[]) => {
-    Alert.alert(
-      'Collab Curated',
-      `Post ${postId} marked as curated with ${selectedAccountIds.length} target accounts.`
-    );
+  const handleMarkCurated = async (postId: string, selectedAccountIds: string[]) => {
+    try {
+      await instagramService.curateCollabPost(postId);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId ? { ...p, curationStatus: 'curated' } : p
+        )
+      );
+    } catch (err: any) {
+      console.error('Failed to curate post', err);
+      Alert.alert('Error', err.message || 'Failed to mark post as curated');
+    }
   };
 
-  const handleQueueAutomation = (postId: string, selectedAccountIds: string[]) => {
-    Alert.alert(
-      'Queued for Automation',
-      `Post ${postId} dispatched to AVD Maestro automation queue with ${selectedAccountIds.length} accounts.`
-    );
+  const handleQueueAutomation = async (postId: string, selectedAccountIds: string[]) => {
+    try {
+      await instagramService.queueCollabPost(postId, selectedAccountIds);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                curationStatus: 'queued',
+                targetCollabAccounts: selectedAccountIds,
+              }
+            : p
+        )
+      );
+      setIsQueueActive(true);
+      Alert.alert(
+        'Queued for Automation',
+        `Post queued for AVD Maestro collaboration automation with ${selectedAccountIds.length} account(s).`
+      );
+    } catch (err: any) {
+      console.error('Failed to queue post for automation', err);
+      Alert.alert('Error', err.message || 'Failed to queue post for automation');
+    }
   };
+
+  if (loading && posts.length === 0) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#7E22CE" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <CollabPlannerScreen
+      <AdminCollabPlannerPage
+        channels={channels}
+        accounts={accounts}
+        posts={posts}
+        activeChannelId={activeChannelId}
+        onSelectChannel={setActiveChannelId}
+        showCurated={showCurated}
+        onToggleShowCurated={setShowCurated}
+        isAutomationQueueActive={isQueueActive}
         onBack={handleBack}
         onMarkCurated={handleMarkCurated}
         onQueueAutomation={handleQueueAutomation}
@@ -42,6 +200,12 @@ export default function CollabPlannerRoute() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
   },
 });
