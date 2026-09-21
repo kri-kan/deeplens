@@ -2,6 +2,8 @@ using DeepLens.Application.Abstractions.Services;
 using DeepLens.Contracts.Instagram;
 using DeepLens.Application.Abstractions.Data;
 using Microsoft.AspNetCore.Authorization;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using Dapper;
@@ -3698,6 +3700,251 @@ public class InstaController : ControllerBase
 
         return Ok(new { success = true, watchlistId = request.WatchlistId, channelType = request.ChannelType });
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // COLLAB PLANNER & AUTOMATION QUEUE (TASK #840)
+    // ─────────────────────────────────────────────────────────────
+
+    [HttpGet("collab-planner/channels")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<CollabPlannerChannelDto>>> GetCollabPlannerChannels(CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        const string sql = @"
+            SELECT 
+                id AS Id,
+                platform AS Platform,
+                username AS Username,
+                display_name AS DisplayName,
+                profile_pic_url AS ProfilePicUrl,
+                profile_pic_storage_path AS ProfilePicStoragePath,
+                bio AS Bio,
+                follower_count AS FollowerCount,
+                following_count AS FollowingCount,
+                post_count AS PostCount,
+                is_active AS IsActive,
+                channel_type AS ChannelType,
+                category_focus AS CategoryFocus,
+                target_demography AS TargetDemography,
+                last_scraped_at AS LastScrapedAt,
+                created_at AS CreatedAt,
+                updated_at AS UpdatedAt
+            FROM competitor_watchlist 
+            WHERE is_competitor = false AND is_active = true 
+            ORDER BY follower_count DESC NULLS LAST";
+
+        var channels = (await conn.QueryAsync<CollabPlannerChannelDto>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
+        return Ok(channels);
+    }
+
+    [HttpGet("collab-planner/posts")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<CollabPlannerPostDto>>> GetCollabPlannerPosts(
+        [FromQuery] string? username = null,
+        [FromQuery] bool includeCurated = false,
+        [FromQuery] int take = 50,
+        [FromQuery] int skip = 0,
+        CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+
+        var sqlBuilder = new StringBuilder(@"
+            SELECT 
+                cv.id::text AS Id, 
+                cv.platform_video_id AS PlatformVideoId, 
+                cv.title AS Title, 
+                COALESCE(cv.url, cv.media_url) AS VideoUrl, 
+                cv.storage_path AS StoragePath, 
+                cv.thumbnail_url AS ThumbnailUrl, 
+                cv.description AS Caption, 
+                cv.like_count AS LikeCount, 
+                cv.comment_count AS CommentCount, 
+                cv.posted_at AS PostedAt, 
+                cv.collab_curation_status AS CollabCurationStatus, 
+                COALESCE(cv.target_collab_accounts, '[]'::jsonb)::text AS TargetCollabAccountsJson, 
+                COALESCE(cv.collaborators, '[]'::jsonb)::text AS CollaboratorsJson, 
+                cw.username AS OwnerUsername, 
+                cw.display_name AS OwnerDisplayName, 
+                cw.profile_pic_url AS OwnerProfilePicUrl
+            FROM competitor_videos cv
+            JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+            WHERE cw.is_competitor = false");
+
+        var parameters = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(username) && !username.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            sqlBuilder.Append(" AND LOWER(cw.username) = LOWER(@Username)");
+            parameters.Add("Username", username.Trim());
+        }
+
+        if (!includeCurated)
+        {
+            sqlBuilder.Append(" AND (cv.collab_curation_status IS NULL OR cv.collab_curation_status NOT IN ('collab_curated', 'completed'))");
+        }
+
+        sqlBuilder.Append(" ORDER BY cv.posted_at DESC");
+        sqlBuilder.Append(" LIMIT @Take OFFSET @Skip");
+
+        parameters.Add("Take", Math.Clamp(take, 1, 200));
+        parameters.Add("Skip", Math.Max(skip, 0));
+
+        var posts = (await conn.QueryAsync<CollabPlannerPostDto>(new CommandDefinition(sqlBuilder.ToString(), parameters, cancellationToken: ct))).ToList();
+        return Ok(posts);
+    }
+
+    [HttpPost("collab-planner/curate")]
+    [AllowAnonymous]
+    public async Task<IActionResult> CurateCollabPost([FromBody] CurateCollabPostRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId))
+        {
+            return BadRequest(new { error = "PostId is required." });
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+        var rowsAffected = await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET collab_curation_status = 'collab_curated',
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim() });
+
+        if (rowsAffected == 0)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        return Ok(new { success = true, postId = request.PostId, status = "collab_curated" });
+    }
+
+    [HttpPost("collab-planner/queue")]
+    [AllowAnonymous]
+    public async Task<IActionResult> QueueCollabPost([FromBody] QueueCollabPostRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId))
+        {
+            return BadRequest(new { error = "PostId is required." });
+        }
+
+        if (request.TargetCollabAccounts != null && request.TargetCollabAccounts.Count > 5)
+        {
+            return BadRequest(new { error = "TargetCollabAccounts cannot exceed 5 accounts." });
+        }
+
+        var cleanAccounts = (request.TargetCollabAccounts ?? new())
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .Select(a => a.Trim().TrimStart('@'))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (cleanAccounts.Count > 5)
+        {
+            return BadRequest(new { error = "TargetCollabAccounts cannot exceed 5 accounts." });
+        }
+
+        var targetAccountsJson = JsonSerializer.Serialize(cleanAccounts);
+
+        using var conn = await _db.CreateConnectionAsync();
+        var rowsAffected = await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET target_collab_accounts = @TargetAccounts::jsonb,
+                collab_curation_status = 'queued',
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim(), TargetAccounts = targetAccountsJson });
+
+        if (rowsAffected == 0)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        var post = await conn.QueryFirstOrDefaultAsync<CollabPlannerPostDto>(new CommandDefinition(@"
+            SELECT 
+                cv.id::text AS Id,
+                cv.platform_video_id AS PlatformVideoId,
+                cv.title AS Title,
+                COALESCE(cv.url, cv.media_url) AS VideoUrl,
+                cv.storage_path AS StoragePath,
+                cv.thumbnail_url AS ThumbnailUrl,
+                cv.description AS Caption,
+                cv.like_count AS LikeCount,
+                cv.comment_count AS CommentCount,
+                cv.posted_at AS PostedAt,
+                cv.collab_curation_status AS CollabCurationStatus,
+                COALESCE(cv.target_collab_accounts, '[]'::jsonb)::text AS TargetCollabAccountsJson,
+                COALESCE(cv.collaborators, '[]'::jsonb)::text AS CollaboratorsJson,
+                cw.username AS OwnerUsername,
+                cw.display_name AS OwnerDisplayName,
+                cw.profile_pic_url AS OwnerProfilePicUrl
+            FROM competitor_videos cv
+            JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+            WHERE cv.platform_video_id = @PostId OR cv.id::text = @PostId",
+            new { PostId = request.PostId.Trim() },
+            cancellationToken: ct));
+
+        return Ok(post);
+    }
+
+    [HttpGet("collab-planner/queue")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<CollabPlannerPostDto>>> GetCollabPlannerQueue(CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var posts = (await conn.QueryAsync<CollabPlannerPostDto>(new CommandDefinition(@"
+            SELECT 
+                cv.id::text AS Id,
+                cv.platform_video_id AS PlatformVideoId,
+                cv.title AS Title,
+                COALESCE(cv.url, cv.media_url) AS VideoUrl,
+                cv.storage_path AS StoragePath,
+                cv.thumbnail_url AS ThumbnailUrl,
+                cv.description AS Caption,
+                cv.like_count AS LikeCount,
+                cv.comment_count AS CommentCount,
+                cv.posted_at AS PostedAt,
+                cv.collab_curation_status AS CollabCurationStatus,
+                COALESCE(cv.target_collab_accounts, '[]'::jsonb)::text AS TargetCollabAccountsJson,
+                COALESCE(cv.collaborators, '[]'::jsonb)::text AS CollaboratorsJson,
+                cw.username AS OwnerUsername,
+                cw.display_name AS OwnerDisplayName,
+                cw.profile_pic_url AS OwnerProfilePicUrl
+            FROM competitor_videos cv
+            JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+            WHERE cv.collab_curation_status = 'queued'
+            ORDER BY cv.updated_at ASC",
+            cancellationToken: ct))).ToList();
+
+        return Ok(posts);
+    }
+
+    [HttpPost("collab-planner/complete")]
+    [AllowAnonymous]
+    public async Task<IActionResult> CompleteCollabPost([FromBody] CompleteCollabPostRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId))
+        {
+            return BadRequest(new { error = "PostId is required." });
+        }
+
+        var collaboratorsJson = JsonSerializer.Serialize(request.Collaborators ?? new());
+
+        using var conn = await _db.CreateConnectionAsync();
+        var rowsAffected = await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET collaborators = @CollaboratorsJson::jsonb,
+                collab_curation_status = 'completed',
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim(), CollaboratorsJson = collaboratorsJson });
+
+        if (rowsAffected == 0)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        return Ok(new { success = true, postId = request.PostId, status = "completed" });
+    }
 }
 
 public class InstagramCommentDto
@@ -3973,6 +4220,176 @@ public class StoryPlannerFeedResponseDto
     [JsonPropertyName("groupCount")]
     public int GroupCount { get; set; }
 }
+
+public class CollabPlannerChannelDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("platform")]
+    public string Platform { get; set; } = "instagram";
+
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("profilePicUrl")]
+    public string? ProfilePicUrl { get; set; }
+
+    [JsonPropertyName("profilePicStoragePath")]
+    public string? ProfilePicStoragePath { get; set; }
+
+    [JsonPropertyName("bio")]
+    public string? Bio { get; set; }
+
+    [JsonPropertyName("followerCount")]
+    public int FollowerCount { get; set; }
+
+    [JsonPropertyName("followingCount")]
+    public int FollowingCount { get; set; }
+
+    [JsonPropertyName("postCount")]
+    public int PostCount { get; set; }
+
+    [JsonPropertyName("isActive")]
+    public bool IsActive { get; set; }
+
+    [JsonPropertyName("channelType")]
+    public string? ChannelType { get; set; }
+
+    [JsonPropertyName("categoryFocus")]
+    public string[] CategoryFocus { get; set; } = Array.Empty<string>();
+
+    [JsonPropertyName("targetDemography")]
+    public string? TargetDemography { get; set; }
+
+    [JsonPropertyName("lastScrapedAt")]
+    public DateTime? LastScrapedAt { get; set; }
+
+    [JsonPropertyName("createdAt")]
+    public DateTime? CreatedAt { get; set; }
+
+    [JsonPropertyName("updatedAt")]
+    public DateTime? UpdatedAt { get; set; }
+}
+
+public class CollabPlannerPostDto
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("platformVideoId")]
+    public string PlatformVideoId { get; set; } = string.Empty;
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("videoUrl")]
+    public string? VideoUrl { get; set; }
+
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath { get; set; }
+
+    [JsonPropertyName("thumbnailUrl")]
+    public string? ThumbnailUrl { get; set; }
+
+    [JsonPropertyName("caption")]
+    public string? Caption { get; set; }
+
+    [JsonPropertyName("likeCount")]
+    public long LikeCount { get; set; }
+
+    [JsonPropertyName("commentCount")]
+    public long CommentCount { get; set; }
+
+    [JsonPropertyName("postedAt")]
+    public DateTime? PostedAt { get; set; }
+
+    [JsonPropertyName("collabCurationStatus")]
+    public string CollabCurationStatus { get; set; } = "pending";
+
+    [JsonPropertyName("targetCollabAccounts")]
+    public List<string> TargetCollabAccounts { get; set; } = new();
+
+    [JsonIgnore]
+    public string? TargetCollabAccountsJson
+    {
+        get => null;
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value) && value != "[]" && value != "null")
+            {
+                try
+                {
+                    TargetCollabAccounts = JsonSerializer.Deserialize<List<string>>(value) ?? new();
+                }
+                catch
+                {
+                    TargetCollabAccounts = new();
+                }
+            }
+        }
+    }
+
+    [JsonPropertyName("collaborators")]
+    public List<InstagramCollaboratorDto> Collaborators { get; set; } = new();
+
+    [JsonIgnore]
+    public string? CollaboratorsJson
+    {
+        get => null;
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value) && value != "[]" && value != "null")
+            {
+                try
+                {
+                    Collaborators = JsonSerializer.Deserialize<List<InstagramCollaboratorDto>>(value) ?? new();
+                }
+                catch
+                {
+                    Collaborators = new();
+                }
+            }
+        }
+    }
+
+    [JsonPropertyName("ownerUsername")]
+    public string OwnerUsername { get; set; } = string.Empty;
+
+    [JsonPropertyName("ownerDisplayName")]
+    public string? OwnerDisplayName { get; set; }
+
+    [JsonPropertyName("ownerProfilePicUrl")]
+    public string? OwnerProfilePicUrl { get; set; }
+}
+
+public class CurateCollabPostRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
+}
+
+public class QueueCollabPostRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
+
+    [JsonPropertyName("targetCollabAccounts")]
+    public List<string> TargetCollabAccounts { get; set; } = new();
+}
+
+public class CompleteCollabPostRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
+
+    [JsonPropertyName("collaborators")]
+    public List<InstagramCollaboratorDto> Collaborators { get; set; } = new();
+}
+
 
 
 

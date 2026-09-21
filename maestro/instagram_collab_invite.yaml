@@ -22,9 +22,22 @@ appId: com.instagram.android
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 3500);
-      - longPressOn:
-          text: "Profile"
-          waitToSettleTimeoutMs: 0
+      - runFlow:
+          when:
+            visible: "Profile"
+          commands:
+            - longPressOn:
+                text: "Profile"
+                waitToSettleTimeoutMs: 0
+      - runFlow:
+          when:
+            notVisible: "Profile"
+            visible:
+              id: "com.instagram.android:id/profile_tab"
+          commands:
+            - longPressOn:
+                id: "com.instagram.android:id/profile_tab"
+                waitToSettleTimeoutMs: 0
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2000);
@@ -192,6 +205,32 @@ appId: com.instagram.android
       visible: "Done"
     commands:
       - tapOn: "Done"
+- runFlow:
+    when:
+      visible: "Save"
+    commands:
+      - tapOn: "Save"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/save"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/save"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/action_bar_button_done"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/action_bar_button_done"
+- runFlow:
+    when:
+      visible:
+        id: "com.instagram.android:id/action_bar_action_button"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/action_bar_action_button"
 - runFlow:
     when:
       visible: "Share"

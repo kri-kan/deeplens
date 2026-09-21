@@ -20,6 +20,8 @@ import {
   LuCheckSquare,
   LuSparkles,
   LuLayoutGrid,
+  LuEllipsisVertical,
+  LuCheck,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -37,6 +39,9 @@ import {
 import {
   CatalogQuickEditSheet,
 } from '../molecules/CatalogQuickEditSheet';
+import {
+  CatalogMenuSheet,
+} from '../molecules/CatalogMenuSheet';
 import {
   CatalogFilterDrawer,
   FilterState,
@@ -166,6 +171,7 @@ export function AdminProductCatalogPage({
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(isFilterDrawerOpen);
   const [activeFilters, setActiveFilters] = useState<FilterState>(propFilters || DEFAULT_FILTER_STATE);
   const [catalogViewMode, setCatalogViewMode] = useState<'grid' | 'ai_matrix'>('grid');
+  const [menuSheetVisible, setMenuSheetVisible] = useState(false);
 
   const selectedIds = propSelectedIds !== undefined ? propSelectedIds : internalSelectedIds;
   const selectionMode = propSelectionMode !== undefined ? propSelectionMode : (internalIsSelectionMode || selectedIds.size > 0);
@@ -497,6 +503,7 @@ export function AdminProductCatalogPage({
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
       {/* Top Header */}
+      {/* Top App Header */}
       <XStack
         paddingTop={topInset}
         height={50 + topInset}
@@ -507,7 +514,7 @@ export function AdminProductCatalogPage({
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
       >
-        <XStack alignItems="center" gap={8} flex={1}>
+        <XStack alignItems="center" gap={8} flex={1} marginRight={8}>
           {onBack && (
             <TouchableOpacity
               accessibilityRole="button"
@@ -516,8 +523,8 @@ export function AdminProductCatalogPage({
               onPress={onBack}
             >
               <XStack
-                width={32}
-                height={32}
+                width={36}
+                height={36}
                 borderRadius={tokens.radius.full}
                 alignItems="center"
                 justifyContent="center"
@@ -527,82 +534,23 @@ export function AdminProductCatalogPage({
             </TouchableOpacity>
           )}
 
-          <XStack alignItems="center" gap={6} flex={1}>
-            <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2} numberOfLines={1}>
+          <XStack alignItems="center" gap={6} flexShrink={1}>
+            <Text
+              fontSize={17}
+              fontWeight="800"
+              color={tokens.text}
+              letterSpacing={0.2}
+              numberOfLines={1}
+            >
               Product Catalog
             </Text>
             <Text fontSize={15} fontWeight="700" color={tokens.textMuted}>
               ({displayedCount})
             </Text>
-            {/* AI Enriched Summary Pill */}
-            <XStack
-              backgroundColor={`${tokens.accent}14`}
-              borderWidth={1}
-              borderColor={`${tokens.accent}35`}
-              borderRadius={tokens.radius.full}
-              paddingHorizontal={7}
-              paddingVertical={2.5}
-              alignItems="center"
-              gap={3.5}
-            >
-              <LuSparkles size={11} color={tokens.accent} />
-              <Text fontSize={10} fontWeight="700" color={tokens.accent}>
-                {aiEnrichedCount}/{products.length} AI
-              </Text>
-            </XStack>
           </XStack>
         </XStack>
 
-        <XStack alignItems="center" gap={6}>
-          {/* View Mode Toggle (Grid vs AI Facet Matrix) */}
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={catalogViewMode === 'grid' ? 'Switch to AI Facet Matrix view' : 'Switch to Grid view'}
-            activeOpacity={0.7}
-            onPress={() => setCatalogViewMode((m) => (m === 'grid' ? 'ai_matrix' : 'grid'))}
-          >
-            <XStack
-              paddingHorizontal={8}
-              height={30}
-              borderRadius={tokens.radius.full}
-              backgroundColor={catalogViewMode === 'ai_matrix' ? `${tokens.accent}18` : tokens.surfaceRaised}
-              borderWidth={catalogViewMode === 'ai_matrix' ? 1 : 0}
-              borderColor={tokens.accent}
-              alignItems="center"
-              justifyContent="center"
-              gap={4}
-            >
-              {catalogViewMode === 'ai_matrix' ? (
-                <LuLayoutGrid size={13} color={tokens.accent} />
-              ) : (
-                <LuSparkles size={13} color={tokens.textMuted} />
-              )}
-              <Text fontSize={11} fontWeight="700" color={catalogViewMode === 'ai_matrix' ? tokens.accent : tokens.text}>
-                {catalogViewMode === 'ai_matrix' ? 'Matrix' : 'Grid'}
-              </Text>
-            </XStack>
-          </TouchableOpacity>
-
-          {/* Archived Screen Nav */}
-          {onNavArchived && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="View archived products"
-              activeOpacity={0.7}
-              onPress={onNavArchived}
-            >
-              <XStack
-                padding={7}
-                borderRadius={tokens.radius.full}
-                backgroundColor={tokens.surfaceRaised}
-                alignItems="center"
-                justifyContent="center"
-              >
-                <LuArchive size={16} color={tokens.text} />
-              </XStack>
-            </TouchableOpacity>
-          )}
-
+        <XStack alignItems="center" gap={8}>
           {/* Filter Drawer Toggle */}
           <TouchableOpacity
             accessibilityRole="button"
@@ -611,7 +559,8 @@ export function AdminProductCatalogPage({
             onPress={handleOpenFilters}
           >
             <XStack
-              padding={7}
+              width={34}
+              height={34}
               borderRadius={tokens.radius.full}
               backgroundColor={totalFilterCount > 0 ? `${tokens.accent}14` : tokens.surfaceRaised}
               borderWidth={totalFilterCount > 0 ? 1 : 0}
@@ -652,23 +601,39 @@ export function AdminProductCatalogPage({
             onPress={toggleSelectionMode}
           >
             <XStack
-              paddingHorizontal={9}
-              height={30}
+              width={34}
+              height={34}
               borderRadius={tokens.radius.full}
-              backgroundColor={selectionMode ? `${tokens.accent}18` : tokens.surfaceRaised}
-              borderWidth={selectionMode ? 1 : 0}
+              backgroundColor={selectionMode ? `${tokens.accent}20` : tokens.surfaceRaised}
+              borderWidth={selectionMode ? 1.5 : 0}
               borderColor={tokens.accent}
               alignItems="center"
               justifyContent="center"
-              gap={4}
             >
-              <LuCheckSquare
-                size={13}
-                color={selectionMode ? tokens.accent : tokens.text}
-              />
-              <Text fontSize={11} fontWeight="700" color={selectionMode ? tokens.accent : tokens.text}>
-                {selectionMode ? 'Done' : 'Select'}
-              </Text>
+              {selectionMode ? (
+                <LuCheck size={16} color={tokens.accent} />
+              ) : (
+                <LuCheckSquare size={16} color={tokens.text} />
+              )}
+            </XStack>
+          </TouchableOpacity>
+
+          {/* More Options Menu (Sheet) */}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="More catalog options"
+            activeOpacity={0.7}
+            onPress={() => setMenuSheetVisible(true)}
+          >
+            <XStack
+              width={34}
+              height={34}
+              borderRadius={tokens.radius.full}
+              backgroundColor={tokens.surfaceRaised}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <LuEllipsisVertical size={18} color={tokens.text} />
             </XStack>
           </TouchableOpacity>
         </XStack>
@@ -1099,6 +1064,17 @@ export function AdminProductCatalogPage({
         stitchTypeOptions={stitchTypeOptions}
         occasionOptions={occasionOptions}
         vendorOptions={vendorOptions}
+      />
+
+      {/* More Options Sheet */}
+      <CatalogMenuSheet
+        visible={menuSheetVisible}
+        onClose={() => setMenuSheetVisible(false)}
+        catalogViewMode={catalogViewMode}
+        onChangeViewMode={setCatalogViewMode}
+        onNavArchived={onNavArchived}
+        aiEnrichedCount={aiEnrichedCount}
+        totalProducts={products.length}
       />
     </YStack>
   );

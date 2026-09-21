@@ -75,6 +75,18 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
   const isStarred = Boolean(getProp(item, 'isStarred', 'IsStarred'));
   const category = getProp(item, 'category', 'Category');
   const title = getProp(item, 'title', 'Title');
+  const mediaCount = mediaList.length > 0
+    ? mediaList.length
+    : (Array.isArray(item.media) ? item.media.length : (getProp(item, 'mediaCount', 'MediaCount') || 0));
+  const craft = getProp(item, 'craft', 'Craft');
+  const fabric = getProp(item, 'fabric', 'Fabric');
+  const motif = getProp(item, 'motif', 'Motif');
+  const border = getProp(item, 'border', 'Border');
+  const stitchType = getProp(item, 'stitchType', 'StitchType');
+  const occasions = getProp(item, 'occasions', 'Occasions');
+  const confidenceScore = getProp(item, 'confidenceScore', 'ConfidenceScore');
+  const unifiedAttributes = getProp(item, 'unifiedAttributes', 'UnifiedAttributes');
+  const isPublishedToStore = Boolean(getProp(item, 'isPublishedToStore', 'IsPublishedToStore'));
 
   return {
     id: item.id,
@@ -84,9 +96,19 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
     category,
     imageUri,
     isStarred,
+    isPublishedToStore,
     listingCount,
+    mediaCount,
     timeAgo: formattedTime,
     rawItem: item,
+    craft,
+    fabric,
+    motif,
+    border,
+    stitchType,
+    occasions,
+    confidenceScore,
+    unifiedAttributes,
   };
 }
 

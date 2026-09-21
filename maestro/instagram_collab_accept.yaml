@@ -21,9 +21,22 @@ appId: com.instagram.android
     while (new Date().getTime() < start + 4000);
 
 # Step 2: Open account switcher via long-press on Profile navigation tab
-- longPressOn:
-    text: "Profile"
-    waitToSettleTimeoutMs: 0
+- runFlow:
+    when:
+      visible: "Profile"
+    commands:
+      - longPressOn:
+          text: "Profile"
+          waitToSettleTimeoutMs: 0
+- runFlow:
+    when:
+      notVisible: "Profile"
+      visible:
+        id: "com.instagram.android:id/profile_tab"
+    commands:
+      - longPressOn:
+          id: "com.instagram.android:id/profile_tab"
+          waitToSettleTimeoutMs: 0
 - evalScript: |
     var start = new Date().getTime();
     while (new Date().getTime() < start + 2000);
@@ -181,6 +194,20 @@ appId: com.instagram.android
       visible: "Accept"
     commands:
       - tapOn: "Accept"
+      - evalScript: ${output.accepted = 'true'}
+- runFlow:
+    when:
+      true: ${output.accepted !== 'true'}
+      visible: "Accept invitation"
+    commands:
+      - tapOn: "Accept invitation"
+      - evalScript: ${output.accepted = 'true'}
+- runFlow:
+    when:
+      true: ${output.accepted !== 'true'}
+      visible: "Accept collaboration"
+    commands:
+      - tapOn: "Accept collaboration"
       - evalScript: ${output.accepted = 'true'}
 - runFlow:
     when:

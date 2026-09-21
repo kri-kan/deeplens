@@ -72,6 +72,10 @@ export function isBoundaryDelimiter(
     return false;
 }
 
+export const SQL_EMOJI_DELIMITER_CONDITION = 
+    "(content IN ('🔚', '🛑', '⛔', '🚫', '⏹️', '🔶🔶🔶🔶') " +
+    "OR (length(content) <= 30 AND content ~ '^[\\U0001F300-\\U0001FAFF\\U00002600-\\U000027BF\\U00002B50\\U000020E3#*0-9\\s*_~\\x60]+$' AND content !~ '[a-zA-Z0-9]{3,}'))";
+
 export class ZoningService {
     /**
      * Determines whether a chat uses Sticker-First zoning or Time-Based fallback.
@@ -93,7 +97,7 @@ export class ZoningService {
                       media_type = 'sticker' 
                       OR (metadata->>'stickerMessage') IS NOT NULL
                       OR group_id LIKE 'sticker_%'
-                      OR content IN ('🔚', '🛑', '⛔', '🚫', '⏹️', '🔶🔶🔶🔶')
+                      OR (content IS NOT NULL AND ${SQL_EMOJI_DELIMITER_CONDITION})
                   )
              ) AS has_stickers`,
             [jid]
@@ -149,6 +153,7 @@ export class ZoningService {
                        media_type = 'sticker' 
                        OR (metadata->>'stickerMessage') IS NOT NULL
                        OR group_id LIKE 'sticker_%'
+                       OR (content IS NOT NULL AND ${SQL_EMOJI_DELIMITER_CONDITION})
                    )
                    AND group_id LIKE 'sticker_%'
                    AND ABS(timestamp - $2) <= 5
@@ -183,7 +188,7 @@ export class ZoningService {
         if (isStickerChat) {
             // STICKER-FIRST ZONING:
             // Find the bounding delimiters (S_prev and S_next) in chronological order
-            // Delimiters can be stickers or standalone emojis (group_id LIKE 'sticker_%')
+            // Delimiters can be stickers or standalone emojis (group_id LIKE 'sticker_%' or emoji content)
             const prevStickerRes = await client.query(
                 `SELECT timestamp, id FROM wa.messages 
                  WHERE jid = $1 
@@ -191,6 +196,7 @@ export class ZoningService {
                        media_type = 'sticker' 
                        OR (metadata->>'stickerMessage') IS NOT NULL
                        OR group_id LIKE 'sticker_%'
+                       OR (content IS NOT NULL AND ${SQL_EMOJI_DELIMITER_CONDITION})
                    )
                    AND (timestamp < $2 OR (timestamp = $2 AND id < COALESCE($3, 2147483647)))
                  ORDER BY timestamp DESC, id DESC LIMIT 1`,
@@ -204,6 +210,7 @@ export class ZoningService {
                        media_type = 'sticker' 
                        OR (metadata->>'stickerMessage') IS NOT NULL
                        OR group_id LIKE 'sticker_%'
+                       OR (content IS NOT NULL AND ${SQL_EMOJI_DELIMITER_CONDITION})
                    )
                    AND (timestamp > $2 OR (timestamp = $2 AND id > COALESCE($3, 0)))
                  ORDER BY timestamp ASC, id ASC LIMIT 1`,
@@ -221,6 +228,7 @@ export class ZoningService {
                    AND group_id LIKE 'product_%'
                    AND (media_type != 'sticker' OR media_type IS NULL)
                    AND NOT (group_id LIKE 'sticker_%')
+                   AND NOT (content IS NOT NULL AND ${SQL_EMOJI_DELIMITER_CONDITION})
                    AND ($2::bigint IS NULL OR timestamp > $2 OR (timestamp = $2 AND id > $3))
                    AND ($4::bigint IS NULL OR timestamp < $4 OR (timestamp = $4 AND id < $5))
                  ORDER BY timestamp ASC, id ASC LIMIT 1`,
@@ -250,12 +258,14 @@ export class ZoningService {
             );
 
             // Auto-heal / unify ALL non-delimiter messages in this delimiter-bounded interval
+            // CRITICAL: Standalone emojis must NEVER be overwritten with a product group_id!
             await client.query(
                 `UPDATE wa.messages 
                  SET group_id = $1 
                  WHERE jid = $2 
                    AND (media_type != 'sticker' OR media_type IS NULL)
                    AND NOT (group_id LIKE 'sticker_%')
+                   AND NOT (content IS NOT NULL AND ${SQL_EMOJI_DELIMITER_CONDITION})
                    AND ($3::bigint IS NULL OR timestamp > $3 OR (timestamp = $3 AND id > $4))
                    AND ($5::bigint IS NULL OR timestamp < $5 OR (timestamp = $5 AND id < $6))
                    AND (group_id IS NULL OR group_id != $1)`,

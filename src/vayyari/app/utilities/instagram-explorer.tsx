@@ -627,6 +627,36 @@ export default function InstagramExplorer() {
               Post Planner
             </Text>
           </TouchableOpacity>
+
+          {/* Tile 3: Collab */}
+          <TouchableOpacity 
+            onPress={() => router.push('/utilities/instagram/collab-planner' as any)}
+            activeOpacity={0.7}
+            style={{ 
+              width: 82, 
+              aspectRatio: 0.95,
+              backgroundColor: theme.colors.surface, 
+              borderRadius: 14, 
+              borderWidth: 1,
+              borderColor: theme.colors.outlineVariant || 'rgba(0,0,0,0.08)',
+              paddingVertical: 10, 
+              paddingHorizontal: 4,
+              alignItems: 'center',
+              justifyContent: 'center',
+              elevation: 1,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+            }}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(217, 70, 239, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+              <MaterialCommunityIcons name="handshake" size={22} color="#D946EF" />
+            </View>
+            <Text variant="labelSmall" style={{ fontWeight: '700', textAlign: 'center', color: theme.colors.onSurface, fontSize: 10 }} numberOfLines={1}>
+              Collab
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
       {/* Active Profiles Section */}

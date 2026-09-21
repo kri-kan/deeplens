@@ -40,10 +40,22 @@ const isPhotoOrVideoMsg = (msg: Message) => {
   );
 };
 
+export const isStandaloneEmoji = (text: string | null | undefined): boolean => {
+  if (!text || typeof text !== 'string') return false;
+  const cleaned = text.replace(/[\s*_~`]+/gu, '');
+  if (!cleaned) return false;
+  const emojiOnlyRegex = /^[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\uFE0E\uFE0F\u200D\u20E3#*0-9]+$/u;
+  if (!emojiOnlyRegex.test(cleaned)) return false;
+  if (!/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/u.test(cleaned)) return false;
+  return cleaned.length <= 30;
+};
+
 const isStickerMsg = (msg: Message) => {
   return (
     msg.mediaType === 'sticker' ||
-    (!!msg.mediaUrl && msg.mediaUrl.includes('/stickers/'))
+    (!!msg.mediaUrl && msg.mediaUrl.includes('/stickers/')) ||
+    (!!msg.groupId && msg.groupId.startsWith('sticker_')) ||
+    isStandaloneEmoji(msg.messageText)
   );
 };
 
@@ -1207,11 +1219,11 @@ export default function FullMessageBrowser() {
     const isSticker = isStickerMsg(msg);
     const isArchived = isMediaArchived(msg);
     const hasActive = hasActiveMedia(msg);
-    const isOnlySticker = isSticker && !text && !msg.groupId;
+    const isOnlySticker = isSticker && (!text || isStandaloneEmoji(text)) && (!msg.groupId || msg.groupId.startsWith('sticker_'));
 
     return (
       <View>
-        {showGroupDivider && msg.groupId && (
+        {showGroupDivider && msg.groupId && !msg.groupId.startsWith('sticker_') && (
           zoningMode ? renderZoneCard(msg.groupId) : (
             <View style={styles.groupDivider}>
               <View style={styles.groupLine} />
@@ -1251,7 +1263,7 @@ export default function FullMessageBrowser() {
               ]} 
               elevation={isOnlySticker ? 0 : (isItemHighlighted(msg.groupId, msg.messageId, msg.timestamp) ? 3 : 1)}
             >
-              {msg.groupId && (
+              {msg.groupId && !isSticker && !msg.groupId.startsWith('sticker_') && (
                 <Text style={styles.groupIdLabel}>{msg.groupId.substring(0, 8)}</Text>
               )}
               

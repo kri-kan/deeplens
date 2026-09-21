@@ -124,6 +124,7 @@ const MOCK_PRODUCTS: ProductGridTileData[] = DIVERSE_CATALOG_PRODUCTS.map((p, id
     Object.values(p.swatches)[0]?.images?.[0]?.url ||
     '',
   isStarred: idx % 2 === 0,
+  mediaCount: p.mediaGallery?.length || ((idx % 4) + 2),
   timeAgo: `${(idx + 1) * 15}m ago`,
   ...AI_FACET_PRESETS[idx % AI_FACET_PRESETS.length],
 }));

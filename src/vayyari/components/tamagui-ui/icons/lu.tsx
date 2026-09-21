@@ -231,3 +231,9 @@ export const LuShieldCheck: React.FC<IconProps> = ({ size = 16, color = "#333333
 export const LuHeart: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="heart" size={size} color={color} style={style} />
 );
+export const LuCircleAlert: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="alert-circle" size={size} color={color} style={style} />
+);
+export const LuMessageCircle: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="message-circle" size={size} color={color} style={style} />
+);

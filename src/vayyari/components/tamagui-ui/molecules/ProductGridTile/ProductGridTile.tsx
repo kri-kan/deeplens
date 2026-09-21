@@ -2,7 +2,7 @@ import React from 'react';
 import { TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuStar, LuCheck, LuPencil } from '../../icons/lu';
+import { LuStar, LuCheck, LuPencil, LuImage } from '../../icons/lu';
 import { useTheme } from '@/theme';
 
 export interface ProductGridTileData {
@@ -15,6 +15,7 @@ export interface ProductGridTileData {
   isStarred?: boolean;
   isPublishedToStore?: boolean;
   listingCount?: number;
+  mediaCount?: number;
   timeAgo?: string;
   rawItem?: any;
   craft?: string;
@@ -161,6 +162,29 @@ export function ProductGridTile({
               {selected && <LuCheck size={13} color="#ffffff" />}
             </XStack>
           </YStack>
+        )}
+
+        {/* Media Count Badge */}
+        {item.mediaCount !== undefined && item.mediaCount > 0 && (
+          <XStack
+            position="absolute"
+            top={6}
+            right={!selectionMode && onToggleStar ? 36 : 6}
+            backgroundColor="rgba(0, 0, 0, 0.65)"
+            paddingHorizontal={5}
+            paddingVertical={2.5}
+            borderRadius={tokens.radius.full}
+            alignItems="center"
+            gap={3}
+            zIndex={8}
+            borderWidth={0.5}
+            borderColor="rgba(255, 255, 255, 0.2)"
+          >
+            <LuImage size={10} color="#ffffff" />
+            <Text fontSize={9} fontWeight="700" color="#ffffff">
+              {item.mediaCount}
+            </Text>
+          </XStack>
         )}
 
         {/* Top-Right: Star Button */}
