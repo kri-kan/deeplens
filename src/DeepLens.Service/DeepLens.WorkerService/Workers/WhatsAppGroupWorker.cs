@@ -37,7 +37,25 @@ public class WhatsAppGroupWorker : BackgroundService
     public const double AUTO_MERGE_MIN_RATIO = 0.60;
     public const decimal MAX_PRICE_TOLERANCE = 0.20m;
 
-    private record MediaRecord(Guid Id, string StoragePath, string? OriginalFilename, string? Phash, bool IsPrimary);
+    private class MediaRecord
+    {
+        public Guid Id { get; set; }
+        public string StoragePath { get; set; } = string.Empty;
+        public string? OriginalFilename { get; set; }
+        public string? Phash { get; set; }
+        public bool IsPrimary { get; set; }
+
+        public MediaRecord() { }
+
+        public MediaRecord(Guid id, string storagePath, string? originalFilename, string? phash, bool isPrimary)
+        {
+            Id = id;
+            StoragePath = storagePath;
+            OriginalFilename = originalFilename;
+            Phash = phash;
+            IsPrimary = isPrimary;
+        }
+    }
 
     public static bool IsPriceCompatible(decimal? priceA, decimal? priceB, decimal maxTolerance = MAX_PRICE_TOLERANCE)
     {
@@ -117,16 +135,24 @@ public class WhatsAppGroupWorker : BackgroundService
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(1));
-                if (consumeResult?.Message != null)
+                try
                 {
-                    await ProcessMessage(consumeResult, stoppingToken);
-                }
+                    var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(1));
+                    if (consumeResult?.Message != null)
+                    {
+                        await ProcessMessage(consumeResult, stoppingToken);
+                    }
 
-                if (DateTime.UtcNow - _lastArchiveCheck > _archiveCheckInterval)
+                    if (DateTime.UtcNow - _lastArchiveCheck > _archiveCheckInterval)
+                    {
+                        _lastArchiveCheck = DateTime.UtcNow;
+                        _ = RunAutoArchiveExpiredMediaAsync(stoppingToken);
+                    }
+                }
+                catch (ConsumeException ex)
                 {
-                    _lastArchiveCheck = DateTime.UtcNow;
-                    _ = RunAutoArchiveExpiredMediaAsync(stoppingToken);
+                    _logger.LogWarning(ex, "Transient Kafka ConsumeException in WhatsAppGroupWorker: {Reason}", ex.Error.Reason);
+                    await Task.Delay(1000, stoppingToken);
                 }
             }
         }
@@ -732,13 +758,15 @@ public class WhatsAppGroupWorker : BackgroundService
             {
                 existingTargetMedia = (await conn.QueryAsync<MediaRecord>(
                     new CommandDefinition(@"
-                        SELECT m.id, m.storage_path, m.original_filename, m.phash, ml.is_primary
+                        SELECT m.id, m.storage_path AS StoragePath, m.original_filename AS OriginalFilename, m.phash, ml.is_primary AS IsPrimary
                         FROM public.media_links ml
                         JOIN public.media m ON m.id = ml.media_id
                         WHERE ml.entity_id = @ProductId AND ml.entity_type = 'product'",
                         new { ProductId = productId }, transaction: trans, cancellationToken: ct)
                 )).ToList();
             }
+
+            int successfulMediaCount = 0;
 
             foreach (var mediaFile in evt.MediaFiles)
             {
@@ -815,18 +843,21 @@ public class WhatsAppGroupWorker : BackgroundService
 
                             if (canonicalSurvivor != null)
                             {
-                                // Duplicate media found: Remap wa.messages to canonical survivor
-                                string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
-                                await conn.ExecuteAsync(
-                                    @"UPDATE wa.messages 
-                                      SET media_url = @CanonicalUrl, updated_at = NOW() 
-                                      WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
-                                    new { 
-                                        CanonicalUrl = canonicalUrl, 
-                                        GroupId = evt.GroupId, 
-                                        OldSourceUrl = mediaFile.MediaUrl,
-                                        OldFileNamePattern = $"%{fileName}"
-                                    }, trans);
+                                if (!string.IsNullOrWhiteSpace(canonicalSurvivor.StoragePath))
+                                {
+                                    // Duplicate media found: Remap wa.messages to canonical survivor
+                                    string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
+                                    await conn.ExecuteAsync(
+                                        @"UPDATE wa.messages 
+                                          SET media_url = @CanonicalUrl, updated_at = NOW() 
+                                          WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                                        new { 
+                                            CanonicalUrl = canonicalUrl, 
+                                            GroupId = evt.GroupId, 
+                                            OldSourceUrl = mediaFile.MediaUrl,
+                                            OldFileNamePattern = $"%{fileName}"
+                                        }, trans);
+                                }
 
                                 try
                                 {
@@ -836,6 +867,7 @@ public class WhatsAppGroupWorker : BackgroundService
 
                                 // Ensure canonical survivor is linked to listing
                                 await LinkMedia(conn, canonicalSurvivor.Id, listingId, "vendor_listing", canonicalSurvivor.IsPrimary, trans);
+                                successfulMediaCount++;
                                 continue;
                             }
 
@@ -890,19 +922,23 @@ public class WhatsAppGroupWorker : BackgroundService
 
                         if (canonicalSurvivor != null && canonicalSurvivor.Id != mediaId)
                         {
-                            string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
-                            await conn.ExecuteAsync(
-                                @"UPDATE wa.messages 
-                                  SET media_url = @CanonicalUrl, updated_at = NOW() 
-                                  WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
-                                new { 
-                                    CanonicalUrl = canonicalUrl, 
-                                    GroupId = evt.GroupId, 
-                                    OldSourceUrl = mediaFile.MediaUrl,
-                                    OldFileNamePattern = $"%{fileName}"
-                                }, trans);
+                            if (!string.IsNullOrWhiteSpace(canonicalSurvivor.StoragePath))
+                            {
+                                string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";
+                                await conn.ExecuteAsync(
+                                    @"UPDATE wa.messages 
+                                      SET media_url = @CanonicalUrl, updated_at = NOW() 
+                                      WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
+                                    new { 
+                                        CanonicalUrl = canonicalUrl, 
+                                        GroupId = evt.GroupId, 
+                                        OldSourceUrl = mediaFile.MediaUrl,
+                                        OldFileNamePattern = $"%{fileName}"
+                                    }, trans);
+                            }
 
                             await LinkMedia(conn, canonicalSurvivor.Id, listingId, "vendor_listing", canonicalSurvivor.IsPrimary, trans);
+                            successfulMediaCount++;
                             continue;
                         }
 
@@ -961,6 +997,7 @@ public class WhatsAppGroupWorker : BackgroundService
 
                     await LinkMedia(conn, mediaId, productId, "product", true, trans);
                     await LinkMedia(conn, mediaId, listingId, "vendor_listing", true, trans);
+                    successfulMediaCount++;
 
                     // Add to in-memory cache if phash computed (stickers are excluded upstream)
                     if (mediaType == 1 && !string.IsNullOrEmpty(phash))
@@ -973,6 +1010,30 @@ public class WhatsAppGroupWorker : BackgroundService
                 {
                     _logger.LogError(ex, "Failed to migrate media file: {MediaUrl}", mediaFile.MediaUrl);
                 }
+            }
+
+            // Mandatory Gate: A product group or product requires at least 2 verified downloaded media files in storage
+            if (successfulMediaCount < 2)
+            {
+                _logger.LogWarning("Group {GroupId} has only {Count} verified downloaded media files in storage (minimum 2 required). Aborting product creation and rolling back.", evt.GroupId, successfulMediaCount);
+                await trans.RollbackAsync(ct);
+
+                await conn.ExecuteAsync(
+                    @"UPDATE wa.message_groups 
+                      SET status = 'media_missing', 
+                          deeplens_product_id = NULL,
+                          deeplens_listing_id = NULL,
+                          error_detail = @ErrorDetail,
+                          updated_at = NOW() 
+                      WHERE group_id = @GroupId",
+                    new 
+                    { 
+                        ErrorDetail = $"Insufficient verified downloaded media files in storage (found {successfulMediaCount}, required >= 2)",
+                        GroupId = evt.GroupId 
+                    }
+                );
+                await LogGroupAudit(conn, evt.GroupId, "product_creation_aborted_insufficient_media", "system", null, new { successful_media_count = successfulMediaCount, required = 2 });
+                return;
             }
 
             await trans.CommitAsync(ct);
@@ -2087,14 +2148,14 @@ public class WhatsAppGroupWorker : BackgroundService
             // Bi-directional Media Remapping:
             // Load media from target product (survivor candidates) and source product
             var targetMedia = (await conn.QueryAsync<MediaRecord>(new CommandDefinition(@"
-                SELECT m.id, m.storage_path, m.original_filename, m.phash, ml.is_primary
+                SELECT m.id, m.storage_path AS StoragePath, m.original_filename AS OriginalFilename, m.phash, ml.is_primary AS IsPrimary
                 FROM public.media_links ml
                 JOIN public.media m ON m.id = ml.media_id
                 WHERE ml.entity_id = @TargetProductId AND ml.entity_type = 'product'",
                 new { TargetProductId = targetProductId }, transaction: trans, cancellationToken: ct))).ToList();
 
             var sourceMedia = (await conn.QueryAsync<MediaRecord>(new CommandDefinition(@"
-                SELECT m.id, m.storage_path, m.original_filename, m.phash, ml.is_primary
+                SELECT m.id, m.storage_path AS StoragePath, m.original_filename AS OriginalFilename, m.phash, ml.is_primary AS IsPrimary
                 FROM public.media_links ml
                 JOIN public.media m ON m.id = ml.media_id
                 WHERE ml.entity_id = @SourceProductId AND ml.entity_type = 'product'",
@@ -2111,7 +2172,7 @@ public class WhatsAppGroupWorker : BackgroundService
                     (!string.IsNullOrEmpty(src.Phash) && !string.IsNullOrEmpty(tgt.Phash) && PerceptualHashHelper.GetHammingDistance(src.Phash, tgt.Phash) <= 2)
                 );
 
-                if (canonicalSurvivor != null)
+                if (canonicalSurvivor != null && !string.IsNullOrWhiteSpace(canonicalSurvivor.StoragePath))
                 {
                     duplicateSourceMediaIds.Add(src.Id);
                     string canonicalUrl = $"minio://{canonicalSurvivor.StoragePath}";

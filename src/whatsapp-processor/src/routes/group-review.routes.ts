@@ -61,7 +61,7 @@ export function createGroupReviewRoutes(): Router {
                     mg.updated_at as "updatedAt"
                  FROM wa.message_groups mg
                  LEFT JOIN public.products p ON mg.deeplens_product_id = p.id
-                 WHERE mg.jid = $1
+                 WHERE (mg.jid = $1 OR mg.jid IN (SELECT jid FROM wa.chats WHERE metadata->>'linkedParent' = $1))
                  ORDER BY mg.last_message_at DESC`,
                 [jid]
             );
@@ -79,18 +79,26 @@ export function createGroupReviewRoutes(): Router {
                     sender,
                     is_from_me as "isFromMe"
                  FROM wa.messages
-                 WHERE jid = $1 AND group_id IS NOT NULL AND is_deleted = false
+                 WHERE (jid = $1 OR jid IN (SELECT jid FROM wa.chats WHERE metadata->>'linkedParent' = $1)) 
+                   AND group_id IS NOT NULL AND is_deleted = false
                  ORDER BY timestamp ASC`,
                 [jid]
             );
 
-            // Group messages by groupId
+            // Group messages by groupId and resolve presigned URLs for media
+            const { getPresignedUrl } = await import('../clients/media.client');
             const messagesByGroup = new Map<string, any[]>();
             for (const msg of messagesRes.rows) {
+                if (msg.mediaUrl && msg.mediaUrl !== 'minio://' && msg.mediaUrl.trim().length > 10) {
+                    try {
+                        msg.mediaUrl = await getPresignedUrl(msg.mediaUrl);
+                    } catch {
+                        // Keep raw if presigning fails
+                    }
+                }
                 if (!messagesByGroup.has(msg.groupId)) {
                     messagesByGroup.set(msg.groupId, []);
                 }
-                // Construct standard media properties
                 messagesByGroup.get(msg.groupId)!.push(msg);
             }
 

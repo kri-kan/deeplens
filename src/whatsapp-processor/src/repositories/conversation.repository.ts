@@ -325,6 +325,8 @@ export class ConversationRepository {
             chat_jids AS (
                 SELECT jid FROM wa.chats WHERE canonical_jid = (SELECT base_jid FROM chat_info)
                 UNION
+                SELECT jid FROM wa.chats WHERE metadata->>'linkedParent' = $1
+                UNION
                 SELECT (SELECT base_jid FROM chat_info)
                 UNION
                 SELECT $1
@@ -610,7 +612,7 @@ export class ConversationRepository {
                 MIN(timestamp) as "oldestTimestamp",
                 MAX(timestamp) as "newestTimestamp"
             FROM wa.messages
-            WHERE jid = $1
+            WHERE (jid = $1 OR jid IN (SELECT jid FROM wa.chats WHERE metadata->>'linkedParent' = $1))
         `, [jid]);
 
         // 3. Get Media Stats
@@ -623,7 +625,8 @@ export class ConversationRepository {
                 COUNT(*) FILTER (WHERE media_type = 'document') as documents,
                 COUNT(*) FILTER (WHERE media_type = 'sticker') as stickers
             FROM wa.messages
-            WHERE jid = $1 AND media_url IS NOT NULL
+            WHERE (jid = $1 OR jid IN (SELECT jid FROM wa.chats WHERE metadata->>'linkedParent' = $1)) 
+              AND media_url IS NOT NULL AND media_url != 'minio://'
         `, [jid]);
 
         return {

@@ -137,7 +137,10 @@ export class GroupReadinessService {
 
                 const isMedia = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type);
                 if (isMedia) {
-                    if (msg.media_url) {
+                    const hasValidMedia = msg.media_url && 
+                                          msg.media_url !== 'minio://' && 
+                                          msg.media_url.trim().length > 10;
+                    if (hasValidMedia) {
                         mediaCount++;
                         let mediaUrl = msg.media_url;
                         if (!mediaUrl.startsWith('minio://')) {
@@ -153,11 +156,7 @@ export class GroupReadinessService {
                                        (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg'))
                         });
                     } else {
-                        // Mark as pending if message queue hasn't processed it yet
-                        const status = msg.processing_status || '';
-                        if (!['processed', 'failed'].includes(status)) {
-                            hasUndownloadedMedia = true;
-                        }
+                        hasUndownloadedMedia = true;
                     }
                 }
 
@@ -268,7 +267,7 @@ export class GroupReadinessService {
             }
 
             // 6. Check Qualification & Emit Event
-            const qualifies = mediaCount >= 2 && isValidDescription(description);
+            const qualifies = mediaCount >= 2 && !hasUndownloadedMedia && isValidDescription(description);
             const enabled = processAsProduct || autoProcess;
 
             if (qualifies && enabled) {
@@ -545,7 +544,10 @@ export class GroupReadinessService {
                     for (const msg of messages) {
                         const isMedia = msg.media_type && ['image', 'video', 'photo'].includes(msg.media_type);
                         if (isMedia) {
-                            if (msg.media_url) {
+                            const hasValidMedia = msg.media_url && 
+                                                  msg.media_url !== 'minio://' && 
+                                                  msg.media_url.trim().length > 10;
+                            if (hasValidMedia) {
                                 mediaCount++;
                                 let mediaUrl = msg.media_url;
                                 if (!mediaUrl.startsWith('minio://')) {
@@ -561,11 +563,7 @@ export class GroupReadinessService {
                                                (msg.media_type === 'sticker' ? 'image/webp' : 'image/jpeg'))
                                 });
                             } else {
-                                // Mark as pending if message queue hasn't processed it yet
-                                const status = msg.processing_status || '';
-                                if (!['processed', 'failed'].includes(status)) {
-                                    hasUndownloadedMedia = true;
-                                }
+                                hasUndownloadedMedia = true;
                             }
                         }
 

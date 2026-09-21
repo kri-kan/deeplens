@@ -6,7 +6,10 @@ using DeepLens.Application;
 using DeepLens.Infrastructure;
 using Minio;
 using Confluent.Kafka;
+using Dapper;
 using DeepLens.Shared.Telemetry;
+
+DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var builder = Host.CreateApplicationBuilder(args);
 
