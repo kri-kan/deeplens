@@ -3716,7 +3716,12 @@ public class InstaController : ControllerBase
                 platform AS Platform,
                 username AS Username,
                 display_name AS DisplayName,
-                profile_pic_url AS ProfilePicUrl,
+                COALESCE(
+                    CASE WHEN profile_pic_storage_path IS NOT NULL AND profile_pic_storage_path <> '' 
+                         THEN '/api/v1/Attachment/download?path=' || profile_pic_storage_path 
+                         ELSE NULL END,
+                    profile_pic_url
+                ) AS ProfilePicUrl,
                 profile_pic_storage_path AS ProfilePicStoragePath,
                 bio AS Bio,
                 follower_count AS FollowerCount,
@@ -3730,7 +3735,7 @@ public class InstaController : ControllerBase
                 created_at AS CreatedAt,
                 updated_at AS UpdatedAt
             FROM competitor_watchlist 
-            WHERE (profile_category = 'My Business' OR (is_competitor = false AND (profile_category IS NULL OR profile_category NOT IN ('Competitors', 'Competitor')))) AND enabled = true
+            WHERE profile_category = 'My Business' AND enabled = true
             ORDER BY follower_count DESC NULLS LAST";
 
         var channels = (await conn.QueryAsync<CollabPlannerChannelDto>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
@@ -3765,10 +3770,15 @@ public class InstaController : ControllerBase
                 COALESCE(cv.collaborators, '[]'::jsonb)::text AS CollaboratorsJson, 
                 cw.username AS OwnerUsername, 
                 cw.display_name AS OwnerDisplayName, 
-                cw.profile_pic_url AS OwnerProfilePicUrl
+                COALESCE(
+                    CASE WHEN cw.profile_pic_storage_path IS NOT NULL AND cw.profile_pic_storage_path <> ''
+                         THEN '/api/v1/Attachment/download?path=' || cw.profile_pic_storage_path
+                         ELSE NULL END,
+                    cw.profile_pic_url
+                ) AS OwnerProfilePicUrl
             FROM competitor_videos cv
             JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
-            WHERE (cw.profile_category = 'My Business' OR (cw.is_competitor = false AND (cw.profile_category IS NULL OR cw.profile_category NOT IN ('Competitors', 'Competitor')))) AND cw.enabled = true");
+            WHERE cw.profile_category = 'My Business' AND cw.enabled = true");
 
         var parameters = new DynamicParameters();
 
@@ -4240,6 +4250,9 @@ public class CollabPlannerChannelDto
 
     [JsonPropertyName("profilePicStoragePath")]
     public string? ProfilePicStoragePath { get; set; }
+
+    [JsonPropertyName("storagePath")]
+    public string? StoragePath => ProfilePicStoragePath;
 
     [JsonPropertyName("bio")]
     public string? Bio { get; set; }

@@ -1155,6 +1155,7 @@ export interface CollabPlannerChannelDto {
   username: string;
   displayName?: string;
   profilePicUrl?: string;
+  profilePicStoragePath?: string;
   storagePath?: string;
   channelType: 'focus' | 'dump';
   followerCount: number;

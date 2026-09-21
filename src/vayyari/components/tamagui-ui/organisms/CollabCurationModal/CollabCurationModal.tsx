@@ -88,6 +88,17 @@ export function CollabCurationModal({
     );
   };
 
+  // Filter out the post's owner account so the channel cannot collaborate with itself
+  const eligibleAccounts = useMemo(() => {
+    if (!post?.ownerUsername) return accounts;
+    const owner = post.ownerUsername.toLowerCase();
+    return accounts.filter(
+      (acc) =>
+        acc.username.toLowerCase() !== owner &&
+        acc.id.toLowerCase() !== owner
+    );
+  }, [accounts, post?.ownerUsername]);
+
   const statusColorMap: Record<string, { bg: string; text: string }> = {
     pending: { bg: '#FEF3C7', text: '#D97706' },
     curated: { bg: '#ECFDF5', text: '#059669' },
@@ -223,7 +234,7 @@ export function CollabCurationModal({
 
             {/* Target Collab Multi-Selector */}
             <TargetCollabAccountPicker
-              accounts={accounts}
+              accounts={eligibleAccounts}
               selectedAccountIds={selectedAccountIds}
               onToggleAccount={handleToggleAccount}
               maxSelections={5}

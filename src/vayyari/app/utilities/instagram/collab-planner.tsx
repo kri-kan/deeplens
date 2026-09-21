@@ -39,6 +39,19 @@ export default function CollabPlannerRoute() {
       // 1. Fetch active owned business accounts from real database
       const dbChannels: CollabPlannerChannelDto[] = await instagramService.getCollabChannels();
 
+      const resolveProfilePic = (picUrl?: string, storagePath?: string) => {
+        if (picUrl && picUrl.startsWith('/')) {
+          return `${cleanBaseUrl}${picUrl}`;
+        }
+        if (storagePath) {
+          return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(storagePath)}`;
+        }
+        if (picUrl && (picUrl.startsWith('http://') || picUrl.startsWith('https://'))) {
+          return picUrl;
+        }
+        return undefined;
+      };
+
       const mappedChannels: TargetChannelOption[] = [
         {
           id: 'all',
@@ -51,9 +64,7 @@ export default function CollabPlannerRoute() {
           username: ch.username,
           displayName: ch.displayName || ch.username,
           channelType: ch.channelType || 'focus',
-          avatarUri: ch.storagePath
-            ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(ch.storagePath)}`
-            : ch.profilePicUrl,
+          avatarUri: resolveProfilePic(ch.profilePicUrl, ch.profilePicStoragePath || ch.storagePath),
         })),
       ];
 
@@ -62,9 +73,7 @@ export default function CollabPlannerRoute() {
         username: ch.username,
         displayName: ch.displayName || ch.username,
         channelType: ch.channelType || 'focus',
-        avatarUri: ch.storagePath
-          ? `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(ch.storagePath)}`
-          : ch.profilePicUrl,
+        avatarUri: resolveProfilePic(ch.profilePicUrl, ch.profilePicStoragePath || ch.storagePath),
       }));
 
       setChannels(mappedChannels);
@@ -83,7 +92,7 @@ export default function CollabPlannerRoute() {
           thumbnailUrl: mediaUri,
           mediaUrl: p.videoUrl || mediaUri,
           ownerUsername: p.ownerUsername,
-          ownerAvatarUri: p.ownerProfilePicUrl,
+          ownerAvatarUri: resolveProfilePic(p.ownerProfilePicUrl),
           caption: p.caption || p.title || '',
           postedAt: p.postedAt
             ? new Date(p.postedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })

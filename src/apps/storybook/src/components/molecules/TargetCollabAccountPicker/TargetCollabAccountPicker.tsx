@@ -24,6 +24,25 @@ export interface TargetCollabAccountPickerProps {
   layout?: 'grid' | 'scroll';
 }
 
+export const CHANNEL_COLORS = [
+  '#7E22CE',
+  '#2563EB',
+  '#059669',
+  '#D97706',
+  '#DC2626',
+  '#DB2777',
+  '#4F46E5',
+  '#0891B2',
+];
+
+export const getChannelColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return CHANNEL_COLORS[Math.abs(hash) % CHANNEL_COLORS.length];
+};
+
 export function TargetCollabAccountPicker({
   accounts,
   selectedAccountIds,
@@ -35,6 +54,7 @@ export function TargetCollabAccountPicker({
 }: TargetCollabAccountPickerProps) {
   const { tokens } = useTheme();
   const [warning, setWarning] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   const selectedCount = selectedAccountIds.length;
   const isMaxReached = selectedCount >= maxSelections;
@@ -65,7 +85,17 @@ export function TargetCollabAccountPicker({
         const isSelected = selectedAccountIds.includes(account.id);
         const isDisabled = disabledAccountIds.includes(account.id);
         const isDimmed = !isSelected && isMaxReached;
-        const initials = account.username.substring(0, 2).toUpperCase();
+        const brandColor = getChannelColor(account.username);
+        const initials = account.displayName
+          ? account.displayName
+              .split(' ')
+              .map((n: string) => n[0])
+              .slice(0, 2)
+              .join('')
+              .toUpperCase()
+          : account.username.substring(0, 2).toUpperCase();
+
+        const hasValidImage = account.avatarUri && !failedImages[account.id];
 
         return (
           <Pressable
@@ -89,15 +119,21 @@ export function TargetCollabAccountPicker({
                 },
               ]}
             >
-              {account.avatarUri ? (
+              {hasValidImage ? (
                 <Image
                   source={{ uri: account.avatarUri }}
                   style={styles.avatarImg}
                   resizeMode="cover"
+                  onError={() => setFailedImages((prev) => ({ ...prev, [account.id]: true }))}
                 />
               ) : (
-                <View style={styles.avatarFallback}>
-                  <Text fontSize={11} fontWeight="800" color="#4B5563">
+                <View
+                  style={[
+                    styles.avatarFallback,
+                    { backgroundColor: brandColor + '1A' },
+                  ]}
+                >
+                  <Text fontSize={12} fontWeight="800" color={brandColor}>
                     {initials}
                   </Text>
                 </View>
@@ -116,7 +152,6 @@ export function TargetCollabAccountPicker({
               fontWeight={isSelected ? '700' : '500'}
               color={isSelected ? tokens.text : tokens.textSecondary}
               numberOfLines={1}
-              ellipsizeMode="tail"
               style={styles.usernameLabel}
             >
               @{account.username}
