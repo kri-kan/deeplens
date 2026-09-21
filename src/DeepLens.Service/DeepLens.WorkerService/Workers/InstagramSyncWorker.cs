@@ -436,10 +436,10 @@ namespace DeepLens.WorkerService.Workers
             var insertSql = @"
                 INSERT INTO competitor_videos (
                     watchlist_id, platform, platform_video_id, url, description, 
-                    media_type, thumbnail_url, media_url, like_count, comment_count, posted_at, is_reel, storage_path, download_status, downloaded_at, raw_metadata)
+                    media_type, thumbnail_url, media_url, like_count, comment_count, posted_at, is_reel, storage_path, download_status, downloaded_at, raw_metadata, collaborators)
                 VALUES (
                     @WatchlistId, 'instagram', @Id, @Url, @Caption, 
-                    @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath, @DownloadStatus, @DownloadedAt, @RawMetadata::jsonb)";
+                    @MediaType, @ThumbnailUrl, @MediaUrl, @LikeCount, @CommentCount, @PostedAt, @IsReel, @StoragePath, @DownloadStatus, @DownloadedAt, @RawMetadata::jsonb, @Collaborators::jsonb)";
 
             var updateStorageSql = "UPDATE competitor_videos SET storage_path = @StoragePath, download_status = 'completed', downloaded_at = COALESCE(downloaded_at, @Now) WHERE platform_video_id = @Id AND watchlist_id = @WatchlistId";
             var updateProgressSql = "UPDATE scraper_queue SET scraped_count = @Count WHERE id = @JobId";
@@ -472,6 +472,7 @@ namespace DeepLens.WorkerService.Workers
                     var effectiveStoragePath = newStoragePath ?? storagePath;
                     var now = DateTime.UtcNow;
                     var rawMetadata = JsonSerializer.Serialize(p);
+                    var collaboratorsJson = JsonSerializer.Serialize(p.Collaborators ?? new List<InstagramCollaboratorDto>());
 
                     if (!exists)
                     {
@@ -487,7 +488,8 @@ namespace DeepLens.WorkerService.Workers
                             StoragePath = newStoragePath,
                             DownloadStatus = downloadStatus,
                             DownloadedAt = downloadedAt,
-                            RawMetadata = rawMetadata
+                            RawMetadata = rawMetadata,
+                            Collaborators = collaboratorsJson
                         });
 
                         // Fetch the auto-generated ID if we need to link media
@@ -535,6 +537,11 @@ namespace DeepLens.WorkerService.Workers
                                 media_url = COALESCE(@MediaUrl, media_url),
                                 thumbnail_url = COALESCE(@ThumbnailUrl, thumbnail_url),
                                 raw_metadata = COALESCE(@RawMetadata::jsonb, raw_metadata),
+                                collaborators = CASE 
+                                    WHEN @Collaborators::jsonb IS NOT NULL AND @Collaborators::jsonb != '[]'::jsonb 
+                                    THEN @Collaborators::jsonb 
+                                    ELSE COALESCE(collaborators, '[]'::jsonb) 
+                                END,
                                 updated_at = @Now 
                             WHERE id = @dbPostId", 
                             new { 
@@ -544,6 +551,7 @@ namespace DeepLens.WorkerService.Workers
                                 MediaUrl = p.MediaUrl, 
                                 ThumbnailUrl = thumbUrl, 
                                 RawMetadata = rawMetadata, 
+                                Collaborators = collaboratorsJson,
                                 Now = now 
                             });
 

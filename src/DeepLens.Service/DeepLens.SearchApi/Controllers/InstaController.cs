@@ -44,7 +44,8 @@ public class InstaController : ControllerBase
             cv.suspend_until AS SuspendUntil,
             cv.last_reviewed_at AS LastReviewedAt,
             (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id) AS LastPostedAt,
-            (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode
+            (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
+            COALESCE(cv.collaborators, cv.raw_metadata->'collaborators', '[]'::jsonb)::text AS CollaboratorsJson
         FROM competitor_videos cv";
 
     private const string MetaPostWithStarredSelectSql = @"
@@ -67,7 +68,8 @@ public class InstaController : ControllerBase
             cv.last_reviewed_at AS LastReviewedAt,
             (SELECT MAX(sph.posted_at) FROM story_posting_history sph WHERE sph.post_id = cv.id) AS LastPostedAt,
             (SELECT p.base_sku FROM instagram_product_links ipl JOIN products p ON p.id = ipl.product_id WHERE ipl.post_id = cv.id AND ipl.link_type = 'is' LIMIT 1) as ProductCode,
-            sgi.is_starred AS IsStarred
+            sgi.is_starred AS IsStarred,
+            COALESCE(cv.collaborators, cv.raw_metadata->'collaborators', '[]'::jsonb)::text AS CollaboratorsJson
         FROM competitor_videos cv";
 
     public InstaController(

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using DeepLens.Domain.Enums;
 
@@ -66,6 +67,24 @@ public class InstagramProfileDto
     public DateTime? LastSyncedAt { get; set; }
 }
 
+public class InstagramCollaboratorDto
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("fullName")]
+    public string? FullName { get; set; }
+
+    [JsonPropertyName("isVerified")]
+    public bool IsVerified { get; set; }
+
+    [JsonPropertyName("profilePictureUrl")]
+    public string? ProfilePictureUrl { get; set; }
+}
+
 public class InstagramPostDto
 {
     [JsonPropertyName("id")]
@@ -101,6 +120,9 @@ public class InstagramPostDto
 
     [JsonPropertyName("commentCount")]
     public long CommentCount { get; set; }
+
+    [JsonPropertyName("collaborators")]
+    public List<InstagramCollaboratorDto> Collaborators { get; set; } = new();
 }
 
 public class YoutubeSyncUpdateDto
@@ -235,6 +257,29 @@ public class MetaPost
 
     [JsonPropertyName("curvePoints")]
     public List<DayNTrajectoryPointDto>? CurvePoints => Trajectory;
+
+    [JsonPropertyName("collaborators")]
+    public List<InstagramCollaboratorDto> Collaborators { get; set; } = new();
+
+    [JsonIgnore]
+    public string? CollaboratorsJson
+    {
+        get => null;
+        set
+        {
+            if (!string.IsNullOrWhiteSpace(value) && value != "[]" && value != "null")
+            {
+                try
+                {
+                    Collaborators = JsonSerializer.Deserialize<List<InstagramCollaboratorDto>>(value) ?? new();
+                }
+                catch
+                {
+                    Collaborators = new();
+                }
+            }
+        }
+    }
 }
 
 public class InstagramProfileDetailsDto

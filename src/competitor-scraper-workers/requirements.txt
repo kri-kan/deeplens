@@ -8,3 +8,4 @@ pydantic==2.5.2
 tenacity==8.2.3
 datetime
 wrapt
+psycopg2-binary>=2.9.9

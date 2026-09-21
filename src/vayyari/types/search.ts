@@ -53,6 +53,14 @@ export interface InstagramProfileDto {
   lastSyncedAt?: string;
 }
 
+export interface InstagramCollaboratorDto {
+  id?: string;
+  username: string;
+  fullName?: string;
+  isVerified?: boolean;
+  profilePictureUrl?: string;
+}
+
 /**
  * Mirrors InstagramPostDto from backend.
  */
@@ -64,4 +72,6 @@ export interface InstagramPostDto {
   isVideo: boolean;
   likeCount: number;
   commentCount: number;
+  collaborators?: InstagramCollaboratorDto[];
 }
+
