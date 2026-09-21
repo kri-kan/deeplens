@@ -334,6 +334,7 @@ inspect_existing_collaborators() {
   local post_id="$1"
   local shortcode="$2"
   local raw_collabs_json="${3:-[]}"
+  local creator="${4:-}"
 
   echo -e "${BLUE}==> [Smart Collab Detection] Inspecting existing collaborators for post ${shortcode}...${NC}"
 
@@ -348,28 +349,39 @@ inspect_existing_collaborators() {
     done < <(echo "$raw_collabs_json" | jq -r '.[].username // .[].targetCollabAccount // .[] // empty' 2>/dev/null || true)
   fi
 
-  # 2. If ADB device is connected and not dry run, inspect UI dump for on-screen collaborator tags
+  # 2. If ADB device is connected and not dry run, inspect UI dump for on-screen collaborator tags ONLY if Instagram is focused
   if [[ "$DRY_RUN" != "true" && -n "$DEVICE" ]]; then
-    local ui_dump
-    ui_dump=$(adb -s "$DEVICE" exec-out uiautomator dump /dev/tty 2>/dev/null || true)
-    if [[ -n "$ui_dump" ]]; then
-      # Scan UI hierarchy text for "and @..." or collaborator handles
-      local found_on_screen
-      found_on_screen=$(echo "$ui_dump" | grep -oE '(vayyari_[a-z0-9_]+|theblouseedition|dressbyvayyari|everydayvayyari|editionsbyvayyari|eclipsevayyari|vayyaristudio)' | sort -u || true)
-      while IFS= read -r handle; do
-        if [[ -n "$handle" ]]; then
-          detected_handles+=("$handle")
-        fi
-      done <<< "$found_on_screen"
+    if [[ -n "$shortcode" ]]; then
+      adb -s "$DEVICE" shell am start -a android.intent.action.VIEW -d "https://www.instagram.com/p/${shortcode}/" -p com.instagram.android >/dev/null 2>&1 || true
+      sleep 3
+    fi
+    local focused_pkg
+    focused_pkg=$(adb -s "$DEVICE" shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus" | grep -oE "com\.instagram\.android" || true)
+    if [[ -n "$focused_pkg" ]]; then
+      local ui_dump
+      ui_dump=$(adb -s "$DEVICE" exec-out uiautomator dump /dev/tty 2>/dev/null || true)
+      if [[ -n "$ui_dump" ]]; then
+        # Scan UI hierarchy text for "and @..." or collaborator handles
+        local found_on_screen
+        found_on_screen=$(echo "$ui_dump" | grep -oE '(vayyari_[a-z0-9_]+|theblouseedition|dressbyvayyari|everydayvayyari|editionsbyvayyari|eclipsevayyari|vayyaristudio)' | sort -u || true)
+        while IFS= read -r handle; do
+          if [[ -n "$handle" ]]; then
+            detected_handles+=("$handle")
+          fi
+        done <<< "$found_on_screen"
+      fi
     fi
   fi
 
-  # Deduplicate handles
+  # Deduplicate handles and exclude creator account
   local -a unique_handles=()
   for h in "${detected_handles[@]}"; do
     h="${h#@}"
     h="${h// /}"
     [[ -z "$h" ]] && continue
+    if [[ -n "$creator" && "${h,,}" == "${creator,,}" ]]; then
+      continue
+    fi
     local exists=false
     for u in "${unique_handles[@]}"; do
       if [[ "${u,,}" == "${h,,}" ]]; then
@@ -540,7 +552,7 @@ execute_post_collab_pipeline() {
     if [[ -n "$ex_handle" ]]; then
       existing_detected+=("$ex_handle")
     fi
-  done < <(inspect_existing_collaborators "$post_id" "$shortcode" "$raw_collabs_json")
+  done < <(inspect_existing_collaborators "$post_id" "$shortcode" "$raw_collabs_json" "$creator")
 
   # Step 2: Classify target accounts into already_active vs pending_invites
   local -a already_active=()
@@ -708,7 +720,7 @@ run_queue_mode() {
       if [[ -n "$acc" && "$acc" != "null" ]]; then
         target_accounts+=("$acc")
       fi
-    done < <(echo "$post" | jq -r '.targetCollabAccounts[]? // .target_collab_accounts[]? // empty')
+    done < <(echo "$post" | jq -r '(.targetCollabAccounts[]? // .target_collab_accounts[]? // empty) | if type == "object" then .username else . end')
 
     if [[ ${#target_accounts[@]} -eq 0 ]]; then
       echo -e "${YELLOW}Post ${p_shortcode} (ID: ${p_id}) has no target collaboration accounts queued.${NC}"

@@ -55,80 +55,105 @@ appId: com.instagram.android
     when:
       true: ${typeof SHORTCODE !== 'undefined' && SHORTCODE !== ''}
     commands:
-      - openLink: "intent://www.instagram.com/p/${SHORTCODE}/#Intent;package=com.instagram.android;scheme=https;end"
+      - openLink: "https://www.instagram.com/p/${SHORTCODE}/"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 3500);
-      # Tap 3-dots options menu on the post
+      # Tap 3-dots options menu on the post (guarded to tap exactly once)
+      - evalScript: ${output.options_opened = 'false'}
       - runFlow:
           when:
-            visible: "More options"
+            visible: "More actions for this post"
           commands:
-            - tapOn: "More options"
+            - tapOn: "More actions for this post"
+            - evalScript: ${output.options_opened = 'true'}
       - runFlow:
           when:
+            true: ${output.options_opened == 'false'}
             visible:
-              id: "com.instagram.android:id/button_more"
+              id: "com.instagram.android:id/media_option_button"
           commands:
             - tapOn:
-                id: "com.instagram.android:id/button_more"
+                id: "com.instagram.android:id/media_option_button"
+            - evalScript: ${output.options_opened = 'true'}
       - evalScript: |
           var start = new Date().getTime();
-          while (new Date().getTime() < start + 1500);
+          while (new Date().getTime() < start + 2000);
       # Tap Edit option
       - extendedWaitUntil:
           visible: "Edit"
-          timeout: 6000
+          timeout: 8000
       - tapOn: "Edit"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
 
-# Step 3: Tap "Tag people" row
+# Step 3: Tap "Tag people and collaborators" row
+- evalScript: ${output.tag_people_tapped = 'false'}
 - runFlow:
     when:
+      visible: "Tag people and collaborators"
+    commands:
+      - tapOn: "Tag people and collaborators"
+      - evalScript: ${output.tag_people_tapped = 'true'}
+- runFlow:
+    when:
+      true: ${output.tag_people_tapped == 'false'}
+      visible:
+        id: "com.instagram.android:id/m2_people_tagging"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/m2_people_tagging"
+      - evalScript: ${output.tag_people_tapped = 'true'}
+- runFlow:
+    when:
+      true: ${output.tag_people_tapped == 'false'}
+      visible:
+        id: "com.instagram.android:id/m2_people_tagging_primary_text"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/m2_people_tagging_primary_text"
+      - evalScript: ${output.tag_people_tapped = 'true'}
+- runFlow:
+    when:
+      true: ${output.tag_people_tapped == 'false'}
       visible: "Tag people"
     commands:
       - tapOn: "Tag people"
+      - evalScript: ${output.tag_people_tapped = 'true'}
 - runFlow:
     when:
+      true: ${output.tag_people_tapped == 'false'}
       visible:
         id: "com.instagram.android:id/tag_people_row"
     commands:
       - tapOn:
           id: "com.instagram.android:id/tag_people_row"
+      - evalScript: ${output.tag_people_tapped = 'true'}
 - runFlow:
     when:
+      true: ${output.tag_people_tapped == 'false'}
       visible:
-        id: "com.instagram.android:id/row_feed_tag_people"
+        id: "com.instagram.android:id/primary_text"
     commands:
       - tapOn:
-          id: "com.instagram.android:id/row_feed_tag_people"
+          id: "com.instagram.android:id/primary_text"
+      - evalScript: ${output.tag_people_tapped = 'true'}
 
 # Settle tagging screen animation
 - evalScript: |
     var start = new Date().getTime();
     while (new Date().getTime() < start + 2000);
-
 # ==============================================================================
 # Step 4: Add Collaborator 1 (or single COLLAB_HANDLE)
 # ==============================================================================
-- evalScript: ${output.target_collab_1 = (typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : (typeof COLLAB_HANDLE !== 'undefined' ? COLLAB_HANDLE : '')}
-
+- evalScript: |
+    output.target_collab_1 = (typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : (typeof COLLAB_HANDLE !== 'undefined' ? COLLAB_HANDLE : '');
 - runFlow:
     when:
       true: ${output.target_collab_1 !== ''}
     commands:
-      - runFlow:
-          when:
-            visible: "Invite collaborator"
-          commands:
-            - tapOn: "Invite collaborator"
-      - runFlow:
-          when:
-            visible: "Invite Collaborator"
-          commands:
-            - tapOn: "Invite Collaborator"
+      - evalScript: ${output.invite_collab_tapped = 'false'}
       - runFlow:
           when:
             visible:
@@ -136,38 +161,78 @@ appId: com.instagram.android
           commands:
             - tapOn:
                 id: "com.instagram.android:id/invite_collaborator_button"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - runFlow:
           when:
+            true: ${output.invite_collab_tapped == 'false'}
+            visible: "Invite collaborators"
+          commands:
+            - tapOn: "Invite collaborators"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
+      - runFlow:
+          when:
+            true: ${output.invite_collab_tapped == 'false'}
             visible:
-              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+              id: "com.instagram.android:id/invite_collaborator"
           commands:
             - tapOn:
-                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+                id: "com.instagram.android:id/invite_collaborator"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
-      - runFlow:
-          when:
-            visible: "Search for a user"
-          commands:
-            - tapOn: "Search for a user"
-            - inputText: "${output.target_collab_1}"
-      - runFlow:
-          when:
-            visible:
-              id: "com.instagram.android:id/search_edit_text"
-          commands:
-            - tapOn:
-                id: "com.instagram.android:id/search_edit_text"
-            - inputText: "${output.target_collab_1}"
+      # Type in search bar
+      - extendedWaitUntil:
+          visible:
+            id: "com.instagram.android:id/search_edit_text"
+          timeout: 6000
+      - tapOn:
+          id: "com.instagram.android:id/search_edit_text"
+      - inputText: "${output.target_collab_1}"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
       - extendedWaitUntil:
           visible: "${output.target_collab_1}"
           timeout: 8000
-      - tapOn:
-          text: "${output.target_collab_1}"
+      # Tap on search result
+      - evalScript: ${output.user_selected = 'false'}
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/row_search_user_username"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/row_search_user_username"
+            - evalScript: ${output.user_selected = 'true'}
+      - runFlow:
+          when:
+            true: ${output.user_selected == 'false'}
+            visible: "${output.target_collab_1}"
+          commands:
+            - tapOn:
+                text: "${output.target_collab_1}"
+            - evalScript: ${output.user_selected = 'true'}
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      # Confirm on bottom sheet "Invite to collaborate"
+      - evalScript: ${output.collab_confirmed = 'false'}
+      - runFlow:
+          when:
+            visible: "Invite to collaborate"
+          commands:
+            - tapOn: "Invite to collaborate"
+            - evalScript: ${output.collab_confirmed = 'true'}
+      - runFlow:
+          when:
+            true: ${output.collab_confirmed == 'false'}
+            visible:
+              id: "com.instagram.android:id/action_sheet_row_text_view"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/action_sheet_row_text_view"
+            - evalScript: ${output.collab_confirmed = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
@@ -179,16 +244,7 @@ appId: com.instagram.android
     when:
       true: ${typeof COLLAB_2 !== 'undefined' && COLLAB_2 !== ''}
     commands:
-      - runFlow:
-          when:
-            visible: "Invite collaborator"
-          commands:
-            - tapOn: "Invite collaborator"
-      - runFlow:
-          when:
-            visible: "Invite Collaborator"
-          commands:
-            - tapOn: "Invite Collaborator"
+      - evalScript: ${output.invite_collab_tapped = 'false'}
       - runFlow:
           when:
             visible:
@@ -196,38 +252,78 @@ appId: com.instagram.android
           commands:
             - tapOn:
                 id: "com.instagram.android:id/invite_collaborator_button"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - runFlow:
           when:
+            true: ${output.invite_collab_tapped == 'false'}
+            visible: "Invite collaborators"
+          commands:
+            - tapOn: "Invite collaborators"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
+      - runFlow:
+          when:
+            true: ${output.invite_collab_tapped == 'false'}
             visible:
-              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+              id: "com.instagram.android:id/invite_collaborator"
           commands:
             - tapOn:
-                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+                id: "com.instagram.android:id/invite_collaborator"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
-      - runFlow:
-          when:
-            visible: "Search for a user"
-          commands:
-            - tapOn: "Search for a user"
-            - inputText: "${COLLAB_2}"
-      - runFlow:
-          when:
-            visible:
-              id: "com.instagram.android:id/search_edit_text"
-          commands:
-            - tapOn:
-                id: "com.instagram.android:id/search_edit_text"
-            - inputText: "${COLLAB_2}"
+      # Type in search bar
+      - extendedWaitUntil:
+          visible:
+            id: "com.instagram.android:id/search_edit_text"
+          timeout: 6000
+      - tapOn:
+          id: "com.instagram.android:id/search_edit_text"
+      - inputText: "${COLLAB_2}"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
       - extendedWaitUntil:
           visible: "${COLLAB_2}"
           timeout: 8000
-      - tapOn:
-          text: "${COLLAB_2}"
+      # Tap on search result
+      - evalScript: ${output.user_selected = 'false'}
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/row_search_user_username"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/row_search_user_username"
+            - evalScript: ${output.user_selected = 'true'}
+      - runFlow:
+          when:
+            true: ${output.user_selected == 'false'}
+            visible: "${COLLAB_2}"
+          commands:
+            - tapOn:
+                text: "${COLLAB_2}"
+            - evalScript: ${output.user_selected = 'true'}
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      # Confirm on bottom sheet "Invite to collaborate"
+      - evalScript: ${output.collab_confirmed = 'false'}
+      - runFlow:
+          when:
+            visible: "Invite to collaborate"
+          commands:
+            - tapOn: "Invite to collaborate"
+            - evalScript: ${output.collab_confirmed = 'true'}
+      - runFlow:
+          when:
+            true: ${output.collab_confirmed == 'false'}
+            visible:
+              id: "com.instagram.android:id/action_sheet_row_text_view"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/action_sheet_row_text_view"
+            - evalScript: ${output.collab_confirmed = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
@@ -239,16 +335,7 @@ appId: com.instagram.android
     when:
       true: ${typeof COLLAB_3 !== 'undefined' && COLLAB_3 !== ''}
     commands:
-      - runFlow:
-          when:
-            visible: "Invite collaborator"
-          commands:
-            - tapOn: "Invite collaborator"
-      - runFlow:
-          when:
-            visible: "Invite Collaborator"
-          commands:
-            - tapOn: "Invite Collaborator"
+      - evalScript: ${output.invite_collab_tapped = 'false'}
       - runFlow:
           when:
             visible:
@@ -256,38 +343,78 @@ appId: com.instagram.android
           commands:
             - tapOn:
                 id: "com.instagram.android:id/invite_collaborator_button"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - runFlow:
           when:
+            true: ${output.invite_collab_tapped == 'false'}
+            visible: "Invite collaborators"
+          commands:
+            - tapOn: "Invite collaborators"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
+      - runFlow:
+          when:
+            true: ${output.invite_collab_tapped == 'false'}
             visible:
-              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+              id: "com.instagram.android:id/invite_collaborator"
           commands:
             - tapOn:
-                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+                id: "com.instagram.android:id/invite_collaborator"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
-      - runFlow:
-          when:
-            visible: "Search for a user"
-          commands:
-            - tapOn: "Search for a user"
-            - inputText: "${COLLAB_3}"
-      - runFlow:
-          when:
-            visible:
-              id: "com.instagram.android:id/search_edit_text"
-          commands:
-            - tapOn:
-                id: "com.instagram.android:id/search_edit_text"
-            - inputText: "${COLLAB_3}"
+      # Type in search bar
+      - extendedWaitUntil:
+          visible:
+            id: "com.instagram.android:id/search_edit_text"
+          timeout: 6000
+      - tapOn:
+          id: "com.instagram.android:id/search_edit_text"
+      - inputText: "${COLLAB_3}"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
       - extendedWaitUntil:
           visible: "${COLLAB_3}"
           timeout: 8000
-      - tapOn:
-          text: "${COLLAB_3}"
+      # Tap on search result
+      - evalScript: ${output.user_selected = 'false'}
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/row_search_user_username"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/row_search_user_username"
+            - evalScript: ${output.user_selected = 'true'}
+      - runFlow:
+          when:
+            true: ${output.user_selected == 'false'}
+            visible: "${COLLAB_3}"
+          commands:
+            - tapOn:
+                text: "${COLLAB_3}"
+            - evalScript: ${output.user_selected = 'true'}
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      # Confirm on bottom sheet "Invite to collaborate"
+      - evalScript: ${output.collab_confirmed = 'false'}
+      - runFlow:
+          when:
+            visible: "Invite to collaborate"
+          commands:
+            - tapOn: "Invite to collaborate"
+            - evalScript: ${output.collab_confirmed = 'true'}
+      - runFlow:
+          when:
+            true: ${output.collab_confirmed == 'false'}
+            visible:
+              id: "com.instagram.android:id/action_sheet_row_text_view"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/action_sheet_row_text_view"
+            - evalScript: ${output.collab_confirmed = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
@@ -299,16 +426,7 @@ appId: com.instagram.android
     when:
       true: ${typeof COLLAB_4 !== 'undefined' && COLLAB_4 !== ''}
     commands:
-      - runFlow:
-          when:
-            visible: "Invite collaborator"
-          commands:
-            - tapOn: "Invite collaborator"
-      - runFlow:
-          when:
-            visible: "Invite Collaborator"
-          commands:
-            - tapOn: "Invite Collaborator"
+      - evalScript: ${output.invite_collab_tapped = 'false'}
       - runFlow:
           when:
             visible:
@@ -316,38 +434,78 @@ appId: com.instagram.android
           commands:
             - tapOn:
                 id: "com.instagram.android:id/invite_collaborator_button"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - runFlow:
           when:
+            true: ${output.invite_collab_tapped == 'false'}
+            visible: "Invite collaborators"
+          commands:
+            - tapOn: "Invite collaborators"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
+      - runFlow:
+          when:
+            true: ${output.invite_collab_tapped == 'false'}
             visible:
-              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+              id: "com.instagram.android:id/invite_collaborator"
           commands:
             - tapOn:
-                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+                id: "com.instagram.android:id/invite_collaborator"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
-      - runFlow:
-          when:
-            visible: "Search for a user"
-          commands:
-            - tapOn: "Search for a user"
-            - inputText: "${COLLAB_4}"
-      - runFlow:
-          when:
-            visible:
-              id: "com.instagram.android:id/search_edit_text"
-          commands:
-            - tapOn:
-                id: "com.instagram.android:id/search_edit_text"
-            - inputText: "${COLLAB_4}"
+      # Type in search bar
+      - extendedWaitUntil:
+          visible:
+            id: "com.instagram.android:id/search_edit_text"
+          timeout: 6000
+      - tapOn:
+          id: "com.instagram.android:id/search_edit_text"
+      - inputText: "${COLLAB_4}"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
       - extendedWaitUntil:
           visible: "${COLLAB_4}"
           timeout: 8000
-      - tapOn:
-          text: "${COLLAB_4}"
+      # Tap on search result
+      - evalScript: ${output.user_selected = 'false'}
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/row_search_user_username"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/row_search_user_username"
+            - evalScript: ${output.user_selected = 'true'}
+      - runFlow:
+          when:
+            true: ${output.user_selected == 'false'}
+            visible: "${COLLAB_4}"
+          commands:
+            - tapOn:
+                text: "${COLLAB_4}"
+            - evalScript: ${output.user_selected = 'true'}
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      # Confirm on bottom sheet "Invite to collaborate"
+      - evalScript: ${output.collab_confirmed = 'false'}
+      - runFlow:
+          when:
+            visible: "Invite to collaborate"
+          commands:
+            - tapOn: "Invite to collaborate"
+            - evalScript: ${output.collab_confirmed = 'true'}
+      - runFlow:
+          when:
+            true: ${output.collab_confirmed == 'false'}
+            visible:
+              id: "com.instagram.android:id/action_sheet_row_text_view"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/action_sheet_row_text_view"
+            - evalScript: ${output.collab_confirmed = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
@@ -359,16 +517,7 @@ appId: com.instagram.android
     when:
       true: ${typeof COLLAB_5 !== 'undefined' && COLLAB_5 !== ''}
     commands:
-      - runFlow:
-          when:
-            visible: "Invite collaborator"
-          commands:
-            - tapOn: "Invite collaborator"
-      - runFlow:
-          when:
-            visible: "Invite Collaborator"
-          commands:
-            - tapOn: "Invite Collaborator"
+      - evalScript: ${output.invite_collab_tapped = 'false'}
       - runFlow:
           when:
             visible:
@@ -376,38 +525,78 @@ appId: com.instagram.android
           commands:
             - tapOn:
                 id: "com.instagram.android:id/invite_collaborator_button"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - runFlow:
           when:
+            true: ${output.invite_collab_tapped == 'false'}
+            visible: "Invite collaborators"
+          commands:
+            - tapOn: "Invite collaborators"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
+      - runFlow:
+          when:
+            true: ${output.invite_collab_tapped == 'false'}
             visible:
-              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+              id: "com.instagram.android:id/invite_collaborator"
           commands:
             - tapOn:
-                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+                id: "com.instagram.android:id/invite_collaborator"
+            - evalScript: ${output.invite_collab_tapped = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
-      - runFlow:
-          when:
-            visible: "Search for a user"
-          commands:
-            - tapOn: "Search for a user"
-            - inputText: "${COLLAB_5}"
-      - runFlow:
-          when:
-            visible:
-              id: "com.instagram.android:id/search_edit_text"
-          commands:
-            - tapOn:
-                id: "com.instagram.android:id/search_edit_text"
-            - inputText: "${COLLAB_5}"
+      # Type in search bar
+      - extendedWaitUntil:
+          visible:
+            id: "com.instagram.android:id/search_edit_text"
+          timeout: 6000
+      - tapOn:
+          id: "com.instagram.android:id/search_edit_text"
+      - inputText: "${COLLAB_5}"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
       - extendedWaitUntil:
           visible: "${COLLAB_5}"
           timeout: 8000
-      - tapOn:
-          text: "${COLLAB_5}"
+      # Tap on search result
+      - evalScript: ${output.user_selected = 'false'}
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/row_search_user_username"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/row_search_user_username"
+            - evalScript: ${output.user_selected = 'true'}
+      - runFlow:
+          when:
+            true: ${output.user_selected == 'false'}
+            visible: "${COLLAB_5}"
+          commands:
+            - tapOn:
+                text: "${COLLAB_5}"
+            - evalScript: ${output.user_selected = 'true'}
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      # Confirm on bottom sheet "Invite to collaborate"
+      - evalScript: ${output.collab_confirmed = 'false'}
+      - runFlow:
+          when:
+            visible: "Invite to collaborate"
+          commands:
+            - tapOn: "Invite to collaborate"
+            - evalScript: ${output.collab_confirmed = 'true'}
+      - runFlow:
+          when:
+            true: ${output.collab_confirmed == 'false'}
+            visible:
+              id: "com.instagram.android:id/action_sheet_row_text_view"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/action_sheet_row_text_view"
+            - evalScript: ${output.collab_confirmed = 'true'}
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 1500);
@@ -415,77 +604,54 @@ appId: com.instagram.android
 # ==============================================================================
 # Step 9: Confirm Done / Checkmark in Tag People screen (Once for all accounts)
 # ==============================================================================
+- evalScript: ${output.tag_done_tapped = 'false'}
 - runFlow:
     when:
       visible: "Done"
     commands:
       - tapOn: "Done"
+      - evalScript: ${output.tag_done_tapped = 'true'}
 - runFlow:
     when:
+      true: ${output.tag_done_tapped == 'false'}
       visible:
-        id: "com.instagram.android:id/action_bar_button_done"
+        id: "com.instagram.android:id/clips_people_tagging_done_button"
     commands:
       - tapOn:
-          id: "com.instagram.android:id/action_bar_button_done"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/action_bar_action_button"
-    commands:
-      - tapOn:
-          id: "com.instagram.android:id/action_bar_action_button"
+          id: "com.instagram.android:id/clips_people_tagging_done_button"
+      - evalScript: ${output.tag_done_tapped = 'true'}
 
 # Settle back to composer / edit screen
 - evalScript: |
     var start = new Date().getTime();
-    while (new Date().getTime() < start + 2000);
+    while (new Date().getTime() < start + 2500);
 
 # ==============================================================================
 # Step 10: Save or Share post (Once for all accounts)
 # ==============================================================================
+- evalScript: ${output.save_tapped = 'false'}
 - runFlow:
     when:
       visible: "Done"
     commands:
       - tapOn: "Done"
+      - evalScript: ${output.save_tapped = 'true'}
 - runFlow:
     when:
+      true: ${output.save_tapped == 'false'}
+      visible:
+        id: "com.instagram.android:id/action_bar_button_action"
+    commands:
+      - tapOn:
+          id: "com.instagram.android:id/action_bar_button_action"
+      - evalScript: ${output.save_tapped = 'true'}
+- runFlow:
+    when:
+      true: ${output.save_tapped == 'false'}
       visible: "Save"
     commands:
       - tapOn: "Save"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/save"
-    commands:
-      - tapOn:
-          id: "com.instagram.android:id/save"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/action_bar_button_done"
-    commands:
-      - tapOn:
-          id: "com.instagram.android:id/action_bar_button_done"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/action_bar_action_button"
-    commands:
-      - tapOn:
-          id: "com.instagram.android:id/action_bar_action_button"
-- runFlow:
-    when:
-      visible: "Share"
-    commands:
-      - tapOn: "Share"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/share_footer_button"
-    commands:
-      - tapOn:
-          id: "com.instagram.android:id/share_footer_button"
+      - evalScript: ${output.save_tapped = 'true'}
 
 # Final pause to allow network dispatch
 - evalScript: |

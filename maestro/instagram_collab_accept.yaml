@@ -55,7 +55,7 @@ appId: com.instagram.android
     while (new Date().getTime() < start + 3500);
 
 # Step 3: Open the post directly via explicit Android Intent Deep Link
-- openLink: "intent://www.instagram.com/p/${SHORTCODE}/#Intent;package=com.instagram.android;scheme=https;end"
+- openLink: "https://www.instagram.com/p/${SHORTCODE}/"
 
 # Wait for post media and metadata to render
 - evalScript: |
@@ -93,6 +93,15 @@ appId: com.instagram.android
             - tapOn:
                 id: "com.instagram.android:id/row_feed_button_review_invite"
             - evalScript: ${output.review_detected = 'banner'}
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
+            visible:
+              id: "com.instagram.android:id/action_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/action_button"
+            - evalScript: ${output.review_detected = 'banner'}
       # Check 2: Already a collaborator? (Idempotent exit)
       - runFlow:
           when:
@@ -120,6 +129,22 @@ appId: com.instagram.android
     when:
       true: ${output.review_detected == 'false'}
     commands:
+      - evalScript: ${output.options_opened = 'false'}
+      - runFlow:
+          when:
+            visible: "More actions for this post"
+          commands:
+            - tapOn: "More actions for this post"
+            - evalScript: ${output.options_opened = 'true'}
+      - runFlow:
+          when:
+            true: ${output.options_opened == 'false'}
+            visible:
+              id: "com.instagram.android:id/media_option_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/media_option_button"
+            - evalScript: ${output.options_opened = 'true'}
       - runFlow:
           when:
             visible: "More options"
