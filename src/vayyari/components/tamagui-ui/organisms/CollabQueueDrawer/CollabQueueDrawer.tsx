@@ -164,17 +164,53 @@ export function CollabQueueDrawer({
 
                             <XStack flexWrap="wrap" gap={4}>
                               {targetAccounts.map((handle) => {
+                                const phaseInfo = (item.channelPhases || []).find(
+                                  (p) => p.username.toLowerCase() === handle.toLowerCase()
+                                );
+                                const phase = phaseInfo?.phase || 'suggested';
                                 const chipColor = getChannelColor(handle);
+
+                                const isInvited = phase === 'invited';
+                                const isAccepted = phase === 'accepted';
+                                const isAlready = phase === 'already_collaborating';
+                                const isFailed = phase === 'failed';
+
+                                let bg = chipColor + '15';
+                                let border = chipColor + '40';
+                                let textColor = chipColor;
+                                let icon = '⏳';
+                                let label = 'Suggested';
+
+                                if (isAlready || isAccepted) {
+                                  bg = '#ECFDF5';
+                                  border = '#10B981';
+                                  textColor = '#047857';
+                                  icon = isAlready ? '🤝' : '✓';
+                                  label = isAlready ? 'Active' : 'Accepted';
+                                } else if (isInvited) {
+                                  bg = '#FEF3C7';
+                                  border = '#F59E0B';
+                                  textColor = '#B45309';
+                                  icon = '📩';
+                                  label = 'Invited';
+                                } else if (isFailed) {
+                                  bg = '#FEE2E2';
+                                  border = '#EF4444';
+                                  textColor = '#B91C1C';
+                                  icon = '⚠';
+                                  label = 'Failed';
+                                }
+
                                 return (
                                   <View
                                     key={handle}
                                     style={[
                                       styles.collabChip,
-                                      { backgroundColor: chipColor + '15', borderColor: chipColor + '40' },
+                                      { backgroundColor: bg, borderColor: border },
                                     ]}
                                   >
-                                    <Text fontSize={10} fontWeight="700" color={chipColor}>
-                                      🤝 @{handle}
+                                    <Text fontSize={10} fontWeight="700" color={textColor}>
+                                      {icon} @{handle} • {label}
                                     </Text>
                                   </View>
                                 );

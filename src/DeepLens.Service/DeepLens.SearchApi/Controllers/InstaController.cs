@@ -3981,6 +3981,279 @@ public class InstaController : ControllerBase
         return Ok(new { success = true, postId = request.PostId, status = "pending" });
     }
 
+    [HttpPost("collab-planner/update-phase")]
+    [AllowAnonymous]
+    public async Task<IActionResult> UpdateCollabPhase([FromBody] UpdateCollabPhaseRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId) || string.IsNullOrWhiteSpace(request?.Channel) || string.IsNullOrWhiteSpace(request?.Phase))
+        {
+            return BadRequest(new { error = "PostId, Channel, and Phase are required." });
+        }
+
+        var channel = request.Channel.Trim().TrimStart('@');
+        var newPhase = request.Phase.Trim().ToLowerInvariant(); // "suggested", "invited", "accepted", "already_collaborating", "failed"
+
+        using var conn = await _db.CreateConnectionAsync();
+        var existing = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT target_collab_accounts::text AS TargetAccountsJson,
+                   collaborators::text AS CollaboratorsJson,
+                   collab_curation_status AS Status
+            FROM competitor_videos
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim() });
+
+        if (existing == null)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        // Parse target channels
+        var statusList = new List<CollabChannelStatusDto>();
+        string targetJson = existing.targetaccountsjson ?? "[]";
+        if (targetJson != "[]" && targetJson != "null")
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(targetJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in doc.RootElement.EnumerateArray())
+                    {
+                        if (el.ValueKind == JsonValueKind.String)
+                        {
+                            var h = el.GetString()?.Trim().TrimStart('@');
+                            if (!string.IsNullOrWhiteSpace(h))
+                                statusList.Add(new CollabChannelStatusDto { Username = h, Phase = "suggested" });
+                        }
+                        else if (el.ValueKind == JsonValueKind.Object)
+                        {
+                            var dto = JsonSerializer.Deserialize<CollabChannelStatusDto>(el.GetRawText());
+                            if (dto != null && !string.IsNullOrWhiteSpace(dto.Username))
+                                statusList.Add(dto);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Parse collaborators
+        var collaboratorsList = new List<InstagramCollaboratorDto>();
+        string collabsJson = existing.collaboratorsjson ?? "[]";
+        if (collabsJson != "[]" && collabsJson != "null")
+        {
+            try
+            {
+                collaboratorsList = JsonSerializer.Deserialize<List<InstagramCollaboratorDto>>(collabsJson) ?? new();
+            }
+            catch { }
+        }
+
+        // Find or create the target channel
+        var targetItem = statusList.FirstOrDefault(s => string.Equals(s.Username, channel, StringComparison.OrdinalIgnoreCase));
+        if (targetItem == null)
+        {
+            targetItem = new CollabChannelStatusDto { Username = channel, Phase = newPhase, SuggestedAt = DateTime.UtcNow };
+            statusList.Add(targetItem);
+        }
+        else
+        {
+            targetItem.Phase = newPhase;
+        }
+
+        if (newPhase == "invited")
+        {
+            targetItem.InvitedAt = DateTime.UtcNow;
+        }
+        else if (newPhase == "accepted" || newPhase == "already_collaborating")
+        {
+            targetItem.AcceptedAt = DateTime.UtcNow;
+            if (!collaboratorsList.Any(c => string.Equals(c.Username, channel, StringComparison.OrdinalIgnoreCase)))
+            {
+                collaboratorsList.Add(new InstagramCollaboratorDto { Username = channel });
+            }
+        }
+        else if (newPhase == "failed")
+        {
+            targetItem.Error = request.Error ?? "Execution failed";
+        }
+
+        // Determine overall status
+        string overallStatus = existing.status ?? "queued";
+        if (statusList.Count > 0 && statusList.All(s => s.Phase == "accepted" || s.Phase == "already_collaborating"))
+        {
+            overallStatus = "completed";
+        }
+        else if (statusList.Any(s => s.Phase == "invited" || s.Phase == "accepted"))
+        {
+            overallStatus = "in_progress";
+        }
+
+        var updatedTargetAccountsJson = JsonSerializer.Serialize(statusList);
+        var updatedCollabsJson = JsonSerializer.Serialize(collaboratorsList);
+
+        await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET target_collab_accounts = @TargetAccounts::jsonb,
+                collaborators = @Collaborators::jsonb,
+                collab_curation_status = @OverallStatus,
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new {
+                PostId = request.PostId.Trim(),
+                TargetAccounts = updatedTargetAccountsJson,
+                Collaborators = updatedCollabsJson,
+                OverallStatus = overallStatus
+            });
+
+        return Ok(new {
+            success = true,
+            postId = request.PostId,
+            channel = channel,
+            phase = newPhase,
+            overallStatus = overallStatus,
+            channelPhases = statusList
+        });
+    }
+
+    [HttpPost("collab-planner/sync-collaborators")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SyncExistingCollaborators([FromBody] SyncExistingCollaboratorsRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId))
+        {
+            return BadRequest(new { error = "PostId is required." });
+        }
+
+        var detected = (request.Collaborators ?? new())
+            .Where(c => !string.IsNullOrWhiteSpace(c?.Username))
+            .Select(c => { c.Username = c.Username.Trim().TrimStart('@'); return c; })
+            .ToList();
+
+        using var conn = await _db.CreateConnectionAsync();
+        var existing = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT target_collab_accounts::text AS TargetAccountsJson,
+                   collaborators::text AS CollaboratorsJson,
+                   collab_curation_status AS Status
+            FROM competitor_videos
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim() });
+
+        if (existing == null)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        // Parse target channels
+        var statusList = new List<CollabChannelStatusDto>();
+        string targetJson = existing.targetaccountsjson ?? "[]";
+        if (targetJson != "[]" && targetJson != "null")
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(targetJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in doc.RootElement.EnumerateArray())
+                    {
+                        if (el.ValueKind == JsonValueKind.String)
+                        {
+                            var h = el.GetString()?.Trim().TrimStart('@');
+                            if (!string.IsNullOrWhiteSpace(h))
+                                statusList.Add(new CollabChannelStatusDto { Username = h, Phase = "suggested" });
+                        }
+                        else if (el.ValueKind == JsonValueKind.Object)
+                        {
+                            var dto = JsonSerializer.Deserialize<CollabChannelStatusDto>(el.GetRawText());
+                            if (dto != null && !string.IsNullOrWhiteSpace(dto.Username))
+                                statusList.Add(dto);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Parse current collaborators
+        var currentCollabs = new List<InstagramCollaboratorDto>();
+        string collabsJson = existing.collaboratorsjson ?? "[]";
+        if (collabsJson != "[]" && collabsJson != "null")
+        {
+            try
+            {
+                currentCollabs = JsonSerializer.Deserialize<List<InstagramCollaboratorDto>>(collabsJson) ?? new();
+            }
+            catch { }
+        }
+
+        int newlyAddedCount = 0;
+        foreach (var det in detected)
+        {
+            // Add to collaborators if not already present
+            var existingCollab = currentCollabs.FirstOrDefault(c => string.Equals(c.Username, det.Username, StringComparison.OrdinalIgnoreCase));
+            if (existingCollab == null)
+            {
+                currentCollabs.Add(det);
+                newlyAddedCount++;
+            }
+
+            // Sync with target_collab_accounts phase
+            var targetItem = statusList.FirstOrDefault(s => string.Equals(s.Username, det.Username, StringComparison.OrdinalIgnoreCase));
+            if (targetItem != null)
+            {
+                if (targetItem.Phase != "accepted")
+                {
+                    targetItem.Phase = "already_collaborating";
+                    targetItem.AcceptedAt = DateTime.UtcNow;
+                }
+            }
+            else
+            {
+                // Human collaborator added outside DeepLens! Record as already_collaborating
+                statusList.Add(new CollabChannelStatusDto
+                {
+                    Username = det.Username,
+                    Phase = "already_collaborating",
+                    SuggestedAt = DateTime.UtcNow,
+                    AcceptedAt = DateTime.UtcNow
+                });
+            }
+        }
+
+        string overallStatus = existing.status ?? "pending";
+        if (statusList.Count > 0 && statusList.All(s => s.Phase == "accepted" || s.Phase == "already_collaborating"))
+        {
+            overallStatus = "completed";
+        }
+
+        var updatedTargetAccountsJson = JsonSerializer.Serialize(statusList);
+        var updatedCollabsJson = JsonSerializer.Serialize(currentCollabs);
+
+        await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET target_collab_accounts = @TargetAccounts::jsonb,
+                collaborators = @Collaborators::jsonb,
+                collab_curation_status = @OverallStatus,
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new {
+                PostId = request.PostId.Trim(),
+                TargetAccounts = updatedTargetAccountsJson,
+                Collaborators = updatedCollabsJson,
+                OverallStatus = overallStatus
+            });
+
+        return Ok(new {
+            success = true,
+            postId = request.PostId,
+            newlyAddedCount = newlyAddedCount,
+            totalCollaborators = currentCollabs.Count,
+            collaborators = currentCollabs,
+            channelPhases = statusList,
+            overallStatus = overallStatus
+        });
+    }
+
     [HttpPost("collab-planner/clear-queue")]
     [AllowAnonymous]
     public async Task<IActionResult> ClearCollabPlannerQueue(CancellationToken ct = default)
@@ -4327,6 +4600,27 @@ public class CollabPlannerChannelDto
     public DateTime? UpdatedAt { get; set; }
 }
 
+public class CollabChannelStatusDto
+{
+    [JsonPropertyName("username")]
+    public string Username { get; set; } = string.Empty;
+
+    [JsonPropertyName("phase")]
+    public string Phase { get; set; } = "suggested"; // "suggested" | "invited" | "accepted" | "already_collaborating" | "failed"
+
+    [JsonPropertyName("suggestedAt")]
+    public DateTime? SuggestedAt { get; set; }
+
+    [JsonPropertyName("invitedAt")]
+    public DateTime? InvitedAt { get; set; }
+
+    [JsonPropertyName("acceptedAt")]
+    public DateTime? AcceptedAt { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
 public class CollabPlannerPostDto
 {
     [JsonPropertyName("id")]
@@ -4365,6 +4659,9 @@ public class CollabPlannerPostDto
     [JsonPropertyName("targetCollabAccounts")]
     public List<string> TargetCollabAccounts { get; set; } = new();
 
+    [JsonPropertyName("channelPhases")]
+    public List<CollabChannelStatusDto> ChannelPhases { get; set; } = new();
+
     [JsonIgnore]
     public string? TargetCollabAccountsJson
     {
@@ -4375,11 +4672,47 @@ public class CollabPlannerPostDto
             {
                 try
                 {
-                    TargetCollabAccounts = JsonSerializer.Deserialize<List<string>>(value) ?? new();
+                    using var doc = JsonDocument.Parse(value);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        var stringList = new List<string>();
+                        var phasesList = new List<CollabChannelStatusDto>();
+
+                        foreach (var el in doc.RootElement.EnumerateArray())
+                        {
+                            if (el.ValueKind == JsonValueKind.String)
+                            {
+                                var handle = el.GetString()?.Trim().TrimStart('@');
+                                if (!string.IsNullOrWhiteSpace(handle))
+                                {
+                                    stringList.Add(handle);
+                                    phasesList.Add(new CollabChannelStatusDto
+                                    {
+                                        Username = handle,
+                                        Phase = "suggested"
+                                    });
+                                }
+                            }
+                            else if (el.ValueKind == JsonValueKind.Object)
+                            {
+                                var dto = JsonSerializer.Deserialize<CollabChannelStatusDto>(el.GetRawText());
+                                if (dto != null && !string.IsNullOrWhiteSpace(dto.Username))
+                                {
+                                    dto.Username = dto.Username.Trim().TrimStart('@');
+                                    stringList.Add(dto.Username);
+                                    phasesList.Add(dto);
+                                }
+                            }
+                        }
+
+                        TargetCollabAccounts = stringList;
+                        ChannelPhases = phasesList;
+                    }
                 }
                 catch
                 {
                     TargetCollabAccounts = new();
+                    ChannelPhases = new();
                 }
             }
         }
@@ -4447,6 +4780,34 @@ public class UnqueueCollabPostRequest
     [JsonPropertyName("postId")]
     public string PostId { get; set; } = string.Empty;
 }
+
+public class UpdateCollabPhaseRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
+
+    [JsonPropertyName("channel")]
+    public string Channel { get; set; } = string.Empty;
+
+    [JsonPropertyName("phase")]
+    public string Phase { get; set; } = string.Empty; // "suggested", "invited", "accepted", "already_collaborating", "failed"
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public class SyncExistingCollaboratorsRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
+
+    [JsonPropertyName("collaborators")]
+    public List<InstagramCollaboratorDto> Collaborators { get; set; } = new();
+
+    [JsonPropertyName("detectedFrom")]
+    public string? DetectedFrom { get; set; } // "instagram_inspect", "scraper", "manual"
+}
+
 
 
 

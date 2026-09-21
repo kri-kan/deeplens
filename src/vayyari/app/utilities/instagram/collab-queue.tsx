@@ -75,6 +75,7 @@ export default function CollabQueueRoute() {
             typeof c === 'string' ? c : c.username
           ),
           targetCollabAccounts: p.targetCollabAccounts || [],
+          channelPhases: p.channelPhases || [],
           curationStatus: 'queued',
         };
       });

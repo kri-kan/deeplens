@@ -1026,6 +1026,29 @@ class InstagramService {
   completeCollabPost = async (postId: string, collaborators: any[]): Promise<{ success: boolean; postId: string; status: string }> => {
     return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_COMPLETE, { postId, collaborators });
   };
+
+  updateCollabPhase = async (postId: string, channel: string, phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed', error?: string): Promise<{
+    success: boolean;
+    postId: string;
+    channel: string;
+    phase: string;
+    overallStatus: string;
+    channelPhases: CollabChannelStatusDto[];
+  }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_UPDATE_PHASE, { postId, channel, phase, error });
+  };
+
+  syncCollaborators = async (postId: string, collaborators: Array<{ username: string }>, detectedFrom: string = 'instagram_inspect'): Promise<{
+    success: boolean;
+    postId: string;
+    newlyAddedCount: number;
+    totalCollaborators: number;
+    collaborators: any[];
+    channelPhases: CollabChannelStatusDto[];
+    overallStatus: string;
+  }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_SYNC_COLLABORATORS, { postId, collaborators, detectedFrom });
+  };
 }
 
 export interface UnifiedPlannerItem {
@@ -1169,6 +1192,15 @@ export interface CollabPlannerChannelDto {
   followerCount: number;
 }
 
+export interface CollabChannelStatusDto {
+  username: string;
+  phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed';
+  suggestedAt?: string | null;
+  invitedAt?: string | null;
+  acceptedAt?: string | null;
+  error?: string | null;
+}
+
 export interface CollabPlannerPostDto {
   id: string;
   platformVideoId: string;
@@ -1182,6 +1214,7 @@ export interface CollabPlannerPostDto {
   postedAt: string;
   collabCurationStatus: 'pending' | 'collab_curated' | 'queued' | 'in_progress' | 'completed';
   targetCollabAccounts: string[];
+  channelPhases?: CollabChannelStatusDto[];
   collaborators: Array<{
     id?: string;
     username: string;
@@ -1195,5 +1228,3 @@ export interface CollabPlannerPostDto {
 }
 
 export const instagramService = new InstagramService();
-
-
