@@ -6,14 +6,21 @@
 #   Mode A (Queue): Runs queued jobs from DeepLens Collab Automation Queue
 #   Mode B (CLI):   Explicit creator, shortcode, and multi-account collaborators
 #
+# Lifecycle Phases (Per Channel):
+#   - suggested:             Target channel curated/queued by user
+#   - invited:               Automation submitted invite on Creator account
+#   - accepted:              Automation accepted invite on Collaborator account
+#   - already_collaborating: Detected as existing co-author/collab (including outside human collabs)
+#   - failed:                Flow failed with error detail
+#
 # Strategies:
-#   --strategy batch (default): Invites ALL target collaborator accounts simultaneously
+#   --strategy batch (default): Invites ALL pending target collaborator accounts simultaneously
 #                               in a single post editing session on Creator account,
 #                               then sequentially switches to collaborator accounts to accept.
 #   --strategy pairwise:        Legacy 1-to-1 ping-pong cycle (invite 1 -> accept 1 -> invite 2...)
 #
 # Usage:
-#   # Mode A: Fetch and execute from Collab Automation Queue (Simultaneous Batch)
+#   # Mode A: Fetch and execute from Collab Automation Queue
 #   ./tools/run_collab_automation.sh --queue
 #   ./tools/run_collab_automation.sh --queue --dry-run
 #
@@ -22,9 +29,6 @@
 #       --shortcode DdYD1MOEzQt \
 #       --collabs "theblouseedition,vayyari_littles,everydayvayyari" \
 #       --post-id 3fa85f64-5717-4562-b3fc-2c963f66afa6
-#
-#   # Single account legacy syntax
-#   ./tools/run_collab_automation.sh --collab dressbyvayyari --shortcode DAxyz123
 # ==============================================================================
 
 set -o pipefail
@@ -63,7 +67,7 @@ SETTLE_DELAY=4
 print_banner() {
   echo -e "${CYAN}====================================================================${NC}"
   echo -e "${CYAN}   Vayyari Instagram Multi-Channel Collaboration Automation Runner   ${NC}"
-  echo -e "${CYAN}   Simultaneous Batch Invite & Streamlined Multi-Channel Accept     ${NC}"
+  echo -e "${CYAN}   Smart Existing Collab Sync & Multi-Phase Channel Lifecycle       ${NC}"
   echo -e "${CYAN}====================================================================${NC}"
 }
 
@@ -246,6 +250,152 @@ check_device() {
 }
 
 # ==============================================================================
+# Phase Lifecycle & Sync API Helpers
+# ==============================================================================
+api_update_channel_phase() {
+  local post_id="$1"
+  local channel="$2"
+  local phase="$3"
+  local err_msg="${4:-}"
+
+  if [[ -z "$post_id" || -z "$channel" || -z "$phase" ]]; then
+    return 0
+  fi
+
+  local payload
+  payload=$(jq -n \
+    --arg pid "$post_id" \
+    --arg ch "$channel" \
+    --arg ph "$phase" \
+    --arg err "$err_msg" \
+    '{postId: $pid, channel: $ch, phase: $ph, error: (if $err == "" then null else $err end)}')
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo -e "${YELLOW}[DRY RUN] Update Phase API -> @${channel} is now '${phase}' for post ${post_id}${NC}"
+    return 0
+  fi
+
+  local resp http_code
+  resp=$(curl -s -w "\n%{http_code}" -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/update-phase" \
+    -H "Content-Type: application/json" \
+    -d "$payload" || true)
+
+  http_code=$(echo "$resp" | tail -n1)
+  if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
+    echo -e "${GREEN}✓ Recorded phase '${phase}' for @${channel} in database${NC}"
+  else
+    echo -e "${YELLOW}⚠ Warning: Failed to update phase for @${channel} (HTTP ${http_code})${NC}"
+  fi
+}
+
+api_sync_collaborators() {
+  local post_id="$1"
+  local collabs_json="$2"
+  local detected_from="${3:-instagram_inspect}"
+
+  if [[ -z "$post_id" || -z "$collabs_json" || "$collabs_json" == "[]" ]]; then
+    return 0
+  fi
+
+  local payload
+  payload=$(jq -n \
+    --arg pid "$post_id" \
+    --argjson collabs "$collabs_json" \
+    --arg from "$detected_from" \
+    '{postId: $pid, collaborators: $collabs, detectedFrom: $from}')
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo -e "${YELLOW}[DRY RUN] Sync Collaborators API -> Found existing collabs for post ${post_id}:${NC}"
+    echo "$payload" | jq .
+    return 0
+  fi
+
+  local resp http_code body
+  resp=$(curl -s -w "\n%{http_code}" -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/sync-collaborators" \
+    -H "Content-Type: application/json" \
+    -d "$payload" || true)
+
+  http_code=$(echo "$resp" | tail -n1)
+  body=$(echo "$resp" | sed '$d')
+
+  if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
+    local new_count
+    new_count=$(echo "$body" | jq -r '.newlyAddedCount // 0')
+    if [[ "$new_count" -gt 0 ]]; then
+      echo -e "${GREEN}✓ Synced ${new_count} newly detected collaborator(s) to database (including manual outside collabs)!${NC}"
+    fi
+  fi
+}
+
+# ==============================================================================
+# Screen & Post Introspection for Existing Collaborators
+# ==============================================================================
+inspect_existing_collaborators() {
+  local post_id="$1"
+  local shortcode="$2"
+  local raw_collabs_json="${3:-[]}"
+
+  echo -e "${BLUE}==> [Smart Collab Detection] Inspecting existing collaborators for post ${shortcode}...${NC}"
+
+  local -a detected_handles=()
+
+  # 1. Check known collaborators already stored in database
+  if [[ -n "$raw_collabs_json" && "$raw_collabs_json" != "[]" && "$raw_collabs_json" != "null" ]]; then
+    while IFS= read -r h; do
+      if [[ -n "$h" && "$h" != "null" ]]; then
+        detected_handles+=("$h")
+      fi
+    done < <(echo "$raw_collabs_json" | jq -r '.[].username // .[].targetCollabAccount // .[] // empty' 2>/dev/null || true)
+  fi
+
+  # 2. If ADB device is connected and not dry run, inspect UI dump for on-screen collaborator tags
+  if [[ "$DRY_RUN" != "true" && -n "$DEVICE" ]]; then
+    local ui_dump
+    ui_dump=$(adb -s "$DEVICE" exec-out uiautomator dump /dev/tty 2>/dev/null || true)
+    if [[ -n "$ui_dump" ]]; then
+      # Scan UI hierarchy text for "and @..." or collaborator handles
+      local found_on_screen
+      found_on_screen=$(echo "$ui_dump" | grep -oE '(vayyari_[a-z0-9_]+|theblouseedition|dressbyvayyari|everydayvayyari|editionsbyvayyari|eclipsevayyari|vayyaristudio)' | sort -u || true)
+      while IFS= read -r handle; do
+        if [[ -n "$handle" ]]; then
+          detected_handles+=("$handle")
+        fi
+      done <<< "$found_on_screen"
+    fi
+  fi
+
+  # Deduplicate handles
+  local -a unique_handles=()
+  for h in "${detected_handles[@]}"; do
+    h="${h#@}"
+    h="${h// /}"
+    [[ -z "$h" ]] && continue
+    local exists=false
+    for u in "${unique_handles[@]}"; do
+      if [[ "${u,,}" == "${h,,}" ]]; then
+        exists=true
+        break
+      fi
+    done
+    if [[ "$exists" == "false" ]]; then
+      unique_handles+=("$h")
+    fi
+  done
+
+  # If any detected, sync them to database immediately
+  if [[ ${#unique_handles[@]} -gt 0 && -n "$post_id" ]]; then
+    echo -e "${CYAN}Found existing collaborators on post: ${unique_handles[*]}${NC}"
+    local collabs_payload
+    collabs_payload=$(printf '%s\n' "${unique_handles[@]}" | jq -R '{username: .}' | jq -s .)
+    api_sync_collaborators "$post_id" "$collabs_payload" "instagram_inspect"
+  else
+    echo -e "${BLUE}No pre-existing collaborators detected on post.${NC}"
+  fi
+
+  printf '%s\n' "${unique_handles[@]}"
+}
+
+# ==============================================================================
 # Single Flow Execution (Used for Phase 2 Accept or Pairwise fallback)
 # ==============================================================================
 run_maestro_flow() {
@@ -367,78 +517,6 @@ run_maestro_batch_invite() {
 }
 
 # ==============================================================================
-# Pairwise Legacy Runner (Invite 1 -> Accept 1 -> Invite 2...)
-# ==============================================================================
-execute_collab_pair() {
-  local creator="$1"
-  local collab="$2"
-  local shortcode="$3"
-  local mode="$4"
-
-  echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-  echo -e "${CYAN} Executing Collab Pair: Creator @${creator} <--> Collab @${collab}${NC}"
-  echo -e "${CYAN} Post Shortcode: ${shortcode}${NC}"
-  echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-
-  # Phase 1: Creator Invites Collaborator
-  if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
-    if ! run_maestro_flow "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$collab" "$shortcode" "Phase 1 (Invite)"; then
-      echo -e "${RED}Phase 1 failed for @${collab}. Skipping acceptance phase.${NC}"
-      return 1
-    fi
-
-    if [[ "$mode" == "full" ]]; then
-      echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before account profile switch...${NC}"
-      sleep "$SETTLE_DELAY"
-    fi
-  fi
-
-  # Phase 2: Switch Profile & Accept Collaboration
-  if [[ "$mode" == "full" || "$mode" == "accept_only" ]]; then
-    if ! run_maestro_flow "$MAESTRO_DIR/instagram_collab_accept.yaml" "$creator" "$collab" "$shortcode" "Phase 2 (Accept)"; then
-      echo -e "${RED}Phase 2 failed for @${collab}.${NC}"
-      return 1
-    fi
-  fi
-
-  echo -e "${GREEN}✓ Collaboration pair established for @${collab}!${NC}"
-  return 0
-}
-
-post_completion_metadata() {
-  local post_id="$1"
-  local collabs_json="$2"
-
-  if [[ -z "$post_id" ]]; then
-    return 0
-  fi
-
-  echo -e "${CYAN}==> Updating post metadata in database via DeepLens SearchApi...${NC}"
-  local payload
-  payload=$(jq -n --arg pid "$post_id" --argjson collabs "$collabs_json" '{postId: $pid, collaborators: $collabs}')
-
-  if [[ "$DRY_RUN" == "true" ]]; then
-    echo -e "${YELLOW}[DRY RUN] Would POST to ${API_BASE_URL}/api/v1/insta/collab-planner/complete:${NC}"
-    echo "$payload" | jq .
-    return 0
-  fi
-
-  local resp http_code body
-  resp=$(curl -s -w "\n%{http_code}" -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/complete" \
-    -H "Content-Type: application/json" \
-    -d "$payload" || true)
-
-  http_code=$(echo "$resp" | tail -n1)
-  body=$(echo "$resp" | sed '$d')
-
-  if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
-    echo -e "${GREEN}✓ Successfully updated metadata for post ${post_id} (HTTP ${http_code})!${NC}"
-  else
-    echo -e "${YELLOW}⚠ Warning: Collab metadata update returned HTTP ${http_code}: ${body}${NC}"
-  fi
-}
-
-# ==============================================================================
 # Unified Pipeline for a Single Post and its List of Collaborators
 # ==============================================================================
 execute_post_collab_pipeline() {
@@ -446,87 +524,117 @@ execute_post_collab_pipeline() {
   local shortcode="$2"
   local post_id="$3"
   local mode="$4"
-  shift 4
+  local raw_collabs_json="$5"
+  shift 5
   local -a targets=("$@")
 
   echo -e "${MAGENTA}====================================================================${NC}"
   echo -e "${MAGENTA} Collab Pipeline for Post: ${shortcode} (ID: ${post_id:-N/A})${NC}"
-  echo -e "${MAGENTA} Creator: @${creator} | Intended Collaborators (${#targets[@]}): ${targets[*]}${NC}"
+  echo -e "${MAGENTA} Creator: @${creator} | Curated Targets (${#targets[@]}): ${targets[*]}${NC}"
   echo -e "${MAGENTA} Strategy: ${STRATEGY^^} | Mode: ${mode}${NC}"
   echo -e "${MAGENTA}====================================================================${NC}"
 
-  local -a successful_collabs=()
+  # Step 1: Detect existing collaborators on this post (including manual human collabs)
+  local existing_detected=()
+  while IFS= read -r ex_handle; do
+    if [[ -n "$ex_handle" ]]; then
+      existing_detected+=("$ex_handle")
+    fi
+  done < <(inspect_existing_collaborators "$post_id" "$shortcode" "$raw_collabs_json")
 
-  if [[ "$STRATEGY" == "batch" ]]; then
-    # --------------------------------------------------------------------------
-    # Strategy A (Batch):
-    # 1. Creator invites ALL target accounts in ONE editing session
-    # 2. Each target account accepts sequentially (switching directly between collaborator accounts)
-    # --------------------------------------------------------------------------
-    local invite_succeeded=false
+  # Step 2: Classify target accounts into already_active vs pending_invites
+  local -a already_active=()
+  local -a pending_invites=()
 
-    if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
-      if run_maestro_batch_invite "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$shortcode" "${targets[@]}"; then
+  for target in "${targets[@]}"; do
+    local is_active=false
+    for ex in "${existing_detected[@]}"; do
+      if [[ "${ex,,}" == "${target,,}" ]]; then
+        is_active=true
+        break
+      fi
+    done
+
+    if [[ "$is_active" == "true" ]]; then
+      already_active+=("$target")
+      echo -e "${CYAN}ℹ Target account @${target} is ALREADY collaborating on post ${shortcode}. Skipping invite/accept.${NC}"
+      api_update_channel_phase "$post_id" "$target" "already_collaborating"
+    else
+      pending_invites+=("$target")
+    fi
+  done
+
+  local -a successful_collabs=("${already_active[@]}")
+
+  if [[ ${#pending_invites[@]} -eq 0 ]]; then
+    echo -e "${GREEN}✓ All intended collaboration accounts are already established for post ${shortcode}!${NC}"
+    return 0
+  fi
+
+  echo -e "${BLUE}Pending accounts requiring automation (${#pending_invites[@]}): ${pending_invites[*]}${NC}"
+
+  # Step 3: Phase 1 (Simultaneous Batch Invite on Creator Account)
+  local invite_succeeded=false
+
+  if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
+    if [[ "$STRATEGY" == "batch" ]]; then
+      if run_maestro_batch_invite "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$shortcode" "${pending_invites[@]}"; then
         invite_succeeded=true
+        # Update phase for each successfully invited channel
+        for inv_acc in "${pending_invites[@]}"; do
+          api_update_channel_phase "$post_id" "$inv_acc" "invited"
+        done
       else
         echo -e "${RED}Batch invite failed for post ${shortcode}.${NC}"
+        for inv_acc in "${pending_invites[@]}"; do
+          api_update_channel_phase "$post_id" "$inv_acc" "failed" "Batch invite flow failed"
+        done
       fi
-
-      if [[ "$mode" == "full" && "$invite_succeeded" == "true" ]]; then
-        echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before starting collaborator acceptance cycle...${NC}"
-        sleep "$SETTLE_DELAY"
-      fi
-    fi
-
-    # Phase 2: Sequential Streamlined Accepts
-    if [[ ("$mode" == "full" && "$invite_succeeded" == "true") || "$mode" == "accept_only" ]]; then
-      local c_idx=1
-      local total_c=${#targets[@]}
-      for collab in "${targets[@]}"; do
-        echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-        echo -e "${CYAN} [Phase 2: Accept ($c_idx/$total_c)] Switching account to @${collab}...${NC}"
-        echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-
-        if run_maestro_flow "$MAESTRO_DIR/instagram_collab_accept.yaml" "$creator" "$collab" "$shortcode" "Phase 2 (Accept)"; then
-          successful_collabs+=("$collab")
+    else
+      # Pairwise invite fallback
+      invite_succeeded=true
+      for inv_acc in "${pending_invites[@]}"; do
+        if run_maestro_flow "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$inv_acc" "$shortcode" "Phase 1 (Invite)"; then
+          api_update_channel_phase "$post_id" "$inv_acc" "invited"
         else
-          echo -e "${RED}Acceptance flow failed for @${collab} on post ${shortcode}.${NC}"
-        fi
-
-        c_idx=$((c_idx + 1))
-        if [[ $c_idx -le $total_c ]]; then
-          echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next collaborator account switch...${NC}"
-          sleep "$SETTLE_DELAY"
+          api_update_channel_phase "$post_id" "$inv_acc" "failed" "Pairwise invite flow failed"
         fi
       done
     fi
 
-  else
-    # --------------------------------------------------------------------------
-    # Strategy B (Pairwise):
-    # Ping-pong between Creator and Collaborator one by one
-    # --------------------------------------------------------------------------
-    for target_collab in "${targets[@]}"; do
-      if execute_collab_pair "$creator" "$target_collab" "$shortcode" "$mode"; then
-        successful_collabs+=("$target_collab")
+    if [[ "$mode" == "full" && "$invite_succeeded" == "true" ]]; then
+      echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before starting collaborator acceptance cycle...${NC}"
+      sleep "$SETTLE_DELAY"
+    fi
+  fi
+
+  # Step 4: Phase 2 (Sequential Streamlined Acceptance)
+  if [[ ("$mode" == "full" && "$invite_succeeded" == "true") || "$mode" == "accept_only" ]]; then
+    local c_idx=1
+    local total_c=${#pending_invites[@]}
+    for collab in "${pending_invites[@]}"; do
+      echo -e "${CYAN}--------------------------------------------------------------------${NC}"
+      echo -e "${CYAN} [Phase 2: Accept ($c_idx/$total_c)] Switching account to @${collab}...${NC}"
+      echo -e "${CYAN}--------------------------------------------------------------------${NC}"
+
+      if run_maestro_flow "$MAESTRO_DIR/instagram_collab_accept.yaml" "$creator" "$collab" "$shortcode" "Phase 2 (Accept)"; then
+        successful_collabs+=("$collab")
+        api_update_channel_phase "$post_id" "$collab" "accepted"
       else
-        echo -e "${RED}Collaboration failed for @${target_collab} on post ${shortcode}.${NC}"
+        echo -e "${RED}Acceptance flow failed for @${collab} on post ${shortcode}.${NC}"
+        api_update_channel_phase "$post_id" "$collab" "failed" "Collaborator review or accept timeout"
       fi
 
-      echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next account...${NC}"
-      sleep "$SETTLE_DELAY"
+      c_idx=$((c_idx + 1))
+      if [[ $c_idx -le $total_c ]]; then
+        echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next collaborator account switch...${NC}"
+        sleep "$SETTLE_DELAY"
+      fi
     done
   fi
 
-  # Update post metadata if post-id was provided and any collabs succeeded
-  if [[ ${#successful_collabs[@]} -gt 0 && -n "$post_id" ]]; then
-    local collabs_json
-    collabs_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R . | jq -s .)
-    post_completion_metadata "$post_id" "$collabs_json"
-  fi
-
   echo -e "${GREEN}====================================================================${NC}"
-  echo -e "${GREEN}   Pipeline Complete for Post ${shortcode}! Established: ${successful_collabs[*]}   ${NC}"
+  echo -e "${GREEN}   Pipeline Complete for Post ${shortcode}! Established Collabs: ${successful_collabs[*]}   ${NC}"
   echo -e "${GREEN}====================================================================${NC}"
   echo ""
 }
@@ -537,7 +645,7 @@ execute_post_collab_pipeline() {
 run_queue_mode() {
   echo -e "${MAGENTA}Mode: Collab Automation Queue Processing${NC}"
   echo -e "${BLUE}API Endpoint : ${API_BASE_URL}/api/v1/insta/collab-planner/queue${NC}"
-  echo -e "${BLUE}Strategy     : ${STRATEGY^^} (Simultaneous batch invite + streamlined accept)${NC}"
+  echo -e "${BLUE}Strategy     : ${STRATEGY^^} (Simultaneous batch invite + smart existing sync)${NC}"
   echo ""
 
   check_device
@@ -575,11 +683,12 @@ run_queue_mode() {
     local post
     post=$(echo "$posts_json" | jq -c ".[$i]")
 
-    local p_id p_shortcode p_url p_creator
+    local p_id p_shortcode p_url p_creator p_raw_collabs
     p_id=$(echo "$post" | jq -r '.postId // .id // .post_id // ""')
     p_shortcode=$(echo "$post" | jq -r '.shortcode // .shortCode // .short_code // ""')
     p_url=$(echo "$post" | jq -r '.videoUrl // .video_url // .url // .permalink // ""')
     p_creator=$(echo "$post" | jq -r '.creatorAccount // .creator_account // .ownerUsername // .username // "vayyari_fashions"')
+    p_raw_collabs=$(echo "$post" | jq -c '.collaborators // []')
 
     if [[ -z "$p_shortcode" && -n "$p_url" ]]; then
       p_shortcode=$(extract_shortcode "$p_url")
@@ -607,7 +716,7 @@ run_queue_mode() {
       continue
     fi
 
-    execute_post_collab_pipeline "$p_creator" "$p_shortcode" "$p_id" "$MODE" "${target_accounts[@]}"
+    execute_post_collab_pipeline "$p_creator" "$p_shortcode" "$p_id" "$MODE" "$p_raw_collabs" "${target_accounts[@]}"
 
     i=$(( i + 1 ))
   done
@@ -666,7 +775,7 @@ run_cli_mode() {
 
   check_device
 
-  execute_post_collab_pipeline "$CREATOR" "$shortcode" "$POST_ID" "$MODE" "${clean_collabs[@]}"
+  execute_post_collab_pipeline "$CREATOR" "$shortcode" "$POST_ID" "$MODE" "[]" "${clean_collabs[@]}"
 }
 
 # ==============================================================================

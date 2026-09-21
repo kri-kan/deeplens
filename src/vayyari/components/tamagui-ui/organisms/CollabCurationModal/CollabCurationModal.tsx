@@ -17,6 +17,15 @@ import {
   TargetCollabAccount,
 } from '../../molecules/TargetCollabAccountPicker';
 
+export interface CollabChannelPhaseInfo {
+  username: string;
+  phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed';
+  suggestedAt?: string | null;
+  invitedAt?: string | null;
+  acceptedAt?: string | null;
+  error?: string | null;
+}
+
 export interface CollabPostItem {
   id: string;
   thumbnailUrl: string;
@@ -29,6 +38,7 @@ export interface CollabPostItem {
   comments?: number;
   collaborators?: string[];
   targetCollabAccounts?: string[];
+  channelPhases?: CollabChannelPhaseInfo[];
   curationStatus?: 'pending' | 'curated' | 'queued' | 'completed';
 }
 
@@ -207,23 +217,46 @@ export function CollabCurationModal({
                   {post.caption || 'Special handloom curation with tested zari embellishments and exquisite borders.'}
                 </Text>
 
-                {/* Currently Collabing Badge if post has existing collaborators */}
-                {post.collaborators && post.collaborators.length > 0 && (
+                {/* Active Collaborations & Channel Phases */}
+                {((post.collaborators && post.collaborators.length > 0) || (post.channelPhases && post.channelPhases.length > 0)) && (
                   <YStack gap={4} marginTop={4}>
                     <XStack alignItems="center" gap={4}>
                       <LuUsers size={12} color="#7E22CE" />
                       <Text fontSize={11} fontWeight="800" color="#7E22CE">
-                        Currently Collabing:
+                        Collab Channels & Lifecycle Status:
                       </Text>
                     </XStack>
                     <XStack flexWrap="wrap" gap={4}>
-                      {post.collaborators.map((username) => (
-                        <View key={username} style={styles.collaboratorChip}>
-                          <Text fontSize={10} fontWeight="700" color="#6B21A8">
-                            @{username}
+                      {/* 1. Established Collaborators */}
+                      {(post.collaborators || []).map((username) => (
+                        <View key={`collab-${username}`} style={[styles.phaseChip, { backgroundColor: '#ECFDF5', borderColor: '#10B981' }]}>
+                          <Text fontSize={10} fontWeight="700" color="#047857">
+                            🤝 @{username} • Active
                           </Text>
                         </View>
                       ))}
+
+                      {/* 2. Target Channels with Real-Time Phases */}
+                      {(post.channelPhases || [])
+                        .filter((cp) => !(post.collaborators || []).some((c) => c.toLowerCase() === cp.username.toLowerCase()))
+                        .map((cp) => {
+                          const isInvited = cp.phase === 'invited';
+                          const isFailed = cp.phase === 'failed';
+                          const isAlready = cp.phase === 'already_collaborating' || cp.phase === 'accepted';
+                          const bg = isAlready ? '#ECFDF5' : isInvited ? '#FEF3C7' : isFailed ? '#FEE2E2' : '#F3E8FF';
+                          const border = isAlready ? '#10B981' : isInvited ? '#F59E0B' : isFailed ? '#EF4444' : '#A855F7';
+                          const textColor = isAlready ? '#047857' : isInvited ? '#B45309' : isFailed ? '#B91C1C' : '#6B21A8';
+                          const label = isAlready ? 'Active' : isInvited ? 'Invited (Pending Accept)' : isFailed ? 'Failed' : 'Suggested';
+                          const icon = isAlready ? '🤝' : isInvited ? '📩' : isFailed ? '⚠' : '⏳';
+
+                          return (
+                            <View key={`phase-${cp.username}`} style={[styles.phaseChip, { backgroundColor: bg, borderColor: border }]}>
+                              <Text fontSize={10} fontWeight="700" color={textColor}>
+                                {icon} @{cp.username} • {label}
+                              </Text>
+                            </View>
+                          );
+                        })}
                     </XStack>
                   </YStack>
                 )}
@@ -400,6 +433,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    borderRadius: 6,
+  },
+  phaseChip: {
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   divider: {

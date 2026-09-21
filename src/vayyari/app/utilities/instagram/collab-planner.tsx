@@ -104,6 +104,7 @@ export default function CollabPlannerRoute() {
             typeof c === 'string' ? c : c.username
           ),
           targetCollabAccounts: p.targetCollabAccounts || [],
+          channelPhases: p.channelPhases || [],
           curationStatus:
             p.collabCurationStatus === 'collab_curated'
               ? 'curated'

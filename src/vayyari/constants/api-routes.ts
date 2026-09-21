@@ -161,6 +161,8 @@ export const API_ROUTES = {
     COLLAB_PLANNER_UNQUEUE: '/api/v1/Insta/collab-planner/unqueue',
     COLLAB_PLANNER_CLEAR_QUEUE: '/api/v1/Insta/collab-planner/clear-queue',
     COLLAB_PLANNER_COMPLETE: '/api/v1/Insta/collab-planner/complete',
+    COLLAB_PLANNER_UPDATE_PHASE: '/api/v1/Insta/collab-planner/update-phase',
+    COLLAB_PLANNER_SYNC_COLLABORATORS: '/api/v1/Insta/collab-planner/sync-collaborators',
   },
 
   // Common / Master Data

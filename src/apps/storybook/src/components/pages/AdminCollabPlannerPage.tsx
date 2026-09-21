@@ -188,6 +188,10 @@ export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
     comments: 204,
     collaborators: ['dressbyvayyari', 'vayyari_littles'],
     targetCollabAccounts: ['dressbyvayyari', 'vayyari_littles'],
+    channelPhases: [
+      { username: 'dressbyvayyari', phase: 'invited', invitedAt: '2026-09-21T18:30:00Z' },
+      { username: 'vayyari_littles', phase: 'suggested', suggestedAt: '2026-09-21T18:00:00Z' },
+    ],
     curationStatus: 'queued',
   },
   {
