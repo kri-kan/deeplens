@@ -1,13 +1,14 @@
 appId: com.instagram.android
 ---
 # ==============================================================================
-# Instagram Collab Automation: Invite Collaborator (Creator Flow)
+# Instagram Collab Automation: Multi-Account Batch Invite (Creator Flow)
 #
 # Parameters:
 #   CREATOR_ACCOUNT: Source account handle (e.g. "vayyari_fashions")
-#   COLLAB_HANDLE: Target account to invite as co-author (e.g. "dressbyvayyari")
-#   SHORTCODE: (Optional) Instagram post shortcode for an existing published post.
-#              If omitted, assumes user is on the Post/Reel sharing composer screen.
+#   COLLAB_1..5:     Target collaborator handles (up to 5 co-authors)
+#   COLLAB_HANDLE:   (Legacy fallback) Single target collaborator handle
+#   SHORTCODE:       (Optional) Instagram post shortcode for an existing published post.
+#                    If omitted, assumes user is on the Post/Reel sharing composer screen.
 # ==============================================================================
 
 # Step 1: Verify / Switch to Creator Account if CREATOR_ACCOUNT is specified
@@ -109,71 +110,311 @@ appId: com.instagram.android
     var start = new Date().getTime();
     while (new Date().getTime() < start + 2000);
 
-# Step 4: Tap "Invite collaborator"
+# ==============================================================================
+# Step 4: Add Collaborator 1 (or single COLLAB_HANDLE)
+# ==============================================================================
+- evalScript: ${output.target_collab_1 = (typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : (typeof COLLAB_HANDLE !== 'undefined' ? COLLAB_HANDLE : '')}
+
 - runFlow:
     when:
-      visible: "Invite collaborator"
+      true: ${output.target_collab_1 !== ''}
     commands:
-      - tapOn: "Invite collaborator"
-- runFlow:
-    when:
-      visible: "Invite Collaborator"
-    commands:
-      - tapOn: "Invite Collaborator"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/invite_collaborator_button"
-    commands:
+      - runFlow:
+          when:
+            visible: "Invite collaborator"
+          commands:
+            - tapOn: "Invite collaborator"
+      - runFlow:
+          when:
+            visible: "Invite Collaborator"
+          commands:
+            - tapOn: "Invite Collaborator"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/invite_collaborator_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/invite_collaborator_button"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      - runFlow:
+          when:
+            visible: "Search for a user"
+          commands:
+            - tapOn: "Search for a user"
+            - inputText: "${output.target_collab_1}"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/search_edit_text"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/search_edit_text"
+            - inputText: "${output.target_collab_1}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+      - extendedWaitUntil:
+          visible: "${output.target_collab_1}"
+          timeout: 8000
       - tapOn:
-          id: "com.instagram.android:id/invite_collaborator_button"
+          text: "${output.target_collab_1}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+
+# ==============================================================================
+# Step 5: Add Collaborator 2 (if present)
+# ==============================================================================
 - runFlow:
     when:
-      visible:
-        id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+      true: ${typeof COLLAB_2 !== 'undefined' && COLLAB_2 !== ''}
     commands:
+      - runFlow:
+          when:
+            visible: "Invite collaborator"
+          commands:
+            - tapOn: "Invite collaborator"
+      - runFlow:
+          when:
+            visible: "Invite Collaborator"
+          commands:
+            - tapOn: "Invite Collaborator"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/invite_collaborator_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/invite_collaborator_button"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      - runFlow:
+          when:
+            visible: "Search for a user"
+          commands:
+            - tapOn: "Search for a user"
+            - inputText: "${COLLAB_2}"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/search_edit_text"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/search_edit_text"
+            - inputText: "${COLLAB_2}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+      - extendedWaitUntil:
+          visible: "${COLLAB_2}"
+          timeout: 8000
       - tapOn:
-          id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+          text: "${COLLAB_2}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
 
-# Settle search screen transition
-- evalScript: |
-    var start = new Date().getTime();
-    while (new Date().getTime() < start + 1500);
-
-# Step 5: Search for target collaborator handle
+# ==============================================================================
+# Step 6: Add Collaborator 3 (if present)
+# ==============================================================================
 - runFlow:
     when:
-      visible: "Search for a user"
+      true: ${typeof COLLAB_3 !== 'undefined' && COLLAB_3 !== ''}
     commands:
-      - tapOn: "Search for a user"
-      - inputText: "${COLLAB_HANDLE}"
-- runFlow:
-    when:
-      visible:
-        id: "com.instagram.android:id/search_edit_text"
-    commands:
+      - runFlow:
+          when:
+            visible: "Invite collaborator"
+          commands:
+            - tapOn: "Invite collaborator"
+      - runFlow:
+          when:
+            visible: "Invite Collaborator"
+          commands:
+            - tapOn: "Invite Collaborator"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/invite_collaborator_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/invite_collaborator_button"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      - runFlow:
+          when:
+            visible: "Search for a user"
+          commands:
+            - tapOn: "Search for a user"
+            - inputText: "${COLLAB_3}"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/search_edit_text"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/search_edit_text"
+            - inputText: "${COLLAB_3}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+      - extendedWaitUntil:
+          visible: "${COLLAB_3}"
+          timeout: 8000
       - tapOn:
-          id: "com.instagram.android:id/search_edit_text"
-      - inputText: "${COLLAB_HANDLE}"
+          text: "${COLLAB_3}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
 
-# Debounce search results from network
-- evalScript: |
-    var start = new Date().getTime();
-    while (new Date().getTime() < start + 2500);
+# ==============================================================================
+# Step 7: Add Collaborator 4 (if present)
+# ==============================================================================
+- runFlow:
+    when:
+      true: ${typeof COLLAB_4 !== 'undefined' && COLLAB_4 !== ''}
+    commands:
+      - runFlow:
+          when:
+            visible: "Invite collaborator"
+          commands:
+            - tapOn: "Invite collaborator"
+      - runFlow:
+          when:
+            visible: "Invite Collaborator"
+          commands:
+            - tapOn: "Invite Collaborator"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/invite_collaborator_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/invite_collaborator_button"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      - runFlow:
+          when:
+            visible: "Search for a user"
+          commands:
+            - tapOn: "Search for a user"
+            - inputText: "${COLLAB_4}"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/search_edit_text"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/search_edit_text"
+            - inputText: "${COLLAB_4}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+      - extendedWaitUntil:
+          visible: "${COLLAB_4}"
+          timeout: 8000
+      - tapOn:
+          text: "${COLLAB_4}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
 
-# Step 6: Select collaborator account from search list
-- extendedWaitUntil:
-    visible: "${COLLAB_HANDLE}"
-    timeout: 8000
-- tapOn:
-    text: "${COLLAB_HANDLE}"
+# ==============================================================================
+# Step 8: Add Collaborator 5 (if present)
+# ==============================================================================
+- runFlow:
+    when:
+      true: ${typeof COLLAB_5 !== 'undefined' && COLLAB_5 !== ''}
+    commands:
+      - runFlow:
+          when:
+            visible: "Invite collaborator"
+          commands:
+            - tapOn: "Invite collaborator"
+      - runFlow:
+          when:
+            visible: "Invite Collaborator"
+          commands:
+            - tapOn: "Invite Collaborator"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/invite_collaborator_button"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/invite_collaborator_button"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/tag_people_invite_collaborator_row"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
+      - runFlow:
+          when:
+            visible: "Search for a user"
+          commands:
+            - tapOn: "Search for a user"
+            - inputText: "${COLLAB_5}"
+      - runFlow:
+          when:
+            visible:
+              id: "com.instagram.android:id/search_edit_text"
+          commands:
+            - tapOn:
+                id: "com.instagram.android:id/search_edit_text"
+            - inputText: "${COLLAB_5}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 2500);
+      - extendedWaitUntil:
+          visible: "${COLLAB_5}"
+          timeout: 8000
+      - tapOn:
+          text: "${COLLAB_5}"
+      - evalScript: |
+          var start = new Date().getTime();
+          while (new Date().getTime() < start + 1500);
 
-# Settle collaborator addition
-- evalScript: |
-    var start = new Date().getTime();
-    while (new Date().getTime() < start + 1500);
-
-# Step 7: Confirm Done / Checkmark in Tag People screen
+# ==============================================================================
+# Step 9: Confirm Done / Checkmark in Tag People screen (Once for all accounts)
+# ==============================================================================
 - runFlow:
     when:
       visible: "Done"
@@ -199,7 +440,9 @@ appId: com.instagram.android
     var start = new Date().getTime();
     while (new Date().getTime() < start + 2000);
 
-# Step 8: Save or Share post
+# ==============================================================================
+# Step 10: Save or Share post (Once for all accounts)
+# ==============================================================================
 - runFlow:
     when:
       visible: "Done"

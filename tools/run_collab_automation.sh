@@ -6,22 +6,25 @@
 #   Mode A (Queue): Runs queued jobs from DeepLens Collab Automation Queue
 #   Mode B (CLI):   Explicit creator, shortcode, and multi-account collaborators
 #
+# Strategies:
+#   --strategy batch (default): Invites ALL target collaborator accounts simultaneously
+#                               in a single post editing session on Creator account,
+#                               then sequentially switches to collaborator accounts to accept.
+#   --strategy pairwise:        Legacy 1-to-1 ping-pong cycle (invite 1 -> accept 1 -> invite 2...)
+#
 # Usage:
-#   # Mode A: Fetch and execute from Collab Automation Queue
+#   # Mode A: Fetch and execute from Collab Automation Queue (Simultaneous Batch)
 #   ./tools/run_collab_automation.sh --queue
-#   ./tools/run_collab_automation.sh --mode queue --api-url http://localhost:5000
+#   ./tools/run_collab_automation.sh --queue --dry-run
 #
 #   # Mode B: Run with explicit post and multiple target collaborator accounts
 #   ./tools/run_collab_automation.sh --creator vayyari_fashions \
 #       --shortcode DdYD1MOEzQt \
-#       --collabs "theblouseedition,vayyari_littles" \
+#       --collabs "theblouseedition,vayyari_littles,everydayvayyari" \
 #       --post-id 3fa85f64-5717-4562-b3fc-2c963f66afa6
 #
 #   # Single account legacy syntax
 #   ./tools/run_collab_automation.sh --collab dressbyvayyari --shortcode DAxyz123
-#
-#   # Dry run inspection
-#   ./tools/run_collab_automation.sh --queue --dry-run
 # ==============================================================================
 
 set -o pipefail
@@ -48,6 +51,7 @@ COLLABS_INPUT=""
 SHORTCODE=""
 POST_ID=""
 MODE="full"
+STRATEGY="batch"
 DEVICE=""
 API_BASE_URL="${API_URL:-http://localhost:5000}"
 IS_QUEUE_MODE=false
@@ -59,6 +63,7 @@ SETTLE_DELAY=4
 print_banner() {
   echo -e "${CYAN}====================================================================${NC}"
   echo -e "${CYAN}   Vayyari Instagram Multi-Channel Collaboration Automation Runner   ${NC}"
+  echo -e "${CYAN}   Simultaneous Batch Invite & Streamlined Multi-Channel Accept     ${NC}"
   echo -e "${CYAN}====================================================================${NC}"
 }
 
@@ -68,10 +73,15 @@ usage() {
   echo "Modes:"
   echo "  --queue, --from-queue       Consume posts from Collab Automation Queue (Mode A)"
   echo "  --mode <mode>               Execution mode:"
-  echo "                              'full' (default: invite + accept)"
-  echo "                              'invite_only' (Phase 1 only)"
-  echo "                              'accept_only' (Phase 2 only)"
+  echo "                              'full' (default: batch invite + sequential accept)"
+  echo "                              'invite_only' (Phase 1 batch invite only)"
+  echo "                              'accept_only' (Phase 2 accept only)"
   echo "                              'queue' (Alias for --queue)"
+  echo ""
+  echo "Strategy:"
+  echo "  --strategy <batch|pairwise> Execution strategy (default: 'batch')"
+  echo "  --batch                     Simultaneously invite all accounts in list on Creator (default)"
+  echo "  --pairwise                  Ping-pong between Creator and Collaborator accounts one-by-one"
   echo ""
   echo "CLI Arguments (Mode B):"
   echo "  --creator <handle>          Source creator account (default: 'vayyari_fashions')"
@@ -119,12 +129,32 @@ while [[ $# -gt 0 ]]; do
       POST_ID="$2"
       shift 2
       ;;
+    --strategy)
+      STRATEGY="$2"
+      shift 2
+      ;;
+    --batch)
+      STRATEGY="batch"
+      shift
+      ;;
+    --pairwise)
+      STRATEGY="pairwise"
+      shift
+      ;;
     --mode)
       MODE="$2"
       if [[ "$MODE" == "queue" ]]; then
         IS_QUEUE_MODE=true
       fi
       shift 2
+      ;;
+    --skip-accept)
+      MODE="invite_only"
+      shift
+      ;;
+    --skip-invite)
+      MODE="accept_only"
+      shift
       ;;
     --device)
       DEVICE="$2"
@@ -215,6 +245,9 @@ check_device() {
   echo ""
 }
 
+# ==============================================================================
+# Single Flow Execution (Used for Phase 2 Accept or Pairwise fallback)
+# ==============================================================================
 run_maestro_flow() {
   local flow_yaml="$1"
   local creator="$2"
@@ -264,6 +297,78 @@ run_maestro_flow() {
   return 0
 }
 
+# ==============================================================================
+# Phase 1: Simultaneous Multi-Account Batch Invite
+# Invites up to 5 collaborator handles in ONE post editing session on Creator account
+# ==============================================================================
+run_maestro_batch_invite() {
+  local flow_yaml="$1"
+  local creator="$2"
+  local shortcode="$3"
+  shift 3
+  local -a targets=("$@")
+
+  local count=${#targets[@]}
+  if [[ $count -gt 5 ]]; then
+    echo -e "${YELLOW}Notice: Capping collaborator invite list to 5 accounts (Instagram limit).${NC}"
+    count=5
+  fi
+
+  # Build Maestro -e arguments for multi-account tagging
+  local -a maestro_args=()
+  maestro_args+=(-e "CREATOR_ACCOUNT=$creator")
+  maestro_args+=(-e "SHORTCODE=$shortcode")
+  maestro_args+=(-e "COLLAB_COUNT=$count")
+
+  local idx=1
+  for acc in "${targets[@]:0:$count}"; do
+    maestro_args+=(-e "COLLAB_${idx}=$acc")
+    idx=$((idx + 1))
+  done
+  # Legacy fallback for COLLAB_HANDLE
+  maestro_args+=(-e "COLLAB_HANDLE=${targets[0]}")
+
+  local attempt=1
+  local max_attempts=$(( MAX_RETRIES + 1 ))
+  local success=false
+
+  while [[ $attempt -le $max_attempts ]]; do
+    echo -e "${BLUE}==> [Phase 1: Simultaneous Batch Invite] @${creator} -> [${targets[*]:0:$count}] (Attempt ${attempt}/${max_attempts})...${NC}"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+      echo -e "${YELLOW}[DRY RUN] Would run: maestro --device \"$DEVICE\" test ${maestro_args[*]} \"$flow_yaml\"${NC}"
+      success=true
+      break
+    fi
+
+    set +e
+    maestro --device "$DEVICE" test "${maestro_args[@]}" "$flow_yaml"
+    local exit_code=$?
+    set -e
+
+    if [[ $exit_code -eq 0 ]]; then
+      echo -e "${GREEN}✓ Simultaneous batch invite succeeded for: ${targets[*]:0:$count}!${NC}"
+      success=true
+      break
+    else
+      echo -e "${RED}✗ Simultaneous batch invite failed (exit code: ${exit_code}).${NC}"
+      if [[ $attempt -lt $max_attempts ]]; then
+        echo -e "${YELLOW}Retrying batch invite in ${RETRY_DELAY} seconds...${NC}"
+        sleep "$RETRY_DELAY"
+      fi
+    fi
+    attempt=$(( attempt + 1 ))
+  done
+
+  if [[ "$success" != "true" ]]; then
+    return 1
+  fi
+  return 0
+}
+
+# ==============================================================================
+# Pairwise Legacy Runner (Invite 1 -> Accept 1 -> Invite 2...)
+# ==============================================================================
 execute_collab_pair() {
   local creator="$1"
   local collab="$2"
@@ -271,7 +376,7 @@ execute_collab_pair() {
   local mode="$4"
 
   echo -e "${CYAN}--------------------------------------------------------------------${NC}"
-  echo -e "${CYAN} Executing Collab Cycle: Creator @${creator} <--> Collab @${collab}${NC}"
+  echo -e "${CYAN} Executing Collab Pair: Creator @${creator} <--> Collab @${collab}${NC}"
   echo -e "${CYAN} Post Shortcode: ${shortcode}${NC}"
   echo -e "${CYAN}--------------------------------------------------------------------${NC}"
 
@@ -296,7 +401,7 @@ execute_collab_pair() {
     fi
   fi
 
-  echo -e "${GREEN}✓ Collaboration cycle successfully established for @${collab}!${NC}"
+  echo -e "${GREEN}✓ Collaboration pair established for @${collab}!${NC}"
   return 0
 }
 
@@ -334,11 +439,105 @@ post_completion_metadata() {
 }
 
 # ==============================================================================
+# Unified Pipeline for a Single Post and its List of Collaborators
+# ==============================================================================
+execute_post_collab_pipeline() {
+  local creator="$1"
+  local shortcode="$2"
+  local post_id="$3"
+  local mode="$4"
+  shift 4
+  local -a targets=("$@")
+
+  echo -e "${MAGENTA}====================================================================${NC}"
+  echo -e "${MAGENTA} Collab Pipeline for Post: ${shortcode} (ID: ${post_id:-N/A})${NC}"
+  echo -e "${MAGENTA} Creator: @${creator} | Intended Collaborators (${#targets[@]}): ${targets[*]}${NC}"
+  echo -e "${MAGENTA} Strategy: ${STRATEGY^^} | Mode: ${mode}${NC}"
+  echo -e "${MAGENTA}====================================================================${NC}"
+
+  local -a successful_collabs=()
+
+  if [[ "$STRATEGY" == "batch" ]]; then
+    # --------------------------------------------------------------------------
+    # Strategy A (Batch):
+    # 1. Creator invites ALL target accounts in ONE editing session
+    # 2. Each target account accepts sequentially (switching directly between collaborator accounts)
+    # --------------------------------------------------------------------------
+    local invite_succeeded=false
+
+    if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
+      if run_maestro_batch_invite "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$shortcode" "${targets[@]}"; then
+        invite_succeeded=true
+      else
+        echo -e "${RED}Batch invite failed for post ${shortcode}.${NC}"
+      fi
+
+      if [[ "$mode" == "full" && "$invite_succeeded" == "true" ]]; then
+        echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before starting collaborator acceptance cycle...${NC}"
+        sleep "$SETTLE_DELAY"
+      fi
+    fi
+
+    # Phase 2: Sequential Streamlined Accepts
+    if [[ ("$mode" == "full" && "$invite_succeeded" == "true") || "$mode" == "accept_only" ]]; then
+      local c_idx=1
+      local total_c=${#targets[@]}
+      for collab in "${targets[@]}"; do
+        echo -e "${CYAN}--------------------------------------------------------------------${NC}"
+        echo -e "${CYAN} [Phase 2: Accept ($c_idx/$total_c)] Switching account to @${collab}...${NC}"
+        echo -e "${CYAN}--------------------------------------------------------------------${NC}"
+
+        if run_maestro_flow "$MAESTRO_DIR/instagram_collab_accept.yaml" "$creator" "$collab" "$shortcode" "Phase 2 (Accept)"; then
+          successful_collabs+=("$collab")
+        else
+          echo -e "${RED}Acceptance flow failed for @${collab} on post ${shortcode}.${NC}"
+        fi
+
+        c_idx=$((c_idx + 1))
+        if [[ $c_idx -le $total_c ]]; then
+          echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next collaborator account switch...${NC}"
+          sleep "$SETTLE_DELAY"
+        fi
+      done
+    fi
+
+  else
+    # --------------------------------------------------------------------------
+    # Strategy B (Pairwise):
+    # Ping-pong between Creator and Collaborator one by one
+    # --------------------------------------------------------------------------
+    for target_collab in "${targets[@]}"; do
+      if execute_collab_pair "$creator" "$target_collab" "$shortcode" "$mode"; then
+        successful_collabs+=("$target_collab")
+      else
+        echo -e "${RED}Collaboration failed for @${target_collab} on post ${shortcode}.${NC}"
+      fi
+
+      echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next account...${NC}"
+      sleep "$SETTLE_DELAY"
+    done
+  fi
+
+  # Update post metadata if post-id was provided and any collabs succeeded
+  if [[ ${#successful_collabs[@]} -gt 0 && -n "$post_id" ]]; then
+    local collabs_json
+    collabs_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R . | jq -s .)
+    post_completion_metadata "$post_id" "$collabs_json"
+  fi
+
+  echo -e "${GREEN}====================================================================${NC}"
+  echo -e "${GREEN}   Pipeline Complete for Post ${shortcode}! Established: ${successful_collabs[*]}   ${NC}"
+  echo -e "${GREEN}====================================================================${NC}"
+  echo ""
+}
+
+# ==============================================================================
 # Mode A: Process Queue
 # ==============================================================================
 run_queue_mode() {
   echo -e "${MAGENTA}Mode: Collab Automation Queue Processing${NC}"
   echo -e "${BLUE}API Endpoint : ${API_BASE_URL}/api/v1/insta/collab-planner/queue${NC}"
+  echo -e "${BLUE}Strategy     : ${STRATEGY^^} (Simultaneous batch invite + streamlined accept)${NC}"
   echo ""
 
   check_device
@@ -395,6 +594,8 @@ run_queue_mode() {
     # Read target accounts
     local target_accounts=()
     while IFS= read -r acc; do
+      acc="${acc#@}"
+      acc="${acc// /}"
       if [[ -n "$acc" && "$acc" != "null" ]]; then
         target_accounts+=("$acc")
       fi
@@ -406,37 +607,7 @@ run_queue_mode() {
       continue
     fi
 
-    echo -e "${MAGENTA}====================================================================${NC}"
-    echo -e "${MAGENTA} Processing Queue Item $((i + 1))/${queue_len}: Post ${p_shortcode}${NC}"
-    echo -e "${MAGENTA} Creator: @${p_creator} | Targets (${#target_accounts[@]}): ${target_accounts[*]}${NC}"
-    echo -e "${MAGENTA}====================================================================${NC}"
-
-    local successful_for_post=()
-
-    for target_collab in "${target_accounts[@]}"; do
-      target_collab="${target_collab#@}"
-      target_collab="${target_collab// /}"
-
-      if [[ -z "$target_collab" ]]; then
-        continue
-      fi
-
-      if execute_collab_pair "$p_creator" "$target_collab" "$p_shortcode" "$MODE"; then
-        successful_for_post+=("$target_collab")
-      else
-        echo -e "${RED}Collaboration failed for @${target_collab} on post ${p_shortcode}.${NC}"
-      fi
-
-      echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next account...${NC}"
-      sleep "$SETTLE_DELAY"
-    done
-
-    # Update metadata if any collabs succeeded
-    if [[ ${#successful_for_post[@]} -gt 0 ]]; then
-      local collabs_json
-      collabs_json=$(printf '%s\n' "${successful_for_post[@]}" | jq -R . | jq -s .)
-      post_completion_metadata "$p_id" "$collabs_json"
-    fi
+    execute_post_collab_pipeline "$p_creator" "$p_shortcode" "$p_id" "$MODE" "${target_accounts[@]}"
 
     i=$(( i + 1 ))
   done
@@ -489,34 +660,13 @@ run_cli_mode() {
   echo -e "${BLUE}Creator Account : @${CREATOR}${NC}"
   echo -e "${BLUE}Target Accounts : ${clean_collabs[*]} (${#clean_collabs[@]} total)${NC}"
   echo -e "${BLUE}Post Shortcode  : ${shortcode}${NC}"
+  echo -e "${BLUE}Strategy        : ${STRATEGY^^}${NC}"
   echo -e "${BLUE}Execution Mode  : ${MODE}${NC}"
   echo ""
 
   check_device
 
-  local successful_collabs=()
-
-  for collab in "${clean_collabs[@]}"; do
-    if execute_collab_pair "$CREATOR" "$collab" "$shortcode" "$MODE"; then
-      successful_collabs+=("$collab")
-    else
-      echo -e "${RED}Collaboration failed for @${collab}.${NC}"
-    fi
-
-    echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before next account...${NC}"
-    sleep "$SETTLE_DELAY"
-  done
-
-  # Update post metadata if post-id was provided and any collabs succeeded
-  if [[ ${#successful_collabs[@]} -gt 0 && -n "$POST_ID" ]]; then
-    local collabs_json
-    collabs_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R . | jq -s .)
-    post_completion_metadata "$POST_ID" "$collabs_json"
-  fi
-
-  echo -e "${GREEN}====================================================================${NC}"
-  echo -e "${GREEN}   Collaboration Cycle Completed for: ${successful_collabs[*]}   ${NC}"
-  echo -e "${GREEN}====================================================================${NC}"
+  execute_post_collab_pipeline "$CREATOR" "$shortcode" "$POST_ID" "$MODE" "${clean_collabs[@]}"
 }
 
 # ==============================================================================
