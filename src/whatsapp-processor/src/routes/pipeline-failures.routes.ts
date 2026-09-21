@@ -53,7 +53,7 @@ export function createPipelineFailuresRoutes(): Router {
                     mg.updated_at as "updatedAt"
                  FROM wa.message_groups mg
                  LEFT JOIN wa.chats c ON mg.jid = c.jid
-                 WHERE mg.status IN ('error', 'enrichment_failed')
+                 WHERE mg.status IN ('error', 'enrichment_failed', 'media_missing')
                  ORDER BY mg.updated_at DESC`
             );
 
@@ -154,10 +154,10 @@ export function createPipelineFailuresRoutes(): Router {
                 let query = `SELECT group_id FROM wa.message_groups WHERE 1=1`;
                 if (type === 'stuck') {
                     query += ` AND status = 'product_create_sent' AND deeplens_product_id IS NULL`;
-                } else if (type === 'error') {
-                    query += ` AND status IN ('error', 'enrichment_failed')`;
+                } else if (type === 'error' || type === 'media_missing') {
+                    query += ` AND status IN ('error', 'enrichment_failed', 'media_missing')`;
                 } else if (type === 'all') {
-                    query += ` AND (status IN ('error', 'enrichment_failed') OR (status = 'product_create_sent' AND deeplens_product_id IS NULL))`;
+                    query += ` AND (status IN ('error', 'enrichment_failed', 'media_missing') OR (status = 'product_create_sent' AND deeplens_product_id IS NULL))`;
                 }
                 const resGroups = await client.query(query);
                 targetGroupIds = resGroups.rows.map(r => r.group_id);
@@ -217,7 +217,8 @@ export function createPipelineFailuresRoutes(): Router {
                 autoProcessUpdatedCount,
                 recoveredStuckSent: scanResult.recoveredStuckSent,
                 recoveredVendorErrors: scanResult.recoveredVendorErrors,
-                recoveredStaleMedia: scanResult.recoveredStaleMedia
+                recoveredStaleMedia: scanResult.recoveredStaleMedia,
+                recoveredMediaMissing: scanResult.recoveredMediaMissing
             });
         } catch (err: any) {
             logger.error({ err: err.message }, 'Failed auto-fix execution');

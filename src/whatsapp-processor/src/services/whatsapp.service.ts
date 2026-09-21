@@ -1170,7 +1170,7 @@ export class WhatsAppService {
             // If message belongs to a group, update has_pending_media if all media are now present
             if (row.group_id) {
                 try {
-                    await client.query(
+                    const groupUpdateRes = await client.query(
                         `UPDATE wa.message_groups 
                          SET has_pending_media = (
                              SELECT COUNT(*) > 0 
@@ -1180,9 +1180,41 @@ export class WhatsAppService {
                                AND media_url IS NULL
                          ),
                          updated_at = NOW()
-                         WHERE group_id = $1`,
+                         WHERE group_id = $1
+                         RETURNING status, has_pending_media`,
                         [row.group_id]
                     );
+
+                    const groupStatus = groupUpdateRes.rows[0]?.status;
+
+                    // If group was previously marked 'media_missing' and now has verified downloaded media:
+                    if (groupStatus === 'media_missing') {
+                        const countRes = await client.query(
+                            `SELECT COUNT(*) as valid_media_count
+                             FROM wa.messages
+                             WHERE group_id = $1
+                               AND media_type IN ('image', 'video', 'photo')
+                               AND media_url IS NOT NULL
+                               AND media_url != 'minio://'
+                               AND length(trim(media_url)) > 10
+                               AND is_deleted = false`,
+                            [row.group_id]
+                        );
+                        const validMediaCount = parseInt(countRes.rows[0]?.valid_media_count || '0', 10);
+                        if (validMediaCount >= 2) {
+                            logger.info({ groupId: row.group_id, validMediaCount }, 'Group previously in media_missing now has >= 2 verified media; resetting to staging for auto-promotion');
+                            await client.query(
+                                `UPDATE wa.message_groups
+                                 SET status = 'staging',
+                                     error_detail = NULL,
+                                     updated_at = NOW()
+                                 WHERE group_id = $1`,
+                                [row.group_id]
+                            );
+                            const { groupReadinessService } = await import('./group-readiness.service');
+                            await groupReadinessService.checkAndEmitGroupEvent(row.group_id);
+                        }
+                    }
                 } catch (groupErr) {
                     logger.warn({ groupErr, groupId: row.group_id }, 'Failed to update message group pending media status');
                 }

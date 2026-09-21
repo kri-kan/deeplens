@@ -271,6 +271,18 @@ export class GroupReadinessService {
             const enabled = processAsProduct || autoProcess;
 
             if (qualifies && enabled) {
+                // If group was previously in media_missing and now qualifies, reset to staging so poller promotes it
+                if (currentStatus === 'media_missing') {
+                    logger.info({ groupId, mediaCount }, 'Group previously in media_missing now qualifies; resetting to staging');
+                    await client.query(
+                        `UPDATE wa.message_groups 
+                         SET status = 'staging', error_detail = NULL, updated_at = NOW() 
+                         WHERE group_id = $1`,
+                        [groupId]
+                    );
+                    currentStatus = 'staging';
+                }
+
                 // In staging, we do NOT trigger create event immediately. It's handled by staging poller after 45s.
                 if (currentStatus === 'product_created') {
                     // Emit media.added event for new media files
@@ -503,13 +515,13 @@ export class GroupReadinessService {
             if (!client) return;
 
             try {
-                // Find all groups in 'staging' where the last message was updated/received more than debounceSeconds ago
+                // Find all groups in 'staging' or 'media_missing' where the last message was updated/received more than debounceSeconds ago
                 // and the group has vendor_id assigned in wa.chats (ignore sticker groups).
                 const res = await client.query(
-                    `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products
+                    `SELECT mg.group_id, mg.jid, mg.process_as_product, c.vendor_id, c.auto_process_products, mg.status as current_status
                      FROM wa.message_groups mg
                      JOIN wa.chats c ON mg.jid = c.jid
-                     WHERE mg.status = 'staging'
+                     WHERE mg.status IN ('staging', 'media_missing')
                        AND mg.group_id LIKE 'product_%'
                        AND NOT (mg.group_id LIKE 'sticker_%')
                        AND mg.updated_at < NOW() - CAST($1 || ' seconds' AS INTERVAL)
@@ -587,7 +599,7 @@ export class GroupReadinessService {
                     const qualifies = mediaCount >= 2 && isValidDescription(description) && !hasUndownloadedMedia;
 
                     if (qualifies) {
-                        logger.info({ groupId: group_id, mediaCount, descriptionWords: description.split(/\s+/).length }, 'Staged group qualifies, promoting to product...');
+                        logger.info({ groupId: group_id, mediaCount, previousStatus: row.current_status, descriptionWords: description.split(/\s+/).length }, 'Staged/media_missing group qualifies, promoting to product...');
                         
                         await this.initialize();
                         if (!this.isConnected) {
@@ -623,7 +635,7 @@ export class GroupReadinessService {
                             }]
                         });
 
-                        await this.logAudit(group_id, 'product_create_sent', 'system_poller', { status: 'staging' }, { status: 'product_create_sent' });
+                        await this.logAudit(group_id, 'product_create_sent', 'system_poller', { status: row.current_status || 'staging' }, { status: 'product_create_sent' });
                         logger.info({ groupId: group_id, jid }, 'Poller promoted group and published create event');
                     }
                 }
@@ -646,14 +658,16 @@ export class GroupReadinessService {
      * 1. Groups stuck in 'product_create_sent' > 10m without deeplens_product_id.
      * 2. Groups in 'error' where vendor has since been assigned.
      * 3. Messages with stalled media downloads > 15m.
+     * 4. Groups in 'media_missing' that now have >= 2 verified downloaded media files.
      */
-    public async runSelfHealingScan(): Promise<{ recoveredStuckSent: number; recoveredVendorErrors: number; recoveredStaleMedia: number }> {
+    public async runSelfHealingScan(): Promise<{ recoveredStuckSent: number; recoveredVendorErrors: number; recoveredStaleMedia: number; recoveredMediaMissing: number }> {
         const client = getWhatsAppDbClient();
-        if (!client) return { recoveredStuckSent: 0, recoveredVendorErrors: 0, recoveredStaleMedia: 0 };
+        if (!client) return { recoveredStuckSent: 0, recoveredVendorErrors: 0, recoveredStaleMedia: 0, recoveredMediaMissing: 0 };
 
         let recoveredStuckSent = 0;
         let recoveredVendorErrors = 0;
         let recoveredStaleMedia = 0;
+        let recoveredMediaMissing = 0;
 
         try {
             // 1. Recover stuck product_create_sent events (> 10 mins old)
@@ -693,14 +707,46 @@ export class GroupReadinessService {
             );
             recoveredStaleMedia = mediaRes.rowCount || 0;
 
-            if (recoveredStuckSent > 0 || recoveredVendorErrors > 0 || recoveredStaleMedia > 0) {
-                logger.info({ recoveredStuckSent, recoveredVendorErrors, recoveredStaleMedia }, 'Self-healing scan completed recovery pass');
+            // 4. Auto-recover 'media_missing' groups that now have >= 2 valid downloaded media files and 0 undownloaded
+            const mediaMissingRes = await client.query(
+                `SELECT mg.group_id 
+                 FROM wa.message_groups mg
+                 JOIN wa.chats c ON mg.jid = c.jid
+                 WHERE mg.status = 'media_missing'
+                   AND c.vendor_id IS NOT NULL
+                   AND (
+                       SELECT COUNT(*) 
+                       FROM wa.messages m 
+                       WHERE m.group_id = mg.group_id 
+                         AND m.media_type IN ('image', 'video', 'photo')
+                         AND m.media_url IS NOT NULL 
+                         AND m.media_url != 'minio://'
+                         AND length(trim(m.media_url)) > 10
+                         AND m.is_deleted = false
+                   ) >= 2
+                   AND NOT EXISTS (
+                       SELECT 1 
+                       FROM wa.messages m 
+                       WHERE m.group_id = mg.group_id 
+                         AND m.media_type IN ('image', 'video', 'photo')
+                         AND (m.media_url IS NULL OR m.media_url = 'minio://' OR length(trim(m.media_url)) <= 10)
+                         AND m.is_deleted = false
+                   )`
+            );
+            for (const row of mediaMissingRes.rows) {
+                await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);
+                await this.checkAndEmitGroupEvent(row.group_id);
+                recoveredMediaMissing++;
+            }
+
+            if (recoveredStuckSent > 0 || recoveredVendorErrors > 0 || recoveredStaleMedia > 0 || recoveredMediaMissing > 0) {
+                logger.info({ recoveredStuckSent, recoveredVendorErrors, recoveredStaleMedia, recoveredMediaMissing }, 'Self-healing scan completed recovery pass');
             }
         } catch (err: any) {
             logger.error({ err: err.message }, 'Error running self-healing scan');
         }
 
-        return { recoveredStuckSent, recoveredVendorErrors, recoveredStaleMedia };
+        return { recoveredStuckSent, recoveredVendorErrors, recoveredStaleMedia, recoveredMediaMissing };
     }
 
     /**
