@@ -72,6 +72,17 @@ export function CollabCurationModal({
     setSelectedAccountIds(initialSelection);
   }, [initialSelection, visible]);
 
+  // Filter out the post's owner account so the channel cannot collaborate with itself
+  const eligibleAccounts = useMemo(() => {
+    if (!post?.ownerUsername) return accounts;
+    const owner = post.ownerUsername.toLowerCase();
+    return accounts.filter(
+      (acc) =>
+        acc.username.toLowerCase() !== owner &&
+        acc.id.toLowerCase() !== owner
+    );
+  }, [accounts, post?.ownerUsername]);
+
   if (!visible || !post) return null;
 
   // Change detection: compare selectedAccountIds with baselineIds
@@ -87,17 +98,6 @@ export function CollabCurationModal({
         : [...prev, accountId]
     );
   };
-
-  // Filter out the post's owner account so the channel cannot collaborate with itself
-  const eligibleAccounts = useMemo(() => {
-    if (!post?.ownerUsername) return accounts;
-    const owner = post.ownerUsername.toLowerCase();
-    return accounts.filter(
-      (acc) =>
-        acc.username.toLowerCase() !== owner &&
-        acc.id.toLowerCase() !== owner
-    );
-  }, [accounts, post?.ownerUsername]);
 
   const statusColorMap: Record<string, { bg: string; text: string }> = {
     pending: { bg: '#FEF3C7', text: '#D97706' },

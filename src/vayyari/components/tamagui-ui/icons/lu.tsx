@@ -12,6 +12,9 @@ export interface IconProps {
 export const LuPencil: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="edit-2" size={size} color={color} style={style} />
 );
+export const LuEdit3: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="edit-3" size={size} color={color} style={style} />
+);
 export const LuPlus: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="plus" size={size} color={color} style={style} />
 );
@@ -105,6 +108,9 @@ export const LuUser: React.FC<IconProps> = ({ size = 16, color = '#333333', styl
 
 export const LuUsers: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="users" size={size} color={color} style={style} />
+);
+export const LuUserCheck: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="user-check" size={size} color={color} style={style} />
 );
 export const LuLayers: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="layers" size={size} color={color} style={style} />
