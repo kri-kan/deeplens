@@ -295,6 +295,7 @@ export interface AdminCollabPlannerPageProps {
   queueDrawerOpen?: boolean;
   onToggleQueueDrawer?: (open: boolean) => void;
   queueItems?: CollabPostItem[];
+  onOpenQueuePage?: () => void;
   loading?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -320,6 +321,7 @@ export function AdminCollabPlannerPage({
   queueDrawerOpen: controlledQueueDrawerOpen,
   onToggleQueueDrawer,
   queueItems: propQueueItems,
+  onOpenQueuePage,
   loading = false,
   refreshing = false,
   onRefresh,
@@ -472,7 +474,7 @@ export function AdminCollabPlannerPage({
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
-      {/* ── Top Bar (Modeled after Story Sharing Header with Safe Notch Inset) ── */}
+      {/* ── Top Bar (with Safe Notch Inset, Curated Header Toggle & Queue Icon Button) ── */}
       <XStack
         paddingHorizontal={16}
         paddingTop={topInset + 6}
@@ -500,78 +502,61 @@ export function AdminCollabPlannerPage({
               Collab Planner
             </Text>
             <Text fontSize={11} color={tokens.textSecondary} numberOfLines={1}>
-              Curate & Automate Cross-Channel Collaborations
+              {showCurated
+                ? `Showing all ${counts.total} posts`
+                : `${counts.pending} uncurated post${counts.pending === 1 ? '' : 's'}`}
             </Text>
           </YStack>
         </XStack>
 
-        {/* Automation Queue Status Pill (Pressable -> Opens CollabQueueDrawer) */}
-        <Pressable
-          onPress={() => handleToggleQueueDrawer(true)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Collab Automation Queue, ${queuedPosts.length} items queued. Tap to view.`}
-          style={[
-            styles.queueStatusPill,
-            {
-              backgroundColor: isAutomationQueueActive || queuedPosts.length > 0 ? '#F3E8FF' : '#F3F4F6',
-              borderColor: isAutomationQueueActive || queuedPosts.length > 0 ? '#C084FC' : '#E5E7EB',
-            },
-          ]}
-        >
-          <LuSparkles
-            size={12}
-            color={isAutomationQueueActive || queuedPosts.length > 0 ? '#7E22CE' : '#6B7280'}
-          />
-          <Text
-            fontSize={11}
-            fontWeight="800"
-            color={isAutomationQueueActive || queuedPosts.length > 0 ? '#7E22CE' : '#6B7280'}
+        {/* Right Header Cluster: "Show Curated" Toggle + Queue Icon Button */}
+        <XStack alignItems="center" gap={10}>
+          {/* Header Toggle for Curated Posts */}
+          <XStack
+            alignItems="center"
+            gap={6}
+            backgroundColor="#F3F4F6"
+            paddingHorizontal={8}
+            paddingVertical={4}
+            borderRadius={16}
           >
-            {isAutomationQueueActive
-              ? 'Queue Active ▾'
-              : queuedPosts.length > 0
-              ? `${queuedPosts.length} Queued ▾`
-              : 'Queue (0) ▾'}
-          </Text>
-        </Pressable>
-      </XStack>
-
-      {/* ── Subheader with "Show Curated Posts" Toggle Switch ── */}
-      <XStack
-        paddingHorizontal={16}
-        paddingVertical={10}
-        alignItems="center"
-        justifyContent="space-between"
-        backgroundColor={tokens.surface}
-        borderBottomWidth={1}
-        borderBottomColor={tokens.border}
-      >
-        <YStack flex={1}>
-          <XStack alignItems="center" gap={6}>
-            <Text fontSize={12} fontWeight="800" color={tokens.text}>
-              Show Curated Posts
+            <Text fontSize={11} fontWeight="800" color={showCurated ? '#7E22CE' : '#4B5563'}>
+              Curated
             </Text>
-            <View style={styles.countBadge}>
-              <Text fontSize={10} fontWeight="800" color="#4B5563">
-                {counts.nonPending}
-              </Text>
-            </View>
+            <Switch
+              value={showCurated}
+              onValueChange={handleToggleCurated}
+              trackColor={{ false: '#D1D5DB', true: '#7E22CE' }}
+              thumbColor="#FFFFFF"
+              accessibilityLabel="Show Curated Posts Toggle"
+              style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
+            />
           </XStack>
-          <Text fontSize={10} color={tokens.textSecondary}>
-            {showCurated
-              ? `Showing all ${counts.total} posts (${counts.pending} uncurated, ${counts.curated} curated, ${counts.queued} queued, ${counts.completed} completed)`
-              : `Showing ${counts.pending} uncurated posts`}
-          </Text>
-        </YStack>
 
-        <Switch
-          value={showCurated}
-          onValueChange={handleToggleCurated}
-          trackColor={{ false: '#D1D5DB', true: '#7E22CE' }}
-          thumbColor="#FFFFFF"
-          accessibilityLabel="Show Curated Posts Toggle"
-        />
+          {/* Queue Icon Button */}
+          <Pressable
+            onPress={onOpenQueuePage || (() => handleToggleQueueDrawer(true))}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Collab Automation Queue, ${queuedPosts.length} items queued. Tap to manage.`}
+            style={[
+              styles.queueIconButton,
+              (isAutomationQueueActive || queuedPosts.length > 0) && styles.queueIconButtonActive,
+            ]}
+          >
+            <LuLayers
+              size={18}
+              color={isAutomationQueueActive || queuedPosts.length > 0 ? '#7E22CE' : '#4B5563'}
+            />
+            {queuedPosts.length > 0 && (
+              <View style={styles.queueIconBadge}>
+                <Text fontSize={9} fontWeight="900" color="#FFFFFF">
+                  {queuedPosts.length > 99 ? '99+' : queuedPosts.length}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </XStack>
       </XStack>
 
       {/* ── Horizontal Channel Carousel ── */}
@@ -804,6 +789,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
+  },
+  queueIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    position: 'relative',
+  },
+  queueIconButtonActive: {
+    backgroundColor: '#F3E8FF',
+    borderColor: '#C084FC',
+  },
+  queueIconBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#7E22CE',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   queueStatusPill: {
     flexDirection: 'row',

@@ -131,14 +131,7 @@ export default function CollabPlannerRoute() {
       setRefreshing(false);
     }
   }, []);
-    } catch (err: any) {
-      console.error('Failed to load Collab Planner data', err);
-      Alert.alert('Error', err.message || 'Failed to load Collab Planner data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+
 
   useEffect(() => {
     loadData();
@@ -211,6 +204,7 @@ export default function CollabPlannerRoute() {
         onToggleShowCurated={setShowCurated}
         isAutomationQueueActive={isQueueActive}
         queueItems={queueItems}
+        onOpenQueuePage={() => router.push('/utilities/instagram/collab-queue' as any)}
         refreshing={refreshing}
         onRefresh={() => loadData(true)}
         onBack={handleBack}

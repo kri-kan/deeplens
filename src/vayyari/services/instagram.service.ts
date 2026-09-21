@@ -1015,6 +1015,14 @@ class InstagramService {
     return searchApiClient.get<CollabPlannerPostDto[]>(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_QUEUE);
   };
 
+  unqueueCollabPost = async (postId: string): Promise<{ success: boolean; postId: string; status: string }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_UNQUEUE, { postId });
+  };
+
+  clearCollabQueue = async (): Promise<{ success: boolean; unqueuedCount: number }> => {
+    return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_CLEAR_QUEUE, {});
+  };
+
   completeCollabPost = async (postId: string, collaborators: any[]): Promise<{ success: boolean; postId: string; status: string }> => {
     return searchApiClient.post(API_ROUTES.INSTAGRAM.COLLAB_PLANNER_COMPLETE, { postId, collaborators });
   };

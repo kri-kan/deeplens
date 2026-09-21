@@ -3955,6 +3955,45 @@ public class InstaController : ControllerBase
 
         return Ok(new { success = true, postId = request.PostId, status = "completed" });
     }
+
+    [HttpPost("collab-planner/unqueue")]
+    [AllowAnonymous]
+    public async Task<IActionResult> UnqueueCollabPost([FromBody] UnqueueCollabPostRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId))
+        {
+            return BadRequest(new { error = "PostId is required." });
+        }
+
+        using var conn = await _db.CreateConnectionAsync();
+        var rowsAffected = await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET collab_curation_status = 'pending',
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim() });
+
+        if (rowsAffected == 0)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        return Ok(new { success = true, postId = request.PostId, status = "pending" });
+    }
+
+    [HttpPost("collab-planner/clear-queue")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ClearCollabPlannerQueue(CancellationToken ct = default)
+    {
+        using var conn = await _db.CreateConnectionAsync();
+        var rowsAffected = await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET collab_curation_status = 'pending',
+                updated_at = NOW()
+            WHERE collab_curation_status = 'queued'");
+
+        return Ok(new { success = true, unqueuedCount = rowsAffected });
+    }
 }
 
 public class InstagramCommentDto
@@ -4401,6 +4440,12 @@ public class CompleteCollabPostRequest
 
     [JsonPropertyName("collaborators")]
     public List<InstagramCollaboratorDto> Collaborators { get; set; } = new();
+}
+
+public class UnqueueCollabPostRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
 }
 
 

@@ -158,6 +158,8 @@ export const API_ROUTES = {
     },
     COLLAB_PLANNER_CURATE: '/api/v1/Insta/collab-planner/curate',
     COLLAB_PLANNER_QUEUE: '/api/v1/Insta/collab-planner/queue',
+    COLLAB_PLANNER_UNQUEUE: '/api/v1/Insta/collab-planner/unqueue',
+    COLLAB_PLANNER_CLEAR_QUEUE: '/api/v1/Insta/collab-planner/clear-queue',
     COLLAB_PLANNER_COMPLETE: '/api/v1/Insta/collab-planner/complete',
   },
 

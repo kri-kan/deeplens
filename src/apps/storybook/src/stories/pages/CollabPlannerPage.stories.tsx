@@ -124,12 +124,12 @@ export const CurationModalMaxFiveAccounts: Story = {
 };
 
 /**
- * Story 7: Automation Queue Active State
- * Screen with the AVD Maestro automation queue actively processing posts.
- * Header status pill displays "Queue Active ▾" with purple pulse highlight.
+ * Story 7: Queue Icon Button Active State (Items Queued)
+ * Header bar displays the compact "Curated" toggle switch alongside the purple
+ * Queue Icon Button with an active badge counter (`{queuedPosts.length}`).
  */
 export const AutomationQueueActiveState: Story = {
-  name: '7. Automation Queue Active State',
+  name: '7. Queue Icon Button Active (Items Queued)',
   args: {
     activeChannelId: 'vayyari_fashions',
     showCurated: true,
@@ -163,12 +163,12 @@ export const EmptyStateAllCaughtUp: Story = {
 };
 
 /**
- * Story 9: Interactive Collab Automation Queue Drawer Open
- * Slide-up drawer displaying queued posts, thumbnails, owner handles,
- * and target collaborator account badges ready for AVD Maestro automation.
+ * Story 9: Interactive Collab Automation Queue Drawer / Quick Inspection
+ * Fallback slide-up drawer displaying queued posts, thumbnails, owner handles,
+ * and target collaborator account badges.
  */
 export const CollabQueueDrawerOpen: Story = {
-  name: '9. Collab Automation Queue Drawer Open',
+  name: '9. Collab Automation Queue Drawer (Quick View)',
   args: {
     activeChannelId: 'vayyari_fashions',
     showCurated: false,
