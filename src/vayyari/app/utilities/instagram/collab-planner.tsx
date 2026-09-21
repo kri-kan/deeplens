@@ -21,7 +21,8 @@ export default function CollabPlannerRoute() {
   const [channels, setChannels] = useState<TargetChannelOption[]>([]);
   const [accounts, setAccounts] = useState<TargetCollabAccount[]>([]);
   const [posts, setPosts] = useState<CollabPostItem[]>([]);
-  const [activeChannelId, setActiveChannelId] = useState<string>('all');
+  const [queueItems, setQueueItems] = useState<CollabPostItem[]>([]);
+  const [activeChannelId, setActiveChannelId] = useState<string>('vayyari_fashions');
   const [showCurated, setShowCurated] = useState<boolean>(false);
   const [isQueueActive, setIsQueueActive] = useState<boolean>(false);
 
@@ -52,21 +53,14 @@ export default function CollabPlannerRoute() {
         return undefined;
       };
 
-      const mappedChannels: TargetChannelOption[] = [
-        {
-          id: 'all',
-          username: 'all_channels',
-          displayName: 'All Channels',
-          channelType: 'focus',
-        },
-        ...dbChannels.map((ch) => ({
-          id: ch.username,
-          username: ch.username,
-          displayName: ch.displayName || ch.username,
-          channelType: ch.channelType || 'focus',
-          avatarUri: resolveProfilePic(ch.profilePicUrl, ch.profilePicStoragePath || ch.storagePath),
-        })),
-      ];
+      // Exclude 'All Channels' - show only dedicated business channels directly
+      const mappedChannels: TargetChannelOption[] = dbChannels.map((ch) => ({
+        id: ch.username,
+        username: ch.username,
+        displayName: ch.displayName || ch.username,
+        channelType: ch.channelType || 'focus',
+        avatarUri: resolveProfilePic(ch.profilePicUrl, ch.profilePicStoragePath || ch.storagePath),
+      }));
 
       const mappedAccounts: TargetCollabAccount[] = dbChannels.map((ch) => ({
         id: ch.username,
@@ -79,13 +73,20 @@ export default function CollabPlannerRoute() {
       setChannels(mappedChannels);
       setAccounts(mappedAccounts);
 
+      // Default active channel to primary business account if current not set
+      if (mappedChannels.length > 0) {
+        setActiveChannelId((prev) =>
+          prev && mappedChannels.some((c) => c.id === prev) ? prev : mappedChannels[0].id
+        );
+      }
+
       // 2. Fetch posts across all owned business accounts
       const dbPosts: CollabPlannerPostDto[] = await instagramService.getCollabPosts({
         includeCurated: true,
         take: 150,
       });
 
-      const mappedPosts: CollabPostItem[] = dbPosts.map((p) => {
+      const mapPost = (p: CollabPlannerPostDto): CollabPostItem => {
         const mediaUri = getMediaUri(p, 'medium') || p.thumbnailUrl || p.videoUrl || '';
         return {
           id: p.id,
@@ -108,17 +109,28 @@ export default function CollabPlannerRoute() {
               ? 'curated'
               : (p.collabCurationStatus as any) || 'pending',
         };
-      });
+      };
 
+      const mappedPosts: CollabPostItem[] = dbPosts.map(mapPost);
       setPosts(mappedPosts);
 
-      // 3. Check queue count
+      // 3. Check automation queue items
       try {
-        const queueItems = await instagramService.getCollabQueue();
-        setIsQueueActive(queueItems.length > 0);
+        const rawQueue = await instagramService.getCollabQueue();
+        const mappedQueue = rawQueue.map(mapPost);
+        setQueueItems(mappedQueue);
+        setIsQueueActive(mappedQueue.length > 0);
       } catch {
-        // queue count check is non-fatal
+        // queue check non-fatal, fallback to queued items in posts list
       }
+    } catch (err: any) {
+      console.error('Failed to load Collab Planner data', err);
+      Alert.alert('Error', err.message || 'Failed to load Collab Planner data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
     } catch (err: any) {
       console.error('Failed to load Collab Planner data', err);
       Alert.alert('Error', err.message || 'Failed to load Collab Planner data');
@@ -198,6 +210,9 @@ export default function CollabPlannerRoute() {
         showCurated={showCurated}
         onToggleShowCurated={setShowCurated}
         isAutomationQueueActive={isQueueActive}
+        queueItems={queueItems}
+        refreshing={refreshing}
+        onRefresh={() => loadData(true)}
         onBack={handleBack}
         onMarkCurated={handleMarkCurated}
         onQueueAutomation={handleQueueAutomation}

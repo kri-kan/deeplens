@@ -32,6 +32,7 @@ import {
   CollabCurationModal,
   CollabPostItem,
 } from '../organisms/CollabCurationModal';
+import { CollabQueueDrawer } from '../organisms/CollabQueueDrawer/CollabQueueDrawer';
 
 export const DEFAULT_COLLAB_ACCOUNTS: TargetCollabAccount[] = [
   {
@@ -96,21 +97,13 @@ export const DEFAULT_COLLAB_ACCOUNTS: TargetCollabAccount[] = [
   },
 ];
 
-export const DEFAULT_COLLAB_CHANNELS: TargetChannelOption[] = [
-  {
-    id: 'all',
-    username: 'all_channels',
-    displayName: 'All Channels',
-    channelType: 'focus',
-  },
-  ...DEFAULT_COLLAB_ACCOUNTS.map((acc) => ({
-    id: acc.username,
-    username: acc.username,
-    displayName: acc.displayName || acc.username,
-    channelType: acc.channelType || 'focus',
-    avatarUri: acc.avatarUri,
-  })),
-];
+export const DEFAULT_COLLAB_CHANNELS: TargetChannelOption[] = DEFAULT_COLLAB_ACCOUNTS.map((acc) => ({
+  id: acc.username,
+  username: acc.username,
+  displayName: acc.displayName || acc.username,
+  channelType: acc.channelType || 'focus',
+  avatarUri: acc.avatarUri,
+}));
 
 export const DEFAULT_COLLAB_POSTS: CollabPostItem[] = [
   {
@@ -302,6 +295,9 @@ export interface AdminCollabPlannerPageProps {
   curationModalOpen?: boolean;
   initialModalSelectedAccountIds?: string[];
   isAutomationQueueActive?: boolean;
+  queueDrawerOpen?: boolean;
+  onToggleQueueDrawer?: (open: boolean) => void;
+  queueItems?: CollabPostItem[];
   loading?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
@@ -324,6 +320,9 @@ export function AdminCollabPlannerPage({
   curationModalOpen: controlledModalOpen,
   initialModalSelectedAccountIds,
   isAutomationQueueActive = false,
+  queueDrawerOpen: controlledQueueDrawerOpen,
+  onToggleQueueDrawer,
+  queueItems: propQueueItems,
   loading = false,
   refreshing = false,
   onRefresh,
@@ -335,8 +334,9 @@ export function AdminCollabPlannerPage({
 }: AdminCollabPlannerPageProps) {
   const { tokens } = useTheme();
 
-  // Internal Channel State — default to 'all' so curators immediately see posts across channels
-  const [internalChannelId, setInternalChannelId] = useState<string>('all');
+  // Internal Channel State — defaults to first business channel (@vayyari_fashions)
+  const defaultInitialChannel = channels[0]?.id || channels[0]?.username || 'vayyari_fashions';
+  const [internalChannelId, setInternalChannelId] = useState<string>(defaultInitialChannel);
   const activeChannelId =
     controlledChannelId !== undefined ? controlledChannelId : internalChannelId;
 
@@ -344,6 +344,13 @@ export function AdminCollabPlannerPage({
     setInternalChannelId(chId);
     onSelectChannel?.(chId);
   };
+
+  // Keep internalChannelId valid if channels change
+  useEffect(() => {
+    if (channels.length > 0 && !channels.some((c) => c.id === internalChannelId || c.username === internalChannelId)) {
+      setInternalChannelId(channels[0].id || channels[0].username);
+    }
+  }, [channels]);
 
   // Internal Show Curated Toggle State
   const [internalShowCurated, setInternalShowCurated] = useState<boolean>(false);
@@ -370,6 +377,16 @@ export function AdminCollabPlannerPage({
     controlledModalOpen !== undefined ? controlledModalOpen : internalModalOpen;
   const activePost =
     controlledSelectedPost !== undefined ? controlledSelectedPost : internalSelectedPost;
+
+  // Queue Drawer State
+  const [internalQueueDrawerOpen, setInternalQueueDrawerOpen] = useState<boolean>(false);
+  const isQueueDrawerOpen =
+    controlledQueueDrawerOpen !== undefined ? controlledQueueDrawerOpen : internalQueueDrawerOpen;
+
+  const handleToggleQueueDrawer = (open: boolean) => {
+    setInternalQueueDrawerOpen(open);
+    onToggleQueueDrawer?.(open);
+  };
 
   const handleOpenModal = (post: CollabPostItem) => {
     setInternalSelectedPost(post);
@@ -422,17 +439,19 @@ export function AdminCollabPlannerPage({
   const isQueued = (status?: string) => status === 'queued';
   const isCompleted = (status?: string) => status === 'completed';
 
-  // Filter posts by active channel and curation toggle
+  // Queued posts for automation queue drawer
+  const queuedPosts = useMemo(() => {
+    if (propQueueItems && propQueueItems.length > 0) return propQueueItems;
+    return postsList.filter((p) => isQueued(p.curationStatus));
+  }, [propQueueItems, postsList]);
+
+  // Filter posts strictly by the active business channel
   const channelFilteredPosts = useMemo(() => {
+    const target = (activeChannelId || '').toLowerCase();
     return postsList.filter((p) => {
-      if (activeChannelId === 'all' || !activeChannelId) return true;
-      const ch = channels.find(
-        (c) => c.id === activeChannelId || c.username === activeChannelId
-      );
-      const targetUser = ch?.username || activeChannelId;
-      return p.ownerUsername.toLowerCase() === targetUser.toLowerCase();
+      return p.ownerUsername?.toLowerCase() === target;
     });
-  }, [postsList, activeChannelId, channels]);
+  }, [postsList, activeChannelId]);
 
   const visiblePosts = useMemo(() => {
     if (showCurated) {
@@ -486,32 +505,37 @@ export function AdminCollabPlannerPage({
           </YStack>
         </XStack>
 
-        {/* Automation Queue Status Pill */}
-        <View
+        {/* Automation Queue Status Pill (Pressable -> Opens CollabQueueDrawer) */}
+        <Pressable
+          onPress={() => handleToggleQueueDrawer(true)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Collab Automation Queue, ${queuedPosts.length} items queued. Tap to view.`}
           style={[
             styles.queueStatusPill,
             {
-              backgroundColor: isAutomationQueueActive || counts.queued > 0 ? '#F3E8FF' : '#F3F4F6',
-              borderColor: isAutomationQueueActive || counts.queued > 0 ? '#C084FC' : '#E5E7EB',
+              backgroundColor: isAutomationQueueActive || queuedPosts.length > 0 ? '#F3E8FF' : '#F3F4F6',
+              borderColor: isAutomationQueueActive || queuedPosts.length > 0 ? '#C084FC' : '#E5E7EB',
+              cursor: 'pointer',
             },
           ]}
         >
           <LuSparkles
             size={12}
-            color={isAutomationQueueActive || counts.queued > 0 ? '#7E22CE' : '#6B7280'}
+            color={isAutomationQueueActive || queuedPosts.length > 0 ? '#7E22CE' : '#6B7280'}
           />
           <Text
             fontSize={11}
             fontWeight="800"
-            color={isAutomationQueueActive || counts.queued > 0 ? '#7E22CE' : '#6B7280'}
+            color={isAutomationQueueActive || queuedPosts.length > 0 ? '#7E22CE' : '#6B7280'}
           >
             {isAutomationQueueActive
-              ? 'Queue Active'
-              : counts.queued > 0
-              ? `${counts.queued} Queued`
-              : 'Idle Queue'}
+              ? 'Queue Active ▾'
+              : queuedPosts.length > 0
+              ? `${queuedPosts.length} Queued ▾`
+              : 'Queue (0) ▾'}
           </Text>
-        </View>
+        </Pressable>
       </XStack>
 
       {/* ── Subheader with "Show Curated Posts" Toggle Switch ── */}
@@ -764,6 +788,14 @@ export function AdminCollabPlannerPage({
         onClose={handleCloseModal}
         onMarkCurated={handleMarkCurated}
         onQueueAutomation={handleQueueAutomation}
+      />
+
+      {/* ── Collab Automation Queue Drawer ── */}
+      <CollabQueueDrawer
+        visible={isQueueDrawerOpen}
+        onClose={() => handleToggleQueueDrawer(false)}
+        queueItems={queuedPosts}
+        onSelectPost={handleOpenModal}
       />
     </YStack>
   );

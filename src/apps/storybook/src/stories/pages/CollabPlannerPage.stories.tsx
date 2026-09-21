@@ -18,9 +18,10 @@ const meta: Meta<any> = {
     channels: DEFAULT_COLLAB_CHANNELS,
     accounts: DEFAULT_COLLAB_ACCOUNTS,
     posts: DEFAULT_COLLAB_POSTS,
-    activeChannelId: 'all',
+    activeChannelId: 'vayyari_fashions',
     showCurated: false,
     curationModalOpen: false,
+    queueDrawerOpen: false,
   },
   argTypes: {
     ...THEME_ARG_TYPES,
@@ -31,26 +32,26 @@ export default meta;
 type Story = StoryObj;
 
 /**
- * Story 1: Default (All Channels, Uncurated Posts Only)
- * Clean initial view showing pending posts across all brand accounts awaiting collab curation.
+ * Story 1: Default (Primary Business Account @vayyari_fashions, Uncurated Posts Only)
+ * Clean initial view showing pending posts awaiting collab curation for primary brand.
  */
-export const DefaultUncuratedAllChannels: Story = {
-  name: '1. Default: Uncurated Posts Across All Channels',
+export const DefaultUncuratedVayyariFashions: Story = {
+  name: '1. Default: Uncurated Posts (@vayyari_fashions)',
   args: {
-    activeChannelId: 'all',
+    activeChannelId: 'vayyari_fashions',
     showCurated: false,
     curationModalOpen: false,
   },
 };
 
 /**
- * Story 2: Channel Filtered (@vayyari_fashions only)
- * Filtered to a specific channel with real brand posts.
+ * Story 2: Channel Filtered (@theblouseedition)
+ * Filtered to dedicated bridal blouse channel with real brand posts.
  */
-export const ChannelFilteredVayyariFashions: Story = {
-  name: '2. Channel Filtered (@vayyari_fashions)',
+export const ChannelFilteredTheBlouseEdition: Story = {
+  name: '2. Channel Filtered (@theblouseedition)',
   args: {
-    activeChannelId: 'vayyari_fashions',
+    activeChannelId: 'theblouseedition',
     showCurated: false,
     curationModalOpen: false,
   },
@@ -64,7 +65,7 @@ export const ChannelFilteredVayyariFashions: Story = {
 export const ShowAllToggleActive: Story = {
   name: '3. Show All Toggle Active (Curated, Queued & Completed)',
   args: {
-    activeChannelId: 'all',
+    activeChannelId: 'vayyari_fashions',
     showCurated: true,
     curationModalOpen: false,
   },
@@ -125,12 +126,12 @@ export const CurationModalMaxFiveAccounts: Story = {
 /**
  * Story 7: Automation Queue Active State
  * Screen with the AVD Maestro automation queue actively processing posts.
- * Header status pill displays "Queue Active" with purple pulse highlight.
+ * Header status pill displays "Queue Active ▾" with purple pulse highlight.
  */
 export const AutomationQueueActiveState: Story = {
   name: '7. Automation Queue Active State',
   args: {
-    activeChannelId: 'all',
+    activeChannelId: 'vayyari_fashions',
     showCurated: true,
     isAutomationQueueActive: true,
     curationModalOpen: false,
@@ -158,5 +159,20 @@ export const EmptyStateAllCaughtUp: Story = {
       },
     ],
     curationModalOpen: false,
+  },
+};
+
+/**
+ * Story 9: Interactive Collab Automation Queue Drawer Open
+ * Slide-up drawer displaying queued posts, thumbnails, owner handles,
+ * and target collaborator account badges ready for AVD Maestro automation.
+ */
+export const CollabQueueDrawerOpen: Story = {
+  name: '9. Collab Automation Queue Drawer Open',
+  args: {
+    activeChannelId: 'vayyari_fashions',
+    showCurated: false,
+    queueDrawerOpen: true,
+    isAutomationQueueActive: true,
   },
 };
