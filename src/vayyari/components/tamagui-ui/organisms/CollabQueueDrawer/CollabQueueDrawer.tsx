@@ -174,6 +174,7 @@ export function CollabQueueDrawer({
                                 const isAccepted = phase === 'accepted';
                                 const isAlready = phase === 'already_collaborating';
                                 const isFailed = phase === 'failed';
+                                const isCantInvite = phase === 'cant_invite';
 
                                 let bg = chipColor + '15';
                                 let border = chipColor + '40';
@@ -199,6 +200,12 @@ export function CollabQueueDrawer({
                                   textColor = '#B91C1C';
                                   icon = '⚠';
                                   label = 'Failed';
+                                } else if (isCantInvite) {
+                                  bg = '#F3F4F6';
+                                  border = '#9CA3AF';
+                                  textColor = '#4B5563';
+                                  icon = '🚫';
+                                  label = 'Cannot Invite (Boosted Ad)';
                                 }
 
                                 return (

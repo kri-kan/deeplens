@@ -149,8 +149,22 @@ def open_post_tagging(device, creator, shortcode):
 
     tap(device, edit_bounds["cx"], edit_bounds["cy"], delay=2.5)
 
-    # Tap "Tag people and collaborators"
+    # Check if Instagram blocked edit due to boosted post / active ad
     xml_str = get_ui_dump(device)
+    if is_boosted_ad_alert(xml_str):
+        print("[!] Detected 'Unable to edit post' alert (post has a related ad/boost).", file=sys.stderr)
+        dismiss_boosted_ad_alert(device, xml_str)
+        existing_collabs = extract_collabs_from_post_view(device)
+        return {
+            "boosted": True,
+            "reason": "boosted_ad_cannot_edit",
+            "already_active": existing_collabs,
+            "cant_invite": [],
+            "removed": [],
+            "newly_invited": []
+        }
+
+    # Tap "Tag people and collaborators"
     tag_bounds = None
     try:
         root = ET.fromstring(xml_str)
@@ -168,6 +182,85 @@ def open_post_tagging(device, creator, shortcode):
 
     tap(device, tag_bounds["cx"], tag_bounds["cy"], delay=2.5)
     print(f"[✓] Landed on 'Tag people and collaborators' screen", file=sys.stderr)
+    return None
+
+
+def is_boosted_ad_alert(xml_str):
+    if not xml_str:
+        return False
+    lower = xml_str.lower()
+    return (
+        "unable to edit post" in lower
+        or "posts that have a related ad" in lower
+        or ("related ad" in lower and "cannot be edited" in lower)
+        or ("ad" in lower and "cannot edit" in lower)
+    )
+
+
+def dismiss_boosted_ad_alert(device, xml_str):
+    print("[*] Dismissing 'Unable to edit post' alert dialog...", file=sys.stderr)
+    try:
+        root = ET.fromstring(xml_str)
+        for node in root.iter("node"):
+            text = (node.attrib.get("text") or "").strip().upper()
+            res_id = node.attrib.get("resource-id") or ""
+            if text in ["OK", "DISMISS", "CLOSE", "GOT IT"] or "primary_button" in res_id or "button1" in res_id:
+                b = parse_bounds(node.attrib.get("bounds"))
+                if b:
+                    tap(device, b["cx"], b["cy"], delay=1.5)
+                    return True
+    except Exception:
+        pass
+    keyevent(device, 4, delay=1.5)
+    return True
+
+
+def extract_collabs_from_post_view(device):
+    """
+    On the post view, inspect existing tagged people / collaborators.
+    Attempts to tap 'View tagged people' indicator to read the full bottom sheet.
+    """
+    print("[*] Extracting existing collaborators from post view...", file=sys.stderr)
+    collabs = []
+    xml_str = get_ui_dump(device)
+    tag_icon_bounds = None
+    try:
+        root = ET.fromstring(xml_str)
+        for node in root.iter("node"):
+            desc = node.attrib.get("content-desc") or ""
+            res_id = node.attrib.get("resource-id") or ""
+            if "View tagged people" in desc or "indicator_icon_view" in res_id:
+                tag_icon_bounds = parse_bounds(node.attrib.get("bounds"))
+                break
+    except Exception:
+        pass
+
+    if tag_icon_bounds:
+        tap(device, tag_icon_bounds["cx"], tag_icon_bounds["cy"], delay=2.0)
+        sheet_xml = get_ui_dump(device)
+        try:
+            sheet_root = ET.fromstring(sheet_xml)
+            for node in sheet_root.iter("node"):
+                res_id = node.attrib.get("resource-id") or ""
+                text = (node.attrib.get("text") or "").strip()
+                if text and ("row_user_primary_name" in res_id or "row_user_name" in res_id or "username" in res_id):
+                    handle = text.lstrip('@')
+                    if handle and handle not in collabs:
+                        collabs.append(handle)
+                if not text:
+                    for child in node.iter("node"):
+                        c_text = (child.attrib.get("text") or "").strip()
+                        c_res = child.attrib.get("resource-id") or ""
+                        if c_text and ("primary_name" in c_res or "username" in c_res):
+                            handle = c_text.lstrip('@')
+                            if handle and handle not in collabs:
+                                collabs.append(handle)
+        except Exception:
+            pass
+        # Close bottom sheet
+        keyevent(device, 4, delay=1.5)
+
+    return collabs
 
 
 def inspect_and_reconcile_tagging_screen(device, target_accounts, dry_run=False):
@@ -362,15 +455,37 @@ def main():
     parser.add_argument("--targets", required=True, help="Comma-separated target collaborator handles")
     parser.add_argument("--device", default="emulator-5554", help="ADB device ID")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without touching device")
+    parser.add_argument("--simulate-boosted", action="store_true", help="Simulate boosted ad unable to edit alert for testing")
 
     args = parser.parse_args()
     targets = [x.strip() for x in args.targets.split(",") if x.strip()]
 
+    if args.simulate_boosted:
+        print("[*] [SIMULATION] Simulating boosted ad unable to edit alert", file=sys.stderr)
+        summary = {
+            "boosted": True,
+            "reason": "boosted_ad_cannot_edit",
+            "already_active": [],
+            "cant_invite": targets,
+            "removed": [],
+            "newly_invited": []
+        }
+        print(json.dumps(summary, indent=2))
+        return
+
     if not args.dry_run:
         switch_to_creator(args.device, args.creator)
-        open_post_tagging(args.device, args.creator, args.shortcode)
+        boosted_res = open_post_tagging(args.device, args.creator, args.shortcode)
+        if boosted_res and boosted_res.get("boosted"):
+            existing = boosted_res.get("already_active", [])
+            cant_invite = [t for t in targets if t.lower() not in [c.lower() for c in existing]]
+            boosted_res["cant_invite"] = cant_invite
+            print(json.dumps(boosted_res, indent=2))
+            return
 
     summary = inspect_and_reconcile_tagging_screen(args.device, targets, dry_run=args.dry_run)
+    summary["boosted"] = False
+    summary["cant_invite"] = []
     print(json.dumps(summary, indent=2))
 
 

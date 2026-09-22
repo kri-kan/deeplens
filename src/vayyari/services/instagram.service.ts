@@ -1194,7 +1194,7 @@ export interface CollabPlannerChannelDto {
 
 export interface CollabChannelStatusDto {
   username: string;
-  phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed';
+  phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed' | 'cant_invite';
   suggestedAt?: string | null;
   invitedAt?: string | null;
   acceptedAt?: string | null;
