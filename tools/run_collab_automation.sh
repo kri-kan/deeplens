@@ -546,85 +546,82 @@ execute_post_collab_pipeline() {
   echo -e "${MAGENTA} Strategy: ${STRATEGY^^} | Mode: ${mode}${NC}"
   echo -e "${MAGENTA}====================================================================${NC}"
 
-  # Step 1: Detect existing collaborators on this post (including manual human collabs)
-  local existing_detected=()
-  while IFS= read -r ex_handle; do
-    if [[ -n "$ex_handle" ]]; then
-      existing_detected+=("$ex_handle")
-    fi
-  done < <(inspect_existing_collaborators "$post_id" "$shortcode" "$raw_collabs_json" "$creator")
+  # Step 1 & 2: Active Reconciliation & Unwanted Collaborator Removal
+  local -a targets_csv
+  targets_csv=$(IFS=,; echo "${targets[*]}")
 
-  # Step 2: Classify target accounts into already_active vs pending_invites
+  local reconcile_json=""
+  local reconcile_flags=""
+  if [[ "$DRY_RUN" == "true" ]]; then
+    reconcile_flags="--dry-run"
+  fi
+
+  echo -e "${BLUE}==> [Phase 1: Reconcile & Batch Invite] Inspecting on-screen collaborators & purging unwanted tags...${NC}"
+  local reconcile_cmd=(python3 "$WORKSPACE_ROOT/tools/reconcile_collabs.py" --creator "$creator" --shortcode "$shortcode" --targets "$targets_csv" --device "$DEVICE" $reconcile_flags)
+
+  local -a newly_invited=()
   local -a already_active=()
-  local -a pending_invites=()
+  local -a removed_accounts=()
 
-  for target in "${targets[@]}"; do
-    local is_active=false
-    for ex in "${existing_detected[@]}"; do
-      if [[ "${ex,,}" == "${target,,}" ]]; then
-        is_active=true
-        break
-      fi
+  if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
+    reconcile_json=$("${reconcile_cmd[@]}" 2>&1 | tee /dev/stderr | grep -E '^\{' -A 100 || true)
+
+    if [[ -n "$reconcile_json" ]]; then
+      while IFS= read -r rem; do
+        [[ -n "$rem" ]] && removed_accounts+=("$rem")
+      done < <(echo "$reconcile_json" | jq -r '.removed[]? // empty' 2>/dev/null || true)
+
+      while IFS= read -r act; do
+        [[ -n "$act" ]] && already_active+=("$act")
+      done < <(echo "$reconcile_json" | jq -r '.already_active[]? // empty' 2>/dev/null || true)
+
+      while IFS= read -r inv; do
+        [[ -n "$inv" ]] && newly_invited+=("$inv")
+      done < <(echo "$reconcile_json" | jq -r '.newly_invited[]? // empty' 2>/dev/null || true)
+    fi
+
+    # Report removed unwanted accounts
+    if [[ ${#removed_accounts[@]} -gt 0 ]]; then
+      echo -e "${RED}✓ Purged ${#removed_accounts[@]} unwanted / external collaborator(s): ${removed_accounts[*]}${NC}"
+    fi
+
+    # Record phase for already active accounts
+    for act_acc in "${already_active[@]}"; do
+      echo -e "${CYAN}ℹ Target account @${act_acc} is ALREADY established on post ${shortcode}.${NC}"
+      api_update_channel_phase "$post_id" "$act_acc" "already_collaborating"
     done
 
-    if [[ "$is_active" == "true" ]]; then
-      already_active+=("$target")
-      echo -e "${CYAN}ℹ Target account @${target} is ALREADY collaborating on post ${shortcode}. Skipping invite/accept.${NC}"
-      api_update_channel_phase "$post_id" "$target" "already_collaborating"
-    else
-      pending_invites+=("$target")
-    fi
-  done
+    # Record phase for newly invited accounts
+    for inv_acc in "${newly_invited[@]}"; do
+      echo -e "${GREEN}✓ Successfully invited @${inv_acc} on post ${shortcode}.${NC}"
+      api_update_channel_phase "$post_id" "$inv_acc" "invited"
+    done
+  fi
 
   local -a successful_collabs=("${already_active[@]}")
 
-  if [[ ${#pending_invites[@]} -eq 0 ]]; then
-    echo -e "${GREEN}✓ All intended collaboration accounts are already established for post ${shortcode}!${NC}"
+  if [[ ${#newly_invited[@]} -eq 0 ]]; then
+    echo -e "${GREEN}✓ All intended collaboration accounts are active on post ${shortcode}! Zero pending invites.${NC}"
+    if [[ -n "$post_id" ]]; then
+      local all_established_json
+      all_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
+      api_sync_collaborators "$post_id" "$all_established_json" "instagram_reconcile"
+    fi
     return 0
   fi
 
-  echo -e "${BLUE}Pending accounts requiring automation (${#pending_invites[@]}): ${pending_invites[*]}${NC}"
+  echo -e "${BLUE}Pending collaborator accounts requiring acceptance (${#newly_invited[@]}): ${newly_invited[*]}${NC}"
 
-  # Step 3: Phase 1 (Simultaneous Batch Invite on Creator Account)
-  local invite_succeeded=false
-
-  if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
-    if [[ "$STRATEGY" == "batch" ]]; then
-      if run_maestro_batch_invite "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$shortcode" "${pending_invites[@]}"; then
-        invite_succeeded=true
-        # Update phase for each successfully invited channel
-        for inv_acc in "${pending_invites[@]}"; do
-          api_update_channel_phase "$post_id" "$inv_acc" "invited"
-        done
-      else
-        echo -e "${RED}Batch invite failed for post ${shortcode}.${NC}"
-        for inv_acc in "${pending_invites[@]}"; do
-          api_update_channel_phase "$post_id" "$inv_acc" "failed" "Batch invite flow failed"
-        done
-      fi
-    else
-      # Pairwise invite fallback
-      invite_succeeded=true
-      for inv_acc in "${pending_invites[@]}"; do
-        if run_maestro_flow "$MAESTRO_DIR/instagram_collab_invite.yaml" "$creator" "$inv_acc" "$shortcode" "Phase 1 (Invite)"; then
-          api_update_channel_phase "$post_id" "$inv_acc" "invited"
-        else
-          api_update_channel_phase "$post_id" "$inv_acc" "failed" "Pairwise invite flow failed"
-        fi
-      done
-    fi
-
-    if [[ "$mode" == "full" && "$invite_succeeded" == "true" ]]; then
-      echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before starting collaborator acceptance cycle...${NC}"
-      sleep "$SETTLE_DELAY"
-    fi
+  if [[ "$mode" == "full" && ${#newly_invited[@]} -gt 0 ]]; then
+    echo -e "${YELLOW}Settling for ${SETTLE_DELAY}s before starting collaborator acceptance cycle...${NC}"
+    sleep "$SETTLE_DELAY"
   fi
 
   # Step 4: Phase 2 (Sequential Streamlined Acceptance)
-  if [[ ("$mode" == "full" && "$invite_succeeded" == "true") || "$mode" == "accept_only" ]]; then
+  if [[ "$mode" == "full" || "$mode" == "accept_only" ]]; then
     local c_idx=1
-    local total_c=${#pending_invites[@]}
-    for collab in "${pending_invites[@]}"; do
+    local total_c=${#newly_invited[@]}
+    for collab in "${newly_invited[@]}"; do
       echo -e "${CYAN}--------------------------------------------------------------------${NC}"
       echo -e "${CYAN} [Phase 2: Accept ($c_idx/$total_c)] Switching account to @${collab}...${NC}"
       echo -e "${CYAN}--------------------------------------------------------------------${NC}"

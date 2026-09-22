@@ -118,6 +118,12 @@ appId: com.instagram.android
       - runFlow:
           when:
             true: ${output.review_detected == 'false'}
+            visible: "Stop sharing"
+          commands:
+            - evalScript: ${output.review_detected = 'already_accepted'}
+      - runFlow:
+          when:
+            true: ${output.review_detected == 'false'}
           commands:
             - evalScript: |
                 var start = new Date().getTime();
@@ -172,6 +178,12 @@ appId: com.instagram.android
           commands:
             - tapOn: "Review invite"
             - evalScript: ${output.review_detected = 'menu'}
+      - runFlow:
+          when:
+            visible: "Stop sharing"
+          commands:
+            - evalScript: ${output.review_detected = 'already_accepted'}
+            - evalScript: console.log("Already active collaborator (Stop sharing visible in menu)");
 
 # Step 6: Fallback via Activity / Notifications Feed if post menu did not have invite
 - runFlow:
@@ -255,3 +267,7 @@ appId: com.instagram.android
       true: ${output.review_detected == 'already_accepted' || output.accepted == 'true'}
     commands:
       - evalScript: console.log("Collab successfully established for " + COLLAB_HANDLE);
+
+# Strict Terminal Assertion: Ensure collaboration was genuinely reviewed/accepted
+- assertTrue: ${output.review_detected == 'already_accepted' || output.accepted == 'true'}
+

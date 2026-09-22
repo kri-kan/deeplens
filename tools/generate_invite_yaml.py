@@ -151,13 +151,11 @@ header = """appId: com.instagram.android
 
 def generate_collaborator_step(idx):
     if idx == 1:
-        cond = "${output.target_collab_1 !== ''}"
-        target_expr = "${output.target_collab_1}"
+        cond = "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') || (typeof COLLAB_HANDLE !== 'undefined' && COLLAB_HANDLE !== '')}"
+        target_expr = "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
         pre = """# ==============================================================================
 # Step 4: Add Collaborator 1 (or single COLLAB_HANDLE)
 # ==============================================================================
-- evalScript: |
-    output.target_collab_1 = (typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : (typeof COLLAB_HANDLE !== 'undefined' ? COLLAB_HANDLE : '');
 """
     else:
         cond = f"${{typeof COLLAB_{idx} !== 'undefined' && COLLAB_{idx} !== ''}}"
@@ -213,15 +211,17 @@ def generate_collaborator_step(idx):
       - extendedWaitUntil:
           visible: "{target_expr}"
           timeout: 8000
-      # Tap on search result
+      # Tap on search result (strictly requiring exact username match)
       - evalScript: ${{output.user_selected = 'false'}}
       - runFlow:
           when:
             visible:
               id: "com.instagram.android:id/row_search_user_username"
+              text: "{target_expr}"
           commands:
             - tapOn:
                 id: "com.instagram.android:id/row_search_user_username"
+                text: "{target_expr}"
             - evalScript: ${{output.user_selected = 'true'}}
       - runFlow:
           when:

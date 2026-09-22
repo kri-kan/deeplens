@@ -147,11 +147,9 @@ appId: com.instagram.android
 # ==============================================================================
 # Step 4: Add Collaborator 1 (or single COLLAB_HANDLE)
 # ==============================================================================
-- evalScript: |
-    output.target_collab_1 = (typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : (typeof COLLAB_HANDLE !== 'undefined' ? COLLAB_HANDLE : '');
 - runFlow:
     when:
-      true: ${output.target_collab_1 !== ''}
+      true: ${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') || (typeof COLLAB_HANDLE !== 'undefined' && COLLAB_HANDLE !== '')}
     commands:
       - evalScript: ${output.invite_collab_tapped = 'false'}
       - runFlow:
@@ -188,30 +186,32 @@ appId: com.instagram.android
           timeout: 6000
       - tapOn:
           id: "com.instagram.android:id/search_edit_text"
-      - inputText: "${output.target_collab_1}"
+      - inputText: "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
       - evalScript: |
           var start = new Date().getTime();
           while (new Date().getTime() < start + 2500);
       - extendedWaitUntil:
-          visible: "${output.target_collab_1}"
+          visible: "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
           timeout: 8000
-      # Tap on search result
+      # Tap on search result (strictly requiring exact username match)
       - evalScript: ${output.user_selected = 'false'}
       - runFlow:
           when:
             visible:
               id: "com.instagram.android:id/row_search_user_username"
+              text: "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
           commands:
             - tapOn:
                 id: "com.instagram.android:id/row_search_user_username"
+                text: "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
             - evalScript: ${output.user_selected = 'true'}
       - runFlow:
           when:
             true: ${output.user_selected == 'false'}
-            visible: "${output.target_collab_1}"
+            visible: "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
           commands:
             - tapOn:
-                text: "${output.target_collab_1}"
+                text: "${(typeof COLLAB_1 !== 'undefined' && COLLAB_1 !== '') ? COLLAB_1 : COLLAB_HANDLE}"
             - evalScript: ${output.user_selected = 'true'}
       - evalScript: |
           var start = new Date().getTime();
@@ -286,15 +286,17 @@ appId: com.instagram.android
       - extendedWaitUntil:
           visible: "${COLLAB_2}"
           timeout: 8000
-      # Tap on search result
+      # Tap on search result (strictly requiring exact username match)
       - evalScript: ${output.user_selected = 'false'}
       - runFlow:
           when:
             visible:
               id: "com.instagram.android:id/row_search_user_username"
+              text: "${COLLAB_2}"
           commands:
             - tapOn:
                 id: "com.instagram.android:id/row_search_user_username"
+                text: "${COLLAB_2}"
             - evalScript: ${output.user_selected = 'true'}
       - runFlow:
           when:
@@ -377,15 +379,17 @@ appId: com.instagram.android
       - extendedWaitUntil:
           visible: "${COLLAB_3}"
           timeout: 8000
-      # Tap on search result
+      # Tap on search result (strictly requiring exact username match)
       - evalScript: ${output.user_selected = 'false'}
       - runFlow:
           when:
             visible:
               id: "com.instagram.android:id/row_search_user_username"
+              text: "${COLLAB_3}"
           commands:
             - tapOn:
                 id: "com.instagram.android:id/row_search_user_username"
+                text: "${COLLAB_3}"
             - evalScript: ${output.user_selected = 'true'}
       - runFlow:
           when:
@@ -468,15 +472,17 @@ appId: com.instagram.android
       - extendedWaitUntil:
           visible: "${COLLAB_4}"
           timeout: 8000
-      # Tap on search result
+      # Tap on search result (strictly requiring exact username match)
       - evalScript: ${output.user_selected = 'false'}
       - runFlow:
           when:
             visible:
               id: "com.instagram.android:id/row_search_user_username"
+              text: "${COLLAB_4}"
           commands:
             - tapOn:
                 id: "com.instagram.android:id/row_search_user_username"
+                text: "${COLLAB_4}"
             - evalScript: ${output.user_selected = 'true'}
       - runFlow:
           when:
@@ -559,15 +565,17 @@ appId: com.instagram.android
       - extendedWaitUntil:
           visible: "${COLLAB_5}"
           timeout: 8000
-      # Tap on search result
+      # Tap on search result (strictly requiring exact username match)
       - evalScript: ${output.user_selected = 'false'}
       - runFlow:
           when:
             visible:
               id: "com.instagram.android:id/row_search_user_username"
+              text: "${COLLAB_5}"
           commands:
             - tapOn:
                 id: "com.instagram.android:id/row_search_user_username"
+                text: "${COLLAB_5}"
             - evalScript: ${output.user_selected = 'true'}
       - runFlow:
           when:
