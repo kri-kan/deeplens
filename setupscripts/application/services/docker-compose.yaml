@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     volumes:
       - ${WORKER_SERVICE_HOSTING_PATH}:/app
+      - /home/krikan/.local/bin/ffmpeg:/usr/local/bin/ffmpeg:ro
     environment:
       - DOTNET_ENVIRONMENT=Development
       - Services__ReasoningApiUrl=http://reasoning-api:8002

@@ -809,6 +809,8 @@ public class WhatsAppGroupWorker : BackgroundService
                         "SELECT id FROM public.media WHERE id = @Id", new { Id = mediaId }, trans);
 
                     string? phash = null;
+                    long uploadFileSize = 0;
+                    string uploadMimeType = mediaFile.MimeType;
 
                     if (!mediaExists.HasValue)
                     {
@@ -871,16 +873,42 @@ public class WhatsAppGroupWorker : BackgroundService
                                 continue;
                             }
 
-                            await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
+                            Stream uploadStream = memStream;
+                            uploadMimeType = mediaFile.MimeType;
+                            uploadFileSize = memStream.Length;
+
+                            if (mediaType == 2) // Video: compress to Instagram-optimized H.264 MP4
+                            {
+                                var (compressed, compStream, compSize, _) = await VideoCompressorHelper.CompressVideoAsync(
+                                    memStream, _logger, crf: 22, ct: ct);
+                                if (compressed && compStream != null)
+                                {
+                                    uploadStream = compStream;
+                                    uploadMimeType = "video/mp4";
+                                    uploadFileSize = compSize;
+                                    if (targetPath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        targetPath = targetPath.Substring(0, targetPath.Length - 4) + ".mp4";
+                                        fileName = Path.GetFileName(targetPath);
+                                    }
+                                }
+                            }
+
+                            await storage.UploadToPathAsync(targetPath, uploadStream, uploadMimeType);
                         }
 
                         string newMediaUrl = $"minio://{targetPath}";
                         await conn.ExecuteAsync(
                             @"UPDATE wa.messages 
-                              SET media_url = @NewMediaUrl, updated_at = NOW() 
+                              SET media_url = @NewMediaUrl, 
+                                  media_size = @MediaSize,
+                                  media_mime_type = @MediaMimeType,
+                                  updated_at = NOW() 
                               WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
                             new { 
                                 NewMediaUrl = newMediaUrl, 
+                                MediaSize = uploadFileSize,
+                                MediaMimeType = uploadMimeType,
                                 GroupId = evt.GroupId, 
                                 OldSourceUrl = mediaFile.MediaUrl,
                                 OldFileNamePattern = $"%{fileName}"
@@ -897,7 +925,7 @@ public class WhatsAppGroupWorker : BackgroundService
 
                         const string insertMediaSql = @"
                             INSERT INTO public.media (id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, category, subcategory, phash, uploaded_at)
-                            VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, 0, @MimeType, 0, @Category, @SubCategory, @Phash, NOW())";
+                            VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, @FileSizeBytes, @MimeType, 0, @Category, @SubCategory, @Phash, NOW())";
                         
                         await conn.ExecuteAsync(insertMediaSql, new
                         {
@@ -905,7 +933,8 @@ public class WhatsAppGroupWorker : BackgroundService
                             StoragePath = targetPath,
                             MediaType = mediaType,
                             OriginalFilename = fileName,
-                            MimeType = mediaFile.MimeType,
+                            FileSizeBytes = uploadFileSize,
+                            MimeType = uploadMimeType,
                             Category = cleanCategory,
                             SubCategory = CleanBucketName(extracted.SubCategory),
                             Phash = phash
@@ -1170,6 +1199,9 @@ public class WhatsAppGroupWorker : BackgroundService
                     _logger.LogInformation("Migrating new media from {Source} to {Target}", sourcePath, targetPath);
 
                     string? phash = null;
+                    long uploadFileSize = 0;
+                    string uploadMimeType = mediaFile.MimeType;
+
                     using (var stream = await storage.GetFileAsync(sourcePath))
                     {
                         using var memStream = new MemoryStream();
@@ -1192,16 +1224,42 @@ public class WhatsAppGroupWorker : BackgroundService
                             }
                         }
 
-                        await storage.UploadToPathAsync(targetPath, memStream, mediaFile.MimeType);
+                        Stream uploadStream = memStream;
+                        uploadMimeType = mediaFile.MimeType;
+                        uploadFileSize = memStream.Length;
+
+                        if (mediaType == 2) // Video: compress to Instagram-optimized H.264 MP4
+                        {
+                            var (compressed, compStream, compSize, _) = await VideoCompressorHelper.CompressVideoAsync(
+                                memStream, _logger, crf: 22, ct: ct);
+                            if (compressed && compStream != null)
+                            {
+                                uploadStream = compStream;
+                                uploadMimeType = "video/mp4";
+                                uploadFileSize = compSize;
+                                if (targetPath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    targetPath = targetPath.Substring(0, targetPath.Length - 4) + ".mp4";
+                                    fileName = Path.GetFileName(targetPath);
+                                }
+                            }
+                        }
+
+                        await storage.UploadToPathAsync(targetPath, uploadStream, uploadMimeType);
                     }
 
                     string newMediaUrl = $"minio://{targetPath}";
                     await conn.ExecuteAsync(
                         @"UPDATE wa.messages 
-                          SET media_url = @NewMediaUrl, updated_at = NOW() 
+                          SET media_url = @NewMediaUrl, 
+                              media_size = @MediaSize,
+                              media_mime_type = @MediaMimeType,
+                              updated_at = NOW() 
                           WHERE group_id = @GroupId AND (media_url = @OldSourceUrl OR media_url LIKE @OldFileNamePattern)",
                         new { 
                             NewMediaUrl = newMediaUrl, 
+                            MediaSize = uploadFileSize,
+                            MediaMimeType = uploadMimeType,
                             GroupId = evt.GroupId, 
                             OldSourceUrl = mediaFile.MediaUrl,
                             OldFileNamePattern = $"%{fileName}"
@@ -1218,7 +1276,7 @@ public class WhatsAppGroupWorker : BackgroundService
 
                     const string insertMediaSql = @"
                         INSERT INTO public.media (id, storage_path, media_type, original_filename, file_size_bytes, mime_type, status, category, subcategory, phash, uploaded_at)
-                        VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, 0, @MimeType, 0, @Category, @SubCategory, @Phash, NOW())";
+                        VALUES (@Id, @StoragePath, @MediaType, @OriginalFilename, @FileSizeBytes, @MimeType, 0, @Category, @SubCategory, @Phash, NOW())";
                     
                     await conn.ExecuteAsync(insertMediaSql, new
                     {
@@ -1226,7 +1284,8 @@ public class WhatsAppGroupWorker : BackgroundService
                         StoragePath = targetPath,
                         MediaType = mediaType,
                         OriginalFilename = fileName,
-                        MimeType = mediaFile.MimeType,
+                        FileSizeBytes = uploadFileSize,
+                        MimeType = uploadMimeType,
                         Category = cleanCategory,
                         SubCategory = CleanBucketName(subCategory),
                         Phash = phash
