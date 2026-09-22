@@ -602,33 +602,53 @@ public class ProductService : IProductService
                     new { Ids = idArray, GroupIds = groupIds }, transaction);
             }
 
-            // 2. Fetch all media linked to these products for MinIO hard-purge
-            var mediaRows = (await db.QueryAsync<(Guid MediaId, string StoragePath)>(@"
-                SELECT m.id AS MediaId, m.storage_path AS StoragePath
+            // 2. Fetch all media linked to these products (both product & vendor_listing) for MinIO hard-purge
+            var mediaRows = (await db.QueryAsync<ProductMediaRow>(@"
+                SELECT DISTINCT m.id AS Id,
+                       COALESCE(p_ml.entity_id, vl.product_id) AS ProductId,
+                       m.storage_path AS StoragePath,
+                       m.original_filename AS OriginalFilename,
+                       m.thumbnail_s AS ThumbnailS,
+                       m.thumbnail_m AS ThumbnailM,
+                       m.thumbnail_l AS ThumbnailL,
+                       m.thumbnail_path AS ThumbnailPath,
+                       m.preview_path AS PreviewPath,
+                       m.media_type AS MediaType,
+                       COALESCE(m.file_size_bytes, 0) AS FileSize
                 FROM media m
-                JOIN media_links ml ON ml.media_id = m.id
-                WHERE ml.entity_id = ANY(@Ids) AND ml.entity_type = 'product'",
+                LEFT JOIN media_links p_ml ON p_ml.media_id = m.id AND p_ml.entity_id = ANY(@Ids) AND p_ml.entity_type = 'product'
+                LEFT JOIN media_links vl_ml ON vl_ml.media_id = m.id AND vl_ml.entity_type = 'vendor_listing'
+                LEFT JOIN vendor_listings vl ON vl.id = vl_ml.entity_id AND vl.product_id = ANY(@Ids)
+                WHERE (p_ml.entity_id IS NOT NULL OR vl.product_id IS NOT NULL)",
                 new { Ids = idArray }, transaction)).ToList();
 
             // 3. Delete files from MinIO
-            foreach (var media in mediaRows)
+            var pathsToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var m in mediaRows)
+            {
+                if (!string.IsNullOrEmpty(m.StoragePath)) pathsToDelete.Add(m.StoragePath);
+                if (!string.IsNullOrEmpty(m.ThumbnailS)) pathsToDelete.Add(m.ThumbnailS);
+                if (!string.IsNullOrEmpty(m.ThumbnailM)) pathsToDelete.Add(m.ThumbnailM);
+                if (!string.IsNullOrEmpty(m.ThumbnailL)) pathsToDelete.Add(m.ThumbnailL);
+                if (!string.IsNullOrEmpty(m.ThumbnailPath)) pathsToDelete.Add(m.ThumbnailPath);
+                if (!string.IsNullOrEmpty(m.PreviewPath)) pathsToDelete.Add(m.PreviewPath);
+            }
+
+            foreach (var path in pathsToDelete)
             {
                 if (ct.IsCancellationRequested) break;
-                if (!string.IsNullOrEmpty(media.StoragePath))
+                try
                 {
-                    try
-                    {
-                        await _storageService.DeleteFileAsync(media.StoragePath);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to delete product media from MinIO: {Path}", media.StoragePath);
-                    }
+                    await _storageService.DeleteFileAsync(path);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete product media from MinIO: {Path}", path);
                 }
             }
 
             // 4. Delete dependent/child records to prevent foreign key errors
-            var mediaIds = mediaRows.Select(m => m.MediaId).Distinct().ToArray();
+            var mediaIds = mediaRows.Select(m => m.Id).Distinct().ToArray();
             if (mediaIds.Length > 0)
             {
                 await db.ExecuteAsync(
@@ -779,9 +799,14 @@ public class ProductService : IProductService
                 var byProduct = mediaRows.GroupBy(r => r.ProductId);
                 foreach (var grp in byProduct)
                 {
-                    // Videos (media_type = 2) are always purged
-                    var videos = grp.Where(r => r.MediaType == 2).ToList();
-                    var nonVideo = grp.Where(r => r.MediaType != 2).ToList();
+                    // Videos (media_type = 2 or video extensions) are always purged
+                    bool IsVideoMedia(ProductMediaRow r) => 
+                        r.MediaType == 2 
+                        || (!string.IsNullOrEmpty(r.StoragePath) && (r.StoragePath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) || r.StoragePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)))
+                        || (!string.IsNullOrEmpty(r.OriginalFilename) && (r.OriginalFilename.EndsWith(".mov", StringComparison.OrdinalIgnoreCase) || r.OriginalFilename.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)));
+
+                    var videos = grp.Where(IsVideoMedia).ToList();
+                    var nonVideo = grp.Where(r => !IsVideoMedia(r)).ToList();
 
                     // Top-2 largest non-video images → retained
                     var retained = nonVideo
@@ -861,8 +886,8 @@ public class ProductService : IProductService
                     WHERE group_id = ANY(@GroupIds) AND deeplens_product_id IS NULL",
                     new { GroupIds = groupArray }, transaction);
 
-                var waMessages = (await db.QueryAsync<(long Id, string MessageId, string GroupId, string MediaUrl, string? MediaType, string? Content)>(@"
-                    SELECT id AS Id, message_id AS MessageId, group_id AS GroupId, media_url AS MediaUrl, media_type AS MediaType, content AS Content
+                var waMessages = (await db.QueryAsync<(long Id, string MessageId, string GroupId, string MediaUrl, string? MediaType, string? MediaMimeType, string? Content)>(@"
+                    SELECT id AS Id, message_id AS MessageId, group_id AS GroupId, media_url AS MediaUrl, media_type AS MediaType, media_mime_type AS MediaMimeType, content AS Content
                     FROM wa.messages
                     WHERE group_id = ANY(@GroupIds) AND media_url IS NOT NULL",
                     new { GroupIds = groupArray }, transaction)).ToList();
@@ -871,14 +896,22 @@ public class ProductService : IProductService
                 {
                     if (string.IsNullOrWhiteSpace(msg.MediaUrl)) continue;
 
-                    var isVideo = string.Equals(msg.MediaType, "video", StringComparison.OrdinalIgnoreCase);
+                    var isVideoExt = !string.IsNullOrEmpty(msg.MediaUrl) && (
+                        msg.MediaUrl.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+                        || msg.MediaUrl.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+                        || msg.MediaUrl.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase)
+                        || msg.MediaUrl.EndsWith(".avi", StringComparison.OrdinalIgnoreCase));
+                    var isVideoMime = !string.IsNullOrEmpty(msg.MediaMimeType) && (
+                        msg.MediaMimeType.IndexOf("video", StringComparison.OrdinalIgnoreCase) >= 0
+                        || msg.MediaMimeType.IndexOf("quicktime", StringComparison.OrdinalIgnoreCase) >= 0);
+                    var isVideo = string.Equals(msg.MediaType, "video", StringComparison.OrdinalIgnoreCase) || isVideoExt || isVideoMime;
                     var isPhoto = string.Equals(msg.MediaType, "image", StringComparison.OrdinalIgnoreCase) 
                                || string.Equals(msg.MediaType, "photo", StringComparison.OrdinalIgnoreCase)
                                || (string.IsNullOrEmpty(msg.MediaType) && !msg.MediaUrl.Contains("/stickers/") && !msg.MediaUrl.Contains("/documents/") && !msg.MediaUrl.Contains("/audios/"));
                     var isSticker = string.Equals(msg.MediaType, "sticker", StringComparison.OrdinalIgnoreCase) 
                                  || msg.MediaUrl.Contains("/stickers/");
 
-                    // Purely archive photos and videos: Stickers, documents, audio, and text messages MUST NEVER be purged
+                    // Purely archive photos and videos: Stickers, non-video documents, audio, and text messages MUST NEVER be purged
                     if (isSticker || (!isVideo && !isPhoto))
                     {
                         continue;
@@ -926,7 +959,7 @@ public class ProductService : IProductService
                 }
             }
 
-            // 6. Clean wa.messages for pruned media (clear media_url, zero out size, strip large base64 thumbnails)
+            // 6. Clean wa.messages for pruned media (clear media_url, zero out size, strip large base64 thumbnails and video payloads)
             if (waMessageIdsToClean.Count > 0)
             {
                 await db.ExecuteAsync(@"
@@ -936,7 +969,7 @@ public class ProductService : IProductService
                         content = COALESCE(NULLIF(content, ''), '[Media archived / deleted]'),
                         metadata = CASE 
                             WHEN metadata IS NOT NULL 
-                            THEN metadata - 'jpegThumbnail' - 'imageMessage' - 'videoMessage'
+                            THEN metadata - 'jpegThumbnail' - 'imageMessage' - 'videoMessage' - 'documentMessage'
                             ELSE NULL 
                         END,
                         updated_at = NOW()
