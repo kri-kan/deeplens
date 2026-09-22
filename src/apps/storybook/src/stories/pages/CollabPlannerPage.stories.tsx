@@ -176,3 +176,36 @@ export const CollabQueueDrawerOpen: Story = {
     isAutomationQueueActive: true,
   },
 };
+
+/**
+ * Story 10: Boosted Ad Post (Cannot Invite - Ad Promotion Locked)
+ * Demonstrates a post with related active Instagram ad campaign where editing is blocked.
+ * The post is gracefully marked as curated, existing collabs are captured as active,
+ * and proposed accounts display "Cannot Invite (Boosted Ad)" chips.
+ */
+export const BoostedAdPostCannotInvite: Story = {
+  name: '10. Boosted Ad Post (Ad Locked • Cannot Invite)',
+  args: {
+    activeChannelId: 'vayyari_fashions',
+    showCurated: true,
+    selectedPost: {
+      id: 'post-boosted-ad-01',
+      platformVideoId: '1800192837461',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&q=80',
+      ownerUsername: 'vayyari_fashions',
+      caption: '🔥 Trending festive zari saree (Active Ad Promotion / Boosted).',
+      likes: 4890,
+      comments: 142,
+      postedAt: '1d ago',
+      curationStatus: 'collab_curated',
+      collaborators: ['editionsbyvayyari'],
+      targetCollabAccounts: ['editionsbyvayyari', 'everydayvayyari', 'vayyari_littles'],
+      channelPhases: [
+        { username: 'editionsbyvayyari', phase: 'already_collaborating', acceptedAt: '1d ago' },
+        { username: 'everydayvayyari', phase: 'cant_invite', error: 'boosted_ad_cannot_edit' },
+        { username: 'vayyari_littles', phase: 'cant_invite', error: 'boosted_ad_cannot_edit' },
+      ],
+    },
+    curationModalOpen: true,
+  },
+};

@@ -566,7 +566,14 @@ execute_post_collab_pipeline() {
   if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
     reconcile_json=$("${reconcile_cmd[@]}" 2>&1 | tee /dev/stderr | grep -E '^\{' -A 100 || true)
 
+    local is_boosted="false"
+    local boosted_reason="boosted_ad_cannot_edit"
+    local -a cant_invite=()
+
     if [[ -n "$reconcile_json" ]]; then
+      is_boosted=$(echo "$reconcile_json" | jq -r '.boosted // false' 2>/dev/null || echo "false")
+      boosted_reason=$(echo "$reconcile_json" | jq -r '.reason // "boosted_ad_cannot_edit"' 2>/dev/null || echo "boosted_ad_cannot_edit")
+
       while IFS= read -r rem; do
         [[ -n "$rem" ]] && removed_accounts+=("$rem")
       done < <(echo "$reconcile_json" | jq -r '.removed[]? // empty' 2>/dev/null || true)
@@ -578,6 +585,66 @@ execute_post_collab_pipeline() {
       while IFS= read -r inv; do
         [[ -n "$inv" ]] && newly_invited+=("$inv")
       done < <(echo "$reconcile_json" | jq -r '.newly_invited[]? // empty' 2>/dev/null || true)
+
+      while IFS= read -r ci; do
+        [[ -n "$ci" ]] && cant_invite+=("$ci")
+      done < <(echo "$reconcile_json" | jq -r '.cant_invite[]? // empty' 2>/dev/null || true)
+    fi
+
+    # Handle Boosted Post / Related Ad Alert
+    if [[ "$is_boosted" == "true" ]]; then
+      echo -e "${YELLOW}====================================================================${NC}"
+      echo -e "${YELLOW} [!] Boosted Ad Alert Detected: 'Unable to edit post'               ${NC}"
+      echo -e "${YELLOW} Reason: Post has an active ad / boosted campaign on Instagram.     ${NC}"
+      echo -e "${YELLOW} Instagram blocks adding or editing collaborators on promoted posts.${NC}"
+      echo -e "${YELLOW}====================================================================${NC}"
+
+      # 1. Sync any existing active collaborators captured from the post view
+      if [[ ${#already_active[@]} -gt 0 ]]; then
+        echo -e "${CYAN}ℹ Captured ${#already_active[@]} existing active collaborator(s) on boosted post: ${already_active[*]}${NC}"
+        for act_acc in "${already_active[@]}"; do
+          api_update_channel_phase "$post_id" "$act_acc" "already_collaborating"
+        done
+        if [[ -n "$post_id" ]]; then
+          local active_collabs_json
+          active_collabs_json=$(printf '%s\n' "${already_active[@]}" | jq -R '{username: .}' | jq -s .)
+          api_sync_collaborators "$post_id" "$active_collabs_json" "instagram_boosted_inspect"
+        fi
+      fi
+
+      # 2. Mark proposed accounts that cannot be invited as 'cant_invite'
+      if [[ ${#cant_invite[@]} -eq 0 && ${#targets[@]} -gt 0 ]]; then
+        for t in "${targets[@]}"; do
+          local found="false"
+          for a in "${already_active[@]}"; do
+            if [[ "${t,,}" == "${a,,}" ]]; then found="true"; break; fi
+          done
+          if [[ "$found" == "false" ]]; then cant_invite+=("$t"); fi
+        done
+      fi
+
+      for ci_acc in "${cant_invite[@]}"; do
+        echo -e "${RED}🚫 Cannot invite @${ci_acc} (Post is boosted / ad locked). Phase -> cant_invite${NC}"
+        api_update_channel_phase "$post_id" "$ci_acc" "cant_invite" "$boosted_reason"
+      done
+
+      # 3. Mark post curation status as 'collab_curated'
+      if [[ -n "$post_id" ]]; then
+        echo -e "${GREEN}✓ Marking post ${shortcode} as 'collab_curated' (Reason: ${boosted_reason})...${NC}"
+        if [[ "$DRY_RUN" == "true" ]]; then
+          echo -e "${YELLOW}[DRY RUN] Would call: POST ${API_BASE_URL}/api/v1/insta/collab-planner/curate with postId=${post_id}${NC}"
+        else
+          curl -s -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/curate" \
+            -H "Content-Type: application/json" \
+            -d "{\"postId\": \"$post_id\"}" >/dev/null || true
+        fi
+      fi
+
+      echo -e "${GREEN}====================================================================${NC}"
+      echo -e "${GREEN}   Boosted Ad Post Handled Gracefully: Post ${shortcode} Curated   ${NC}"
+      echo -e "${GREEN}====================================================================${NC}"
+      echo ""
+      return 0
     fi
 
     # Report removed unwanted accounts

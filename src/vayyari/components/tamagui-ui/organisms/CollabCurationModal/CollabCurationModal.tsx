@@ -19,7 +19,7 @@ import {
 
 export interface CollabChannelPhaseInfo {
   username: string;
-  phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed';
+  phase: 'suggested' | 'invited' | 'accepted' | 'already_collaborating' | 'failed' | 'cant_invite';
   suggestedAt?: string | null;
   invitedAt?: string | null;
   acceptedAt?: string | null;
@@ -243,11 +243,12 @@ export function CollabCurationModal({
                           const isInvited = cp.phase === 'invited';
                           const isFailed = cp.phase === 'failed';
                           const isAlready = cp.phase === 'already_collaborating' || cp.phase === 'accepted';
-                          const bg = isAlready ? '#ECFDF5' : isInvited ? '#FEF3C7' : isFailed ? '#FEE2E2' : '#F3E8FF';
-                          const border = isAlready ? '#10B981' : isInvited ? '#F59E0B' : isFailed ? '#EF4444' : '#A855F7';
-                          const textColor = isAlready ? '#047857' : isInvited ? '#B45309' : isFailed ? '#B91C1C' : '#6B21A8';
-                          const label = isAlready ? 'Active' : isInvited ? 'Invited (Pending Accept)' : isFailed ? 'Failed' : 'Suggested';
-                          const icon = isAlready ? '🤝' : isInvited ? '📩' : isFailed ? '⚠' : '⏳';
+                          const isCantInvite = cp.phase === 'cant_invite';
+                          const bg = isAlready ? '#ECFDF5' : isInvited ? '#FEF3C7' : isFailed ? '#FEE2E2' : isCantInvite ? '#F3F4F6' : '#F3E8FF';
+                          const border = isAlready ? '#10B981' : isInvited ? '#F59E0B' : isFailed ? '#EF4444' : isCantInvite ? '#9CA3AF' : '#A855F7';
+                          const textColor = isAlready ? '#047857' : isInvited ? '#B45309' : isFailed ? '#B91C1C' : isCantInvite ? '#4B5563' : '#6B21A8';
+                          const label = isAlready ? 'Active' : isInvited ? 'Invited (Pending Accept)' : isFailed ? 'Failed' : isCantInvite ? 'Cannot Invite (Boosted Ad)' : 'Suggested';
+                          const icon = isAlready ? '🤝' : isInvited ? '📩' : isFailed ? '⚠' : isCantInvite ? '🚫' : '⏳';
 
                           return (
                             <View key={`phase-${cp.username}`} style={[styles.phaseChip, { backgroundColor: bg, borderColor: border }]}>

@@ -4073,9 +4073,9 @@ public class InstaController : ControllerBase
                 collaboratorsList.Add(new InstagramCollaboratorDto { Username = channel });
             }
         }
-        else if (newPhase == "failed")
+        else if (newPhase == "failed" || newPhase == "cant_invite")
         {
-            targetItem.Error = request.Error ?? "Execution failed";
+            targetItem.Error = request.Error ?? (newPhase == "cant_invite" ? "boosted_ad_cannot_edit" : "Execution failed");
         }
 
         // Determine overall status
@@ -4083,6 +4083,10 @@ public class InstaController : ControllerBase
         if (statusList.Count > 0 && statusList.All(s => s.Phase == "accepted" || s.Phase == "already_collaborating"))
         {
             overallStatus = "completed";
+        }
+        else if (statusList.Count > 0 && statusList.All(s => s.Phase == "accepted" || s.Phase == "already_collaborating" || s.Phase == "cant_invite"))
+        {
+            overallStatus = "collab_curated";
         }
         else if (statusList.Any(s => s.Phase == "invited" || s.Phase == "accepted"))
         {
@@ -4251,6 +4255,165 @@ public class InstaController : ControllerBase
             collaborators = currentCollabs,
             channelPhases = statusList,
             overallStatus = overallStatus
+        });
+    }
+
+    [HttpPost("collab-planner/handle-boosted")]
+    [AllowAnonymous]
+    public async Task<IActionResult> HandleBoostedPost([FromBody] HandleBoostedPostRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.PostId))
+        {
+            return BadRequest(new { error = "PostId is required." });
+        }
+
+        var detected = (request.ExistingCollaborators ?? new())
+            .Where(c => !string.IsNullOrWhiteSpace(c?.Username))
+            .Select(c => { c.Username = c.Username.Trim().TrimStart('@'); return c; })
+            .ToList();
+
+        var cantInvite = (request.CantInviteChannels ?? new())
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Select(h => h.Trim().TrimStart('@'))
+            .ToList();
+
+        using var conn = await _db.CreateConnectionAsync();
+        var existing = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT target_collab_accounts::text AS TargetAccountsJson,
+                   collaborators::text AS CollaboratorsJson,
+                   collab_curation_status AS Status
+            FROM competitor_videos
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new { PostId = request.PostId.Trim() });
+
+        if (existing == null)
+        {
+            return NotFound(new { error = $"Post with ID '{request.PostId}' not found." });
+        }
+
+        // Parse target channels
+        var statusList = new List<CollabChannelStatusDto>();
+        string targetJson = existing.targetaccountsjson ?? "[]";
+        if (targetJson != "[]" && targetJson != "null")
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(targetJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in doc.RootElement.EnumerateArray())
+                    {
+                        if (el.ValueKind == JsonValueKind.String)
+                        {
+                            var h = el.GetString()?.Trim().TrimStart('@');
+                            if (!string.IsNullOrWhiteSpace(h))
+                                statusList.Add(new CollabChannelStatusDto { Username = h, Phase = "suggested" });
+                        }
+                        else if (el.ValueKind == JsonValueKind.Object)
+                        {
+                            var dto = JsonSerializer.Deserialize<CollabChannelStatusDto>(el.GetRawText());
+                            if (dto != null && !string.IsNullOrWhiteSpace(dto.Username))
+                                statusList.Add(dto);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Parse current collaborators
+        var currentCollabs = new List<InstagramCollaboratorDto>();
+        string collabsJson = existing.collaboratorsjson ?? "[]";
+        if (collabsJson != "[]" && collabsJson != "null")
+        {
+            try
+            {
+                currentCollabs = JsonSerializer.Deserialize<List<InstagramCollaboratorDto>>(collabsJson) ?? new();
+            }
+            catch { }
+        }
+
+        // 1. Sync existing active collaborators
+        foreach (var det in detected)
+        {
+            if (!currentCollabs.Any(c => string.Equals(c.Username, det.Username, StringComparison.OrdinalIgnoreCase)))
+            {
+                currentCollabs.Add(det);
+            }
+
+            var targetItem = statusList.FirstOrDefault(s => string.Equals(s.Username, det.Username, StringComparison.OrdinalIgnoreCase));
+            if (targetItem != null)
+            {
+                if (targetItem.Phase != "accepted")
+                {
+                    targetItem.Phase = "already_collaborating";
+                    targetItem.AcceptedAt = DateTime.UtcNow;
+                }
+            }
+            else
+            {
+                statusList.Add(new CollabChannelStatusDto
+                {
+                    Username = det.Username,
+                    Phase = "already_collaborating",
+                    SuggestedAt = DateTime.UtcNow,
+                    AcceptedAt = DateTime.UtcNow
+                });
+            }
+        }
+
+        // 2. Mark proposed accounts that could not be invited as cant_invite
+        string reason = string.IsNullOrWhiteSpace(request.Reason) ? "boosted_ad_cannot_edit" : request.Reason;
+        foreach (var ci in cantInvite)
+        {
+            var targetItem = statusList.FirstOrDefault(s => string.Equals(s.Username, ci, StringComparison.OrdinalIgnoreCase));
+            if (targetItem != null)
+            {
+                if (targetItem.Phase != "accepted" && targetItem.Phase != "already_collaborating")
+                {
+                    targetItem.Phase = "cant_invite";
+                    targetItem.Error = reason;
+                }
+            }
+            else
+            {
+                statusList.Add(new CollabChannelStatusDto
+                {
+                    Username = ci,
+                    Phase = "cant_invite",
+                    Error = reason,
+                    SuggestedAt = DateTime.UtcNow
+                });
+            }
+        }
+
+        // 3. Mark post as collab_curated
+        string overallStatus = "collab_curated";
+
+        var updatedTargetAccountsJson = JsonSerializer.Serialize(statusList);
+        var updatedCollabsJson = JsonSerializer.Serialize(currentCollabs);
+
+        await conn.ExecuteAsync(@"
+            UPDATE competitor_videos
+            SET target_collab_accounts = @TargetAccounts::jsonb,
+                collaborators = @Collaborators::jsonb,
+                collab_curation_status = @OverallStatus,
+                updated_at = NOW()
+            WHERE platform_video_id = @PostId OR id::text = @PostId",
+            new {
+                PostId = request.PostId.Trim(),
+                TargetAccounts = updatedTargetAccountsJson,
+                Collaborators = updatedCollabsJson,
+                OverallStatus = overallStatus
+            });
+
+        return Ok(new {
+            success = true,
+            postId = request.PostId,
+            reason = reason,
+            overallStatus = overallStatus,
+            collaborators = currentCollabs,
+            channelPhases = statusList
         });
     }
 
@@ -4806,6 +4969,21 @@ public class SyncExistingCollaboratorsRequest
 
     [JsonPropertyName("detectedFrom")]
     public string? DetectedFrom { get; set; } // "instagram_inspect", "scraper", "manual"
+}
+
+public class HandleBoostedPostRequest
+{
+    [JsonPropertyName("postId")]
+    public string PostId { get; set; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; } = "boosted_ad_cannot_edit";
+
+    [JsonPropertyName("existingCollaborators")]
+    public List<InstagramCollaboratorDto> ExistingCollaborators { get; set; } = new();
+
+    [JsonPropertyName("cantInviteChannels")]
+    public List<string> CantInviteChannels { get; set; } = new();
 }
 
 
