@@ -72,7 +72,8 @@ switch_profile_with_retries() {
     echo "Switching Instagram and Vayyari to profile: $prof"
     local switch_ok=0
     for attempt in 1 2; do
-        MAESTRO_CLI_NO_ANALYTICS=true maestro test -e PROFILE_NAME="$prof" maestro/switch_profile.yaml
+        # TERM=dumb: prevents JLine/Maestro JVM from freezing due to SIGTTIN when maestro mcp is on a live TTY
+        TERM=dumb CI=true MAESTRO_OPTS="-Djline.terminal=dumb" MAESTRO_CLI_NO_ANALYTICS=true maestro test -e PROFILE_NAME="$prof" maestro/switch_profile.yaml </dev/null
         local sw_exit=$?
         # Propagate Ctrl+C immediately
         [ $sw_exit -eq 130 ] && exit 130
@@ -148,14 +149,17 @@ for profile in "${PROFILES[@]}"; do
         run_ok=0
         consecutive_failures=0
         for attempt in 1 2 3; do
-            MAESTRO_CLI_NO_ANALYTICS=true timeout 180 maestro test \
+            # TERM=dumb + -Djline.terminal=dumb: prevents JLine from opening /dev/tty directly.
+            # Without this, the Maestro JVM gets SIGTTIN and freezes (Tl state) when
+            # 'maestro mcp' is running on a live TTY (e.g. spawned by AGY CLI in a terminal).
+            TERM=dumb CI=true MAESTRO_OPTS="-Djline.terminal=dumb" MAESTRO_CLI_NO_ANALYTICS=true timeout 180 maestro test \
                 -e PROFILE_NAME="$profile" \
                 -e DELAY_SHARE=$DELAY_SHARE \
                 -e DELAY_SHEET=$DELAY_SHEET \
                 -e DELAY_DRAFT=$DELAY_DRAFT \
                 -e DELAY_CONFIRM=$DELAY_CONFIRM \
                 -e DELAY_POST=$DELAY_POST \
-                maestro/story_automation.yaml
+                maestro/story_automation.yaml </dev/null
             exit_code=$?
             # Propagate Ctrl+C immediately
             [ $exit_code -eq 130 ] && exit 130
