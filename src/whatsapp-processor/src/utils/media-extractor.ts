@@ -31,6 +31,13 @@ export function extractMediaPayload(metadata: any): ExtractedMediaPayload | null
         return { type: 'audio', mediaKeyName: 'audioMessage', payload: targetMsg.audioMessage };
     }
     if (targetMsg.documentMessage) {
+        const doc = targetMsg.documentMessage;
+        const mimetype = (doc.mimetype || '').toLowerCase();
+        const fileName = (doc.fileName || '').toLowerCase();
+        const isVideo = mimetype.startsWith('video/') || mimetype === 'video/quicktime' || fileName.endsWith('.mov') || fileName.endsWith('.mp4');
+        if (isVideo) {
+            return { type: 'video', mediaKeyName: 'documentMessage', payload: targetMsg.documentMessage };
+        }
         return { type: 'document', mediaKeyName: 'documentMessage', payload: targetMsg.documentMessage };
     }
     if (targetMsg.stickerMessage) {

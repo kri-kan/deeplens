@@ -2,9 +2,52 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Share, FlatList, Dimensions, BackHandler } from 'react-native';
 import { Portal, Modal, IconButton, Text } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { ZoomableImage } from './ZoomableImage';
 
 const { width, height } = Dimensions.get('window');
+
+export const isVideoUrl = (url?: string): boolean => {
+    if (!url) return false;
+    const cleanUrl = url.split('?')[0];
+    const lower = cleanUrl.toLowerCase();
+    return (
+        lower.endsWith('.mov') ||
+        lower.endsWith('.mp4') ||
+        lower.includes('videos/') ||
+        cleanUrl.includes('.MOV') ||
+        cleanUrl.includes('.MP4') ||
+        cleanUrl.endsWith('.MOV') ||
+        cleanUrl.endsWith('.MP4')
+    );
+};
+
+const VideoPlayerItem = ({ uri, isActive }: { uri: string; isActive: boolean }) => {
+    const player = useVideoPlayer(uri, (p) => {
+        p.loop = true;
+        if (isActive) {
+            p.play();
+        }
+    });
+
+    useEffect(() => {
+        if (!player) return;
+        if (isActive) {
+            player.play();
+        } else {
+            player.pause();
+        }
+    }, [isActive, player]);
+
+    return (
+        <VideoView
+            player={player}
+            style={styles.video}
+            contentFit="contain"
+            nativeControls
+        />
+    );
+};
 
 interface ImagePreviewModalProps {
     visible: boolean;
@@ -39,7 +82,7 @@ export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, ini
         return () => subscription.remove();
     }, [visible, onDismiss]);
 
-    if (images.length === 0) return null;
+    if (!visible || images.length === 0) return null;
 
     const currentUrl = images[currentIndex];
 
@@ -83,28 +126,47 @@ export const ImagePreviewModal = ({ visible, onDismiss, imageUrl, imageUrls, ini
                         />
                     </View>
                     
-                    <FlatList
-                        ref={flatListRef}
-                        data={images}
-                        keyExtractor={(item, index) => `${item}-${index}`}
-                        horizontal
-                        pagingEnabled
-                        scrollEnabled={!isZoomed}
-                        showsHorizontalScrollIndicator={false}
-                        onMomentumScrollEnd={onMomentumScrollEnd}
-                        initialScrollIndex={initialIndex < images.length ? initialIndex : 0}
-                        getItemLayout={getItemLayout}
-                        renderItem={({ item }) => (
-                            <View style={[styles.imageContainer, { width }]}>
+                    {images.length === 1 ? (
+                        <View style={[styles.imageContainer, { width }]}>
+                            {isVideoUrl(currentUrl) ? (
+                                <VideoPlayerItem uri={currentUrl} isActive={visible} />
+                            ) : (
                                 <ZoomableImage
-                                    uri={item}
+                                    uri={currentUrl}
                                     containerWidth={width}
                                     containerHeight={height * 0.75}
                                     onZoomChange={setIsZoomed}
                                 />
-                            </View>
-                        )}
-                    />
+                            )}
+                        </View>
+                    ) : (
+                        <FlatList
+                            ref={flatListRef}
+                            data={images}
+                            keyExtractor={(item, index) => `${item}-${index}`}
+                            horizontal
+                            pagingEnabled
+                            scrollEnabled={!isZoomed}
+                            showsHorizontalScrollIndicator={false}
+                            onMomentumScrollEnd={onMomentumScrollEnd}
+                            initialScrollIndex={initialIndex < images.length ? initialIndex : 0}
+                            getItemLayout={getItemLayout}
+                            renderItem={({ item, index }) => (
+                                <View style={[styles.imageContainer, { width }]}>
+                                    {isVideoUrl(item) ? (
+                                        <VideoPlayerItem uri={item} isActive={visible && index === currentIndex} />
+                                    ) : (
+                                        <ZoomableImage
+                                            uri={item}
+                                            containerWidth={width}
+                                            containerHeight={height * 0.75}
+                                            onZoomChange={setIsZoomed}
+                                        />
+                                    )}
+                                </View>
+                            )}
+                        />
+                    )}
 
                     {title && (
                         <View style={styles.titleContainer}>
@@ -152,6 +214,10 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         resizeMode: 'contain',
+    },
+    video: {
+        width: width,
+        height: height * 0.75,
     },
     titleContainer: {
         padding: 20,

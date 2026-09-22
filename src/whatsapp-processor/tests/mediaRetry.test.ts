@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { extractMediaPayload, clampBackfillLimit } from '../src/utils/media-extractor';
 import { ConversationController } from '../src/controllers/conversation.controller';
+import { getContentTypeFromFilename } from '../src/clients/media.client';
 
 describe('Media Extractor & Payload Unwrapping', () => {
     test('extracts direct imageMessage payload correctly', () => {
@@ -79,6 +80,41 @@ describe('Media Extractor & Payload Unwrapping', () => {
         assert.ok(result);
         assert.equal(result.type, 'document');
         assert.equal(result.payload.fileName, 'catalog.pdf');
+    });
+
+    test('classifies documentMessage with .mov or video/quicktime as video', () => {
+        const movDoc1 = {
+            documentMessage: {
+                fileName: 'video_clip.mov',
+                mimetype: 'application/octet-stream'
+            }
+        };
+        const res1 = extractMediaPayload(movDoc1);
+        assert.ok(res1);
+        assert.equal(res1.type, 'video');
+        assert.equal(res1.mediaKeyName, 'documentMessage');
+        assert.equal(res1.payload.fileName, 'video_clip.mov');
+
+        const movDoc2 = {
+            documentMessage: {
+                fileName: 'clip.dat',
+                mimetype: 'video/quicktime'
+            }
+        };
+        const res2 = extractMediaPayload(movDoc2);
+        assert.ok(res2);
+        assert.equal(res2.type, 'video');
+        assert.equal(res2.mediaKeyName, 'documentMessage');
+
+        const mp4Doc = {
+            documentMessage: {
+                fileName: 'video.mp4',
+                mimetype: 'video/mp4'
+            }
+        };
+        const res3 = extractMediaPayload(mp4Doc);
+        assert.ok(res3);
+        assert.equal(res3.type, 'video');
     });
 
     test('returns null for protocol/text-only messages or empty metadata', () => {
@@ -184,3 +220,31 @@ describe('ConversationController Media Endpoints Unit Tests', () => {
         assert.equal(responseBody.failed, 1);
     });
 });
+
+describe('getContentTypeFromFilename', () => {
+    test('resolves video MIME types based on extension', () => {
+        assert.equal(getContentTypeFromFilename('sample.mov'), 'video/quicktime');
+        assert.equal(getContentTypeFromFilename('sample.MOV'), 'video/quicktime');
+        assert.equal(getContentTypeFromFilename('clip.mp4'), 'video/mp4');
+        assert.equal(getContentTypeFromFilename('clip.m4v'), 'video/x-m4v');
+        assert.equal(getContentTypeFromFilename('clip.webm'), 'video/webm');
+    });
+
+    test('resolves image and audio MIME types based on extension', () => {
+        assert.equal(getContentTypeFromFilename('pic.jpg'), 'image/jpeg');
+        assert.equal(getContentTypeFromFilename('pic.jpeg'), 'image/jpeg');
+        assert.equal(getContentTypeFromFilename('pic.png'), 'image/png');
+        assert.equal(getContentTypeFromFilename('pic.webp'), 'image/webp');
+        assert.equal(getContentTypeFromFilename('audio.mp3'), 'audio/mpeg');
+        assert.equal(getContentTypeFromFilename('doc.pdf'), 'application/pdf');
+    });
+
+    test('falls back to mediaType when extension is unknown or missing', () => {
+        assert.equal(getContentTypeFromFilename('file_without_ext', 'video'), 'video/mp4');
+        assert.equal(getContentTypeFromFilename('file_without_ext', 'photo'), 'image/jpeg');
+        assert.equal(getContentTypeFromFilename('file_without_ext', 'audio'), 'audio/mpeg');
+        assert.equal(getContentTypeFromFilename('unknown.xyz', 'sticker'), 'image/webp');
+        assert.equal(getContentTypeFromFilename('unknown.xyz'), 'application/octet-stream');
+    });
+});
+

@@ -170,6 +170,16 @@ export default function MediaGrid({ messages }: MediaGridProps) {
         if (e.key === 'Escape') closeModal();
     };
 
+    const isVideoMsg = (msg: any) => {
+        if (!msg) return false;
+        if (msg.media_type === 'video') return true;
+        const url = msg.media_url?.split('?')[0].toLowerCase() || '';
+        if (url.endsWith('.mov') || url.endsWith('.mp4')) return true;
+        const text = msg.message_text?.trim().toLowerCase() || '';
+        if (text.endsWith('.mov') || text.endsWith('.mp4')) return true;
+        return false;
+    };
+
     return (
         <>
             <div className={gridClass}>
@@ -179,7 +189,13 @@ export default function MediaGrid({ messages }: MediaGridProps) {
                         className={`${styles.mediaGridItem} ${count === 3 && idx === 0 ? styles.mediaGridItem3First : ''}`}
                         onClick={() => openModal(idx)}
                     >
-                        {msg.media_type === 'photo' ? (
+                        {isVideoMsg(msg) ? (
+                            <video
+                                src={msg.media_url}
+                                className={styles.mediaGridImage}
+                                style={{ objectFit: 'cover' }}
+                            />
+                        ) : (
                             <img
                                 src={msg.media_url}
                                 alt="Photo"
@@ -187,12 +203,6 @@ export default function MediaGrid({ messages }: MediaGridProps) {
                                 onError={(e) => {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                 }}
-                            />
-                        ) : (
-                            <video
-                                src={msg.media_url}
-                                className={styles.mediaGridImage}
-                                style={{ objectFit: 'cover' }}
                             />
                         )}
                         {idx === displayCount - 1 && remaining > 0 && (
@@ -239,18 +249,19 @@ export default function MediaGrid({ messages }: MediaGridProps) {
                                 </>
                             )}
 
-                            {messages[currentIndex]?.media_type === 'photo' ? (
+                            {isVideoMsg(messages[currentIndex]) ? (
+                                <video
+                                    src={messages[currentIndex]?.media_url}
+                                    controls
+                                    playsInline
+                                    autoPlay
+                                    className={styles.modalVideo}
+                                />
+                            ) : (
                                 <img
                                     src={messages[currentIndex]?.media_url}
                                     alt="Photo"
                                     className={styles.modalImage}
-                                />
-                            ) : (
-                                <video
-                                    src={messages[currentIndex]?.media_url}
-                                    controls
-                                    autoPlay
-                                    className={styles.modalVideo}
                                 />
                             )}
                         </div>
@@ -259,13 +270,22 @@ export default function MediaGrid({ messages }: MediaGridProps) {
                         {messages.length > 1 && (
                             <div className={styles.thumbnailStrip}>
                                 {messages.map((msg, idx) => (
-                                    <img
-                                        key={msg.message_id}
-                                        src={msg.media_url}
-                                        alt={`Thumbnail ${idx + 1}`}
-                                        className={`${styles.thumbnail} ${idx === currentIndex ? styles.thumbnailActive : ''}`}
-                                        onClick={() => setCurrentIndex(idx)}
-                                    />
+                                    isVideoMsg(msg) ? (
+                                        <video
+                                            key={msg.message_id}
+                                            src={msg.media_url}
+                                            className={`${styles.thumbnail} ${idx === currentIndex ? styles.thumbnailActive : ''}`}
+                                            onClick={() => setCurrentIndex(idx)}
+                                        />
+                                    ) : (
+                                        <img
+                                            key={msg.message_id}
+                                            src={msg.media_url}
+                                            alt={`Thumbnail ${idx + 1}`}
+                                            className={`${styles.thumbnail} ${idx === currentIndex ? styles.thumbnailActive : ''}`}
+                                            onClick={() => setCurrentIndex(idx)}
+                                        />
+                                    )
                                 ))}
                             </div>
                         )}
@@ -278,13 +298,23 @@ export default function MediaGrid({ messages }: MediaGridProps) {
 
 // Helper function to group consecutive media messages
 export function groupMediaMessages(messages: any[]) {
+    const isVideoMsg = (msg: any) => {
+        if (!msg) return false;
+        if (msg.media_type === 'video') return true;
+        const url = msg.media_url?.split('?')[0].toLowerCase() || '';
+        if (url.endsWith('.mov') || url.endsWith('.mp4')) return true;
+        const text = msg.message_text?.trim().toLowerCase() || '';
+        if (text.endsWith('.mov') || text.endsWith('.mp4')) return true;
+        return false;
+    };
+
     const groups: any[][] = [];
     let currentGroup: any[] = [];
     let lastSender: string | null = null;
     let lastTimestamp: number | null = null;
 
     messages.forEach((msg) => {
-        const isMedia = msg.media_url && (msg.media_type === 'photo' || msg.media_type === 'video');
+        const isMedia = msg.media_url && (msg.media_type === 'photo' || msg.media_type === 'image' || isVideoMsg(msg));
         const isSameSender = msg.sender === lastSender;
         const isWithin5Minutes = lastTimestamp ? Math.abs(msg.timestamp - lastTimestamp) < 300 : true;
 

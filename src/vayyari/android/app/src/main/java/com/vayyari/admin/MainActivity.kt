@@ -1,4 +1,4 @@
-package com.anonymous.vayyari
+package com.vayyari.admin
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.content.Intent

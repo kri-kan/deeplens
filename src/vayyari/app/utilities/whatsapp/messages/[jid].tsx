@@ -31,7 +31,17 @@ type MediaGroup = {
 };
 
 // Helper functions for media status
+const isVideoDocMsg = (msg: Message) => {
+  return !!(
+    msg.metadata?.documentMessage?.fileName?.toLowerCase().endsWith('.mov') ||
+    msg.messageText?.toLowerCase().endsWith('.mov') ||
+    msg.metadata?.mimetype === 'video/quicktime' ||
+    msg.metadata?.documentMessage?.mimetype === 'video/quicktime'
+  );
+};
+
 const isPhotoOrVideoMsg = (msg: Message) => {
+  if (isVideoDocMsg(msg)) return true;
   return (
     msg.mediaType === 'image' ||
     msg.mediaType === 'photo' ||
@@ -60,6 +70,18 @@ const isStickerMsg = (msg: Message) => {
 };
 
 const isMediaArchived = (msg: Message) => {
+  // If it's a video document, allow it to be marked as missing/archived when !msg.mediaUrl so the user can tap to fetch it
+  if (isVideoDocMsg(msg)) {
+    return (
+      !msg.mediaUrl ||
+      msg.metadata?.isArchived === true ||
+      msg.metadata?.deleted === true ||
+      msg.metadata?.isTombstone === true ||
+      msg.messageText === '[Media archived / deleted]' ||
+      msg.messageText === '[Media Unavailable]'
+    );
+  }
+
   // Stickers, documents, audio, and text messages are NEVER archived
   if (isStickerMsg(msg) || msg.mediaType === 'document' || msg.mediaType === 'audio' || (!msg.mediaType && !msg.mediaUrl)) {
     return false;
@@ -92,7 +114,7 @@ const ChatMediaItem = React.memo(({
 }) => {
   const [loadFailed, setLoadFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const isVideo = msg.mediaType === 'video';
+  const isVideo = msg.mediaType === 'video' || isVideoDocMsg(msg);
   const isSticker = isStickerMsg(msg);
   const isArchived = !isSticker && (!msg.mediaUrl || loadFailed || isMediaArchived(msg));
 
@@ -1289,7 +1311,7 @@ export default function FullMessageBrowser() {
                     style={{ margin: 0, width: 22, height: 22 }} 
                   />
                   <Text style={[styles.singleArchivedText, { color: '#6366f1', fontWeight: '600' }]}>
-                    {retryingMessageId === msg.messageId ? 'Fetching media...' : `${msg.mediaType === 'video' ? 'Video' : 'Photo'} (Tap to fetch)`}
+                    {retryingMessageId === msg.messageId ? 'Fetching media...' : `${(msg.mediaType === 'video' || isVideoDocMsg(msg)) ? 'Video' : 'Photo'} (Tap to fetch)`}
                   </Text>
                 </TouchableOpacity>
               ) : msg.mediaType === 'document' ? (

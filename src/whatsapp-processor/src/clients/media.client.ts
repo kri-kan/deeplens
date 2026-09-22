@@ -47,6 +47,54 @@ function getMediaFolder(mediaType: MediaType): string {
 }
 
 /**
+ * Determines Content-Type MIME based on filename extension and mediaType
+ */
+export function getContentTypeFromFilename(filename: string, mediaType?: MediaType): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    switch (ext) {
+        case 'mov':
+            return 'video/quicktime';
+        case 'mp4':
+            return 'video/mp4';
+        case 'm4v':
+            return 'video/x-m4v';
+        case 'webm':
+            return 'video/webm';
+        case 'mkv':
+            return 'video/x-matroska';
+        case 'avi':
+            return 'video/x-msvideo';
+        case 'jpg':
+        case 'jpeg':
+            return 'image/jpeg';
+        case 'png':
+            return 'image/png';
+        case 'webp':
+            return 'image/webp';
+        case 'gif':
+            return 'image/gif';
+        case 'svg':
+            return 'image/svg+xml';
+        case 'mp3':
+            return 'audio/mpeg';
+        case 'm4a':
+            return 'audio/mp4';
+        case 'ogg':
+            return 'audio/ogg';
+        case 'wav':
+            return 'audio/wav';
+        case 'pdf':
+            return 'application/pdf';
+        default:
+            if (mediaType === 'photo') return 'image/jpeg';
+            if (mediaType === 'video') return 'video/mp4';
+            if (mediaType === 'audio') return 'audio/mpeg';
+            if (mediaType === 'sticker') return 'image/webp';
+            return 'application/octet-stream';
+    }
+}
+
+/**
  * Uploads media to MinIO and returns the URL
  * Returns null if MinIO is unavailable (graceful degradation)
  * 
@@ -77,12 +125,14 @@ export async function uploadMedia(
 
             // Convert buffer to stream
             const stream = Readable.from(buffer);
+            const contentType = getContentTypeFromFilename(filename, mediaType);
 
             await minioClient.putObject(
                 MINIO_CONFIG.bucket,
                 objectName,
                 stream,
-                buffer.length
+                buffer.length,
+                { 'Content-Type': contentType }
             );
 
             // Return the MinIO URL (can be updated later for DeepLens migration)

@@ -807,8 +807,12 @@ export class WhatsAppService {
             mediaType = 'audio';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'audio');
         } else if (!skipMedia && !existingMediaUrl && msg.message?.documentMessage) {
-            mediaType = 'document';
-            mediaUrl = await this.downloadAndUploadMedia(msg, 'document');
+            const doc = msg.message.documentMessage;
+            const docMime = (doc.mimetype || '').toLowerCase();
+            const docFileName = (doc.fileName || '').toLowerCase();
+            const isDocVideo = docMime.startsWith('video/') || docMime === 'video/quicktime' || docFileName.endsWith('.mov') || docFileName.endsWith('.mp4');
+            mediaType = isDocVideo ? 'video' : 'document';
+            mediaUrl = await this.downloadAndUploadMedia(msg, mediaType);
         } else if (!skipMedia && !existingMediaUrl && msg.message?.stickerMessage) {
             mediaType = 'sticker';
             mediaUrl = await this.downloadAndUploadMedia(msg, 'sticker');
@@ -819,11 +823,23 @@ export class WhatsAppService {
             if (msg.message?.imageMessage) mediaType = 'photo';
             else if (msg.message?.videoMessage) mediaType = 'video';
             else if (msg.message?.audioMessage) mediaType = 'audio';
-            else if (msg.message?.documentMessage) mediaType = 'document';
+            else if (msg.message?.documentMessage) {
+                const doc = msg.message.documentMessage;
+                const docMime = (doc.mimetype || '').toLowerCase();
+                const docFileName = (doc.fileName || '').toLowerCase();
+                const isDocVideo = docMime.startsWith('video/') || docMime === 'video/quicktime' || docFileName.endsWith('.mov') || docFileName.endsWith('.mp4');
+                mediaType = isDocVideo ? 'video' : 'document';
+            }
             else if (msg.message?.stickerMessage) mediaType = 'sticker';
         } else if (skipMedia && (msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage || msg.message?.stickerMessage)) {
             logger.debug({ messageId }, 'Skipping media download in history sync');
         }
+
+        const mediaMimeType = msg.message?.documentMessage?.mimetype ||
+            msg.message?.videoMessage?.mimetype ||
+            msg.message?.imageMessage?.mimetype ||
+            msg.message?.audioMessage?.mimetype ||
+            null;
 
         // Ensure chat exists in database
         const isGroup = remoteJid.endsWith('@g.us');
@@ -878,6 +894,7 @@ export class WhatsAppService {
                 messageType,
                 mediaType,
                 mediaUrl,
+                mediaMimeType,
                 sender: participant,  // Primary sender ID
                 senderName: pushName,
                 timestamp,
@@ -1035,14 +1052,15 @@ export class WhatsAppService {
         const message = msg.message;
         const timestamp = msg.messageTimestamp;
 
+        if (message?.documentMessage?.fileName) {
+            return message.documentMessage.fileName;
+        }
+
         let extension = 'bin';
         if (type === 'photo') extension = 'jpg';
         else if (type === 'video') extension = 'mp4';
         else if (type === 'audio') extension = 'mp3';
         else if (type === 'sticker') extension = 'webp';
-        else if (message?.documentMessage?.fileName) {
-            return message.documentMessage.fileName;
-        }
 
         return `${timestamp}.${extension}`;
     }

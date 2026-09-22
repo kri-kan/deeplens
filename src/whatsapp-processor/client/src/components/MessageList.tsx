@@ -129,9 +129,32 @@ export default function MessageList() {
     const [hasMore, setHasMore] = useState(true);
     const [offset, setOffset] = useState(0);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+    const [retryingMediaIds, setRetryingMediaIds] = useState<Record<string, boolean>>({});
     const scrollRef = useRef<HTMLDivElement>(null);
     const { error: showError, success: showSuccess } = useToasts();
     const PAGE_SIZE = 50;
+
+    const handleRetryMedia = async (messageId: string) => {
+        if (retryingMediaIds[messageId]) return;
+        setRetryingMediaIds(prev => ({ ...prev, [messageId]: true }));
+        try {
+            const response = await fetch(`/api/conversations/messages/${messageId}/retry-media`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+            const mediaUrl = data.mediaUrl || data.media_url;
+            if (data.success && mediaUrl) {
+                setMessages(messages.map(m => m.message_id === messageId ? { ...m, media_url: mediaUrl } : m));
+                showSuccess('Media downloaded successfully');
+            } else {
+                showError('Failed to download media', data.error || 'Unknown error');
+            }
+        } catch (err: any) {
+            showError('Retry failed', err.message);
+        } finally {
+            setRetryingMediaIds(prev => ({ ...prev, [messageId]: false }));
+        }
+    };
 
     const handleSplitGroup = async (msgId: string) => {
         if (!activeChatJid) return;
@@ -398,18 +421,34 @@ export default function MessageList() {
                         const group = mediaGroups.find(g => g[0].message_id === msg.message_id);
                         if (groupedMessageIds.has(msg.message_id) && !group) return null;
 
+                        const isVideoMsg = (m: typeof msg) => {
+                            if (m.media_type === 'video') return true;
+                            const url = m.media_url?.split('?')[0].toLowerCase() || '';
+                            if (url.endsWith('.mov') || url.endsWith('.mp4')) return true;
+                            const text = m.message_text?.trim().toLowerCase() || '';
+                            if (text.endsWith('.mov') || text.endsWith('.mp4')) return true;
+                            return false;
+                        };
+
                         // Skip messages with no displayable content
                         const isSticker = msg.media_type === 'sticker';
-                        const hasMedia = msg.media_url;
-                        const hasText = msg.message_text && msg.message_text.trim().length > 0;
+                        const hasMedia = Boolean(msg.media_url);
+                        const hasText = Boolean(msg.message_text && msg.message_text.trim().length > 0);
                         const isPlaceholder = [
                             '[image]', '[video]', '[audio]', '[sticker]', '[document]',
                             '[Image]', '[Video]', '[Audio]', '[Sticker]', '[Document]'
                         ].includes(msg.message_text?.trim());
 
-                        // Hide if no content at all (unless it's a sticker - show placeholder)
-                        if (!isSticker && !hasMedia && !hasText) return null;
-                        if (!isSticker && !hasMedia && isPlaceholder) return null;
+                        const isMissingMedia = !hasMedia && !isSticker && (
+                            Boolean(msg.media_type) ||
+                            ['image', 'video', 'document', 'audio', 'ptt', 'photo'].includes(msg.message_type) ||
+                            isPlaceholder ||
+                            isVideoMsg(msg)
+                        );
+
+                        // Hide if no content at all (unless it's a sticker or missing media that can be retried)
+                        if (!isSticker && !hasMedia && !hasText && !isMissingMedia) return null;
+                        if (!isSticker && !hasMedia && isPlaceholder && !isMissingMedia) return null;
 
                         // Group Divider Logic
                         let showDivider = false;
@@ -461,9 +500,40 @@ export default function MessageList() {
                                             </>
                                         ) : (
                                             <>
+                                                {isMissingMedia && (
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        padding: '8px 12px',
+                                                        backgroundColor: tokens.colorNeutralBackground3,
+                                                        borderRadius: '8px',
+                                                        marginBottom: '6px',
+                                                        gap: '6px',
+                                                    }}>
+                                                        <Button
+                                                            size="small"
+                                                            appearance="secondary"
+                                                            icon={retryingMediaIds[msg.message_id] ? <Spinner size="tiny" /> : <ArrowSync20Regular />}
+                                                            disabled={retryingMediaIds[msg.message_id]}
+                                                            onClick={() => handleRetryMedia(msg.message_id)}
+                                                            style={{ fontSize: '12px', fontWeight: 500 }}
+                                                        >
+                                                            {retryingMediaIds[msg.message_id] ? 'Downloading media...' : 'Media not downloaded - Tap to retry'}
+                                                        </Button>
+                                                    </div>
+                                                )}
                                                 {msg.media_url && (
                                                     <div className={styles.mediaContent}>
-                                                        {msg.media_type === 'photo' && (
+                                                        {isVideoMsg(msg) ? (
+                                                            <video
+                                                                src={msg.media_url}
+                                                                controls
+                                                                playsInline
+                                                                style={{ width: '100%', maxHeight: '400px', borderRadius: '8px' }}
+                                                            />
+                                                        ) : msg.media_type === 'photo' ? (
                                                             <img
                                                                 src={msg.media_url}
                                                                 alt="Photo"
@@ -479,30 +549,20 @@ export default function MessageList() {
                                                                     (e.target as HTMLImageElement).style.display = 'none';
                                                                 }}
                                                             />
-                                                        )}
-                                                        {msg.media_type === 'video' && (
-                                                            <video
-                                                                src={msg.media_url}
-                                                                controls
-                                                                style={{ width: '100%', borderRadius: '8px' }}
-                                                            />
-                                                        )}
-                                                        {msg.media_type === 'audio' && (
+                                                        ) : msg.media_type === 'audio' ? (
                                                             <audio
                                                                 src={msg.media_url}
                                                                 controls
                                                                 style={{ width: '100%' }}
                                                             />
-                                                        )}
-                                                        {msg.media_type === 'document' && (
+                                                        ) : msg.media_type === 'document' ? (
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', backgroundColor: tokens.colorNeutralBackground3, borderRadius: '4px' }}>
                                                                 <span>📄</span>
                                                                 <a href={msg.media_url} target="_blank" rel="noopener noreferrer" style={{ color: tokens.colorBrandForeground1 }}>
                                                                     Download Document
                                                                 </a>
                                                             </div>
-                                                        )}
-                                                        {msg.media_type === 'sticker' && (
+                                                        ) : msg.media_type === 'sticker' ? (
                                                             msg.media_url ? (
                                                                 <img
                                                                     src={msg.media_url}
@@ -523,8 +583,7 @@ export default function MessageList() {
                                                                     🎭
                                                                 </div>
                                                             )
-                                                        )}
-                                                        {!msg.media_type && (
+                                                        ) : (
                                                             <img
                                                                 src={msg.media_url}
                                                                 alt="Media"
@@ -545,6 +604,7 @@ export default function MessageList() {
                                                         ].includes(msg.message_text?.trim());
 
                                                         if (msg.media_url && isPlaceholder) return null;
+                                                        if (isMissingMedia && isPlaceholder) return null;
                                                         if (!msg.message_text && msg.media_url) return null;
                                                         if (!msg.message_text) return null; // Already filtered, but just in case
 
