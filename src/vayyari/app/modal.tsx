@@ -29,6 +29,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/types/authorization';
 import { appSettingsService, AppSetting, AppSettingsGrouped, DEFAULT_WHATSAPP_RETENTION_SETTING } from '@/services/app-settings.service';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+import { useOTAUpdate } from '@/hooks/useOTAUpdate';
 import { Fonts } from '@/constants/theme';
 
 interface CategoryMetadata {
@@ -84,6 +85,55 @@ export default function ModalScreen() {
 
   // Show/Hide Secrets per row
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
+
+  // OTA Updates State & Triggers
+  const {
+    stage: otaStage,
+    isChecking: otaChecking,
+    isDownloading: otaDownloading,
+    updateReady: otaUpdateReady,
+    percent: otaPercent,
+    newVersion: otaNewVersion,
+    localVersion: otaLocalVersion,
+    checkForUpdates,
+  } = useOTAUpdate();
+  const [manualChecking, setManualChecking] = useState(false);
+
+  const handleCheckForUpdates = useCallback(async () => {
+    try {
+      setManualChecking(true);
+      const result = await checkForUpdates(false);
+      if (result.updateAvailable && result.applied) {
+        Alert.alert(
+          'Update Ready',
+          `Version ${result.newVersion || 'latest'} has been downloaded and staged. Please swipe away and restart Vayyari to apply it.`,
+          [{ text: 'OK' }]
+        );
+      } else if (result.updateAvailable && !result.applied) {
+        Alert.alert(
+          'Downloading Update',
+          `Version ${result.newVersion || 'latest'} is actively downloading in the background. Check the top banner for progress.`,
+          [{ text: 'OK' }]
+        );
+      } else if (result.error) {
+        Alert.alert(
+          'Update Check Failed',
+          `Unable to reach update server: ${result.error}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Up to Date',
+          `Vayyari is running the latest version (${result.currentVersion}). No new updates available.`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to check for updates.');
+    } finally {
+      setManualChecking(false);
+    }
+  }, [checkForUpdates]);
 
   const canEditSettings = useMemo(() => {
     return (
@@ -691,11 +741,65 @@ export default function ModalScreen() {
 
           <View style={styles.infoRow}>
             <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
-              App Version
+              Base APK Version
             </Text>
             <Text variant="bodyMedium" style={{ fontWeight: '600', color: theme.colors.onSurface }}>
               {Constants.expoConfig?.version || '1.0.0'}
             </Text>
+          </View>
+          <Divider style={styles.infoDivider} />
+
+          <View style={styles.infoRow}>
+            <View>
+              <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
+                Active OTA Version
+              </Text>
+              {otaLocalVersion?.installedAt ? (
+                <Text variant="labelSmall" style={{ color: theme.colors.outline, fontSize: 10 }}>
+                  Installed: {new Date(otaLocalVersion.installedAt).toLocaleDateString()}
+                </Text>
+              ) : null}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Chip
+                compact
+                style={{
+                  backgroundColor: otaUpdateReady
+                    ? 'rgba(245, 158, 11, 0.2)'
+                    : otaLocalVersion?.subversion
+                    ? 'rgba(16, 185, 129, 0.15)'
+                    : (theme.colors as any).surfaceContainerHigh || theme.colors.surfaceVariant,
+                }}
+                textStyle={{
+                  color: otaUpdateReady ? '#D97706' : otaLocalVersion?.subversion ? '#059669' : theme.colors.onSurface,
+                  fontSize: 11,
+                  fontWeight: '700',
+                }}
+              >
+                {otaLocalVersion?.version ? `v${otaLocalVersion.version}` : 'Bundled Asset'}
+              </Chip>
+            </View>
+          </View>
+          <Divider style={styles.infoDivider} />
+
+          {/* On-Demand Check for Updates Button */}
+          <View style={{ marginTop: 12, marginBottom: 8 }}>
+            <Button
+              mode="contained-tonal"
+              icon={otaChecking || manualChecking ? undefined : otaDownloading ? 'cloud-download' : otaUpdateReady ? 'sparkles' : 'refresh'}
+              loading={otaChecking || manualChecking}
+              disabled={otaChecking || manualChecking || otaDownloading}
+              onPress={handleCheckForUpdates}
+              style={{ borderRadius: 10 }}
+            >
+              {otaChecking || manualChecking
+                ? 'Checking for updates...'
+                : otaDownloading
+                ? `Downloading (${otaPercent}%)...`
+                : otaUpdateReady
+                ? `v${otaNewVersion || ''} Ready (Restart App)`
+                : 'Check for Updates'}
+            </Button>
           </View>
           <Divider style={styles.infoDivider} />
 
