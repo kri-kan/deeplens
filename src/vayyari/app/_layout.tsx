@@ -24,6 +24,7 @@ import { ShareIntentProvider } from '../context/ShareIntentContext';
 import { useShareIntent } from '../hooks/useShareIntent';
 import { useOTAUpdate } from '../hooks/useOTAUpdate';
 import { ShareActionChooserModal } from '../components/ui/ShareActionChooserModal';
+import { OTABanner } from '../components/ui/OTABanner';
 import { ensureInitialPermissions } from '../utils/device-permissions';
 
 console.log('[RootLayout] Global execution started');
@@ -130,6 +131,7 @@ function InnerRootLayout() {
                 <Stack.Screen name="share-target" options={{ headerShown: false }} />
               </Stack>
               <StatusBar style="auto" />
+              <OTABanner />
               <ShareActionChooserModal
                 visible={modalVisible}
                 mediaItems={modalMedia}
