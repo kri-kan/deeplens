@@ -307,6 +307,171 @@ public class CurationService : ICurationService
         return true;
     }
 
+    public async Task<StoreMediaItemDto?> SaveModifiedMediaAsync(
+        Guid productId,
+        string mediaId,
+        Stream imageStream,
+        string mimeType,
+        string? recipeJson,
+        string authorEmail,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string findSql = @"
+            SELECT id, product_code, media_order::text AS MediaOrderJson
+            FROM products
+            WHERE id = @Id OR vayyari_product_id = @Id
+            LIMIT 1;";
+
+        var prod = await conn.QuerySingleOrDefaultAsync<(Guid Id, string ProductCode, string? MediaOrderJson)?>(findSql, new { Id = productId });
+        if (prod == null) return null;
+
+        var mediaList = string.IsNullOrEmpty(prod.Value.MediaOrderJson)
+            ? new List<StoreMediaItemDto>()
+            : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(prod.Value.MediaOrderJson, JsonOptions) ?? new();
+
+        var itemIndex = mediaList.FindIndex(m => m.Id == mediaId);
+        if (itemIndex < 0) return null;
+
+        var currentItem = mediaList[itemIndex];
+
+        // 1. Upload modified image to MinIO
+        var modifiedUrl = await _mediaStorage.UploadModifiedMediaAsync(prod.Value.Id, mediaId, imageStream, mimeType, ct);
+
+        // 2. Preserve original URL
+        var originalUrl = currentItem.OriginalUrl ?? currentItem.Url;
+
+        // 3. Update StoreMediaItemDto
+        var updatedItem = currentItem with
+        {
+            Url = modifiedUrl,
+            OriginalUrl = originalUrl,
+            ModifiedUrl = modifiedUrl,
+            ActiveDisplaySource = "modified",
+            HasModified = true,
+            TransformRecipe = recipeJson
+        };
+
+        mediaList[itemIndex] = updatedItem;
+
+        // 4. Persist updated media_order
+        var updatedMediaJson = JsonSerializer.Serialize(mediaList);
+        const string updateSql = @"UPDATE products SET media_order = @MediaOrder::jsonb, updated_at = NOW() WHERE id = @Id;";
+        await conn.ExecuteAsync(updateSql, new { MediaOrder = updatedMediaJson, Id = prod.Value.Id });
+
+        await LogAuditAsync(conn, prod.Value.Id, "media_modified", "mediaOrder", currentItem.Url, modifiedUrl, authorEmail);
+        _logger.LogInformation("Updated modified media for product {ProductCode}, mediaId {MediaId}", prod.Value.ProductCode, mediaId);
+
+        return updatedItem;
+    }
+
+    public async Task<StoreMediaItemDto?> DeleteModifiedMediaAsync(
+        Guid productId,
+        string mediaId,
+        string authorEmail,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string findSql = @"
+            SELECT id, product_code, media_order::text AS MediaOrderJson
+            FROM products
+            WHERE id = @Id OR vayyari_product_id = @Id
+            LIMIT 1;";
+
+        var prod = await conn.QuerySingleOrDefaultAsync<(Guid Id, string ProductCode, string? MediaOrderJson)?>(findSql, new { Id = productId });
+        if (prod == null) return null;
+
+        var mediaList = string.IsNullOrEmpty(prod.Value.MediaOrderJson)
+            ? new List<StoreMediaItemDto>()
+            : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(prod.Value.MediaOrderJson, JsonOptions) ?? new();
+
+        var itemIndex = mediaList.FindIndex(m => m.Id == mediaId);
+        if (itemIndex < 0) return null;
+
+        var currentItem = mediaList[itemIndex];
+        if (string.IsNullOrEmpty(currentItem.ModifiedUrl)) return currentItem;
+
+        // 1. Delete from MinIO
+        await _mediaStorage.DeleteModifiedMediaAsync(currentItem.ModifiedUrl, ct);
+
+        // 2. Revert to original
+        var originalUrl = currentItem.OriginalUrl ?? currentItem.Url;
+        var updatedItem = currentItem with
+        {
+            Url = originalUrl,
+            ModifiedUrl = null,
+            ActiveDisplaySource = "original",
+            HasModified = false,
+            TransformRecipe = null
+        };
+
+        mediaList[itemIndex] = updatedItem;
+
+        // 3. Persist
+        var updatedMediaJson = JsonSerializer.Serialize(mediaList);
+        const string updateSql = @"UPDATE products SET media_order = @MediaOrder::jsonb, updated_at = NOW() WHERE id = @Id;";
+        await conn.ExecuteAsync(updateSql, new { MediaOrder = updatedMediaJson, Id = prod.Value.Id });
+
+        await LogAuditAsync(conn, prod.Value.Id, "media_reverted", "mediaOrder", currentItem.ModifiedUrl, originalUrl, authorEmail);
+        _logger.LogInformation("Reverted modified media to original for product {ProductCode}, mediaId {MediaId}", prod.Value.ProductCode, mediaId);
+
+        return updatedItem;
+    }
+
+    public async Task<StoreMediaItemDto?> ToggleMediaDisplaySourceAsync(
+        Guid productId,
+        string mediaId,
+        string activeDisplaySource,
+        string authorEmail,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string findSql = @"
+            SELECT id, product_code, media_order::text AS MediaOrderJson
+            FROM products
+            WHERE id = @Id OR vayyari_product_id = @Id
+            LIMIT 1;";
+
+        var prod = await conn.QuerySingleOrDefaultAsync<(Guid Id, string ProductCode, string? MediaOrderJson)?>(findSql, new { Id = productId });
+        if (prod == null) return null;
+
+        var mediaList = string.IsNullOrEmpty(prod.Value.MediaOrderJson)
+            ? new List<StoreMediaItemDto>()
+            : JsonSerializer.Deserialize<List<StoreMediaItemDto>>(prod.Value.MediaOrderJson, JsonOptions) ?? new();
+
+        var itemIndex = mediaList.FindIndex(m => m.Id == mediaId);
+        if (itemIndex < 0) return null;
+
+        var currentItem = mediaList[itemIndex];
+        var isModified = activeDisplaySource.Equals("modified", StringComparison.OrdinalIgnoreCase);
+
+        var activeUrl = isModified && !string.IsNullOrEmpty(currentItem.ModifiedUrl)
+            ? currentItem.ModifiedUrl
+            : currentItem.OriginalUrl ?? currentItem.Url;
+
+        var updatedItem = currentItem with
+        {
+            Url = activeUrl,
+            ActiveDisplaySource = isModified ? "modified" : "original"
+        };
+
+        mediaList[itemIndex] = updatedItem;
+
+        var updatedMediaJson = JsonSerializer.Serialize(mediaList);
+        const string updateSql = @"UPDATE products SET media_order = @MediaOrder::jsonb, updated_at = NOW() WHERE id = @Id;";
+        await conn.ExecuteAsync(updateSql, new { MediaOrder = updatedMediaJson, Id = prod.Value.Id });
+
+        await LogAuditAsync(conn, prod.Value.Id, "media_display_toggled", "activeDisplaySource", currentItem.ActiveDisplaySource, activeDisplaySource, authorEmail);
+
+        return updatedItem;
+    }
+
     private static async Task LogAuditAsync(NpgsqlConnection conn, Guid productId, string actionType, string fieldName, string? oldValue, string? newValue, string author)
     {
         const string sql = @"

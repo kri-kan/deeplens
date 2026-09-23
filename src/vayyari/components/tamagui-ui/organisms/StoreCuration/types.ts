@@ -23,6 +23,11 @@ export interface StoreCurationMediaItem {
   dwellTimeSeconds?: number;
   detectedColors?: ExtractedColorCentroid[];
   title?: string;
+  originalUri?: string;
+  modifiedUri?: string | null;
+  activeDisplaySource?: 'original' | 'modified';
+  hasModified?: boolean;
+  transformRecipe?: any;
 }
 
 export interface StoreColorGroup {

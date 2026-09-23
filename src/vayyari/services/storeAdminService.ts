@@ -24,6 +24,11 @@ export interface StoreMediaItem {
   isQualified?: boolean;
   isCommon?: boolean;
   title?: string;
+  originalUrl?: string | null;
+  modifiedUrl?: string | null;
+  activeDisplaySource?: 'original' | 'modified';
+  hasModified?: boolean;
+  transformRecipe?: string | null;
 }
 
 export interface StoreProduct {
@@ -168,6 +173,71 @@ class StoreAdminService {
     });
 
     return res.ok;
+  }
+
+  async uploadModifiedMedia(
+    productId: string,
+    mediaId: string,
+    imageBlob: Blob,
+    recipeJson?: string
+  ): Promise<StoreMediaItem> {
+    const headers = await this.getAuthHeaders();
+    // Do not set Content-Type header so browser sets multipart boundary
+    delete headers['Content-Type'];
+
+    const formData = new FormData();
+    formData.append('file', imageBlob, `${mediaId}_mod.webp`);
+    if (recipeJson) {
+      formData.append('recipeJson', recipeJson);
+    }
+
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/${productId}/media/${mediaId}/modified`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to upload modified media: ${res.status}`);
+    }
+
+    return res.json();
+  }
+
+  async deleteModifiedMedia(productId: string, mediaId: string): Promise<StoreMediaItem> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/${productId}/media/${mediaId}/modified`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to delete modified media: ${res.status}`);
+    }
+
+    return res.json();
+  }
+
+  async toggleMediaDisplaySource(
+    productId: string,
+    mediaId: string,
+    activeDisplaySource: 'original' | 'modified'
+  ): Promise<StoreMediaItem> {
+    const headers = await this.getAuthHeaders();
+    const baseUrl = getStoreApiUrl();
+    const res = await fetch(`${baseUrl}/api/v1/admin/products/${productId}/media/${mediaId}/display-source`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ activeDisplaySource }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to toggle media display source: ${res.status}`);
+    }
+
+    return res.json();
   }
 }
 

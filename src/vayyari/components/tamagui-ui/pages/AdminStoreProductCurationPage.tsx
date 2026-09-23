@@ -32,6 +32,7 @@ import {
   LuPlay,
   LuPause,
   LuShieldCheck,
+  LuShield,
   LuShare2,
   LuHeart,
   LuChevronLeft,
@@ -62,6 +63,10 @@ import {
   INITIAL_COLOR_GROUPS,
   MOCK_CURATION_MEDIA,
 } from '../organisms/StoreCuration/mockCurationData';
+import { MediaEditorModal } from '../organisms/StoreCuration/MediaEditorModal';
+import { MediaDualCardStackModal } from '../organisms/StoreCuration/MediaDualCardStackModal';
+import { TransformRecipe } from '@/utils/MediaCanvasEngine';
+import { storeAdminService } from '@/services/storeAdminService';
 
 export type CurationScreen = 'hub' | 'qualify_and_group' | 'metadata';
 export type QualifyAndGroupStage = 'qualify' | 'swatches' | 'grouping';
@@ -185,6 +190,10 @@ export function AdminStoreProductCurationPage({
   const [previewSlideIndex, setPreviewSlideIndex] = useState(0);
   const [previewPlayingVideo, setPreviewPlayingVideo] = useState(false);
   const [previewBufferingVideo, setPreviewBufferingVideo] = useState(false);
+
+  // Anti-Lens Media Stack & Studio Modals
+  const [activeStackMedia, setActiveStackMedia] = useState<StoreCurationMediaItem | null>(null);
+  const [activeStudioMedia, setActiveStudioMedia] = useState<StoreCurationMediaItem | null>(null);
 
   // Sync state if props update dynamically
   React.useEffect(() => {
@@ -344,6 +353,134 @@ export function AdminStoreProductCurationPage({
     setMediaList((prev) =>
       prev.map((item) => (item.id === id ? { ...item, isQualified: !item.isQualified } : item))
     );
+  };
+
+  // ── ANTI-LENS MEDIA VERSION STACK HANDLERS ──
+  const handleToggleActiveSource = async (mediaId: string, targetSource: 'original' | 'modified') => {
+    setMediaList((prev) =>
+      prev.map((m) => {
+        if (m.id === mediaId) {
+          const activeUrl = targetSource === 'modified' && m.modifiedUri ? m.modifiedUri : (m.originalUri || m.uri);
+          return {
+            ...m,
+            activeDisplaySource: targetSource,
+            uri: activeUrl,
+          };
+        }
+        return m;
+      })
+    );
+
+    if (activeStackMedia?.id === mediaId) {
+      setActiveStackMedia((prev) =>
+        prev
+          ? {
+              ...prev,
+              activeDisplaySource: targetSource,
+              uri: targetSource === 'modified' && prev.modifiedUri ? prev.modifiedUri : (prev.originalUri || prev.uri),
+            }
+          : null
+      );
+    }
+
+    try {
+      if (productId) {
+        await storeAdminService.toggleMediaDisplaySource(productId, mediaId, targetSource);
+      }
+    } catch (err) {
+      console.warn('Failed to persist toggle display source to backend:', err);
+    }
+  };
+
+  const handleDeleteModified = async (mediaId: string) => {
+    const item = mediaList.find((m) => m.id === mediaId);
+    if (!item) return;
+
+    const originalUrl = item.originalUri || item.uri;
+
+    setMediaList((prev) =>
+      prev.map((m) => {
+        if (m.id === mediaId) {
+          return {
+            ...m,
+            uri: originalUrl,
+            modifiedUri: null,
+            activeDisplaySource: 'original',
+            hasModified: false,
+            transformRecipe: null,
+          };
+        }
+        return m;
+      })
+    );
+
+    if (activeStackMedia?.id === mediaId) {
+      setActiveStackMedia((prev) =>
+        prev
+          ? {
+              ...prev,
+              uri: originalUrl,
+              modifiedUri: null,
+              activeDisplaySource: 'original',
+              hasModified: false,
+              transformRecipe: null,
+            }
+          : null
+      );
+    }
+
+    try {
+      if (productId) {
+        await storeAdminService.deleteModifiedMedia(productId, mediaId);
+      }
+    } catch (err) {
+      console.warn('Failed to delete modified media on backend:', err);
+    }
+  };
+
+  const handleSaveStudioMedia = async (blob: Blob, recipe: TransformRecipe) => {
+    if (!activeStudioMedia) return;
+    const mediaId = activeStudioMedia.id;
+
+    const localUrl = URL.createObjectURL(blob);
+    const originalUrl = activeStudioMedia.originalUri || activeStudioMedia.uri;
+
+    const updatedItem: StoreCurationMediaItem = {
+      ...activeStudioMedia,
+      originalUri: originalUrl,
+      modifiedUri: localUrl,
+      activeDisplaySource: 'modified',
+      hasModified: true,
+      transformRecipe: recipe,
+      uri: localUrl,
+    };
+
+    setMediaList((prev) => prev.map((m) => (m.id === mediaId ? updatedItem : m)));
+    setActiveStudioMedia(null);
+
+    try {
+      if (productId) {
+        const res = await storeAdminService.uploadModifiedMedia(
+          productId,
+          mediaId,
+          blob,
+          JSON.stringify(recipe)
+        );
+        setMediaList((prev) =>
+          prev.map((m) =>
+            m.id === mediaId
+              ? {
+                  ...m,
+                  uri: res.url,
+                  modifiedUri: res.modifiedUrl || res.url,
+                }
+              : m
+          )
+        );
+      }
+    } catch (err) {
+      console.error('Failed to upload modified media to Store.Api:', err);
+    }
   };
 
   // ── STAGE 3: MEDIA ASSIGNMENT ──
@@ -1083,6 +1220,36 @@ export function AdminStoreProductCurationPage({
                           {item.durationSeconds ? `0:${item.durationSeconds}` : 'VIDEO'}
                         </Text>
                       </View>
+                    )}
+
+                    {/* Anti-Lens Status Badge (If Image) */}
+                    {item.mediaType !== 'video' && (
+                      <View
+                        style={[
+                          styles.tileLensBadge,
+                          {
+                            backgroundColor: item.hasModified ? '#8B5CF6' : 'rgba(15, 23, 42, 0.75)',
+                          },
+                        ]}
+                      >
+                        <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                          {item.hasModified ? '✦ MOD' : 'RAW'}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Anti-Lens Studio & Card Stack Trigger Button */}
+                    {item.mediaType !== 'video' && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setActiveStackMedia(item);
+                        }}
+                        style={styles.tileStackTriggerBtn}
+                        hitSlop={6}
+                      >
+                        <LuShield size={11} color="#FFFFFF" />
+                      </Pressable>
                     )}
 
                     {/* Order Badge */}
@@ -1884,6 +2051,30 @@ export function AdminStoreProductCurationPage({
         }}
         onClose={() => setColorPickerModalGroupId(null)}
       />
+
+      {/* Anti-Lens Dual-Card Stack Modal */}
+      <MediaDualCardStackModal
+        visible={!!activeStackMedia}
+        mediaItem={activeStackMedia}
+        productCode={productCode}
+        onClose={() => setActiveStackMedia(null)}
+        onOpenStudio={(item) => {
+          setActiveStackMedia(null);
+          setActiveStudioMedia(item);
+        }}
+        onToggleActiveSource={handleToggleActiveSource}
+        onDeleteModified={handleDeleteModified}
+      />
+
+      {/* Client-Side Media Editor Modal (Anti-Lens Studio) */}
+      <MediaEditorModal
+        visible={!!activeStudioMedia}
+        mediaItem={activeStudioMedia}
+        productCode={productCode}
+        brandName="VAYYARI"
+        onClose={() => setActiveStudioMedia(null)}
+        onSave={handleSaveStudioMedia}
+      />
     </YStack>
   );
 }
@@ -2426,5 +2617,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  tileLensBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  tileStackTriggerBtn: {
+    position: 'absolute',
+    bottom: 6,
+    right: 26,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#8B5CF6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
 });

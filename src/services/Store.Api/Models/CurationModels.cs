@@ -27,7 +27,12 @@ public record StoreMediaItemDto(
     [property: JsonPropertyName("colorGroupId")] string? ColorGroupId = null,
     [property: JsonPropertyName("isQualified")] bool? IsQualified = null,
     [property: JsonPropertyName("isCommon")] bool? IsCommon = null,
-    [property: JsonPropertyName("title")] string? Title = null
+    [property: JsonPropertyName("title")] string? Title = null,
+    [property: JsonPropertyName("originalUrl")] string? OriginalUrl = null,
+    [property: JsonPropertyName("modifiedUrl")] string? ModifiedUrl = null,
+    [property: JsonPropertyName("activeDisplaySource")] string? ActiveDisplaySource = "original",
+    [property: JsonPropertyName("hasModified")] bool HasModified = false,
+    [property: JsonPropertyName("transformRecipe")] string? TransformRecipe = null
 );
 
 public record StoreColorGroupDto(
@@ -98,4 +103,8 @@ public record UpdateCurationRequest(
     [property: JsonPropertyName("colorGroups")] List<StoreColorGroupDto>? ColorGroups,
     [property: JsonPropertyName("mediaOrder")] List<StoreMediaItemDto>? MediaOrder,
     [property: JsonPropertyName("tags")] List<string>? Tags
+);
+
+public record ToggleMediaDisplaySourceRequest(
+    [property: JsonPropertyName("activeDisplaySource")] string ActiveDisplaySource
 );

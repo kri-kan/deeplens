@@ -158,6 +158,15 @@ export const LuArchive: React.FC<IconProps> = ({ size = 16, color = "#333333", s
 export const LuRotateCcw: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="rotate-ccw" size={size} color={color} style={style} />
 );
+export const LuRotateCw: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="rotate-cw" size={size} color={color} style={style} />
+);
+export const LuCrop: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="crop" size={size} color={color} style={style} />
+);
+export const LuSliders: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="sliders" size={size} color={color} style={style} />
+);
 export const LuEllipsisVertical: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="more-vertical" size={size} color={color} style={style} />
 );
