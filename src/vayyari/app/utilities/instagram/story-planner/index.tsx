@@ -220,8 +220,8 @@ function MergeModalInner({
     setSuggesting(true);
     try {
       const res = await instagramService.suggestGroupMetadata(postIds);
-      if (!res.title && !res.keywords) {
-        Alert.alert('AI Error', 'Failed to generate suggestions. The AI service may be unavailable.');
+      if (!res || (!res.title && !res.keywords)) {
+        Alert.alert('AI Notice', 'Could not generate AI suggestions for these posts. You can enter them manually.');
       } else {
         if (res.title) {
           setGroupName(res.title);
@@ -232,8 +232,8 @@ function MergeModalInner({
         Alert.alert('AI Suggestions Applied', 'Suggested title and keywords have been filled!');
       }
     } catch (err: any) {
-      console.error(err);
-      Alert.alert('AI Error', 'Failed to generate suggestions.');
+      console.error('[StoryPlanner] AI Suggestion Error:', err);
+      Alert.alert('AI Error', err?.message || 'Failed to generate suggestions.');
     } finally {
       setSuggesting(false);
     }
