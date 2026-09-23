@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Switch,
   ScrollView,
+  FlatList,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
@@ -288,6 +289,7 @@ export interface AdminCollabPlannerPageProps {
   channels?: TargetChannelOption[];
   accounts?: TargetCollabAccount[];
   posts?: CollabPostItem[];
+  totalCount?: number;
   activeChannelId?: string;
   onSelectChannel?: (channelId: string) => void;
   showCurated?: boolean;
@@ -301,6 +303,10 @@ export interface AdminCollabPlannerPageProps {
   queueItems?: CollabPostItem[];
   onOpenQueuePage?: () => void;
   loading?: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
+  onEndReached?: () => void;
+  onEndReachedThreshold?: number;
   refreshing?: boolean;
   onRefresh?: () => void;
   onSelectPost?: (post: CollabPostItem) => void;
@@ -314,6 +320,7 @@ export function AdminCollabPlannerPage({
   channels = DEFAULT_COLLAB_CHANNELS,
   accounts = DEFAULT_COLLAB_ACCOUNTS,
   posts: initialPosts = DEFAULT_COLLAB_POSTS,
+  totalCount,
   activeChannelId: controlledChannelId,
   onSelectChannel,
   showCurated: controlledShowCurated,
@@ -327,6 +334,10 @@ export function AdminCollabPlannerPage({
   queueItems: propQueueItems,
   onOpenQueuePage,
   loading = false,
+  loadingMore = false,
+  hasMore = false,
+  onEndReached,
+  onEndReachedThreshold = 0.8,
   refreshing = false,
   onRefresh,
   onSelectPost,
@@ -467,14 +478,14 @@ export function AdminCollabPlannerPage({
 
   // Status counts for active channel
   const counts = useMemo(() => {
-    const total = channelFilteredPosts.length;
+    const total = totalCount !== undefined ? totalCount : channelFilteredPosts.length;
     const pending = channelFilteredPosts.filter((p) => isPending(p.curationStatus)).length;
     const curated = channelFilteredPosts.filter((p) => isCurated(p.curationStatus)).length;
     const queued = channelFilteredPosts.filter((p) => isQueued(p.curationStatus)).length;
     const completed = channelFilteredPosts.filter((p) => isCompleted(p.curationStatus)).length;
     const nonPending = total - pending;
     return { total, pending, curated, queued, completed, nonPending };
-  }, [channelFilteredPosts]);
+  }, [channelFilteredPosts, totalCount]);
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
@@ -507,8 +518,12 @@ export function AdminCollabPlannerPage({
             </Text>
             <Text fontSize={11} color={tokens.textSecondary} numberOfLines={1}>
               {showCurated
-                ? `Showing all ${counts.total} posts`
-                : `${counts.pending} uncurated post${counts.pending === 1 ? '' : 's'}`}
+                ? totalCount !== undefined
+                  ? `Showing ${visiblePosts.length} of ${totalCount} posts`
+                  : `Showing all ${counts.total} posts`
+                : totalCount !== undefined
+                  ? `${totalCount} uncurated post${totalCount === 1 ? '' : 's'} (${visiblePosts.length} loaded)`
+                  : `${counts.pending} uncurated post${counts.pending === 1 ? '' : 's'}`}
             </Text>
           </YStack>
         </XStack>
@@ -644,43 +659,8 @@ export function AdminCollabPlannerPage({
           </Text>
         </YStack>
       ) : visiblePosts.length === 0 ? (
-        <YStack
-          flex={1}
-          alignItems="center"
-          justifyContent="center"
-          padding={32}
-          gap={12}
-        >
-          <View style={styles.emptyIconCircle}>
-            <LuCheckCheck size={36} color="#059669" />
-          </View>
-          <Text fontSize={16} fontWeight="800" color={tokens.text} textAlign="center">
-            All caught up!
-          </Text>
-          <Text
-            fontSize={12}
-            color={tokens.textSecondary}
-            textAlign="center"
-            maxWidth={260}
-          >
-            No uncurated posts found for{' '}
-            {activeChannelId === 'all' ? 'any channel' : `@${activeChannelId}`}.
-          </Text>
-          <Pressable
-            style={styles.showCuratedCta}
-            onPress={() => handleToggleCurated(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Show Curated Posts"
-          >
-            <LuLayers size={14} color="#7E22CE" />
-            <Text fontSize={12} fontWeight="800" color="#7E22CE">
-              Show Curated Posts ({counts.nonPending})
-            </Text>
-          </Pressable>
-        </YStack>
-      ) : (
         <ScrollView
-          contentContainerStyle={styles.gridContent}
+          contentContainerStyle={styles.emptyScrollContainer}
           refreshControl={
             onRefresh ? (
               <RefreshControl
@@ -692,72 +672,144 @@ export function AdminCollabPlannerPage({
             ) : undefined
           }
         >
-          <View style={styles.mediaGrid}>
-            {visiblePosts.map((post) => {
-              const statusColors: Record<string, { bg: string; text: string }> = {
-                pending: { bg: 'rgba(245, 158, 11, 0.9)', text: '#FFFFFF' },
-                curated: { bg: 'rgba(16, 185, 129, 0.9)', text: '#FFFFFF' },
-                queued: { bg: 'rgba(126, 34, 206, 0.9)', text: '#FFFFFF' },
-                completed: { bg: 'rgba(37, 99, 235, 0.9)', text: '#FFFFFF' },
-              };
-              const statusInfo =
-                statusColors[post.curationStatus || 'pending'] || statusColors.pending;
-
-              const collabCount =
-                (post.collaborators?.length || 0) + (post.targetCollabAccounts?.length || 0);
-
-              return (
-                <Pressable
-                  key={post.id}
-                  onPress={() => handleOpenModal(post)}
-                  style={styles.mediaTile}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Post by @${post.ownerUsername}, Status ${post.curationStatus}`}
-                >
-                  <Image
-                    source={{ uri: post.thumbnailUrl }}
-                    style={styles.tileImage}
-                    contentFit="cover"
-                  />
-
-                  {/* Top-Left Status Badge */}
-                  <View
-                    style={[
-                      styles.tileStatusBadge,
-                      { backgroundColor: statusInfo.bg },
-                    ]}
-                  >
-                    <Text fontSize={9} fontWeight="800" color={statusInfo.text}>
-                      {(post.curationStatus || 'pending').toUpperCase()}
-                    </Text>
-                  </View>
-
-                  {/* Collaborators Badge if already collabing or target set */}
-                  {collabCount > 0 && (
-                    <View style={styles.tileCollabBadge}>
-                      <LuUsers size={10} color="#FFFFFF" />
-                      <Text fontSize={9} fontWeight="800" color="#FFFFFF">
-                        {collabCount}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Bottom Owner Overlay */}
-                  <View style={styles.tileBottomOverlay}>
-                    <Text
-                      fontSize={9}
-                      fontWeight={700}
-                      color="#FFFFFF"
-                      numberOfLines={1}
-                    >
-                      @{post.ownerUsername}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+          <YStack
+            flex={1}
+            alignItems="center"
+            justifyContent="center"
+            padding={32}
+            gap={12}
+          >
+            <View style={styles.emptyIconCircle}>
+              <LuCheckCheck size={36} color="#059669" />
+            </View>
+            <Text fontSize={16} fontWeight="800" color={tokens.text} textAlign="center">
+              All caught up!
+            </Text>
+            <Text
+              fontSize={12}
+              color={tokens.textSecondary}
+              textAlign="center"
+              maxWidth={260}
+            >
+              No uncurated posts found for{' '}
+              {activeChannelId === 'all' ? 'any channel' : `@${activeChannelId}`}.
+            </Text>
+            <Pressable
+              style={styles.showCuratedCta}
+              onPress={() => handleToggleCurated(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Show Curated Posts"
+            >
+              <LuLayers size={14} color="#7E22CE" />
+              <Text fontSize={12} fontWeight="800" color="#7E22CE">
+                Show Curated Posts ({counts.nonPending})
+              </Text>
+            </Pressable>
+          </YStack>
         </ScrollView>
+      ) : (
+        <FlatList
+          data={visiblePosts}
+          keyExtractor={(item) => item.id}
+          numColumns={3}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={styles.gridContent}
+          renderItem={({ item: post }) => {
+            const statusColors: Record<string, { bg: string; text: string }> = {
+              pending: { bg: 'rgba(245, 158, 11, 0.9)', text: '#FFFFFF' },
+              curated: { bg: 'rgba(16, 185, 129, 0.9)', text: '#FFFFFF' },
+              queued: { bg: 'rgba(126, 34, 206, 0.9)', text: '#FFFFFF' },
+              completed: { bg: 'rgba(37, 99, 235, 0.9)', text: '#FFFFFF' },
+            };
+            const statusInfo =
+              statusColors[post.curationStatus || 'pending'] || statusColors.pending;
+
+            const collabCount =
+              (post.collaborators?.length || 0) + (post.targetCollabAccounts?.length || 0);
+
+            return (
+              <Pressable
+                key={post.id}
+                onPress={() => handleOpenModal(post)}
+                style={styles.mediaTile}
+                accessibilityRole="button"
+                accessibilityLabel={`Post by @${post.ownerUsername}, Status ${post.curationStatus}`}
+              >
+                <Image
+                  source={{ uri: post.thumbnailUrl }}
+                  style={styles.tileImage}
+                  contentFit="cover"
+                />
+
+                {/* Top-Left Status Badge */}
+                <View
+                  style={[
+                    styles.tileStatusBadge,
+                    { backgroundColor: statusInfo.bg },
+                  ]}
+                >
+                  <Text fontSize={9} fontWeight="800" color={statusInfo.text}>
+                    {(post.curationStatus || 'pending').toUpperCase()}
+                  </Text>
+                </View>
+
+                {/* Collaborators Badge if already collabing or target set */}
+                {collabCount > 0 && (
+                  <View style={styles.tileCollabBadge}>
+                    <LuUsers size={10} color="#FFFFFF" />
+                    <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+                      {collabCount}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Bottom Owner Overlay */}
+                <View style={styles.tileBottomOverlay}>
+                  <Text
+                    fontSize={9}
+                    fontWeight={700}
+                    color="#FFFFFF"
+                    numberOfLines={1}
+                  >
+                    @{post.ownerUsername}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          }}
+          onEndReached={() => {
+            if (!loading && !loadingMore && hasMore) {
+              onEndReached?.();
+            }
+          }}
+          onEndReachedThreshold={onEndReachedThreshold}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#7E22CE']}
+                tintColor="#7E22CE"
+              />
+            ) : undefined
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadingMoreFooter}>
+                <ActivityIndicator size="small" color="#7E22CE" />
+                <Text fontSize={11} color={tokens.textSecondary} fontWeight="600" marginLeft={8}>
+                  Loading more posts...
+                </Text>
+              </View>
+            ) : hasMore && visiblePosts.length > 0 ? (
+              <View style={styles.scrollSpacer} />
+            ) : null
+          }
+          initialNumToRender={18}
+          maxToRenderPerBatch={18}
+          windowSize={7}
+          removeClippedSubviews={true}
+        />
       )}
 
       {/* ── Curation Modal ── */}
@@ -889,13 +941,13 @@ const styles = StyleSheet.create({
   gridContent: {
     padding: 2,
   },
-  mediaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  columnWrapper: {
     gap: 2,
+    marginBottom: 2,
   },
   mediaTile: {
-    width: '32.8%',
+    flex: 1,
+    maxWidth: '33.1%',
     aspectRatio: 1,
     position: 'relative',
     backgroundColor: '#E5E7EB',
@@ -952,5 +1004,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     marginTop: 8,
+  },
+  loadingMoreFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  scrollSpacer: {
+    height: 30,
+  },
+  emptyScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

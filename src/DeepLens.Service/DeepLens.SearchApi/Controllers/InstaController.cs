@@ -3755,6 +3755,7 @@ public class InstaController : ControllerBase
 
         var sqlBuilder = new StringBuilder(@"
             SELECT 
+                COUNT(*) OVER() AS TotalCount,
                 cv.id::text AS Id, 
                 cv.platform_video_id AS PlatformVideoId, 
                 cv.title AS Title, 
@@ -4788,6 +4789,9 @@ public class CollabPlannerPostDto
 {
     [JsonPropertyName("id")]
     public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("totalCount")]
+    public int TotalCount { get; set; }
 
     [JsonPropertyName("platformVideoId")]
     public string PlatformVideoId { get; set; } = string.Empty;

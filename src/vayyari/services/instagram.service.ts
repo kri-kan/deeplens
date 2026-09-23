@@ -1203,6 +1203,7 @@ export interface CollabChannelStatusDto {
 
 export interface CollabPlannerPostDto {
   id: string;
+  totalCount?: number;
   platformVideoId: string;
   title?: string;
   videoUrl?: string;
