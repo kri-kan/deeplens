@@ -44,6 +44,7 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
         
         var baseUrl = _configuration["Services:ReasoningApiUrl"] ?? "http://localhost:8002";
         _httpClient.BaseAddress = new Uri(baseUrl);
+        _httpClient.Timeout = TimeSpan.FromSeconds(15);
     }
 
     public async Task<ExtractedAttributes> ExtractAttributesAsync(string description, string category)
@@ -98,13 +99,20 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
             {
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var data = await response.Content.ReadFromJsonAsync<SuggestResponse>(options);
-                if (data != null && (!string.IsNullOrWhiteSpace(data.Title) || !string.IsNullOrWhiteSpace(data.Keywords)))
+                if (data != null)
                 {
-                    return new SuggestedMetadata
+                    var fallback = CreateFallbackMetadata(descriptions);
+                    var title = string.IsNullOrWhiteSpace(data.Title) ? fallback.Title : data.Title;
+                    var keywords = string.IsNullOrWhiteSpace(data.Keywords) ? fallback.Keywords : data.Keywords;
+
+                    if (!string.IsNullOrWhiteSpace(title) || !string.IsNullOrWhiteSpace(keywords))
                     {
-                        Title = data.Title ?? string.Empty,
-                        Keywords = data.Keywords ?? string.Empty
-                    };
+                        return new SuggestedMetadata
+                        {
+                            Title = title,
+                            Keywords = keywords
+                        };
+                    }
                 }
             }
             _logger.LogWarning("Reasoning Service returned status {Status} for suggestion. Using local heuristic fallback.", response.StatusCode);
@@ -117,19 +125,86 @@ public class LlmAttributeExtractionService : IAttributeExtractionService
         }
     }
 
-    private SuggestedMetadata CreateFallbackMetadata(List<string> descriptions)
+    public SuggestedMetadata CreateFallbackMetadata(List<string> descriptions)
     {
-        var firstDesc = descriptions.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d)) ?? "New Story Collection";
-        var firstLine = firstDesc.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "New Story Collection";
-        var cleaned = Regex.Replace(firstLine, @"[*#_]", "").Trim();
-        if (cleaned.Length > 35)
+        var combined = string.Join(" ", descriptions ?? new List<string>());
+        
+        var fashionKeywords = new[]
         {
-            cleaned = cleaned.Substring(0, 35).Trim();
+            "saree", "sari", "lehenga", "lehanga", "kurti", "kurta", "anarkali", "salwar", "suit",
+            "pattu", "silk", "kanchi", "kanchipuram", "banarasi", "paithani", "dola", "chiffon",
+            "georgette", "organza", "crepe", "cotton", "velvet", "tissue", "chanderi", "bandhani",
+            "zari", "embroidery", "mirror work", "handwork", "maggam", "cutdana", "sequins",
+            "partywear", "bridal", "wedding", "festive", "traditional", "designerwear", "designer"
+        };
+
+        var matchedKeywords = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kw in fashionKeywords)
+        {
+            if (Regex.IsMatch(combined, $@"\b{Regex.Escape(kw)}\b", RegexOptions.IgnoreCase))
+            {
+                matchedKeywords.Add(kw.ToLowerInvariant());
+            }
         }
+
+        // Extract hashtags
+        var promoTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "vayyari", "vayyarifashions", "reels", "viral", "explore", "trending", "fyp", "dmfororders", "freeshipping", "cod"
+        };
+        var hashtagMatches = Regex.Matches(combined, @"#([a-zA-Z0-9_]{3,30})");
+        foreach (Match match in hashtagMatches)
+        {
+            var tag = match.Groups[1].Value.ToLowerInvariant();
+            if (!promoTags.Contains(tag))
+            {
+                matchedKeywords.Add(tag);
+            }
+        }
+
+        string finalKeywords;
+        if (matchedKeywords.Count > 0)
+        {
+            finalKeywords = string.Join(", ", matchedKeywords);
+        }
+        else
+        {
+            finalKeywords = "ethnic wear, traditional, partywear, new arrival";
+        }
+
+        // Clean title generation
+        string title = "";
+        foreach (var desc in descriptions ?? new List<string>())
+        {
+            var lines = (desc ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => Regex.Replace(l, @"[*#_]", "").Trim())
+                .Where(l => !string.IsNullOrWhiteSpace(l) && !Regex.IsMatch(l, @"^(\d{3,5}|price|rate|cod|free ship|dm for)", RegexOptions.IgnoreCase))
+                .ToList();
+
+            if (lines.Count > 0)
+            {
+                title = lines[0];
+                if (title.Length > 35) title = title.Substring(0, 35).Trim();
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            if (matchedKeywords.Contains("saree") || matchedKeywords.Contains("pattu") || matchedKeywords.Contains("silk"))
+                title = "Ethnic Saree Collection";
+            else if (matchedKeywords.Contains("lehenga"))
+                title = "Designer Lehenga Collection";
+            else if (matchedKeywords.Contains("kurti"))
+                title = "Curated Kurti Collection";
+            else
+                title = "New Story Collection";
+        }
+
         return new SuggestedMetadata
         {
-            Title = string.IsNullOrWhiteSpace(cleaned) ? "New Story Collection" : cleaned,
-            Keywords = ""
+            Title = title,
+            Keywords = finalKeywords
         };
     }
 

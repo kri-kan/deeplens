@@ -1886,7 +1886,7 @@ public class InstaController : ControllerBase
 
             if (descriptions.Count == 0)
             {
-                return Ok(new { title = "New Story Group", keywords = "" });
+                return Ok(new { title = "New Story Group", keywords = "ethnic wear, traditional, story collection" });
             }
 
             var suggestion = await _attributeService.SuggestGroupMetadataAsync(descriptions);
