@@ -13,7 +13,7 @@ import { CollabPostItem } from '@/components/tamagui-ui/organisms/CollabCuration
 import { getSearchApiUrl } from '@/utils/api-config';
 import { getMediaUri } from '@/utils/instagram-helpers';
 
-const PAGE_SIZE = 45;
+export const COLLAB_PAGE_SIZE = 90;
 
 export default function CollabPlannerRoute() {
   const router = useRouter();
@@ -24,6 +24,10 @@ export default function CollabPlannerRoute() {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [page, setPage] = useState<number>(0);
   const [totalCount, setTotalCount] = useState<number | undefined>(undefined);
+
+  const pageRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
 
   const [channels, setChannels] = useState<TargetChannelOption[]>([]);
   const [accounts, setAccounts] = useState<TargetCollabAccount[]>([]);
@@ -88,11 +92,11 @@ export default function CollabPlannerRoute() {
       includeCurated: boolean,
       isAppend = false
     ) => {
-      const skip = pageIndex * PAGE_SIZE;
+      const skip = pageIndex * COLLAB_PAGE_SIZE;
       const dbPosts: CollabPlannerPostDto[] = await instagramService.getCollabPosts({
         username: channelUsername,
         includeCurated,
-        take: PAGE_SIZE,
+        take: COLLAB_PAGE_SIZE,
         skip,
       });
 
@@ -110,11 +114,10 @@ export default function CollabPlannerRoute() {
           : undefined;
 
       setTotalCount(total);
-      if (total !== undefined) {
-        setHasMore(skip + dbPosts.length < total);
-      } else {
-        setHasMore(dbPosts.length === PAGE_SIZE);
-      }
+      const moreAvailable =
+        total !== undefined ? skip + dbPosts.length < total : dbPosts.length === COLLAB_PAGE_SIZE;
+      hasMoreRef.current = moreAvailable;
+      setHasMore(moreAvailable);
 
       const mappedPosts = dbPosts.map(mapPost);
 
@@ -188,7 +191,12 @@ export default function CollabPlannerRoute() {
         activeChannelRef.current = targetChannel;
 
         // 2. Fetch page 0 for this active channel
+        pageRef.current = 0;
         setPage(0);
+        hasMoreRef.current = true;
+        setHasMore(true);
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
         await fetchChannelPosts(targetChannel, 0, showCuratedRef.current, false);
 
         // 3. Check automation queue items
@@ -220,9 +228,13 @@ export default function CollabPlannerRoute() {
       if (channelId === activeChannelRef.current) return;
       setActiveChannelId(channelId);
       activeChannelRef.current = channelId;
-      setPosts([]);
+      pageRef.current = 0;
       setPage(0);
+      hasMoreRef.current = true;
       setHasMore(true);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+      setPosts([]);
       setLoading(true);
       try {
         await fetchChannelPosts(channelId, 0, showCuratedRef.current, false);
@@ -240,9 +252,13 @@ export default function CollabPlannerRoute() {
     async (newCurated: boolean) => {
       setShowCurated(newCurated);
       showCuratedRef.current = newCurated;
-      setPosts([]);
+      pageRef.current = 0;
       setPage(0);
+      hasMoreRef.current = true;
       setHasMore(true);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+      setPosts([]);
       setLoading(true);
       try {
         await fetchChannelPosts(activeChannelRef.current, 0, newCurated, false);
@@ -257,20 +273,23 @@ export default function CollabPlannerRoute() {
   );
 
   const handleEndReached = useCallback(async () => {
-    if (loading || loadingMore || !hasMore) {
+    if (loading || loadingMoreRef.current || !hasMoreRef.current) {
       return;
     }
+    loadingMoreRef.current = true;
     setLoadingMore(true);
+    const nextPage = pageRef.current + 1;
     try {
-      const nextPage = page + 1;
       await fetchChannelPosts(activeChannelRef.current, nextPage, showCuratedRef.current, true);
+      pageRef.current = nextPage;
       setPage(nextPage);
     } catch (err: any) {
       console.error('Failed to load more collab posts', err);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [loading, loadingMore, hasMore, page, fetchChannelPosts]);
+  }, [loading, fetchChannelPosts]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -345,7 +364,7 @@ export default function CollabPlannerRoute() {
         loadingMore={loadingMore}
         hasMore={hasMore}
         onEndReached={handleEndReached}
-        onEndReachedThreshold={0.8}
+        onEndReachedThreshold={1.2}
         refreshing={refreshing}
         onRefresh={() => loadInitialData(true)}
         onBack={handleBack}

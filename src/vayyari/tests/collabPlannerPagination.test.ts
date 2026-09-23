@@ -1,14 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-export const PAGE_SIZE = 45;
+export const COLLAB_PAGE_SIZE = 90;
 
 export function calculateHasMore(skip: number, returnedCount: number, totalCount?: number): boolean {
   if (returnedCount === 0) return false;
   if (totalCount !== undefined) {
     return skip + returnedCount < totalCount;
   }
-  return returnedCount === PAGE_SIZE;
+  return returnedCount === COLLAB_PAGE_SIZE;
 }
 
 export function deduplicateAndAppendPosts<T extends { id: string }>(existing: T[], fresh: T[]): T[] {
@@ -69,9 +69,9 @@ describe('Collab Planner Pagination & Infinite Scroll Logic', () => {
     assert.strictEqual(calculateHasMore(1407, 0, 1407), false);
   });
 
-  it('calculateHasMore falls back to PAGE_SIZE check when totalCount is undefined', () => {
-    assert.strictEqual(calculateHasMore(0, 45, undefined), true);
-    assert.strictEqual(calculateHasMore(45, 30, undefined), false);
+  it('calculateHasMore falls back to COLLAB_PAGE_SIZE check when totalCount is undefined', () => {
+    assert.strictEqual(calculateHasMore(0, 90, undefined), true);
+    assert.strictEqual(calculateHasMore(90, 45, undefined), false);
     assert.strictEqual(calculateHasMore(0, 0, undefined), false);
   });
 
@@ -110,19 +110,78 @@ describe('Collab Planner Pagination & Infinite Scroll Logic', () => {
 
   it('formatHeaderSubtitle formats loaded vs total posts accurately', () => {
     // Uncurated mode with totalCount
-    const sub1 = formatHeaderSubtitle(45, false, 1403);
-    assert.strictEqual(sub1, '1403 uncurated posts (45 loaded)');
+    const sub1 = formatHeaderSubtitle(90, false, 1403);
+    assert.strictEqual(sub1, '1403 uncurated posts (90 loaded)');
 
     // Single uncurated post
     const sub2 = formatHeaderSubtitle(1, false, 1);
     assert.strictEqual(sub2, '1 uncurated post (1 loaded)');
 
     // Curated mode with totalCount
-    const sub3 = formatHeaderSubtitle(90, true, 1407);
-    assert.strictEqual(sub3, 'Showing 90 of 1407 posts');
+    const sub3 = formatHeaderSubtitle(180, true, 1407);
+    assert.strictEqual(sub3, 'Showing 180 of 1407 posts');
 
     // Fallbacks without totalCount
     const sub4 = formatHeaderSubtitle(15, false, undefined, 15, 20);
     assert.strictEqual(sub4, '15 uncurated posts');
+  });
+
+  it('simulates ref-guarded pagination traversing all 1403 posts without stall', () => {
+    const totalCount = 1403;
+    let pageRef = 0;
+    let loadingMoreRef = false;
+    let hasMoreRef = true;
+    let totalLoaded = 0;
+    let fetchCount = 0;
+
+    // Simulate paging until hasMore is false
+    while (hasMoreRef) {
+      if (loadingMoreRef) break; // guarded
+      loadingMoreRef = true;
+
+      const skip = pageRef * COLLAB_PAGE_SIZE;
+      const remaining = totalCount - skip;
+      const batchSize = Math.min(COLLAB_PAGE_SIZE, remaining);
+
+      totalLoaded += batchSize;
+      fetchCount++;
+
+      hasMoreRef = calculateHasMore(skip, batchSize, totalCount);
+      pageRef++;
+      loadingMoreRef = false;
+    }
+
+    assert.strictEqual(totalLoaded, 1403);
+    // 1403 / 90 = 15.58 -> exactly 16 pages
+    assert.strictEqual(fetchCount, 16);
+    assert.strictEqual(hasMoreRef, false);
+  });
+
+  it('ref guard blocks concurrent fetch requests during rapid scrolling', () => {
+    let loadingMoreRef = false;
+    let networkCalls = 0;
+
+    const simulateTrigger = () => {
+      if (loadingMoreRef) return false;
+      loadingMoreRef = true;
+      networkCalls++;
+      return true;
+    };
+
+    // First trigger initiates fetch
+    assert.strictEqual(simulateTrigger(), true);
+    assert.strictEqual(networkCalls, 1);
+
+    // Rapid successive scroll events while in flight are safely dropped
+    assert.strictEqual(simulateTrigger(), false);
+    assert.strictEqual(simulateTrigger(), false);
+    assert.strictEqual(networkCalls, 1);
+
+    // Fetch finishes
+    loadingMoreRef = false;
+
+    // Next trigger executes cleanly
+    assert.strictEqual(simulateTrigger(), true);
+    assert.strictEqual(networkCalls, 2);
   });
 });

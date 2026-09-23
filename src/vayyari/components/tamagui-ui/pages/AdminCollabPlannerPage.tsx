@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Pressable,
@@ -316,10 +316,77 @@ export interface AdminCollabPlannerPageProps {
   onBack?: () => void;
 }
 
+export interface CollabMediaTileProps {
+  post: CollabPostItem;
+  onPress: (post: CollabPostItem) => void;
+}
+
+export const CollabMediaTile = React.memo(function CollabMediaTile({
+  post,
+  onPress,
+}: CollabMediaTileProps) {
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    pending: { bg: 'rgba(245, 158, 11, 0.9)', text: '#FFFFFF' },
+    curated: { bg: 'rgba(16, 185, 129, 0.9)', text: '#FFFFFF' },
+    queued: { bg: 'rgba(126, 34, 206, 0.9)', text: '#FFFFFF' },
+    completed: { bg: 'rgba(37, 99, 235, 0.9)', text: '#FFFFFF' },
+  };
+  const statusInfo =
+    statusColors[post.curationStatus || 'pending'] || statusColors.pending;
+
+  const collabCount =
+    (post.collaborators?.length || 0) + (post.targetCollabAccounts?.length || 0);
+
+  const handlePress = useCallback(() => {
+    onPress(post);
+  }, [onPress, post]);
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={styles.mediaTile}
+      accessibilityRole="button"
+      accessibilityLabel={`Post by @${post.ownerUsername}, Status ${post.curationStatus}`}
+    >
+      <Image
+        source={{ uri: post.thumbnailUrl }}
+        style={styles.tileImage}
+        contentFit="cover"
+        recyclingKey={post.id}
+        cachePolicy="memory-disk"
+      />
+
+      {/* Top-Left Status Badge */}
+      <View style={[styles.tileStatusBadge, { backgroundColor: statusInfo.bg }]}>
+        <Text fontSize={9} fontWeight="800" color={statusInfo.text}>
+          {(post.curationStatus || 'pending').toUpperCase()}
+        </Text>
+      </View>
+
+      {/* Collaborators Badge if already collabing or target set */}
+      {collabCount > 0 && (
+        <View style={styles.tileCollabBadge}>
+          <LuUsers size={10} color="#FFFFFF" />
+          <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+            {collabCount}
+          </Text>
+        </View>
+      )}
+
+      {/* Bottom Owner Overlay */}
+      <View style={styles.tileBottomOverlay}>
+        <Text fontSize={9} fontWeight="700" color="#FFFFFF" numberOfLines={1}>
+          @{post.ownerUsername}
+        </Text>
+      </View>
+    </Pressable>
+  );
+});
+
 export function AdminCollabPlannerPage({
   channels = DEFAULT_COLLAB_CHANNELS,
   accounts = DEFAULT_COLLAB_ACCOUNTS,
-  posts: initialPosts = DEFAULT_COLLAB_POSTS,
+  posts: controlledPosts,
   totalCount,
   activeChannelId: controlledChannelId,
   onSelectChannel,
@@ -378,12 +445,9 @@ export function AdminCollabPlannerPage({
     onToggleShowCurated?.(value);
   };
 
-  // Internal Posts List State synchronized with initialPosts prop
-  const [postsList, setPostsList] = useState<CollabPostItem[]>(initialPosts);
-
-  useEffect(() => {
-    setPostsList(initialPosts);
-  }, [initialPosts]);
+  // Posts List State: If controlled posts prop is supplied, consume it directly; otherwise fallback to internal state.
+  const [internalPostsList, setInternalPostsList] = useState<CollabPostItem[]>(DEFAULT_COLLAB_POSTS);
+  const postsList = controlledPosts !== undefined ? controlledPosts : internalPostsList;
 
   // Modal State
   const [internalModalOpen, setInternalModalOpen] = useState<boolean>(false);
@@ -404,47 +468,51 @@ export function AdminCollabPlannerPage({
     onToggleQueueDrawer?.(open);
   };
 
-  const handleOpenModal = (post: CollabPostItem) => {
+  const handleOpenModal = useCallback((post: CollabPostItem) => {
     setInternalSelectedPost(post);
     setInternalModalOpen(true);
     onSelectPost?.(post);
-  };
+  }, [onSelectPost]);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setInternalModalOpen(false);
     setInternalSelectedPost(null);
     onCloseModal?.();
-  };
+  }, [onCloseModal]);
 
   // Handlers for Curation & Automation
   const handleMarkCurated = (postId: string, selectedAccountIds: string[]) => {
-    setPostsList((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              curationStatus: 'curated',
-              targetCollabAccounts: selectedAccountIds,
-            }
-          : p
-      )
-    );
+    if (controlledPosts === undefined) {
+      setInternalPostsList((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                curationStatus: 'curated',
+                targetCollabAccounts: selectedAccountIds,
+              }
+            : p
+        )
+      );
+    }
     onMarkCurated?.(postId, selectedAccountIds);
     handleCloseModal();
   };
 
   const handleQueueAutomation = (postId: string, selectedAccountIds: string[]) => {
-    setPostsList((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              curationStatus: 'queued',
-              targetCollabAccounts: selectedAccountIds,
-            }
-          : p
-      )
-    );
+    if (controlledPosts === undefined) {
+      setInternalPostsList((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                curationStatus: 'queued',
+                targetCollabAccounts: selectedAccountIds,
+              }
+            : p
+        )
+      );
+    }
     onQueueAutomation?.(postId, selectedAccountIds);
     handleCloseModal();
   };
@@ -486,6 +554,15 @@ export function AdminCollabPlannerPage({
     const nonPending = total - pending;
     return { total, pending, curated, queued, completed, nonPending };
   }, [channelFilteredPosts, totalCount]);
+
+  const keyExtractor = useCallback((item: CollabPostItem) => item.id, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: CollabPostItem }) => (
+      <CollabMediaTile post={item} onPress={handleOpenModal} />
+    ),
+    [handleOpenModal]
+  );
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
@@ -718,78 +795,12 @@ export function AdminCollabPlannerPage({
       ) : (
         <FlatList
           data={visiblePosts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
           numColumns={3}
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.gridContent}
-          renderItem={({ item: post }) => {
-            const statusColors: Record<string, { bg: string; text: string }> = {
-              pending: { bg: 'rgba(245, 158, 11, 0.9)', text: '#FFFFFF' },
-              curated: { bg: 'rgba(16, 185, 129, 0.9)', text: '#FFFFFF' },
-              queued: { bg: 'rgba(126, 34, 206, 0.9)', text: '#FFFFFF' },
-              completed: { bg: 'rgba(37, 99, 235, 0.9)', text: '#FFFFFF' },
-            };
-            const statusInfo =
-              statusColors[post.curationStatus || 'pending'] || statusColors.pending;
-
-            const collabCount =
-              (post.collaborators?.length || 0) + (post.targetCollabAccounts?.length || 0);
-
-            return (
-              <Pressable
-                key={post.id}
-                onPress={() => handleOpenModal(post)}
-                style={styles.mediaTile}
-                accessibilityRole="button"
-                accessibilityLabel={`Post by @${post.ownerUsername}, Status ${post.curationStatus}`}
-              >
-                <Image
-                  source={{ uri: post.thumbnailUrl }}
-                  style={styles.tileImage}
-                  contentFit="cover"
-                />
-
-                {/* Top-Left Status Badge */}
-                <View
-                  style={[
-                    styles.tileStatusBadge,
-                    { backgroundColor: statusInfo.bg },
-                  ]}
-                >
-                  <Text fontSize={9} fontWeight="800" color={statusInfo.text}>
-                    {(post.curationStatus || 'pending').toUpperCase()}
-                  </Text>
-                </View>
-
-                {/* Collaborators Badge if already collabing or target set */}
-                {collabCount > 0 && (
-                  <View style={styles.tileCollabBadge}>
-                    <LuUsers size={10} color="#FFFFFF" />
-                    <Text fontSize={9} fontWeight="800" color="#FFFFFF">
-                      {collabCount}
-                    </Text>
-                  </View>
-                )}
-
-                {/* Bottom Owner Overlay */}
-                <View style={styles.tileBottomOverlay}>
-                  <Text
-                    fontSize={9}
-                    fontWeight={700}
-                    color="#FFFFFF"
-                    numberOfLines={1}
-                  >
-                    @{post.ownerUsername}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          }}
-          onEndReached={() => {
-            if (!loading && !loadingMore && hasMore) {
-              onEndReached?.();
-            }
-          }}
+          renderItem={renderItem}
+          onEndReached={onEndReached}
           onEndReachedThreshold={onEndReachedThreshold}
           refreshControl={
             onRefresh ? (
@@ -813,9 +824,9 @@ export function AdminCollabPlannerPage({
               <View style={styles.scrollSpacer} />
             ) : null
           }
-          initialNumToRender={18}
-          maxToRenderPerBatch={18}
-          windowSize={7}
+          initialNumToRender={24}
+          maxToRenderPerBatch={24}
+          windowSize={9}
           removeClippedSubviews={true}
         />
       )}
