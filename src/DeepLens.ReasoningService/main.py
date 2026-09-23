@@ -86,42 +86,18 @@ GEMINI_SAFETY_SETTINGS = [
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
 ]
 
-async def query_ollama_direct(model: str, messages: list[dict], timeout: float = 6.0) -> str | None:
-    """Direct HTTP fallback to local Ollama GPU endpoint bypassing LiteLLM proxy."""
-    endpoint = os.getenv("OLLAMA_API_BASE", "http://ollama-gpu:11434")
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            res = await client.post(
-                f"{endpoint}/api/chat",
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "format": "json",
-                    "stream": False,
-                    "options": {"temperature": 0.1}
-                }
-            )
-            if res.status_code == 200:
-                data = res.json()
-                content = data.get("message", {}).get("content", "").strip()
-                if content:
-                    return content
-    except Exception as e:
-        print(f"Direct Ollama fallback to {endpoint} with model {model} failed: {e}", flush=True)
-    return None
-
 async def call_llm(prompt: str, system: str = "", req: Request = None, model: str = None, timeout: float = 12.0) -> str:
-    """Execute chat completion via LiteLLM OpenAI-compatible gateway in JSON mode with automatic Ollama fallback."""
+    """Execute chat completion via LiteLLM OpenAI-compatible gateway in JSON mode."""
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
     target_model = model or LITELLM_MODEL
-    try:
-        if req and await req.is_disconnected():
-            raise HTTPException(status_code=499, detail="Client Closed Request")
+    if req and await req.is_disconnected():
+        raise HTTPException(status_code=499, detail="Client Closed Request")
 
+    try:
         completion = await asyncio.wait_for(
             llm_client.chat.completions.create(
                 model=target_model,
@@ -138,21 +114,13 @@ async def call_llm(prompt: str, system: str = "", req: Request = None, model: st
             if content and choice.finish_reason != "content_filter":
                 return content
             elif choice.finish_reason == "content_filter":
-                print(f"LiteLLM model {target_model} finished with content_filter. Falling over to Ollama...", flush=True)
+                print(f"LiteLLM model {target_model} finished with content_filter.", flush=True)
     except HTTPException:
         raise
     except Exception as e:
         print(f"LiteLLM gateway with model {target_model} notice: {e}", flush=True)
 
-    # Automatic Zero-Downtime Fallback directly to local Ollama GPU
-    print(f"Engaging resilient direct local Ollama fallback for {target_model}...", flush=True)
-    fallback_models = ["qwen2.5:0.5b", "phi4-mini:latest"]
-    for fb_model in fallback_models:
-        direct_content = await query_ollama_direct(fb_model, messages, timeout=6.0)
-        if direct_content:
-            return direct_content
-
-    raise HTTPException(status_code=502, detail=f"Failed to communicate with LLM gateway and Ollama fallback for model {target_model}")
+    raise HTTPException(status_code=502, detail=f"Failed to communicate with LLM gateway for model {target_model}")
 
 class ExtractionRequest(BaseModel):
     text: str
@@ -519,7 +487,7 @@ async def run_all_models(req: Request, request: RunAllModelsRequest = None):
     
     target_models = req_body.models
     if not target_models:
-        target_models = ["deeplens-llm", "deeplens-fast", "gemini-2.5-flash", "phi3:latest", "phi4-mini:latest"]
+        target_models = ["deeplens-llm", "deeplens-fast", "gemini-2.5-flash"]
         try:
             models_response = await asyncio.wait_for(llm_client.models.list(), timeout=5.0)
             if hasattr(models_response, 'data') and models_response.data:
