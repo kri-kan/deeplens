@@ -85,6 +85,70 @@ export function loadHtmlImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
+ * Pure calculation helper: Computes pixel crop bounds from normalized coordinates.
+ */
+export function calculateCropBounds(
+  origW: number,
+  origH: number,
+  crop?: CropRect
+): { sx: number; sy: number; sw: number; sh: number } {
+  const c = crop || { x: 0, y: 0, width: 1, height: 1 };
+  const sx = Math.max(0, Math.min(origW, (c.x || 0) * origW));
+  const sy = Math.max(0, Math.min(origH, (c.y || 0) * origH));
+  const sw = Math.max(1, Math.min(origW - sx, (c.width ?? 1) * origW));
+  const sh = Math.max(1, Math.min(origH - sy, (c.height ?? 1) * origH));
+  return { sx, sy, sw, sh };
+}
+
+/**
+ * Pure calculation helper: Computes target canvas dimensions after crop, rotation, and downscale clamp.
+ */
+export function calculateTargetCanvasDimensions(
+  sw: number,
+  sh: number,
+  rotateDegrees: number,
+  maxDimension = 2048
+): { width: number; height: number; isRotated90or270: boolean } {
+  const isRotated90or270 = rotateDegrees === 90 || rotateDegrees === 270;
+  const croppedW = isRotated90or270 ? sh : sw;
+  const croppedH = isRotated90or270 ? sw : sh;
+
+  let targetW = croppedW;
+  let targetH = croppedH;
+  if (Math.max(targetW, targetH) > maxDimension) {
+    const scaleFactor = maxDimension / Math.max(targetW, targetH);
+    targetW = Math.round(targetW * scaleFactor);
+    targetH = Math.round(targetH * scaleFactor);
+  }
+
+  return {
+    width: Math.max(1, Math.round(targetW)),
+    height: Math.max(1, Math.round(targetH)),
+    isRotated90or270,
+  };
+}
+
+/**
+ * Pure calculation helper: Computes tangent shear factors for perspective tilt matrix.
+ */
+export function calculateShearFactors(
+  tiltAngleX = 0,
+  tiltAngleY = 0
+): { tanX: number; tanY: number; radX: number; radY: number } {
+  // Clamp angles between -15 and +15 degrees to prevent extreme distortion
+  const clampedX = Math.max(-15, Math.min(15, tiltAngleX));
+  const clampedY = Math.max(-15, Math.min(15, tiltAngleY));
+  const radX = (clampedX * Math.PI) / 180;
+  const radY = (clampedY * Math.PI) / 180;
+  return {
+    tanX: Math.tan(radX),
+    tanY: Math.tan(radY),
+    radX,
+    radY,
+  };
+}
+
+/**
  * Renders the transformation recipe onto a fresh HTML5 Canvas.
  */
 export function renderCanvasTransform(
@@ -96,29 +160,19 @@ export function renderCanvasTransform(
   const origH = sourceImg.naturalHeight || sourceImg.height;
 
   // 1. Calculate Crop bounds
-  const crop = recipe.crop || { x: 0, y: 0, width: 1, height: 1 };
-  const sx = Math.max(0, crop.x * origW);
-  const sy = Math.max(0, crop.y * origH);
-  const sw = Math.min(origW - sx, crop.width * origW);
-  const sh = Math.min(origH - sy, crop.height * origH);
+  const { sx, sy, sw, sh } = calculateCropBounds(origW, origH, recipe.crop);
 
   // 2. Determine base dimensions after crop and rotation
-  const isRotated90or270 = recipe.rotateDegrees === 90 || recipe.rotateDegrees === 270;
-  const croppedW = isRotated90or270 ? sh : sw;
-  const croppedH = isRotated90or270 ? sw : sh;
-
-  // Scale down if exceeds maxDimension to optimize memory while retaining high quality
-  let targetW = croppedW;
-  let targetH = croppedH;
-  if (Math.max(targetW, targetH) > maxDimension) {
-    const scaleFactor = maxDimension / Math.max(targetW, targetH);
-    targetW = Math.round(targetW * scaleFactor);
-    targetH = Math.round(targetH * scaleFactor);
-  }
+  const { width, height, isRotated90or270 } = calculateTargetCanvasDimensions(
+    sw,
+    sh,
+    recipe.rotateDegrees,
+    maxDimension
+  );
 
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(targetW);
-  canvas.height = Math.round(targetH);
+  canvas.width = width;
+  canvas.height = height;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) {
@@ -135,10 +189,9 @@ export function renderCanvasTransform(
   ctx.translate(canvas.width / 2, canvas.height / 2);
 
   // 3. Apply Tilt / Perspective Shear (Key to defeating Google Lens / visual keypoints)
-  const radX = ((recipe.tiltAngleX || 0) * Math.PI) / 180;
-  const radY = ((recipe.tiltAngleY || 0) * Math.PI) / 180;
-  if (radX !== 0 || radY !== 0) {
-    ctx.transform(1, Math.tan(radY), Math.tan(radX), 1, 0, 0);
+  const { tanX, tanY } = calculateShearFactors(recipe.tiltAngleX, recipe.tiltAngleY);
+  if (tanX !== 0 || tanY !== 0) {
+    ctx.transform(1, tanY, tanX, 1, 0, 0);
   }
 
   // 4. Apply Rotation
@@ -152,8 +205,8 @@ export function renderCanvasTransform(
   ctx.scale(scaleX, scaleY);
 
   // 6. Draw the cropped source image centered
-  const drawW = isRotated90or270 ? targetH : targetW;
-  const drawH = isRotated90or270 ? targetW : targetH;
+  const drawW = isRotated90or270 ? height : width;
+  const drawH = isRotated90or270 ? width : height;
   ctx.drawImage(sourceImg, sx, sy, sw, sh, -drawW / 2, -drawH / 2, drawW, drawH);
 
   ctx.restore();
