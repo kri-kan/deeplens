@@ -531,26 +531,34 @@ export function AdminCollabPlannerPage({
         {/* Right Header Cluster: "Show Curated" Toggle + Queue Icon Button */}
         <XStack alignItems="center" gap={10}>
           {/* Header Toggle for Curated Posts */}
-          <XStack
-            alignItems="center"
-            gap={6}
-            backgroundColor="#F3F4F6"
-            paddingHorizontal={8}
-            paddingVertical={4}
-            borderRadius={16}
+          <Pressable
+            onPress={() => handleToggleCurated(!showCurated)}
+            hitSlop={8}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showCurated }}
+            accessibilityLabel="Show Curated Posts Toggle"
           >
-            <Text fontSize={11} fontWeight="800" color={showCurated ? '#7E22CE' : '#4B5563'}>
-              Curated
-            </Text>
-            <Switch
-              value={showCurated}
-              onValueChange={handleToggleCurated}
-              trackColor={{ false: '#D1D5DB', true: '#7E22CE' }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Show Curated Posts Toggle"
-              style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
-            />
-          </XStack>
+            <XStack
+              alignItems="center"
+              gap={6}
+              backgroundColor={showCurated ? '#F3E8FF' : '#F3F4F6'}
+              paddingHorizontal={8}
+              paddingVertical={4}
+              borderRadius={16}
+            >
+              <Text fontSize={11} fontWeight="800" color={showCurated ? '#7E22CE' : '#4B5563'}>
+                Curated
+              </Text>
+              <Switch
+                value={showCurated}
+                onValueChange={handleToggleCurated}
+                trackColor={{ false: '#D1D5DB', true: '#7E22CE' }}
+                thumbColor="#FFFFFF"
+                pointerEvents="none"
+                style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
+              />
+            </XStack>
+          </Pressable>
 
           {/* Queue Icon Button */}
           <Pressable
