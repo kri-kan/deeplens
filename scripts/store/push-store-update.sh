@@ -15,7 +15,7 @@ MINIO_ALIAS="local"
 MINIO_BUCKET="store-updates"
 BUNDLES_PREFIX="bundles"
 BASE_URL="http://krikanserver.taild227d9.ts.net/store-updates"
-KEEP_VERSIONS=5
+KEEP_VERSIONS=2
 
 RELEASE_NOTES="No release notes provided."
 while [[ $# -gt 0 ]]; do

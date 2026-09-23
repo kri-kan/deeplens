@@ -57,7 +57,7 @@ MINIO_ALIAS="local"
 MINIO_BUCKET="admin-updates"
 BUNDLES_PREFIX="bundles"
 BASE_URL="http://krikanserver.taild227d9.ts.net/admin-updates"
-KEEP_VERSIONS=5
+KEEP_VERSIONS=2
 
 # ─── Argument parsing ──────────────────────────────────────────────────────────
 RELEASE_NOTES="No release notes provided."
