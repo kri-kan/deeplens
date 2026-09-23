@@ -407,6 +407,56 @@ app.MapPatch("/api/v1/admin/products/{id}/curation", async (Guid id, [FromBody] 
 .WithName("AdminUpdateProductCuration")
 .WithOpenApi();
 
+// 5. Upload Client-Modified Media (WebP blob from Admin Canvas)
+app.MapPost("/api/v1/admin/products/{id}/media/{mediaId}/modified", async (Guid id, string mediaId, HttpRequest request, HttpContext ctx, ICurationService curationService) =>
+{
+    var author = GetAuthorEmail(ctx);
+    if (!request.HasFormContentType)
+        return Results.BadRequest(new { message = "Expected multipart/form-data content type." });
+
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
+    if (file == null || file.Length == 0)
+        return Results.BadRequest(new { message = "No image file provided in form data." });
+
+    var recipeJson = form["recipeJson"].ToString();
+    var mimeType = !string.IsNullOrEmpty(file.ContentType) ? file.ContentType : "image/webp";
+
+    await using var stream = file.OpenReadStream();
+    var updated = await curationService.SaveModifiedMediaAsync(id, mediaId, stream, mimeType, recipeJson, author);
+
+    return updated != null
+        ? Results.Ok(updated)
+        : Results.NotFound(new { message = $"Product '{id}' or media '{mediaId}' not found." });
+})
+.DisableAntiforgery()
+.WithName("AdminUploadModifiedMedia")
+.WithOpenApi();
+
+// 6. Delete Client-Modified Media (Revert to Original)
+app.MapDelete("/api/v1/admin/products/{id}/media/{mediaId}/modified", async (Guid id, string mediaId, HttpContext ctx, ICurationService curationService) =>
+{
+    var author = GetAuthorEmail(ctx);
+    var updated = await curationService.DeleteModifiedMediaAsync(id, mediaId, author);
+    return updated != null
+        ? Results.Ok(updated)
+        : Results.NotFound(new { message = $"Product '{id}' or media '{mediaId}' not found." });
+})
+.WithName("AdminDeleteModifiedMedia")
+.WithOpenApi();
+
+// 7. Toggle Active Display Source (Original vs. Modified)
+app.MapPatch("/api/v1/admin/products/{id}/media/{mediaId}/display-source", async (Guid id, string mediaId, [FromBody] ToggleMediaDisplaySourceRequest req, HttpContext ctx, ICurationService curationService) =>
+{
+    var author = GetAuthorEmail(ctx);
+    var updated = await curationService.ToggleMediaDisplaySourceAsync(id, mediaId, req.ActiveDisplaySource, author);
+    return updated != null
+        ? Results.Ok(updated)
+        : Results.NotFound(new { message = $"Product '{id}' or media '{mediaId}' not found." });
+})
+.WithName("AdminToggleMediaDisplaySource")
+.WithOpenApi();
+
 try
 {
     await app.Services.GetRequiredService<IMediaStorageService>().EnsureBucketExistsAsync();

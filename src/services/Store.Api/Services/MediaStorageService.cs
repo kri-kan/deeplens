@@ -206,4 +206,52 @@ public class MediaStorageService : IMediaStorageService
             );
         }
     }
+
+    public async Task<string> UploadModifiedMediaAsync(
+        Guid productId,
+        string mediaId,
+        Stream stream,
+        string mimeType,
+        CancellationToken ct = default)
+    {
+        var ext = mimeType.Contains("webp") ? "webp" : "jpg";
+        var storageKey = $"store/modified/{productId}/{mediaId}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}.{ext}";
+
+        await _minioClient.PutObjectAsync(new PutObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(storageKey)
+            .WithStreamData(stream)
+            .WithObjectSize(stream.Length)
+            .WithContentType(mimeType),
+            ct);
+
+        var publicUrl = $"{_publicBaseUrl.TrimEnd('/')}/{storageKey}";
+        _logger.LogInformation("Uploaded client-modified media to MinIO: {PublicUrl}", publicUrl);
+        return publicUrl;
+    }
+
+    public async Task DeleteModifiedMediaAsync(string modifiedUrl, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(modifiedUrl)) return;
+        try
+        {
+            var uri = new Uri(modifiedUrl);
+            var path = uri.AbsolutePath.TrimStart('/');
+            if (path.StartsWith($"{_bucketName}/", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path[(_bucketName.Length + 1)..];
+            }
+
+            await _minioClient.RemoveObjectAsync(new RemoveObjectArgs()
+                .WithBucket(_bucketName)
+                .WithObject(path),
+                ct);
+
+            _logger.LogInformation("Deleted modified media object from MinIO: {StorageKey}", path);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete modified media from MinIO: {Url}", modifiedUrl);
+        }
+    }
 }

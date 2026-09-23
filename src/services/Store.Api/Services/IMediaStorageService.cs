@@ -13,4 +13,15 @@ public interface IMediaStorageService
         CancellationToken ct = default);
 
     Task EnsureBucketExistsAsync(CancellationToken ct = default);
+
+    Task<string> UploadModifiedMediaAsync(
+        Guid productId,
+        string mediaId,
+        Stream stream,
+        string mimeType,
+        CancellationToken ct = default);
+
+    Task DeleteModifiedMediaAsync(
+        string modifiedUrl,
+        CancellationToken ct = default);
 }

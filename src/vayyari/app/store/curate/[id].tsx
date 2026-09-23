@@ -52,6 +52,11 @@ export default function StoreCurationScreen() {
           isQualified: m.isQualified !== false,
           isCommon: !!m.isCommon,
           title: m.title,
+          originalUrl: m.originalUri || m.uri,
+          modifiedUrl: m.modifiedUri || null,
+          activeDisplaySource: m.activeDisplaySource || 'original',
+          hasModified: !!m.hasModified,
+          transformRecipe: m.transformRecipe ? (typeof m.transformRecipe === 'string' ? m.transformRecipe : JSON.stringify(m.transformRecipe)) : null,
         })
       );
 
@@ -138,6 +143,11 @@ export default function StoreCurationScreen() {
       isHero: m.isCover || idx === 0,
       isQualified: m.isQualified !== false,
       isCommon: !!m.isCommon,
+      originalUri: m.originalUrl || m.url,
+      modifiedUri: m.modifiedUrl || null,
+      activeDisplaySource: m.activeDisplaySource || (m.hasModified ? 'modified' : 'original'),
+      hasModified: !!m.hasModified,
+      transformRecipe: m.transformRecipe ? (typeof m.transformRecipe === 'string' ? JSON.parse(m.transformRecipe) : m.transformRecipe) : null,
       // If colorGroupId is assigned, preserve it!
       colorGroupId: m.colorGroupId || (m.isCommon ? undefined : (product.colorGroups && product.colorGroups.length > 0 ? product.colorGroups[0].id : defaultGroupId)),
       dwellTimeSeconds: m.dwellSeconds || 0,
