@@ -1,3 +1,4 @@
+import '@/utils/assetResolver';
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
