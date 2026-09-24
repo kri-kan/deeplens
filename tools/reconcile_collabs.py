@@ -51,27 +51,19 @@ def cleanup_conflicting_services(device):
 
 def get_ui_dump(device, retries=4):
     """
-    Dumps UI hierarchy with fallback and conflict recovery.
-    Uses --compressed to bypass idle-state lockups caused by looping videos/animations.
+    Dumps UI hierarchy with zero side-effects (no rogue screen taps).
+    Always removes stale dump files first to guarantee fresh reads.
+    Falls back cleanly to /dev/tty if file dump fails.
     """
     dump_remote = "/data/local/tmp/uidump.xml"
 
     for attempt in range(1, retries + 1):
         cleanup_conflicting_services(device)
+        subprocess.run(f"adb -s {device} shell rm -f {dump_remote}", shell=True, capture_output=True)
 
         # First attempt: dump with --compressed to file
         cmd = f"adb -s {device} shell uiautomator dump --compressed {dump_remote}"
         res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=12)
-        out = (res.stdout or "") + (res.stderr or "")
-
-        if "ERROR: could not get idle state" in out or "IllegalStateException" in out or "Killed" in out or res.returncode != 0:
-            cleanup_conflicting_services(device)
-            # Try a quick tap in center to pause any video playback
-            subprocess.run(f"adb -s {device} shell input tap 540 1000", shell=True, capture_output=True)
-            time.sleep(1.5)
-            # Retry dump without --compressed or with
-            cmd = f"adb -s {device} shell uiautomator dump --compressed {dump_remote}"
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=12)
 
         # Read back the dumped XML
         cat_res = subprocess.run(f"adb -s {device} shell cat {dump_remote}", shell=True, capture_output=True, text=True)
@@ -79,14 +71,17 @@ def get_ui_dump(device, retries=4):
         if content.startswith("<?xml") or content.startswith("<hierarchy"):
             return content
 
-        time.sleep(1.5)
+        # Last resort fallback: exec-out /dev/tty
+        tty_res = subprocess.run(f"adb -s {device} exec-out uiautomator dump /dev/tty", shell=True, capture_output=True, text=True, timeout=8)
+        tty_out = (tty_res.stdout or "").strip()
+        if "<?xml" in tty_out or "<hierarchy" in tty_out:
+            clean = tty_out.split("<?xml")[-1]
+            if not clean.startswith("<?xml"):
+                clean = "<?xml" + clean
+            clean = clean.split("UI hierchary")[0].split("UI hierarchy")[0].strip()
+            return clean
 
-    # Last resort fallback: exec-out /dev/tty
-    cleanup_conflicting_services(device)
-    res = subprocess.run(f"adb -s {device} exec-out uiautomator dump /dev/tty", shell=True, capture_output=True, text=True, timeout=8)
-    tty_out = (res.stdout or "").strip()
-    if tty_out.startswith("<?xml") or tty_out.startswith("<hierarchy"):
-        return tty_out
+        time.sleep(1.0)
 
     return ""
 
@@ -99,6 +94,72 @@ def parse_bounds(bounds_str):
     cx = (x1 + x2) // 2
     cy = (y1 + y2) // 2
     return {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "cx": cx, "cy": cy}
+
+
+def find_node(root, text=None, text_contains=None, desc=None, desc_contains=None, res_id=None, res_id_contains=None):
+    """
+    Finds element bounds purely based on element hierarchy, IDs, text, or content-desc.
+    Returns parsed bounds dict {"x1", "y1", "x2", "y2", "cx", "cy"} or None.
+    """
+    if root is None:
+        return None
+    for node in root.iter("node"):
+        n_text = (node.attrib.get("text") or "").strip()
+        n_desc = (node.attrib.get("content-desc") or "").strip()
+        n_res = (node.attrib.get("resource-id") or "").strip()
+
+        if text is not None and n_text != text:
+            continue
+        if text_contains is not None and text_contains.lower() not in n_text.lower():
+            continue
+        if desc is not None and n_desc != desc:
+            continue
+        if desc_contains is not None and desc_contains.lower() not in n_desc.lower():
+            continue
+        if res_id is not None and n_res != res_id:
+            continue
+        if res_id_contains is not None and res_id_contains.lower() not in n_res.lower():
+            continue
+
+        b = parse_bounds(node.attrib.get("bounds"))
+        if b:
+            return b
+    return None
+
+
+def extract_header_collaborators(root, creator="vayyari_fashions"):
+    """
+    Inspects the initial post view for already published co-authors (e.g. 'vayyari_fashions and editionsbyvayyari')
+    or status notifications (e.g. '... were invited to be collaborators but haven't accepted yet').
+    """
+    collabs = []
+    if root is None:
+        return collabs
+    for node in root.iter("node"):
+        text = (node.attrib.get("text") or "").strip()
+        desc = (node.attrib.get("content-desc") or "").strip()
+        res = (node.attrib.get("resource-id") or "").strip()
+
+        # 1. Co-authors in profile header (e.g. 'vayyari_fashions and editionsbyvayyari')
+        if "profile_name" in res or "profile_header" in res or "title" in res:
+            for s in [text, desc]:
+                if " and " in s:
+                    for part in s.split(" and "):
+                        h = part.strip().lstrip("@").lower()
+                        if h and h != creator.lower() and h not in collabs:
+                            collabs.append(h)
+
+        # 2. Status text (e.g. 'everydayvayyari and dressbyvayyari were invited to be collaborators...')
+        if "invited to be collaborators" in text or "invited to be collaborators" in desc:
+            msg = text if "invited to be collaborators" in text else desc
+            prefix = msg.split("were invited")[0]
+            for part in prefix.split(" and "):
+                for sub in part.split(","):
+                    h = sub.strip().lstrip("@").lower()
+                    if h and h != creator.lower() and h not in collabs:
+                        collabs.append(h)
+
+    return collabs
 
 
 def tap(device, x, y, delay=1.0):
@@ -124,23 +185,28 @@ def switch_to_creator(device, creator):
     run_cmd(f"adb -s {device} shell am start -a android.intent.action.VIEW -d 'https://www.instagram.com/' -p com.instagram.android", check=False)
     time.sleep(2.5)
 
-    # Long press profile tab (bottom right) to open account switcher
-    run_cmd(f"adb -s {device} shell input swipe 972 2334 972 2334 1500", check=False)
-    time.sleep(2.5)
+    home_xml = get_ui_dump(device)
+    home_root = ET.fromstring(home_xml) if home_xml else None
+    prof_node = find_node(home_root, res_id_contains="profile_tab") or find_node(home_root, desc="Profile")
 
-    xml_str = get_ui_dump(device)
-    if creator in xml_str:
-        try:
-            root = ET.fromstring(xml_str)
-            for node in root.iter("node"):
-                if node.attrib.get("text") == creator:
-                    b = parse_bounds(node.attrib.get("bounds"))
-                    if b:
-                        tap(device, b["cx"], b["cy"], delay=3.0)
-                        print(f"[✓] Switched to creator account @{creator}", file=sys.stderr)
-                        return
-        except Exception:
-            pass
+    if prof_node:
+        # Long press profile tab element to open account switcher purely by element bounds
+        run_cmd(f"adb -s {device} shell input swipe {prof_node['cx']} {prof_node['cy']} {prof_node['cx']} {prof_node['cy']} 1500", check=False)
+        time.sleep(2.5)
+
+        xml_str = get_ui_dump(device)
+        if creator in xml_str:
+            try:
+                root = ET.fromstring(xml_str)
+                for node in root.iter("node"):
+                    if node.attrib.get("text") == creator:
+                        b = parse_bounds(node.attrib.get("bounds"))
+                        if b:
+                            tap(device, b["cx"], b["cy"], delay=3.0)
+                            print(f"[✓] Switched to creator account @{creator}", file=sys.stderr)
+                            return
+            except Exception:
+                pass
 
     # If already on creator or bottom sheet wasn't open, press back to dismiss any overlay
     keyevent(device, 4, delay=1.0)
@@ -220,7 +286,7 @@ def extract_collabs_from_post_view(device):
     return collabs
 
 
-def open_post_tagging(device, creator, shortcode):
+def open_post_tagging(device, creator, shortcode, targets=None):
     """
     Opens post in edit mode and navigates to the 'Tag people' screen.
     Always uses /p/{shortcode}/ to ensure Instagram opens the exact post rather than
@@ -228,18 +294,59 @@ def open_post_tagging(device, creator, shortcode):
     """
     print(f"[*] Opening post {shortcode} in edit mode...", file=sys.stderr)
     post_url = f"https://www.instagram.com/p/{shortcode}/"
-    run_cmd(f"adb -s {device} shell am start -a android.intent.action.VIEW -d '{post_url}' -p com.instagram.android")
-    time.sleep(3.5)
+    run_cmd(f"adb -s {device} shell am start -a android.intent.action.VIEW -d '{post_url}' -p com.instagram.android -f 0x14000000")
 
-    xml_str = get_ui_dump(device)
-    if not xml_str:
-        time.sleep(2.0)
+    normalized_targets = [t.lower().lstrip("@").strip() for t in targets] if targets else []
+    header_collabs = []
+    root = None
+    xml_str = ""
+
+    # Allow up to 3 polls (with settle delays) for post and status text to render
+    for attempt in range(1, 4):
+        time.sleep(2.5 if attempt == 1 else 1.5)
         xml_str = get_ui_dump(device)
+        if not xml_str:
+            continue
+        try:
+            root = ET.fromstring(xml_str)
+            collabs = extract_header_collaborators(root, creator)
+            for c in collabs:
+                if c not in header_collabs:
+                    header_collabs.append(c)
+            # If all targets are found, break immediately
+            if normalized_targets and all(t in [c.lower() for c in header_collabs] for t in normalized_targets):
+                break
+        except Exception:
+            pass
+
+    if not xml_str or root is None:
+        raise RuntimeError(f"Failed to dump UI hierarchy for post {shortcode}")
 
     # Verify that the screen is displaying the creator's post and not an external reel/feed
-    if creator.lower() not in xml_str.lower():
+    author_node = (
+        find_node(root, res_id_contains="row_feed_profile_header")
+        or find_node(root, res_id_contains="row_feed_photo_profile_name")
+        or find_node(root, res_id_contains="clips_author")
+    )
+    if not author_node and creator.lower() not in xml_str.lower():
         print(f"[!] Security check failed: Creator @{creator} not found on screen for post {shortcode}!", file=sys.stderr)
         raise RuntimeError(f"Target post screen does not match creator @{creator}")
+
+    if header_collabs:
+        print(f"[*] Extracted active collaborators/co-authors from post header: {header_collabs}", file=sys.stderr)
+
+    # If all targets are already co-authoring or invited, skip edit mode entirely
+    if normalized_targets and all(t in [c.lower() for c in header_collabs] for t in normalized_targets):
+        print(f"[✓] All target collaborators {targets} are already co-authoring/invited on post header! Skipping edit.", file=sys.stderr)
+        return {
+            "skip_edit": True,
+            "already_active": [t for t in normalized_targets if t in [c.lower() for c in header_collabs]],
+            "newly_invited": [],
+            "removed": [],
+            "boosted": False,
+            "cant_invite": [],
+            "header_collabs": header_collabs
+        }
 
     # Detect if screen is rendered with Instagram Reel or Standard Post UI
     is_reel = (
@@ -252,79 +359,47 @@ def open_post_tagging(device, creator, shortcode):
 
     if is_reel:
         print(f"[*] Detected Instagram Reel interface for {shortcode}", file=sys.stderr)
-        return _open_reel_tagging(device, creator, shortcode, xml_str)
+        res = _open_reel_tagging(device, creator, shortcode, xml_str)
     else:
         print(f"[*] Detected Standard Instagram Post interface for {shortcode}", file=sys.stderr)
-        return _open_feed_post_tagging(device, creator, shortcode, xml_str)
+        res = _open_feed_post_tagging(device, creator, shortcode, xml_str)
+
+    res["header_collabs"] = header_collabs
+    return res
 
 
 def _open_reel_tagging(device, creator, shortcode, xml_str):
+    root = ET.fromstring(xml_str)
+
     # Step 1: Pause reel video to allow UI to settle
-    try:
-        root = ET.fromstring(xml_str)
-        for node in root.iter("node"):
-            res_id = node.attrib.get("resource-id") or ""
-            if "clips_pause_button" in res_id:
-                b = parse_bounds(node.attrib.get("bounds"))
-                if b:
-                    tap(device, b["cx"], b["cy"], delay=1.0)
-                    break
-    except Exception:
-        pass
+    pause_b = find_node(root, res_id_contains="clips_pause_button")
+    if pause_b:
+        tap(device, pause_b["cx"], pause_b["cy"], delay=1.0)
 
-    # Step 2: Tap the 3-dots "More" button on Reel
-    more_bounds = None
-    try:
-        root = ET.fromstring(xml_str)
-        for node in root.iter("node"):
-            res_id = node.attrib.get("resource-id") or ""
-            desc = node.attrib.get("content-desc") or ""
-            if "clips_ufi_more_button" in res_id or desc in ["More", "More options"]:
-                more_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    # Step 2: Tap the 3-dots "More" button on Reel purely by hierarchy
+    more_bounds = find_node(root, res_id_contains="clips_ufi_more_button") or find_node(root, desc="More") or find_node(root, desc="More options")
     if not more_bounds:
-        more_bounds = {"cx": 1001, "cy": 1794}
+        raise RuntimeError("Reel navigation failed: 'More' options button not found in UI hierarchy")
 
     print(f"[*] Tapping Reel More button at ({more_bounds['cx']}, {more_bounds['cy']})...", file=sys.stderr)
     tap(device, more_bounds["cx"], more_bounds["cy"], delay=2.5)
 
-    # Step 3: Find and tap "Manage" in the bottom sheet
+    # Step 3: Find and tap "Manage" in the bottom sheet purely by text/desc
     menu_xml = get_ui_dump(device)
-    manage_bounds = None
-    try:
-        root = ET.fromstring(menu_xml)
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            if text == "Manage":
-                manage_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    menu_root = ET.fromstring(menu_xml)
+    manage_bounds = find_node(menu_root, text="Manage") or find_node(menu_root, desc="Manage")
     if not manage_bounds:
-        manage_bounds = {"cx": 280, "cy": 1634}
+        raise RuntimeError("Reel navigation failed: 'Manage' button not found in UI hierarchy")
 
     print(f"[*] Tapping 'Manage' at ({manage_bounds['cx']}, {manage_bounds['cy']})...", file=sys.stderr)
     tap(device, manage_bounds["cx"], manage_bounds["cy"], delay=2.5)
 
-    # Step 4: Find and tap "Edit" in "Manage your reel" sheet
+    # Step 4: Find and tap "Edit" in "Manage your reel" sheet purely by text/desc
     manage_xml = get_ui_dump(device)
-    edit_bounds = None
-    try:
-        root = ET.fromstring(manage_xml)
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            if text == "Edit":
-                edit_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    manage_root = ET.fromstring(manage_xml)
+    edit_bounds = find_node(manage_root, text="Edit") or find_node(manage_root, desc="Edit")
     if not edit_bounds:
-        edit_bounds = {"cx": 240, "cy": 866}
+        raise RuntimeError("Reel navigation failed: 'Edit' button not found in UI hierarchy")
 
     print(f"[*] Tapping 'Edit' at ({edit_bounds['cx']}, {edit_bounds['cy']})...", file=sys.stderr)
     tap(device, edit_bounds["cx"], edit_bounds["cy"], delay=3.0)
@@ -345,21 +420,11 @@ def _open_reel_tagging(device, creator, shortcode, xml_str):
             "is_reel": True
         }
 
-    # Step 6: Find and tap "Tag people" in "Edit info" screen
-    tag_bounds = None
-    try:
-        root = ET.fromstring(edit_xml)
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            res_id = node.attrib.get("resource-id") or ""
-            if text == "Tag people" or "tag_people" in res_id:
-                tag_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    # Step 6: Find and tap "Tag people" in "Edit info" screen purely by element name
+    edit_root = ET.fromstring(edit_xml)
+    tag_bounds = find_node(edit_root, text_contains="Tag people") or find_node(edit_root, desc_contains="Tag people") or find_node(edit_root, res_id_contains="tag_people")
     if not tag_bounds:
-        tag_bounds = {"cx": 498, "cy": 1393}
+        raise RuntimeError("Reel navigation failed: 'Tag people' option not found in UI hierarchy")
 
     print(f"[*] Tapping 'Tag people' at ({tag_bounds['cx']}, {tag_bounds['cy']})...", file=sys.stderr)
     tap(device, tag_bounds["cx"], tag_bounds["cy"], delay=2.5)
@@ -368,47 +433,30 @@ def _open_reel_tagging(device, creator, shortcode, xml_str):
 
 
 def _open_feed_post_tagging(device, creator, shortcode, xml_str):
-    # Tap 3-dots media options button
-    dots_bounds = None
-    try:
-        root = ET.fromstring(xml_str)
-        for node in root.iter("node"):
-            desc = node.attrib.get("content-desc") or ""
-            res_id = node.attrib.get("resource-id") or ""
-            if "media_option_button" in res_id or "More actions for this post" in desc:
-                dots_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    root = ET.fromstring(xml_str)
+    # Tap 3-dots media options button purely by resource-id / desc
+    dots_bounds = find_node(root, res_id_contains="media_option_button") or find_node(root, desc_contains="More actions")
     if not dots_bounds:
-        dots_bounds = {"cx": 1022, "cy": 336}
+        raise RuntimeError("Feed Post navigation failed: 'More actions' (3-dots) button not found in UI hierarchy")
 
+    print(f"[*] Tapping Post More button at ({dots_bounds['cx']}, {dots_bounds['cy']})...", file=sys.stderr)
     tap(device, dots_bounds["cx"], dots_bounds["cy"], delay=2.0)
 
-    # Tap "Edit"
-    xml_str = get_ui_dump(device)
-    edit_bounds = None
-    try:
-        root = ET.fromstring(xml_str)
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            if text == "Edit":
-                edit_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    # Tap "Edit" purely by text/desc
+    menu_xml = get_ui_dump(device)
+    menu_root = ET.fromstring(menu_xml)
+    edit_bounds = find_node(menu_root, text="Edit") or find_node(menu_root, desc="Edit")
     if not edit_bounds:
-        edit_bounds = {"cx": 230, "cy": 1460}
+        raise RuntimeError("Feed Post navigation failed: 'Edit' button not found in UI hierarchy")
 
+    print(f"[*] Tapping 'Edit' at ({edit_bounds['cx']}, {edit_bounds['cy']})...", file=sys.stderr)
     tap(device, edit_bounds["cx"], edit_bounds["cy"], delay=2.5)
 
     # Check boosted post alert
-    xml_str = get_ui_dump(device)
-    if is_boosted_ad_alert(xml_str):
+    edit_xml = get_ui_dump(device)
+    if is_boosted_ad_alert(edit_xml):
         print("[!] Detected 'Unable to edit post' alert (post has a related ad/boost).", file=sys.stderr)
-        dismiss_boosted_ad_alert(device, xml_str)
+        dismiss_boosted_ad_alert(device, edit_xml)
         existing_collabs = extract_collabs_from_post_view(device)
         return {
             "boosted": True,
@@ -420,32 +468,28 @@ def _open_feed_post_tagging(device, creator, shortcode, xml_str):
             "is_reel": False
         }
 
-    # Tap "Tag people and collaborators"
-    tag_bounds = None
-    try:
-        root = ET.fromstring(xml_str)
-        for node in root.iter("node"):
-            text = (node.attrib.get("text") or "").strip()
-            res_id = node.attrib.get("resource-id") or ""
-            if "Tag people and collaborators" in text or "m2_people_tagging" in res_id or text == "Tag people":
-                tag_bounds = parse_bounds(node.attrib.get("bounds"))
-                break
-    except Exception:
-        pass
-
+    # Tap "Tag people and collaborators" purely by element text / res_id
+    edit_root = ET.fromstring(edit_xml)
+    tag_bounds = find_node(edit_root, text_contains="Tag people") or find_node(edit_root, desc_contains="Tag people") or find_node(edit_root, res_id_contains="people_tagging")
     if not tag_bounds:
-        tag_bounds = {"cx": 300, "cy": 1675}
+        raise RuntimeError("Feed Post navigation failed: 'Tag people' row not found in UI hierarchy")
 
+    print(f"[*] Tapping 'Tag people' at ({tag_bounds['cx']}, {tag_bounds['cy']})...", file=sys.stderr)
     tap(device, tag_bounds["cx"], tag_bounds["cy"], delay=2.5)
     print(f"[✓] Landed on Feed Post 'Tag people and collaborators' screen", file=sys.stderr)
     return {"is_reel": False, "boosted": False}
 
 
-def inspect_and_reconcile_tagging_screen(device, target_accounts, is_reel=False, dry_run=False):
+def inspect_and_reconcile_tagging_screen(device, target_accounts, header_collabs=None, is_reel=False, dry_run=False):
     normalized_targets = [t.lower().lstrip("@").strip() for t in target_accounts if t.strip()]
     removed_accounts = []
     already_active = []
     newly_invited = []
+
+    if header_collabs:
+        for c in header_collabs:
+            if c.lower() in normalized_targets and c.lower() not in already_active:
+                already_active.append(c.lower())
 
     time.sleep(1.5)
     xml_str = get_ui_dump(device)
@@ -481,7 +525,7 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, is_reel=False,
                     "remove_bounds": matching_rem
                 })
 
-    print(f"[*] Found {len(collaborator_rows)} accounts currently tagged/collaborating: {[r['username'] for r in collaborator_rows]}", file=sys.stderr)
+    print(f"[*] Found {len(collaborator_rows)} accounts currently tagged/collaborating on screen: {[r['username'] for r in collaborator_rows]}", file=sys.stderr)
 
     # Step B: Remove unwanted accounts
     for row in collaborator_rows:
@@ -492,7 +536,8 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, is_reel=False,
                 tap(device, row["remove_bounds"]["cx"], row["remove_bounds"]["cy"], delay=1.5)
             removed_accounts.append(u)
         else:
-            already_active.append(u)
+            if u not in already_active:
+                already_active.append(u)
 
     # Step C: Determine missing accounts
     missing_accounts = [t for t in normalized_targets if t not in already_active]
@@ -508,58 +553,44 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, is_reel=False,
 
         time.sleep(1.0)
         xml_screen = get_ui_dump(device)
-        inv_bounds = None
-        try:
-            r = ET.fromstring(xml_screen)
-            for node in r.iter("node"):
-                text = (node.attrib.get("text") or "").strip()
-                desc = (node.attrib.get("content-desc") or "").strip()
-                res_id = node.attrib.get("resource-id") or ""
-                if "Invite collaborator" in text or "Invite collaborator" in desc or "invite_collaborator" in res_id:
-                    inv_bounds = parse_bounds(node.attrib.get("bounds"))
-                    break
-        except Exception:
-            pass
-
+        r = ET.fromstring(xml_screen)
+        inv_bounds = (
+            find_node(r, res_id_contains="invite_collaborator")
+            or find_node(r, desc_contains="Invite collaborator")
+            or find_node(r, text_contains="Invite collaborator")
+        )
         if not inv_bounds:
-            inv_bounds = {"cx": 540, "cy": 1436} if not is_reel else {"cx": 794, "cy": 1437}
+            raise RuntimeError("Tagging screen failed: 'Invite collaborators' button not found in UI hierarchy")
 
         tap(device, inv_bounds["cx"], inv_bounds["cy"], delay=2.0)
 
-        # Tap search bar and clear text
+        # Tap search bar and clear text purely by element resolution
         xml_search_init = get_ui_dump(device)
-        search_bar_bounds = None
-        clear_button_bounds = None
-        try:
-            sr_init = ET.fromstring(xml_search_init)
-            for node in sr_init.iter("node"):
-                res_id = node.attrib.get("resource-id") or ""
-                if "search_edit_text" in res_id:
-                    search_bar_bounds = parse_bounds(node.attrib.get("bounds"))
-                elif "clear" in res_id or "clear_button" in res_id or "action_button" in res_id:
-                    clear_button_bounds = parse_bounds(node.attrib.get("bounds"))
-        except Exception:
-            pass
+        sr_init = ET.fromstring(xml_search_init)
+        search_bar_bounds = find_node(sr_init, res_id_contains="search_edit_text")
+        if not search_bar_bounds:
+            raise RuntimeError("Search screen failed: 'search_edit_text' input not found in UI hierarchy")
 
+        clear_button_bounds = find_node(sr_init, res_id_contains="action_button") or find_node(sr_init, res_id_contains="clear")
         if clear_button_bounds:
             tap(device, clear_button_bounds["cx"], clear_button_bounds["cy"], delay=0.5)
-
-        if not search_bar_bounds:
-            search_bar_bounds = {"cx": 300, "cy": 173, "x2": 880}
 
         tap(device, search_bar_bounds["cx"], search_bar_bounds["cy"], delay=0.8)
+
+        # Re-check clear button when focused
+        xml_search_focused = get_ui_dump(device)
+        sr_focused = ET.fromstring(xml_search_focused)
+        clear_button_bounds = find_node(sr_focused, res_id_contains="action_button") or find_node(sr_focused, res_id_contains="clear")
         if clear_button_bounds:
             tap(device, clear_button_bounds["cx"], clear_button_bounds["cy"], delay=0.5)
-        # Fallback: tap right end of search bar to hit X button if present
-        x_tap = min(search_bar_bounds.get("x2", 880) + 40, 930)
-        tap(device, x_tap, search_bar_bounds["cy"], delay=0.5)
-        # Select all and delete or backspace to guarantee clean input
+
+        # Guarantee empty text
         run_cmd(f"adb -s {device} shell input keyevent 123", check=False)
         for _ in range(35):
             run_cmd(f"adb -s {device} shell input keyevent 67", check=False)
         type_text(device, missing_user, delay=2.5)
 
-        # Wait for search result and match EXACT username with retries
+        # Wait for search result and match EXACT username purely by element name/text
         result_bounds = None
         for attempt in range(4):
             if attempt > 0:
@@ -596,36 +627,48 @@ def inspect_and_reconcile_tagging_screen(device, target_accounts, is_reel=False,
 
             # Check if "Invite to collaborate" confirmation bottom sheet appeared
             xml_sheet = get_ui_dump(device)
-            if "Invite to collaborate" in xml_sheet:
-                try:
-                    shr = ET.fromstring(xml_sheet)
-                    for node in shr.iter("node"):
-                        if node.attrib.get("text") == "Invite to collaborate":
-                            b = parse_bounds(node.attrib.get("bounds"))
-                            if b:
-                                tap(device, b["cx"], b["cy"], delay=2.0)
-                                break
-                except Exception:
-                    pass
+            shr = ET.fromstring(xml_sheet)
+            confirm_b = find_node(shr, text="Invite to collaborate") or find_node(shr, desc="Invite to collaborate")
+            if confirm_b:
+                tap(device, confirm_b["cx"], confirm_b["cy"], delay=2.0)
+
             newly_invited.append(missing_user)
             print(f"[✓] Successfully added invite for @{missing_user}", file=sys.stderr)
         else:
             print(f"[✗] Error: Exact search result not found for @{missing_user}!", file=sys.stderr)
             keyevent(device, 4, delay=1.0)
 
-    # Step E: Save tagging screen changes
+    # Step E: Save tagging screen changes purely by element hierarchy
     if not dry_run:
         print("[*] Confirming tagging changes...", file=sys.stderr)
-        if is_reel:
-            # On Reels, Done button is top-right (center ~995, 194)
-            tap(device, 995, 194, delay=2.5)
-            print("[*] Saving Reel edit changes...", file=sys.stderr)
-            tap(device, 995, 194, delay=3.5)
-        else:
-            # On Feed Posts, checkmark is top-right (center ~1006, 194)
-            tap(device, 1006, 194, delay=2.5)
-            print("[*] Saving Post edit changes...", file=sys.stderr)
-            tap(device, 1006, 194, delay=3.5)
+        xml_tag_done = get_ui_dump(device)
+        r_tag_done = ET.fromstring(xml_tag_done)
+        done_b = (
+            find_node(r_tag_done, res_id_contains="clips_people_tagging_done_button")
+            or find_node(r_tag_done, res_id_contains="action_bar_button_action")
+            or find_node(r_tag_done, desc="Done")
+            or find_node(r_tag_done, text="Done")
+            or find_node(r_tag_done, desc="Save")
+            or find_node(r_tag_done, text="Save")
+        )
+        if not done_b:
+            raise RuntimeError("Tagging screen failed: 'Done/Save' button not found in UI hierarchy")
+        tap(device, done_b["cx"], done_b["cy"], delay=2.5)
+
+        print("[*] Saving Post edit changes...", file=sys.stderr)
+        xml_edit_done = get_ui_dump(device)
+        r_edit_done = ET.fromstring(xml_edit_done)
+        save_b = (
+            find_node(r_edit_done, res_id_contains="action_bar_button_action")
+            or find_node(r_edit_done, res_id_contains="clips_people_tagging_done_button")
+            or find_node(r_edit_done, desc="Done")
+            or find_node(r_edit_done, text="Done")
+            or find_node(r_edit_done, desc="Save")
+            or find_node(r_edit_done, text="Save")
+        )
+        if not save_b:
+            raise RuntimeError("Edit screen failed: 'Save/Done' button not found in UI hierarchy")
+        tap(device, save_b["cx"], save_b["cy"], delay=3.5)
 
     return {
         "removed": removed_accounts,
@@ -661,19 +704,26 @@ def main():
         return
 
     is_reel = False
+    header_collabs = []
     if not args.dry_run:
         switch_to_creator(args.device, args.creator)
-        nav_res = open_post_tagging(args.device, args.creator, args.shortcode)
+        nav_res = open_post_tagging(args.device, args.creator, args.shortcode, targets=targets)
         if nav_res and nav_res.get("boosted"):
             existing = nav_res.get("already_active", [])
             cant_invite = [t for t in targets if t.lower() not in [c.lower() for c in existing]]
             nav_res["cant_invite"] = cant_invite
             print(json.dumps(nav_res, indent=2))
             return
+
+        if nav_res and nav_res.get("skip_edit"):
+            print(json.dumps(nav_res, indent=2))
+            return
+
+        header_collabs = nav_res.get("header_collabs", [])
         if nav_res and nav_res.get("is_reel"):
             is_reel = True
 
-    summary = inspect_and_reconcile_tagging_screen(args.device, targets, is_reel=is_reel, dry_run=args.dry_run)
+    summary = inspect_and_reconcile_tagging_screen(args.device, targets, header_collabs=header_collabs, is_reel=is_reel, dry_run=args.dry_run)
     summary["boosted"] = False
     summary["cant_invite"] = []
     print(json.dumps(summary, indent=2))
