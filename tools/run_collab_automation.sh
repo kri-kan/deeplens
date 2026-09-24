@@ -327,6 +327,56 @@ api_sync_collaborators() {
   fi
 }
 
+api_complete_collab_post() {
+  local post_id="$1"
+  shift
+  local -a collabs=("$@")
+
+  if [[ -z "$post_id" ]]; then
+    return 0
+  fi
+
+  local payload
+  payload=$(printf '%s\n' "${collabs[@]}" | jq -R '{username: .}' | jq -s --arg pid "$post_id" '{postId: $pid, collaborators: .}')
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo -e "${YELLOW}[DRY RUN] Complete Collab API -> Marking post ${post_id} as completed with collabs: ${collabs[*]}${NC}"
+    return 0
+  fi
+
+  local resp http_code
+  resp=$(curl -s -w "\n%{http_code}" -X POST "${API_BASE_URL}/api/v1/insta/collab-planner/complete" \
+    -H "Content-Type: application/json" \
+    -d "$payload" || true)
+
+  http_code=$(echo "$resp" | tail -n1)
+  if [[ "$http_code" =~ ^2[0-9]{2}$ ]]; then
+    echo -e "${GREEN}✓ Marked post ${post_id} as 'completed' in database! (Removed from queue)${NC}"
+  else
+    echo -e "${YELLOW}⚠ Warning: Failed to mark post completed (HTTP ${http_code})${NC}"
+  fi
+}
+
+switch_session_to_creator() {
+  local creator="$1"
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo -e "${YELLOW}[DRY RUN] Would switch session back to creator @${creator}${NC}"
+    return 0
+  fi
+
+  echo -e "${BLUE}==> Resetting active Instagram session to creator @${creator}...${NC}"
+  adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+  python3 -c "
+import sys
+sys.path.insert(0, '$WORKSPACE_ROOT/tools')
+try:
+    from reconcile_collabs import switch_to_creator
+    switch_to_creator('$DEVICE', '$creator')
+except Exception as e:
+    print(f'Error switching to creator: {e}', file=sys.stderr)
+" 2>/dev/null || true
+}
+
 # ==============================================================================
 # Screen & Post Introspection for Existing Collaborators
 # ==============================================================================
@@ -537,7 +587,8 @@ execute_post_collab_pipeline() {
   local post_id="$3"
   local mode="$4"
   local raw_collabs_json="$5"
-  shift 5
+  local post_url="$6"
+  shift 6
   local -a targets=("$@")
 
   echo -e "${MAGENTA}====================================================================${NC}"
@@ -564,32 +615,49 @@ execute_post_collab_pipeline() {
   local -a removed_accounts=()
 
   if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
-    reconcile_json=$("${reconcile_cmd[@]}" 2>&1 | tee /dev/stderr | grep -E '^\{' -A 100 || true)
+    adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+
+    local reconcile_out=""
+    local reconcile_rc=0
+    reconcile_out=$("${reconcile_cmd[@]}" 2>&1) || reconcile_rc=$?
+    echo "$reconcile_out" >&2
+
+    reconcile_json=$(echo "$reconcile_out" | grep -E '^\{' -A 100 || true)
+
+    if [[ $reconcile_rc -ne 0 || -z "$reconcile_json" ]]; then
+      echo -e "${RED}✗ Error: Reconciliation script failed for post ${shortcode} (Exit code: ${reconcile_rc})${NC}"
+      local err_summary
+      err_summary=$(echo "$reconcile_out" | tail -n 2 | tr '\n' ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      for t in "${targets[@]}"; do
+        api_update_channel_phase "$post_id" "$t" "failed" "Reconciliation error: ${err_summary:-Script failed}"
+      done
+      adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+      switch_session_to_creator "$creator"
+      return 1
+    fi
 
     local is_boosted="false"
     local boosted_reason="boosted_ad_cannot_edit"
     local -a cant_invite=()
 
-    if [[ -n "$reconcile_json" ]]; then
-      is_boosted=$(echo "$reconcile_json" | jq -r '.boosted // false' 2>/dev/null || echo "false")
-      boosted_reason=$(echo "$reconcile_json" | jq -r '.reason // "boosted_ad_cannot_edit"' 2>/dev/null || echo "boosted_ad_cannot_edit")
+    is_boosted=$(echo "$reconcile_json" | jq -r '.boosted // false' 2>/dev/null || echo "false")
+    boosted_reason=$(echo "$reconcile_json" | jq -r '.reason // "boosted_ad_cannot_edit"' 2>/dev/null || echo "boosted_ad_cannot_edit")
 
-      while IFS= read -r rem; do
-        [[ -n "$rem" ]] && removed_accounts+=("$rem")
-      done < <(echo "$reconcile_json" | jq -r '.removed[]? // empty' 2>/dev/null || true)
+    while IFS= read -r rem; do
+      [[ -n "$rem" ]] && removed_accounts+=("$rem")
+    done < <(echo "$reconcile_json" | jq -r '.removed[]? // empty' 2>/dev/null || true)
 
-      while IFS= read -r act; do
-        [[ -n "$act" ]] && already_active+=("$act")
-      done < <(echo "$reconcile_json" | jq -r '.already_active[]? // empty' 2>/dev/null || true)
+    while IFS= read -r act; do
+      [[ -n "$act" ]] && already_active+=("$act")
+    done < <(echo "$reconcile_json" | jq -r '.already_active[]? // empty' 2>/dev/null || true)
 
-      while IFS= read -r inv; do
-        [[ -n "$inv" ]] && newly_invited+=("$inv")
-      done < <(echo "$reconcile_json" | jq -r '.newly_invited[]? // empty' 2>/dev/null || true)
+    while IFS= read -r inv; do
+      [[ -n "$inv" ]] && newly_invited+=("$inv")
+    done < <(echo "$reconcile_json" | jq -r '.newly_invited[]? // empty' 2>/dev/null || true)
 
-      while IFS= read -r ci; do
-        [[ -n "$ci" ]] && cant_invite+=("$ci")
-      done < <(echo "$reconcile_json" | jq -r '.cant_invite[]? // empty' 2>/dev/null || true)
-    fi
+    while IFS= read -r ci; do
+      [[ -n "$ci" ]] && cant_invite+=("$ci")
+    done < <(echo "$reconcile_json" | jq -r '.cant_invite[]? // empty' 2>/dev/null || true)
 
     # Handle Boosted Post / Related Ad Alert
     if [[ "$is_boosted" == "true" ]]; then
@@ -644,6 +712,7 @@ execute_post_collab_pipeline() {
       echo -e "${GREEN}   Boosted Ad Post Handled Gracefully: Post ${shortcode} Curated   ${NC}"
       echo -e "${GREEN}====================================================================${NC}"
       echo ""
+      switch_session_to_creator "$creator"
       return 0
     fi
 
@@ -667,14 +736,45 @@ execute_post_collab_pipeline() {
 
   local -a successful_collabs=("${already_active[@]}")
 
-  if [[ ${#newly_invited[@]} -eq 0 ]]; then
-    echo -e "${GREEN}✓ All intended collaboration accounts are active on post ${shortcode}! Zero pending invites.${NC}"
-    if [[ -n "$post_id" ]]; then
-      local all_established_json
-      all_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
-      api_sync_collaborators "$post_id" "$all_established_json" "instagram_reconcile"
+  # Check if all targets are satisfied by already_active
+  local -a unfulfilled_targets=()
+  for t in "${targets[@]}"; do
+    local found=false
+    for act in "${already_active[@]}"; do
+      if [[ "${act,,}" == "${t,,}" ]]; then
+        found=true
+        break
+      fi
+    done
+    if [[ "$found" == "false" ]]; then
+      unfulfilled_targets+=("$t")
     fi
-    return 0
+  done
+
+  if [[ ${#newly_invited[@]} -eq 0 ]]; then
+    if [[ ${#unfulfilled_targets[@]} -eq 0 ]]; then
+      echo -e "${GREEN}✓ All intended collaboration accounts are active on post ${shortcode}! Zero pending invites.${NC}"
+      if [[ -n "$post_id" ]]; then
+        local all_established_json
+        all_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
+        api_sync_collaborators "$post_id" "$all_established_json" "instagram_reconcile"
+        api_complete_collab_post "$post_id" "${successful_collabs[@]}"
+      fi
+      switch_session_to_creator "$creator"
+      return 0
+    else
+      echo -e "${RED}✗ Warning: No new invites were sent, and targets remain unfulfilled: ${unfulfilled_targets[*]}${NC}"
+      for unfulfilled in "${unfulfilled_targets[@]}"; do
+        api_update_channel_phase "$post_id" "$unfulfilled" "failed" "Account could not be found or invited"
+      done
+      if [[ -n "$post_id" && ${#successful_collabs[@]} -gt 0 ]]; then
+        local partial_established_json
+        partial_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
+        api_sync_collaborators "$post_id" "$partial_established_json" "instagram_reconcile"
+      fi
+      switch_session_to_creator "$creator"
+      return 1
+    fi
   fi
 
   echo -e "${BLUE}Pending collaborator accounts requiring acceptance (${#newly_invited[@]}): ${newly_invited[*]}${NC}"
@@ -708,6 +808,17 @@ execute_post_collab_pipeline() {
       fi
     done
   fi
+
+  # Step 5: Mark Post Completed in Collab Queue & Sync All Established Collaborators
+  if [[ -n "$post_id" && ${#successful_collabs[@]} -gt 0 ]]; then
+    local final_collabs_json
+    final_collabs_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
+    api_sync_collaborators "$post_id" "$final_collabs_json" "instagram_pipeline_complete"
+    api_complete_collab_post "$post_id" "${successful_collabs[@]}"
+  fi
+
+  # Step 6: Reset Session back to Creator for next post
+  switch_session_to_creator "$creator"
 
   echo -e "${GREEN}====================================================================${NC}"
   echo -e "${GREEN}   Pipeline Complete for Post ${shortcode}! Established Collabs: ${successful_collabs[*]}   ${NC}"
@@ -792,7 +903,9 @@ run_queue_mode() {
       continue
     fi
 
-    execute_post_collab_pipeline "$p_creator" "$p_shortcode" "$p_id" "$MODE" "$p_raw_collabs" "${target_accounts[@]}"
+    execute_post_collab_pipeline "$p_creator" "$p_shortcode" "$p_id" "$MODE" "$p_raw_collabs" "$p_url" "${target_accounts[@]}" || {
+      echo -e "${RED}Post ${p_shortcode} pipeline completed with errors. Moving to next queued item...${NC}"
+    }
 
     i=$(( i + 1 ))
   done
@@ -851,7 +964,7 @@ run_cli_mode() {
 
   check_device
 
-  execute_post_collab_pipeline "$CREATOR" "$shortcode" "$POST_ID" "$MODE" "[]" "${clean_collabs[@]}"
+  execute_post_collab_pipeline "$CREATOR" "$shortcode" "$POST_ID" "$MODE" "[]" "$SHORTCODE" "${clean_collabs[@]}"
 }
 
 # ==============================================================================
