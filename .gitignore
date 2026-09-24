@@ -453,3 +453,4 @@ test-results/
 publish/vayyari/*.apk
 publish/**/*.apk
 !src/IGReplyBot/artifacts/IGReplyBot-debug.apk
+tools/collab_run_summary.json

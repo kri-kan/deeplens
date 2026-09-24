@@ -63,6 +63,119 @@ DRY_RUN=false
 MAX_RETRIES=1
 RETRY_DELAY=3
 SETTLE_DELAY=4
+declare -a SUMMARY_RECORDS=()
+
+record_summary_entry() {
+  local sc="$1"
+  local pid="$2"
+  local cr="$3"
+  local status="$4"
+  local collabs_str="$5"
+  local targets_str="$6"
+
+  local -a col_arr=()
+  for c in $collabs_str; do
+    c="${c#@}"
+    c="${c//,/}"
+    [[ -n "$c" && "$c" != "null" ]] && col_arr+=("$c")
+  done
+
+  local -a tar_arr=()
+  for t in $targets_str; do
+    t="${t#@}"
+    t="${t//,/}"
+    [[ -n "$t" && "$t" != "null" ]] && tar_arr+=("$t")
+  done
+
+  local rec
+  rec=$(jq -nc \
+    --arg shortcode "$sc" \
+    --arg postId "$pid" \
+    --arg creator "$cr" \
+    --arg status "$status" \
+    --argjson collabs "$(printf '%s\n' "${col_arr[@]}" | jq -R . | jq -s .)" \
+    --argjson targets "$(printf '%s\n' "${tar_arr[@]}" | jq -R . | jq -s .)" \
+    '{shortcode: $shortcode, postId: $postId, creator: $creator, status: $status, collabs: $collabs, targets: $targets}')
+  SUMMARY_RECORDS+=("$rec")
+}
+
+print_summary_report() {
+  local total=${#SUMMARY_RECORDS[@]}
+  if [[ $total -eq 0 ]]; then
+    return 0
+  fi
+
+  echo ""
+  echo -e "${CYAN}===================================================================================================${NC}"
+  echo -e "${CYAN}                     VAYYARI COLLABORATION AUTOMATION RUN REPORT                                   ${NC}"
+  echo -e "${CYAN}===================================================================================================${NC}"
+  printf "%-16s | %-20s | %-40s | %-14s\n" "POST (SHORTCODE)" "CREATOR" "ACTIVE COLLABORATORS" "STATUS"
+  echo "---------------------------------------------------------------------------------------------------"
+
+  local completed_count=0
+  local failed_count=0
+  local boosted_count=0
+  declare -A account_post_counts
+
+  for entry in "${SUMMARY_RECORDS[@]}"; do
+    local sc cr st
+    sc=$(echo "$entry" | jq -r '.shortcode')
+    cr=$(echo "$entry" | jq -r '.creator')
+    st=$(echo "$entry" | jq -r '.status')
+
+    local -a col_list=()
+    while IFS= read -r c; do
+      [[ -n "$c" && "$c" != "null" ]] && col_list+=("@$c")
+    done < <(echo "$entry" | jq -r '.collabs[]? // empty')
+
+    local col_str="None"
+    if [[ ${#col_list[@]} -gt 0 ]]; then
+      col_str=$(echo "${col_list[*]}" | sed 's/ /, /g')
+      for c_acc in "${col_list[@]}"; do
+        account_post_counts["$c_acc"]=$(( ${account_post_counts["$c_acc"]:-0} + 1 ))
+      done
+    fi
+
+    # Truncate col_str if too long for column
+    local col_display="$col_str"
+    if [[ ${#col_display} -gt 38 ]]; then
+      col_display="${col_display:0:35}..."
+    fi
+
+    local st_color="${GREEN}"
+    if [[ "$st" == "FAILED" || "$st" == "ERROR" ]]; then
+      st_color="${RED}"
+      failed_count=$((failed_count + 1))
+    elif [[ "$st" =~ "BOOSTED" ]]; then
+      st_color="${YELLOW}"
+      boosted_count=$((boosted_count + 1))
+    else
+      completed_count=$((completed_count + 1))
+    fi
+
+    printf "%-16s | %-20s | %-40s | ${st_color}%-14s${NC}\n" "$sc" "@$cr" "$col_display" "$st"
+  done
+
+  echo "---------------------------------------------------------------------------------------------------"
+  echo -e "Total Posts Processed: ${total} | ${GREEN}Completed: ${completed_count}${NC} | ${YELLOW}Boosted/Curated: ${boosted_count}${NC} | ${RED}Failed: ${failed_count}${NC}"
+  echo ""
+  echo -e "${MAGENTA}Collaborations Breakdown by Account / Channel:${NC}"
+  if [[ ${#account_post_counts[@]} -gt 0 ]]; then
+    for acc in "${!account_post_counts[@]}"; do
+      printf "  • %-22s : %d post(s)\n" "$acc" "${account_post_counts[$acc]}"
+    done
+  else
+    echo "  (No collaborators attached)"
+  fi
+
+  # Save JSON summary report for auditing/tooling
+  local summary_json_file="$WORKSPACE_ROOT/tools/collab_run_summary.json"
+  printf '%s\n' "${SUMMARY_RECORDS[@]}" | jq -s . > "$summary_json_file" 2>/dev/null || true
+  echo ""
+  echo -e "${CYAN}Report artifact saved to: ${summary_json_file}${NC}"
+  echo -e "${CYAN}===================================================================================================${NC}"
+  echo ""
+}
 
 print_banner() {
   echo -e "${CYAN}====================================================================${NC}"
@@ -631,6 +744,7 @@ execute_post_collab_pipeline() {
       for t in "${targets[@]}"; do
         api_update_channel_phase "$post_id" "$t" "failed" "Reconciliation error: ${err_summary:-Script failed}"
       done
+      record_summary_entry "$shortcode" "$post_id" "$creator" "FAILED" "" "${targets[*]}"
       adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
       switch_session_to_creator "$creator"
       return 1
@@ -712,6 +826,7 @@ execute_post_collab_pipeline() {
       echo -e "${GREEN}   Boosted Ad Post Handled Gracefully: Post ${shortcode} Curated   ${NC}"
       echo -e "${GREEN}====================================================================${NC}"
       echo ""
+      record_summary_entry "$shortcode" "$post_id" "$creator" "BOOSTED" "${already_active[*]}" "${targets[*]}"
       switch_session_to_creator "$creator"
       return 0
     fi
@@ -760,6 +875,7 @@ execute_post_collab_pipeline() {
         api_sync_collaborators "$post_id" "$all_established_json" "instagram_reconcile"
         api_complete_collab_post "$post_id" "${successful_collabs[@]}"
       fi
+      record_summary_entry "$shortcode" "$post_id" "$creator" "COMPLETED" "${successful_collabs[*]}" "${targets[*]}"
       switch_session_to_creator "$creator"
       return 0
     else
@@ -772,6 +888,7 @@ execute_post_collab_pipeline() {
         partial_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
         api_sync_collaborators "$post_id" "$partial_established_json" "instagram_reconcile"
       fi
+      record_summary_entry "$shortcode" "$post_id" "$creator" "FAILED" "${successful_collabs[*]}" "${targets[*]}"
       switch_session_to_creator "$creator"
       return 1
     fi
@@ -816,6 +933,28 @@ execute_post_collab_pipeline() {
     api_sync_collaborators "$post_id" "$final_collabs_json" "instagram_pipeline_complete"
     api_complete_collab_post "$post_id" "${successful_collabs[@]}"
   fi
+
+  local -a final_unfulfilled=()
+  for t in "${targets[@]}"; do
+    local found=false
+    for sc in "${successful_collabs[@]}"; do
+      if [[ "${sc,,}" == "${t,,}" ]]; then
+        found=true
+        break
+      fi
+    done
+    if [[ "$found" == "false" ]]; then
+      final_unfulfilled+=("$t")
+    fi
+  done
+
+  local pipeline_status="COMPLETED"
+  if [[ ${#final_unfulfilled[@]} -gt 0 && ${#successful_collabs[@]} -eq 0 ]]; then
+    pipeline_status="FAILED"
+  elif [[ ${#final_unfulfilled[@]} -gt 0 ]]; then
+    pipeline_status="PARTIAL"
+  fi
+  record_summary_entry "$shortcode" "$post_id" "$creator" "$pipeline_status" "${successful_collabs[*]}" "${targets[*]}"
 
   # Step 6: Reset Session back to Creator for next post
   switch_session_to_creator "$creator"
@@ -913,6 +1052,7 @@ run_queue_mode() {
   echo -e "${GREEN}====================================================================${NC}"
   echo -e "${GREEN}   Collab Automation Queue Processing Complete!                    ${NC}"
   echo -e "${GREEN}====================================================================${NC}"
+  print_summary_report
 }
 
 # ==============================================================================
@@ -965,6 +1105,7 @@ run_cli_mode() {
   check_device
 
   execute_post_collab_pipeline "$CREATOR" "$shortcode" "$POST_ID" "$MODE" "[]" "$SHORTCODE" "${clean_collabs[@]}"
+  print_summary_report
 }
 
 # ==============================================================================
