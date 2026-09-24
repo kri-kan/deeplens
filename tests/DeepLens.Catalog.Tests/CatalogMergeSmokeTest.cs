@@ -14,8 +14,10 @@ namespace DeepLens.Catalog.Tests;
 [TestFixture]
 public class CatalogMergeSmokeTest
 {
-    private string _connectionString = "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$;Database=deeplens_platform";
+    private string _connectionString = Environment.GetEnvironmentVariable("TEST_DATABASE_URL") 
+        ?? "Host=192.168.0.170;Port=5432;Username=postgres;Password=Krikank1$;Database=deeplens_platform";
     private MetadataService _service;
+    private readonly List<Guid> _createdProductIds = new();
 
     [OneTimeSetUp]
     public async Task Setup()
@@ -33,6 +35,35 @@ public class CatalogMergeSmokeTest
         _service = new MetadataService(config, logger, cache, producer);
 
         await EnsureSchemaAsync();
+    }
+
+    [TearDown]
+    public async Task CleanupAsync()
+    {
+        try
+        {
+            using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            if (_createdProductIds.Count > 0)
+            {
+                await conn.ExecuteAsync(@"
+                    DELETE FROM product_variants WHERE product_id = ANY(@Ids);
+                    DELETE FROM products WHERE id = ANY(@Ids);
+                ", new { Ids = _createdProductIds.ToArray() });
+            }
+
+            // Safety net: ensure any test-generated MERGE products are wiped
+            await conn.ExecuteAsync("DELETE FROM products WHERE base_sku LIKE 'MERGE-%'");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Warning] Failed to cleanup test products in TearDown: {ex.Message}");
+        }
+        finally
+        {
+            _createdProductIds.Clear();
+        }
     }
 
     private async Task EnsureSchemaAsync()
@@ -97,6 +128,8 @@ public class CatalogMergeSmokeTest
         // 1. Seed Data
         var targetId = Guid.NewGuid();
         var sourceId = Guid.NewGuid();
+        _createdProductIds.Add(targetId);
+        _createdProductIds.Add(sourceId);
         await conn.ExecuteAsync("INSERT INTO products (id, base_sku, title, tags) VALUES (@Id, @Sku, @Title, @Tags)", 
             new { Id = targetId, Sku = targetSku, Title = "Target Product", Tags = new[] { "silk", "red" } });
         await conn.ExecuteAsync("INSERT INTO products (id, base_sku, title, tags) VALUES (@Id, @Sku, @Title, @Tags)", 
