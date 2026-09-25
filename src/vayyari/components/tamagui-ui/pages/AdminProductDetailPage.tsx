@@ -27,6 +27,7 @@ import {
   LuCalendar,
   LuChevronDown,
   LuChevronUp,
+  LuTriangleAlert,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -72,6 +73,10 @@ export interface AdminProductDetailData {
   confidenceScore?: number;
   taxonomyVersion?: string;
   taxonomyDerivedAt?: string;
+  mediaCount?: number;
+  tags?: string[];
+  sourceGroupId?: string;
+  sourceJid?: string;
 }
 
 export interface AdminProductDetailPageProps {
@@ -197,6 +202,12 @@ export function AdminProductDetailPage({
 
   const mediaList = product?.media || [];
   const listings = product?.listings || [];
+
+  const totalMedia = product?.mediaCount ?? (product?.media?.length || 0);
+  const needsZoningReview = Boolean(
+    totalMedia > 30 ||
+    product?.tags?.includes('needs-zoning-review')
+  );
 
   if (isLoading) {
     return (
@@ -418,6 +429,78 @@ export function AdminProductDetailPage({
             setIsFullscreenPreviewOpen(true);
           }}
         />
+
+        {/* High Media Count / Needs Zoning Review Banner */}
+        {needsZoningReview && (
+          <XStack
+            marginHorizontal={16}
+            marginTop={12}
+            marginBottom={4}
+            padding={12}
+            borderRadius={tokens.radius.sm}
+            backgroundColor="rgba(245, 158, 11, 0.12)"
+            borderWidth={1}
+            borderColor="rgba(245, 158, 11, 0.45)"
+            alignItems="center"
+            justifyContent="space-between"
+            gap={10}
+          >
+            <XStack alignItems="center" gap={10} flex={1}>
+              <XStack
+                width={34}
+                height={34}
+                borderRadius={17}
+                backgroundColor="rgba(245, 158, 11, 0.22)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuTriangleAlert size={18} color="#D97706" />
+              </XStack>
+              <YStack flex={1}>
+                <Text fontSize={12} fontWeight="800" color="#B45309" letterSpacing={0.2}>
+                  High Media Count ({totalMedia} media)
+                </Text>
+                <Text fontSize={11} color={tokens.textMuted} numberOfLines={2}>
+                  Flagged for human zoning review. Verify chat boundaries & split zones if needed.
+                </Text>
+              </YStack>
+            </XStack>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Review chat and boundaries"
+              activeOpacity={0.8}
+              onPress={() => {
+                if (onOpenWhatsAppListing) {
+                  onOpenWhatsAppListing(
+                    product.listings?.[0] || {
+                      id: 'source-chat',
+                      sourceJid: product.sourceJid,
+                      sourceGroupId: product.sourceGroupId,
+                      vendorName: product.title,
+                      price: product.vendorPrice,
+                      isActive: true,
+                    }
+                  );
+                }
+              }}
+            >
+              <XStack
+                backgroundColor="#D97706"
+                paddingHorizontal={12}
+                paddingVertical={7}
+                borderRadius={tokens.radius.full}
+                alignItems="center"
+                gap={4}
+              >
+                <Text fontSize={11} fontWeight="800" color="#ffffff">
+                  Review Chat
+                </Text>
+                <LuExternalLink size={12} color="#ffffff" />
+              </XStack>
+            </TouchableOpacity>
+          </XStack>
+        )}
 
         {/* Product Information Section */}
         <AdminProductInfoSection

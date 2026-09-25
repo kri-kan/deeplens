@@ -56,6 +56,10 @@ export interface VendorProduct {
   listings?: VendorListing[];
   /** Number of active vendor listings for this product */
   listingCount?: number;
+  /** Total media count linked to this product */
+  mediaCount?: number;
+  /** Product tags including review status flags */
+  tags?: string[];
   /** Whether this product is starred by the user */
   isStarred?: boolean;
   /** Whether this product has been archived */
