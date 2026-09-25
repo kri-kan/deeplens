@@ -80,6 +80,9 @@ async function initializeServices() {
     const { createEmojiSeparatorRoutes } = await import('./routes/emoji-separator.routes');
     apiRouter.use('/emoji-separators', createEmojiSeparatorRoutes());
 
+    const { createMediaRetryRoutes } = await import('./routes/media-retry.routes');
+    apiRouter.use('/media-retry', createMediaRetryRoutes());
+
     app.use('/api', apiRouter);
 
     // --- Start Server Early ---
@@ -96,6 +99,12 @@ async function initializeServices() {
             logger.info('DeepLens integration service started');
 
             await waService.start();
+
+            // Start automated media retry queue with 5x exponential backoff (ADO #991)
+            const { mediaRetryService } = await import('./services/media-retry.service');
+            mediaRetryService.setWhatsAppService(waService);
+            mediaRetryService.start(30000); // Poll every 30 seconds
+            logger.info('Automated background media retry queue started');
 
             // Initialize product created write-back consumer
             const { productCreatedConsumer } = await import('./services/product-created-consumer.service');

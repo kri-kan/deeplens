@@ -45,8 +45,10 @@ export async function saveMessage(msg: MessageRecord): Promise<void> {
                 is_forwarded, 
                 metadata,
                 processing_status,
-                media_mime_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                media_mime_type,
+                media_retry_count,
+                media_last_attempt
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, CASE WHEN $5 IS NOT NULL AND $6 IS NULL THEN NOW() ELSE NULL END)
             ON CONFLICT (message_id) 
             DO UPDATE SET 
                 content = EXCLUDED.content,

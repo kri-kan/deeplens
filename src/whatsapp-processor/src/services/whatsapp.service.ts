@@ -1180,6 +1180,7 @@ export class WhatsAppService {
                      media_type = COALESCE($2, media_type), 
                      media_size = $3, 
                      media_mime_type = $4,
+                     media_last_attempt = NOW(),
                      updated_at = NOW() 
                  WHERE message_id = $5`,
                 [mediaUrl, type, buffer.length, mimeType, messageId]
