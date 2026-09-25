@@ -31,7 +31,7 @@ public static class CategoryClassifier
 
     // ── Regex Patterns ──
     private static readonly Regex DiacriticsRegex = new(@"\p{M}", RegexOptions.Compiled);
-    private static readonly Regex SpecialCharsRegex = new(@"[*~_`#\[\]\(\)\{\}\\\/<>@!?,;:|""'+=]", RegexOptions.Compiled);
+    private static readonly Regex SpecialCharsRegex = new(@"[*~_`#\[\]\(\)\{\}\\\/<>@!?,;:|""'+=“”‘’]", RegexOptions.Compiled);
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
 
     // Kids age / size patterns: e.g. "age 2-6 yrs", "4 years", "0-6 months", "1-16 years" (NO bare 'm' to prevent matching meters)
@@ -44,9 +44,9 @@ public static class CategoryClassifier
         @"\b(?:kids?|kidwear|kidswear|children|child|toddlers?|infants?|baba\s*suit|infant\s*wear|boys?\s*wear|girls?\s*wear|pavadai|pattu\s*pavadai|baby(?!\s*(?:pink|blue|soft|silk|color|colour|shade|print))|baby\s*(?:wear|dress|frock|suit|cloth(?:es|ing)?|boy|girl)|(?:boys?|girls?)\s*(?:wear|collection|dress|clothing|frock|suit|choli|lehenga|kurta|fashion|outfit))\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    // Adult size indicators (e.g. S-36, M-38, L-40, XL-42, XXL, 38 to 44, bust 38)
+    // Adult size indicators (e.g. S-36, M(38), M 38, L 40, XL 42, XXL, 38 to 44, bust 38, length 46)
     private static readonly Regex AdultSizeRegex = new(
-        @"\b(?:s\s*-\s*36|m\s*-\s*38|l\s*-\s*40|xl\s*-\s*42|xxl|2xl|3xl|36\s*to\s*44|38\s*to\s*42|size\s*:\s*[smlx]{1,4})\b",
+        @"\b(?:[smlx]{1,4}\s*[-:]?\s*(?:3[4-9]|4[0-8])|xxl|2xl|3xl|4xl|5xl|(?:3[6-9]|4[0-8])\s*to\s*(?:4[0-8]|5[0-2])|size\s*:\s*[smlx]{1,4}|(?:bust|waist|chest|length)\s*(?:3[6-9]|4[0-8])\b)\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // Mens keywords

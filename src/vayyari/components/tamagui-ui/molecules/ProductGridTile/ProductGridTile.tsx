@@ -76,6 +76,12 @@ export function ProductGridTile({
       ? (item.unifiedAttributes.confidence_score <= 1 ? Math.round(item.unifiedAttributes.confidence_score * 100) : Math.round(item.unifiedAttributes.confidence_score))
       : null);
 
+  const isHighMedia = Boolean(
+    (item.mediaCount ?? 0) > 30 ||
+    item.tags?.includes('needs-zoning-review') ||
+    item.rawItem?.tags?.includes('needs-zoning-review')
+  );
+
   return (
     <TouchableOpacity
       accessibilityRole="button"
@@ -165,32 +171,6 @@ export function ProductGridTile({
           </YStack>
         )}
 
-        {/* Media Count Badge */}
-        {item.mediaCount !== undefined && item.mediaCount > 0 && (() => {
-          const isHighMedia = item.mediaCount > 30 || item.tags?.includes('needs-zoning-review') || item.rawItem?.tags?.includes('needs-zoning-review');
-          return (
-            <XStack
-              position="absolute"
-              top={6}
-              right={!selectionMode && onToggleStar ? 36 : 6}
-              backgroundColor={isHighMedia ? 'rgba(217, 119, 6, 0.9)' : 'rgba(0, 0, 0, 0.65)'}
-              paddingHorizontal={isHighMedia ? 6 : 5}
-              paddingVertical={2.5}
-              borderRadius={tokens.radius.full}
-              alignItems="center"
-              gap={3}
-              zIndex={8}
-              borderWidth={0.5}
-              borderColor={isHighMedia ? 'rgba(251, 191, 36, 0.8)' : 'rgba(255, 255, 255, 0.2)'}
-            >
-              <LuImage size={10} color="#ffffff" />
-              <Text fontSize={9} fontWeight="700" color="#ffffff">
-                {item.mediaCount}
-              </Text>
-            </XStack>
-          );
-        })()}
-
         {/* Top-Right: Star Button */}
         {!selectionMode && onToggleStar && (
           <TouchableOpacity
@@ -235,24 +215,47 @@ export function ProductGridTile({
           gap={1}
         >
           <XStack alignItems="center" justifyContent="space-between">
-            {/* Price Badge */}
-            <Text fontSize={11} fontWeight="800" color="#ffffff">
-              ₹{item.price ? item.price.toLocaleString('en-IN') : '---'}
-            </Text>
-
-            {/* Quick Edit Icon */}
-            {onQuickEdit && !selectionMode && (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Quick edit SKU"
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  onQuickEdit(item);
-                }}
+            {/* Left Side: Media Count Badge */}
+            {item.mediaCount !== undefined && item.mediaCount > 0 ? (
+              <XStack
+                backgroundColor={isHighMedia ? 'rgba(217, 119, 6, 0.9)' : 'rgba(255, 255, 255, 0.16)'}
+                paddingHorizontal={5}
+                paddingVertical={1.5}
+                borderRadius={tokens.radius.full}
+                alignItems="center"
+                gap={3}
+                borderWidth={0.5}
+                borderColor={isHighMedia ? 'rgba(251, 191, 36, 0.8)' : 'rgba(255, 255, 255, 0.2)'}
               >
-                <LuPencil size={11} color="rgba(255,255,255,0.75)" />
-              </TouchableOpacity>
+                <LuImage size={10} color="#ffffff" />
+                <Text fontSize={9} fontWeight="700" color="#ffffff">
+                  {item.mediaCount}
+                </Text>
+              </XStack>
+            ) : (
+              <XStack />
             )}
+
+            {/* Right Side: Shifted Price + Quick Edit Pencil Icon */}
+            <XStack alignItems="center" gap={6}>
+              <Text fontSize={11} fontWeight="800" color="#ffffff">
+                ₹{item.price ? item.price.toLocaleString('en-IN') : '---'}
+              </Text>
+
+              {onQuickEdit && !selectionMode && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Quick edit SKU"
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    onQuickEdit(item);
+                  }}
+                >
+                  <LuPencil size={11} color="rgba(255,255,255,0.75)" />
+                </TouchableOpacity>
+              )}
+            </XStack>
           </XStack>
 
           {/* Subtitle / Code / Category */}

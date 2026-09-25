@@ -39,6 +39,7 @@ public class CategoryClassifierTests
     [TestCase("Trending Co-ord Set", "Western style 2 piece cord set for women", "dress", "Dress")]
     [TestCase("Sharara Suit Set", "Georgette peplum top with sharara", "dress", "Dress")]
     [TestCase("Sparkling Georgette Gown And Duptta Set", "Size:- S-36 M-38 L-40 Xl-42 Length 50\" Flare 3.8m Price:-899/-+ship", "dress", "Dress")]
+    [TestCase("Printed Cotton Kurti and Pant for Kids", "KURTI: Printed Cotton SIZE: M(38”),L(40”),XL(42”),XXL(44”) LENGTH: 46 INCH PANT: Length 40 Inch WAIST: 42-44 Inch Rate 709", "dress", "Dress")]
     public void Classify_DressExamples_ReturnsDress(string? title, string? desc, string expectedSlug, string expectedName)
     {
         var result = CategoryClassifier.Classify(title, desc);
