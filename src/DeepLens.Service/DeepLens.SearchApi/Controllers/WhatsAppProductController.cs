@@ -391,13 +391,16 @@ public class WhatsAppProductController : ControllerBase
         using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        var products = await conn.QueryAsync<dynamic>(
-            new CommandDefinition(@"SELECT p.id as product_id, 
-                     COALESCE(mg.group_id, p.id::text) as group_id, 
-                     COALESCE(mg.description, p.description) as description 
+        var products = await conn.QueryAsync<ProductReevaluateTarget>(
+            new CommandDefinition(@"SELECT DISTINCT ON (p.id)
+                     p.id as ProductId, 
+                     COALESCE(mg.group_id, vl.source_group_id, p.id::text) as GroupId, 
+                     COALESCE(NULLIF(mg.description, ''), NULLIF(vl.description, ''), NULLIF(p.description, ''), '') as Description 
               FROM public.products p 
               LEFT JOIN wa.message_groups mg ON mg.deeplens_product_id = p.id
-              WHERE p.id = ANY(@ProductIds)",
+              LEFT JOIN public.vendor_listings vl ON vl.product_id = p.id
+              WHERE p.id = ANY(@ProductIds)
+              ORDER BY p.id, mg.created_at DESC NULLS LAST, vl.updated_at DESC NULLS LAST",
             new { ProductIds = request.ProductIds }, cancellationToken: ct)
         );
 
@@ -407,20 +410,27 @@ public class WhatsAppProductController : ControllerBase
             var enrichEvt = new WhatsAppGroupProductEnrichmentEvent
             {
                 EventId = Guid.NewGuid(),
-                GroupId = p.group_id,
-                ProductId = p.product_id,
-                Description = p.description ?? "",
+                GroupId = p.GroupId,
+                ProductId = p.ProductId,
+                Description = p.Description ?? "",
                 IsManual = true,  // manual user-triggered re-evaluation → high priority
                 Timestamp = DateTime.UtcNow
             };
 
-            await _producer.ProduceAsync(KafkaTopics.ProductEnrichmentRequested, new Message<string, string>
+            try
             {
-                Key = p.group_id,
-                Value = JsonSerializer.Serialize(enrichEvt, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
-            }, ct);
+                await _producer.ProduceAsync(KafkaTopics.ProductEnrichmentRequested, new Message<string, string>
+                {
+                    Key = p.GroupId,
+                    Value = JsonSerializer.Serialize(enrichEvt, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+                }, ct);
 
-            count++;
+                count++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to publish product enrichment event for product {ProductId}", p.ProductId);
+            }
         }
 
         return Ok(new { success = true, count });
@@ -477,14 +487,17 @@ public class WhatsAppProductController : ControllerBase
         using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync();
 
-        var product = await conn.QuerySingleOrDefaultAsync<dynamic>(
+        var product = await conn.QueryFirstOrDefaultAsync<ProductReevaluateTarget>(
             new CommandDefinition(
-                @"SELECT p.id as product_id, 
-                         COALESCE(mg.group_id, p.id::text) as group_id, 
-                         COALESCE(mg.description, p.description) as description 
+                @"SELECT DISTINCT ON (p.id)
+                         p.id as ProductId, 
+                         COALESCE(mg.group_id, vl.source_group_id, p.id::text) as GroupId, 
+                         COALESCE(NULLIF(mg.description, ''), NULLIF(vl.description, ''), NULLIF(p.description, ''), '') as Description 
                   FROM public.products p 
                   LEFT JOIN wa.message_groups mg ON mg.deeplens_product_id = p.id
+                  LEFT JOIN public.vendor_listings vl ON vl.product_id = p.id
                   WHERE p.id = @ProductId AND (p.is_deleted IS NULL OR p.is_deleted = false)
+                  ORDER BY p.id, mg.created_at DESC NULLS LAST, vl.updated_at DESC NULLS LAST
                   LIMIT 1",
                 new { ProductId = productId }, cancellationToken: ct)
         );
@@ -494,16 +507,16 @@ public class WhatsAppProductController : ControllerBase
         var enrichEvt = new WhatsAppGroupProductEnrichmentEvent
         {
             EventId = Guid.NewGuid(),
-            GroupId = product.group_id,
-            ProductId = (Guid)product.product_id,
-            Description = product.description ?? "",
+            GroupId = product.GroupId,
+            ProductId = product.ProductId,
+            Description = product.Description ?? "",
             IsManual = true,
             Timestamp = DateTime.UtcNow
         };
 
         await _producer.ProduceAsync(KafkaTopics.ProductEnrichmentRequested, new Message<string, string>
         {
-            Key = product.group_id,
+            Key = product.GroupId,
             Value = JsonSerializer.Serialize(enrichEvt, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         }, ct);
 
@@ -512,6 +525,7 @@ public class WhatsAppProductController : ControllerBase
     }
 }
 
+public record ProductReevaluateTarget(Guid ProductId, string GroupId, string Description);
 public record MergeProductsRequest(
     [property: JsonPropertyName("productAId")] Guid ProductAId, 
     [property: JsonPropertyName("productBId")] Guid ProductBId, 

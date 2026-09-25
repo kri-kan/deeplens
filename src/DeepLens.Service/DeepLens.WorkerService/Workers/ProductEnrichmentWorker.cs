@@ -55,10 +55,18 @@ public class ProductEnrichmentWorker : BackgroundService
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(1));
-                if (consumeResult?.Message != null)
+                try
                 {
-                    await ProcessMessage(consumeResult, stoppingToken);
+                    var consumeResult = _consumer.Consume(TimeSpan.FromSeconds(1));
+                    if (consumeResult?.Message != null)
+                    {
+                        await ProcessMessage(consumeResult, stoppingToken);
+                    }
+                }
+                catch (ConsumeException ex)
+                {
+                    _logger.LogWarning(ex, "Kafka ConsumeException in ProductEnrichmentWorker, retrying in 2s...");
+                    await Task.Delay(2000, stoppingToken);
                 }
             }
         }
@@ -121,6 +129,11 @@ public class ProductEnrichmentWorker : BackgroundService
                 _logger.LogError(dbEx, "Failed to mark group {GroupId} as enrichment_failed", @event.GroupId);
             }
             return;
+        }
+
+        if (!extracted.Price.HasValue)
+        {
+            extracted.Price = PriceExtractor.ExtractPrice(@event.Description);
         }
 
         using var conn = new NpgsqlConnection(_connectionString);
@@ -189,8 +202,8 @@ public class ProductEnrichmentWorker : BackgroundService
             // Update vendor_listings
             const string updateListingSql = @"
                 UPDATE public.vendor_listings
-                SET current_price = @Price,
-                    is_plus_shipping = @IsPlusShipping
+                SET current_price = COALESCE(@Price, current_price),
+                    is_plus_shipping = COALESCE(@IsPlusShipping, is_plus_shipping)
                 WHERE product_id = @Id";
 
             await conn.ExecuteAsync(updateListingSql, new
@@ -203,10 +216,10 @@ public class ProductEnrichmentWorker : BackgroundService
             // Update wa.message_groups
             const string updateGroupSql = @"
                 UPDATE wa.message_groups 
-                SET category = @Category, 
-                    sub_category = @SubCategory, 
-                    detected_price = @Price, 
-                    is_plus_shipping = @IsPlusShipping,
+                SET category = COALESCE(@Category, category), 
+                    sub_category = COALESCE(@SubCategory, sub_category), 
+                    detected_price = COALESCE(@Price, detected_price), 
+                    is_plus_shipping = COALESCE(@IsPlusShipping, is_plus_shipping),
                     status = 'enriched',
                     updated_at = NOW()
                 WHERE group_id = @GroupId";

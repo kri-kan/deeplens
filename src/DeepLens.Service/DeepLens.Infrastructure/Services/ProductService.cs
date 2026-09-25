@@ -283,10 +283,20 @@ public class ProductService : IProductService
                 (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""VendorPrice"",
                 COALESCE((SELECT description FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT description FROM vendor_listings WHERE product_id = p.id LIMIT 1)) as ""VendorDescription"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary, 'mediaType', m.media_type))
-                    FROM media m 
-                    JOIN media_links ml ON m.id = ml.media_id
-                    WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
+                    SELECT json_agg(sub.media_obj)
+                    FROM (
+                        SELECT json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', m.is_primary, 'mediaType', m.media_type) as media_obj
+                        FROM (
+                            SELECT DISTINCT ON (COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text))
+                                   m2.id, m2.storage_path, m2.color, ml2.is_primary, m2.media_type, m2.uploaded_at
+                            FROM media m2
+                            JOIN media_links ml2 ON m2.id = ml2.media_id
+                            WHERE ml2.entity_id = p.id AND ml2.entity_type = 'product'
+                            ORDER BY COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text), ml2.is_primary DESC
+                        ) m
+                        ORDER BY m.is_primary DESC, m.uploaded_at ASC
+                        LIMIT 15
+                    ) sub
                 ), '[]'::json)::text as ""MediaJson"",
                 (SELECT COUNT(*) FROM public.vendor_listings WHERE product_id = p.id AND is_active = true) as ""ListingCount""
             FROM products p
@@ -1138,10 +1148,20 @@ public class ProductService : IProductService
                 COALESCE((SELECT jid FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT jid FROM wa.messages m JOIN vendor_listings vl2 ON vl2.source_group_id = m.group_id WHERE vl2.product_id = p.id LIMIT 1)) as ""SourceJid"",
                 COALESCE((SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1), (SELECT source_group_id FROM vendor_listings WHERE product_id = p.id AND source_group_id IS NOT NULL LIMIT 1)) as ""SourceGroupId"",
                 COALESCE((
-                    SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary, 'mediaType', m.media_type))
-                    FROM media m 
-                    JOIN media_links ml ON m.id = ml.media_id
-                    WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
+                    SELECT json_agg(sub.media_obj)
+                    FROM (
+                        SELECT json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', m.is_primary, 'mediaType', m.media_type) as media_obj
+                        FROM (
+                            SELECT DISTINCT ON (COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text))
+                                   m2.id, m2.storage_path, m2.color, ml2.is_primary, m2.media_type, m2.uploaded_at
+                            FROM media m2
+                            JOIN media_links ml2 ON m2.id = ml2.media_id
+                            WHERE ml2.entity_id = p.id AND ml2.entity_type = 'product'
+                            ORDER BY COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text), ml2.is_primary DESC
+                        ) m
+                        ORDER BY m.is_primary DESC, m.uploaded_at ASC
+                        LIMIT 50
+                    ) sub
                 ), '[]'::json)::text as ""MediaJson"",
                 COALESCE((
                     SELECT json_agg(json_build_object(
@@ -1282,10 +1302,20 @@ public class ProductService : IProductService
                    p.title as ""ProductTitle"", p.base_sku as ""ProductCode"",
                    (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) as ""Price"",
                    COALESCE((
-                       SELECT json_agg(json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', ml.is_primary))
-                       FROM media m 
-                       JOIN media_links ml ON m.id = ml.media_id
-                       WHERE ml.entity_id = p.id AND ml.entity_type = 'product'
+                       SELECT json_agg(sub.media_obj)
+                       FROM (
+                           SELECT json_build_object('id', m.id, 'storagePath', m.storage_path, 'color', m.color, 'isDefault', m.is_primary) as media_obj
+                           FROM (
+                               SELECT DISTINCT ON (COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text))
+                                      m2.id, m2.storage_path, m2.color, ml2.is_primary, m2.uploaded_at
+                               FROM media m2
+                               JOIN media_links ml2 ON m2.id = ml2.media_id
+                               WHERE ml2.entity_id = p.id AND ml2.entity_type = 'product'
+                               ORDER BY COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text), ml2.is_primary DESC
+                           ) m
+                           ORDER BY m.is_primary DESC, m.uploaded_at ASC
+                           LIMIT 15
+                       ) sub
                    ), '[]'::json)::text as ""MediaJson""
             FROM instagram_product_links l
             JOIN products p ON l.product_id = p.id

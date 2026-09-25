@@ -278,12 +278,8 @@ public class WhatsAppGroupWorker : BackgroundService
             matched = true;
         }
 
-        decimal? fastPrice = null;
-        var priceMatch = Regex.Match(rawDesc, @"(?:price|rate|pp|mrp|rs\.?|₹)[\s:-]*([0-9]{3,5})", RegexOptions.IgnoreCase);
-        if (priceMatch.Success && decimal.TryParse(priceMatch.Groups[1].Value, out var parsedPrice))
-        {
-            fastPrice = parsedPrice;
-        }
+        decimal? fastPrice = PriceExtractor.ExtractPrice(rawDesc);
+        bool isPlusShipping = PriceExtractor.DetectIsPlusShipping(rawDesc);
 
         int bestScore = matched ? 1 : 0;
 
@@ -297,7 +293,7 @@ public class WhatsAppGroupWorker : BackgroundService
             SubCategory = "General",
             Title = !string.IsNullOrWhiteSpace(rawDesc) ? (rawDesc.Split('\n').FirstOrDefault(s => !string.IsNullOrWhiteSpace(s) && !s.StartsWith("["))?.Trim() ?? "New Product") : "New Product",
             Price = fastPrice,
-            IsPlusShipping = !lowerDesc.Contains("free ship") && !lowerDesc.Contains("freeship") && !lowerDesc.Contains("free shipping"),
+            IsPlusShipping = isPlusShipping,
             Fabric = "Unknown",
             StitchType = "Unknown",
             Color = "Unknown",
@@ -307,19 +303,23 @@ public class WhatsAppGroupWorker : BackgroundService
 
         if (extracted.Title.Length > 200) extracted.Title = extracted.Title.Substring(0, 200);
 
-        if (bestScore == 0 && !string.IsNullOrWhiteSpace(rawDesc) && rawDesc.Trim().Length > 15)
+        if ((bestScore == 0 || !fastPrice.HasValue) && !string.IsNullOrWhiteSpace(rawDesc) && rawDesc.Trim().Length > 15)
         {
             try
             {
                 _logger.LogInformation(
-                    "Static match missed — falling back to AI extraction for GroupId={GroupId}", evt.GroupId);
+                    "Static match incomplete (categoryScore={Score}, price={Price}) — invoking AI extraction for GroupId={GroupId}",
+                    bestScore, fastPrice, evt.GroupId);
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 cts.CancelAfter(TimeSpan.FromSeconds(3));
 
                 var aiResult = await aiService.ExtractProductInfoAsync(rawDesc);
 
                 // Remap whatever the AI returned → our 5 buckets
-                extracted.Category = RemapToTaxonomy(aiResult.Category);
+                if (bestScore == 0)
+                {
+                    extracted.Category = RemapToTaxonomy(aiResult.Category);
+                }
 
                 _logger.LogInformation(
                     "AI result: raw={AiCategory} → remapped={Category} for GroupId={GroupId}",
@@ -767,9 +767,15 @@ public class WhatsAppGroupWorker : BackgroundService
             }
 
             int successfulMediaCount = 0;
+            const int MAX_GROUP_MEDIA = 30;
 
             foreach (var mediaFile in evt.MediaFiles)
             {
+                if (successfulMediaCount >= MAX_GROUP_MEDIA)
+                {
+                    _logger.LogInformation("Group {GroupId} reached max media limit ({Max}). Skipping remaining media items.", evt.GroupId, MAX_GROUP_MEDIA);
+                    break;
+                }
                 try
                 {
                     string sourcePath = mediaFile.MediaUrl;
