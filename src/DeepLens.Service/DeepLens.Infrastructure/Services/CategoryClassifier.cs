@@ -34,13 +34,19 @@ public static class CategoryClassifier
     private static readonly Regex SpecialCharsRegex = new(@"[*~_`#\[\]\(\)\{\}\\\/<>@!?,;:|""'+=]", RegexOptions.Compiled);
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
 
-    // Kids age / size patterns: e.g. "size 2-6 yrs", "4 years", "12y", "6m", "1-16 years", "infant"
+    // Kids age / size patterns: e.g. "age 2-6 yrs", "4 years", "0-6 months", "1-16 years" (NO bare 'm' to prevent matching meters)
     private static readonly Regex KidsAgePattern = new(
-        @"\b(?:size\s*)?\d{1,2}(?:\s*-\s*\d{1,2})?\s*(?:years?|yrs?|yr|y|months?|mths?|m)\b|\b(?:1[0-6]|[0-9])\s*(?:years?|yrs?|yr|y)\b",
+        @"\b(?:age\s*)?\d{1,2}(?:\s*-\s*\d{1,2})?\s*(?:years?|yrs?|yr)\b|\b\d{1,2}(?:\s*-\s*\d{1,2})?\s*(?:months?|mths?)\b|\b(?:1[0-6]|[0-9])\s*(?:years?|yrs?|yr)\s*old\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    // Explicit Kids keywords (excludes 'baby pink', 'baby blue', 'baby soft' and standalone 'girls/women' adult phrases)
     private static readonly Regex KidsKeywordsRegex = new(
-        @"\b(?:kids?|kidwear|kidswear|children|child|baby|babies|toddlers?|infants?|boys?|girls?|baba\s*suit|infant\s*wear|boys?\s*wear|girls?\s*wear|pavadai|pattu\s*pavadai)\b",
+        @"\b(?:kids?|kidwear|kidswear|children|child|toddlers?|infants?|baba\s*suit|infant\s*wear|boys?\s*wear|girls?\s*wear|pavadai|pattu\s*pavadai|baby(?!\s*(?:pink|blue|soft|silk|color|colour|shade|print))|baby\s*(?:wear|dress|frock|suit|cloth(?:es|ing)?|boy|girl)|(?:boys?|girls?)\s*(?:wear|collection|dress|clothing|frock|suit|choli|lehenga|kurta|fashion|outfit))\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // Adult size indicators (e.g. S-36, M-38, L-40, XL-42, XXL, 38 to 44, bust 38)
+    private static readonly Regex AdultSizeRegex = new(
+        @"\b(?:s\s*-\s*36|m\s*-\s*38|l\s*-\s*40|xl\s*-\s*42|xxl|2xl|3xl|36\s*to\s*44|38\s*to\s*42|size\s*:\s*[smlx]{1,4})\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // Mens keywords
@@ -86,12 +92,13 @@ public static class CategoryClassifier
     /// <summary>
     /// Classifies product title and description into standard category (Name and Slug).
     /// Precedence hierarchy:
-    /// 1. Kids (explicit keywords or age indicators)
+    /// 1. Explicit Kids Title (kids/baby/child directly in product title)
     /// 2. Mens (explicit men's wear keywords)
-    /// 3. Lehanga (lehenga, choli, ghagra, half saree)
-    /// 4. Saree (saree, sari, pallu, weave names)
+    /// 3. Saree (saree, sari, pallu, weave names - protected against adult false positives)
+    /// 4. Lehanga (lehenga, choli, ghagra, half saree)
     /// 5. Dress (kurti, suit, gown, anarkali, coord set, etc.)
-    /// 6. Default Fallback ("Others" / "general")
+    /// 6. Kids Description (if no adult saree/dress override and matches genuine kids patterns)
+    /// 7. Default Fallback ("Others" / "general")
     /// </summary>
     public static (string CategoryName, string CategorySlug) Classify(string? title, string? description, string fallbackSlug = DefaultFallbackSlug)
     {
@@ -104,9 +111,11 @@ public static class CategoryClassifier
             return (DefaultFallbackName, fallbackSlug);
         }
 
-        // 1. Check Kids (Kids keywords in title/desc or age patterns)
-        if (KidsKeywordsRegex.IsMatch(normTitle) || KidsAgePattern.IsMatch(normTitle) ||
-            KidsKeywordsRegex.IsMatch(normDesc) || KidsAgePattern.IsMatch(normDesc))
+        bool hasKidsTitle = KidsKeywordsRegex.IsMatch(normTitle) || KidsAgePattern.IsMatch(normTitle);
+        bool hasAdultSizes = AdultSizeRegex.IsMatch(normTitle) || AdultSizeRegex.IsMatch(normDesc);
+
+        // 1. Explicit Kids Title (takes absolute priority if user/vendor titled it as Kids)
+        if (hasKidsTitle && !hasAdultSizes)
         {
             return (KidsName, KidsSlug);
         }
@@ -117,24 +126,48 @@ public static class CategoryClassifier
             return (MensName, MensSlug);
         }
 
-        // 3. Check Lehanga
-        if (LehangaKeywordsRegex.IsMatch(normTitle) || LehangaKeywordsRegex.IsMatch(normDesc))
+        // 3. Check Lehanga in Title (e.g. "Pattu silk lehenga", "Crop top with skirt and voni")
+        bool hasLehangaTitle = LehangaKeywordsRegex.IsMatch(normTitle);
+        if (hasLehangaTitle && !hasKidsTitle)
         {
             return (LehangaName, LehangaSlug);
         }
 
-        // 4. Check Saree
-        if (SareeKeywordsRegex.IsMatch(normTitle) || SareeKeywordsRegex.IsMatch(normDesc) ||
-            combined.Contains("saree") || combined.Contains("sari"))
+        // 4. Check Saree (sarees are 5.5m-6.3m adult garments unless explicitly titled for kids)
+        // If description has "half saree", that is a Lehanga/Voni style, not a Saree.
+        bool hasHalfSaree = normTitle.Contains("half saree") || normTitle.Contains("halfsaree") || 
+                            normDesc.Contains("half saree") || normDesc.Contains("halfsaree");
+        bool isSaree = (SareeKeywordsRegex.IsMatch(normTitle) || SareeKeywordsRegex.IsMatch(normDesc) ||
+                        combined.Contains("saree") || combined.Contains("sari")) && !hasHalfSaree;
+        if (isSaree && !hasKidsTitle)
         {
             return (SareeName, SareeSlug);
         }
 
-        // 5. Check Dress
-        if (DressKeywordsRegex.IsMatch(normTitle) || DressKeywordsRegex.IsMatch(normDesc))
+        // 5. Check Lehanga in Description or Half Saree
+        bool isLehanga = hasLehangaTitle || LehangaKeywordsRegex.IsMatch(normDesc) || hasHalfSaree;
+        if (isLehanga && !hasKidsTitle)
+        {
+            return (LehangaName, LehangaSlug);
+        }
+
+        // 6. Check Dress
+        bool isDress = DressKeywordsRegex.IsMatch(normTitle) || DressKeywordsRegex.IsMatch(normDesc);
+        if (isDress && !hasKidsTitle)
         {
             return (DressName, DressSlug);
         }
+
+        // 6. Kids from Description (only if no conflicting adult apparel or adult sizes detected)
+        if (!hasAdultSizes && !isSaree && (KidsKeywordsRegex.IsMatch(normDesc) || KidsAgePattern.IsMatch(normDesc)))
+        {
+            return (KidsName, KidsSlug);
+        }
+
+        // 7. If Lehanga or Dress had kids mention in desc, check which one is stronger
+        if (isLehanga) return (LehangaName, LehangaSlug);
+        if (isDress) return (DressName, DressSlug);
+        if (isSaree) return (SareeName, SareeSlug);
 
         return (DefaultFallbackName, fallbackSlug);
     }

@@ -12,6 +12,8 @@ public class CategoryClassifierTests
     [TestCase("Kanjivaram Pattu Saree", "Grand zari border, contrast pallu", "saree", "Saree")]
     [TestCase("Tissue Saree Collection", "Price 1450 free shipping", "saree", "Saree")]
     [TestCase("Gadwal checks silk saree", "Gadhwal checks pattu", "saree", "Saree")]
+    [TestCase("*💖 New Arrival – Royal Banarasi Satin Mashroo Silk Saree 💖*", "Tranding Baby Pink Colour For Uniform Order PRICR 1050+shiping", "saree", "Saree")]
+    [TestCase("Special Collection Chanderi Saree", "5.5m saree length with blouse piece", "saree", "Saree")]
     public void Classify_SareeExamples_ReturnsSaree(string? title, string? desc, string expectedSlug, string expectedName)
     {
         var result = CategoryClassifier.Classify(title, desc);
@@ -36,6 +38,7 @@ public class CategoryClassifierTests
     [TestCase("Salwar Suit 3 Piece Set", "Unstitched dress material with dupatta", "dress", "Dress")]
     [TestCase("Trending Co-ord Set", "Western style 2 piece cord set for women", "dress", "Dress")]
     [TestCase("Sharara Suit Set", "Georgette peplum top with sharara", "dress", "Dress")]
+    [TestCase("Sparkling Georgette Gown And Duptta Set", "Size:- S-36 M-38 L-40 Xl-42 Length 50\" Flare 3.8m Price:-899/-+ship", "dress", "Dress")]
     public void Classify_DressExamples_ReturnsDress(string? title, string? desc, string expectedSlug, string expectedName)
     {
         var result = CategoryClassifier.Classify(title, desc);

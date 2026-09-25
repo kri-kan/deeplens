@@ -75,6 +75,9 @@ export const LuInfo: React.FC<IconProps> = ({ size = 16, color = '#333333', styl
 export const LuCopy: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="copy" size={size} color={color} style={style} />
 );
+export const LuGitMerge: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="git-merge" size={size} color={color} style={style} />
+);
 export const LuTag: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="tag" size={size} color={color} style={style} />
 );

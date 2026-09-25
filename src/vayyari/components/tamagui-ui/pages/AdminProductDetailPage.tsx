@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   LuArrowLeft,
   LuSparkles,
+  LuGitMerge,
   LuShare2,
   LuPencil,
   LuStar,
@@ -317,11 +318,11 @@ export function AdminProductDetailPage({
 
         {/* Right Header Action Icons */}
         <XStack alignItems="center" gap={8}>
-          {/* Find Similar Matches */}
+          {/* Find Similar Matches / Merge Candidates */}
           {onFindSimilar && (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Find similar products"
+              accessibilityLabel="Find similar merge candidates"
               activeOpacity={0.7}
               onPress={onFindSimilar}
             >
@@ -333,7 +334,7 @@ export function AdminProductDetailPage({
                 alignItems="center"
                 justifyContent="center"
               >
-                <LuSparkles size={16} color="#ffffff" />
+                <LuGitMerge size={16} color="#ffffff" />
               </XStack>
             </TouchableOpacity>
           )}
