@@ -40,6 +40,7 @@ export interface CollabPostItem {
   targetCollabAccounts?: string[];
   channelPhases?: CollabChannelPhaseInfo[];
   curationStatus?: 'pending' | 'curated' | 'queued' | 'completed';
+  isStarred?: boolean;
 }
 
 export interface CollabCurationModalProps {

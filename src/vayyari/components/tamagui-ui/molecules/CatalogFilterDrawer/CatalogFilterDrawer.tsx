@@ -58,6 +58,29 @@ export const DEFAULT_FILTER_STATE: FilterState = {
   includeArchived: false,
 };
 
+export const DEFAULT_STARRED_FILTER_STATE: FilterState = {
+  ...DEFAULT_FILTER_STATE,
+  isStarred: true,
+};
+
+export const getActiveFilterCount = (filter: FilterState): number => {
+  return (
+    (filter.sortBy && filter.sortBy !== 'recent' ? 1 : 0) +
+    (filter.isStarred !== null && filter.isStarred !== undefined ? 1 : 0) +
+    (filter.categories?.length || 0) +
+    (filter.fabrics?.length || 0) +
+    (filter.crafts?.length || 0) +
+    (filter.motifs?.length || 0) +
+    (filter.borders?.length || 0) +
+    (filter.stitchTypes?.length || 0) +
+    (filter.occasions?.length || 0) +
+    (filter.blouseTypes?.length || 0) +
+    (filter.vendorNames?.length || 0) +
+    ((filter.minPrice || 0) > 0 || (filter.maxPrice || 0) > 0 ? 1 : 0) +
+    (filter.status && filter.status !== 'active' ? 1 : 0)
+  );
+};
+
 const SECTIONS = [
   'Sort',
   'Starred',

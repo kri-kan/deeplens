@@ -974,8 +974,8 @@ class InstagramService {
     return searchApiClient.get<PostPlannerChannelOption[]>(API_ROUTES.INSTAGRAM.POST_PLANNER_CHANNELS);
   };
 
-  getPostPlannerItems = async (category?: string): Promise<PostPlannerItem[]> => {
-    return searchApiClient.get<PostPlannerItem[]>(API_ROUTES.INSTAGRAM.POST_PLANNER_ITEMS(category));
+  getPostPlannerItems = async (optionsOrCategory?: string | GetPostPlannerItemsOptions): Promise<PostPlannerItem[]> => {
+    return searchApiClient.get<PostPlannerItem[]>(API_ROUTES.INSTAGRAM.POST_PLANNER_ITEMS(optionsOrCategory as any));
   };
 
   matchProductChannels = async (payload: MatchProductChannelsPayload): Promise<{ success: boolean; productId: string; planningStatus: string }> => {
@@ -1133,10 +1133,25 @@ export interface PostPlannerChannelOption {
   targetDemography?: string;
 }
 
+export interface GetPostPlannerItemsOptions {
+  category?: string;
+  isStarred?: boolean | null;
+  curationStatus?: 'pending' | 'curated' | 'all' | string;
+  search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: string;
+  take?: number;
+  skip?: number;
+}
+
 export interface PostPlannerChannelAssignment {
   assignmentId: string;
   watchlistId: string;
   username: string;
+  handle?: string;
+  displayName?: string;
+  profilePicUrl?: string;
   channelType: 'focus' | 'dump';
   status: 'assigned' | 'scheduled' | 'shared' | 'excluded' | 'unassigned';
   scheduledAt?: string;
@@ -1153,9 +1168,11 @@ export interface PostPlannerItem {
   fabric?: string;
   price: number;
   primaryImageUrl?: string;
+  mediaCount?: number;
   isStarred: boolean;
   planningStatus: 'in_progress' | 'complete';
   channelAssignments: PostPlannerChannelAssignment[];
+  assignedChannelIds?: string[];
 }
 
 export interface MatchProductChannelsPayload {
@@ -1226,6 +1243,7 @@ export interface CollabPlannerPostDto {
   ownerUsername: string;
   ownerDisplayName?: string;
   ownerProfilePicUrl?: string;
+  isStarred?: boolean;
 }
 
 export const instagramService = new InstagramService();

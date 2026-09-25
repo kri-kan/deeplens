@@ -18,8 +18,16 @@ import {
   LuUsers,
   LuCheckCheck,
   LuLayers,
+  LuSlidersHorizontal,
+  LuX,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
+import {
+  CatalogFilterDrawer,
+  FilterState,
+  DEFAULT_STARRED_FILTER_STATE,
+  getActiveFilterCount,
+} from '../molecules/CatalogFilterDrawer';
 import {
   TargetChannelOption,
 } from '../molecules/TargetChannelAvatar';
@@ -445,6 +453,58 @@ export function AdminCollabPlannerPage({
     onToggleShowCurated?.(value);
   };
 
+  // Universal Filter State (defaulting to isStarred: true with removable chip)
+  const [filterState, setFilterState] = useState<FilterState>(DEFAULT_STARRED_FILTER_STATE);
+  const [filterDrawerVisible, setFilterDrawerVisible] = useState<boolean>(false);
+
+  // Dynamic Filter Chips from Universal Filter State
+  const computedFilterChips = useMemo(() => {
+    const chips: { id: string; label: string }[] = [];
+    if (filterState.isStarred === true) {
+      chips.push({ id: 'f-star', label: '⭐ Starred Only' });
+    } else if (filterState.isStarred === false) {
+      chips.push({ id: 'f-unstar', label: 'Unstarred Only' });
+    }
+    if (filterState.minPrice > 0 && filterState.maxPrice > 0) {
+      chips.push({ id: 'f-price', label: `₹${filterState.minPrice} - ₹${filterState.maxPrice}` });
+    } else if (filterState.minPrice > 0) {
+      chips.push({ id: 'f-minprice', label: `≥ ₹${filterState.minPrice}` });
+    } else if (filterState.maxPrice > 0) {
+      chips.push({ id: 'f-maxprice', label: `≤ ₹${filterState.maxPrice}` });
+    }
+    (filterState.categories || []).forEach((cat) => {
+      chips.push({ id: `f-cat-${cat}`, label: cat });
+    });
+    (filterState.fabrics || []).forEach((fab) => {
+      chips.push({ id: `f-fab-${fab}`, label: fab });
+    });
+    if (filterState.sortBy && filterState.sortBy !== 'recent') {
+      chips.push({ id: 'f-sort', label: `Sort: ${filterState.sortBy}` });
+    }
+    return chips;
+  }, [filterState]);
+
+  const handleRemoveFilterChip = (chipId: string) => {
+    setFilterState((prev) => {
+      const next = { ...prev };
+      if (chipId === 'f-star' || chipId === 'f-unstar') {
+        next.isStarred = null;
+      } else if (chipId === 'f-price' || chipId === 'f-minprice' || chipId === 'f-maxprice') {
+        next.minPrice = 0;
+        next.maxPrice = 0;
+      } else if (chipId.startsWith('f-cat-')) {
+        const cat = chipId.replace('f-cat-', '');
+        next.categories = (next.categories || []).filter((c) => c !== cat);
+      } else if (chipId.startsWith('f-fab-')) {
+        const fab = chipId.replace('f-fab-', '');
+        next.fabrics = (next.fabrics || []).filter((f) => f !== fab);
+      } else if (chipId === 'f-sort') {
+        next.sortBy = 'recent';
+      }
+      return next;
+    });
+  };
+
   // Posts List State: If controlled posts prop is supplied, consume it directly; otherwise fallback to internal state.
   const [internalPostsList, setInternalPostsList] = useState<CollabPostItem[]>(DEFAULT_COLLAB_POSTS);
   const postsList = controlledPosts !== undefined ? controlledPosts : internalPostsList;
@@ -538,11 +598,16 @@ export function AdminCollabPlannerPage({
   }, [postsList, activeChannelId]);
 
   const visiblePosts = useMemo(() => {
-    if (showCurated) {
-      return channelFilteredPosts;
+    let list = channelFilteredPosts;
+    if (!showCurated) {
+      list = list.filter((p) => isPending(p.curationStatus));
     }
-    return channelFilteredPosts.filter((p) => isPending(p.curationStatus));
-  }, [channelFilteredPosts, showCurated]);
+    // Universal Starred Filter (if null, allows both starred and unstarred)
+    if (filterState.isStarred !== null && filterState.isStarred !== undefined) {
+      list = list.filter((p) => (p.isStarred !== undefined ? p.isStarred : true) === filterState.isStarred);
+    }
+    return list;
+  }, [channelFilteredPosts, showCurated, filterState.isStarred]);
 
   // Status counts for active channel
   const counts = useMemo(() => {
@@ -605,8 +670,32 @@ export function AdminCollabPlannerPage({
           </YStack>
         </XStack>
 
-        {/* Right Header Cluster: "Show Curated" Toggle + Queue Icon Button */}
-        <XStack alignItems="center" gap={10}>
+        {/* Right Header Cluster: Universal Filter + "Show Curated" Toggle + Queue Icon Button */}
+        <XStack alignItems="center" gap={8}>
+          {/* Universal Filter Button */}
+          <Pressable
+            onPress={() => setFilterDrawerVisible(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Open Catalog Filters"
+            style={[
+              styles.filterIconButton,
+              getActiveFilterCount(filterState) > 0 && styles.filterIconButtonActive,
+            ]}
+          >
+            <LuSlidersHorizontal
+              size={17}
+              color={getActiveFilterCount(filterState) > 0 ? '#7E22CE' : '#4B5563'}
+            />
+            {getActiveFilterCount(filterState) > 0 && (
+              <View style={styles.filterBadge}>
+                <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                  {getActiveFilterCount(filterState)}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+
           {/* Header Toggle for Curated Posts */}
           <Pressable
             onPress={() => handleToggleCurated(!showCurated)}
@@ -662,6 +751,53 @@ export function AdminCollabPlannerPage({
           </Pressable>
         </XStack>
       </XStack>
+
+      {/* Active Filter Chips Bar (Compact 34px height row) */}
+      {computedFilterChips.length > 0 && (
+        <XStack
+          height={34}
+          alignItems="center"
+          paddingHorizontal={12}
+          backgroundColor={tokens.surface}
+          borderBottomWidth={1}
+          borderBottomColor={tokens.border}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            {computedFilterChips.map((chip) => (
+              <XStack
+                key={chip.id}
+                alignItems="center"
+                height={24}
+                gap={4}
+                paddingHorizontal={8}
+                borderRadius={tokens.radius.full}
+                backgroundColor="#F3E8FF"
+                borderWidth={1}
+                borderColor="#D8B4FE"
+              >
+                <Text fontSize={11} fontWeight="700" color="#7E22CE">
+                  {chip.label}
+                </Text>
+                <Pressable
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove filter ${chip.label}`}
+                  onPress={() => handleRemoveFilterChip(chip.id)}
+                >
+                  <LuX size={11} color="#7E22CE" />
+                </Pressable>
+              </XStack>
+            ))}
+          </ScrollView>
+        </XStack>
+      )}
 
       {/* ── Horizontal Channel Carousel ── */}
       <View style={styles.carouselWrapper}>
@@ -849,6 +985,17 @@ export function AdminCollabPlannerPage({
         queueItems={queuedPosts}
         onSelectPost={handleOpenModal}
       />
+
+      {/* ── Universal Catalog Filter Drawer ── */}
+      <CatalogFilterDrawer
+        visible={filterDrawerVisible}
+        onClose={() => setFilterDrawerVisible(false)}
+        current={filterState}
+        onApply={(f) => {
+          setFilterState(f);
+          setFilterDrawerVisible(false);
+        }}
+      />
     </YStack>
   );
 }
@@ -864,6 +1011,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
+  },
+  filterIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    position: 'relative',
+  },
+  filterIconButtonActive: {
+    backgroundColor: '#F3E8FF',
+    borderColor: '#C084FC',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#7E22CE',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   queueIconButton: {
     width: 36,

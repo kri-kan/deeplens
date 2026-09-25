@@ -82,6 +82,7 @@ export default function CollabPlannerRoute() {
         p.collabCurationStatus === 'collab_curated'
           ? 'curated'
           : (p.collabCurationStatus as any) || 'pending',
+      isStarred: p.isStarred !== undefined ? p.isStarred : true,
     };
   }, []);
 
