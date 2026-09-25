@@ -142,8 +142,34 @@ export const API_ROUTES = {
     AUTO_CLASSIFY: (username: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/auto-classify`,
     SET_CATEGORY: (username: string, category: string) => `/api/v1/Insta/profile/${encodeURIComponent(username)}/set-category?category=${encodeURIComponent(category)}`,
     POST_PLANNER_CHANNELS: '/api/v1/Insta/post-planner/channels',
-    POST_PLANNER_ITEMS: (category?: string) => `/api/v1/Insta/post-planner/items${category ? `?category=${encodeURIComponent(category)}` : ''}`,
     POST_PLANNER_MATCH_CHANNELS: '/api/v1/Insta/post-planner/match-channels',
+    POST_PLANNER_ITEMS: (options?: string | {
+      category?: string;
+      isStarred?: boolean | null;
+      curationStatus?: string;
+      search?: string;
+      minPrice?: number;
+      maxPrice?: number;
+      sortBy?: string;
+      take?: number;
+      skip?: number;
+    }) => {
+      if (typeof options === 'string') {
+        return `/api/v1/Insta/post-planner/items?category=${encodeURIComponent(options)}`;
+      }
+      const q = new URLSearchParams();
+      if (options?.category) q.append('category', options.category);
+      if (options?.isStarred !== undefined && options?.isStarred !== null) q.append('isStarred', String(options.isStarred));
+      if (options?.curationStatus) q.append('curationStatus', options.curationStatus);
+      if (options?.search) q.append('search', options.search);
+      if (options?.minPrice !== undefined && options?.minPrice !== null) q.append('minPrice', String(options.minPrice));
+      if (options?.maxPrice !== undefined && options?.maxPrice !== null) q.append('maxPrice', String(options.maxPrice));
+      if (options?.sortBy) q.append('sortBy', options.sortBy);
+      if (options?.take) q.append('take', String(options.take));
+      if (options?.skip) q.append('skip', String(options.skip));
+      const qs = q.toString();
+      return `/api/v1/Insta/post-planner/items${qs ? `?${qs}` : ''}`;
+    },
     POST_PLANNER_RECORD_ACTION: '/api/v1/Insta/post-planner/record-action',
     POST_PLANNER_CLASSIFY_CHANNEL: '/api/v1/Insta/post-planner/channels/classify',
     COLLAB_PLANNER_CHANNELS: '/api/v1/Insta/collab-planner/channels',

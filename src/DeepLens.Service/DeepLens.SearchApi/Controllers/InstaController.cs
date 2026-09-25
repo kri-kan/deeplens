@@ -3467,12 +3467,17 @@ public class InstaController : ControllerBase
                 id AS WatchlistId,
                 username AS Username,
                 display_name AS DisplayName,
-                profile_pic_url AS ProfilePicUrl,
+                COALESCE(
+                    CASE WHEN profile_pic_storage_path IS NOT NULL AND profile_pic_storage_path <> '' 
+                         THEN '/api/v1/Attachment/download?path=' || profile_pic_storage_path 
+                         ELSE NULL END,
+                    profile_pic_url
+                ) AS ProfilePicUrl,
                 COALESCE(channel_type, 'focus') AS ChannelType,
                 COALESCE(category_focus, ARRAY[]::text[]) AS CategoryFocus,
                 target_demography AS TargetDemography
             FROM competitor_watchlist
-            WHERE profile_category = 'My Business' AND platform = 'instagram' AND is_active = true
+            WHERE profile_category = 'My Business' AND platform = 'instagram' AND enabled = true
             ORDER BY channel_type ASC, username ASC";
 
         var channels = (await conn.QueryAsync<PostPlannerChannelOptionDto>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
@@ -3481,10 +3486,88 @@ public class InstaController : ControllerBase
 
     [HttpGet("post-planner/items")]
     [Authorize(Policy = "SearchPolicy")]
-    public async Task<ActionResult<List<PostPlannerItemDto>>> GetPostPlannerItems([FromQuery] string? category = null, CancellationToken ct = default)
+    public async Task<ActionResult<List<PostPlannerItemDto>>> GetPostPlannerItems(
+        [FromQuery] string? category = null,
+        [FromQuery] bool? isStarred = true,
+        [FromQuery] string? curationStatus = null, // "pending" | "curated" | "all"
+        [FromQuery] string? search = null,
+        [FromQuery] decimal? minPrice = null,
+        [FromQuery] decimal? maxPrice = null,
+        [FromQuery] string? sortBy = "recent",
+        [FromQuery] int take = 100,
+        [FromQuery] int skip = 0,
+        CancellationToken ct = default)
     {
         using var conn = await _db.CreateConnectionAsync();
-        var productSql = @"
+
+        var whereClauses = new List<string> { "p.is_deleted = false" };
+        var parameters = new DynamicParameters();
+
+        // 1. Starred Filter (default true, but if false returns unstarred, if null returns all)
+        if (isStarred.HasValue)
+        {
+            if (isStarred.Value)
+            {
+                whereClauses.Add("p.is_starred = true");
+            }
+            else
+            {
+                whereClauses.Add("(p.is_starred = false OR p.is_starred IS NULL)");
+            }
+        }
+
+        // 2. Curation Status Filter ('curated' vs 'pending' vs 'all')
+        if (string.Equals(curationStatus, "curated", StringComparison.OrdinalIgnoreCase))
+        {
+            whereClauses.Add("EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete')");
+        }
+        else if (string.Equals(curationStatus, "pending", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(curationStatus))
+        {
+            whereClauses.Add("NOT EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete')");
+        }
+        // "all" adds no predicate on planning_status
+
+        // 3. Category Filter
+        if (!string.IsNullOrWhiteSpace(category) && !string.Equals(category, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            whereClauses.Add("(c.slug = @Category OR c.name ILIKE @Category OR p.tags @> ARRAY[@Category])");
+            parameters.Add("Category", category);
+        }
+
+        // 4. Search Filter
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            whereClauses.Add("(p.base_sku ILIKE @SearchPattern OR p.title ILIKE @SearchPattern OR p.fabric ILIKE @SearchPattern OR p.description ILIKE @SearchPattern)");
+            parameters.Add("SearchPattern", $"%{search.Trim()}%");
+        }
+
+        // 5. Price Bounds
+        if (minPrice.HasValue)
+        {
+            whereClauses.Add("COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) >= @MinPrice");
+            parameters.Add("MinPrice", minPrice.Value);
+        }
+        if (maxPrice.HasValue)
+        {
+            whereClauses.Add("COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) <= @MaxPrice");
+            parameters.Add("MaxPrice", maxPrice.Value);
+        }
+
+        // 6. Sorting Order
+        string orderByClause = sortBy?.ToLowerInvariant() switch
+        {
+            "oldest" => "p.created_at ASC",
+            "price_low" => "COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) ASC, p.created_at DESC",
+            "price_high" => "COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) DESC, p.created_at DESC",
+            "media_high" => "(SELECT COUNT(*) FROM public.media_links ml_cnt WHERE ml_cnt.entity_id = p.id AND ml_cnt.entity_type = 'product') DESC, p.created_at DESC",
+            "media_low" => "(SELECT COUNT(*) FROM public.media_links ml_cnt WHERE ml_cnt.entity_id = p.id AND ml_cnt.entity_type = 'product') ASC, p.created_at DESC",
+            _ => "p.created_at DESC"
+        };
+
+        parameters.Add("Take", Math.Min(Math.Max(take, 1), 200));
+        parameters.Add("Skip", Math.Max(skip, 0));
+
+        var productSql = $@"
             SELECT 
                 p.id AS ProductId,
                 COALESCE(p.base_sku, '') AS ProductCode,
@@ -3492,18 +3575,32 @@ public class InstaController : ControllerBase
                 c.name AS Category,
                 p.fabric AS Fabric,
                 COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) AS Price,
-                (SELECT i.storage_path FROM images i 
-                 JOIN product_variants pv ON pv.id = i.product_variant_id 
-                 WHERE pv.product_id = p.id ORDER BY i.created_at ASC LIMIT 1) AS PrimaryImageUrl,
+                COALESCE(
+                    (SELECT m.storage_path 
+                     FROM public.media_links ml 
+                     JOIN public.media m ON ml.media_id = m.id 
+                     WHERE ml.entity_id = p.id AND ml.entity_type = 'product' 
+                     ORDER BY ml.is_primary DESC, m.uploaded_at ASC LIMIT 1),
+                    (SELECT m.storage_path 
+                     FROM public.media_links ml 
+                     JOIN public.vendor_listings vl ON vl.id = ml.entity_id AND ml.entity_type = 'vendor_listing'
+                     JOIN public.media m ON ml.media_id = m.id 
+                     WHERE vl.product_id = p.id 
+                     ORDER BY ml.is_primary DESC, m.uploaded_at ASC LIMIT 1)
+                ) AS PrimaryImageUrl,
+                (SELECT COUNT(*) FROM public.media_links ml_c WHERE ml_c.entity_id = p.id AND ml_c.entity_type = 'product') AS MediaCount,
                 p.is_starred AS IsStarred,
-                COALESCE((SELECT ppa.planning_status FROM post_planner_assignments ppa WHERE ppa.product_id = p.id LIMIT 1), 'in_progress') AS PlanningStatus
+                CASE 
+                    WHEN EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete') THEN 'complete' 
+                    ELSE 'in_progress' 
+                END AS PlanningStatus
             FROM products p
             LEFT JOIN categories c ON c.id = p.category_id
-            WHERE p.is_starred = true
-            ORDER BY p.created_at DESC
-            LIMIT 100";
+            WHERE {string.Join(" AND ", whereClauses)}
+            ORDER BY {orderByClause}
+            LIMIT @Take OFFSET @Skip";
 
-        var products = (await conn.QueryAsync<PostPlannerItemDto>(new CommandDefinition(productSql, cancellationToken: ct))).ToList();
+        var products = (await conn.QueryAsync<PostPlannerItemDto>(new CommandDefinition(productSql, parameters, cancellationToken: ct))).ToList();
         if (products.Count == 0)
         {
             return Ok(products);
@@ -3516,6 +3613,13 @@ public class InstaController : ControllerBase
                 ppa.product_id AS ProductId,
                 ppa.watchlist_id AS WatchlistId,
                 cw.username AS Username,
+                cw.display_name AS DisplayName,
+                COALESCE(
+                    CASE WHEN cw.profile_pic_storage_path IS NOT NULL AND cw.profile_pic_storage_path <> '' 
+                         THEN '/api/v1/Attachment/download?path=' || cw.profile_pic_storage_path 
+                         ELSE NULL END,
+                    cw.profile_pic_url
+                ) AS ProfilePicUrl,
                 COALESCE(ppa.channel_type, 'focus') AS ChannelType,
                 ppa.status AS Status,
                 ppa.scheduled_at AS ScheduledAt,
@@ -3524,7 +3628,8 @@ public class InstaController : ControllerBase
                 ppa.caption_used AS CaptionUsed
             FROM post_planner_assignments ppa
             JOIN competitor_watchlist cw ON cw.id = ppa.watchlist_id
-            WHERE ppa.product_id = ANY(@ProductIds)";
+            WHERE ppa.product_id = ANY(@ProductIds)
+            ORDER BY cw.username ASC";
 
         var rawAssignments = await conn.QueryAsync<dynamic>(new CommandDefinition(assignmentsSql, new { ProductIds = productIds }, cancellationToken: ct));
         var assignmentsByProduct = rawAssignments
@@ -3536,6 +3641,8 @@ public class InstaController : ControllerBase
                     AssignmentId = (Guid)a.assignmentid,
                     WatchlistId = (Guid)a.watchlistid,
                     Username = (string)a.username,
+                    DisplayName = (string?)a.displayname,
+                    ProfilePicUrl = (string?)a.profilepicurl,
                     ChannelType = (string)a.channeltype,
                     Status = (string)a.status,
                     ScheduledAt = (DateTime?)a.scheduledat,
@@ -3563,32 +3670,53 @@ public class InstaController : ControllerBase
         }
 
         using var conn = await _db.CreateConnectionAsync();
+        var watchlistIds = request.WatchlistIds ?? new List<Guid>();
         var channels = (await conn.QueryAsync<dynamic>(@"
             SELECT id, COALESCE(channel_type, 'focus') AS channel_type
             FROM competitor_watchlist
             WHERE id = ANY(@WatchlistIds)",
-            new { WatchlistIds = request.WatchlistIds.ToArray() })).ToDictionary(x => (Guid)x.id, x => (string)x.channel_type);
+            new { WatchlistIds = watchlistIds.ToArray() })).ToDictionary(x => (Guid)x.id, x => (string)x.channel_type);
 
-        var planningStatus = request.IsDonePlanning ? "complete" : "in_progress";
+        var planningStatus = request.IsDonePlanning || watchlistIds.Count > 0 ? "complete" : "in_progress";
 
-        foreach (var wId in request.WatchlistIds)
+        // 1. Remove assignments in 'assigned' status that are not in the new selection
+        if (watchlistIds.Count > 0)
+        {
+            await conn.ExecuteAsync(@"
+                DELETE FROM post_planner_assignments 
+                WHERE product_id = @ProductId 
+                  AND status = 'assigned' 
+                  AND watchlist_id != ALL(@WatchlistIds)",
+                new { ProductId = request.ProductId, WatchlistIds = watchlistIds.ToArray() });
+        }
+        else
+        {
+            await conn.ExecuteAsync(@"
+                DELETE FROM post_planner_assignments 
+                WHERE product_id = @ProductId AND status = 'assigned'",
+                new { ProductId = request.ProductId });
+        }
+
+        // 2. Insert or update the selected channels
+        foreach (var wId in watchlistIds)
         {
             var cType = channels.TryGetValue(wId, out var ctVal) ? ctVal : "focus";
             await conn.ExecuteAsync(@"
                 INSERT INTO post_planner_assignments (product_id, watchlist_id, channel_type, status, planning_status, updated_at)
                 VALUES (@ProductId, @WatchlistId, @ChannelType, 'assigned', @PlanningStatus, NOW())
                 ON CONFLICT (product_id, watchlist_id)
-                DO UPDATE SET planning_status = @PlanningStatus, updated_at = NOW()",
+                DO UPDATE SET planning_status = @PlanningStatus, channel_type = @ChannelType, updated_at = NOW()",
                 new { ProductId = request.ProductId, WatchlistId = wId, ChannelType = cType, PlanningStatus = planningStatus });
         }
 
+        // 3. Keep all remaining assignments in sync with current planningStatus
         await conn.ExecuteAsync(@"
             UPDATE post_planner_assignments
             SET planning_status = @PlanningStatus, updated_at = NOW()
             WHERE product_id = @ProductId",
             new { ProductId = request.ProductId, PlanningStatus = planningStatus });
 
-        return Ok(new { success = true, productId = request.ProductId, planningStatus });
+        return Ok(new { success = true, productId = request.ProductId, planningStatus, count = watchlistIds.Count });
     }
 
     [HttpPost("post-planner/record-action")]

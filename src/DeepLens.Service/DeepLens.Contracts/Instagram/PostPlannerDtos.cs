@@ -33,8 +33,14 @@ public record PostPlannerItemDto
     [JsonPropertyName("planningStatus")]
     public string PlanningStatus { get; init; } = "in_progress"; // 'in_progress', 'complete'
 
+    [JsonPropertyName("mediaCount")]
+    public int MediaCount { get; init; }
+
     [JsonPropertyName("channelAssignments")]
     public List<PostPlannerChannelAssignmentDto> ChannelAssignments { get; init; } = new();
+
+    [JsonPropertyName("assignedChannelIds")]
+    public List<Guid> AssignedChannelIds => ChannelAssignments.Select(a => a.WatchlistId).ToList();
 }
 
 public record PostPlannerChannelAssignmentDto
@@ -47,6 +53,15 @@ public record PostPlannerChannelAssignmentDto
 
     [JsonPropertyName("username")]
     public string Username { get; init; } = string.Empty;
+
+    [JsonPropertyName("handle")]
+    public string Handle => string.IsNullOrWhiteSpace(Username) ? string.Empty : (Username.StartsWith("@") ? Username : $"@{Username}");
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; init; }
+
+    [JsonPropertyName("profilePicUrl")]
+    public string? ProfilePicUrl { get; init; }
 
     [JsonPropertyName("channelType")]
     public string ChannelType { get; init; } = "focus"; // 'focus' | 'dump'
@@ -85,7 +100,7 @@ public record PostPlannerChannelOptionDto
     public string ChannelType { get; init; } = "focus"; // 'focus' | 'dump'
 
     [JsonPropertyName("categoryFocus")]
-    public List<string> CategoryFocus { get; init; } = new();
+    public string[] CategoryFocus { get; init; } = Array.Empty<string>();
 
     [JsonPropertyName("targetDemography")]
     public string? TargetDemography { get; init; }

@@ -9,6 +9,8 @@ import {
   Dimensions,
   Platform,
   Modal,
+  Switch,
+  Pressable,
 } from 'react-native';
 import {
   Text,
@@ -36,6 +38,23 @@ import {
   PostPlannerChannelAssignment,
 } from '@/services/instagram.service';
 import { getSearchApiUrl } from '@/utils/api-config';
+import {
+  CatalogFilterDrawer,
+  FilterState,
+  DEFAULT_STARRED_FILTER_STATE,
+  getActiveFilterCount,
+} from '@/components/tamagui-ui/molecules/CatalogFilterDrawer';
+import {
+  TargetCollabAccountPicker,
+  TargetCollabAccount,
+  getChannelColor,
+} from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
+import {
+  LuSlidersHorizontal,
+  LuX,
+  LuPlus,
+  LuCheck,
+} from '@/components/tamagui-ui/icons/lu';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +95,11 @@ export default function PostPlannerScreen() {
   const [items, setItems] = useState<PostPlannerItem[]>([]);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
+  // Universal Filter State (defaulting to isStarred: true with removable chip)
+  const [filterState, setFilterState] = useState<FilterState>(DEFAULT_STARRED_FILTER_STATE);
+  const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
+  const [includeCurated, setIncludeCurated] = useState(false);
+
   // Filters for Backlog tab
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('All');
@@ -113,7 +137,14 @@ export default function PostPlannerScreen() {
     try {
       const [channelsData, itemsData] = await Promise.all([
         instagramService.getPostPlannerChannels(),
-        instagramService.getPostPlannerItems(),
+        instagramService.getPostPlannerItems({
+          isStarred: filterState.isStarred,
+          curationStatus: includeCurated ? 'all' : 'pending',
+          category: filterState.categories?.[0],
+          minPrice: filterState.minPrice > 0 ? filterState.minPrice : undefined,
+          maxPrice: filterState.maxPrice > 0 ? filterState.maxPrice : undefined,
+          sortBy: filterState.sortBy,
+        }),
       ]);
 
       setChannels(channelsData || []);
@@ -131,7 +162,7 @@ export default function PostPlannerScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedChannelId]);
+  }, [selectedChannelId, filterState, includeCurated]);
 
   useEffect(() => {
     loadData();
@@ -146,6 +177,24 @@ export default function PostPlannerScreen() {
   const activeChannel = useMemo(() => {
     return channels.find((c) => c.watchlistId === selectedChannelId) || channels[0] || null;
   }, [channels, selectedChannelId]);
+
+  // Collab Accounts for TargetCollabAccountPicker
+  const collabAccounts: TargetCollabAccount[] = useMemo(() => {
+    return channels.map((c) => ({
+      id: c.watchlistId,
+      username: c.username,
+      displayName: c.displayName || c.username,
+      channelType: c.channelType,
+      avatarUri: c.profilePicUrl,
+      niche: (c.categoryFocus || []).join(', '),
+    }));
+  }, [channels]);
+
+  const handleToggleMatchedAccount = (accountId: string) => {
+    setMatchedChannelIds((prev) =>
+      prev.includes(accountId) ? prev.filter((id) => id !== accountId) : [...prev, accountId]
+    );
+  };
 
   // ── Suggestions Calculation ──────────────────────────────────────────────────
   const channelSuggestions = useMemo(() => {
@@ -173,7 +222,55 @@ export default function PostPlannerScreen() {
     });
   }, [items, activeChannel]);
 
-  // ── Filtered Backlog ─────────────────────────────────────────────────────────
+  // ── Dynamic Filter Chips from Universal Filter State ─────────────────────────
+  const computedFilterChips = useMemo(() => {
+    const chips: { id: string; label: string }[] = [];
+    if (filterState.isStarred === true) {
+      chips.push({ id: 'f-star', label: '⭐ Starred Only' });
+    } else if (filterState.isStarred === false) {
+      chips.push({ id: 'f-unstar', label: 'Unstarred Only' });
+    }
+    if (filterState.minPrice > 0 && filterState.maxPrice > 0) {
+      chips.push({ id: 'f-price', label: `₹${filterState.minPrice} - ₹${filterState.maxPrice}` });
+    } else if (filterState.minPrice > 0) {
+      chips.push({ id: 'f-minprice', label: `≥ ₹${filterState.minPrice}` });
+    } else if (filterState.maxPrice > 0) {
+      chips.push({ id: 'f-maxprice', label: `≤ ₹${filterState.maxPrice}` });
+    }
+    (filterState.categories || []).forEach((cat) => {
+      chips.push({ id: `f-cat-${cat}`, label: cat });
+    });
+    (filterState.fabrics || []).forEach((fab) => {
+      chips.push({ id: `f-fab-${fab}`, label: fab });
+    });
+    if (filterState.sortBy && filterState.sortBy !== 'recent') {
+      chips.push({ id: 'f-sort', label: `Sort: ${filterState.sortBy}` });
+    }
+    return chips;
+  }, [filterState]);
+
+  const handleRemoveFilterChip = (chipId: string) => {
+    setFilterState((prev) => {
+      const next = { ...prev };
+      if (chipId === 'f-star' || chipId === 'f-unstar') {
+        next.isStarred = null;
+      } else if (chipId === 'f-price' || chipId === 'f-minprice' || chipId === 'f-maxprice') {
+        next.minPrice = 0;
+        next.maxPrice = 0;
+      } else if (chipId.startsWith('f-cat-')) {
+        const cat = chipId.replace('f-cat-', '');
+        next.categories = (next.categories || []).filter((c) => c !== cat);
+      } else if (chipId.startsWith('f-fab-')) {
+        const fab = chipId.replace('f-fab-', '');
+        next.fabrics = (next.fabrics || []).filter((f) => f !== fab);
+      } else if (chipId === 'f-sort') {
+        next.sortBy = 'recent';
+      }
+      return next;
+    });
+  };
+
+  // ── Filtered Items for Curation Grid ─────────────────────────────────────────
   const categoriesList = useMemo(() => {
     const set = new Set<string>();
     items.forEach((item) => {
@@ -184,7 +281,17 @@ export default function PostPlannerScreen() {
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // Query filter
+      // 1. Curated visibility toggle (Curated posts hidden by default, shown when toggle ON)
+      if (!includeCurated && item.planningStatus === 'complete') {
+        return false;
+      }
+
+      // 2. Starred Filter (if null, allows both starred and unstarred)
+      if (filterState.isStarred !== null && filterState.isStarred !== undefined) {
+        if (Boolean(item.isStarred) !== filterState.isStarred) return false;
+      }
+
+      // 3. Query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const codeMatches = (item.productCode || '').toLowerCase().includes(q);
@@ -193,19 +300,30 @@ export default function PostPlannerScreen() {
         if (!codeMatches && !titleMatches && !fabricMatches) return false;
       }
 
-      // Category filter
-      if (filterCategory !== 'All' && item.category !== filterCategory) {
+      // 4. Categories filter (from filter drawer or pill)
+      if (filterState.categories && filterState.categories.length > 0) {
+        if (!filterState.categories.includes(item.category || '')) return false;
+      } else if (filterCategory !== 'All' && item.category !== filterCategory) {
         return false;
       }
 
-      // Planning Status filter
+      // 5. Price filter
+      if (filterState.minPrice > 0 && item.price < filterState.minPrice) return false;
+      if (filterState.maxPrice > 0 && item.price > filterState.maxPrice) return false;
+
+      // 6. Fabric filter
+      if (filterState.fabrics && filterState.fabrics.length > 0) {
+        if (!filterState.fabrics.includes(item.fabric || '')) return false;
+      }
+
+      // 7. Planning Status filter (legacy pill)
       if (filterPlanningStatus !== 'all' && item.planningStatus !== filterPlanningStatus) {
         return false;
       }
 
       return true;
     });
-  }, [items, searchQuery, filterCategory, filterPlanningStatus]);
+  }, [items, searchQuery, filterCategory, filterPlanningStatus, filterState, includeCurated]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const openShareModal = (product: PostPlannerItem, channel?: PostPlannerChannelOption) => {
@@ -472,7 +590,7 @@ export default function PostPlannerScreen() {
             value={activeTab}
             onValueChange={(val) => setActiveTab(val as any)}
             buttons={[
-              { value: 'curation', label: '1. Curation Grid', icon: 'sparkles' },
+              { value: 'curation', label: '1. Curation Grid', icon: 'view-grid-outline' },
               { value: 'sharing', label: '2. Sharing Queues', icon: 'share-variant' },
             ]}
             style={styles.segmentedButtons}
@@ -684,62 +802,96 @@ export default function PostPlannerScreen() {
             {/* ── TAB 1: PRODUCT CURATION GRID ──────────────────────────────── */}
             {activeTab === 'curation' && (
               <View style={styles.tabContent}>
-                {/* Search & Filter Bar */}
+                {/* Search & Filter Bar with Universal Filter + Curated Toggle */}
                 <View style={styles.filterSection}>
-                  <TextInput
-                    placeholder="Search SKU or title..."
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    mode="outlined"
-                    dense
-                    left={<TextInput.Icon icon="magnify" />}
-                    right={
-                      searchQuery ? (
-                        <TextInput.Icon icon="close" onPress={() => setSearchQuery('')} />
-                      ) : null
-                    }
-                    style={styles.searchInput}
-                  />
+                  <View style={styles.searchAndActionsRow}>
+                    <TextInput
+                      placeholder="Search SKU or title..."
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      mode="outlined"
+                      dense
+                      left={<TextInput.Icon icon="magnify" />}
+                      right={
+                        searchQuery ? (
+                          <TextInput.Icon icon="close" onPress={() => setSearchQuery('')} />
+                        ) : null
+                      }
+                      style={styles.searchInput}
+                    />
 
-                  {/* Planning Status Filter */}
-                  <View style={styles.filterPillsRow}>
-                    <Chip
-                      selected={filterPlanningStatus === 'all'}
-                      onPress={() => setFilterPlanningStatus('all')}
-                      style={styles.filterChip}
+                    {/* Filter Drawer Trigger Button */}
+                    <TouchableOpacity
+                      onPress={() => setFilterDrawerVisible(true)}
+                      style={[
+                        styles.filterBtn,
+                        getActiveFilterCount(filterState) > 0 && styles.filterBtnActive,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open Catalog Filters"
                     >
-                      All
-                    </Chip>
-                    <Chip
-                      selected={filterPlanningStatus === 'complete'}
-                      onPress={() => setFilterPlanningStatus('complete')}
-                      style={styles.filterChip}
+                      <LuSlidersHorizontal
+                        size={18}
+                        color={getActiveFilterCount(filterState) > 0 ? '#7E22CE' : '#4A5568'}
+                      />
+                      {getActiveFilterCount(filterState) > 0 && (
+                        <View style={styles.filterCountBadge}>
+                          <Text style={styles.filterCountText}>
+                            {getActiveFilterCount(filterState)}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Curated Toggle Switch Pill */}
+                    <Pressable
+                      onPress={() => setIncludeCurated(!includeCurated)}
+                      style={[
+                        styles.curatedTogglePill,
+                        { backgroundColor: includeCurated ? '#F3E8FF' : '#F3F4F6' },
+                      ]}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: includeCurated }}
                     >
-                      ✅ Done Planning
-                    </Chip>
-                    <Chip
-                      selected={filterPlanningStatus === 'in_progress'}
-                      onPress={() => setFilterPlanningStatus('in_progress')}
-                      style={styles.filterChip}
-                    >
-                      ⏳ In Progress
-                    </Chip>
+                      <Text
+                        style={[
+                          styles.curatedToggleText,
+                          { color: includeCurated ? '#7E22CE' : '#4B5563' },
+                        ]}
+                      >
+                        Curated
+                      </Text>
+                      <Switch
+                        value={includeCurated}
+                        onValueChange={setIncludeCurated}
+                        trackColor={{ false: '#D1D5DB', true: '#7E22CE' }}
+                        thumbColor="#FFFFFF"
+                        pointerEvents="none"
+                        style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
+                      />
+                    </Pressable>
                   </View>
 
-                  {/* Category Filter Carousel */}
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-                    {categoriesList.map((cat) => (
-                      <Chip
-                        key={cat}
-                        selected={filterCategory === cat}
-                        onPress={() => setFilterCategory(cat)}
-                        style={styles.catChip}
-                        compact
-                      >
-                        {cat}
-                      </Chip>
-                    ))}
-                  </ScrollView>
+                  {/* Universal Filter Chips Strip (with removable Starred chip) */}
+                  {computedFilterChips.length > 0 && (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.filterChipsScroll}
+                    >
+                      {computedFilterChips.map((chip) => (
+                        <TouchableOpacity
+                          key={chip.id}
+                          onPress={() => handleRemoveFilterChip(chip.id)}
+                          style={styles.activeFilterChip}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.activeFilterChipText}>{chip.label}</Text>
+                          <LuX size={12} color="#7E22CE" />
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  )}
                 </View>
 
                 {/* Starred Products List */}
@@ -751,15 +903,20 @@ export default function PostPlannerScreen() {
                   ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                       <IconButton icon="folder-star-outline" size={48} iconColor="#A0AEC0" />
-                      <Text style={styles.emptyTitle}>No Starred Items Found</Text>
+                      <Text style={styles.emptyTitle}>No Items Found</Text>
                       <Text style={styles.emptySubtitle}>
-                        Star items in the catalog to begin planning channels and scheduling posts.
+                        {filterState.isStarred
+                          ? 'No starred items match the current filters. Toggle "Curated" or clear filters.'
+                          : 'No items match the current filters. Clear filters to see more.'}
                       </Text>
                     </View>
                   }
                   renderItem={({ item }) => {
                     const imgUri = getProductImageUri(item.primaryImageUrl);
                     const isComplete = item.planningStatus === 'complete';
+                    const validAssignments = (item.channelAssignments || []).filter(
+                      (a) => a.status !== 'excluded'
+                    );
 
                     return (
                       <Card style={styles.backlogCard} mode="outlined">
@@ -773,9 +930,20 @@ export default function PostPlannerScreen() {
                                 <IconButton icon="image-outline" size={28} />
                               </View>
                             )}
-                            <View style={styles.starBadgeOverlay}>
-                              <IconButton icon="star" size={14} iconColor="#D69E2E" style={{ margin: 0 }} />
-                            </View>
+
+                            {/* Media Count Overlay Badge */}
+                            {item.mediaCount !== undefined && item.mediaCount > 0 && (
+                              <View style={styles.mediaCountBadgeOverlay}>
+                                <Text style={styles.mediaCountText}>📷 {item.mediaCount}</Text>
+                              </View>
+                            )}
+
+                            {/* Star Badge Overlay */}
+                            {item.isStarred && (
+                              <View style={styles.starBadgeOverlay}>
+                                <IconButton icon="star" size={14} iconColor="#D69E2E" style={{ margin: 0 }} />
+                              </View>
+                            )}
                           </View>
 
                           {/* Info */}
@@ -786,7 +954,7 @@ export default function PostPlannerScreen() {
                                 style={[
                                   styles.planningStatusBadge,
                                   { backgroundColor: isComplete ? '#C6F6D5' : '#FEEBC8' },
-                                ]}
+                               ]}
                               >
                                 <Text
                                   style={[
@@ -794,7 +962,7 @@ export default function PostPlannerScreen() {
                                     { color: isComplete ? '#22543D' : '#7B341E' },
                                   ]}
                                 >
-                                  {isComplete ? '✅ Planned' : '⏳ In Progress'}
+                                  {isComplete ? '✅ Curated' : '⏳ Pending'}
                                 </Text>
                               </View>
                             </View>
@@ -808,47 +976,60 @@ export default function PostPlannerScreen() {
                               {item.fabric ? ` • ${item.fabric}` : ''}
                             </Text>
 
-                            {/* Channel Assignments Matrix Badges */}
-                            <View style={styles.assignmentsRow}>
-                              {(item.channelAssignments || []).length > 0 ? (
-                                (item.channelAssignments || []).map((a) => (
+                            {/* Channel Affinities / Account Heads Row */}
+                            <View style={styles.accountHeadsContainer}>
+                              <Text style={styles.affinityLabel}>Channel Affinities:</Text>
+                              <View style={styles.accountHeadsRow}>
+                                {validAssignments.length > 0 ? (
+                                  validAssignments.map((a) => {
+                                    const brandColor = getChannelColor(a.username);
+                                    const initials = (a.displayName || a.username || 'IG')
+                                      .split(' ')
+                                      .map((n: string) => n[0])
+                                      .slice(0, 2)
+                                      .join('')
+                                      .toUpperCase();
+                                    return (
+                                      <TouchableOpacity
+                                        key={a.watchlistId}
+                                        onPress={() => openMatchModal(item)}
+                                        style={[
+                                          styles.accountHeadPill,
+                                          { borderColor: `${brandColor}40` },
+                                        ]}
+                                        activeOpacity={0.8}
+                                      >
+                                        <View
+                                          style={[
+                                            styles.accountHeadAvatar,
+                                            { backgroundColor: `${brandColor}18`, borderColor: brandColor },
+                                          ]}
+                                        >
+                                          {a.profilePicUrl ? (
+                                            <Image source={{ uri: a.profilePicUrl }} style={styles.accountHeadImg} />
+                                          ) : (
+                                            <Text style={[styles.accountHeadMonogram, { color: brandColor }]}>
+                                              {initials}
+                                            </Text>
+                                          )}
+                                        </View>
+                                        <Text style={styles.accountHeadHandle} numberOfLines={1}>
+                                          @{a.username}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    );
+                                  })
+                                ) : (
                                   <TouchableOpacity
-                                    key={a.watchlistId}
-                                    onPress={() => {
-                                      const ch = channels.find((c) => c.watchlistId === a.watchlistId);
-                                      openShareModal(item, ch || undefined);
-                                    }}
-                                    style={[
-                                      styles.channelAssignmentChip,
-                                      a.status === 'shared' && { borderColor: '#38A169', backgroundColor: '#F0FFF4' },
-                                      a.status === 'scheduled' && { borderColor: '#3182CE', backgroundColor: '#EBF8FF' },
-                                      a.status === 'excluded' && { borderColor: '#CBD5E0', backgroundColor: '#F7FAFC' },
-                                    ]}
+                                    onPress={() => openMatchModal(item)}
+                                    style={styles.addAffinityBtn}
+                                    activeOpacity={0.7}
                                   >
-                                    <Text
-                                      style={[
-                                        styles.assignmentUsername,
-                                        a.status === 'shared' && { color: '#276749' },
-                                        a.status === 'scheduled' && { color: '#2B6CB0' },
-                                        a.status === 'excluded' && { color: '#A0AEC0', textDecorationLine: 'line-through' },
-                                      ]}
-                                    >
-                                      @{a.username}
-                                    </Text>
-                                    <Text style={styles.assignmentStatusTag}>
-                                      {a.status === 'shared'
-                                        ? '✓'
-                                        : a.status === 'scheduled'
-                                        ? '⏰'
-                                        : a.status === 'excluded'
-                                        ? '✕'
-                                        : '•'}
-                                    </Text>
+                                    <LuPlus size={13} color="#6B7280" />
+                                    <Text style={styles.addAffinityText}>+ Map Accounts</Text>
                                   </TouchableOpacity>
-                                ))
-                              ) : (
-                                <Text style={styles.unassignedPrompt}>⚠️ No channels matched yet</Text>
-                              )}
+                                )}
+                              </View>
                             </View>
                           </View>
                         </View>
@@ -858,12 +1039,12 @@ export default function PostPlannerScreen() {
                         <View style={styles.backlogActionsRow}>
                           <Button
                             mode="outlined"
-                            icon="tag-multiple"
+                            icon="account-multiple-plus"
                             compact
                             onPress={() => openMatchModal(item)}
                             style={{ flex: 1 }}
                           >
-                            Match Channels
+                            Map Accounts
                           </Button>
                           <Button
                             mode="contained"
@@ -1091,7 +1272,7 @@ export default function PostPlannerScreen() {
           </View>
         </Modal>
 
-        {/* ── MODAL 2: CHANNEL MATCHING MOBILE BOTTOM SHEET ─────────────────── */}
+        {/* ── MODAL 2: CHANNEL MATCHING MOBILE BOTTOM SHEET (Multi-Account Affinity) ── */}
         <Modal
           visible={matchModalVisible}
           transparent
@@ -1104,7 +1285,7 @@ export default function PostPlannerScreen() {
               activeOpacity={1}
               onPress={() => setMatchModalVisible(false)}
             />
-            <View style={[styles.bottomSheetContainer, { backgroundColor: theme.colors.surface, maxHeight: '85%' }]}>
+            <View style={[styles.bottomSheetContainer, { backgroundColor: theme.colors.surface, height: '80%', maxHeight: '88%' }]}>
               <View style={styles.dragHandleWrapper}>
                 <View style={[styles.dragHandle, { backgroundColor: theme.colors.outlineVariant }]} />
               </View>
@@ -1121,146 +1302,40 @@ export default function PostPlannerScreen() {
                     <IconButton icon="close" size={20} onPress={() => setMatchModalVisible(false)} style={{ margin: 0 }} />
                   </View>
 
-                  <Text style={styles.modalSubtitle}>
-                    Select all commercial focus & dump channels to post this product:
-                  </Text>
-
-                  <ScrollView style={{ flex: 1, marginVertical: 8 }} showsVerticalScrollIndicator={false}>
-                    {/* Focus Channels Section */}
-                    <Text style={styles.groupSectionTitle}>🎯 Focus Channels (Brand Sales)</Text>
-                    {channels
-                      .filter((c) => c.channelType === 'focus')
-                      .map((ch) => {
-                        const isChecked = matchedChannelIds.includes(ch.watchlistId);
-                        return (
-                          <TouchableOpacity
-                            key={ch.watchlistId}
-                            onPress={() => {
-                              setMatchedChannelIds((prev) =>
-                                isChecked ? prev.filter((id) => id !== ch.watchlistId) : [...prev, ch.watchlistId]
-                              );
-                            }}
-                            style={[
-                              styles.channelCheckboxRow,
-                              isChecked && { backgroundColor: theme.colors.primaryContainer + '33' },
-                            ]}
-                          >
-                            <Checkbox status={isChecked ? 'checked' : 'unchecked'} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.checkboxUsername}>@{ch.username}</Text>
-                              <Text style={styles.checkboxNiche}>
-                                {(ch.categoryFocus || []).join(', ') || 'General Fashion'}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-
-                    {/* Dump Channels Section */}
-                    <Text style={[styles.groupSectionTitle, { marginTop: 14 }]}>
-                      📦 Dump Channels (Niche Content Incubators)
-                    </Text>
-                    {channels
-                      .filter((c) => c.channelType === 'dump')
-                      .map((ch) => {
-                        const isChecked = matchedChannelIds.includes(ch.watchlistId);
-                        return (
-                          <TouchableOpacity
-                            key={ch.watchlistId}
-                            onPress={() => {
-                              setMatchedChannelIds((prev) =>
-                                isChecked ? prev.filter((id) => id !== ch.watchlistId) : [...prev, ch.watchlistId]
-                              );
-                            }}
-                            style={[
-                              styles.channelCheckboxRow,
-                              isChecked && { backgroundColor: '#F3E8FF' },
-                            ]}
-                          >
-                            <Checkbox status={isChecked ? 'checked' : 'unchecked'} />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.checkboxUsername}>@{ch.username}</Text>
-                              <Text style={styles.checkboxNiche}>
-                                {(ch.categoryFocus || []).join(', ') || 'Curated Styles'}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
+                  <ScrollView style={{ flex: 1, marginVertical: 4 }} showsVerticalScrollIndicator={false}>
+                    <TargetCollabAccountPicker
+                      accounts={collabAccounts}
+                      selectedAccountIds={matchedChannelIds}
+                      onToggleAccount={handleToggleMatchedAccount}
+                      maxSelections={10}
+                      title="Select Channel Affinities for Post Planning (Up to 10)"
+                      layout="grid"
+                    />
                   </ScrollView>
 
-                  <Button
-                    mode="contained"
-                    onPress={() => setMatchDoneConfirmVisible(true)}
-                    disabled={matchedChannelIds.length === 0}
-                    style={{ borderRadius: 12, paddingVertical: 4, marginTop: 8 }}
-                  >
-                    Review & Done Planning Gate ({matchedChannelIds.length})
-                  </Button>
+                  {/* Dual Action Buttons: Save & Mark Curated vs Keep In Progress */}
+                  <View style={{ gap: 8, marginTop: 10 }}>
+                    <Button
+                      mode="contained"
+                      onPress={() => handleSaveMatching(true)}
+                      loading={matchSubmitting}
+                      disabled={matchSubmitting || matchedChannelIds.length === 0}
+                      style={{ borderRadius: 12, backgroundColor: '#15803D', paddingVertical: 4 }}
+                    >
+                      Save & Mark Curated ({matchedChannelIds.length})
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={() => handleSaveMatching(false)}
+                      loading={matchSubmitting}
+                      disabled={matchSubmitting || matchedChannelIds.length === 0}
+                      style={{ borderRadius: 12, paddingVertical: 4 }}
+                    >
+                      Keep In Progress ({matchedChannelIds.length})
+                    </Button>
+                  </View>
                 </View>
               )}
-            </View>
-          </View>
-        </Modal>
-
-        {/* ── GATE MODAL: ARE YOU COMPLETELY DONE WITH POST PLANNING? ────────── */}
-        <Modal
-          visible={matchDoneConfirmVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setMatchDoneConfirmVisible(false)}
-        >
-          <View style={styles.bottomSheetBackdrop}>
-            <TouchableOpacity
-              style={styles.backdropDismiss}
-              activeOpacity={1}
-              onPress={() => setMatchDoneConfirmVisible(false)}
-            />
-            <View style={[styles.bottomSheetContainer, { backgroundColor: theme.colors.surface }]}>
-              <View style={styles.dragHandleWrapper}>
-                <View style={[styles.dragHandle, { backgroundColor: theme.colors.outlineVariant }]} />
-              </View>
-
-              <View style={{ alignItems: 'center', gap: 8, paddingVertical: 10 }}>
-                <View style={{ backgroundColor: '#DCFCE7', borderRadius: 28, padding: 8 }}>
-                  <IconButton icon="check-all" size={32} iconColor="#15803D" style={{ margin: 0 }} />
-                </View>
-                <Text variant="titleMedium" style={{ fontWeight: '800', textAlign: 'center' }}>
-                  Are you completely done with post planning for this product?
-                </Text>
-                <Text variant="bodySmall" style={{ textAlign: 'center', color: theme.colors.onSurfaceVariant, paddingHorizontal: 16 }}>
-                  Marking as "Done Planning" finalizes channel qualifications for this item. You can keep it "In Progress" to evaluate more channels later.
-                </Text>
-              </View>
-
-              {/* Stacked Mobile Action Buttons */}
-              <View style={{ gap: 10, marginTop: 8 }}>
-                <Button
-                  mode="contained"
-                  onPress={() => handleSaveMatching(true)}
-                  loading={matchSubmitting}
-                  disabled={matchSubmitting}
-                  style={{ borderRadius: 12, backgroundColor: '#15803D', paddingVertical: 4 }}
-                >
-                  ✅ Yes, Done Planning (Finalize)
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={() => handleSaveMatching(false)}
-                  loading={matchSubmitting}
-                  disabled={matchSubmitting}
-                  style={{ borderRadius: 12, paddingVertical: 4 }}
-                >
-                  ⏳ Still In Progress (Revisit Later)
-                </Button>
-                <Button
-                  mode="text"
-                  onPress={() => setMatchDoneConfirmVisible(false)}
-                  disabled={matchSubmitting}
-                >
-                  Back to Channel Selection
-                </Button>
-              </View>
             </View>
           </View>
         </Modal>
@@ -1349,6 +1424,17 @@ export default function PostPlannerScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* ── UNIVERSAL CATALOG FILTER DRAWER ── */}
+        <CatalogFilterDrawer
+          visible={filterDrawerVisible}
+          onClose={() => setFilterDrawerVisible(false)}
+          current={filterState}
+          onApply={(f) => {
+            setFilterState(f);
+            setFilterDrawerVisible(false);
+          }}
+        />
       </View>
     </ScreenWrapper>
   );
@@ -1543,8 +1629,156 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
+  searchAndActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   searchInput: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  filterBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  filterBtnActive: {
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#7E22CE',
+  },
+  filterCountBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#7E22CE',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCountText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  curatedTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 16,
+    gap: 4,
+  },
+  curatedToggleText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  filterChipsScroll: {
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#D8B4FE',
+  },
+  activeFilterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7E22CE',
+  },
+  mediaCountBadgeOverlay: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  mediaCountText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  accountHeadsContainer: {
+    marginTop: 6,
+  },
+  affinityLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  accountHeadsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  accountHeadPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingRight: 8,
+    paddingVertical: 2,
+    paddingLeft: 2,
+    gap: 5,
+  },
+  accountHeadAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  accountHeadImg: {
+    width: 24,
+    height: 24,
+  },
+  accountHeadMonogram: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  accountHeadHandle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E293B',
+    maxWidth: 90,
+  },
+  addAffinityBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#94A3B8',
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F8FAFC',
+    gap: 4,
+  },
+  addAffinityText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
   },
   filterPillsRow: {
     flexDirection: 'row',
@@ -1782,7 +2016,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdropDismiss: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
   },
   bottomSheetContainer: {
     width: '100%',
