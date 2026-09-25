@@ -45,6 +45,14 @@ public class VendorProduct
     [JsonPropertyName("media")]
     public List<MediaEntry> Media { get; set; } = new();
 
+    /// <summary>Total media count linked to this product across all attachments.</summary>
+    [JsonPropertyName("mediaCount")]
+    public int MediaCount { get; set; }
+
+    /// <summary>Product tags including review flags such as 'needs-zoning-review'.</summary>
+    [JsonPropertyName("tags")]
+    public List<string> Tags { get; set; } = new();
+
     [JsonPropertyName("mediaMap")]
     public Dictionary<string, Guid> MediaMap { get; set; } = new();
 

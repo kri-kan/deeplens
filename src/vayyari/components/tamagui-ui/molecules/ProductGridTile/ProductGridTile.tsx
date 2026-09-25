@@ -18,6 +18,7 @@ export interface ProductGridTileData {
   mediaCount?: number;
   timeAgo?: string;
   rawItem?: any;
+  tags?: string[];
   craft?: string;
   fabric?: string;
   motif?: string;
@@ -165,27 +166,30 @@ export function ProductGridTile({
         )}
 
         {/* Media Count Badge */}
-        {item.mediaCount !== undefined && item.mediaCount > 0 && (
-          <XStack
-            position="absolute"
-            top={6}
-            right={!selectionMode && onToggleStar ? 36 : 6}
-            backgroundColor="rgba(0, 0, 0, 0.65)"
-            paddingHorizontal={5}
-            paddingVertical={2.5}
-            borderRadius={tokens.radius.full}
-            alignItems="center"
-            gap={3}
-            zIndex={8}
-            borderWidth={0.5}
-            borderColor="rgba(255, 255, 255, 0.2)"
-          >
-            <LuImage size={10} color="#ffffff" />
-            <Text fontSize={9} fontWeight="700" color="#ffffff">
-              {item.mediaCount}
-            </Text>
-          </XStack>
-        )}
+        {item.mediaCount !== undefined && item.mediaCount > 0 && (() => {
+          const isHighMedia = item.mediaCount > 30 || item.tags?.includes('needs-zoning-review') || item.rawItem?.tags?.includes('needs-zoning-review');
+          return (
+            <XStack
+              position="absolute"
+              top={6}
+              right={!selectionMode && onToggleStar ? 36 : 6}
+              backgroundColor={isHighMedia ? 'rgba(217, 119, 6, 0.9)' : 'rgba(0, 0, 0, 0.65)'}
+              paddingHorizontal={isHighMedia ? 6 : 5}
+              paddingVertical={2.5}
+              borderRadius={tokens.radius.full}
+              alignItems="center"
+              gap={3}
+              zIndex={8}
+              borderWidth={0.5}
+              borderColor={isHighMedia ? 'rgba(251, 191, 36, 0.8)' : 'rgba(255, 255, 255, 0.2)'}
+            >
+              <LuImage size={10} color="#ffffff" />
+              <Text fontSize={9} fontWeight="700" color="#ffffff">
+                {item.mediaCount}
+              </Text>
+            </XStack>
+          );
+        })()}
 
         {/* Top-Right: Star Button */}
         {!selectionMode && onToggleStar && (

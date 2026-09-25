@@ -251,7 +251,7 @@ public class WhatsAppProductController : ControllerBase
             JOIN public.products p ON mg.deeplens_product_id = p.id
             LEFT JOIN public.vendor_listings vl ON mg.deeplens_listing_id = vl.id
             LEFT JOIN public.vendors v ON vl.vendor_id = v.id
-            WHERE mg.status = 'product_created'
+            WHERE mg.status IN ('product_created', 'needs_review')
             ORDER BY mg.product_created_at DESC";
 
         var products = await conn.QueryAsync<dynamic>(new CommandDefinition(sql, cancellationToken: ct));

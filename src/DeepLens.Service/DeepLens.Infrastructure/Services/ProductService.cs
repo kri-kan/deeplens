@@ -298,7 +298,8 @@ public class ProductService : IProductService
                         LIMIT 15
                     ) sub
                 ), '[]'::json)::text as ""MediaJson"",
-                (SELECT COUNT(*) FROM public.vendor_listings WHERE product_id = p.id AND is_active = true) as ""ListingCount""
+                (SELECT COUNT(*) FROM public.vendor_listings WHERE product_id = p.id AND is_active = true) as ""ListingCount"",
+                (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') as ""MediaCount""
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id";
 
@@ -474,6 +475,8 @@ public class ProductService : IProductService
                 WorkHeaviness = r.WorkHeaviness,
                 Category = r.Category,
                 ListingCount = r.ListingCount,
+                MediaCount = r.MediaCount,
+                Tags = r.Tags != null ? r.Tags.ToList() : new List<string>(),
                 IsStarred = r.IsStarred
             };
 
@@ -1160,9 +1163,9 @@ public class ProductService : IProductService
                             ORDER BY COALESCE(NULLIF(m2.phash, ''), m2.storage_path, m2.id::text), ml2.is_primary DESC
                         ) m
                         ORDER BY m.is_primary DESC, m.uploaded_at ASC
-                        LIMIT 50
                     ) sub
                 ), '[]'::json)::text as ""MediaJson"",
+                (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') as ""MediaCount"",
                 COALESCE((
                     SELECT json_agg(json_build_object(
                         'id',            vl.id,
@@ -1203,6 +1206,8 @@ public class ProductService : IProductService
             Category = r.Category,
             SourceJid = r.SourceJid,
             SourceGroupId = r.SourceGroupId,
+            MediaCount = r.MediaCount,
+            Tags = r.Tags != null ? r.Tags.ToList() : new List<string>(),
             IsStarred = r.IsStarred
         };
 
@@ -1218,6 +1223,11 @@ public class ProductService : IProductService
             var json = r.MediaJson.ToString();
             var mediaList = JsonSerializer.Deserialize<List<MediaEntry>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (mediaList != null) vp.Media = mediaList;
+        }
+
+        if (vp.MediaCount == 0 && vp.Media != null && vp.Media.Count > 0)
+        {
+            vp.MediaCount = vp.Media.Count;
         }
 
         if (r.ListingsJson != null)
@@ -1828,6 +1838,7 @@ public class ProductService : IProductService
         public string? SourceJid { get; init; }
         public string? SourceGroupId { get; init; }
         public int ListingCount { get; init; }
+        public int MediaCount { get; init; }
     }
 
     private void PopulateUnifiedAttributes(VendorProduct vp, string? unifiedAttributesJson, Guid productId)

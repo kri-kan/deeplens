@@ -767,15 +767,9 @@ public class WhatsAppGroupWorker : BackgroundService
             }
 
             int successfulMediaCount = 0;
-            const int MAX_GROUP_MEDIA = 30;
 
             foreach (var mediaFile in evt.MediaFiles)
             {
-                if (successfulMediaCount >= MAX_GROUP_MEDIA)
-                {
-                    _logger.LogInformation("Group {GroupId} reached max media limit ({Max}). Skipping remaining media items.", evt.GroupId, MAX_GROUP_MEDIA);
-                    break;
-                }
                 try
                 {
                     string sourcePath = mediaFile.MediaUrl;
@@ -1069,6 +1063,34 @@ public class WhatsAppGroupWorker : BackgroundService
                 );
                 await LogGroupAudit(conn, evt.GroupId, "product_creation_aborted_insufficient_media", "system", null, new { successful_media_count = successfulMediaCount, required = 2 });
                 return;
+            }
+
+            const int HIGH_MEDIA_THRESHOLD = 30;
+            if (successfulMediaCount > HIGH_MEDIA_THRESHOLD)
+            {
+                _logger.LogInformation("Group {GroupId} has high media count ({Count} > {Threshold}). Flagging for human zoning review.",
+                    evt.GroupId, successfulMediaCount, HIGH_MEDIA_THRESHOLD);
+
+                await conn.ExecuteAsync(
+                    @"UPDATE wa.message_groups 
+                      SET status = 'needs_review', 
+                          error_detail = @ErrorDetail,
+                          updated_at = NOW() 
+                      WHERE group_id = @GroupId",
+                    new 
+                    { 
+                        ErrorDetail = $"High media count ({successfulMediaCount} media). Flagged for human zoning review.",
+                        GroupId = evt.GroupId 
+                    }, trans);
+
+                await conn.ExecuteAsync(
+                    @"UPDATE public.products 
+                      SET tags = array_append(COALESCE(tags, ARRAY[]::text[]), 'needs-zoning-review') 
+                      WHERE id = @ProductId AND NOT ('needs-zoning-review' = ANY(COALESCE(tags, ARRAY[]::text[])))",
+                    new { ProductId = productId }, trans);
+
+                await LogGroupAudit(conn, evt.GroupId, "high_media_review_enqueued", "system", null, 
+                    new { successful_media_count = successfulMediaCount, threshold = HIGH_MEDIA_THRESHOLD }, trans);
             }
 
             await trans.CommitAsync(ct);

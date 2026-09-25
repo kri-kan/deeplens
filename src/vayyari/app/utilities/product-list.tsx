@@ -75,9 +75,12 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
   const isStarred = Boolean(getProp(item, 'isStarred', 'IsStarred'));
   const category = getProp(item, 'category', 'Category');
   const title = getProp(item, 'title', 'Title');
-  const mediaCount = mediaList.length > 0
-    ? mediaList.length
-    : (Array.isArray(item.media) ? item.media.length : (getProp(item, 'mediaCount', 'MediaCount') || 0));
+  const rawMediaCount = getProp(item, 'mediaCount', 'MediaCount');
+  const mediaCount = (rawMediaCount !== undefined && rawMediaCount !== null)
+    ? Number(rawMediaCount)
+    : (mediaList.length > 0
+        ? mediaList.length
+        : (Array.isArray(item.media) ? item.media.length : 0));
   const craft = getProp(item, 'craft', 'Craft');
   const fabric = getProp(item, 'fabric', 'Fabric');
   const motif = getProp(item, 'motif', 'Motif');
@@ -87,6 +90,7 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
   const confidenceScore = getProp(item, 'confidenceScore', 'ConfidenceScore');
   const unifiedAttributes = getProp(item, 'unifiedAttributes', 'UnifiedAttributes');
   const isPublishedToStore = Boolean(getProp(item, 'isPublishedToStore', 'IsPublishedToStore'));
+  const tags = getProp(item, 'tags', 'Tags') || [];
 
   return {
     id: item.id,
@@ -101,6 +105,7 @@ function mapVendorProductToTileData(item: VendorProduct): ProductGridTileData {
     mediaCount,
     timeAgo: formattedTime,
     rawItem: item,
+    tags,
     craft,
     fabric,
     motif,
