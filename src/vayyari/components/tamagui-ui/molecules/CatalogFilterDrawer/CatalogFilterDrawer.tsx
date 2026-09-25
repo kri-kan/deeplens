@@ -79,6 +79,8 @@ const SORT_OPTIONS = [
   { id: 'oldest', label: 'Oldest First' },
   { id: 'price_low', label: 'Price: Low to High' },
   { id: 'price_high', label: 'Price: High to Low' },
+  { id: 'media_high', label: 'Media: High to Low' },
+  { id: 'media_low', label: 'Media: Low to High' },
   { id: 'listings_most', label: 'Most Listings' },
   { id: 'listings_least', label: 'Fewest Listings' },
 ];

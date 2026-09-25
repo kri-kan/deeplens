@@ -449,6 +449,8 @@ public class ProductService : IProductService
         {
             "price_low" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) ASC NULLS LAST, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC",
             "price_high" => " ORDER BY (SELECT current_price FROM vendor_listings WHERE product_id = p.id LIMIT 1) DESC NULLS LAST, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC",
+            "media_high" or "most_media" => " ORDER BY (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') DESC, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC",
+            "media_low" or "least_media" => " ORDER BY (SELECT COUNT(*) FROM public.media_links WHERE entity_id = p.id AND entity_type = 'product') ASC, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC, p.id DESC",
             "oldest" => " ORDER BY COALESCE(p.created_at, '1970-01-01'::timestamptz) ASC, p.sequence_id ASC, p.id ASC",
             "listings_most" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) DESC, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC",
             "listings_least" => " ORDER BY (SELECT COUNT(*) FROM vendor_listings WHERE product_id = p.id AND is_active = true) ASC, COALESCE(p.created_at, NOW()) DESC, p.sequence_id DESC",
@@ -1537,21 +1539,49 @@ public class ProductService : IProductService
     {
         using var connection = GetConnection();
         
-        var categoryId = await connection.QueryFirstOrDefaultAsync<Guid?>(
-            "SELECT id FROM public.categories WHERE slug = @slug OR name = @slug",
-            new { slug = categorySlug });
+        var normalizedSlug = categorySlug?.Trim().ToLowerInvariant() switch
+        {
+            "lehenga" or "lehengas" or "lehangas" => "lehanga",
+            "sarees" or "sari" or "saris" => "saree",
+            "dresses" => "dress",
+            "men" => "mens",
+            "other" => "others",
+            var other => other ?? string.Empty
+        };
 
-        if (!categoryId.HasValue)
+        var categoryRow = await connection.QueryFirstOrDefaultAsync<CategoryDto>(
+            @"SELECT id, slug, name FROM public.categories 
+              WHERE LOWER(slug) = @norm OR LOWER(name) = @norm OR LOWER(slug) = LOWER(@raw) OR LOWER(name) = LOWER(@raw) 
+              LIMIT 1",
+            new { norm = normalizedSlug, raw = categorySlug ?? string.Empty });
+
+        if (categoryRow == null)
         {
             throw new Exception($"Category not found: {categorySlug}");
         }
 
+        var allCategoryKeywords = (await connection.QueryAsync<string>("SELECT slug FROM public.categories UNION SELECT LOWER(name) FROM public.categories")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var existingTags = await connection.QueryFirstOrDefaultAsync<string[]>(
+            "SELECT tags FROM products WHERE id = @ProductId", new { ProductId = productId }) ?? Array.Empty<string>();
+
+        var updatedTags = existingTags.Where(t => !allCategoryKeywords.Contains(t)).ToList();
+        if (!string.IsNullOrWhiteSpace(categoryRow.Slug))
+        {
+            updatedTags.Add(categoryRow.Slug.ToLowerInvariant());
+        }
+
         var sql = @"
             UPDATE public.products 
-            SET category_id = @CategoryId 
+            SET category_id = @CategoryId,
+                tags = @Tags
             WHERE id = @ProductId";
 
-        var rowsAffected = await connection.ExecuteAsync(sql, new { CategoryId = categoryId, ProductId = productId });
+        var rowsAffected = await connection.ExecuteAsync(sql, new { 
+            CategoryId = categoryRow.Id, 
+            Tags = updatedTags.ToArray(), 
+            ProductId = productId 
+        });
         return rowsAffected > 0;
     }
 
@@ -1561,7 +1591,7 @@ public class ProductService : IProductService
         
         var product = await connection.QueryFirstOrDefaultAsync<dynamic>(
             @"SELECT p.id, p.fabric, c.name as category_name, 
-                     (SELECT min(current_price) FROM seller_listings WHERE product_id = p.id AND is_active = true) as vendor_price
+                     (SELECT min(current_price) FROM vendor_listings WHERE product_id = p.id AND is_active = true) as vendor_price
               FROM products p
               LEFT JOIN categories c ON c.id = p.category_id
               WHERE p.id = @ProductId", new { ProductId = productId });
@@ -1569,34 +1599,114 @@ public class ProductService : IProductService
         if (product == null) return false;
 
         Guid? newCategoryId = null;
+        string? matchedCategorySlug = null;
         if (!string.IsNullOrWhiteSpace(dto.CategoryName))
         {
-            newCategoryId = await connection.QueryFirstOrDefaultAsync<Guid?>(
-                "SELECT id FROM public.categories WHERE slug = @slug OR name = @slug",
-                new { slug = dto.CategoryName });
+            var normalizedSlug = dto.CategoryName.Trim().ToLowerInvariant() switch
+            {
+                "lehenga" or "lehengas" or "lehangas" => "lehanga",
+                "sarees" or "sari" or "saris" => "saree",
+                "dresses" => "dress",
+                "men" => "mens",
+                "other" => "others",
+                var other => other
+            };
+
+            var categoryRow = await connection.QueryFirstOrDefaultAsync<CategoryDto>(
+                @"SELECT id, slug, name FROM public.categories 
+                  WHERE LOWER(slug) = @norm OR LOWER(name) = @norm OR LOWER(slug) = LOWER(@raw) OR LOWER(name) = LOWER(@raw) 
+                  LIMIT 1",
+                new { norm = normalizedSlug, raw = dto.CategoryName.Trim() });
+
+            if (categoryRow != null)
+            {
+                newCategoryId = categoryRow.Id;
+                matchedCategorySlug = categoryRow.Slug;
+            }
         }
 
         if (newCategoryId.HasValue || dto.Fabric != null)
         {
             var updateSql = "UPDATE products SET ";
             var sets = new System.Collections.Generic.List<string>();
-            if (newCategoryId.HasValue) sets.Add("category_id = @CategoryId");
-            if (dto.Fabric != null) sets.Add("fabric = @Fabric");
+            var updateParams = new DynamicParameters();
+            updateParams.Add("ProductId", productId);
+
+            if (newCategoryId.HasValue)
+            {
+                sets.Add("category_id = @CategoryId");
+                updateParams.Add("CategoryId", newCategoryId.Value);
+
+                var allCategoryKeywords = (await connection.QueryAsync<string>("SELECT slug FROM public.categories UNION SELECT LOWER(name) FROM public.categories")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var existingTags = await connection.QueryFirstOrDefaultAsync<string[]>(
+                    "SELECT tags FROM products WHERE id = @ProductId", new { ProductId = productId }) ?? Array.Empty<string>();
+                var updatedTags = existingTags.Where(t => !allCategoryKeywords.Contains(t)).ToList();
+                if (!string.IsNullOrWhiteSpace(matchedCategorySlug))
+                {
+                    updatedTags.Add(matchedCategorySlug.ToLowerInvariant());
+                }
+                sets.Add("tags = @Tags");
+                updateParams.Add("Tags", updatedTags.ToArray());
+            }
+
+            if (dto.Fabric != null)
+            {
+                sets.Add("fabric = @Fabric");
+                updateParams.Add("Fabric", dto.Fabric);
+            }
+
             updateSql += string.Join(", ", sets) + " WHERE id = @ProductId";
-            await connection.ExecuteAsync(updateSql, new { CategoryId = newCategoryId, Fabric = dto.Fabric, ProductId = productId });
+            await connection.ExecuteAsync(updateSql, updateParams);
+
+            if (newCategoryId.HasValue && !string.IsNullOrWhiteSpace(matchedCategorySlug) && _producer != null)
+            {
+                try
+                {
+                    var evt = new DeepLens.Contracts.Events.ProductCategoryChangedEvent
+                    {
+                        EventId = Guid.NewGuid(),
+                        ProductId = productId,
+                        NewCategory = matchedCategorySlug.ToLowerInvariant(),
+                        Timestamp = DateTime.UtcNow
+                    };
+
+                    await _producer.ProduceAsync(DeepLens.Contracts.Events.KafkaTopics.ProductCategoryChanged, new Confluent.Kafka.Message<string, string>
+                    {
+                        Key = productId.ToString(),
+                        Value = System.Text.Json.JsonSerializer.Serialize(evt, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })
+                    });
+
+                    _logger.LogInformation("Published ProductCategoryChanged event for Product {ProductId} to {Category}", productId, matchedCategorySlug);
+                }
+                catch (Exception kex)
+                {
+                    _logger.LogWarning(kex, "Failed to publish ProductCategoryChanged event for Product {ProductId}", productId);
+                }
+            }
         }
 
         if (dto.Price.HasValue)
         {
-            await connection.ExecuteAsync(
-                "UPDATE seller_listings SET current_price = @Price, updated_at = NOW() WHERE product_id = @ProductId AND is_active = true",
+            var updatedRows = await connection.ExecuteAsync(
+                "UPDATE vendor_listings SET current_price = @Price, is_active = true, updated_at = NOW() WHERE product_id = @ProductId",
                 new { Price = dto.Price.Value, ProductId = productId });
+
+            if (updatedRows == 0)
+            {
+                await connection.ExecuteAsync(
+                    "INSERT INTO vendor_listings (id, product_id, current_price, is_active, updated_at) VALUES (gen_random_uuid(), @ProductId, @Price, true, NOW())",
+                    new { Price = dto.Price.Value, ProductId = productId });
+            }
         }
 
         if (dto.UseForTraining)
         {
             var sourceText = await connection.QueryFirstOrDefaultAsync<string>(
-                "SELECT description FROM seller_listings WHERE product_id = @ProductId ORDER BY created_at ASC LIMIT 1",
+                @"SELECT COALESCE(
+                    (SELECT description FROM wa.message_groups WHERE deeplens_product_id = @ProductId LIMIT 1),
+                    (SELECT description FROM vendor_listings WHERE product_id = @ProductId AND description IS NOT NULL LIMIT 1),
+                    (SELECT description FROM products WHERE id = @ProductId)
+                  )",
                 new { ProductId = productId });
 
             var previousState = System.Text.Json.JsonSerializer.Serialize(new { 
@@ -1612,8 +1722,8 @@ public class ProductService : IProductService
             });
 
             await connection.ExecuteAsync(@"
-                INSERT INTO llm_corrections (product_id, source_text, previous_state, new_state, use_for_training)
-                VALUES (@ProductId, @SourceText, @PreviousState::jsonb, @NewState::jsonb, @UseForTraining)",
+                INSERT INTO llm_corrections (id, product_id, source_text, previous_state, new_state, use_for_training, created_at)
+                VALUES (gen_random_uuid(), @ProductId, @SourceText, @PreviousState::jsonb, @NewState::jsonb, @UseForTraining, NOW())",
                 new { ProductId = productId, SourceText = sourceText, PreviousState = previousState, NewState = newState, UseForTraining = true });
         }
 
