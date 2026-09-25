@@ -77,6 +77,9 @@ async function initializeServices() {
     const { createPipelineFailuresRoutes } = await import('./routes/pipeline-failures.routes');
     apiRouter.use('/admin', createPipelineFailuresRoutes());
 
+    const { createEmojiSeparatorRoutes } = await import('./routes/emoji-separator.routes');
+    apiRouter.use('/emoji-separators', createEmojiSeparatorRoutes());
+
     app.use('/api', apiRouter);
 
     // --- Start Server Early ---

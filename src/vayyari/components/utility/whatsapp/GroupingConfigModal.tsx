@@ -13,6 +13,7 @@ import {
   Divider,
   Checkbox,
 } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { waProcessorService } from '@/services/wa-processor.service';
 
 interface GroupingConfigModalProps {
@@ -35,6 +36,7 @@ export function GroupingConfigModal({
   onSuccess 
 }: GroupingConfigModalProps) {
   const theme = useTheme();
+  const router = useRouter();
   const [enabled, setEnabled] = useState(initialEnabled);
   const [useSticker, setUseSticker] = useState(initialConfig?.strategy === 'sticker' || initialConfig?.strategy === 'hybrid');
   const [useTimeGap, setUseTimeGap] = useState(initialConfig?.strategy === 'time_gap' || initialConfig?.strategy === 'hybrid');
@@ -125,6 +127,21 @@ export function GroupingConfigModal({
                   <View style={{ flex: 1 }}>
                     <Text variant="bodyLarge">Sticker &amp; Emoji Separator</Text>
                     <Text variant="bodySmall" style={{ opacity: 0.6 }}>Use stickers or standalone emojis (e.g. 🔚, 🛑) as a break between groups</Text>
+                    {useSticker && (
+                      <Button
+                        mode="text"
+                        compact
+                        icon="format-line-spacing"
+                        onPress={() => {
+                          onDismiss();
+                          router.push('/utilities/whatsapp/separators');
+                        }}
+                        style={{ alignSelf: 'flex-start', marginTop: 4, marginLeft: -8 }}
+                        labelStyle={{ fontSize: 11, fontWeight: '700' }}
+                      >
+                        Manage Emoji Separators
+                      </Button>
+                    )}
                   </View>
                 </View>
                 <Divider style={styles.divider} />

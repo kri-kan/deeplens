@@ -600,6 +600,41 @@ export default function FullMessageBrowser() {
     }
   };
 
+  const handleAddAsSeparator = useCallback((separatorText: string) => {
+    const trimmed = separatorText.trim();
+    if (!trimmed) return;
+    Alert.alert(
+      'Register Zone Separator',
+      `Add "${trimmed}" to the list of emoji / zone break separators?\n\nThis will mark this pattern as a product boundary and immediately re-split message groups in this chat.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Register & Re-split',
+          onPress: async () => {
+            try {
+              setRefreshing(true);
+              const res = await waProcessorService.addEmojiSeparator({
+                pattern: trimmed,
+                autoResplit: true,
+                jid,
+              });
+              const resplit = res?.resplitResult;
+              let alertMsg = `Separator "${trimmed}" registered successfully!`;
+              if (resplit) {
+                alertMsg += `\nRe-split ${resplit.zonesCreated ?? 0} product zones across ${resplit.totalMessages ?? 0} messages.`;
+              }
+              Alert.alert('Success', alertMsg);
+              await onRefresh();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to add separator');
+              setRefreshing(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [jid, onRefresh]);
+
   const handleMergeGroups = async (groupId: string) => {
     const groupIndex = groups.findIndex(g => g.groupId === groupId);
     if (groupIndex === -1 || groupIndex === groups.length - 1) return;
@@ -1266,13 +1301,9 @@ export default function FullMessageBrowser() {
         <View style={[styles.messageRow, isFromMe ? styles.myMessageRow : styles.theirMessageRow]}>
           <TouchableOpacity 
             activeOpacity={0.9} 
-            onLongPress={() => zoningMode && setHoveredMessageId(msg.messageId)}
+            onLongPress={() => setHoveredMessageId(hoveredMessageId === msg.messageId ? null : msg.messageId)}
             onPress={() => {
-              if (zoningMode) {
-                setHoveredMessageId(hoveredMessageId === msg.messageId ? null : msg.messageId);
-              } else {
-                setHoveredMessageId(null);
-              }
+              setHoveredMessageId(hoveredMessageId === msg.messageId ? null : msg.messageId);
             }}
           >
             <Surface 
@@ -1280,7 +1311,7 @@ export default function FullMessageBrowser() {
                 styles.bubble, 
                 isFromMe ? styles.myBubble : styles.theirBubble,
                 isOnlySticker && styles.stickerBubble,
-                zoningMode && hoveredMessageId === msg.messageId && styles.selectedBubble,
+                hoveredMessageId === msg.messageId && styles.selectedBubble,
                 getHighlightedStyle(msg.groupId, msg.messageId, msg.timestamp)
               ]} 
               elevation={isOnlySticker ? 0 : (isItemHighlighted(msg.groupId, msg.messageId, msg.timestamp) ? 3 : 1)}
@@ -1324,37 +1355,72 @@ export default function FullMessageBrowser() {
               ) : null}
 
               {text ? <Text style={styles.messageText}>{text}</Text> : null}
+
+              {!isSticker && text && hoveredMessageId === msg.messageId && (
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(99, 102, 241, 0.14)',
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 8,
+                    marginTop: 6,
+                    alignSelf: 'flex-start',
+                  }}
+                  onPress={() => handleAddAsSeparator(text)}
+                >
+                  <IconButton icon="format-line-spacing" size={13} iconColor="#4338ca" style={{ margin: 0, width: 16, height: 16 }} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#4338ca', marginLeft: 4 }}>
+                    Add as Zone Separator
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <Text style={[styles.timestamp, isOnlySticker && styles.stickerTimestamp]}>
                 {msg.timestamp ? format(new Date(msg.timestamp * 1000), 'HH:mm') : ''}
               </Text>
             </Surface>
           </TouchableOpacity>
 
-          {zoningMode && hoveredMessageId === msg.messageId && (
+          {hoveredMessageId === msg.messageId && (
             <View style={[styles.controls, isFromMe ? styles.myControls : styles.theirControls]}>
-              <IconButton 
-                icon="arrow-up-bold" 
-                size={16} 
-                onPress={() => handleMoveGroup(msg.messageId, msg.groupId, 'prev')} 
-                disabled={!hasPreviousGroup(msg.groupId || '')}
-              />
-              <IconButton 
-                icon="content-cut" 
-                size={16} 
-                onPress={() => handleSplitGroup(msg.messageId, msg.groupId)} 
-              />
-              <IconButton 
-                icon="arrow-down-bold" 
-                size={16} 
-                onPress={() => handleMoveGroup(msg.messageId, msg.groupId, 'next')} 
-                disabled={groupIndexForId(msg.groupId || '') <= 0}
-              />
+              {!isSticker && text ? (
+                <IconButton 
+                  icon="format-line-spacing" 
+                  size={16} 
+                  iconColor="#4338ca"
+                  accessibilityLabel="Add as Zone Separator"
+                  onPress={() => handleAddAsSeparator(text)} 
+                />
+              ) : null}
+              {zoningMode && (
+                <>
+                  <IconButton 
+                    icon="arrow-up-bold" 
+                    size={16} 
+                    onPress={() => handleMoveGroup(msg.messageId, msg.groupId, 'prev')} 
+                    disabled={!hasPreviousGroup(msg.groupId || '')}
+                  />
+                  <IconButton 
+                    icon="content-cut" 
+                    size={16} 
+                    onPress={() => handleSplitGroup(msg.messageId, msg.groupId)} 
+                  />
+                  <IconButton 
+                    icon="arrow-down-bold" 
+                    size={16} 
+                    onPress={() => handleMoveGroup(msg.messageId, msg.groupId, 'next')} 
+                    disabled={groupIndexForId(msg.groupId || '') <= 0}
+                  />
+                </>
+              )}
             </View>
           )}
         </View>
       </View>
     );
-  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, groupsMap, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme, renderMediaContent, cleanMessageText, getHighlightedStyle, isItemHighlighted, handleRetryMedia, handleRetryGroup, retryingMessageId, retryingGroupId]);
+  }, [groupedMessages, zoningMode, highlightGroupId, pulseActive, hoveredMessageId, groupsMap, setHoveredMessageId, setPreviewData, handleMoveGroup, handleSplitGroup, hasPreviousGroup, groupIndexForId, theme, renderMediaContent, cleanMessageText, getHighlightedStyle, isItemHighlighted, handleRetryMedia, handleRetryGroup, retryingMessageId, retryingGroupId, handleAddAsSeparator]);
 
   return (
     <ScreenWrapper 
@@ -1406,6 +1472,12 @@ export default function FullMessageBrowser() {
             icon="cog-outline" 
             iconColor={theme.colors.primary} 
             onPress={() => router.push(`/utilities/whatsapp/${encodeURIComponent(jid)}`)} 
+          />
+          <IconButton 
+            icon="format-line-spacing" 
+            iconColor={theme.colors.primary} 
+            accessibilityLabel="Emoji & Zone Separators"
+            onPress={() => router.push('/utilities/whatsapp/separators')} 
           />
           <IconButton 
             icon="refresh" 

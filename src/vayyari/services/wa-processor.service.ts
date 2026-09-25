@@ -82,6 +82,21 @@ async function patch<T = void>(path: string, body?: object): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function put<T = void>(path: string, body?: object): Promise<T> {
+  const token = await identityService.getAccessTokenWithRefresh();
+  const res = await fetch(`${BASE_URL}/api${path}`, {
+    method: 'PUT',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) await handleResponseError(res);
+  if (res.status === 204 || res.headers.get('content-length') === '0') return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 /**
  * Defensive mapper to handle both camelCase and snake_case from backend
  */
@@ -473,8 +488,53 @@ export const waProcessorService = {
       `/conversations/${encodeURIComponent(jid)}/backfill-media`,
       { limit }
     );
+  },
+
+  fetchEmojiSeparators: async (): Promise<EmojiSeparator[]> => {
+    const res = await get<{ success: boolean; separators: EmojiSeparator[] }>('/emoji-separators');
+    return res.separators || [];
+  },
+
+  addEmojiSeparator: async (params: { pattern: string; description?: string; matchType?: string; autoResplit?: boolean; jid?: string }): Promise<any> => {
+    return post('/emoji-separators', params);
+  },
+
+  updateEmojiSeparator: async (id: number, params: { is_active?: boolean; description?: string; pattern?: string; autoResplit?: boolean }): Promise<any> => {
+    return put(`/emoji-separators/${id}`, params);
+  },
+
+  deleteEmojiSeparator: async (id: number): Promise<any> => {
+    return del(`/emoji-separators/${id}`);
+  },
+
+  reSplitEmojiSeparator: async (id: number, jid?: string): Promise<any> => {
+    return post(`/emoji-separators/${id}/re-split`, { jid });
+  },
+
+  fetchSeparatorCandidates: async (): Promise<EmojiSeparatorCandidate[]> => {
+    const res = await get<{ success: boolean; candidates: EmojiSeparatorCandidate[] }>('/emoji-separators/candidates');
+    return res.candidates || [];
   }
 };
+
+export interface EmojiSeparator {
+  id: number;
+  pattern: string;
+  matchType: string;
+  description?: string | null;
+  isActive: boolean;
+  matchCount: number;
+  liveMatches?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmojiSeparatorCandidate {
+  candidateText: string;
+  frequency: number;
+  chatCount: number;
+  latestTimestamp: number;
+}
 
 export interface Message {
   messageId: string;
