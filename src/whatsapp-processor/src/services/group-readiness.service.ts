@@ -550,6 +550,7 @@ export class GroupReadinessService {
                     let mediaCount = 0;
                     let textCount = 0;
                     let hasUndownloadedMedia = false;
+                    let hasActiveDownloads = false;
                     const descriptionParts: string[] = [];
                     const mediaFiles: any[] = [];
 
@@ -576,6 +577,9 @@ export class GroupReadinessService {
                                 });
                             } else {
                                 hasUndownloadedMedia = true;
+                                if (['queued', 'processing'].includes(msg.processing_status)) {
+                                    hasActiveDownloads = true;
+                                }
                             }
                         }
 
@@ -596,7 +600,9 @@ export class GroupReadinessService {
                     const description = rawDescription
                         .replace(/\[image\]|\[photo\]|\[video\]|\[sticker\]|\[audio\]|\[document\]/gi, '')
                         .trim();
-                    const qualifies = mediaCount >= 2 && isValidDescription(description) && !hasUndownloadedMedia;
+                    // Qualifies if mediaCount >= 2 and description is valid.
+                    // If active downloads are in progress, wait for them. But do NOT block on stale/failed undownloaded media.
+                    const qualifies = mediaCount >= 2 && isValidDescription(description) && !hasActiveDownloads;
 
                     if (qualifies) {
                         logger.info({ groupId: group_id, mediaCount, previousStatus: row.current_status, descriptionWords: description.split(/\s+/).length }, 'Staged/media_missing group qualifies, promoting to product...');
@@ -707,7 +713,7 @@ export class GroupReadinessService {
             );
             recoveredStaleMedia = mediaRes.rowCount || 0;
 
-            // 4. Auto-recover 'media_missing' groups that now have >= 2 valid downloaded media files and 0 undownloaded
+            // 4. Auto-recover 'media_missing' groups that now have >= 2 valid downloaded media files
             const mediaMissingRes = await client.query(
                 `SELECT mg.group_id 
                  FROM wa.message_groups mg
@@ -723,15 +729,7 @@ export class GroupReadinessService {
                          AND m.media_url != 'minio://'
                          AND length(trim(m.media_url)) > 10
                          AND m.is_deleted = false
-                   ) >= 2
-                   AND NOT EXISTS (
-                       SELECT 1 
-                       FROM wa.messages m 
-                       WHERE m.group_id = mg.group_id 
-                         AND m.media_type IN ('image', 'video', 'photo')
-                         AND (m.media_url IS NULL OR m.media_url = 'minio://' OR length(trim(m.media_url)) <= 10)
-                         AND m.is_deleted = false
-                   )`
+                   ) >= 2`
             );
             for (const row of mediaMissingRes.rows) {
                 await client.query(`UPDATE wa.message_groups SET status = 'staging', error_detail = NULL, updated_at = NOW() WHERE group_id = $1`, [row.group_id]);

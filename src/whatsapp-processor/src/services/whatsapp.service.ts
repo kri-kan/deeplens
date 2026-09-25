@@ -1197,6 +1197,15 @@ export class WhatsAppService {
                                AND media_type IS NOT NULL 
                                AND media_url IS NULL
                          ),
+                         media_count = (
+                             SELECT COUNT(*) 
+                             FROM wa.messages 
+                             WHERE group_id = $1 
+                               AND media_type IN ('image', 'video', 'photo') 
+                               AND media_url IS NOT NULL 
+                               AND length(trim(media_url)) > 10
+                               AND is_deleted = false
+                         ),
                          updated_at = NOW()
                          WHERE group_id = $1
                          RETURNING status, has_pending_media`,
