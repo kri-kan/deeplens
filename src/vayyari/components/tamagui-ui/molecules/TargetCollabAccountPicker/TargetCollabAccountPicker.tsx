@@ -20,6 +20,7 @@ export interface TargetCollabAccountPickerProps {
   selectedAccountIds: string[];
   onToggleAccount: (accountId: string) => void;
   maxSelections?: number;
+  isUnlimited?: boolean;
   title?: string;
   disabledAccountIds?: string[];
   layout?: 'grid' | 'scroll';
@@ -44,11 +45,14 @@ export const getChannelColor = (name: string) => {
   return CHANNEL_COLORS[Math.abs(hash) % CHANNEL_COLORS.length];
 };
 
+import { getSearchApiUrl } from '@/utils/api-config';
+
 export function TargetCollabAccountPicker({
   accounts,
   selectedAccountIds,
   onToggleAccount,
   maxSelections = 5,
+  isUnlimited = false,
   title = 'Select Intended Collab Accounts (Up to 5)',
   disabledAccountIds = [],
   layout = 'grid',
@@ -58,7 +62,7 @@ export function TargetCollabAccountPicker({
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   const selectedCount = selectedAccountIds.length;
-  const isMaxReached = selectedCount >= maxSelections;
+  const isMaxReached = isUnlimited || !maxSelections || maxSelections <= 0 ? false : selectedCount >= maxSelections;
 
   const handlePress = (account: TargetCollabAccount) => {
     const isAlreadySelected = selectedAccountIds.includes(account.id);
@@ -71,7 +75,7 @@ export function TargetCollabAccountPicker({
       onToggleAccount(account.id);
     } else {
       if (isMaxReached) {
-        setWarning(`Maximum ${maxSelections} collaboration accounts allowed`);
+        setWarning(`Maximum ${maxSelections} accounts allowed`);
         setTimeout(() => setWarning(null), 3500);
       } else {
         setWarning(null);
@@ -96,7 +100,16 @@ export function TargetCollabAccountPicker({
               .toUpperCase()
           : account.username.substring(0, 2).toUpperCase();
 
-        const hasValidImage = account.avatarUri && !failedImages[account.id];
+        const cleanBase = (getSearchApiUrl() || '').replace(/\/$/, '');
+        const resolvedUri = account.avatarUri
+          ? account.avatarUri.startsWith('http://') || account.avatarUri.startsWith('https://')
+            ? account.avatarUri
+            : account.avatarUri.startsWith('/')
+            ? `${cleanBase}${account.avatarUri}`
+            : `${cleanBase}/api/v1/Attachment/download?path=${encodeURIComponent(account.avatarUri)}`
+          : undefined;
+
+        const hasValidImage = Boolean(resolvedUri) && !failedImages[account.id];
 
         return (
           <Pressable
@@ -122,7 +135,7 @@ export function TargetCollabAccountPicker({
             >
               {hasValidImage ? (
                 <Image
-                  source={{ uri: account.avatarUri }}
+                  source={{ uri: resolvedUri }}
                   style={styles.avatarImg}
                   contentFit="cover"
                   onError={() => setFailedImages((prev) => ({ ...prev, [account.id]: true }))}
@@ -168,7 +181,7 @@ export function TargetCollabAccountPicker({
       {/* Header with Title and Dynamic Counter */}
       <XStack justifyContent="space-between" alignItems="center">
         <Text fontSize={12} fontWeight="800" color={tokens.text}>
-          {title}
+          {isUnlimited ? (title !== 'Select Intended Collab Accounts (Up to 5)' ? title : 'Select Channels for Post Planning') : title}
         </Text>
         <View
           style={[
@@ -193,7 +206,7 @@ export function TargetCollabAccountPicker({
                 : '#6B7280'
             }
           >
-            {selectedCount} / {maxSelections} Selected
+            {isUnlimited ? `${selectedCount} Selected` : `${selectedCount} / ${maxSelections} Selected`}
           </Text>
         </View>
       </XStack>

@@ -3464,29 +3464,64 @@ public class InstaController : ControllerBase
         using var conn = await _db.CreateConnectionAsync();
         var sql = @"
             SELECT 
-                id AS WatchlistId,
-                username AS Username,
-                display_name AS DisplayName,
+                cw.id AS WatchlistId,
+                cw.username AS Username,
+                cw.display_name AS DisplayName,
                 COALESCE(
-                    CASE WHEN profile_pic_storage_path IS NOT NULL AND profile_pic_storage_path <> '' 
-                         THEN '/api/v1/Attachment/download?path=' || profile_pic_storage_path 
+                    CASE WHEN cw.profile_pic_storage_path IS NOT NULL AND cw.profile_pic_storage_path <> '' 
+                         THEN '/api/v1/Attachment/download?path=' || cw.profile_pic_storage_path 
                          ELSE NULL END,
-                    profile_pic_url
+                    cw.profile_pic_url
                 ) AS ProfilePicUrl,
-                COALESCE(channel_type, 'focus') AS ChannelType,
-                COALESCE(category_focus, ARRAY[]::text[]) AS CategoryFocus,
-                target_demography AS TargetDemography
-            FROM competitor_watchlist
-            WHERE profile_category = 'My Business' AND platform = 'instagram' AND enabled = true
-            ORDER BY channel_type ASC, username ASC";
+                COALESCE(cw.channel_type, 'focus') AS ChannelType,
+                COALESCE(cw.category_focus, ARRAY[]::text[]) AS CategoryFocus,
+                cw.target_demography AS TargetDemography,
+                (SELECT MAX(ppa.scheduled_at) 
+                 FROM post_planner_assignments ppa 
+                 WHERE ppa.watchlist_id = cw.id AND ppa.scheduled_at IS NOT NULL) AS LatestScheduledAt
+            FROM competitor_watchlist cw
+            WHERE cw.profile_category = 'My Business' AND cw.platform = 'instagram' AND cw.enabled = true
+            ORDER BY cw.channel_type ASC, cw.username ASC";
 
-        var channels = (await conn.QueryAsync<PostPlannerChannelOptionDto>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
+        var rawChannels = (await conn.QueryAsync<dynamic>(new CommandDefinition(sql, cancellationToken: ct))).ToList();
+        var nowUtc = DateTime.UtcNow;
+
+        var channels = rawChannels.Select(r =>
+        {
+            DateTime? latest = (DateTime?)r.latestscheduledat;
+            DateTime nextSuggested;
+            if (latest.HasValue && latest.Value > nowUtc)
+            {
+                nextSuggested = latest.Value.AddHours(24);
+            }
+            else
+            {
+                var tomorrow = nowUtc.Date.AddDays(1);
+                nextSuggested = new DateTime(tomorrow.Year, tomorrow.Month, tomorrow.Day, 12, 30, 0, DateTimeKind.Utc);
+            }
+
+            return new PostPlannerChannelOptionDto
+            {
+                WatchlistId = (Guid)r.watchlistid,
+                Username = (string)r.username,
+                DisplayName = (string?)r.displayname,
+                ProfilePicUrl = (string?)r.profilepicurl,
+                ChannelType = (string)r.channeltype,
+                CategoryFocus = (string[])r.categoryfocus,
+                TargetDemography = (string?)r.targetdemography,
+                LatestScheduledAt = latest,
+                NextSuggestedScheduledAt = nextSuggested
+            };
+        }).ToList();
+
         return Ok(channels);
     }
 
     [HttpGet("post-planner/items")]
     [Authorize(Policy = "SearchPolicy")]
     public async Task<ActionResult<List<PostPlannerItemDto>>> GetPostPlannerItems(
+        [FromQuery] Guid? watchlistId = null,
+        [FromQuery] string? channelStatus = null, // "pending" | "posted" | "all"
         [FromQuery] string? category = null,
         [FromQuery] bool? isStarred = true,
         [FromQuery] string? curationStatus = null, // "pending" | "curated" | "all"
@@ -3503,7 +3538,38 @@ public class InstaController : ControllerBase
         var whereClauses = new List<string> { "p.is_deleted = false" };
         var parameters = new DynamicParameters();
 
-        // 1. Starred Filter (default true, but if false returns unstarred, if null returns all)
+        // 1. Single Channel Filter (For dedicated Post Planner queue)
+        if (watchlistId.HasValue && watchlistId.Value != Guid.Empty)
+        {
+            parameters.Add("ChannelWatchlistId", watchlistId.Value);
+            if (string.Equals(channelStatus, "posted", StringComparison.OrdinalIgnoreCase))
+            {
+                whereClauses.Add("EXISTS (SELECT 1 FROM post_planner_assignments ppa_ch WHERE ppa_ch.product_id = p.id AND ppa_ch.watchlist_id = @ChannelWatchlistId AND ppa_ch.status = 'shared')");
+            }
+            else if (string.Equals(channelStatus, "pending", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(channelStatus))
+            {
+                whereClauses.Add("EXISTS (SELECT 1 FROM post_planner_assignments ppa_ch WHERE ppa_ch.product_id = p.id AND ppa_ch.watchlist_id = @ChannelWatchlistId AND ppa_ch.status IN ('assigned', 'scheduled'))");
+            }
+            else
+            {
+                whereClauses.Add("EXISTS (SELECT 1 FROM post_planner_assignments ppa_ch WHERE ppa_ch.product_id = p.id AND ppa_ch.watchlist_id = @ChannelWatchlistId AND ppa_ch.status != 'excluded')");
+            }
+        }
+        else
+        {
+            // Global Curation Status Filter ('curated' vs 'pending' vs 'all') for Post Curation page
+            if (string.Equals(curationStatus, "curated", StringComparison.OrdinalIgnoreCase))
+            {
+                whereClauses.Add("EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete')");
+            }
+            else if (string.Equals(curationStatus, "pending", StringComparison.OrdinalIgnoreCase))
+            {
+                whereClauses.Add("NOT EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete')");
+            }
+            // "all" adds no predicate on planning_status
+        }
+
+        // 2. Starred Filter (default true, but if false returns unstarred, if null returns all)
         if (isStarred.HasValue)
         {
             if (isStarred.Value)
@@ -3515,17 +3581,6 @@ public class InstaController : ControllerBase
                 whereClauses.Add("(p.is_starred = false OR p.is_starred IS NULL)");
             }
         }
-
-        // 2. Curation Status Filter ('curated' vs 'pending' vs 'all')
-        if (string.Equals(curationStatus, "curated", StringComparison.OrdinalIgnoreCase))
-        {
-            whereClauses.Add("EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete')");
-        }
-        else if (string.Equals(curationStatus, "pending", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(curationStatus))
-        {
-            whereClauses.Add("NOT EXISTS (SELECT 1 FROM post_planner_assignments ppa WHERE ppa.product_id = p.id AND ppa.planning_status = 'complete')");
-        }
-        // "all" adds no predicate on planning_status
 
         // 3. Category Filter
         if (!string.IsNullOrWhiteSpace(category) && !string.Equals(category, "all", StringComparison.OrdinalIgnoreCase))
@@ -3554,17 +3609,25 @@ public class InstaController : ControllerBase
         }
 
         // 6. Sorting Order
-        string orderByClause = sortBy?.ToLowerInvariant() switch
+        string orderByClause;
+        if (string.Equals(sortBy, "schedule_time", StringComparison.OrdinalIgnoreCase) && watchlistId.HasValue && watchlistId.Value != Guid.Empty)
         {
-            "oldest" => "p.created_at ASC",
-            "price_low" => "COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) ASC, p.created_at DESC",
-            "price_high" => "COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) DESC, p.created_at DESC",
-            "media_high" => "(SELECT COUNT(*) FROM public.media_links ml_cnt WHERE ml_cnt.entity_id = p.id AND ml_cnt.entity_type = 'product') DESC, p.created_at DESC",
-            "media_low" => "(SELECT COUNT(*) FROM public.media_links ml_cnt WHERE ml_cnt.entity_id = p.id AND ml_cnt.entity_type = 'product') ASC, p.created_at DESC",
-            _ => "p.created_at DESC"
-        };
+            orderByClause = "(SELECT ppa_ch.scheduled_at FROM post_planner_assignments ppa_ch WHERE ppa_ch.product_id = p.id AND ppa_ch.watchlist_id = @ChannelWatchlistId) ASC NULLS LAST, p.created_at DESC";
+        }
+        else
+        {
+            orderByClause = sortBy?.ToLowerInvariant() switch
+            {
+                "oldest" => "p.created_at ASC",
+                "price_low" => "COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) ASC, p.created_at DESC",
+                "price_high" => "COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) DESC, p.created_at DESC",
+                "media_high" => "(SELECT COUNT(*) FROM public.media_links ml_cnt WHERE ml_cnt.entity_id = p.id AND ml_cnt.entity_type = 'product') DESC, p.created_at DESC",
+                "media_low" => "(SELECT COUNT(*) FROM public.media_links ml_cnt WHERE ml_cnt.entity_id = p.id AND ml_cnt.entity_type = 'product') ASC, p.created_at DESC",
+                _ => "p.created_at DESC"
+            };
+        }
 
-        parameters.Add("Take", Math.Min(Math.Max(take, 1), 200));
+        parameters.Add("Take", Math.Min(Math.Max(take, 1), 500));
         parameters.Add("Skip", Math.Max(skip, 0));
 
         var productSql = $@"
@@ -3678,6 +3741,7 @@ public class InstaController : ControllerBase
             new { WatchlistIds = watchlistIds.ToArray() })).ToDictionary(x => (Guid)x.id, x => (string)x.channel_type);
 
         var planningStatus = request.IsDonePlanning || watchlistIds.Count > 0 ? "complete" : "in_progress";
+        var nowUtc = DateTime.UtcNow;
 
         // 1. Remove assignments in 'assigned' status that are not in the new selection
         if (watchlistIds.Count > 0)
@@ -3697,16 +3761,38 @@ public class InstaController : ControllerBase
                 new { ProductId = request.ProductId });
         }
 
-        // 2. Insert or update the selected channels
+        // 2. Insert or update the selected channels with auto 24h-spaced schedule suggestion
         foreach (var wId in watchlistIds)
         {
             var cType = channels.TryGetValue(wId, out var ctVal) ? ctVal : "focus";
+
+            var latestScheduled = await conn.QueryFirstOrDefaultAsync<DateTime?>(@"
+                SELECT MAX(scheduled_at) 
+                FROM post_planner_assignments 
+                WHERE watchlist_id = @WatchlistId AND product_id != @ProductId AND scheduled_at IS NOT NULL",
+                new { WatchlistId = wId, ProductId = request.ProductId });
+
+            DateTime autoScheduled;
+            if (latestScheduled.HasValue && latestScheduled.Value > nowUtc)
+            {
+                autoScheduled = latestScheduled.Value.AddHours(24);
+            }
+            else
+            {
+                var tomorrow = nowUtc.Date.AddDays(1);
+                autoScheduled = new DateTime(tomorrow.Year, tomorrow.Month, tomorrow.Day, 12, 30, 0, DateTimeKind.Utc);
+            }
+
             await conn.ExecuteAsync(@"
-                INSERT INTO post_planner_assignments (product_id, watchlist_id, channel_type, status, planning_status, updated_at)
-                VALUES (@ProductId, @WatchlistId, @ChannelType, 'assigned', @PlanningStatus, NOW())
+                INSERT INTO post_planner_assignments (product_id, watchlist_id, channel_type, status, planning_status, scheduled_at, updated_at)
+                VALUES (@ProductId, @WatchlistId, @ChannelType, 'assigned', @PlanningStatus, @ScheduledAt, NOW())
                 ON CONFLICT (product_id, watchlist_id)
-                DO UPDATE SET planning_status = @PlanningStatus, channel_type = @ChannelType, updated_at = NOW()",
-                new { ProductId = request.ProductId, WatchlistId = wId, ChannelType = cType, PlanningStatus = planningStatus });
+                DO UPDATE SET 
+                    planning_status = @PlanningStatus, 
+                    channel_type = @ChannelType, 
+                    scheduled_at = COALESCE(post_planner_assignments.scheduled_at, @ScheduledAt),
+                    updated_at = NOW()",
+                new { ProductId = request.ProductId, WatchlistId = wId, ChannelType = cType, PlanningStatus = planningStatus, ScheduledAt = autoScheduled });
         }
 
         // 3. Keep all remaining assignments in sync with current planningStatus

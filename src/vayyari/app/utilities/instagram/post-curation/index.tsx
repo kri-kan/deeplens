@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { AdminPostPlannerPage } from '@/components/tamagui-ui/pages/AdminPostPlannerPage';
+import { useRouter } from 'expo-router';
+import { AdminPostCurationPage } from '@/components/tamagui-ui/pages/AdminPostCurationPage';
 import {
   instagramService,
   PostPlannerChannelOption,
@@ -9,9 +9,8 @@ import {
 } from '@/services/instagram.service';
 import { getSearchApiUrl } from '@/utils/api-config';
 
-export default function PostPlannerScreen() {
+export default function PostCurationScreen() {
   const router = useRouter();
-  const { tab } = useLocalSearchParams<{ tab?: string }>();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,7 +54,7 @@ export default function PostPlannerScreen() {
       setChannels(mappedChannels);
       setItems(mappedItems);
     } catch (err) {
-      console.error('Failed to load post planner data', err);
+      console.error('Failed to load post curation data', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -165,39 +164,8 @@ export default function PostPlannerScreen() {
     [channels]
   );
 
-  const handleSaveClassification = useCallback(
-    async (
-      watchlistId: string,
-      channelType: 'focus' | 'dump',
-      categoryFocus: string[],
-      targetDemography?: string
-    ) => {
-      await instagramService.classifyChannel({
-        watchlistId,
-        channelType,
-        categoryFocus,
-        targetDemography,
-      });
-
-      setChannels((prev) =>
-        prev.map((c) => {
-          if (c.watchlistId === watchlistId) {
-            return {
-              ...c,
-              channelType,
-              categoryFocus,
-              targetDemography,
-            };
-          }
-          return c;
-        })
-      );
-    },
-    []
-  );
-
   return (
-    <AdminPostPlannerPage
+    <AdminPostCurationPage
       channels={channels}
       items={items}
       loading={loading}
@@ -206,7 +174,6 @@ export default function PostPlannerScreen() {
       onBack={() => router.back()}
       onSaveMatching={handleSaveMatching}
       onRecordAction={handleRecordAction}
-      onSaveClassification={handleSaveClassification}
     />
   );
 }

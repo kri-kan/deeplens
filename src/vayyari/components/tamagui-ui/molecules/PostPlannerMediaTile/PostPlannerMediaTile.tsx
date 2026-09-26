@@ -13,6 +13,7 @@ export interface PostPlannerMediaTileProps {
   item: PostPlannerItem;
   onPress: (item: PostPlannerItem) => void;
   getChannelColor?: (username: string) => string;
+  showChannelAvatars?: boolean;
 }
 
 const DEFAULT_CHANNEL_COLORS: Record<string, string> = {
@@ -45,6 +46,7 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
   item,
   onPress,
   getChannelColor = defaultGetColor,
+  showChannelAvatars = true,
 }: PostPlannerMediaTileProps) {
   const { tokens } = useTheme();
 
@@ -133,7 +135,7 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
         )}
 
         {/* Bottom-Right: Overlapping Channel Heads */}
-        {assignedChannels.length > 0 && (
+        {showChannelAvatars && assignedChannels.length > 0 && (
           <View style={styles.channelAvatarsRow}>
             {assignedChannels.slice(0, 3).map((a: PostPlannerChannelAssignment, idx: number) => {
               const color = getChannelColor(a.username);

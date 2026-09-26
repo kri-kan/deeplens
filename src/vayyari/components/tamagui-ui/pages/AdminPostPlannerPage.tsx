@@ -9,6 +9,7 @@ import {
   Switch,
   ActivityIndicator,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -21,16 +22,14 @@ import {
   LuX,
   LuCheck,
   LuSettings,
-  LuFolder,
-  LuLayers,
-  LuTarget,
-  LuPackage,
-  LuSparkles,
+  LuClock,
   LuShare2,
+  LuBan,
+  LuCamera,
+  LuSparkles,
+  LuCalendar,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
-import { PostPlannerMediaTile } from '../molecules/PostPlannerMediaTile';
-import { PostCurationModal } from '../organisms/PostCurationModal';
 import { ChannelClassificationModal } from '../organisms/ChannelClassificationModal';
 import {
   CatalogFilterDrawer,
@@ -53,8 +52,9 @@ export interface AdminPostPlannerPageProps {
   refreshing?: boolean;
   onRefresh?: () => void;
   onBack?: () => void;
-  initialTab?: 'curation' | 'sharing';
-  onSaveMatching: (productId: string, watchlistIds: string[], isDonePlanning: boolean) => Promise<void>;
+  selectedChannelId?: string;
+  onSelectChannel?: (watchlistId: string) => void;
+  onSaveMatching?: (productId: string, watchlistIds: string[], isDonePlanning: boolean) => Promise<void>;
   onRecordAction?: (
     productId: string,
     watchlistId: string,
@@ -63,7 +63,7 @@ export interface AdminPostPlannerPageProps {
     publishedUrl?: string,
     captionUsed?: string
   ) => Promise<void>;
-  onSaveClassification: (
+  onSaveClassification?: (
     watchlistId: string,
     channelType: 'focus' | 'dump',
     categoryFocus: string[],
@@ -78,7 +78,8 @@ export function AdminPostPlannerPage({
   refreshing = false,
   onRefresh,
   onBack,
-  initialTab = 'curation',
+  selectedChannelId: propSelectedChannelId,
+  onSelectChannel,
   onSaveMatching,
   onRecordAction,
   onSaveClassification,
@@ -87,816 +88,1027 @@ export function AdminPostPlannerPage({
   const insets = useSafeAreaInsets();
   const topInset = Math.max(insets?.top || 0, 12);
 
-  // Active Tab: 'curation' (Curation Grid) vs 'sharing' (Sharing Queues & Suggestions)
-  const [activeTab, setActiveTab] = useState<'curation' | 'sharing'>(initialTab);
+  // Active Channel ID: Defaults to first channel in list, NO "ALL" HEAD
+  const [internalSelectedChannelId, setInternalSelectedChannelId] = useState<string>(
+    propSelectedChannelId || channels[0]?.watchlistId || ''
+  );
 
-  React.useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
-  }, [initialTab]);
+  const activeChannelId = propSelectedChannelId || internalSelectedChannelId || channels[0]?.watchlistId || '';
 
-  // Channel Selection: null = all channels, string = watchlistId
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const handleSelectChannel = (wId: string) => {
+    setInternalSelectedChannelId(wId);
+    onSelectChannel?.(wId);
+  };
 
-  // Search & Filters
+  const activeChannel = useMemo(() => {
+    return channels.find((c) => c.watchlistId === activeChannelId) || channels[0] || null;
+  }, [channels, activeChannelId]);
+
+  // Posted Toggle: false = Pending / Scheduled, true = Posted / Shared
+  const [showPosted, setShowPosted] = useState(false);
+
+  // Search & Catalog Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [includeCurated, setIncludeCurated] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>(DEFAULT_STARRED_FILTER_STATE);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
 
-  // Modals
-  const [selectedProductForModal, setSelectedProductForModal] = useState<PostPlannerItem | null>(null);
-  const [curationModalVisible, setCurationModalVisible] = useState(false);
-
+  // Classification Modal
   const [classificationModalVisible, setClassificationModalVisible] = useState(false);
-  const [classificationTargetChannel, setClassificationTargetChannel] = useState<PostPlannerChannelOption | null>(null);
 
-  // Active Channel Object
-  const activeChannel = useMemo(() => {
-    if (!selectedChannelId) return channels[0] || null;
-    return channels.find((c) => c.watchlistId === selectedChannelId) || channels[0] || null;
-  }, [channels, selectedChannelId]);
+  // Action / Posting Execution Modal
+  const [actionItem, setActionItem] = useState<PostPlannerItem | null>(null);
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [actionType, setActionType] = useState<'shared_now' | 'scheduled' | 'excluded'>('shared_now');
+  const [actionScheduledTime, setActionScheduledTime] = useState<string>('');
+  const [actionPublishedUrl, setActionPublishedUrl] = useState('');
+  const [actionCaption, setActionCaption] = useState('');
+  const [submittingAction, setSubmittingAction] = useState(false);
 
-  // Dynamic Filter Chips
-  const computedFilterChips = useMemo(() => {
-    const chips: { id: string; label: string }[] = [];
-    if (filterState.isStarred === true) {
-      chips.push({ id: 'f-star', label: '⭐ Starred Only' });
-    } else if (filterState.isStarred === false) {
-      chips.push({ id: 'f-unstar', label: 'Unstarred Only' });
-    }
-    if (filterState.minPrice > 0 && filterState.maxPrice > 0) {
-      chips.push({ id: 'f-price', label: `₹${filterState.minPrice} - ₹${filterState.maxPrice}` });
-    } else if (filterState.minPrice > 0) {
-      chips.push({ id: 'f-minprice', label: `≥ ₹${filterState.minPrice}` });
-    } else if (filterState.maxPrice > 0) {
-      chips.push({ id: 'f-maxprice', label: `≤ ₹${filterState.maxPrice}` });
-    }
-    (filterState.categories || []).forEach((cat) => {
-      chips.push({ id: `f-cat-${cat}`, label: cat });
-    });
-    (filterState.fabrics || []).forEach((fab) => {
-      chips.push({ id: `f-fab-${fab}`, label: fab });
-    });
-    if (filterState.sortBy && filterState.sortBy !== 'recent') {
-      chips.push({ id: 'f-sort', label: `Sort: ${filterState.sortBy}` });
-    }
-    return chips;
+  // Filter & Sort Items for Active Channel
+  const filteredAndSortedItems = useMemo(() => {
+    if (!activeChannelId) return [];
+
+    return items
+      .filter((item) => {
+        // Find assignment for this specific channel
+        const assignment = (item.channelAssignments || []).find(
+          (a: PostPlannerChannelAssignment) => a.watchlistId === activeChannelId
+        );
+
+        if (!assignment) return false;
+
+        // Posted toggle filter
+        if (!showPosted) {
+          // Pending queue: must NOT be shared or excluded
+          if (assignment.status === 'shared' || assignment.status === 'excluded') {
+            return false;
+          }
+        } else {
+          // Posted queue: must be shared
+          if (assignment.status !== 'shared') {
+            return false;
+          }
+        }
+
+        // Starred Filter
+        if (filterState.isStarred === true && !item.isStarred) return false;
+        if (filterState.isStarred === false && item.isStarred) return false;
+
+        // Search Filter
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          const code = (item.productCode || '').toLowerCase();
+          const title = (item.title || '').toLowerCase();
+          const fabric = (item.fabric || '').toLowerCase();
+          if (!code.includes(q) && !title.includes(q) && !fabric.includes(q)) {
+            return false;
+          }
+        }
+
+        // Category Filter
+        if (filterState.categories?.length) {
+          if (!item.category || !filterState.categories.includes(item.category)) {
+            return false;
+          }
+        }
+
+        // Fabric Filter
+        if (filterState.fabrics?.length) {
+          if (!item.fabric || !filterState.fabrics.includes(item.fabric)) {
+            return false;
+          }
+        }
+
+        // Price Filter
+        const price = Number(item.price || 0);
+        if (filterState.minPrice > 0 && price < filterState.minPrice) return false;
+        if (filterState.maxPrice > 0 && price > filterState.maxPrice) return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        // Chronological sort by scheduled_at ASC
+        const aAssign = (a.channelAssignments || []).find((x) => x.watchlistId === activeChannelId);
+        const bAssign = (b.channelAssignments || []).find((x) => x.watchlistId === activeChannelId);
+
+        const aTime = aAssign?.scheduledAt ? new Date(aAssign.scheduledAt).getTime() : Infinity;
+        const bTime = bAssign?.scheduledAt ? new Date(bAssign.scheduledAt).getTime() : Infinity;
+
+        if (aTime !== bTime) {
+          return aTime - bTime;
+        }
+
+        // Tie-breaker: Product Code
+        return (a.productCode || '').localeCompare(b.productCode || '');
+      });
+  }, [items, activeChannelId, showPosted, filterState, searchQuery]);
+
+  const activeFilterCount = useMemo(() => {
+    return getActiveFilterCount(filterState);
   }, [filterState]);
 
-  const removeFilterChip = (chipId: string) => {
-    setFilterState((prev) => {
-      const next = { ...prev };
-      if (chipId === 'f-star' || chipId === 'f-unstar') {
-        next.isStarred = null;
-      } else if (chipId === 'f-price' || chipId === 'f-minprice' || chipId === 'f-maxprice') {
-        next.minPrice = 0;
-        next.maxPrice = 0;
-      } else if (chipId.startsWith('f-cat-')) {
-        const cat = chipId.replace('f-cat-', '');
-        next.categories = (next.categories || []).filter((c) => c !== cat);
-      } else if (chipId.startsWith('f-fab-')) {
-        const fab = chipId.replace('f-fab-', '');
-        next.fabrics = (next.fabrics || []).filter((f) => f !== fab);
-      } else if (chipId === 'f-sort') {
-        next.sortBy = 'recent';
-      }
-      return next;
-    });
+  const openActionModal = (item: PostPlannerItem) => {
+    const assignment = (item.channelAssignments || []).find(
+      (a) => a.watchlistId === activeChannelId
+    );
+    setActionItem(item);
+    setActionType(showPosted ? 'scheduled' : 'shared_now');
+    setActionScheduledTime(assignment?.scheduledAt || '');
+    setActionPublishedUrl(assignment?.publishedUrl || '');
+    setActionCaption(assignment?.captionUsed || (item.title ? `${item.title} • ₹${item.price} • DM to order` : ''));
+    setActionModalVisible(true);
   };
 
-  // Filter items for Curation Grid
-  const visibleCurationItems = useMemo(() => {
-    return items.filter((item) => {
-      // 1. Starred Filter
-      if (filterState.isStarred === true && !item.isStarred) return false;
-      if (filterState.isStarred === false && item.isStarred) return false;
-
-      // 2. Curated Visibility Filter
-      const isCurated = item.planningStatus === 'complete';
-      if (!includeCurated && isCurated) return false;
-
-      // 3. Channel Filter (if channel selected in stories bar)
-      if (selectedChannelId) {
-        const hasAffinity = (item.channelAssignments || []).some(
-          (a: PostPlannerChannelAssignment) => a.watchlistId === selectedChannelId && a.status !== 'excluded'
-        );
-        if (!hasAffinity) return false;
-      }
-
-      // 4. Search Filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const code = (item.productCode || '').toLowerCase();
-        const title = (item.title || '').toLowerCase();
-        const fabric = (item.fabric || '').toLowerCase();
-        if (!code.includes(q) && !title.includes(q) && !fabric.includes(q)) {
-          return false;
-        }
-      }
-
-      // 5. Category Drawer Filter
-      if (filterState.categories?.length) {
-        const itemCat = (item.category || '').toLowerCase();
-        if (!filterState.categories.some((c) => itemCat.includes(c.toLowerCase()))) {
-          return false;
-        }
-      }
-
-      // 6. Fabric Drawer Filter
-      if (filterState.fabrics?.length) {
-        const itemFab = (item.fabric || '').toLowerCase();
-        if (!filterState.fabrics.some((f) => itemFab.includes(f.toLowerCase()))) {
-          return false;
-        }
-      }
-
-      // 7. Price Bounds
-      if (filterState.minPrice > 0 && (item.price || 0) < filterState.minPrice) return false;
-      if (filterState.maxPrice > 0 && (item.price || 0) > filterState.maxPrice) return false;
-
-      return true;
-    });
-  }, [items, filterState, includeCurated, selectedChannelId, searchQuery]);
-
-  // Channel Suggestions for Sharing Queues Tab
-  const channelSuggestions = useMemo(() => {
-    if (!activeChannel) return [];
-    const focusCategories = (activeChannel.categoryFocus || []).map((t: string) => t.toLowerCase().trim());
-
-    return items.filter((item) => {
-      const assignment = (item.channelAssignments || []).find((a: PostPlannerChannelAssignment) => a.watchlistId === activeChannel.watchlistId);
-      if (assignment && (assignment.status === 'shared' || assignment.status === 'scheduled' || assignment.status === 'excluded')) {
-        return false;
-      }
-      if (focusCategories.length === 0) return true;
-
-      const itemCategory = (item.category || '').toLowerCase();
-      const itemFabric = (item.fabric || '').toLowerCase();
-      const itemTitle = (item.title || '').toLowerCase();
-
-      return focusCategories.some(
-        (tag: string) => itemCategory.includes(tag) || itemFabric.includes(tag) || itemTitle.includes(tag)
+  const handleExecuteAction = async () => {
+    if (!actionItem || !activeChannelId || !onRecordAction) return;
+    try {
+      setSubmittingAction(true);
+      await onRecordAction(
+        actionItem.productId,
+        activeChannelId,
+        actionType,
+        actionType === 'scheduled' ? actionScheduledTime || undefined : undefined,
+        actionPublishedUrl.trim() || undefined,
+        actionCaption.trim() || undefined
       );
-    });
-  }, [items, activeChannel]);
-
-  const handleOpenProductModal = (product: PostPlannerItem) => {
-    setSelectedProductForModal(product);
-    setCurationModalVisible(true);
+      setActionModalVisible(false);
+      setActionItem(null);
+    } catch (err) {
+      console.error('Failed to submit post action', err);
+    } finally {
+      setSubmittingAction(false);
+    }
   };
 
-  const handleOpenClassifyModal = (channel: PostPlannerChannelOption) => {
-    setClassificationTargetChannel(channel);
-    setClassificationModalVisible(true);
+  const handleQuickSkip = async (item: PostPlannerItem) => {
+    if (!activeChannelId || !onRecordAction) return;
+    try {
+      await onRecordAction(item.productId, activeChannelId, 'excluded');
+    } catch (err) {
+      console.error('Failed to skip product for channel', err);
+    }
   };
 
   return (
-    <View style={[styles.root, { paddingTop: topInset }]}>
-      {/* ── STICKY TOP BAR ── */}
-      <YStack backgroundColor="#FFFFFF" borderBottomWidth={1} borderBottomColor="#E5E7EB">
-        <XStack
-          paddingHorizontal={16}
-          paddingVertical={10}
-          alignItems="center"
-          justifyContent="space-between"
-          gap={8}
-        >
-          {/* Back & Title */}
-          <XStack alignItems="center" gap={10} flex={1}>
-            {onBack && (
-              <Pressable onPress={onBack} hitSlop={8} style={styles.iconBtn}>
-                <LuArrowLeft size={20} color="#1F2937" />
-              </Pressable>
-            )}
-            <YStack>
-              <XStack alignItems="center" gap={6}>
-                <Text fontSize={18} fontWeight="900" color="#1F2937">
-                  Post Planner
-                </Text>
-                <View style={styles.countBadge}>
-                  <Text fontSize={10} fontWeight="800" color="#7E22CE">
-                    {visibleCurationItems.length}
-                  </Text>
-                </View>
-              </XStack>
-              <Text fontSize={11} color="#6B7280">
-                {activeTab === 'curation' ? 'Multi-Account Curation' : 'Sharing Queues & Suggestions'}
-              </Text>
-            </YStack>
-          </XStack>
-
-          {/* Action Cluster */}
-          <XStack alignItems="center" gap={8}>
-            {/* Filter Drawer Trigger */}
-            <Pressable
-              onPress={() => setFilterDrawerVisible(true)}
-              style={[
-                styles.iconBtn,
-                getActiveFilterCount(filterState) > 0 && styles.filterBtnActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Open Filters"
-            >
-              <LuSlidersHorizontal
-                size={18}
-                color={getActiveFilterCount(filterState) > 0 ? '#7E22CE' : '#4B5563'}
-              />
-              {getActiveFilterCount(filterState) > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text fontSize={9} fontWeight="800" color="#FFFFFF">
-                    {getActiveFilterCount(filterState)}
-                  </Text>
-                </View>
-              )}
+    <View style={[styles.container, { paddingTop: topInset }]}>
+      {/* Top Header */}
+      <XStack
+        paddingHorizontal={16}
+        paddingVertical={10}
+        justifyContent="space-between"
+        alignItems="center"
+        backgroundColor="#FFFFFF"
+        borderBottomWidth={1}
+        borderBottomColor="#F3F4F6"
+      >
+        <XStack alignItems="center" gap={10} flex={1}>
+          {onBack && (
+            <Pressable onPress={onBack} hitSlop={8} style={styles.iconCircleBtn}>
+              <LuArrowLeft size={18} color="#1F2937" />
             </Pressable>
-
-            {/* Curated Toggle Switch Pill */}
-            <View style={styles.curatedTogglePill}>
-              <Text fontSize={11} fontWeight="800" color={includeCurated ? '#059669' : '#6B7280'}>
-                Curated
-              </Text>
-              <Switch
-                value={includeCurated}
-                onValueChange={setIncludeCurated}
-                trackColor={{ false: '#E5E7EB', true: '#A7F3D0' }}
-                thumbColor={includeCurated ? '#059669' : '#9CA3AF'}
-                style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }], marginLeft: 2 }}
-              />
-            </View>
-
-            {/* Refresh Button */}
-            {onRefresh && (
-              <Pressable onPress={onRefresh} hitSlop={8} style={styles.iconBtn}>
-                <LuRefreshCw size={16} color="#4B5563" />
-              </Pressable>
-            )}
-          </XStack>
+          )}
+          <YStack flex={1}>
+            <Text fontSize={16} fontWeight="900" color="#111827">
+              Post Planner
+            </Text>
+            <Text fontSize={11} color="#6B7280" numberOfLines={1}>
+              {activeChannel ? `@${activeChannel.username} posting queue` : 'Channel posting queue'}
+            </Text>
+          </YStack>
         </XStack>
 
-        {/* ── SEARCH INPUT ROW ── */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchInputContainer}>
-            <LuSearch size={15} color="#9CA3AF" style={{ marginRight: 6 }} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search SKU, title, fabric..."
-              placeholderTextColor="#9CA3AF"
-              style={styles.searchInput}
+        <XStack alignItems="center" gap={8}>
+          {/* Posted Toggle Switch Pill */}
+          <Pressable
+            onPress={() => setShowPosted((prev) => !prev)}
+            style={[styles.postedTogglePill, showPosted && styles.postedTogglePillActive]}
+          >
+            <Text
+              fontSize={11}
+              fontWeight="800"
+              color={showPosted ? '#059669' : '#6B7280'}
+            >
+              Posted
+            </Text>
+            <Switch
+              value={showPosted}
+              onValueChange={setShowPosted}
+              trackColor={{ false: '#D1D5DB', true: '#A7F3D0' }}
+              thumbColor={showPosted ? '#059669' : '#F3F4F6'}
+              style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }], marginLeft: -2 }}
             />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')} hitSlop={6}>
-                <LuX size={15} color="#9CA3AF" />
-              </Pressable>
+          </Pressable>
+
+          {/* Filter Drawer Button */}
+          <Pressable
+            onPress={() => setFilterDrawerVisible(true)}
+            hitSlop={8}
+            style={[styles.iconCircleBtn, activeFilterCount > 0 && styles.filterBtnActive]}
+          >
+            <LuSlidersHorizontal
+              size={17}
+              color={activeFilterCount > 0 ? '#7E22CE' : '#4B5563'}
+            />
+            {activeFilterCount > 0 && (
+              <View style={styles.badgeIndicator}>
+                <Text fontSize={9} fontWeight="800" color="#FFFFFF">
+                  {activeFilterCount}
+                </Text>
+              </View>
             )}
-          </View>
-        </View>
+          </Pressable>
 
-        {/* ── TAMAGUI SEGMENTED MODE SWITCHER ── */}
-        <View style={styles.modeSwitcherContainer}>
-          <View style={styles.modeSwitcherTrack}>
+          {/* Refresh Button */}
+          {onRefresh && (
             <Pressable
-              onPress={() => setActiveTab('curation')}
-              style={[
-                styles.modeTab,
-                activeTab === 'curation' && styles.modeTabActive,
-              ]}
+              onPress={onRefresh}
+              hitSlop={8}
+              style={[styles.iconCircleBtn, refreshing && { opacity: 0.5 }]}
             >
-              <LuLayers size={13} color={activeTab === 'curation' ? '#7E22CE' : '#6B7280'} />
-              <Text
-                fontSize={12}
-                fontWeight="800"
-                color={activeTab === 'curation' ? '#7E22CE' : '#6B7280'}
-              >
-                1. Curation Grid
-              </Text>
+              <LuRefreshCw size={16} color="#4B5563" />
             </Pressable>
+          )}
+        </XStack>
+      </XStack>
 
-            <Pressable
-              onPress={() => setActiveTab('sharing')}
-              style={[
-                styles.modeTab,
-                activeTab === 'sharing' && styles.modeTabActive,
-              ]}
-            >
-              <LuShare2 size={13} color={activeTab === 'sharing' ? '#7E22CE' : '#6B7280'} />
-              <Text
-                fontSize={12}
-                fontWeight="800"
-                color={activeTab === 'sharing' ? '#7E22CE' : '#6B7280'}
+      {/* Stories Avatar Bar: Single Channels ONLY, NO "ALL" CIRCLE */}
+      <View style={styles.storiesBarWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.storiesBarContent}
+        >
+          {channels.map((channel) => {
+            const isSelected = channel.watchlistId === activeChannelId;
+            return (
+              <Pressable
+                key={channel.watchlistId}
+                onPress={() => handleSelectChannel(channel.watchlistId)}
+                style={styles.storyItem}
               >
-                2. Sharing Queues
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+                <View style={[styles.avatarRing, isSelected && styles.avatarRingActive]}>
+                  {channel.profilePicUrl ? (
+                    <Image
+                      source={{ uri: channel.profilePicUrl }}
+                      style={styles.storyAvatarImg}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.storyAvatarPlaceholder}>
+                      <Text fontSize={13} fontWeight="800" color="#6B21A8">
+                        {channel.username.slice(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text
+                  fontSize={10}
+                  fontWeight={isSelected ? '800' : '600'}
+                  color={isSelected ? '#7E22CE' : '#4B5563'}
+                  numberOfLines={1}
+                  style={styles.storyHandleText}
+                >
+                  @{channel.username}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-        {/* ── INSTAGRAM STORIES-STYLE CHANNEL AVATAR BAR ── */}
-        <View style={styles.storyBarWrapper}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storyBarContent}>
-            {/* All Channels Circle */}
-            <Pressable
-              onPress={() => setSelectedChannelId(null)}
-              style={styles.storyItem}
-            >
+      {/* Channel Focus/Category Info Banner */}
+      {activeChannel && (
+        <View style={styles.channelBanner}>
+          <XStack justifyContent="space-between" alignItems="center">
+            <XStack alignItems="center" gap={6} flex={1}>
               <View
                 style={[
-                  styles.storyRing,
-                  selectedChannelId === null && styles.storyRingActive,
+                  styles.channelTypeBadge,
+                  {
+                    backgroundColor:
+                      activeChannel.channelType === 'dump' ? '#FEE2E2' : '#EDE9FE',
+                  },
                 ]}
               >
-                <View style={[styles.storyAvatarFallback, { backgroundColor: '#F3E8FF' }]}>
-                  <Text fontSize={11} fontWeight="900" color="#7E22CE">
-                    ALL
-                  </Text>
-                </View>
-              </View>
-              <Text
-                fontSize={10}
-                fontWeight={selectedChannelId === null ? '800' : '600'}
-                color={selectedChannelId === null ? '#7E22CE' : '#4B5563'}
-                numberOfLines={1}
-                style={styles.storyLabel}
-              >
-                All
-              </Text>
-            </Pressable>
-
-            {/* Individual Channels */}
-            {channels.map((ch) => {
-              const isSelected = selectedChannelId === ch.watchlistId;
-              const initials = (ch.username || '').replace(/^@/, '').substring(0, 2).toUpperCase();
-              return (
-                <Pressable
-                  key={ch.watchlistId}
-                  onPress={() => setSelectedChannelId(ch.watchlistId)}
-                  style={styles.storyItem}
+                <Text
+                  fontSize={10}
+                  fontWeight="900"
+                  color={activeChannel.channelType === 'dump' ? '#DC2626' : '#7E22CE'}
                 >
-                  <View
-                    style={[
-                      styles.storyRing,
-                      isSelected && styles.storyRingActive,
-                    ]}
-                  >
-                    {ch.profilePicUrl ? (
-                      <Image
-                        source={{ uri: ch.profilePicUrl }}
-                        style={styles.storyAvatar}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={[styles.storyAvatarFallback, { backgroundColor: '#EDE9FE' }]}>
-                        <Text fontSize={11} fontWeight="900" color="#7E22CE">
-                          {initials}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text
-                    fontSize={10}
-                    fontWeight={isSelected ? '800' : '600'}
-                    color={isSelected ? '#7E22CE' : '#4B5563'}
-                    numberOfLines={1}
-                    style={styles.storyLabel}
-                  >
-                    @{ch.username}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+                  {(activeChannel.channelType || 'focus').toUpperCase()}
+                </Text>
+              </View>
+              <Text fontSize={12} fontWeight="800" color="#1F2937">
+                @{activeChannel.username}
+              </Text>
+              {activeChannel.targetDemography && (
+                <Text fontSize={11} color="#6B7280" numberOfLines={1}>
+                  • {activeChannel.targetDemography}
+                </Text>
+              )}
+            </XStack>
 
-        {/* ── ACTIVE FILTER CHIPS STRIP ── */}
-        {computedFilterChips.length > 0 && (
-          <View style={styles.filterChipsWrapper}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsContent}>
-              {computedFilterChips.map((chip) => (
-                <View key={chip.id} style={styles.chipPill}>
-                  <Text fontSize={11} fontWeight="700" color="#7E22CE">
-                    {chip.label}
+            {onSaveClassification && (
+              <Pressable
+                onPress={() => setClassificationModalVisible(true)}
+                hitSlop={6}
+                style={styles.gearBtn}
+              >
+                <LuSettings size={14} color="#6B7280" />
+              </Pressable>
+            )}
+          </XStack>
+
+          {/* Category focus chips */}
+          {activeChannel.categoryFocus && activeChannel.categoryFocus.length > 0 && (
+            <XStack gap={4} marginTop={6} flexWrap="wrap">
+              {activeChannel.categoryFocus.map((cat) => (
+                <View key={cat} style={styles.categoryFocusChip}>
+                  <Text fontSize={9} fontWeight="700" color="#4B5563">
+                    {cat}
                   </Text>
-                  <Pressable onPress={() => removeFilterChip(chip.id)} hitSlop={6}>
-                    <LuX size={12} color="#7E22CE" />
-                  </Pressable>
                 </View>
               ))}
-            </ScrollView>
-          </View>
-        )}
-      </YStack>
+            </XStack>
+          )}
+        </View>
+      )}
 
-      {/* ── MAIN CONTENT TABS ── */}
+      {/* Search Input Bar */}
+      <View style={styles.searchBarWrapper}>
+        <View style={styles.searchInnerBox}>
+          <LuSearch size={15} color="#9CA3AF" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={`Search ${activeChannel ? '@' + activeChannel.username : ''} queue...`}
+            placeholderTextColor="#9CA3AF"
+            style={styles.searchInput}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={6}>
+              <LuX size={15} color="#9CA3AF" />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Queue Count & Sort Indicator */}
+      <XStack
+        paddingHorizontal={16}
+        paddingVertical={6}
+        justifyContent="space-between"
+        alignItems="center"
+      >
+        <Text fontSize={11} fontWeight="700" color="#6B7280">
+          {loading
+            ? 'Loading queue items...'
+            : `${filteredAndSortedItems.length} ${showPosted ? 'posted' : 'pending'} product(s)`}
+        </Text>
+        <XStack alignItems="center" gap={4}>
+          <LuClock size={11} color="#7E22CE" />
+          <Text fontSize={10} fontWeight="700" color="#7E22CE">
+            Sorted by Scheduled Time
+          </Text>
+        </XStack>
+      </XStack>
+
+      {/* Main Queue List */}
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#7E22CE" />
-          <Text fontSize={12} color="#6B7280" marginTop={8}>
-            Loading post planner items...
+          <Text fontSize={12} color="#6B7280" marginTop={10}>
+            Loading posting queue...
           </Text>
         </View>
-      ) : activeTab === 'curation' ? (
-        /* ── TAB 1: CURATION GRID ── */
+      ) : filteredAndSortedItems.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <Text fontSize={14} fontWeight="800" color="#4B5563">
+            {showPosted ? 'No posted items yet' : 'No pending posts in queue'}
+          </Text>
+          <Text fontSize={12} color="#9CA3AF" marginTop={4} textAlign="center" paddingHorizontal={30}>
+            {showPosted
+              ? 'When items are shared to Instagram, they will appear here in the posted archive.'
+              : 'Curate catalog items in the Post Curation screen to add them to this channel queue.'}
+          </Text>
+        </View>
+      ) : (
         <FlatList
-          data={visibleCurationItems}
-          keyExtractor={(item) => item.productId}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
-          contentContainerStyle={styles.gridContainer}
+          data={filteredAndSortedItems}
+          keyExtractor={(it) => it.productId}
+          contentContainerStyle={styles.listContentContainer}
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          renderItem={({ item }) => (
-            <PostPlannerMediaTile
-              item={item}
-              onPress={handleOpenProductModal}
-            />
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconCircle}>
-                <LuFolder size={32} color="#7E22CE" />
-              </View>
-              <Text fontSize={15} fontWeight="800" color="#1F2937" marginTop={12}>
-                No Items Found
-              </Text>
-              <Text fontSize={12} color="#6B7280" textAlign="center" marginTop={4} maxWidth={280}>
-                No products match the selected filters. Toggle "Curated" or clear active filters.
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setFilterState({ ...DEFAULT_STARRED_FILTER_STATE, isStarred: null });
-                  setSearchQuery('');
-                  setSelectedChannelId(null);
-                }}
-                style={styles.clearFiltersBtn}
-              >
-                <Text fontSize={12} fontWeight="800" color="#7E22CE">
-                  Clear All Filters
-                </Text>
-              </Pressable>
-            </View>
-          }
-        />
-      ) : (
-        /* ── TAB 2: SHARING QUEUES & SUGGESTIONS ── */
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-          {activeChannel && (
-            <View style={styles.channelBannerCard}>
-              <XStack justifyContent="space-between" alignItems="center">
-                <XStack alignItems="center" gap={10} flex={1}>
-                  <View style={[styles.storyRing, styles.storyRingActive, { width: 44, height: 44, borderRadius: 22 }]}>
-                    {activeChannel.profilePicUrl ? (
-                      <Image source={{ uri: activeChannel.profilePicUrl }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-                    ) : (
-                      <View style={[styles.storyAvatarFallback, { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EDE9FE' }]}>
-                        <Text fontSize={10} fontWeight="900" color="#7E22CE">
-                          {(activeChannel.username || '').replace(/^@/, '').substring(0, 2).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <YStack flex={1}>
-                    <XStack alignItems="center" gap={6}>
-                      <Text fontSize={14} fontWeight="900" color="#1F2937">
-                        @{activeChannel.username}
+          renderItem={({ item }) => {
+            const assignment = (item.channelAssignments || []).find(
+              (a) => a.watchlistId === activeChannelId
+            );
+
+            const scheduledDate = assignment?.scheduledAt ? new Date(assignment.scheduledAt) : null;
+            const isShared = assignment?.status === 'shared';
+
+            return (
+              <View style={styles.queueCard}>
+                <Pressable
+                  onPress={() => openActionModal(item)}
+                  style={styles.cardMainRow}
+                >
+                  {/* Thumbnail */}
+                  {item.primaryImageUrl ? (
+                    <Image
+                      source={{ uri: item.primaryImageUrl }}
+                      style={styles.cardThumbnail}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={[styles.cardThumbnail, styles.thumbnailPlaceholder]}>
+                      <LuCamera size={22} color="#9CA3AF" />
+                    </View>
+                  )}
+
+                  {/* Info Column */}
+                  <YStack flex={1} gap={3}>
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={13} fontWeight="900" color="#111827">
+                        {item.productCode || 'ITEM'}
                       </Text>
-                      <View style={[styles.typeBadge, activeChannel.channelType === 'dump' && styles.dumpBadge]}>
-                        <Text fontSize={9} fontWeight="800" color={activeChannel.channelType === 'dump' ? '#6B7280' : '#7E22CE'}>
-                          {activeChannel.channelType === 'dump' ? '📦 DUMP' : '🎯 FOCUS'}
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          {
+                            backgroundColor: isShared
+                              ? '#ECFDF5'
+                              : assignment?.status === 'scheduled'
+                              ? '#F5F3FF'
+                              : '#FFFBEB',
+                          },
+                        ]}
+                      >
+                        <Text
+                          fontSize={9}
+                          fontWeight="800"
+                          color={
+                            isShared
+                              ? '#059669'
+                              : assignment?.status === 'scheduled'
+                              ? '#7E22CE'
+                              : '#D97706'
+                          }
+                        >
+                          {(assignment?.status || 'assigned').toUpperCase()}
                         </Text>
                       </View>
                     </XStack>
-                    <Text fontSize={11} color="#6B7280">
-                      {activeChannel.targetDemography || 'All Audience'}
+
+                    <Text fontSize={12} color="#4B5563" numberOfLines={1}>
+                      {item.title || 'Product Item'}
                     </Text>
-                  </YStack>
-                </XStack>
 
-                <Pressable
-                  onPress={() => handleOpenClassifyModal(activeChannel)}
-                  style={styles.configBtn}
-                >
-                  <LuSettings size={14} color="#7E22CE" />
-                  <Text fontSize={11} fontWeight="800" color="#7E22CE">
-                    Config
-                  </Text>
-                </Pressable>
-              </XStack>
+                    <XStack alignItems="center" gap={8} marginTop={2}>
+                      <Text fontSize={13} fontWeight="900" color="#7E22CE">
+                        ₹{Number(item.price || 0).toLocaleString('en-IN')}
+                      </Text>
+                      {(item.mediaCount ?? 0) > 0 && (
+                        <View style={styles.mediaCountBadge}>
+                          <LuCamera size={9} color="#6B7280" />
+                          <Text fontSize={9} fontWeight="700" color="#6B7280">
+                            {item.mediaCount}
+                          </Text>
+                        </View>
+                      )}
+                      {item.category && (
+                        <Text fontSize={10} color="#9CA3AF">
+                          • {item.category}
+                        </Text>
+                      )}
+                    </XStack>
 
-              {/* Category Focus Chips */}
-              {(activeChannel.categoryFocus || []).length > 0 && (
-                <XStack gap={6} flexWrap="wrap" marginTop={8}>
-                  {activeChannel.categoryFocus.map((cat: string, idx: number) => (
-                    <View key={idx} style={styles.focusPill}>
-                      <Text fontSize={10} fontWeight="700" color="#4B5563">
-                        {cat}
+                    {/* Scheduled Slot Chip */}
+                    <View style={styles.scheduleSlotChip}>
+                      <LuClock size={11} color={scheduledDate ? '#6B21A8' : '#9CA3AF'} />
+                      <Text
+                        fontSize={10}
+                        fontWeight="700"
+                        color={scheduledDate ? '#6B21A8' : '#6B7280'}
+                      >
+                        {scheduledDate
+                          ? scheduledDate.toLocaleString('en-IN', {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                              timeZone: 'Asia/Kolkata',
+                            }) + ' IST'
+                          : 'Not scheduled yet'}
                       </Text>
                     </View>
-                  ))}
+                  </YStack>
+                </Pressable>
+
+                {/* Bottom Quick Action Strip */}
+                <XStack
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  borderTopWidth={1}
+                  borderTopColor="#F3F4F6"
+                  justifyContent="flex-end"
+                  alignItems="center"
+                  gap={8}
+                >
+                  {!isShared && (
+                    <Pressable
+                      onPress={() => handleQuickSkip(item)}
+                      hitSlop={6}
+                      style={styles.skipBtn}
+                    >
+                      <LuBan size={12} color="#DC2626" />
+                      <Text fontSize={11} fontWeight="700" color="#DC2626">
+                        Skip
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  <Pressable
+                    onPress={() => openActionModal(item)}
+                    style={styles.actionBtn}
+                  >
+                    <LuShare2 size={12} color="#FFFFFF" />
+                    <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+                      {isShared ? 'View / Edit Post' : 'Post / Schedule'}
+                    </Text>
+                  </Pressable>
                 </XStack>
-              )}
-            </View>
-          )}
-
-          {/* Channel Suggestions Section */}
-          <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={16} paddingVertical={8}>
-            <Text fontSize={13} fontWeight="900" color="#1F2937">
-              Matching Product Suggestions ({channelSuggestions.length})
-            </Text>
-            <Text fontSize={11} color="#6B7280">
-              Tap any tile to schedule
-            </Text>
-          </XStack>
-
-          <View style={styles.suggestionsGrid}>
-            {channelSuggestions.map((item) => (
-              <PostPlannerMediaTile
-                key={item.productId}
-                item={item}
-                onPress={handleOpenProductModal}
-              />
-            ))}
-            {channelSuggestions.length === 0 && (
-              <View style={[styles.emptyContainer, { width: '100%' }]}>
-                <Text fontSize={13} fontWeight="700" color="#6B7280">
-                  No pending suggestions match this channel's focus tags.
-                </Text>
               </View>
-            )}
-          </View>
-        </ScrollView>
+            );
+          }}
+        />
       )}
 
-      {/* ── UNIVERSAL CATALOG FILTER DRAWER ── */}
+      {/* Universal Catalog Filter Drawer */}
       <CatalogFilterDrawer
         visible={filterDrawerVisible}
         onClose={() => setFilterDrawerVisible(false)}
         current={filterState}
-        onApply={(f) => {
-          setFilterState(f);
-          setFilterDrawerVisible(false);
-        }}
+        onApply={setFilterState}
       />
 
-      {/* ── UNIFIED POST CURATION & SCHEDULE MODAL ── */}
-      <PostCurationModal
-        visible={curationModalVisible}
-        item={selectedProductForModal}
-        channels={channels}
-        onClose={() => setCurationModalVisible(false)}
-        onSaveMatching={onSaveMatching}
-        onRecordAction={onRecordAction}
-      />
+      {/* Channel Classification Modal */}
+      {activeChannel && onSaveClassification && (
+        <ChannelClassificationModal
+          visible={classificationModalVisible}
+          channel={activeChannel}
+          onClose={() => setClassificationModalVisible(false)}
+          onSaveClassification={onSaveClassification}
+        />
+      )}
 
-      {/* ── CHANNEL CLASSIFICATION MODAL ── */}
-      <ChannelClassificationModal
-        visible={classificationModalVisible}
-        channel={classificationTargetChannel}
-        onClose={() => setClassificationModalVisible(false)}
-        onSaveClassification={onSaveClassification}
-      />
+      {/* Action / Posting Execution Modal */}
+      {actionItem && (
+        <Modal
+          visible={actionModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setActionModalVisible(false)}
+        >
+          <View style={styles.actionBackdrop}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setActionModalVisible(false)}
+            />
+            <View style={styles.actionSheetContainer}>
+              <View style={styles.dragHandleWrapper}>
+                <View style={styles.dragHandle} />
+              </View>
+
+              <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={16} paddingBottom={10}>
+                <YStack>
+                  <Text fontSize={15} fontWeight="900" color="#111827">
+                    Execute Posting: @{activeChannel?.username}
+                  </Text>
+                  <Text fontSize={11} color="#6B7280">
+                    Product: {actionItem.productCode || 'ITEM'} • ₹{actionItem.price}
+                  </Text>
+                </YStack>
+                <Pressable
+                  onPress={() => setActionModalVisible(false)}
+                  hitSlop={8}
+                  style={styles.closeBtn}
+                >
+                  <LuX size={18} color="#6B7280" />
+                </Pressable>
+              </XStack>
+
+              <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+                <YStack gap={12} paddingBottom={24}>
+                  {/* Action Mode Switcher */}
+                  <XStack gap={8}>
+                    <Pressable
+                      onPress={() => setActionType('shared_now')}
+                      style={[
+                        styles.modeBtn,
+                        actionType === 'shared_now' && styles.modeBtnActive,
+                      ]}
+                    >
+                      <LuShare2 size={13} color={actionType === 'shared_now' ? '#7E22CE' : '#6B7280'} />
+                      <Text
+                        fontSize={11}
+                        fontWeight="700"
+                        color={actionType === 'shared_now' ? '#7E22CE' : '#4B5563'}
+                      >
+                        Mark Shared
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setActionType('scheduled')}
+                      style={[
+                        styles.modeBtn,
+                        actionType === 'scheduled' && styles.modeBtnActive,
+                      ]}
+                    >
+                      <LuClock size={13} color={actionType === 'scheduled' ? '#7E22CE' : '#6B7280'} />
+                      <Text
+                        fontSize={11}
+                        fontWeight="700"
+                        color={actionType === 'scheduled' ? '#7E22CE' : '#4B5563'}
+                      >
+                        Reschedule
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => setActionType('excluded')}
+                      style={[
+                        styles.modeBtn,
+                        actionType === 'excluded' && styles.modeBtnActive,
+                      ]}
+                    >
+                      <LuBan size={13} color={actionType === 'excluded' ? '#DC2626' : '#6B7280'} />
+                      <Text
+                        fontSize={11}
+                        fontWeight="700"
+                        color={actionType === 'excluded' ? '#DC2626' : '#4B5563'}
+                      >
+                        Skip
+                      </Text>
+                    </Pressable>
+                  </XStack>
+
+                  {/* Scheduled Slot Input */}
+                  {actionType === 'scheduled' && (
+                    <YStack gap={4}>
+                      <Text fontSize={11} fontWeight="800" color="#374151">
+                        Scheduled ISO Date / Time (IST):
+                      </Text>
+                      <TextInput
+                        value={actionScheduledTime}
+                        onChangeText={setActionScheduledTime}
+                        placeholder="e.g. 2026-09-28T18:00:00Z"
+                        placeholderTextColor="#9CA3AF"
+                        style={styles.actionInput}
+                      />
+                    </YStack>
+                  )}
+
+                  {/* Published URL for Shared Now */}
+                  {actionType === 'shared_now' && (
+                    <YStack gap={4}>
+                      <Text fontSize={11} fontWeight="800" color="#374151">
+                        Instagram Post URL (Optional):
+                      </Text>
+                      <TextInput
+                        value={actionPublishedUrl}
+                        onChangeText={setActionPublishedUrl}
+                        placeholder="https://www.instagram.com/p/..."
+                        placeholderTextColor="#9CA3AF"
+                        style={styles.actionInput}
+                      />
+                    </YStack>
+                  )}
+
+                  {/* Caption Input */}
+                  <YStack gap={4}>
+                    <Text fontSize={11} fontWeight="800" color="#374151">
+                      Post Caption:
+                    </Text>
+                    <TextInput
+                      value={actionCaption}
+                      onChangeText={setActionCaption}
+                      placeholder="Write post caption..."
+                      placeholderTextColor="#9CA3AF"
+                      multiline
+                      numberOfLines={4}
+                      style={[styles.actionInput, { height: 80, textAlignVertical: 'top' }]}
+                    />
+                  </YStack>
+
+                  {/* Submit Button */}
+                  <Pressable
+                    onPress={handleExecuteAction}
+                    disabled={submittingAction}
+                    style={[styles.actionConfirmBtn, submittingAction && { opacity: 0.6 }]}
+                  >
+                    {submittingAction ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text fontSize={13} fontWeight="800" color="#FFFFFF" textAlign="center">
+                        Confirm {actionType === 'shared_now' ? 'Shared Now' : actionType === 'scheduled' ? 'Schedule' : 'Skip Channel'}
+                      </Text>
+                    )}
+                  </Pressable>
+                </YStack>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconCircleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
   filterBtnActive: {
     backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#7E22CE',
   },
-  filterBadge: {
+  badgeIndicator: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: -3,
+    right: -3,
     backgroundColor: '#7E22CE',
+    borderRadius: 8,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 3,
   },
-  countBadge: {
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 10,
-  },
-  curatedTogglePill: {
+  postedTogglePill: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     backgroundColor: '#F3F4F6',
-    paddingLeft: 8,
-    paddingRight: 2,
-    paddingVertical: 2,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  searchRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+  postedTogglePillActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
-  searchInputContainer: {
+  storiesBarWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingVertical: 8,
+  },
+  storiesBarContent: {
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  storyItem: {
+    alignItems: 'center',
+    width: 64,
+  },
+  avatarRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  avatarRingActive: {
+    borderColor: '#7E22CE',
+    borderWidth: 2.5,
+    shadowColor: '#7E22CE',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  storyAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  storyAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F3E8FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyHandleText: {
+    marginTop: 4,
+    textAlign: 'center',
+    maxWidth: 62,
+  },
+  channelBanner: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  channelTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  gearBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  categoryFocusChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  searchBarWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+  },
+  searchInnerBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F3F4F6',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 10,
-    height: 38,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingVertical: 6,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 12,
     color: '#1F2937',
-    paddingVertical: 0,
+    padding: 0,
   },
-  modeSwitcherContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+  listContentContainer: {
+    padding: 12,
+    paddingBottom: 40,
+    gap: 10,
   },
-  modeSwitcherTrack: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 3,
-  },
-  modeTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 7,
-    borderRadius: 6,
-  },
-  modeTabActive: {
+  queueCard: {
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  storyBarWrapper: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    paddingVertical: 6,
+  cardMainRow: {
+    flexDirection: 'row',
+    padding: 10,
+    gap: 10,
   },
-  storyBarContent: {
-    paddingHorizontal: 14,
-    gap: 12,
+  cardThumbnail: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
   },
-  storyItem: {
-    alignItems: 'center',
-    width: 62,
-  },
-  storyRing: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-  },
-  storyRingActive: {
-    borderColor: '#7E22CE',
-    borderWidth: 2.5,
-  },
-  storyAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  storyAvatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  thumbnailPlaceholder: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  storyLabel: {
-    marginTop: 4,
-    textAlign: 'center',
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  filterChipsWrapper: {
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  filterChipsContent: {
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  chipPill: {
+  mediaCountBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    gap: 2,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  scheduleSlotChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FAF5FF',
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: '#E9D5FF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
-  gridContainer: {
-    padding: 10,
-    paddingBottom: 24,
+  skipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
   },
-  gridRow: {
-    justifyContent: 'space-between',
-    gap: 8,
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#7E22CE',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 40,
   },
-  emptyContainer: {
+  actionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContainer: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+  },
+  dragHandleWrapper: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modeBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F3E8FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clearFiltersBtn: {
-    marginTop: 14,
-    paddingHorizontal: 14,
+    gap: 4,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F3E8FF',
-  },
-  tabContent: {
-    flex: 1,
-    paddingBottom: 24,
-  },
-  channelBannerCard: {
-    backgroundColor: '#FFFFFF',
-    margin: 16,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  typeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  modeBtnActive: {
     backgroundColor: '#F3E8FF',
+    borderColor: '#7E22CE',
   },
-  dumpBadge: {
-    backgroundColor: '#F3F4F6',
-  },
-  configBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+  actionInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
     borderRadius: 8,
-    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#1F2937',
   },
-  focusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  suggestionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    gap: 8,
+  actionConfirmBtn: {
+    backgroundColor: '#7E22CE',
+    paddingVertical: 12,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
   },
 });

@@ -570,7 +570,7 @@ export default function InstagramExplorer() {
         <View style={{ flexDirection: 'row', gap: 10 }}>
           {/* Tile 1: Product Curation */}
           <TouchableOpacity 
-            onPress={() => router.push('/utilities/instagram/post-planner?tab=curation' as any)}
+            onPress={() => router.push('/utilities/instagram/post-curation' as any)}
             activeOpacity={0.7}
             style={{ 
               width: 82, 
@@ -600,7 +600,7 @@ export default function InstagramExplorer() {
 
           {/* Tile 2: Post Planner */}
           <TouchableOpacity 
-            onPress={() => router.push('/utilities/instagram/post-planner?tab=sharing' as any)}
+            onPress={() => router.push('/utilities/instagram/post-planner' as any)}
             activeOpacity={0.7}
             style={{ 
               width: 82, 

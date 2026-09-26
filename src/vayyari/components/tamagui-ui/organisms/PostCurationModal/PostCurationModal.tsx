@@ -11,6 +11,7 @@ import {
   LuCamera,
   LuStar,
   LuLayers,
+  LuSparkles,
 } from '../../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -39,6 +40,8 @@ export interface PostCurationModalProps {
   ) => Promise<void>;
 }
 
+import { getSearchApiUrl } from '@/utils/api-config';
+
 export function PostCurationModal({
   visible,
   item,
@@ -59,10 +62,14 @@ export function PostCurationModal({
   // Sharing Tab State
   const [shareTargetChannelId, setShareTargetChannelId] = useState<string>('');
   const [shareActionType, setShareActionType] = useState<'shared_now' | 'scheduled' | 'excluded'>('scheduled');
-  const [sharePreset, setSharePreset] = useState<'today_6pm' | 'tomorrow_11am' | 'tomorrow_630pm' | 'custom'>('today_6pm');
+  const [sharePreset, setSharePreset] = useState<'suggested' | 'today_6pm' | 'tomorrow_11am' | 'tomorrow_630pm' | 'custom'>('suggested');
+  const [customScheduleInput, setCustomScheduleInput] = useState('');
   const [sharePublishedUrl, setSharePublishedUrl] = useState('');
   const [shareCaption, setShareCaption] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Confirmation Prompt State
+  const [scheduleConfirmVisible, setScheduleConfirmVisible] = useState(false);
 
   // Initialize selectedChannelIds whenever item opens
   useEffect(() => {
@@ -77,19 +84,55 @@ export function PostCurationModal({
       setShareTargetChannelId(firstTarget);
       setShareCaption(item.title ? `${item.title} • ₹${item.price} • DM to order` : '');
       setSharePublishedUrl('');
+      setSharePreset('suggested');
+      setCustomScheduleInput('');
+      setScheduleConfirmVisible(false);
       setModalTab('affinities');
     }
   }, [item, channels]);
 
+  // Active target channel
+  const activeTargetChannel = useMemo(() => {
+    return channels.find((c) => c.watchlistId === shareTargetChannelId) || channels[0] || null;
+  }, [channels, shareTargetChannelId]);
+
+  // Next Suggested Scheduled Time (≥ 24h gap)
+  const suggestedScheduledDate = useMemo(() => {
+    if (!activeTargetChannel) return new Date();
+    if (activeTargetChannel.nextSuggestedScheduledAt) {
+      return new Date(activeTargetChannel.nextSuggestedScheduledAt);
+    }
+    if (activeTargetChannel.latestScheduledAt) {
+      const d = new Date(activeTargetChannel.latestScheduledAt);
+      d.setHours(d.getHours() + 24);
+      if (d > new Date()) return d;
+    }
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(18, 0, 0, 0);
+    return tomorrow;
+  }, [activeTargetChannel]);
+
   // Map PostPlannerChannelOption to TargetCollabAccount for the picker
   const collabAccounts: TargetCollabAccount[] = useMemo(() => {
-    return channels.map((c) => ({
-      id: c.watchlistId,
-      username: c.username,
-      displayName: c.displayName || c.username,
-      channelType: c.channelType || 'focus',
-      avatarUri: c.profilePicUrl,
-    }));
+    const cleanBase = (getSearchApiUrl() || '').replace(/\/$/, '');
+    return channels.map((c) => {
+      const resolvedAvatar = c.profilePicUrl
+        ? c.profilePicUrl.startsWith('http://') || c.profilePicUrl.startsWith('https://')
+          ? c.profilePicUrl
+          : c.profilePicUrl.startsWith('/')
+          ? `${cleanBase}${c.profilePicUrl}`
+          : `${cleanBase}/api/v1/Attachment/download?path=${encodeURIComponent(c.profilePicUrl)}`
+        : undefined;
+
+      return {
+        id: c.watchlistId,
+        username: c.username,
+        displayName: c.displayName || c.username,
+        channelType: c.channelType || 'focus',
+        avatarUri: resolvedAvatar,
+      };
+    });
   }, [channels]);
 
   if (!item) return null;
@@ -113,25 +156,35 @@ export function PostCurationModal({
     }
   };
 
-  const computePresetDate = (preset: 'today_6pm' | 'tomorrow_11am' | 'tomorrow_630pm'): string => {
+  const computePresetDate = (preset: string): string => {
+    if (preset === 'suggested') {
+      return suggestedScheduledDate.toISOString();
+    }
     const d = new Date();
     if (preset === 'today_6pm') {
       d.setHours(18, 0, 0, 0);
+      if (d <= new Date()) d.setDate(d.getDate() + 1);
     } else if (preset === 'tomorrow_11am') {
       d.setDate(d.getDate() + 1);
       d.setHours(11, 0, 0, 0);
     } else if (preset === 'tomorrow_630pm') {
       d.setDate(d.getDate() + 1);
       d.setHours(18, 30, 0, 0);
+    } else if (preset === 'custom' && customScheduleInput) {
+      const parsed = new Date(customScheduleInput);
+      if (!isNaN(parsed.getTime())) return parsed.toISOString();
     }
     return d.toISOString();
   };
 
-  const handleSubmitSharingAction = async () => {
+  const handleExecuteSharing = async (confirmedTime?: string) => {
     if (!shareTargetChannelId || !onRecordAction) return;
     try {
       setSubmittingAction(true);
-      const scheduledAt = shareActionType === 'scheduled' ? computePresetDate(sharePreset as any) : undefined;
+      const scheduledAt = shareActionType === 'scheduled'
+        ? (confirmedTime || computePresetDate(sharePreset))
+        : undefined;
+
       await onRecordAction(
         item.productId,
         shareTargetChannelId,
@@ -140,11 +193,20 @@ export function PostCurationModal({
         sharePublishedUrl.trim() || undefined,
         shareCaption.trim() || undefined
       );
+      setScheduleConfirmVisible(false);
       onClose();
     } catch (err) {
       console.error('Failed to record sharing action', err);
     } finally {
       setSubmittingAction(false);
+    }
+  };
+
+  const handlePressActionBtn = () => {
+    if (shareActionType === 'scheduled') {
+      setScheduleConfirmVisible(true);
+    } else {
+      handleExecuteSharing();
     }
   };
 
@@ -268,15 +330,12 @@ export function PostCurationModal({
           <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
             {modalTab === 'affinities' ? (
               <YStack gap={12} paddingBottom={20}>
-                <Text fontSize={12} fontWeight="800" color="#374151">
-                  Select Channel Affinities for Post Planning (Up to 10):
-                </Text>
-
                 <TargetCollabAccountPicker
+                  title="Select Channel Affinities for Post Planning"
                   accounts={collabAccounts}
                   selectedAccountIds={selectedChannelIds}
                   onToggleAccount={handleToggleAccount}
-                  maxSelections={10}
+                  isUnlimited={true}
                 />
 
                 <YStack gap={8} marginTop={12}>
@@ -342,6 +401,34 @@ export function PostCurationModal({
                   </ScrollView>
                 </YStack>
 
+                {/* 24-Hour Suggested Schedule Banner */}
+                {activeTargetChannel && (
+                  <View style={styles.suggestedSlotCard}>
+                    <XStack alignItems="center" gap={6}>
+                      <LuSparkles size={14} color="#7E22CE" />
+                      <Text fontSize={11} fontWeight="800" color="#6B21A8">
+                        Auto-Suggested Slot (≥ 24h Gap)
+                      </Text>
+                    </XStack>
+                    <Text fontSize={13} fontWeight="900" color="#1F2937" marginTop={4}>
+                      {suggestedScheduledDate.toLocaleString('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                        timeZone: 'Asia/Kolkata',
+                      })} IST
+                    </Text>
+                    {activeTargetChannel.latestScheduledAt && (
+                      <Text fontSize={10} color="#6B7280" marginTop={2}>
+                        Last scheduled: {new Date(activeTargetChannel.latestScheduledAt).toLocaleString('en-IN', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                          timeZone: 'Asia/Kolkata',
+                        })}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
                 {/* Action Type Selector */}
                 <YStack gap={6}>
                   <Text fontSize={12} fontWeight="800" color="#374151">
@@ -405,13 +492,15 @@ export function PostCurationModal({
                 {shareActionType === 'scheduled' && (
                   <YStack gap={6}>
                     <Text fontSize={12} fontWeight="800" color="#374151">
-                      Quick Scheduling Presets:
+                      Schedule Time Slot:
                     </Text>
                     <XStack gap={6} flexWrap="wrap">
                       {[
+                        { id: 'suggested', label: '⭐ Auto Suggested' },
                         { id: 'today_6pm', label: 'Today 6 PM' },
                         { id: 'tomorrow_11am', label: 'Tomorrow 11 AM' },
                         { id: 'tomorrow_630pm', label: 'Tomorrow 6:30 PM' },
+                        { id: 'custom', label: 'Custom Time' },
                       ].map((preset) => (
                         <Pressable
                           key={preset.id}
@@ -431,6 +520,21 @@ export function PostCurationModal({
                         </Pressable>
                       ))}
                     </XStack>
+
+                    {sharePreset === 'custom' && (
+                      <YStack gap={4} marginTop={4}>
+                        <Text fontSize={11} color="#6B7280">
+                          Enter custom ISO date/time or YYYY-MM-DD HH:mm:
+                        </Text>
+                        <TextInput
+                          value={customScheduleInput}
+                          onChangeText={setCustomScheduleInput}
+                          placeholder="e.g. 2026-09-28 17:30"
+                          placeholderTextColor="#9CA3AF"
+                          style={styles.textInput}
+                        />
+                      </YStack>
+                    )}
                   </YStack>
                 )}
 
@@ -468,7 +572,7 @@ export function PostCurationModal({
 
                 {/* Action Submit Button */}
                 <Pressable
-                  onPress={handleSubmitSharingAction}
+                  onPress={handlePressActionBtn}
                   disabled={submittingAction || !shareTargetChannelId}
                   style={[
                     styles.primaryActionBtn,
@@ -486,6 +590,86 @@ export function PostCurationModal({
               </YStack>
             )}
           </ScrollView>
+
+          {/* Schedule Confirmation Modal Prompt */}
+          <Modal
+            visible={scheduleConfirmVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setScheduleConfirmVisible(false)}
+          >
+            <View style={styles.confirmBackdrop}>
+              <View style={styles.confirmCard}>
+                <XStack alignItems="center" gap={8} marginBottom={12}>
+                  <View style={styles.clockIconBg}>
+                    <LuClock size={20} color="#7E22CE" />
+                  </View>
+                  <YStack flex={1}>
+                    <Text fontSize={14} fontWeight="900" color="#1F2937">
+                      Confirm Scheduled Slot
+                    </Text>
+                    <Text fontSize={11} color="#6B7280">
+                      Channel: @{activeTargetChannel?.username || 'instagram'}
+                    </Text>
+                  </YStack>
+                </XStack>
+
+                <View style={styles.confirmSlotBox}>
+                  <Text fontSize={11} fontWeight="700" color="#6B21A8">
+                    {sharePreset === 'suggested' ? 'Auto-Suggested Slot (≥24h gap):' : 'Planned Slot:'}
+                  </Text>
+                  <Text fontSize={14} fontWeight="900" color="#1F2937" marginTop={4}>
+                    {new Date(computePresetDate(sharePreset)).toLocaleString('en-IN', {
+                      dateStyle: 'full',
+                      timeStyle: 'short',
+                      timeZone: 'Asia/Kolkata',
+                    })} IST
+                  </Text>
+                </View>
+
+                <Text fontSize={11} color="#4B5563" marginTop={10} marginBottom={14}>
+                  Are you scheduling for this planned time or would you like to select a custom time?
+                </Text>
+
+                <YStack gap={8}>
+                  <Pressable
+                    onPress={() => handleExecuteSharing(computePresetDate(sharePreset))}
+                    disabled={submittingAction}
+                    style={styles.primaryActionBtn}
+                  >
+                    {submittingAction ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text fontSize={12} fontWeight="800" color="#FFFFFF" textAlign="center">
+                        Confirm This Time ({sharePreset === 'suggested' ? 'Suggested' : 'Selected'})
+                      </Text>
+                    )}
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setScheduleConfirmVisible(false);
+                      setSharePreset('custom');
+                    }}
+                    style={styles.secondaryActionBtn}
+                  >
+                    <Text fontSize={12} fontWeight="700" color="#7E22CE" textAlign="center">
+                      Choose Different / Custom Time
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setScheduleConfirmVisible(false)}
+                    style={{ paddingVertical: 6 }}
+                  >
+                    <Text fontSize={11} fontWeight="600" color="#9CA3AF" textAlign="center">
+                      Cancel
+                    </Text>
+                  </Pressable>
+                </YStack>
+              </View>
+            </View>
+          </Modal>
         </View>
       </View>
     </Modal>
@@ -657,4 +841,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1F2937',
   },
+  suggestedSlotCard: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+  },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  clockIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3E8FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmSlotBox: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    borderRadius: 8,
+    padding: 12,
+  },
 });
+

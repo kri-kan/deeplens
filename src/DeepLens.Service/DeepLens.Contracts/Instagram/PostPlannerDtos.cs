@@ -104,6 +104,12 @@ public record PostPlannerChannelOptionDto
 
     [JsonPropertyName("targetDemography")]
     public string? TargetDemography { get; init; }
+
+    [JsonPropertyName("latestScheduledAt")]
+    public DateTime? LatestScheduledAt { get; init; }
+
+    [JsonPropertyName("nextSuggestedScheduledAt")]
+    public DateTime? NextSuggestedScheduledAt { get; init; }
 }
 
 public record MatchProductChannelsRequest

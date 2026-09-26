@@ -147,6 +147,8 @@ export const API_ROUTES = {
       category?: string;
       isStarred?: boolean | null;
       curationStatus?: string;
+      watchlistId?: string;
+      channelStatus?: string;
       search?: string;
       minPrice?: number;
       maxPrice?: number;
@@ -158,6 +160,8 @@ export const API_ROUTES = {
         return `/api/v1/Insta/post-planner/items?category=${encodeURIComponent(options)}`;
       }
       const q = new URLSearchParams();
+      if (options?.watchlistId) q.append('watchlistId', options.watchlistId);
+      if (options?.channelStatus) q.append('channelStatus', options.channelStatus);
       if (options?.category) q.append('category', options.category);
       if (options?.isStarred !== undefined && options?.isStarred !== null) q.append('isStarred', String(options.isStarred));
       if (options?.curationStatus) q.append('curationStatus', options.curationStatus);

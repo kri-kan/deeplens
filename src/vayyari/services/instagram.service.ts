@@ -1131,12 +1131,16 @@ export interface PostPlannerChannelOption {
   channelType: 'focus' | 'dump';
   categoryFocus: string[];
   targetDemography?: string;
+  latestScheduledAt?: string;
+  nextSuggestedScheduledAt?: string;
 }
 
 export interface GetPostPlannerItemsOptions {
   category?: string;
   isStarred?: boolean | null;
   curationStatus?: 'pending' | 'curated' | 'all' | string;
+  watchlistId?: string;
+  channelStatus?: 'pending' | 'posted' | 'all' | string;
   search?: string;
   minPrice?: number;
   maxPrice?: number;
