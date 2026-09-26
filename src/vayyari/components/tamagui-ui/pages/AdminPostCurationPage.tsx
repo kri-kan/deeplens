@@ -3,7 +3,6 @@ import {
   View,
   Pressable,
   StyleSheet,
-  ScrollView,
   FlatList,
   TextInput,
   Switch,
@@ -18,8 +17,6 @@ import {
   LuRefreshCw,
   LuSearch,
   LuX,
-  LuCamera,
-  LuStar,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import { PostPlannerMediaTile } from '../molecules/PostPlannerMediaTile';
@@ -78,54 +75,6 @@ export function AdminPostCurationPage({
   // Modal State
   const [selectedProductForModal, setSelectedProductForModal] = useState<PostPlannerItem | null>(null);
   const [curationModalVisible, setCurationModalVisible] = useState(false);
-
-  // Filter Chips
-  const computedFilterChips = useMemo(() => {
-    const chips: { id: string; label: string }[] = [];
-    if (filterState.isStarred === true) {
-      chips.push({ id: 'f-star', label: '⭐ Starred Only' });
-    } else if (filterState.isStarred === false) {
-      chips.push({ id: 'f-unstar', label: 'Unstarred Only' });
-    }
-    if (filterState.minPrice > 0 && filterState.maxPrice > 0) {
-      chips.push({ id: 'f-price', label: `₹${filterState.minPrice} - ₹${filterState.maxPrice}` });
-    } else if (filterState.minPrice > 0) {
-      chips.push({ id: 'f-minprice', label: `≥ ₹${filterState.minPrice}` });
-    } else if (filterState.maxPrice > 0) {
-      chips.push({ id: 'f-maxprice', label: `≤ ₹${filterState.maxPrice}` });
-    }
-    (filterState.categories || []).forEach((cat) => {
-      chips.push({ id: `f-cat-${cat}`, label: cat });
-    });
-    (filterState.fabrics || []).forEach((fab) => {
-      chips.push({ id: `f-fab-${fab}`, label: fab });
-    });
-    if (filterState.sortBy && filterState.sortBy !== 'recent') {
-      chips.push({ id: 'f-sort', label: `Sort: ${filterState.sortBy}` });
-    }
-    return chips;
-  }, [filterState]);
-
-  const removeFilterChip = (chipId: string) => {
-    setFilterState((prev) => {
-      const next = { ...prev };
-      if (chipId === 'f-star' || chipId === 'f-unstar') {
-        next.isStarred = null;
-      } else if (chipId === 'f-price' || chipId === 'f-minprice' || chipId === 'f-maxprice') {
-        next.minPrice = 0;
-        next.maxPrice = 0;
-      } else if (chipId.startsWith('f-cat-')) {
-        const cat = chipId.replace('f-cat-', '');
-        next.categories = (next.categories || []).filter((c) => c !== cat);
-      } else if (chipId.startsWith('f-fab-')) {
-        const fab = chipId.replace('f-fab-', '');
-        next.fabrics = (next.fabrics || []).filter((f) => f !== fab);
-      } else if (chipId === 'f-sort') {
-        next.sortBy = 'recent';
-      }
-      return next;
-    });
-  };
 
   // Filter items
   const visibleItems = useMemo(() => {
@@ -282,29 +231,6 @@ export function AdminPostCurationPage({
         </View>
       </View>
 
-      {/* Removable Active Filter Chips */}
-      {computedFilterChips.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipsScroll}
-          contentContainerStyle={styles.chipsScrollContent}
-        >
-          {computedFilterChips.map((chip) => (
-            <Pressable
-              key={chip.id}
-              onPress={() => removeFilterChip(chip.id)}
-              style={styles.activeFilterChip}
-            >
-              <Text fontSize={11} fontWeight="700" color="#7E22CE">
-                {chip.label}
-              </Text>
-              <LuX size={11} color="#7E22CE" />
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
       {/* Subheader Count Bar */}
       <XStack
         paddingHorizontal={16}
@@ -322,7 +248,7 @@ export function AdminPostCurationPage({
         )}
       </XStack>
 
-      {/* Main Visual Product Grid (2 columns, no channel heads on tiles) */}
+      {/* Main Visual Product Grid (3 columns, no channel heads on tiles) */}
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#7E22CE" />
@@ -345,7 +271,7 @@ export function AdminPostCurationPage({
         <FlatList
           data={visibleItems}
           keyExtractor={(it) => it.productId}
-          numColumns={2}
+          numColumns={3}
           contentContainerStyle={styles.gridContentContainer}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
@@ -435,6 +361,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   searchInnerBox: {
     flexDirection: 'row',
@@ -451,34 +379,14 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     padding: 0,
   },
-  chipsScroll: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  chipsScrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    gap: 6,
-  },
-  activeFilterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#D8B4FE',
-    gap: 4,
-  },
   gridContentContainer: {
-    padding: 12,
+    paddingVertical: 8,
     paddingBottom: 40,
   },
   columnWrapper: {
-    gap: 12,
-    marginBottom: 12,
+    gap: 6,
+    paddingHorizontal: 12,
+    marginBottom: 6,
   },
   centerContainer: {
     flex: 1,

@@ -28,8 +28,10 @@ import {
   LuCamera,
   LuSparkles,
   LuCalendar,
+  LuStar,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
+import { getSearchApiUrl } from '@/utils/api-config';
 import { ChannelClassificationModal } from '../organisms/ChannelClassificationModal';
 import {
   CatalogFilterDrawer,
@@ -44,6 +46,171 @@ import type {
 } from '@/services/instagram.service';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+function formatScheduledBadge(scheduledAt?: string | null): string | null {
+  if (!scheduledAt) return null;
+  const d = new Date(scheduledAt);
+  if (isNaN(d.getTime())) return null;
+
+  const now = new Date();
+  const isToday =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear();
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const isTomorrow =
+    d.getDate() === tomorrow.getDate() &&
+    d.getMonth() === tomorrow.getMonth() &&
+    d.getFullYear() === tomorrow.getFullYear();
+
+  const mins = d.getMinutes();
+  const timeStr = d
+    .toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: mins !== 0 ? '2-digit' : undefined,
+      hour12: true,
+      timeZone: 'Asia/Kolkata',
+    })
+    .toUpperCase()
+    .replace(/\s/g, '');
+
+  if (isToday) {
+    return `Today ${timeStr}`;
+  }
+  if (isTomorrow) {
+    return `Tmrw ${timeStr}`;
+  }
+
+  const monthStr = d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  });
+
+  return `${monthStr} ${timeStr}`;
+}
+
+export interface PlannerMediaTileProps {
+  item: PostPlannerItem;
+  activeChannelId: string;
+  onPress: (item: PostPlannerItem) => void;
+}
+
+export const PlannerMediaTile = React.memo(function PlannerMediaTile({
+  item,
+  activeChannelId,
+  onPress,
+}: PlannerMediaTileProps) {
+  const assignment = useMemo(() => {
+    return (item.channelAssignments || []).find((a) => a.watchlistId === activeChannelId);
+  }, [item.channelAssignments, activeChannelId]);
+
+  const status = assignment?.status || 'pending';
+  const isShared = status === 'shared';
+  const isScheduled = status === 'scheduled';
+
+  // Border highlighting:
+  // - shared (posted): green border (#10B981, borderWidth: 2)
+  // - scheduled: purple border (#7E22CE, borderWidth: 2)
+  // - pending / assigned: yellow border (#F59E0B, borderWidth: 2)
+  const borderColor = useMemo(() => {
+    if (isShared) return '#10B981';
+    if (isScheduled) return '#7E22CE';
+    return '#F59E0B';
+  }, [isShared, isScheduled]);
+
+  const scheduledBadgeText = useMemo(() => {
+    return formatScheduledBadge(assignment?.scheduledAt);
+  }, [assignment?.scheduledAt]);
+
+  const imageUri = useMemo(() => {
+    if (!item.primaryImageUrl) return null;
+    if (item.primaryImageUrl.startsWith('http://') || item.primaryImageUrl.startsWith('https://')) {
+      return item.primaryImageUrl;
+    }
+    const baseUrl = getSearchApiUrl() || '';
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    if (item.primaryImageUrl.startsWith('/')) {
+      return `${cleanBaseUrl}${item.primaryImageUrl}`;
+    }
+    return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(item.primaryImageUrl)}`;
+  }, [item.primaryImageUrl]);
+
+  return (
+    <Pressable
+      onPress={() => onPress(item)}
+      style={({ pressed }) => [
+        styles.gridTile,
+        { borderColor },
+        pressed && styles.tilePressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Product ${item.productCode}, Price ₹${item.price}`}
+    >
+      <View style={styles.tileImageWrapper}>
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.tileImage}
+            contentFit="cover"
+            recyclingKey={item.productId}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <View style={styles.tileImagePlaceholder}>
+            <LuCamera size={22} color="#9CA3AF" />
+          </View>
+        )}
+
+        {/* Top-Left: Star badge if isStarred */}
+        {item.isStarred && (
+          <View style={styles.starBadge}>
+            <LuStar size={10} color="#F59E0B" />
+          </View>
+        )}
+
+        {/* Bottom-Left: Media count badge if mediaCount > 0 */}
+        {(item.mediaCount ?? 0) > 0 && (
+          <View style={styles.mediaCountBadge}>
+            <LuCamera size={8} color="#FFFFFF" />
+            <Text fontSize={8} fontWeight="700" color="#FFFFFF">
+              {item.mediaCount}
+            </Text>
+          </View>
+        )}
+
+        {/* Bottom-Right: Scheduled time badge (or posted badge) */}
+        {isShared ? (
+          <View style={[styles.timeBadge, styles.sharedBadge]}>
+            <LuCheck size={8} color="#FFFFFF" />
+            <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+              {scheduledBadgeText || 'POSTED'}
+            </Text>
+          </View>
+        ) : scheduledBadgeText ? (
+          <View style={[styles.timeBadge, styles.scheduledBadge]}>
+            <LuClock size={8} color="#FFFFFF" />
+            <Text fontSize={8} fontWeight="800" color="#FFFFFF" numberOfLines={1}>
+              {scheduledBadgeText}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Compact bottom bar: Product SKU and Price */}
+        <View style={styles.tileBottomBar}>
+          <Text fontSize={9} fontWeight="800" color="#FFFFFF" numberOfLines={1} style={styles.skuText}>
+            {item.productCode || 'ITEM'}
+          </Text>
+          <Text fontSize={9} fontWeight="900" color="#FCD34D" numberOfLines={1}>
+            ₹{Number(item.price || 0).toLocaleString('en-IN')}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+});
 
 export interface AdminPostPlannerPageProps {
   channels: PostPlannerChannelOption[];
@@ -212,7 +379,13 @@ export function AdminPostPlannerPage({
       (a) => a.watchlistId === activeChannelId
     );
     setActionItem(item);
-    setActionType(showPosted ? 'scheduled' : 'shared_now');
+    if (assignment?.status === 'scheduled') {
+      setActionType('scheduled');
+    } else if (assignment?.status === 'shared') {
+      setActionType('shared_now');
+    } else {
+      setActionType('shared_now');
+    }
     setActionScheduledTime(assignment?.scheduledAt || '');
     setActionPublishedUrl(assignment?.publishedUrl || '');
     setActionCaption(assignment?.captionUsed || (item.title ? `${item.title} • ₹${item.price} • DM to order` : ''));
@@ -237,15 +410,6 @@ export function AdminPostPlannerPage({
       console.error('Failed to submit post action', err);
     } finally {
       setSubmittingAction(false);
-    }
-  };
-
-  const handleQuickSkip = async (item: PostPlannerItem) => {
-    if (!activeChannelId || !onRecordAction) return;
-    try {
-      await onRecordAction(item.productId, activeChannelId, 'excluded');
-    } catch (err) {
-      console.error('Failed to skip product for channel', err);
     }
   };
 
@@ -496,150 +660,19 @@ export function AdminPostPlannerPage({
         <FlatList
           data={filteredAndSortedItems}
           keyExtractor={(it) => it.productId}
+          numColumns={3}
           contentContainerStyle={styles.listContentContainer}
+          columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={onRefresh}
-          renderItem={({ item }) => {
-            const assignment = (item.channelAssignments || []).find(
-              (a) => a.watchlistId === activeChannelId
-            );
-
-            const scheduledDate = assignment?.scheduledAt ? new Date(assignment.scheduledAt) : null;
-            const isShared = assignment?.status === 'shared';
-
-            return (
-              <View style={styles.queueCard}>
-                <Pressable
-                  onPress={() => openActionModal(item)}
-                  style={styles.cardMainRow}
-                >
-                  {/* Thumbnail */}
-                  {item.primaryImageUrl ? (
-                    <Image
-                      source={{ uri: item.primaryImageUrl }}
-                      style={styles.cardThumbnail}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={[styles.cardThumbnail, styles.thumbnailPlaceholder]}>
-                      <LuCamera size={22} color="#9CA3AF" />
-                    </View>
-                  )}
-
-                  {/* Info Column */}
-                  <YStack flex={1} gap={3}>
-                    <XStack justifyContent="space-between" alignItems="center">
-                      <Text fontSize={13} fontWeight="900" color="#111827">
-                        {item.productCode || 'ITEM'}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          {
-                            backgroundColor: isShared
-                              ? '#ECFDF5'
-                              : assignment?.status === 'scheduled'
-                              ? '#F5F3FF'
-                              : '#FFFBEB',
-                          },
-                        ]}
-                      >
-                        <Text
-                          fontSize={9}
-                          fontWeight="800"
-                          color={
-                            isShared
-                              ? '#059669'
-                              : assignment?.status === 'scheduled'
-                              ? '#7E22CE'
-                              : '#D97706'
-                          }
-                        >
-                          {(assignment?.status || 'assigned').toUpperCase()}
-                        </Text>
-                      </View>
-                    </XStack>
-
-                    <Text fontSize={12} color="#4B5563" numberOfLines={1}>
-                      {item.title || 'Product Item'}
-                    </Text>
-
-                    <XStack alignItems="center" gap={8} marginTop={2}>
-                      <Text fontSize={13} fontWeight="900" color="#7E22CE">
-                        ₹{Number(item.price || 0).toLocaleString('en-IN')}
-                      </Text>
-                      {(item.mediaCount ?? 0) > 0 && (
-                        <View style={styles.mediaCountBadge}>
-                          <LuCamera size={9} color="#6B7280" />
-                          <Text fontSize={9} fontWeight="700" color="#6B7280">
-                            {item.mediaCount}
-                          </Text>
-                        </View>
-                      )}
-                      {item.category && (
-                        <Text fontSize={10} color="#9CA3AF">
-                          • {item.category}
-                        </Text>
-                      )}
-                    </XStack>
-
-                    {/* Scheduled Slot Chip */}
-                    <View style={styles.scheduleSlotChip}>
-                      <LuClock size={11} color={scheduledDate ? '#6B21A8' : '#9CA3AF'} />
-                      <Text
-                        fontSize={10}
-                        fontWeight="700"
-                        color={scheduledDate ? '#6B21A8' : '#6B7280'}
-                      >
-                        {scheduledDate
-                          ? scheduledDate.toLocaleString('en-IN', {
-                              dateStyle: 'medium',
-                              timeStyle: 'short',
-                              timeZone: 'Asia/Kolkata',
-                            }) + ' IST'
-                          : 'Not scheduled yet'}
-                      </Text>
-                    </View>
-                  </YStack>
-                </Pressable>
-
-                {/* Bottom Quick Action Strip */}
-                <XStack
-                  paddingHorizontal={12}
-                  paddingVertical={8}
-                  borderTopWidth={1}
-                  borderTopColor="#F3F4F6"
-                  justifyContent="flex-end"
-                  alignItems="center"
-                  gap={8}
-                >
-                  {!isShared && (
-                    <Pressable
-                      onPress={() => handleQuickSkip(item)}
-                      hitSlop={6}
-                      style={styles.skipBtn}
-                    >
-                      <LuBan size={12} color="#DC2626" />
-                      <Text fontSize={11} fontWeight="700" color="#DC2626">
-                        Skip
-                      </Text>
-                    </Pressable>
-                  )}
-
-                  <Pressable
-                    onPress={() => openActionModal(item)}
-                    style={styles.actionBtn}
-                  >
-                    <LuShare2 size={12} color="#FFFFFF" />
-                    <Text fontSize={11} fontWeight="800" color="#FFFFFF">
-                      {isShared ? 'View / Edit Post' : 'Post / Schedule'}
-                    </Text>
-                  </Pressable>
-                </XStack>
-              </View>
-            );
-          }}
+          renderItem={({ item }) => (
+            <PlannerMediaTile
+              item={item}
+              activeChannelId={activeChannelId}
+              onPress={openActionModal}
+            />
+          )}
         />
       )}
 
@@ -947,6 +980,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   searchInnerBox: {
     flexDirection: 'row',
@@ -964,81 +999,104 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   listContentContainer: {
-    padding: 12,
+    paddingVertical: 8,
     paddingBottom: 40,
-    gap: 10,
   },
-  queueCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+  columnWrapper: {
+    gap: 6,
+    paddingHorizontal: 12,
+    marginBottom: 6,
   },
-  cardMainRow: {
-    flexDirection: 'row',
-    padding: 10,
-    gap: 10,
-  },
-  cardThumbnail: {
-    width: 72,
-    height: 72,
+  gridTile: {
+    flex: 1,
+    maxWidth: '32.6%',
+    aspectRatio: 1,
+    backgroundColor: '#E5E7EB',
     borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 2,
   },
-  thumbnailPlaceholder: {
+  tilePressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  tileImageWrapper: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  tileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  tileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F3F4F6',
   },
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  starBadge: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
   },
   mediaCountBadge: {
+    position: 'absolute',
+    bottom: 22,
+    left: 4,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 4,
+    paddingVertical: 1.5,
+    borderRadius: 3,
+    zIndex: 2,
   },
-  scheduleSlotChip: {
+  timeBadge: {
+    position: 'absolute',
+    bottom: 22,
+    right: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FAF5FF',
-    borderWidth: 1,
-    borderColor: '#E9D5FF',
-    paddingHorizontal: 6,
+    gap: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1.5,
+    borderRadius: 3,
+    maxWidth: '65%',
+    zIndex: 2,
+  },
+  scheduledBadge: {
+    backgroundColor: 'rgba(126, 34, 206, 0.92)',
+  },
+  sharedBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.95)',
+  },
+  tileBottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    paddingHorizontal: 4,
     paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 4,
-    alignSelf: 'flex-start',
-  },
-  skipBtn: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#FEF2F2',
+    zIndex: 2,
   },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#7E22CE',
+  skuText: {
+    flex: 1,
+    marginRight: 4,
   },
   centerContainer: {
     flex: 1,

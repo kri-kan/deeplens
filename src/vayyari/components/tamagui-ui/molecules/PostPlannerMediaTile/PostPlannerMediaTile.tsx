@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Text, XStack, YStack } from 'tamagui';
-import { LuCamera, LuStar, LuShare2, LuCheck } from '../../icons/lu';
+import { LuCamera, LuStar } from '../../icons/lu';
 import { useTheme } from '@/theme';
+import { getSearchApiUrl } from '@/utils/api-config';
 import type {
   PostPlannerItem,
   PostPlannerChannelAssignment,
@@ -14,6 +15,8 @@ export interface PostPlannerMediaTileProps {
   onPress: (item: PostPlannerItem) => void;
   getChannelColor?: (username: string) => string;
   showChannelAvatars?: boolean;
+  borderStatus?: 'curated' | 'pending' | 'posted' | 'scheduled';
+  borderColor?: string;
 }
 
 const DEFAULT_CHANNEL_COLORS: Record<string, string> = {
@@ -40,13 +43,13 @@ const defaultGetColor = (username: string): string => {
   return `hsl(${hue}, 65%, 45%)`;
 };
 
-import { getSearchApiUrl } from '@/utils/api-config';
-
 export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
   item,
   onPress,
   getChannelColor = defaultGetColor,
   showChannelAvatars = true,
+  borderStatus,
+  borderColor,
 }: PostPlannerMediaTileProps) {
   const { tokens } = useTheme();
 
@@ -68,26 +71,29 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
     return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(item.primaryImageUrl)}`;
   }, [item.primaryImageUrl]);
 
-  const statusBadgeInfo = useMemo(() => {
-    if (isCurated) {
-      return {
-        bg: 'rgba(16, 185, 129, 0.92)',
-        text: '#FFFFFF',
-        label: 'CURATED',
-      };
+  const resolvedBorderColor = useMemo(() => {
+    if (borderColor) return borderColor;
+    if (borderStatus) {
+      switch (borderStatus) {
+        case 'curated':
+        case 'posted':
+          return '#10B981';
+        case 'scheduled':
+          return '#3B82F6';
+        case 'pending':
+        default:
+          return '#F59E0B';
+      }
     }
-    return {
-      bg: 'rgba(245, 158, 11, 0.92)',
-      text: '#FFFFFF',
-      label: 'PENDING',
-    };
-  }, [isCurated]);
+    return isCurated ? '#10B981' : '#F59E0B';
+  }, [borderColor, borderStatus, isCurated]);
 
   return (
     <Pressable
       onPress={() => onPress(item)}
       style={({ pressed }) => [
         styles.tileContainer,
+        { borderColor: resolvedBorderColor },
         pressed && styles.tilePressed,
       ]}
       accessibilityRole="button"
@@ -105,30 +111,22 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
           />
         ) : (
           <View style={styles.tileImagePlaceholder}>
-            <LuCamera size={28} color="#9CA3AF" />
+            <LuCamera size={24} color="#9CA3AF" />
           </View>
         )}
 
         {/* Top-Left: Star Badge */}
         {item.isStarred && (
           <View style={styles.starBadge}>
-            <LuStar size={11} color="#F59E0B" />
+            <LuStar size={10} color="#F59E0B" />
           </View>
         )}
-
-        {/* Top-Right: Status Pill */}
-        <View style={[styles.statusBadge, { backgroundColor: statusBadgeInfo.bg }]}>
-          {isCurated && <LuCheck size={10} color="#FFFFFF" style={{ marginRight: 2 }} />}
-          <Text fontSize={9} fontWeight="800" color={statusBadgeInfo.text}>
-            {statusBadgeInfo.label}
-          </Text>
-        </View>
 
         {/* Bottom-Left: Media Count Pill */}
         {(item.mediaCount ?? 0) > 0 && (
           <View style={styles.mediaCountBadge}>
-            <LuCamera size={10} color="#FFFFFF" />
-            <Text fontSize={10} fontWeight="700" color="#FFFFFF">
+            <LuCamera size={9} color="#FFFFFF" />
+            <Text fontSize={9} fontWeight="700" color="#FFFFFF">
               {item.mediaCount}
             </Text>
           </View>
@@ -170,17 +168,17 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
       </View>
 
       {/* Compact Information Base */}
-      <YStack paddingHorizontal={8} paddingVertical={6} gap={2} backgroundColor="#FFFFFF">
+      <YStack paddingHorizontal={6} paddingVertical={4} gap={1} backgroundColor="#FFFFFF">
         <XStack justifyContent="space-between" alignItems="center">
-          <Text fontSize={11} fontWeight="800" color="#1F2937" numberOfLines={1} style={{ flex: 1 }}>
+          <Text fontSize={10} fontWeight="800" color="#1F2937" numberOfLines={1} style={{ flex: 1 }}>
             {item.productCode || 'ITEM'}
           </Text>
-          <Text fontSize={12} fontWeight="900" color="#7E22CE">
+          <Text fontSize={11} fontWeight="900" color="#7E22CE">
             ₹{Number(item.price || 0).toLocaleString('en-IN')}
           </Text>
         </XStack>
 
-        <Text fontSize={10} color="#6B7280" numberOfLines={1}>
+        <Text fontSize={9} color="#6B7280" numberOfLines={1}>
           {item.title || item.category || 'Vayyari Item'}
         </Text>
       </YStack>
@@ -191,11 +189,11 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
 const styles = StyleSheet.create({
   tileContainer: {
     flex: 1,
-    maxWidth: '49.2%',
+    maxWidth: '32.8%',
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -227,11 +225,11 @@ const styles = StyleSheet.create({
   },
   starBadge: {
     position: 'absolute',
-    top: 6,
-    left: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: 4,
+    left: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -241,44 +239,29 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  statusBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
   mediaCountBadge: {
     position: 'absolute',
-    bottom: 6,
-    left: 6,
+    bottom: 4,
+    left: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
+    gap: 2,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 8,
   },
   channelAvatarsRow: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
+    bottom: 4,
+    right: 4,
     flexDirection: 'row',
     alignItems: 'center',
   },
   miniChannelAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
