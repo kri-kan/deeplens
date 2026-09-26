@@ -20,6 +20,7 @@ import {
   LuX,
   LuDownload,
   LuLayers,
+  LuLayoutGrid,
   LuStore,
   LuExternalLink,
   LuClock,
@@ -350,10 +351,10 @@ export function AdminProductDetailPage({
             </TouchableOpacity>
           )}
 
-          {/* View Mode Toggle */}
+          {/* View Mode Toggle: Dynamic Stack/Grid Icon */}
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Toggle media presentation mode"
+            accessibilityLabel={viewMode === 'carousel' ? 'Switch to grid gallery view' : 'Switch to carousel stack view'}
             activeOpacity={0.7}
             onPress={() => setViewMode((m) => (m === 'carousel' ? 'gallery' : 'carousel'))}
           >
@@ -365,7 +366,11 @@ export function AdminProductDetailPage({
               alignItems="center"
               justifyContent="center"
             >
-              <LuLayers size={16} color="#ffffff" />
+              {viewMode === 'carousel' ? (
+                <LuLayoutGrid size={16} color="#ffffff" />
+              ) : (
+                <LuLayers size={16} color="#ffffff" />
+              )}
             </XStack>
           </TouchableOpacity>
 
@@ -424,6 +429,7 @@ export function AdminProductDetailPage({
           onMediaIndexChange={setActiveMediaIndex}
           viewMode={viewMode}
           onToggleViewMode={() => setViewMode((m) => (m === 'carousel' ? 'gallery' : 'carousel'))}
+          topInset={topInset}
           onMediaPress={(idx) => {
             setActiveMediaIndex(idx);
             setIsFullscreenPreviewOpen(true);
@@ -512,6 +518,7 @@ export function AdminProductDetailPage({
           timestamp={product.timestamp}
           description={product.exclusiveDescription}
           isArchived={product.isArchived}
+          marginTop={viewMode === 'gallery' ? 4 : -14}
           onUnarchive={onUnarchive}
           onEditPress={() => setIsEditOpen(true)}
         />
