@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, forwardRef, useImperativeHandle, useState } from 'react';
 import { StyleSheet, View, Dimensions, StyleProp, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -8,28 +8,47 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import {
+  calculateMaxTranslation,
+  calculateDoubleTapTarget,
+  clamp,
+  ZOOM_ACTIVE_THRESHOLD,
+  MIN_SCALE,
+  MAX_SCALE,
+} from '@/utils/zoomMath';
 
-interface ZoomableImageProps {
+export interface ZoomableImageRef {
+  resetZoom: () => void;
+}
+
+export interface ZoomableImageProps {
   uri: string;
   containerWidth?: number;
   containerHeight?: number;
   contentFit?: 'contain' | 'cover' | 'fill';
   style?: StyleProp<ViewStyle>;
+  isActive?: boolean;
   onZoomChange?: (isZoomed: boolean) => void;
   onSingleTap?: () => void;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export const ZoomableImage: React.FC<ZoomableImageProps> = ({
-  uri,
-  containerWidth = SCREEN_WIDTH,
-  containerHeight = SCREEN_HEIGHT * 0.7,
-  contentFit = 'contain',
-  style,
-  onZoomChange,
-  onSingleTap,
-}) => {
+export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(function ZoomableImage(
+  {
+    uri,
+    containerWidth = SCREEN_WIDTH,
+    containerHeight = SCREEN_HEIGHT * 0.7,
+    contentFit = 'contain',
+    style,
+    isActive = true,
+    onZoomChange,
+    onSingleTap,
+  },
+  ref
+) {
+  const [isZoomedInternal, setIsZoomedInternal] = useState(false);
+
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -37,57 +56,84 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
+  const updateZoomState = (zoomed: boolean) => {
+    setIsZoomedInternal(zoomed);
+    if (onZoomChange) {
+      onZoomChange(zoomed);
+    }
+  };
+
   const resetZoom = () => {
     'worklet';
-    scale.value = withTiming(1);
-    translateX.value = withTiming(0);
-    translateY.value = withTiming(0);
+    scale.value = withTiming(1, { duration: 250 });
+    translateX.value = withTiming(0, { duration: 250 });
+    translateY.value = withTiming(0, { duration: 250 });
     savedScale.value = 1;
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
-    if (onZoomChange) {
-      runOnJS(onZoomChange)(false);
-    }
+
+    runOnJS(updateZoomState)(false);
   };
+
+  // Expose imperative reset to parent
+  useImperativeHandle(ref, () => ({
+    resetZoom: () => {
+      resetZoom();
+    },
+  }));
+
+  // Auto-reset when slide becomes inactive
+  useEffect(() => {
+    if (!isActive) {
+      resetZoom();
+    }
+  }, [isActive]);
 
   const pinchGesture = Gesture.Pinch()
     .onStart(() => {
       savedScale.value = scale.value;
     })
     .onUpdate((e) => {
-      const nextScale = Math.max(1, Math.min(savedScale.value * e.scale, 5));
+      const nextScale = clamp(savedScale.value * e.scale, MIN_SCALE, MAX_SCALE);
       scale.value = nextScale;
-      if (nextScale > 1.05 && onZoomChange) {
-        runOnJS(onZoomChange)(true);
+      if (nextScale > ZOOM_ACTIVE_THRESHOLD && !isZoomedInternal) {
+        runOnJS(updateZoomState)(true);
       }
     })
     .onEnd(() => {
-      if (scale.value < 1.1) {
+      if (scale.value <= ZOOM_ACTIVE_THRESHOLD) {
         resetZoom();
       } else {
         savedScale.value = scale.value;
-        if (onZoomChange) {
-          runOnJS(onZoomChange)(true);
-        }
+        // Clamp current translation within new scale bounds so image edges don't pull inward
+        const maxTx = calculateMaxTranslation(scale.value, containerWidth);
+        const maxTy = calculateMaxTranslation(scale.value, containerHeight);
+        translateX.value = withTiming(clamp(translateX.value, -maxTx, maxTx), { duration: 150 });
+        translateY.value = withTiming(clamp(translateY.value, -maxTy, maxTy), { duration: 150 });
+        savedTranslateX.value = clamp(translateX.value, -maxTx, maxTx);
+        savedTranslateY.value = clamp(translateY.value, -maxTy, maxTy);
+        runOnJS(updateZoomState)(true);
       }
     });
 
+  // Pan gesture is strictly enabled ONLY when zoomed in (isZoomedInternal).
+  // When scale === 1, pan is disabled so horizontal swipe naturally navigates the outer FlatList!
   const panGesture = Gesture.Pan()
+    .enabled(isZoomedInternal)
     .averageTouches(true)
-    .activeOffsetX([-20, 20])
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
     })
     .onUpdate((e) => {
-      if (scale.value > 1.05) {
-        const maxTranslateX = ((scale.value - 1) * containerWidth) / 2;
-        const maxTranslateY = ((scale.value - 1) * containerHeight) / 2;
+      if (scale.value > ZOOM_ACTIVE_THRESHOLD) {
+        const maxTx = calculateMaxTranslation(scale.value, containerWidth);
+        const maxTy = calculateMaxTranslation(scale.value, containerHeight);
         const nextX = savedTranslateX.value + e.translationX;
         const nextY = savedTranslateY.value + e.translationY;
 
-        translateX.value = Math.max(-maxTranslateX, Math.min(maxTranslateX, nextX));
-        translateY.value = Math.max(-maxTranslateY, Math.min(maxTranslateY, nextY));
+        translateX.value = clamp(nextX, -maxTx, maxTx);
+        translateY.value = clamp(nextY, -maxTy, maxTy);
       }
     })
     .onEnd(() => {
@@ -98,28 +144,24 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .maxDelay(300)
-    .onEnd((e: { x: number; y: number }) => {
-      if (scale.value > 1.2) {
-        resetZoom();
-      } else {
-        const targetScale = 2.5;
-        scale.value = withTiming(targetScale);
-        savedScale.value = targetScale;
+    .onEnd((e) => {
+      const target = calculateDoubleTapTarget(
+        scale.value,
+        e.x,
+        e.y,
+        containerWidth,
+        containerHeight
+      );
 
-        const maxTranslateX = ((targetScale - 1) * containerWidth) / 2;
-        const maxTranslateY = ((targetScale - 1) * containerHeight) / 2;
-        const targetX = (containerWidth / 2 - e.x) * 1.5;
-        const targetY = (containerHeight / 2 - e.y) * 1.5;
+      scale.value = withTiming(target.scale, { duration: 250 });
+      savedScale.value = target.scale;
 
-        translateX.value = withTiming(Math.max(-maxTranslateX, Math.min(maxTranslateX, targetX)));
-        translateY.value = withTiming(Math.max(-maxTranslateY, Math.min(maxTranslateY, targetY)));
-        savedTranslateX.value = translateX.value;
-        savedTranslateY.value = translateY.value;
+      translateX.value = withTiming(target.translateX, { duration: 250 });
+      translateY.value = withTiming(target.translateY, { duration: 250 });
+      savedTranslateX.value = target.translateX;
+      savedTranslateY.value = target.translateY;
 
-        if (onZoomChange) {
-          runOnJS(onZoomChange)(true);
-        }
-      }
+      runOnJS(updateZoomState)(target.isZoomed);
     });
 
   const singleTapGesture = Gesture.Tap()
@@ -158,7 +200,7 @@ export const ZoomableImage: React.FC<ZoomableImageProps> = ({
       </GestureDetector>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

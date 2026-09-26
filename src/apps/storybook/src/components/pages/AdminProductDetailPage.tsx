@@ -19,6 +19,7 @@ import {
   LuLayers,
   LuStore,
   LuLayoutGrid,
+  LuImage,
   LuClock,
   LuTag,
   LuCalendar,
@@ -1097,14 +1098,19 @@ export function AdminProductDetailPage({
         animationType="fade"
         onRequestClose={() => setIsFullscreenPreviewOpen(false)}
       >
-        <YStack flex={1} backgroundColor="#000000" position="relative">
-          {/* Close Button */}
+        <YStack flex={1} backgroundColor="#000000" position="relative" justifyContent="center">
+          {/* Top Header Bar */}
           <XStack
             position="absolute"
             top={topInset + 12}
-            right={14}
-            zIndex={20}
+            left={0}
+            right={0}
+            paddingHorizontal={16}
+            alignItems="center"
+            justifyContent="space-between"
+            zIndex={30}
           >
+            {/* Close Button */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close fullscreen preview"
@@ -1112,9 +1118,9 @@ export function AdminProductDetailPage({
               style={{ cursor: 'pointer' } as any}
             >
               <XStack
-                width={36}
-                height={36}
-                borderRadius={18}
+                width={38}
+                height={38}
+                borderRadius={19}
                 backgroundColor="rgba(255,255,255,0.2)"
                 alignItems="center"
                 justifyContent="center"
@@ -1122,6 +1128,68 @@ export function AdminProductDetailPage({
                 <LuX size={20} color="#ffffff" />
               </XStack>
             </Pressable>
+
+            {/* n / m Index Counter Pill */}
+            <XStack
+              backgroundColor="rgba(0,0,0,0.65)"
+              paddingHorizontal={14}
+              paddingVertical={6}
+              borderRadius={tokens.radius.full}
+              alignItems="center"
+              gap={6}
+              borderWidth={1}
+              borderColor="rgba(255,255,255,0.2)"
+            >
+              <LuImage size={13} color="#ffffff" />
+              <Text fontSize={13} fontWeight="800" color="#ffffff">
+                {activeMediaIndex + 1} / {mediaList.length}
+              </Text>
+            </XStack>
+
+            {/* Top Right Actions */}
+            <XStack gap={8} alignItems="center">
+              {onStarMedia && mediaList[activeMediaIndex] && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Set as cover image"
+                  onPress={() => onStarMedia(mediaList[activeMediaIndex].id)}
+                  style={{ cursor: 'pointer' } as any}
+                >
+                  <XStack
+                    width={38}
+                    height={38}
+                    borderRadius={19}
+                    backgroundColor={mediaList[activeMediaIndex].isDefault ? tokens.accent : 'rgba(255,255,255,0.2)'}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <LuStar size={18} color="#ffffff" />
+                  </XStack>
+                </Pressable>
+              )}
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Download image"
+                onPress={() => {
+                  if (mediaList[activeMediaIndex]?.url) {
+                    window.open(mediaList[activeMediaIndex].url, '_blank');
+                  }
+                }}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <XStack
+                  width={38}
+                  height={38}
+                  borderRadius={19}
+                  backgroundColor="rgba(255,255,255,0.2)"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <LuDownload size={18} color="#ffffff" />
+                </XStack>
+              </Pressable>
+            </XStack>
           </XStack>
 
           {/* Fullscreen Image Presentation */}
@@ -1132,58 +1200,88 @@ export function AdminProductDetailPage({
                 alt="Fullscreen Preview"
                 style={{
                   maxWidth: '100%',
-                  maxHeight: '80%',
+                  maxHeight: '70%',
                   objectFit: 'contain',
                 }}
               />
             )}
           </YStack>
 
-          {/* Bottom Action Bar */}
-          <XStack
+          {/* Bottom Section: Carousel Dots + Small Thumbnail Scroll Strip */}
+          <YStack
             position="absolute"
-            bottom={Math.max(20, bottomInset + 10)}
-            alignSelf="center"
-            gap={12}
-            backgroundColor="rgba(255,255,255,0.15)"
-            paddingHorizontal={16}
-            paddingVertical={10}
-            borderRadius={tokens.radius.full}
+            bottom={Math.max(14, bottomInset + 8)}
+            left={0}
+            right={0}
+            alignItems="center"
+            gap={10}
+            zIndex={30}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Download image"
-              onPress={() => {
-                if (mediaList[activeMediaIndex]?.url) {
-                  window.open(mediaList[activeMediaIndex].url, '_blank');
-                }
-              }}
-              style={{ cursor: 'pointer' } as any}
-            >
-              <XStack alignItems="center" gap={6}>
-                <LuDownload size={16} color="#ffffff" />
-                <Text fontSize={12} fontWeight="700" color="#ffffff">
-                  Download
-                </Text>
-              </XStack>
-            </Pressable>
-
-            {onStarMedia && mediaList[activeMediaIndex] && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Set as cover image"
-                onPress={() => onStarMedia(mediaList[activeMediaIndex].id)}
-                style={{ cursor: 'pointer' } as any}
+            {/* Carousel Dots Bar */}
+            {mediaList.length > 1 && (
+              <XStack
+                backgroundColor="rgba(0,0,0,0.6)"
+                paddingHorizontal={10}
+                paddingVertical={5}
+                borderRadius={tokens.radius.full}
+                gap={5}
+                alignItems="center"
               >
-                <XStack alignItems="center" gap={6}>
-                  <LuStar size={16} color="#ffffff" />
-                  <Text fontSize={12} fontWeight="700" color="#ffffff">
-                    Set Cover
-                  </Text>
-                </XStack>
-              </Pressable>
+                {mediaList.map((_, i) => (
+                  <YStack
+                    key={i}
+                    width={i === activeMediaIndex ? 16 : 5}
+                    height={5}
+                    borderRadius={2.5}
+                    backgroundColor={i === activeMediaIndex ? '#ffffff' : 'rgba(255,255,255,0.35)'}
+                  />
+                ))}
+              </XStack>
             )}
-          </XStack>
+
+            {/* Small Horizontal Thumbnail Scroll Strip */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                gap: 8,
+                alignItems: 'center',
+              }}
+              style={{ maxHeight: 62, width: '100%' }}
+            >
+              {mediaList.map((m, idx) => {
+                const isActive = idx === activeMediaIndex;
+                return (
+                  <Pressable
+                    key={`thumb-${m.id || idx}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Jump to media ${idx + 1}`}
+                    onPress={() => setActiveMediaIndex(idx)}
+                    style={{
+                      width: 46,
+                      height: 58,
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      backgroundColor: '#1c1c1c',
+                      cursor: 'pointer',
+                      borderWidth: isActive ? 2 : 1,
+                      borderColor: isActive ? '#ffffff' : 'rgba(255,255,255,0.2)',
+                      opacity: isActive ? 1 : 0.5,
+                      transform: isActive ? 'scale(1.05)' : 'scale(1)',
+                      flexShrink: 0,
+                    } as any}
+                  >
+                    <img
+                      src={m.thumbnailUrl || m.url}
+                      alt={`Thumbnail ${idx + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </YStack>
         </YStack>
       </Modal>
     </YStack>

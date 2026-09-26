@@ -48,6 +48,9 @@ import {
 import {
   AdminProductEditSheet,
 } from '../molecules/AdminProductEditSheet';
+import {
+  AdminProductFullscreenViewer,
+} from '../molecules/AdminProductMediaViewer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1234,98 +1237,17 @@ export function AdminProductDetailPage({
       </Modal>
 
       {/* Fullscreen Media Viewer Modal */}
-      <Modal
+      <AdminProductFullscreenViewer
         visible={isFullscreenPreviewOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsFullscreenPreviewOpen(false)}
-      >
-        <YStack flex={1} backgroundColor="#000000" position="relative">
-          {/* Close Button */}
-          <XStack
-            position="absolute"
-            top={topInset + 12}
-            right={14}
-            zIndex={20}
-          >
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Close fullscreen preview"
-              activeOpacity={0.7}
-              onPress={() => setIsFullscreenPreviewOpen(false)}
-            >
-              <XStack
-                width={36}
-                height={36}
-                borderRadius={18}
-                backgroundColor="rgba(255,255,255,0.2)"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <LuX size={20} color="#ffffff" />
-              </XStack>
-            </TouchableOpacity>
-          </XStack>
-
-          {/* Fullscreen Image Presentation */}
-          <YStack flex={1} alignItems="center" justifyContent="center">
-            {mediaList[activeMediaIndex] && (
-              <Image
-                source={{ uri: mediaList[activeMediaIndex].url }}
-                style={{
-                  width: '100%',
-                  height: '80%',
-                }}
-                contentFit="contain"
-              />
-            )}
-          </YStack>
-
-          {/* Bottom Action Bar */}
-          <XStack
-            position="absolute"
-            bottom={Math.max(20, bottomInset + 10)}
-            alignSelf="center"
-            gap={12}
-            backgroundColor="rgba(255,255,255,0.15)"
-            paddingHorizontal={16}
-            paddingVertical={10}
-            borderRadius={tokens.radius.full}
-          >
-            {onDownloadMedia && mediaList[activeMediaIndex] && (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Download image"
-                activeOpacity={0.7}
-                onPress={() => onDownloadMedia(mediaList[activeMediaIndex])}
-              >
-                <XStack alignItems="center" gap={6}>
-                  <LuDownload size={16} color="#ffffff" />
-                  <Text fontSize={12} fontWeight="700" color="#ffffff">
-                    Download
-                  </Text>
-                </XStack>
-              </TouchableOpacity>
-            )}
-
-            {onStarMedia && mediaList[activeMediaIndex] && (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Set as cover image"
-                activeOpacity={0.7}
-                onPress={() => onStarMedia(mediaList[activeMediaIndex].id)}
-              >
-                <XStack alignItems="center" gap={6}>
-                  <LuStar size={16} color="#ffffff" />
-                  <Text fontSize={12} fontWeight="700" color="#ffffff">
-                    Set Cover
-                  </Text>
-                </XStack>
-              </TouchableOpacity>
-            )}
-          </XStack>
-        </YStack>
-      </Modal>
+        onClose={() => setIsFullscreenPreviewOpen(false)}
+        mediaList={mediaList}
+        initialIndex={activeMediaIndex}
+        onIndexChange={setActiveMediaIndex}
+        onDownloadMedia={onDownloadMedia}
+        onStarMedia={onStarMedia}
+        topInset={topInset}
+        bottomInset={bottomInset}
+      />
     </YStack>
   );
 }
