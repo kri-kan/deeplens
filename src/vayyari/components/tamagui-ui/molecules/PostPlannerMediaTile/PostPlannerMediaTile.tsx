@@ -1,0 +1,295 @@
+import React, { useMemo } from 'react';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+import { Text, XStack, YStack } from 'tamagui';
+import { LuCamera, LuStar, LuShare2, LuCheck } from '../../icons/lu';
+import { useTheme } from '@/theme';
+import type {
+  PostPlannerItem,
+  PostPlannerChannelAssignment,
+} from '@/services/instagram.service';
+
+export interface PostPlannerMediaTileProps {
+  item: PostPlannerItem;
+  onPress: (item: PostPlannerItem) => void;
+  getChannelColor?: (username: string) => string;
+}
+
+const DEFAULT_CHANNEL_COLORS: Record<string, string> = {
+  vayyari_fashions: '#D97706',
+  theblouseedition: '#7C3AED',
+  dressbyvayyari: '#2563EB',
+  vayyari_littles: '#DB2777',
+  vayyari_prive: '#4F46E5',
+  everydayvayyari: '#059669',
+  vayyariplusyou: '#DC2626',
+  eclipsevayyari: '#475569',
+  vayyari_lifestyle: '#0891B2',
+  vayyaristore: '#9333EA',
+};
+
+const defaultGetColor = (username: string): string => {
+  const clean = username.replace(/^@/, '').toLowerCase().trim();
+  if (DEFAULT_CHANNEL_COLORS[clean]) return DEFAULT_CHANNEL_COLORS[clean];
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = clean.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash % 360);
+  return `hsl(${hue}, 65%, 45%)`;
+};
+
+import { getSearchApiUrl } from '@/utils/api-config';
+
+export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
+  item,
+  onPress,
+  getChannelColor = defaultGetColor,
+}: PostPlannerMediaTileProps) {
+  const { tokens } = useTheme();
+
+  const isCurated = item.planningStatus === 'complete';
+  const assignedChannels = useMemo(() => {
+    return (item.channelAssignments || []).filter((a: PostPlannerChannelAssignment) => a.status !== 'excluded');
+  }, [item.channelAssignments]);
+
+  const imageUri = useMemo(() => {
+    if (!item.primaryImageUrl) return null;
+    if (item.primaryImageUrl.startsWith('http://') || item.primaryImageUrl.startsWith('https://')) {
+      return item.primaryImageUrl;
+    }
+    const baseUrl = getSearchApiUrl() || '';
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    if (item.primaryImageUrl.startsWith('/')) {
+      return `${cleanBaseUrl}${item.primaryImageUrl}`;
+    }
+    return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(item.primaryImageUrl)}`;
+  }, [item.primaryImageUrl]);
+
+  const statusBadgeInfo = useMemo(() => {
+    if (isCurated) {
+      return {
+        bg: 'rgba(16, 185, 129, 0.92)',
+        text: '#FFFFFF',
+        label: 'CURATED',
+      };
+    }
+    return {
+      bg: 'rgba(245, 158, 11, 0.92)',
+      text: '#FFFFFF',
+      label: 'PENDING',
+    };
+  }, [isCurated]);
+
+  return (
+    <Pressable
+      onPress={() => onPress(item)}
+      style={({ pressed }) => [
+        styles.tileContainer,
+        pressed && styles.tilePressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Product ${item.productCode}, ${item.title}, Price ₹${item.price}`}
+    >
+      {/* 1:1 Square Image Container */}
+      <View style={styles.imageWrapper}>
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.tileImage}
+            contentFit="cover"
+            recyclingKey={item.productId}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <View style={styles.tileImagePlaceholder}>
+            <LuCamera size={28} color="#9CA3AF" />
+          </View>
+        )}
+
+        {/* Top-Left: Star Badge */}
+        {item.isStarred && (
+          <View style={styles.starBadge}>
+            <LuStar size={11} color="#F59E0B" />
+          </View>
+        )}
+
+        {/* Top-Right: Status Pill */}
+        <View style={[styles.statusBadge, { backgroundColor: statusBadgeInfo.bg }]}>
+          {isCurated && <LuCheck size={10} color="#FFFFFF" style={{ marginRight: 2 }} />}
+          <Text fontSize={9} fontWeight="800" color={statusBadgeInfo.text}>
+            {statusBadgeInfo.label}
+          </Text>
+        </View>
+
+        {/* Bottom-Left: Media Count Pill */}
+        {(item.mediaCount ?? 0) > 0 && (
+          <View style={styles.mediaCountBadge}>
+            <LuCamera size={10} color="#FFFFFF" />
+            <Text fontSize={10} fontWeight="700" color="#FFFFFF">
+              {item.mediaCount}
+            </Text>
+          </View>
+        )}
+
+        {/* Bottom-Right: Overlapping Channel Heads */}
+        {assignedChannels.length > 0 && (
+          <View style={styles.channelAvatarsRow}>
+            {assignedChannels.slice(0, 3).map((a: PostPlannerChannelAssignment, idx: number) => {
+              const color = getChannelColor(a.username);
+              const initials = (a.username || '').replace(/^@/, '').substring(0, 2).toUpperCase();
+              return (
+                <View
+                  key={a.assignmentId || a.watchlistId || idx}
+                  style={[
+                    styles.miniChannelAvatar,
+                    {
+                      backgroundColor: color,
+                      marginLeft: idx > 0 ? -6 : 0,
+                      zIndex: 10 - idx,
+                    },
+                  ]}
+                >
+                  <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                    {initials}
+                  </Text>
+                </View>
+              );
+            })}
+            {assignedChannels.length > 3 && (
+              <View style={[styles.miniChannelAvatar, styles.moreChannelsAvatar]}>
+                <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                  +{assignedChannels.length - 3}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Compact Information Base */}
+      <YStack paddingHorizontal={8} paddingVertical={6} gap={2} backgroundColor="#FFFFFF">
+        <XStack justifyContent="space-between" alignItems="center">
+          <Text fontSize={11} fontWeight="800" color="#1F2937" numberOfLines={1} style={{ flex: 1 }}>
+            {item.productCode || 'ITEM'}
+          </Text>
+          <Text fontSize={12} fontWeight="900" color="#7E22CE">
+            ₹{Number(item.price || 0).toLocaleString('en-IN')}
+          </Text>
+        </XStack>
+
+        <Text fontSize={10} color="#6B7280" numberOfLines={1}>
+          {item.title || item.category || 'Vayyari Item'}
+        </Text>
+      </YStack>
+    </Pressable>
+  );
+});
+
+const styles = StyleSheet.create({
+  tileContainer: {
+    flex: 1,
+    maxWidth: '49.2%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+    marginBottom: 6,
+  },
+  tilePressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.985 }],
+  },
+  imageWrapper: {
+    width: '100%',
+    aspectRatio: 1,
+    position: 'relative',
+    backgroundColor: '#F3F4F6',
+  },
+  tileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  tileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  starBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  channelAvatarsRow: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  miniChannelAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  moreChannelsAvatar: {
+    backgroundColor: '#374151',
+    marginLeft: -6,
+    zIndex: 5,
+  },
+});

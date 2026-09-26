@@ -255,3 +255,15 @@ export const LuCircleAlert: React.FC<IconProps> = ({ size = 16, color = "#333333
 export const LuMessageCircle: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="message-circle" size={size} color={color} style={style} />
 );
+export const LuCamera: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="camera" size={size} color={color} style={style} />
+);
+export const LuBan: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="slash" size={size} color={color} style={style} />
+);
+export const LuTarget: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="target" size={size} color={color} style={style} />
+);
+export const LuFolder: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="folder" size={size} color={color} style={style} />
+);
