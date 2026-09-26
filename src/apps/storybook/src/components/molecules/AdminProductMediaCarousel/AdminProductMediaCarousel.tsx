@@ -52,31 +52,6 @@ export function AdminProductMediaCarousel({
   if (viewMode === 'gallery') {
     return (
       <YStack backgroundColor="#000000" width="100%">
-        {/* Toggle Mode Button Bar */}
-        <XStack
-          position="absolute"
-          top={12}
-          right={12}
-          zIndex={10}
-          backgroundColor="rgba(0,0,0,0.6)"
-          borderRadius={tokens.radius.full}
-          padding={6}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Switch to carousel view"
-            onPress={onToggleViewMode}
-            style={{ cursor: 'pointer' } as any}
-          >
-            <XStack alignItems="center" gap={6} paddingHorizontal={8} paddingVertical={2}>
-              <LuLayers size={14} color="#ffffff" />
-              <Text fontSize={11} fontWeight="700" color="#ffffff">
-                Carousel
-              </Text>
-            </XStack>
-          </Pressable>
-        </XStack>
-
         {/* 3-Column Grid View */}
         <XStack flexWrap="wrap" padding={1.5} paddingTop={48}>
           {mediaList.length === 0 ? (
@@ -273,31 +248,6 @@ export function AdminProductMediaCarousel({
           ))
         )}
       </ScrollView>
-
-      {/* Floating Gallery Switch Button (Top Right) */}
-      <XStack
-        position="absolute"
-        top={14}
-        right={14}
-        zIndex={10}
-        backgroundColor="rgba(0,0,0,0.6)"
-        borderRadius={tokens.radius.full}
-        padding={6}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Switch to grid gallery view"
-          onPress={onToggleViewMode}
-          style={{ cursor: 'pointer' } as any}
-        >
-          <XStack alignItems="center" gap={6} paddingHorizontal={8} paddingVertical={2}>
-            <LuLayoutGrid size={14} color="#ffffff" />
-            <Text fontSize={11} fontWeight="700" color="#ffffff">
-              Grid
-            </Text>
-          </XStack>
-        </Pressable>
-      </XStack>
 
       {/* Adaptive Paging Indicator (Bottom Center): Dots for <= 8, Counter pill for > 8 */}
       {mediaList.length > 1 && (

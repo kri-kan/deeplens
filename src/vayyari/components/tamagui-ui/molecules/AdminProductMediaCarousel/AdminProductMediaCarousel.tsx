@@ -23,6 +23,7 @@ export interface AdminProductMediaCarouselProps {
   onToggleViewMode: () => void;
   onMediaPress: (index: number) => void;
   height?: number;
+  topInset?: number;
 }
 
 export function AdminProductMediaCarousel({
@@ -33,6 +34,7 @@ export function AdminProductMediaCarousel({
   onToggleViewMode,
   onMediaPress,
   height = Math.round(SCREEN_WIDTH * 1.15),
+  topInset = 0,
 }: AdminProductMediaCarouselProps) {
   const { tokens } = useTheme();
   const carouselRef = useRef<FlatList<MediaSlideItem>>(null);
@@ -50,32 +52,7 @@ export function AdminProductMediaCarousel({
 
   if (viewMode === 'gallery') {
     return (
-      <YStack backgroundColor="#000000" width="100%" height={height * 1.4}>
-        {/* Toggle Mode Button Bar */}
-        <XStack
-          position="absolute"
-          top={12}
-          right={12}
-          zIndex={10}
-          backgroundColor="rgba(0,0,0,0.6)"
-          borderRadius={tokens.radius.full}
-          padding={6}
-        >
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Switch to carousel view"
-            activeOpacity={0.7}
-            onPress={onToggleViewMode}
-          >
-            <XStack alignItems="center" gap={6} paddingHorizontal={8} paddingVertical={2}>
-              <LuLayers size={14} color="#ffffff" />
-              <Text fontSize={11} fontWeight="700" color="#ffffff">
-                Carousel
-              </Text>
-            </XStack>
-          </TouchableOpacity>
-        </XStack>
-
+      <YStack backgroundColor="#000000" width="100%">
         {mediaList.length === 0 ? (
           <YStack
             width="100%"
@@ -83,7 +60,7 @@ export function AdminProductMediaCarousel({
             alignItems="center"
             justifyContent="center"
             gap={8}
-            paddingTop={48}
+            paddingTop={topInset + 56}
           >
             <LuImage size={40} color="#666666" />
             <Text fontSize={12} color="#888888">
@@ -91,17 +68,16 @@ export function AdminProductMediaCarousel({
             </Text>
           </YStack>
         ) : (
-          <FlatList
-            data={mediaList}
-            numColumns={3}
-            keyExtractor={(m, idx) => (m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? `${m.id}-${idx}` : String(idx))}
-            initialNumToRender={15}
-            maxToRenderPerBatch={15}
-            windowSize={5}
-            removeClippedSubviews={true}
-            contentContainerStyle={{ padding: 1.5, paddingTop: 48 }}
-            renderItem={({ item: m, index: idx }) => (
+          <XStack
+            flexWrap="wrap"
+            width="100%"
+            padding={1.5}
+            paddingTop={topInset + 56}
+            paddingBottom={16}
+          >
+            {mediaList.map((m, idx) => (
               <YStack
+                key={m.id && m.id !== '00000000-0000-0000-0000-000000000000' ? `${m.id}-${idx}` : String(idx)}
                 width="33.333333%"
                 aspectRatio={4 / 5}
                 padding={1.5}
@@ -167,8 +143,8 @@ export function AdminProductMediaCarousel({
                   </YStack>
                 </TouchableOpacity>
               </YStack>
-            )}
-          />
+            ))}
+          </XStack>
         )}
       </YStack>
     );
@@ -273,31 +249,6 @@ export function AdminProductMediaCarousel({
           )}
         />
       )}
-
-      {/* Floating Gallery Switch Button (Top Right) */}
-      <XStack
-        position="absolute"
-        top={14}
-        right={14}
-        zIndex={10}
-        backgroundColor="rgba(0,0,0,0.6)"
-        borderRadius={tokens.radius.full}
-        padding={6}
-      >
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Switch to grid gallery view"
-          activeOpacity={0.7}
-          onPress={onToggleViewMode}
-        >
-          <XStack alignItems="center" gap={6} paddingHorizontal={8} paddingVertical={2}>
-            <LuLayoutGrid size={14} color="#ffffff" />
-            <Text fontSize={11} fontWeight="700" color="#ffffff">
-              Grid
-            </Text>
-          </XStack>
-        </TouchableOpacity>
-      </XStack>
 
       {/* Adaptive Paging Indicator (Bottom Center): Dots for <= 8, Counter pill for > 8 */}
       {mediaList.length > 1 && (

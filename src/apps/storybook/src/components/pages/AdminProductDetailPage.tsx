@@ -18,6 +18,7 @@ import {
   LuDownload,
   LuLayers,
   LuStore,
+  LuLayoutGrid,
   LuClock,
   LuTag,
   LuCalendar,
@@ -324,10 +325,10 @@ export function AdminProductDetailPage({
             </Pressable>
           )}
 
-          {/* View Mode Toggle */}
+          {/* View Mode Toggle: Dynamic Stack/Grid Icon */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Toggle media presentation mode"
+            accessibilityLabel={viewMode === 'carousel' ? 'Switch to grid gallery view' : 'Switch to carousel stack view'}
             onPress={() => setViewMode((m) => (m === 'carousel' ? 'gallery' : 'carousel'))}
             style={{ cursor: 'pointer' } as any}
           >
@@ -339,7 +340,11 @@ export function AdminProductDetailPage({
               alignItems="center"
               justifyContent="center"
             >
-              <LuLayers size={16} color="#ffffff" />
+              {viewMode === 'carousel' ? (
+                <LuLayoutGrid size={16} color="#ffffff" />
+              ) : (
+                <LuLayers size={16} color="#ffffff" />
+              )}
             </XStack>
           </Pressable>
 

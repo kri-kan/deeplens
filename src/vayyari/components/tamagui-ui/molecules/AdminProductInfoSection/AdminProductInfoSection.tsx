@@ -19,6 +19,7 @@ export interface AdminProductInfoSectionProps {
   timestamp?: string;
   description?: string;
   isArchived?: boolean;
+  marginTop?: number;
   onUnarchive?: () => void;
   onEditPress?: () => void;
 }
@@ -32,6 +33,7 @@ export function AdminProductInfoSection({
   timestamp,
   description,
   isArchived = false,
+  marginTop = -14,
   onUnarchive,
   onEditPress,
 }: AdminProductInfoSectionProps) {
@@ -45,7 +47,7 @@ export function AdminProductInfoSection({
       paddingHorizontal={16}
       paddingTop={18}
       paddingBottom={12}
-      marginTop={-14}
+      marginTop={marginTop}
       gap={12}
       shadowColor="#000"
       shadowOffset={{ width: 0, height: -2 }}
