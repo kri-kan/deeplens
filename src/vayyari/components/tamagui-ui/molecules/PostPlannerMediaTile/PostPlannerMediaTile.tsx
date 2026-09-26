@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { Text, XStack, YStack } from 'tamagui';
+import { Text } from 'tamagui';
 import { LuCamera, LuStar } from '../../icons/lu';
-import { useTheme } from '@/theme';
 import { getSearchApiUrl } from '@/utils/api-config';
 import type {
   PostPlannerItem,
@@ -51,8 +50,6 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
   borderStatus,
   borderColor,
 }: PostPlannerMediaTileProps) {
-  const { tokens } = useTheme();
-
   const isCurated = item.planningStatus === 'complete';
   const assignedChannels = useMemo(() => {
     return (item.channelAssignments || []).filter((a: PostPlannerChannelAssignment) => a.status !== 'excluded');
@@ -97,91 +94,83 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
         pressed && styles.tilePressed,
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`Product ${item.productCode}, ${item.title}, Price ₹${item.price}`}
+      accessibilityLabel={`Product ${item.productCode}, ${item.title || 'Item'}, Price ₹${item.price}`}
     >
-      {/* 1:1 Square Image Container */}
-      <View style={styles.imageWrapper}>
-        {imageUri ? (
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.tileImage}
-            contentFit="cover"
-            recyclingKey={item.productId}
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <View style={styles.tileImagePlaceholder}>
-            <LuCamera size={24} color="#9CA3AF" />
-          </View>
-        )}
+      {/* 1:1 Square Image */}
+      {imageUri ? (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.tileImage}
+          contentFit="cover"
+          recyclingKey={item.productId}
+          cachePolicy="memory-disk"
+        />
+      ) : (
+        <View style={styles.tileImagePlaceholder}>
+          <LuCamera size={24} color="#9CA3AF" />
+        </View>
+      )}
 
-        {/* Top-Left: Star Badge */}
-        {item.isStarred && (
-          <View style={styles.starBadge}>
-            <LuStar size={10} color="#F59E0B" />
-          </View>
-        )}
+      {/* Top-Left: Star Badge */}
+      {item.isStarred && (
+        <View style={styles.starBadge}>
+          <LuStar size={10} color="#F59E0B" />
+        </View>
+      )}
 
-        {/* Bottom-Left: Media Count Pill */}
-        {(item.mediaCount ?? 0) > 0 && (
-          <View style={styles.mediaCountBadge}>
-            <LuCamera size={9} color="#FFFFFF" />
-            <Text fontSize={9} fontWeight="700" color="#FFFFFF">
-              {item.mediaCount}
-            </Text>
-          </View>
-        )}
+      {/* Bottom-Left: Media Count Pill */}
+      {(item.mediaCount ?? 0) > 0 && (
+        <View style={styles.mediaCountBadge}>
+          <LuCamera size={9} color="#FFFFFF" />
+          <Text fontSize={9} fontWeight="700" color="#FFFFFF">
+            {item.mediaCount}
+          </Text>
+        </View>
+      )}
 
-        {/* Bottom-Right: Overlapping Channel Heads */}
-        {showChannelAvatars && assignedChannels.length > 0 && (
-          <View style={styles.channelAvatarsRow}>
-            {assignedChannels.slice(0, 3).map((a: PostPlannerChannelAssignment, idx: number) => {
-              const color = getChannelColor(a.username);
-              const initials = (a.username || '').replace(/^@/, '').substring(0, 2).toUpperCase();
-              return (
-                <View
-                  key={a.assignmentId || a.watchlistId || idx}
-                  style={[
-                    styles.miniChannelAvatar,
-                    {
-                      backgroundColor: color,
-                      marginLeft: idx > 0 ? -6 : 0,
-                      zIndex: 10 - idx,
-                    },
-                  ]}
-                >
-                  <Text fontSize={8} fontWeight="800" color="#FFFFFF">
-                    {initials}
-                  </Text>
-                </View>
-              );
-            })}
-            {assignedChannels.length > 3 && (
-              <View style={[styles.miniChannelAvatar, styles.moreChannelsAvatar]}>
+      {/* Bottom-Right: Overlapping Channel Heads */}
+      {showChannelAvatars && assignedChannels.length > 0 && (
+        <View style={styles.channelAvatarsRow}>
+          {assignedChannels.slice(0, 3).map((a: PostPlannerChannelAssignment, idx: number) => {
+            const color = getChannelColor(a.username);
+            const initials = (a.username || '').replace(/^@/, '').substring(0, 2).toUpperCase();
+            return (
+              <View
+                key={a.assignmentId || a.watchlistId || idx}
+                style={[
+                  styles.miniChannelAvatar,
+                  {
+                    backgroundColor: color,
+                    marginLeft: idx > 0 ? -6 : 0,
+                    zIndex: 10 - idx,
+                  },
+                ]}
+              >
                 <Text fontSize={8} fontWeight="800" color="#FFFFFF">
-                  +{assignedChannels.length - 3}
+                  {initials}
                 </Text>
               </View>
-            )}
-          </View>
-        )}
-      </View>
+            );
+          })}
+          {assignedChannels.length > 3 && (
+            <View style={[styles.miniChannelAvatar, styles.moreChannelsAvatar]}>
+              <Text fontSize={8} fontWeight="800" color="#FFFFFF">
+                +{assignedChannels.length - 3}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
-      {/* Compact Information Base */}
-      <YStack paddingHorizontal={6} paddingVertical={4} gap={1} backgroundColor="#FFFFFF">
-        <XStack justifyContent="space-between" alignItems="center">
-          <Text fontSize={10} fontWeight="800" color="#1F2937" numberOfLines={1} style={{ flex: 1 }}>
-            {item.productCode || 'ITEM'}
-          </Text>
-          <Text fontSize={11} fontWeight="900" color="#7E22CE">
-            ₹{Number(item.price || 0).toLocaleString('en-IN')}
-          </Text>
-        </XStack>
-
-        <Text fontSize={9} color="#6B7280" numberOfLines={1}>
-          {item.title || item.category || 'Vayyari Item'}
+      {/* Bottom Bar: Translucent Overlay for SKU & Price */}
+      <View style={styles.bottomBar}>
+        <Text fontSize={9} fontWeight="800" color="#FFFFFF" numberOfLines={1} style={styles.skuText}>
+          {item.productCode || 'ITEM'}
         </Text>
-      </YStack>
+        <Text fontSize={9} fontWeight="900" color="#FCD34D" numberOfLines={1}>
+          ₹{Number(item.price || 0).toLocaleString('en-IN')}
+        </Text>
+      </View>
     </Pressable>
   );
 });
@@ -189,28 +178,17 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
 const styles = StyleSheet.create({
   tileContainer: {
     flex: 1,
-    maxWidth: '32.8%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    maxWidth: '33.33%',
+    aspectRatio: 1,
+    position: 'relative',
+    backgroundColor: '#E5E7EB',
+    borderWidth: 1.5,
+    borderRadius: 0,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-    marginBottom: 6,
   },
   tilePressed: {
     opacity: 0.88,
     transform: [{ scale: 0.985 }],
-  },
-  imageWrapper: {
-    width: '100%',
-    aspectRatio: 1,
-    position: 'relative',
-    backgroundColor: '#F3F4F6',
   },
   tileImage: {
     width: '100%',
@@ -221,7 +199,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#E5E7EB',
   },
   starBadge: {
     position: 'absolute',
@@ -233,6 +211,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
@@ -241,22 +220,24 @@ const styles = StyleSheet.create({
   },
   mediaCountBadge: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 22,
     left: 4,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 1.5,
-    borderRadius: 8,
+    borderRadius: 3,
+    zIndex: 2,
   },
   channelAvatarsRow: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 22,
     right: 4,
     flexDirection: 'row',
     alignItems: 'center',
+    zIndex: 2,
   },
   miniChannelAvatar: {
     width: 18,
@@ -276,5 +257,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#374151',
     marginLeft: -6,
     zIndex: 5,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 4,
+    paddingVertical: 2.5,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  skuText: {
+    flex: 1,
+    marginRight: 4,
   },
 });
