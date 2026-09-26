@@ -380,13 +380,13 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   gridContentContainer: {
-    paddingVertical: 8,
+    padding: 1,
     paddingBottom: 40,
   },
   columnWrapper: {
-    gap: 6,
-    paddingHorizontal: 12,
-    marginBottom: 6,
+    gap: 1.5,
+    marginBottom: 1.5,
+    paddingHorizontal: 0,
   },
   centerContainer: {
     flex: 1,
