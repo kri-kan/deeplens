@@ -25,6 +25,7 @@ import {
   LuCalendar,
   LuChevronDown,
   LuChevronUp,
+  LuExternalLink,
 } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
@@ -56,6 +57,8 @@ export interface AdminProductDetailData {
   exclusiveDescription?: string;
   isArchived?: boolean;
   isPublishedToStore?: boolean;
+  sourceJid?: string;
+  sourceGroupId?: string;
   media?: MediaSlideItem[];
   listings?: VendorListingItemData[];
   unifiedAttributes?: Record<string, any>;
@@ -915,6 +918,35 @@ export function AdminProductDetailPage({
                   <LuStore size={18} color={tokens.accent} />
                   <Text fontSize={14} fontWeight="800" color={tokens.accent}>
                     {product?.isPublishedToStore ? '✓ Published to Store (Re-sync)' : '🚀 Publish to Store'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            )}
+
+            {/* View Source WhatsApp Chat */}
+            {onOpenWhatsAppListing && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open WhatsApp source chat"
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  const firstListing = listings.length > 0 ? listings[0] : undefined;
+                  onOpenWhatsAppListing({
+                    id: firstListing?.id || 'source-chat',
+                    vendorName: firstListing?.vendorName || product.title,
+                    sourceJid: firstListing?.sourceJid || product.sourceJid,
+                    sourceGroupId: firstListing?.sourceGroupId || product.sourceGroupId,
+                    price: firstListing?.price ?? product.vendorPrice,
+                    currency: firstListing?.currency || 'INR',
+                    isActive: firstListing?.isActive ?? true,
+                  } as any);
+                }}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <XStack alignItems="center" gap={12} paddingVertical={12}>
+                  <LuExternalLink size={18} color="#25D366" />
+                  <Text fontSize={14} fontWeight="700" color={tokens.text}>
+                    View Source WhatsApp Chat
                   </Text>
                 </XStack>
               </Pressable>

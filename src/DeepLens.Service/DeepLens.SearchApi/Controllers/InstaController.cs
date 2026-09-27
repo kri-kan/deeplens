@@ -3639,12 +3639,12 @@ public class InstaController : ControllerBase
                 p.fabric AS Fabric,
                 COALESCE((SELECT MIN(vl.current_price) FROM vendor_listings vl WHERE vl.product_id = p.id), 0) AS Price,
                 COALESCE(
-                    (SELECT m.storage_path 
+                    (SELECT '/api/v1/catalog/media/thumbnail-by-path?path=' || m.storage_path || '&spec=medium'
                      FROM public.media_links ml 
                      JOIN public.media m ON ml.media_id = m.id 
                      WHERE ml.entity_id = p.id AND ml.entity_type = 'product' 
                      ORDER BY ml.is_primary DESC, m.uploaded_at ASC LIMIT 1),
-                    (SELECT m.storage_path 
+                    (SELECT '/api/v1/catalog/media/thumbnail-by-path?path=' || m.storage_path || '&spec=medium'
                      FROM public.media_links ml 
                      JOIN public.vendor_listings vl ON vl.id = ml.entity_id AND ml.entity_type = 'vendor_listing'
                      JOIN public.media m ON ml.media_id = m.id 

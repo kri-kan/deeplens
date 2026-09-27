@@ -75,6 +75,7 @@ export function AdminVendorListingCard({
               accessibilityRole="button"
               accessibilityLabel="Expand vendor listing details"
               activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               onPress={onExpand}
             >
               <XStack
@@ -96,6 +97,7 @@ export function AdminVendorListingCard({
               accessibilityRole="button"
               accessibilityLabel="Open WhatsApp source chat"
               activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               onPress={onOpenWhatsApp}
             >
               <XStack

@@ -273,152 +273,6 @@ export function AdminProductDetailPage({
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
-      {/* Floating Top Header Bar */}
-      <XStack
-        position="absolute"
-        top={topInset}
-        left={0}
-        right={0}
-        zIndex={20}
-        height={48}
-        alignItems="center"
-        justifyContent="space-between"
-        paddingHorizontal={12}
-      >
-        {/* Back Button & In-Store Pill */}
-        <XStack alignItems="center" gap={8}>
-          {onBack ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Navigate back"
-              activeOpacity={0.7}
-              onPress={onBack}
-            >
-              <XStack
-                width={36}
-                height={36}
-                borderRadius={18}
-                backgroundColor="rgba(0,0,0,0.55)"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <LuArrowLeft size={18} color="#ffffff" />
-              </XStack>
-            </TouchableOpacity>
-          ) : (
-            <XStack width={36} />
-          )}
-
-          {product.isPublishedToStore && (
-            <TouchableOpacity
-              onPress={onNavigateToStoreCuration}
-              activeOpacity={0.8}
-            >
-              <XStack
-                backgroundColor="rgba(16,185,129,0.9)"
-                paddingHorizontal={8}
-                paddingVertical={4}
-                borderRadius={12}
-                alignItems="center"
-                gap={4}
-              >
-                <LuStore size={12} color="#ffffff" />
-                <Text fontSize={10} fontWeight="800" color="#ffffff">
-                  In Store
-                </Text>
-              </XStack>
-            </TouchableOpacity>
-          )}
-        </XStack>
-
-        {/* Right Header Action Icons */}
-        <XStack alignItems="center" gap={8}>
-          {/* Find Similar Matches / Merge Candidates */}
-          {onFindSimilar && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Find similar merge candidates"
-              activeOpacity={0.7}
-              onPress={onFindSimilar}
-            >
-              <XStack
-                width={36}
-                height={36}
-                borderRadius={18}
-                backgroundColor="rgba(0,0,0,0.55)"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <LuGitMerge size={16} color="#ffffff" />
-              </XStack>
-            </TouchableOpacity>
-          )}
-
-          {/* View Mode Toggle: Dynamic Stack/Grid Icon */}
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={viewMode === 'carousel' ? 'Switch to grid gallery view' : 'Switch to carousel stack view'}
-            activeOpacity={0.7}
-            onPress={() => setViewMode((m) => (m === 'carousel' ? 'gallery' : 'carousel'))}
-          >
-            <XStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor="rgba(0,0,0,0.55)"
-              alignItems="center"
-              justifyContent="center"
-            >
-              {viewMode === 'carousel' ? (
-                <LuLayoutGrid size={16} color="#ffffff" />
-              ) : (
-                <LuLayers size={16} color="#ffffff" />
-              )}
-            </XStack>
-          </TouchableOpacity>
-
-          {/* Quick Enrich with AI Button */}
-          {onReevaluateLLM && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Enrich with AI"
-              activeOpacity={0.7}
-              onPress={onReevaluateLLM}
-            >
-              <XStack
-                width={36}
-                height={36}
-                borderRadius={18}
-                backgroundColor="rgba(0,0,0,0.55)"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <LuSparkles size={16} color="#fbbf24" />
-              </XStack>
-            </TouchableOpacity>
-          )}
-
-          {/* 3-Dots Context Menu Button */}
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Open options menu"
-            activeOpacity={0.7}
-            onPress={() => setIsMenuOpen(true)}
-          >
-            <XStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor="rgba(0,0,0,0.55)"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <LuEllipsisVertical size={16} color="#ffffff" />
-            </XStack>
-          </TouchableOpacity>
-        </XStack>
-      </XStack>
-
       {/* Main Scrollable Body */}
       <ScrollView
         style={{ flex: 1 }}
@@ -959,6 +813,154 @@ export function AdminProductDetailPage({
         )}
       </ScrollView>
 
+      {/* Floating Top Header Bar (mounted after ScrollView for Android touch priority) */}
+      <XStack
+        position="absolute"
+        top={topInset}
+        left={0}
+        right={0}
+        zIndex={20}
+        elevation={30}
+        pointerEvents="box-none"
+        height={48}
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal={12}
+      >
+        {/* Back Button & In-Store Pill */}
+        <XStack alignItems="center" gap={8} pointerEvents="auto">
+          {onBack ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Navigate back"
+              activeOpacity={0.7}
+              onPress={onBack}
+            >
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor="rgba(0,0,0,0.55)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuArrowLeft size={18} color="#ffffff" />
+              </XStack>
+            </TouchableOpacity>
+          ) : (
+            <XStack width={36} />
+          )}
+
+          {product.isPublishedToStore && (
+            <TouchableOpacity
+              onPress={onNavigateToStoreCuration}
+              activeOpacity={0.8}
+            >
+              <XStack
+                backgroundColor="rgba(16,185,129,0.9)"
+                paddingHorizontal={8}
+                paddingVertical={4}
+                borderRadius={12}
+                alignItems="center"
+                gap={4}
+              >
+                <LuStore size={12} color="#ffffff" />
+                <Text fontSize={10} fontWeight="800" color="#ffffff">
+                  In Store
+                </Text>
+              </XStack>
+            </TouchableOpacity>
+          )}
+        </XStack>
+
+        {/* Right Header Action Icons */}
+        <XStack alignItems="center" gap={8} pointerEvents="auto">
+          {/* Find Similar Matches / Merge Candidates */}
+          {onFindSimilar && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Find similar merge candidates"
+              activeOpacity={0.7}
+              onPress={onFindSimilar}
+            >
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor="rgba(0,0,0,0.55)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuGitMerge size={16} color="#ffffff" />
+              </XStack>
+            </TouchableOpacity>
+          )}
+
+          {/* View Mode Toggle: Dynamic Stack/Grid Icon */}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'carousel' ? 'Switch to grid gallery view' : 'Switch to carousel stack view'}
+            activeOpacity={0.7}
+            onPress={() => setViewMode((m) => (m === 'carousel' ? 'gallery' : 'carousel'))}
+          >
+            <XStack
+              width={36}
+              height={36}
+              borderRadius={18}
+              backgroundColor="rgba(0,0,0,0.55)"
+              alignItems="center"
+              justifyContent="center"
+            >
+              {viewMode === 'carousel' ? (
+                <LuLayoutGrid size={16} color="#ffffff" />
+              ) : (
+                <LuLayers size={16} color="#ffffff" />
+              )}
+            </XStack>
+          </TouchableOpacity>
+
+          {/* Quick Enrich with AI Button */}
+          {onReevaluateLLM && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Enrich with AI"
+              activeOpacity={0.7}
+              onPress={onReevaluateLLM}
+            >
+              <XStack
+                width={36}
+                height={36}
+                borderRadius={18}
+                backgroundColor="rgba(0,0,0,0.55)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuSparkles size={16} color="#fbbf24" />
+              </XStack>
+            </TouchableOpacity>
+          )}
+
+          {/* 3-Dots Context Menu Button */}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Open options menu"
+            activeOpacity={0.7}
+            onPress={() => setIsMenuOpen(true)}
+          >
+            <XStack
+              width={36}
+              height={36}
+              borderRadius={18}
+              backgroundColor="rgba(0,0,0,0.55)"
+              alignItems="center"
+              justifyContent="center"
+            >
+              <LuEllipsisVertical size={16} color="#ffffff" />
+            </XStack>
+          </TouchableOpacity>
+        </XStack>
+      </XStack>
+
       {/* Context Actions Menu Modal */}
       <Modal
         visible={isMenuOpen}
@@ -1053,7 +1055,15 @@ export function AdminProductDetailPage({
                 onPress={() => {
                   setIsMenuOpen(false);
                   const firstListing = listings.length > 0 ? listings[0] : undefined;
-                  onOpenWhatsAppListing(firstListing as any);
+                  onOpenWhatsAppListing({
+                    id: firstListing?.id || 'source-chat',
+                    vendorName: firstListing?.vendorName || product.title,
+                    sourceJid: firstListing?.sourceJid || product.sourceJid,
+                    sourceGroupId: firstListing?.sourceGroupId || product.sourceGroupId,
+                    price: firstListing?.price ?? product.vendorPrice,
+                    currency: firstListing?.currency || 'INR',
+                    isActive: firstListing?.isActive ?? true,
+                  } as any);
                 }}
               >
                 <XStack alignItems="center" gap={12} paddingVertical={12}>

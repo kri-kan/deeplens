@@ -146,23 +146,47 @@ export default function ProductDetailScreen() {
 
   // Open WhatsApp Source Chat
   const handleOpenWhatsAppListing = (listing?: VendorListingItemData) => {
-    const targetJid = listing?.sourceJid || product?.sourceJid;
-    const targetGroupId = listing?.sourceGroupId || product?.sourceGroupId;
+    let targetJid = listing?.sourceJid || product?.sourceJid;
+    let targetGroupId = listing?.sourceGroupId || product?.sourceGroupId;
+
+    // Resilient fallback from listings if not directly on the passed listing
+    if (!targetJid && product?.listings && product.listings.length > 0) {
+      const match = product.listings.find((l) => l.sourceJid);
+      if (match?.sourceJid) {
+        targetJid = match.sourceJid;
+      }
+    }
+    if (!targetGroupId && product?.listings && product.listings.length > 0) {
+      const match = product.listings.find((l) => l.sourceGroupId);
+      if (match?.sourceGroupId) {
+        targetGroupId = match.sourceGroupId;
+      }
+    }
+
+    // Storage path regex fallback for group ID
+    if (!targetGroupId && product?.media) {
+      for (const m of product.media) {
+        const path = m.storagePath || (m as any).url || '';
+        const match = path.match(/general\/(product_[a-f0-9-]+)/);
+        if (match) {
+          targetGroupId = match[1];
+          break;
+        }
+      }
+    }
 
     if (!targetJid) {
       Alert.alert('No WhatsApp Source', 'This product does not have an associated WhatsApp chat.');
       return;
     }
 
-    router.push({
-      pathname: '/utilities/whatsapp/messages/[jid]',
-      params: {
-        jid: targetJid,
-        name: listing?.vendorName || product?.title || 'Source Chat',
-        highlightGroupId: targetGroupId || '',
-        initialZoningMode: 'true',
-      },
-    } as any);
+    const encodedJid = encodeURIComponent(targetJid);
+    const chatName = listing?.vendorName || product?.title || 'Source Chat';
+    const highlightGroup = targetGroupId || '';
+
+    router.push(
+      `/utilities/whatsapp/messages/${encodedJid}?name=${encodeURIComponent(chatName)}&chatName=${encodeURIComponent(chatName)}&highlightGroupId=${encodeURIComponent(highlightGroup)}&targetGroupId=${encodeURIComponent(highlightGroup)}&sourceGroupId=${encodeURIComponent(highlightGroup)}&initialZoningMode=true` as any
+    );
   };
 
   // Format product data for presentation
