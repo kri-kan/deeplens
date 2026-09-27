@@ -793,9 +793,10 @@ export default function FullMessageBrowser() {
 
   const findTargetIndex = useCallback(() => {
     if (!highlightGroupId && !targetMessageId) return -1;
-    return groupedMessages.findIndex(item => {
-      // 1. Direct message ID match (case-insensitive)
-      if (targetMessageId) {
+
+    // 1. Direct message ID match (case-insensitive)
+    if (targetMessageId) {
+      const msgIdx = groupedMessages.findIndex(item => {
         if ('messageId' in item && (
           item.messageId === targetMessageId || 
           item.messageId?.toLowerCase() === targetMessageId.toLowerCase()
@@ -803,31 +804,38 @@ export default function FullMessageBrowser() {
           return true;
         }
         if ('messages' in item && Array.isArray(item.messages)) {
-          if (item.messages.some((m: any) => 
+          return item.messages.some((m: any) => 
             m.messageId === targetMessageId || 
             m.messageId?.toLowerCase() === targetMessageId.toLowerCase()
-          )) {
-            return true;
-          }
+          );
         }
-      }
+        return false;
+      });
+      if (msgIdx !== -1) return msgIdx;
+    }
 
-      // 2. Group ID match
-      if (highlightGroupId) {
+    // 2. Group ID match:
+    // In an inverted FlatList (index 0 = newest, index len-1 = oldest), the Zone Card (product header)
+    // is rendered on the OLDEST message of the group, which has the HIGHEST index in groupedMessages.
+    // We scan from the highest index downwards to locate the Zone Card item for perfect landing!
+    if (highlightGroupId) {
+      for (let i = groupedMessages.length - 1; i >= 0; i--) {
+        const item = groupedMessages[i];
+        let isMatch = false;
         if (item.groupId && matchesGroupId(item.groupId, highlightGroupId, item.timestamp)) {
-          return true;
-        }
-        if ('messages' in item && Array.isArray(item.messages)) {
-          if (item.messages.some((m: any) => 
-            matchesGroupId(m.groupId, highlightGroupId, m.timestamp)
-          )) {
-            return true;
+          isMatch = true;
+        } else if ('messages' in item && Array.isArray(item.messages)) {
+          if (item.messages.some((m: any) => matchesGroupId(m.groupId, highlightGroupId, m.timestamp))) {
+            isMatch = true;
           }
         }
+        if (isMatch) {
+          return i;
+        }
       }
+    }
 
-      return false;
-    });
+    return -1;
   }, [groupedMessages, highlightGroupId, targetMessageId, matchesGroupId]);
 
   const scrollToTarget = useCallback((animated: boolean = false) => {
@@ -844,7 +852,7 @@ export default function FullMessageBrowser() {
       });
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
-      }, 350);
+      }, 500);
     } catch (e) {
       isProgrammaticScrollRef.current = false;
       console.warn("[FullMessageBrowser] scrollToIndex attempt failed:", e);
@@ -1516,10 +1524,10 @@ export default function FullMessageBrowser() {
               initialNumToRender={(() => {
                 const targetIdx = findTargetIndex();
                 if (targetIdx !== -1) {
-                  return Math.max(30, targetIdx + 10);
+                  return Math.max(40, targetIdx + 15);
                 }
                 return (highlightGroupId || targetMessageId) && groupedMessages.length > 0
-                  ? Math.min(30, groupedMessages.length)
+                  ? Math.min(40, groupedMessages.length)
                   : 25;
               })()}
               maxToRenderPerBatch={30}
@@ -1534,13 +1542,7 @@ export default function FullMessageBrowser() {
                 setPulseActive(false);
               }}
               onMomentumScrollBegin={() => {
-                if (isProgrammaticScrollRef.current) {
-                  return;
-                }
-                userInteractedRef.current = true;
-                initialLandingCompletedRef.current = true;
-                initialScrollTimersRef.current.forEach(t => clearTimeout(t));
-                initialScrollTimersRef.current = [];
+                // Programmatic inertia scroll should never cancel landing or mark user interaction
               }}
               onScroll={(e) => {
                 const y = e.nativeEvent.contentOffset.y;
@@ -1549,7 +1551,8 @@ export default function FullMessageBrowser() {
                 } else {
                   setShowScrollToBottom(false);
                 }
-                if (y < 50 && !isLatestLoaded && !loadingNewer) {
+                // Only load newer messages if the initial landing has already completed AND the user intentionally scrolled
+                if (y < 50 && !isLatestLoaded && !loadingNewer && initialLandingCompletedRef.current && !isProgrammaticScrollRef.current && userInteractedRef.current) {
                   loadNewer();
                 }
               }}
