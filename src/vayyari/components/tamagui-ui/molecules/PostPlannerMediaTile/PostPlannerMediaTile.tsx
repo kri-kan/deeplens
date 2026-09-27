@@ -104,6 +104,7 @@ export const PostPlannerMediaTile = React.memo(function PostPlannerMediaTile({
           contentFit="cover"
           recyclingKey={item.productId}
           cachePolicy="memory-disk"
+          transition={150}
         />
       ) : (
         <View style={styles.tileImagePlaceholder}>

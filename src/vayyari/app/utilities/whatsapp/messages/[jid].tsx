@@ -259,7 +259,9 @@ export default function FullMessageBrowser() {
     }
   })() : '';
 
-  const name = Array.isArray(rawParams.name) ? rawParams.name[0] : rawParams.name;
+  const name = Array.isArray(rawParams.name)
+    ? rawParams.name[0]
+    : (rawParams.name || (rawParams as any).chatName);
 
   // Resilient group / message targeting: accept highlightGroupId, targetGroupId, and sourceGroupId
   const rawTargetGroup = rawParams.highlightGroupId || rawParams.targetGroupId || rawParams.sourceGroupId;

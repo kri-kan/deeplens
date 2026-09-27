@@ -34,7 +34,9 @@ export default function PostPlannerScreen() {
       const resolveUri = (urlOrPath?: string) => {
         if (!urlOrPath) return undefined;
         if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) return urlOrPath;
+        // Paths starting with /api/ are already well-formed API routes (e.g. thumbnail-by-path)
         if (urlOrPath.startsWith('/')) return `${cleanBaseUrl}${urlOrPath}`;
+        // Legacy raw storage paths (pre-migration fallback) — should not appear after backend fix
         return `${cleanBaseUrl}/api/v1/Attachment/download?path=${encodeURIComponent(urlOrPath)}`;
       };
 
