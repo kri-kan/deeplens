@@ -439,14 +439,21 @@ export class ConversationRepository {
             const params: any[] = [jid, limit, aroundGroupId];
             const query = `
                 ${chatJidSubquery},
+                matched_gids AS (
+                    SELECT $3::text as gid
+                    UNION
+                    SELECT group_id FROM wa.message_groups WHERE deeplens_product_id::text = $3
+                    UNION
+                    SELECT group_id FROM wa.message_groups WHERE group_id = $3
+                ),
                 target_ts_lookup AS (
                     SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
                     FROM wa.messages
-                    WHERE jid IN (SELECT jid FROM chat_jids) AND group_id = $3
+                    WHERE jid IN (SELECT jid FROM chat_jids) AND group_id IN (SELECT gid FROM matched_gids)
                     UNION ALL
                     SELECT EXTRACT(EPOCH FROM last_message_at)::bigint as min_ts, EXTRACT(EPOCH FROM last_message_at)::bigint as max_ts
                     FROM wa.message_groups
-                    WHERE group_id = $3
+                    WHERE group_id IN (SELECT gid FROM matched_gids)
                     UNION ALL
                     SELECT CASE 
                         WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint 
@@ -466,14 +473,14 @@ export class ConversationRepository {
                     SELECT ${selectFields}
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
-                      AND group_id = $3
+                      AND group_id IN (SELECT gid FROM matched_gids)
                 ),
                 older_msgs AS (
                     SELECT ${selectFields}
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND timestamp < (SELECT min_ts FROM target_bounds)
-                      AND (group_id != $3 OR group_id IS NULL)
+                      AND (group_id NOT IN (SELECT gid FROM matched_gids) OR group_id IS NULL)
                     ORDER BY timestamp DESC
                     LIMIT 25
                 ),
@@ -482,7 +489,7 @@ export class ConversationRepository {
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND timestamp > (SELECT max_ts FROM target_bounds)
-                      AND (group_id != $3 OR group_id IS NULL)
+                      AND (group_id NOT IN (SELECT gid FROM matched_gids) OR group_id IS NULL)
                     ORDER BY timestamp ASC
                     LIMIT 25
                 ),
