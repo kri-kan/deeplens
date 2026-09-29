@@ -289,6 +289,9 @@ public class ProductService : IProductService
                     (SELECT jid FROM wa.messages msg WHERE msg.group_id = (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1) LIMIT 1)
                 ) as ""SourceJid"",
                 COALESCE(
+                    (SELECT mg.group_id FROM wa.message_groups mg JOIN wa.messages m ON m.group_id = mg.group_id WHERE mg.deeplens_product_id = p.id LIMIT 1),
+                    (SELECT m.group_id FROM wa.messages m JOIN media med ON split_part(m.media_url, '/', 5) = med.original_filename JOIN media_links ml ON ml.media_id = med.id WHERE ml.entity_id = p.id AND m.group_id IS NOT NULL LIMIT 1),
+                    (SELECT vl2.source_group_id FROM vendor_listings vl2 JOIN wa.messages m ON m.group_id = vl2.source_group_id WHERE vl2.product_id = p.id LIMIT 1),
                     (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
                     (SELECT source_group_id FROM vendor_listings WHERE product_id = p.id AND source_group_id IS NOT NULL LIMIT 1),
                     (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1)
@@ -1170,6 +1173,9 @@ public class ProductService : IProductService
                     (SELECT jid FROM wa.messages msg WHERE msg.group_id = (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1) LIMIT 1)
                 ) as ""SourceJid"",
                 COALESCE(
+                    (SELECT mg.group_id FROM wa.message_groups mg JOIN wa.messages m ON m.group_id = mg.group_id WHERE mg.deeplens_product_id = p.id LIMIT 1),
+                    (SELECT m.group_id FROM wa.messages m JOIN media med ON split_part(m.media_url, '/', 5) = med.original_filename JOIN media_links ml ON ml.media_id = med.id WHERE ml.entity_id = p.id AND m.group_id IS NOT NULL LIMIT 1),
+                    (SELECT vl2.source_group_id FROM vendor_listings vl2 JOIN wa.messages m ON m.group_id = vl2.source_group_id WHERE vl2.product_id = p.id LIMIT 1),
                     (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
                     (SELECT source_group_id FROM vendor_listings WHERE product_id = p.id AND source_group_id IS NOT NULL LIMIT 1),
                     (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1)
@@ -1202,6 +1208,8 @@ public class ProductService : IProductService
                         'isActive',      vl.is_active,
                         'updatedAt',     vl.updated_at,
                         'sourceGroupId', COALESCE(
+                            (SELECT mg.group_id FROM wa.message_groups mg JOIN wa.messages m ON m.group_id = mg.group_id WHERE mg.group_id = vl.source_group_id LIMIT 1),
+                            (SELECT m.group_id FROM wa.messages m JOIN media med ON split_part(m.media_url, '/', 5) = med.original_filename JOIN media_links ml ON ml.media_id = med.id WHERE ml.entity_id = p.id AND m.group_id IS NOT NULL LIMIT 1),
                             vl.source_group_id, 
                             (SELECT group_id FROM wa.message_groups WHERE deeplens_product_id = p.id LIMIT 1),
                             (SELECT substring(m.storage_path from 'general/([^/]+)/') FROM media m JOIN media_links ml ON ml.media_id = m.id WHERE ml.entity_id = p.id AND m.storage_path LIKE 'general/product_%' LIMIT 1)

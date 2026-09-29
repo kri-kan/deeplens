@@ -27,33 +27,46 @@ describe('Target Message Navigation and Auto-Scroll Rules', () => {
     itemGroupId?: string,
     targetGroupId?: string,
     itemTs?: number,
-    groupsMap?: Map<string, { deeplensProductId?: string }>
+    groupsMap?: Map<string, { deeplensProductId?: string }>,
+    productId?: string
   ): boolean {
-    if (!targetGroupId || !itemGroupId) return false;
-    if (
-      itemGroupId === targetGroupId ||
-      itemGroupId.toLowerCase() === targetGroupId.toLowerCase() ||
-      itemGroupId.endsWith(targetGroupId) ||
-      targetGroupId.endsWith(itemGroupId) ||
-      itemGroupId.includes(targetGroupId) ||
-      targetGroupId.includes(itemGroupId)
-    ) {
-      return true;
-    }
-    if (groupsMap) {
-      const grp = groupsMap.get(itemGroupId);
+    if (!itemGroupId) return false;
+    if (targetGroupId) {
       if (
-        grp?.deeplensProductId &&
-        (grp.deeplensProductId === targetGroupId ||
-          grp.deeplensProductId.toLowerCase() === targetGroupId.toLowerCase())
+        itemGroupId === targetGroupId ||
+        itemGroupId.toLowerCase() === targetGroupId.toLowerCase() ||
+        itemGroupId.endsWith(targetGroupId) ||
+        targetGroupId.endsWith(itemGroupId) ||
+        itemGroupId.includes(targetGroupId) ||
+        targetGroupId.includes(itemGroupId)
       ) {
         return true;
       }
+      if (groupsMap) {
+        const grp = groupsMap.get(itemGroupId);
+        if (
+          grp?.deeplensProductId &&
+          (grp.deeplensProductId === targetGroupId ||
+            grp.deeplensProductId.toLowerCase() === targetGroupId.toLowerCase())
+        ) {
+          return true;
+        }
+      }
+      const tsMatch = targetGroupId.match(/(?:_|^)(\d{9,11})$/);
+      if (tsMatch && itemTs) {
+        const targetTs = parseInt(tsMatch[1], 10);
+        if (Math.abs(itemTs - targetTs) <= 60) {
+          return true;
+        }
+      }
     }
-    const tsMatch = targetGroupId.match(/(?:_|^)(\d{9,11})$/);
-    if (tsMatch && itemTs) {
-      const targetTs = parseInt(tsMatch[1], 10);
-      if (Math.abs(itemTs - targetTs) <= 60) {
+    if (productId && groupsMap) {
+      const grp = groupsMap.get(itemGroupId);
+      if (
+        grp?.deeplensProductId &&
+        (grp.deeplensProductId === productId ||
+          grp.deeplensProductId.toLowerCase() === productId.toLowerCase())
+      ) {
         return true;
       }
     }
@@ -65,10 +78,12 @@ describe('Target Message Navigation and Auto-Scroll Rules', () => {
     targetGroupId?: string;
     sourceGroupId?: string;
     targetMessageId?: string;
+    productId?: string;
   }) {
     const rawTargetGroup =
       params.highlightGroupId || params.targetGroupId || params.sourceGroupId;
     const rawTargetMessage = params.targetMessageId;
+    const productId = params.productId;
 
     const isMessageIdActuallyGroup =
       rawTargetMessage &&
@@ -83,16 +98,17 @@ describe('Target Message Navigation and Auto-Scroll Rules', () => {
       ? undefined
       : rawTargetMessage;
 
-    return { highlightGroupId, targetMessageId };
+    return { highlightGroupId, targetMessageId, productId };
   }
 
   function findTargetIndex(
     groupedMessages: (Message | MediaGroup)[],
     targetMessageId?: string,
     highlightGroupId?: string,
-    groupsMap?: Map<string, { deeplensProductId?: string }>
+    groupsMap?: Map<string, { deeplensProductId?: string }>,
+    productId?: string
   ): number {
-    if (!highlightGroupId && !targetMessageId) return -1;
+    if (!highlightGroupId && !targetMessageId && !productId) return -1;
 
     return groupedMessages.findIndex((item) => {
       if (targetMessageId) {
@@ -116,17 +132,17 @@ describe('Target Message Navigation and Auto-Scroll Rules', () => {
         }
       }
 
-      if (highlightGroupId) {
+      if (highlightGroupId || productId) {
         if (
           item.groupId &&
-          matchesGroupId(item.groupId, highlightGroupId, item.timestamp, groupsMap)
+          matchesGroupId(item.groupId, highlightGroupId, item.timestamp, groupsMap, productId)
         ) {
           return true;
         }
         if ('messages' in item && Array.isArray(item.messages)) {
           if (
             item.messages.some((m) =>
-              matchesGroupId(m.groupId, highlightGroupId, m.timestamp, groupsMap)
+              matchesGroupId(m.groupId, highlightGroupId, m.timestamp, groupsMap, productId)
             )
           ) {
             return true;
@@ -140,12 +156,13 @@ describe('Target Message Navigation and Auto-Scroll Rules', () => {
 
   function calculateInitialNumToRender(
     targetIndex: number,
-    totalMessages: number
+    totalMessages: number,
+    hasTarget: boolean = false
   ): number {
     if (targetIndex !== -1) {
-      return Math.max(30, targetIndex + 10);
+      return Math.max(50, targetIndex + 15);
     }
-    return totalMessages > 0 ? Math.min(30, totalMessages) : 25;
+    return hasTarget && totalMessages > 0 ? Math.min(50, totalMessages) : 25;
   }
 
   test('resolves targetGroupId and sourceGroupId aliases when highlightGroupId is omitted', () => {
@@ -265,16 +282,51 @@ describe('Target Message Navigation and Auto-Scroll Rules', () => {
     assert.equal(idx, 1);
   });
 
+  test('matches group ID via direct productId parameter when groupsMap contains product ID', () => {
+    const groupsMap = new Map<string, { deeplensProductId?: string }>();
+    groupsMap.set('product_52fbf360-6421-4f10-9114-f421ca134d1c', {
+      deeplensProductId: '33e8cd97-0fbf-40ea-9cb4-8a0322d7cbca',
+    });
+
+    const messages: (Message | MediaGroup)[] = [
+      {
+        messageId: 'MSG_NEWEST',
+        groupId: 'product_other',
+        timestamp: 1782364000,
+        isFromMe: false,
+      },
+      {
+        messageId: 'MSG_TARGET_PROD',
+        groupId: 'product_52fbf360-6421-4f10-9114-f421ca134d1c',
+        timestamp: 1782363760,
+        isFromMe: false,
+      },
+    ];
+
+    // Navigating with direct productId parameter and undefined highlightGroupId
+    const idx = findTargetIndex(
+      messages,
+      undefined,
+      undefined,
+      groupsMap,
+      '33e8cd97-0fbf-40ea-9cb4-8a0322d7cbca'
+    );
+    assert.equal(idx, 1);
+  });
+
   test('dynamically sizes initialNumToRender to ensure target message is pre-rendered', () => {
     const targetIdx = 35;
     const total = 50;
 
     const initialNum = calculateInitialNumToRender(targetIdx, total);
     assert.ok(initialNum >= targetIdx + 1, 'InitialNumToRender must cover target item');
-    assert.equal(initialNum, 45); // 35 + 10 = 45
+    assert.equal(initialNum, 50); // Math.max(50, 35 + 15) = 50
 
-    const defaultNum = calculateInitialNumToRender(-1, total);
-    assert.equal(defaultNum, 30);
+    const defaultNum = calculateInitialNumToRender(-1, total, false);
+    assert.equal(defaultNum, 25);
+
+    const targetPendingNum = calculateInitialNumToRender(-1, total, true);
+    assert.equal(targetPendingNum, 50);
   });
 
   test('programmatic momentum scroll does not cancel user scroll lock or retry timers', () => {

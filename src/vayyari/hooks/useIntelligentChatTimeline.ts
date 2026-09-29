@@ -8,6 +8,7 @@ export interface UseIntelligentChatTimelineOptions {
   highlightGroupId?: string;
   searchQuery?: string;
   pageSize?: number;
+  productId?: string;
 }
 
 export function useIntelligentChatTimeline({
@@ -17,6 +18,7 @@ export function useIntelligentChatTimeline({
   highlightGroupId,
   searchQuery,
   pageSize = 50,
+  productId,
 }: UseIntelligentChatTimelineOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export function useIntelligentChatTimeline({
     if (!jid) return;
     if (showLoading) setLoading(true);
     try {
-      if (targetMessageId || targetTimestamp || highlightGroupId || searchQuery) {
+      if (targetMessageId || targetTimestamp || highlightGroupId || searchQuery || productId) {
         // Fetch anchored batch around target or highlighted group
         const res = await waProcessorService.fetchMessages(
           jid,
@@ -51,13 +53,13 @@ export function useIntelligentChatTimeline({
           0,
           highlightGroupId,
           searchQuery,
-          { targetMessageId, targetTimestamp }
+          { targetMessageId, targetTimestamp, productId }
         );
 
         setMessages(mergeMessages([], res.messages));
         setHasMoreOlder(true);
         // If specific target message/timestamp or highlight group requested, we might be in historical window
-        const isHistoricalTarget = !!(targetMessageId || targetTimestamp || highlightGroupId);
+        const isHistoricalTarget = !!(targetMessageId || targetTimestamp || highlightGroupId || productId);
         setIsLatestLoaded(!isHistoricalTarget);
 
         if (targetMessageId) {
@@ -88,7 +90,7 @@ export function useIntelligentChatTimeline({
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [jid, targetMessageId, targetTimestamp, highlightGroupId, searchQuery, pageSize, mergeMessages]);
+  }, [jid, targetMessageId, targetTimestamp, highlightGroupId, searchQuery, pageSize, productId, mergeMessages]);
 
   useEffect(() => {
     initTimeline();
