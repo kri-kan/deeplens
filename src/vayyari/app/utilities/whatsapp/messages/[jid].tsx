@@ -245,6 +245,7 @@ export default function FullMessageBrowser() {
     highlightGroupId?: string, 
     targetGroupId?: string,
     sourceGroupId?: string,
+    productId?: string,
     initialZoningMode?: string,
     targetMessageId?: string,
     targetTimestamp?: string
@@ -266,6 +267,8 @@ export default function FullMessageBrowser() {
   // Resilient group / message targeting: accept highlightGroupId, targetGroupId, and sourceGroupId
   const rawTargetGroup = rawParams.highlightGroupId || rawParams.targetGroupId || rawParams.sourceGroupId;
   const rawTargetMessage = rawParams.targetMessageId;
+  const rawProductId = rawParams.productId;
+  const productId = Array.isArray(rawProductId) ? rawProductId[0] : rawProductId;
 
   // Auto-detect if targetMessageId was passed as a group ID (e.g. product_... or sticker_... or ...@g.us_...)
   const isMessageIdActuallyGroup = rawTargetMessage && (
@@ -282,14 +285,14 @@ export default function FullMessageBrowser() {
   const [pulseActive, setPulseActive] = useState(true);
 
   useEffect(() => {
-    if (highlightGroupId || targetMessageId) {
+    if (highlightGroupId || targetMessageId || productId) {
       setPulseActive(true);
       const timer = setTimeout(() => {
         setPulseActive(false);
       }, 7000);
       return () => clearTimeout(timer);
     }
-  }, [highlightGroupId, targetMessageId]);
+  }, [highlightGroupId, targetMessageId, productId]);
   const router = useRouter();
   
   const [searchInput, setSearchInput] = useState('');
@@ -313,6 +316,7 @@ export default function FullMessageBrowser() {
     targetMessageId,
     targetTimestamp: targetTimestamp ? parseInt(targetTimestamp) : undefined,
     highlightGroupId,
+    productId,
     searchQuery: activeSearchQuery,
   });
 
@@ -746,41 +750,54 @@ export default function FullMessageBrowser() {
   }, [messages]);
 
   const matchesGroupId = useCallback((itemGroupId?: string, targetGroupId?: string, itemTs?: number) => {
-    if (!targetGroupId || !itemGroupId) return false;
-    if (
-      itemGroupId === targetGroupId || 
-      itemGroupId.toLowerCase() === targetGroupId.toLowerCase() ||
-      itemGroupId.endsWith(targetGroupId) || 
-      targetGroupId.endsWith(itemGroupId) || 
-      itemGroupId.includes(targetGroupId) || 
-      targetGroupId.includes(itemGroupId)
-    ) {
-      return true;
+    if (!itemGroupId) return false;
+    if (targetGroupId) {
+      if (
+        itemGroupId === targetGroupId || 
+        itemGroupId.toLowerCase() === targetGroupId.toLowerCase() ||
+        itemGroupId.endsWith(targetGroupId) || 
+        targetGroupId.endsWith(itemGroupId) || 
+        itemGroupId.includes(targetGroupId) || 
+        targetGroupId.includes(itemGroupId)
+      ) {
+        return true;
+      }
+      // Check if groupsMap maps this group to targetGroupId as deeplensProductId
+      const grp = groupsMap.get(itemGroupId);
+      if (grp?.deeplensProductId && (
+        grp.deeplensProductId === targetGroupId || 
+        grp.deeplensProductId.toLowerCase() === targetGroupId.toLowerCase()
+      )) {
+        return true;
+      }
+      const tsMatch = targetGroupId.match(/(?:_|^)(\d{9,11})$/);
+      if (tsMatch && itemTs) {
+        const targetTs = parseInt(tsMatch[1], 10);
+        if (Math.abs(itemTs - targetTs) <= 60) {
+          return true;
+        }
+      }
     }
-    // Check if groupsMap maps this group to targetGroupId as deeplensProductId
-    const grp = groupsMap.get(itemGroupId);
-    if (grp?.deeplensProductId && (
-      grp.deeplensProductId === targetGroupId || 
-      grp.deeplensProductId.toLowerCase() === targetGroupId.toLowerCase()
-    )) {
-      return true;
-    }
-    const tsMatch = targetGroupId.match(/(?:_|^)(\d{9,11})$/);
-    if (tsMatch && itemTs) {
-      const targetTs = parseInt(tsMatch[1], 10);
-      if (Math.abs(itemTs - targetTs) <= 60) {
+    // Check if groupsMap maps this group to productId
+    if (productId) {
+      const grp = groupsMap.get(itemGroupId);
+      if (grp?.deeplensProductId && (
+        grp.deeplensProductId === productId || 
+        grp.deeplensProductId.toLowerCase() === productId.toLowerCase()
+      )) {
         return true;
       }
     }
     return false;
-  }, [groupsMap]);
+  }, [groupsMap, productId]);
 
   const isItemHighlighted = useCallback((groupId?: string, msgId?: string, timestamp?: number) => {
     if (!pulseActive) return false;
     if (targetMessageId && msgId && (msgId === targetMessageId || msgId.toLowerCase() === targetMessageId.toLowerCase())) return true;
     if (highlightGroupId && matchesGroupId(groupId, highlightGroupId, timestamp)) return true;
+    if (productId && matchesGroupId(groupId, undefined, timestamp)) return true;
     return false;
-  }, [pulseActive, targetMessageId, highlightGroupId, matchesGroupId]);
+  }, [pulseActive, targetMessageId, highlightGroupId, productId, matchesGroupId]);
 
   const getHighlightedStyle = useCallback((groupId?: string, msgId?: string, timestamp?: number) => {
     if (!isItemHighlighted(groupId, msgId, timestamp)) return null;
@@ -792,7 +809,7 @@ export default function FullMessageBrowser() {
   }, [isItemHighlighted]);
 
   const findTargetIndex = useCallback(() => {
-    if (!highlightGroupId && !targetMessageId) return -1;
+    if (!highlightGroupId && !targetMessageId && !productId) return -1;
 
     // 1. Direct message ID match (case-insensitive)
     if (targetMessageId) {
@@ -814,29 +831,27 @@ export default function FullMessageBrowser() {
       if (msgIdx !== -1) return msgIdx;
     }
 
-    // 2. Group ID match:
-    // In an inverted FlatList (index 0 = newest, index len-1 = oldest), the Zone Card (product header)
-    // is rendered on the OLDEST message of the group, which has the HIGHEST index in groupedMessages.
-    // We scan from the highest index downwards to locate the Zone Card item for perfect landing!
-    if (highlightGroupId) {
-      for (let i = groupedMessages.length - 1; i >= 0; i--) {
-        const item = groupedMessages[i];
-        let isMatch = false;
+    // 2. Group ID or Product ID match:
+    // In an inverted FlatList (index 0 = newest, index len-1 = oldest),
+    // findIndex finds the lowest index (the primary media album / newest item of the group),
+    // which ensures media albums and content are directly in view without overshooting into older history.
+    if (highlightGroupId || productId) {
+      const idx = groupedMessages.findIndex(item => {
         if (item.groupId && matchesGroupId(item.groupId, highlightGroupId, item.timestamp)) {
-          isMatch = true;
-        } else if ('messages' in item && Array.isArray(item.messages)) {
+          return true;
+        }
+        if ('messages' in item && Array.isArray(item.messages)) {
           if (item.messages.some((m: any) => matchesGroupId(m.groupId, highlightGroupId, m.timestamp))) {
-            isMatch = true;
+            return true;
           }
         }
-        if (isMatch) {
-          return i;
-        }
-      }
+        return false;
+      });
+      if (idx !== -1) return idx;
     }
 
     return -1;
-  }, [groupedMessages, highlightGroupId, targetMessageId, matchesGroupId]);
+  }, [groupedMessages, highlightGroupId, targetMessageId, productId, matchesGroupId]);
 
   const scrollToTarget = useCallback((animated: boolean = false) => {
     if (userInteractedRef.current) return;
@@ -859,7 +874,7 @@ export default function FullMessageBrowser() {
     }
   }, [findTargetIndex]);
 
-  const targetKey = useMemo(() => `${highlightGroupId || ''}_${targetMessageId || ''}`, [highlightGroupId, targetMessageId]);
+  const targetKey = useMemo(() => `${highlightGroupId || ''}_${targetMessageId || ''}_${productId || ''}`, [highlightGroupId, targetMessageId, productId]);
 
   useEffect(() => {
     initialLandingCompletedRef.current = false;
@@ -871,7 +886,7 @@ export default function FullMessageBrowser() {
   // One-shot initial scroll anchoring: lands user on target product/message exactly once on screen entry.
   // As soon as the user scrolls away or the initial landing completes, scroll lock is permanently released.
   useEffect(() => {
-    if (timelineLoading || groupedMessages.length === 0 || (!highlightGroupId && !targetMessageId)) return;
+    if (timelineLoading || groupedMessages.length === 0 || (!highlightGroupId && !targetMessageId && !productId)) return;
     if (initialLandingCompletedRef.current || userInteractedRef.current) return;
 
     const targetIndex = findTargetIndex();
@@ -897,7 +912,7 @@ export default function FullMessageBrowser() {
         clearTimeout(secondaryTimer);
       };
     }
-  }, [timelineLoading, groupedMessages, highlightGroupId, targetMessageId, findTargetIndex, scrollToTarget]);
+  }, [timelineLoading, groupedMessages, highlightGroupId, targetMessageId, productId, findTargetIndex, scrollToTarget]);
 
   const renderZoneCard = (groupId: string) => {
     const group = groupsMap.get(groupId);
@@ -1524,10 +1539,10 @@ export default function FullMessageBrowser() {
               initialNumToRender={(() => {
                 const targetIdx = findTargetIndex();
                 if (targetIdx !== -1) {
-                  return Math.max(40, targetIdx + 15);
+                  return Math.max(50, targetIdx + 15);
                 }
-                return (highlightGroupId || targetMessageId) && groupedMessages.length > 0
-                  ? Math.min(40, groupedMessages.length)
+                return (highlightGroupId || targetMessageId || productId) && groupedMessages.length > 0
+                  ? Math.min(50, groupedMessages.length)
                   : 25;
               })()}
               maxToRenderPerBatch={30}

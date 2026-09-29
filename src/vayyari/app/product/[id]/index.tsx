@@ -185,7 +185,7 @@ export default function ProductDetailScreen() {
     const highlightGroup = targetGroupId || '';
 
     router.push(
-      `/utilities/whatsapp/messages/${encodedJid}?name=${encodeURIComponent(chatName)}&chatName=${encodeURIComponent(chatName)}&highlightGroupId=${encodeURIComponent(highlightGroup)}&targetGroupId=${encodeURIComponent(highlightGroup)}&sourceGroupId=${encodeURIComponent(highlightGroup)}&initialZoningMode=true` as any
+      `/utilities/whatsapp/messages/${encodedJid}?name=${encodeURIComponent(chatName)}&chatName=${encodeURIComponent(chatName)}&highlightGroupId=${encodeURIComponent(highlightGroup)}&targetGroupId=${encodeURIComponent(highlightGroup)}&sourceGroupId=${encodeURIComponent(highlightGroup)}&productId=${encodeURIComponent(product?.id || id || '')}&initialZoningMode=true` as any
     );
   };
 

@@ -76,12 +76,13 @@ export class ConversationService {
         targetMessageId?: string,
         targetTimestamp?: number,
         fromTimestamp?: number,
-        toTimestamp?: number
+        toTimestamp?: number,
+        productId?: string
     ) {
         const messages = await this.repository.findMessages(
             jid, limit, offset, aroundGroupId, searchQuery,
             beforeTimestamp, afterTimestamp, targetMessageId, targetTimestamp,
-            fromTimestamp, toTimestamp
+            fromTimestamp, toTimestamp, productId
         );
         const total = await this.repository.countMessages(jid);
 

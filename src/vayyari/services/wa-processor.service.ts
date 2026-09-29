@@ -358,6 +358,7 @@ export const waProcessorService = {
       targetTimestamp?: number;
       fromTimestamp?: number;
       toTimestamp?: number;
+      productId?: string;
     }
   ): Promise<{ messages: Message[]; total: number }> => {
     let url = `/conversations/${encodeURIComponent(jid)}/messages?limit=${limit}&offset=${offset}`;
@@ -366,6 +367,9 @@ export const waProcessorService = {
     }
     if (searchQuery) {
       url += `&searchQuery=${encodeURIComponent(searchQuery)}`;
+    }
+    if (options?.productId) {
+      url += `&productId=${encodeURIComponent(options.productId)}`;
     }
     if (options?.beforeTimestamp !== undefined) {
       url += `&beforeTimestamp=${options.beforeTimestamp}`;

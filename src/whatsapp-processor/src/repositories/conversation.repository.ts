@@ -308,7 +308,8 @@ export class ConversationRepository {
         targetMessageId?: string,
         targetTimestamp?: number,
         fromTimestamp?: number,
-        toTimestamp?: number
+        toTimestamp?: number,
+        productId?: string
     ): Promise<any[]> {
         let searchCondition = "";
         if (searchQuery) {
@@ -435,8 +436,9 @@ export class ConversationRepository {
         }
 
         // 5. Default Group-based or offset-based query
-        if (aroundGroupId) {
-            const params: any[] = [jid, limit, aroundGroupId];
+        if (aroundGroupId || productId) {
+            const effectiveTarget = aroundGroupId || productId;
+            const params: any[] = [jid, limit, effectiveTarget];
             const query = `
                 ${chatJidSubquery},
                 matched_gids AS (
@@ -445,32 +447,64 @@ export class ConversationRepository {
                     SELECT group_id FROM wa.message_groups WHERE deeplens_product_id::text = $3
                     UNION
                     SELECT group_id FROM wa.message_groups WHERE group_id = $3
+                    UNION
+                    -- If $3 matches a group that has a product, include all groups for that product
+                    SELECT group_id FROM wa.message_groups
+                    WHERE deeplens_product_id IS NOT NULL 
+                      AND deeplens_product_id IN (SELECT deeplens_product_id FROM wa.message_groups WHERE group_id = $3 AND deeplens_product_id IS NOT NULL)
+                    UNION
+                    -- Match other groups with same normalized description in the same chat
+                    SELECT mg2.group_id 
+                    FROM wa.message_groups mg1
+                    JOIN wa.message_groups mg2 ON mg1.jid = mg2.jid AND mg1.group_id != mg2.group_id
+                    WHERE (mg1.group_id = $3 OR mg1.deeplens_product_id::text = $3)
+                      AND LENGTH(REPLACE(COALESCE(mg1.description, ''), '*', '')) >= 20
+                      AND SUBSTRING(REPLACE(mg1.description, '*', ''), 1, 35) = SUBSTRING(REPLACE(COALESCE(mg2.description, ''), '*', ''), 1, 35)
+                    UNION
+                    -- Match groups linked through vendor listings
+                    SELECT vl.source_group_id
+                    FROM vendor_listings vl
+                    WHERE (vl.product_id::text = $3 OR vl.source_group_id = $3)
+                      AND vl.source_group_id IS NOT NULL
                 ),
-                target_ts_lookup AS (
+                msg_ts AS (
                     SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) AND group_id IN (SELECT gid FROM matched_gids)
-                    UNION ALL
+                ),
+                group_ts AS (
                     SELECT EXTRACT(EPOCH FROM last_message_at)::bigint as min_ts, EXTRACT(EPOCH FROM last_message_at)::bigint as max_ts
                     FROM wa.message_groups
                     WHERE group_id IN (SELECT gid FROM matched_gids)
-                    UNION ALL
-                    SELECT CASE 
-                        WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint 
-                        ELSE NULL 
-                    END as min_ts,
-                    CASE 
-                        WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint 
-                        ELSE NULL 
-                    END as max_ts
+                      AND last_message_at IS NOT NULL
+                      AND EXISTS (SELECT 1 FROM wa.messages m WHERE m.group_id = wa.message_groups.group_id)
                 ),
                 target_bounds AS (
-                    SELECT MIN(min_ts) as min_ts, MAX(max_ts) as max_ts 
-                    FROM target_ts_lookup 
-                    WHERE min_ts IS NOT NULL AND min_ts > 0
+                    SELECT 
+                        COALESCE(
+                            (SELECT min_ts FROM msg_ts WHERE min_ts IS NOT NULL),
+                            (SELECT min_ts FROM group_ts WHERE min_ts IS NOT NULL),
+                            CASE WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint ELSE NULL END
+                        ) as min_ts,
+                        COALESCE(
+                            (SELECT max_ts FROM msg_ts WHERE max_ts IS NOT NULL),
+                            (SELECT max_ts FROM group_ts WHERE max_ts IS NOT NULL),
+                            CASE WHEN $3 ~ '_[0-9]{9,11}$' THEN SPLIT_PART($3, '_', 2)::bigint ELSE NULL END
+                        ) as max_ts
                 ),
                 group_msgs AS (
-                    SELECT ${selectFields}
+                    SELECT 
+                        message_id as "messageId",
+                        jid as "chatJid",
+                        sender as "senderJid",
+                        content as "messageText",
+                        message_type as "messageType",
+                        media_type as "mediaType",
+                        media_url as "mediaUrl",
+                        timestamp,
+                        is_from_me as "isFromMe",
+                        metadata,
+                        CASE WHEN group_id IN (SELECT gid FROM matched_gids) THEN $3 ELSE group_id END as "groupId"
                     FROM wa.messages
                     WHERE jid IN (SELECT jid FROM chat_jids) ${searchCondition}
                       AND group_id IN (SELECT gid FROM matched_gids)

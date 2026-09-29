@@ -92,12 +92,13 @@ export class ConversationController {
         const targetTimestamp = req.query.targetTimestamp ? parseInt(req.query.targetTimestamp as string) : undefined;
         const fromTimestamp = req.query.fromTimestamp ? parseInt(req.query.fromTimestamp as string) : undefined;
         const toTimestamp = req.query.toTimestamp ? parseInt(req.query.toTimestamp as string) : undefined;
+        const productId = req.query.productId as string | undefined;
 
         try {
             const result = await this.service.getMessages(
                 jid, limit, offset, highlightGroupId, searchQuery,
                 beforeTimestamp, afterTimestamp, targetMessageId, targetTimestamp,
-                fromTimestamp, toTimestamp
+                fromTimestamp, toTimestamp, productId
             );
             res.json(result);
         } catch (err: any) {
