@@ -2407,11 +2407,30 @@ public class InstaController : ControllerBase
         Guid targetWatchlistId,
         [FromQuery] int limit = 50,
         [FromQuery] int offset = 0,
+        [FromQuery] string? search = null,
         CancellationToken ct = default)
     {
         try
         {
             using var conn = await _db.CreateConnectionAsync();
+
+            string postSearchFilter = "";
+            string groupSearchFilter = "";
+            if (!string.IsNullOrEmpty(search))
+            {
+                postSearchFilter = "AND (cv.description ILIKE @search OR cw.username ILIKE @search)";
+                groupSearchFilter = @"
+                    AND (sg.name ILIKE @search 
+                       OR sg.keywords ILIKE @search
+                       OR EXISTS (
+                           SELECT 1 
+                           FROM story_group_items sgi
+                           JOIN competitor_videos cv ON cv.id = sgi.post_id
+                           JOIN competitor_watchlist cw ON cv.watchlist_id = cw.id
+                           WHERE sgi.group_id = sg.id 
+                             AND (cv.description ILIKE @search OR cw.username ILIKE @search)
+                       ))";
+            }
 
             // Same UNION ALL + sort_timestamp pattern as GetStoryPlannerFeed, with story-sharing filters:
             // - Groups must be eligible for this target watchlist, not ignored/suspended
@@ -2447,6 +2466,7 @@ public class InstaController : ControllerBase
                     WHERE sg.status != 'ignore'
                       AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
                       AND (sge.suspend_until IS NULL OR sge.suspend_until < now())
+                      {groupSearchFilter}
 
                     UNION ALL
 
@@ -2470,6 +2490,7 @@ public class InstaController : ControllerBase
                       AND (cv.status != 'suspend' OR cv.suspend_until IS NULL OR cv.suspend_until < now())
                       AND cv.url IS NOT NULL AND cv.url != '' AND cv.url ~* 'instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+'
                       AND NOT EXISTS (SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id)
+                      {postSearchFilter}
                 )
                 SELECT item_type AS ItemType, id AS Id, sort_timestamp AS SortTimestamp
                 FROM eligible_feed
@@ -2500,6 +2521,7 @@ public class InstaController : ControllerBase
                     WHERE sg.status != 'ignore'
                       AND (sg.status != 'suspend' OR sg.suspend_until IS NULL OR sg.suspend_until < now())
                       AND (sge.suspend_until IS NULL OR sge.suspend_until < now())
+                      {groupSearchFilter}
 
                     UNION ALL
 
@@ -2518,14 +2540,16 @@ public class InstaController : ControllerBase
                       AND (cv.status != 'suspend' OR cv.suspend_until IS NULL OR cv.suspend_until < now())
                       AND cv.url IS NOT NULL AND cv.url != '' AND cv.url ~* 'instagram\.com/(p|reel|reels|tv)/[A-Za-z0-9_-]+'
                       AND NOT EXISTS (SELECT 1 FROM story_group_items sgi WHERE sgi.post_id = cv.id)
+                      {postSearchFilter}
                 )
                 SELECT
                     COUNT(*) AS TotalCount,
                     COUNT(*) FILTER (WHERE item_type = 'group') AS GroupCount
                 FROM eligible_feed;";
 
+            var searchPattern = string.IsNullOrEmpty(search) ? null : $"%{search.Trim()}%";
             using var multi = await conn.QueryMultipleAsync(
-                new CommandDefinition(sql, new { TargetWatchlistId = targetWatchlistId, limit, offset }, cancellationToken: ct)
+                new CommandDefinition(sql, new { TargetWatchlistId = targetWatchlistId, limit, offset, search = searchPattern }, cancellationToken: ct)
             );
             var queryResults = (await multi.ReadAsync<UnifiedFeedQueryResult>()).ToList();
             var counts = await multi.ReadFirstAsync<StoryPlannerQueryCounts>();

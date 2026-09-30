@@ -799,9 +799,10 @@ class InstagramService {
     return searchApiClient.post(`/api/v1/Insta/story-groups/${id}/finish?targetWatchlistId=${targetWatchlistId}`, {});
   };
 
-  getEligibleShares = async (targetWatchlistId: string, limit = 50, offset = 0): Promise<{ items: UnifiedPlannerItem[]; totalCount: number }> => {
+  getEligibleShares = async (targetWatchlistId: string, limit = 50, offset = 0, search?: string): Promise<{ items: UnifiedPlannerItem[]; totalCount: number }> => {
+    const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
     const raw = await searchApiClient.get<{ items: any[]; totalCount: number }>(
-      `/api/v1/Insta/story-planner/eligible/${targetWatchlistId}?limit=${limit}&offset=${offset}`
+      `/api/v1/Insta/story-planner/eligible/${targetWatchlistId}?limit=${limit}&offset=${offset}${searchParam}`
     );
     const items = ((raw && raw.items) || []).map(item => {
       if (item.type === 'post' && item.post) {
