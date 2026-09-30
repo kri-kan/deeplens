@@ -148,6 +148,8 @@ for profile in "${PROFILES[@]}"; do
         # Run the test – retry on ADB/gRPC failures AND transient UI failures (e.g. timeout waiting for Close Friends)
         run_ok=0
         consecutive_failures=0
+        # Base wait doubles on each retry: attempt 1→5s, attempt 2→10s, attempt 3→20s
+        retry_wait=5
         for attempt in 1 2 3; do
             # TERM=dumb + -Djline.terminal=dumb: prevents JLine from opening /dev/tty directly.
             # Without this, the Maestro JVM gets SIGTTIN and freezes (Tl state) when
@@ -187,10 +189,11 @@ for profile in "${PROFILES[@]}"; do
                 adb kill-server && sleep 3 && adb start-server && sleep 3
             else
                 # Transient UI failure or slow app load (e.g. Expo bundle compiling, Close Friends timeout)
-                # Give it sufficient wait time and retry up to 3 times before giving up
+                # Double the wait on each retry so Instagram's story editor has more time to render.
                 consecutive_failures=$((consecutive_failures + 1))
-                echo "Flow failure or slow loading on attempt $attempt for $profile. Waiting 5 seconds before retry..."
-                sleep 5
+                echo "Flow failure or slow loading on attempt $attempt for $profile. Waiting ${retry_wait}s before retry..."
+                sleep $retry_wait
+                retry_wait=$((retry_wait * 2))
             fi
         done
 

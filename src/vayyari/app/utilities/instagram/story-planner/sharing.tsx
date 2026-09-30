@@ -476,6 +476,10 @@ export default function StorySharingScreen() {
   const [confirmShareVisible, setConfirmShareVisible] = useState(false);
   const [postToShare, setPostToShare] = useState<InstagramPost | null>(null);
   
+  // Search Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const isFirstRender = useRef(true);
+  
   const [selectedItems, setSelectedItems] = useState<Map<string, { item: UnifiedPlannerItem; order: number }>>(new Map());
   const selectionCounter = useRef(0);
   const [selectionMenuVisible, setSelectionMenuVisible] = useState(false);
@@ -600,7 +604,7 @@ export default function StorySharingScreen() {
   };
 
   // Load Eligible Shares
-  const loadShares = async (profileId?: string, reset = false, showPullRefresh = false) => {
+  const loadShares = async (profileId?: string, reset = false, showPullRefresh = false, search = searchQuery) => {
     const pid = profileId || selectedProfile?.id;
     if (!pid) return;
     if (reset) {
@@ -615,7 +619,7 @@ export default function StorySharingScreen() {
     }
     try {
       const { items, totalCount: total } = await wrapInSpan('StorySharingScreen: getEligibleShares', () =>
-        instagramService.getEligibleShares(pid, PAGE_SIZE, offsetRef.current)
+        instagramService.getEligibleShares(pid, PAGE_SIZE, offsetRef.current, search)
       );
       if (reset) {
         setAllShares(items);
@@ -636,15 +640,15 @@ export default function StorySharingScreen() {
 
   const handleRefresh = useCallback(() => {
     if (selectedProfile) {
-      loadShares(selectedProfile.id, true, true);
+      loadShares(selectedProfile.id, true, true, searchQuery);
     }
-  }, [selectedProfile]);
+  }, [selectedProfile, searchQuery]);
 
   const handleLoadMore = useCallback(() => {
     if (loadingMore || loading) return;
     if (allShares.length >= totalCount) return;
-    loadShares();
-  }, [loadingMore, loading, allShares.length, totalCount, selectedProfile]);
+    loadShares(selectedProfile?.id, false, false, searchQuery);
+  }, [loadingMore, loading, allShares.length, totalCount, selectedProfile, searchQuery]);
 
   useEffect(() => {
     loadProfiles();
@@ -660,10 +664,30 @@ export default function StorySharingScreen() {
   useFocusEffect(
     useCallback(() => {
       if (selectedProfile) {
-        loadShares(selectedProfile.id, true);
+        loadShares(selectedProfile.id, true, false, searchQuery);
       }
-    }, [selectedProfile])
+    }, [selectedProfile, searchQuery])
   );
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (searchQuery === '') {
+      if (selectedProfile) {
+        loadShares(selectedProfile.id, true, false, '');
+      }
+      return;
+    }
+    const delayDebounceFn = setTimeout(() => {
+      if (selectedProfile) {
+        loadShares(selectedProfile.id, true, false, searchQuery);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
   const handleSharePostDirectly = async (post: InstagramPost) => {
     if (!post.permalink) {
@@ -1125,6 +1149,25 @@ export default function StorySharingScreen() {
 
       <Divider />
 
+      {/* Search Filter Bar */}
+      <View style={[
+        styles.searchBarContainer,
+        selectedItems.size > 0 && { marginTop: -6 }
+      ]}>
+        <TextInput
+          placeholder="Search name, keywords, caption..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          mode="flat"
+          dense
+          activeUnderlineColor="transparent"
+          underlineColor="transparent"
+          style={styles.searchBarInputFlex}
+          left={<TextInput.Icon icon="magnify" size={20} />}
+          right={searchQuery ? <TextInput.Icon icon="close" size={20} onPress={() => setSearchQuery('')} /> : null}
+        />
+      </View>
+
       {loading && allShares.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -1132,11 +1175,25 @@ export default function StorySharingScreen() {
         </View>
       ) : eligibleItems.length === 0 ? (
         <View style={styles.center}>
-          <IconButton icon="check-decagram-outline" size={48} style={{ opacity: 0.3 }} />
-          <Text variant="bodyLarge" style={{ opacity: 0.5 }}>All caught up!</Text>
-          <Text variant="bodySmall" style={{ opacity: 0.5, textAlign: 'center', marginTop: 4, paddingHorizontal: 40 }}>
-            No active content mapped to @{selectedProfile?.username}.
+          <IconButton icon={searchQuery ? "magnify-close" : "check-decagram-outline"} size={48} style={{ opacity: 0.3 }} />
+          <Text variant="bodyLarge" style={{ opacity: 0.5 }}>
+            {searchQuery ? 'No matching content found' : 'All caught up!'}
           </Text>
+          <Text variant="bodySmall" style={{ opacity: 0.5, textAlign: 'center', marginTop: 4, paddingHorizontal: 40 }}>
+            {searchQuery
+              ? `No active content matching "${searchQuery}" for @${selectedProfile?.username}.`
+              : `No active content mapped to @${selectedProfile?.username}.`}
+          </Text>
+          {searchQuery ? (
+            <Button
+              mode="text"
+              compact
+              onPress={() => setSearchQuery('')}
+              style={{ marginTop: 8 }}
+            >
+              Clear Search
+            </Button>
+          ) : null}
         </View>
       ) : (
         <FlatList
@@ -1828,5 +1885,20 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '600',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  searchBarInputFlex: {
+    flex: 1,
+    height: 40,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 8,
   },
 });
