@@ -17,18 +17,47 @@ export default function PostDetailScreen() {
     const insets = useSafeAreaInsets();
     
     const initialItem = initialData ? normalizeData(JSON.parse(initialData as string)) : null;
+    const targetId = (id as string) || initialItem?.id?.toString();
+
+    const extractShortcode = (urlOrStr?: string) => {
+        if (!urlOrStr) return undefined;
+        const match = urlOrStr.match(/(?:p|reel|reels)\/([A-Za-z0-9_-]+)/i);
+        if (match) return match[1];
+        if (/^[A-Za-z0-9_-]{5,25}$/.test(urlOrStr) && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(urlOrStr)) return urlOrStr;
+        return undefined;
+    };
+    const targetShortcode = extractShortcode(initialItem?.permalink) ||
+                            extractShortcode(initialItem?.postUrl) ||
+                            extractShortcode(id as string);
+
+    const matchesTarget = (p: InstagramPost) => {
+        if (!p) return false;
+        const pId = p.id?.toString();
+        if (targetId && pId === targetId) return true;
+        if (targetId && p.platformVideoId && p.platformVideoId.toString() === targetId) return true;
+        if (targetShortcode) {
+            if (p.permalink && p.permalink.includes(targetShortcode)) return true;
+            if (p.postUrl && p.postUrl.includes(targetShortcode)) return true;
+            if (p.platformVideoId && p.platformVideoId.toString() === targetShortcode) return true;
+        }
+        return false;
+    };
+
     const [posts, setPosts] = useState<any[]>(() => {
         const cached = instagramService.getLastFetchedPosts();
+        // Normalize the cache first so ID fields (postId vs id) are resolved consistently,
+        // then only use it if it actually contains the target post.
         if (cached && cached.length > 0) {
-            return cached.map(normalizeData);
+            const normalizedCache = cached.map(normalizeData);
+            const hit = normalizedCache.some(matchesTarget);
+            if (hit) return normalizedCache;
         }
         return initialItem ? [initialItem] : [];
     });
     
     const [activeIndex, setActiveIndex] = useState(() => {
         if (posts.length > 0) {
-            const targetId = (id || initialItem?.id)?.toString();
-            const idx = posts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
+            const idx = posts.findIndex(matchesTarget);
             return idx !== -1 ? idx : 0;
         }
         return 0;
@@ -40,25 +69,26 @@ export default function PostDetailScreen() {
     const [isDragging, setIsDragging] = useState(false);
     const flatListRef = useRef<FlatList>(null);
 
+    // Initial mount positioning fallback for FlatList when landing on non-zero index
     useEffect(() => {
-        if (!loading && posts.length > 1) {
-            const targetId = (id || initialItem?.id)?.toString();
-            const idx = posts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
-            
-            if (idx !== -1) {
-                setActiveIndex(idx);
-                // Use a small timeout to ensure FlatList has rendered the new list
-                setTimeout(() => {
-                    flatListRef.current?.scrollToIndex({ 
-                        index: idx, 
-                        animated: false 
-                    });
-                }, 100);
-            }
+        if (activeIndex > 0) {
+            const timer = setTimeout(() => {
+                flatListRef.current?.scrollToOffset({ offset: activeIndex * height, animated: false });
+            }, 60);
+            return () => clearTimeout(timer);
         }
-    }, [loading, posts.length]);
+    }, []);
 
     useEffect(() => {
+        // If we already have the target post in a populated list (e.g. from the explorer cache),
+        // DO NOT re-fetch the first page of 100 items. Doing so would truncate any posts beyond
+        // offset 100 (causing posts like row 126 to be dropped and flipping to the 100th post)
+        // and clobber the user's navigated list.
+        if (posts.length > 1 && posts.some(matchesTarget)) {
+            setLoading(false);
+            return;
+        }
+
         const loadAllPosts = async () => {
             if (!username) {
                 setLoading(false);
@@ -72,12 +102,33 @@ export default function PostDetailScreen() {
                     (sortOrder as string) || 'desc'
                 );
                 if (response?.videos && response.videos.length > 0) {
-                    const allPosts = response.videos.map(normalizeData);
-                    setPosts(allPosts);
-                    
-                    const targetId = (id || initialItem?.id)?.toString();
-                    const idx = allPosts.findIndex((p: InstagramPost) => p.id?.toString() === targetId);
-                    if (idx !== -1) setActiveIndex(idx);
+                    const fetched = response.videos.map(normalizeData);
+                    const idx = fetched.findIndex(matchesTarget);
+
+                    let finalPosts: InstagramPost[];
+                    let finalIndex: number;
+
+                    if (idx !== -1) {
+                        finalPosts = fetched;
+                        finalIndex = idx;
+                    } else if (initialItem) {
+                        // The target post was not in the first 100 items (e.g. older post).
+                        // Preserve initialItem so the clicked post is NEVER lost or flipped to a default post.
+                        finalPosts = [initialItem, ...fetched.filter(p => !matchesTarget(p))];
+                        finalIndex = 0;
+                    } else {
+                        finalPosts = fetched;
+                        finalIndex = 0;
+                    }
+
+                    setPosts(finalPosts);
+                    setActiveIndex(finalIndex);
+
+                    // scrollToOffset is reliable regardless of rendered window size;
+                    // scrollToIndex silently fails when the target isn't rendered yet.
+                    setTimeout(() => {
+                        flatListRef.current?.scrollToOffset({ offset: finalIndex * height, animated: false });
+                    }, 150);
                 }
             } catch (e) {
                 console.error("Error loading profile posts", e);
@@ -86,7 +137,7 @@ export default function PostDetailScreen() {
             }
         };
         loadAllPosts();
-    }, [username, id, sortBy, sortOrder]);
+    }, [username, sortBy, sortOrder]);
 
     const theme = useTheme();
 
@@ -111,6 +162,10 @@ export default function PostDetailScreen() {
                             const index = Math.round(e.nativeEvent.contentOffset.y / height);
                             setActiveIndex(index);
                         }}
+                        onScrollToIndexFailed={({ index }) => {
+                            // Fallback: scroll by offset if item isn't rendered yet
+                            flatListRef.current?.scrollToOffset({ offset: index * height, animated: false });
+                        }}
                         renderItem={({ item, index }) => (
                             <InstagramPostDetailItem 
                                 item={item}
@@ -128,7 +183,7 @@ export default function PostDetailScreen() {
                                 }}
                             />
                         )}
-                        keyExtractor={(p) => p.id}
+                        keyExtractor={(p, index) => (p?.id ? p.id.toString() : `post-${index}`)}
                         showsVerticalScrollIndicator={false}
                         windowSize={3}
                         maxToRenderPerBatch={3}

@@ -150,6 +150,8 @@ for profile in "${PROFILES[@]}"; do
         consecutive_failures=0
         # Base wait doubles on each retry: attempt 1→5s, attempt 2→10s, attempt 3→20s
         retry_wait=5
+        # Timeout for waiting on the "Your story" button doubles per attempt: 90s → 180s → 360s
+        story_button_timeout=90000
         for attempt in 1 2 3; do
             # TERM=dumb + -Djline.terminal=dumb: prevents JLine from opening /dev/tty directly.
             # Without this, the Maestro JVM gets SIGTTIN and freezes (Tl state) when
@@ -161,6 +163,7 @@ for profile in "${PROFILES[@]}"; do
                 -e DELAY_DRAFT=$DELAY_DRAFT \
                 -e DELAY_CONFIRM=$DELAY_CONFIRM \
                 -e DELAY_POST=$DELAY_POST \
+                -e STORY_BUTTON_TIMEOUT=$story_button_timeout \
                 maestro/story_automation.yaml </dev/null
             exit_code=$?
             # Propagate Ctrl+C immediately
@@ -191,9 +194,10 @@ for profile in "${PROFILES[@]}"; do
                 # Transient UI failure or slow app load (e.g. Expo bundle compiling, Close Friends timeout)
                 # Double the wait on each retry so Instagram's story editor has more time to render.
                 consecutive_failures=$((consecutive_failures + 1))
-                echo "Flow failure or slow loading on attempt $attempt for $profile. Waiting ${retry_wait}s before retry..."
+                echo "Flow failure or slow loading on attempt $attempt for $profile. Waiting ${retry_wait}s before retry (next story button timeout: $((story_button_timeout * 2 / 1000))s)..."
                 sleep $retry_wait
                 retry_wait=$((retry_wait * 2))
+                story_button_timeout=$((story_button_timeout * 2))
             fi
         done
 
