@@ -299,7 +299,7 @@ appId: com.vayyari.admin
     commands:
       - extendedWaitUntil:
           visible: "Your stor.*"
-          timeout: 90000
+          timeout: ${STORY_BUTTON_TIMEOUT}
 
 # Enforce a 1 second gap after elements appear before interacting
 - evalScript: |
