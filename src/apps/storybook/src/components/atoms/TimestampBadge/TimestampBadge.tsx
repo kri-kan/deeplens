@@ -12,6 +12,8 @@ export interface TimestampBadgeProps {
   size?: 'sm' | 'md';
   /** Optional override for accessibility label */
   accessibilityLabel?: string;
+  /** Maximum visible character count before truncating with dots (defaults to 10) */
+  maxChars?: number;
 }
 
 export interface FormattedTimeResult {
@@ -110,11 +112,16 @@ export function TimestampBadge({
   compact = false,
   size = 'sm',
   accessibilityLabel,
+  maxChars = 10,
 }: TimestampBadgeProps) {
   const { tokens } = useTheme();
   const [tooltipVisible, setTooltipVisible] = useState(false);
 
   const { displayText, fullDetailText } = formatAdaptiveTimestamp(date, compact);
+  const truncatedDisplayText =
+    maxChars !== undefined && displayText.length > maxChars
+      ? `${displayText.slice(0, maxChars)}...`
+      : displayText;
   const isSmall = size === 'sm';
 
   // Auto-dismiss tooltip after 4 seconds if toggled on touch
@@ -169,7 +176,7 @@ export function TimestampBadge({
               includeFontPadding: false,
             } as any}
           >
-            {displayText}
+            {truncatedDisplayText}
           </Text>
         </XStack>
       </Pressable>

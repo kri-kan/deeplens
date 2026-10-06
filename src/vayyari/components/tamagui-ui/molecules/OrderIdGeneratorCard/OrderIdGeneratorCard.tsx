@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TextInput, Pressable, TouchableOpacity } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramFill } from '../../icons/ri';
-import { LuCopy, LuCheck, LuSparkles, LuPhone, LuTag } from '../../icons/lu';
+import { LuCheck, LuSparkles, LuPhone, LuTag } from '../../icons/lu';
 import { useTheme } from '@/theme';
 import { openPlatformHandle, formatDisplayHandle } from '@/utils/platformLink';
 
@@ -451,10 +451,8 @@ export function OrderIdGeneratorCard({
                   borderColor={tokens.border}
                   backgroundColor={tokens.surface}
                 >
-                  {copiedType === 'raw' ? (
+                  {copiedType === 'raw' && (
                     <LuCheck size={14} color={tokens.success} />
-                  ) : (
-                    <LuCopy size={14} color={tokens.accent} />
                   )}
                   <Text
                     fontSize={11}
