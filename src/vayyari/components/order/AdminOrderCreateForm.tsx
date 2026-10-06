@@ -23,6 +23,8 @@ import {
   LuSparkles,
   LuClipboardPaste,
   LuCheck,
+  LuCheckCircle2,
+  LuArrowRight,
   LuTriangleAlert,
   LuExternalLink,
   LuTrash2,
@@ -264,10 +266,14 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
   const [aiRawText, setAiRawText] = useState('');
   const [isCheckingPin, setIsCheckingPin] = useState(false);
   const [pinServiceable, setPinServiceable] = useState<boolean | null>(initial.isDelhiveryServiceable ?? null);
+  const [parsedPreview, setParsedPreview] = useState<AddressData | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
 
   useEffect(() => {
     setForm(initial);
     setPinServiceable(initial.isDelhiveryServiceable ?? null);
+    setParsedPreview(null);
+    setIsExtracting(false);
   }, [initial, visible]);
 
   if (!visible) return null;
@@ -329,6 +335,95 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
     } catch {
       setFillState('idle');
     }
+  };
+
+  const extractAddressFromText = async (text: string): Promise<AddressData> => {
+    const pinMatch = text.match(/\b(\d{6})\b/);
+    const pin = pinMatch ? pinMatch[1] : '';
+
+    const phoneMatch = text.match(/(?:\+?91[\s-]?)?([6-9]\d{9})\b/);
+    const phone = phoneMatch ? phoneMatch[1] : '';
+
+    let extractedName = '';
+    const namePrefixMatch = text.match(/(?:Name|To|Customer|Recipient)[:\s-]+([A-Za-z\s.]+)(?:\n|,|$)/i);
+    if (namePrefixMatch && namePrefixMatch[1].trim()) {
+      extractedName = namePrefixMatch[1].trim();
+    } else {
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (
+          !/\d/.test(line) &&
+          !/address|street|road|pincode|phone|near|opp|flat|house|block|city|state/i.test(line) &&
+          line.split(' ').length <= 4 &&
+          line.length >= 3 &&
+          line.length <= 40
+        ) {
+          extractedName = line.replace(/^[•\-*]\s*/, '').trim();
+          break;
+        }
+      }
+    }
+
+    let cleanAddress = text;
+    if (pinMatch) cleanAddress = cleanAddress.replace(pinMatch[0], '');
+    if (phoneMatch) cleanAddress = cleanAddress.replace(phoneMatch[0], '');
+    if (extractedName) cleanAddress = cleanAddress.replace(extractedName, '');
+
+    cleanAddress = cleanAddress
+      .replace(/(?:Name|Phone|Ph|Mob|Mobile|Address|PIN|Pincode|City|State)[:\s-]*/gi, '')
+      .replace(/[,|\n]+/g, ', ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s,]+|[\s,]+$/g, '')
+      .trim();
+
+    let city = form.city;
+    let state = form.state;
+    let serviceable: boolean | null = null;
+
+    if (pin && pin.length === 6) {
+      try {
+        const res = await delhiveryService.checkServiceability(pin);
+        serviceable = res.isServiceable;
+        if (res.city) city = res.city;
+        if (res.state) state = res.state;
+      } catch {
+        // network/timeout fallback
+      }
+    }
+
+    return {
+      name: extractedName || form.name,
+      phone: phone || form.phone,
+      address: cleanAddress || form.address,
+      pincode: pin || form.pincode,
+      city: city || form.city,
+      state: state || form.state,
+      isDelhiveryServiceable: serviceable ?? form.isDelhiveryServiceable,
+    };
+  };
+
+  const handleExtract = async () => {
+    if (!aiRawText.trim() || isExtracting) return;
+    setIsExtracting(true);
+    try {
+      const extracted = await extractAddressFromText(aiRawText);
+      setParsedPreview(extracted);
+    } catch {
+      // fallback
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleProceed = () => {
+    if (!parsedPreview) return;
+    setForm(parsedPreview);
+    if (parsedPreview.pincode) {
+      setPinServiceable(parsedPreview.isDelhiveryServiceable ?? null);
+    }
+    setFillState('smart-parsed');
+    setIsAiMode(false);
+    setParsedPreview(null);
   };
 
   return (
@@ -451,6 +546,8 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
             <Text fontSize={12} color={tokens.textMuted}>
               Paste the entire WhatsApp/Instagram delivery text here:
             </Text>
+
+            {/* Flowy auto-expanding textarea */}
             <YStack
               borderWidth={1}
               borderColor={tokens.border}
@@ -460,23 +557,115 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
             >
               <TextInput
                 value={aiRawText}
-                onChangeText={setAiRawText}
+                onChangeText={(t) => {
+                  setAiRawText(t);
+                  if (parsedPreview) setParsedPreview(null);
+                }}
                 placeholder="Name, Street, Landmark, City, State, PIN, Phone..."
                 placeholderTextColor={tokens.textMuted}
                 multiline
-                numberOfLines={4}
+                scrollEnabled={true}
                 style={{
                   fontSize: 14,
                   color: tokens.text,
-                  height: 80,
+                  minHeight: 80,
+                  maxHeight: 160,
                   textAlignVertical: 'top',
+                  lineHeight: 20,
+                  paddingVertical: 2,
                 }}
               />
             </YStack>
+
+            {/* Parsed Preview Tile (appears upon extraction) */}
+            {parsedPreview && (
+              <YStack
+                backgroundColor={`${tokens.accent}0D`}
+                borderRadius={tokens.radius.md}
+                borderWidth={1}
+                borderColor={`${tokens.accent}33`}
+                padding={12}
+                gap={8}
+              >
+                <XStack justifyContent="space-between" alignItems="center">
+                  <XStack alignItems="center" gap={6}>
+                    <LuCheckCircle2 size={13} color={tokens.success} />
+                    <Text fontSize={11} fontWeight="800" color={tokens.text} letterSpacing={0.5} textTransform="uppercase">
+                      PARSED DETAILS PREVIEW
+                    </Text>
+                  </XStack>
+                  {parsedPreview.pincode ? (
+                    <XStack
+                      paddingHorizontal={7}
+                      paddingVertical={2}
+                      borderRadius={9999}
+                      backgroundColor={parsedPreview.isDelhiveryServiceable ? `${tokens.success}1A` : `${tokens.warning}1A`}
+                    >
+                      <Text
+                        fontSize={10}
+                        fontWeight="700"
+                        color={parsedPreview.isDelhiveryServiceable ? tokens.success : tokens.warning}
+                      >
+                        {parsedPreview.isDelhiveryServiceable ? '✓ Delhivery Serviceable' : '⚠ PIN Unserviceable'}
+                      </Text>
+                    </XStack>
+                  ) : null}
+                </XStack>
+
+                <YStack gap={5}>
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      Recipient:
+                    </Text>
+                    <Text fontSize={12} fontWeight="600" color={tokens.text} flex={1}>
+                      {parsedPreview.name || '—'}
+                    </Text>
+                  </XStack>
+
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      Phone:
+                    </Text>
+                    <Text fontSize={12} fontWeight="600" color={tokens.text} flex={1}>
+                      {parsedPreview.phone || '—'}
+                    </Text>
+                  </XStack>
+
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      Address:
+                    </Text>
+                    <Text fontSize={12} fontWeight="500" color={tokens.text} flex={1} numberOfLines={3}>
+                      {parsedPreview.address || '—'}
+                    </Text>
+                  </XStack>
+
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      PIN / Area:
+                    </Text>
+                    <Text fontSize={12} fontWeight="600" color={tokens.text} flex={1}>
+                      {parsedPreview.pincode || '—'}
+                      {(parsedPreview.city || parsedPreview.state) && (
+                        ` (${[parsedPreview.city, parsedPreview.state].filter(Boolean).join(', ')})`
+                      )}
+                    </Text>
+                  </XStack>
+                </YStack>
+              </YStack>
+            )}
+
+            {/* Action Buttons */}
             <XStack gap={10}>
               <Pressable
                 style={{ flex: 1 }}
-                onPress={() => setIsAiMode(false)}
+                onPress={() => {
+                  if (parsedPreview) {
+                    setParsedPreview(null);
+                  } else {
+                    setIsAiMode(false);
+                  }
+                }}
               >
                 <YStack
                   height={44}
@@ -486,29 +675,57 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
                   justifyContent="center"
                 >
                   <Text fontSize={13} fontWeight="700" color={tokens.textSecondary}>
-                    CANCEL
+                    {parsedPreview ? 'RESET' : 'CANCEL'}
                   </Text>
                 </YStack>
               </Pressable>
+
               <Pressable
                 style={{ flex: 1 }}
-                onPress={async () => {
-                  if (aiRawText.trim()) {
-                    await parseAndApplyText(aiRawText);
-                    setIsAiMode(false);
+                disabled={isExtracting || (!parsedPreview && !aiRawText.trim())}
+                onPress={() => {
+                  if (parsedPreview) {
+                    handleProceed();
+                  } else {
+                    handleExtract();
                   }
                 }}
               >
                 <YStack
                   height={44}
                   borderRadius={tokens.radius.md}
-                  backgroundColor={tokens.accent}
+                  backgroundColor={
+                    isExtracting || (!parsedPreview && !aiRawText.trim())
+                      ? `${tokens.accent}55`
+                      : tokens.accent
+                  }
                   alignItems="center"
                   justifyContent="center"
+                  flexDirection="row"
+                  gap={6}
                 >
-                  <Text fontSize={13} fontWeight="800" color={tokens.accentForeground}>
-                    EXTRACT & FILL
-                  </Text>
+                  {isExtracting ? (
+                    <>
+                      <ActivityIndicator size="small" color={tokens.accentForeground} />
+                      <Text fontSize={13} fontWeight="800" color={tokens.accentForeground}>
+                        EXTRACTING...
+                      </Text>
+                    </>
+                  ) : parsedPreview ? (
+                    <>
+                      <Text fontSize={13} fontWeight="800" color={tokens.accentForeground}>
+                        PROCEED
+                      </Text>
+                      <LuArrowRight size={14} color={tokens.accentForeground} />
+                    </>
+                  ) : (
+                    <>
+                      <LuSparkles size={14} color={tokens.accentForeground} />
+                      <Text fontSize={13} fontWeight="800" color={tokens.accentForeground}>
+                        EXTRACT
+                      </Text>
+                    </>
+                  )}
                 </YStack>
               </Pressable>
             </XStack>

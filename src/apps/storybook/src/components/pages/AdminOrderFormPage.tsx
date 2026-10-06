@@ -4,6 +4,7 @@ import {
   TextInput,
   Pressable,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -15,7 +16,9 @@ import {
   LuSparkles,
   LuClipboardPaste,
   LuArrowLeft,
+  LuArrowRight,
   LuCheck,
+  LuCircleCheck,
   LuTriangleAlert,
   LuPhone,
   LuExternalLink,
@@ -45,6 +48,9 @@ export interface AddressData {
   phone: string;
   address: string;
   pincode: string;
+  city?: string;
+  state?: string;
+  isDelhiveryServiceable?: boolean;
 }
 
 export type AdminOrderFormPageProps = {
@@ -64,6 +70,7 @@ export type AdminOrderFormPageProps = {
   onAddImage?: () => void;
   onSaveAddress?: (data: AddressData) => void;
   onSubmitOrder?: () => void;
+  onNavigateBack?: () => void;
 };
 
 // ─────────────────────────────────────────────
@@ -147,28 +154,28 @@ function OrderTypeSection({
           {(['cod', 'prepaid'] as PaymentType[]).map((p) => {
             const isActive = paymentType === p;
             return (
-              <Pressable
+              <YStack
                 key={p}
                 accessibilityRole="button"
                 accessibilityLabel={`${p === 'cod' ? 'Cash on Delivery' : 'Prepaid'} payment`}
                 onPress={() => onPaymentTypeChange(p)}
+                paddingHorizontal={16}
+                paddingVertical={8}
+                borderRadius={tokens.radius.full}
+                backgroundColor={isActive ? tokens.accent : 'transparent'}
+                overflow="hidden"
+                cursor="pointer"
+                pressStyle={{ opacity: 0.85 }}
               >
-                <YStack
-                  paddingHorizontal={16}
-                  paddingVertical={8}
-                  borderRadius={tokens.radius.full}
-                  backgroundColor={isActive ? tokens.accent : 'transparent'}
+                <Text
+                  fontSize={13}
+                  fontWeight="700"
+                  color={isActive ? tokens.accentForeground : tokens.textSecondary}
+                  letterSpacing={0.3}
                 >
-                  <Text
-                    fontSize={13}
-                    fontWeight="700"
-                    color={isActive ? tokens.accentForeground : tokens.textSecondary}
-                    letterSpacing={0.3}
-                  >
-                    {p === 'cod' ? 'COD' : 'Prepaid'}
-                  </Text>
-                </YStack>
-              </Pressable>
+                  {p === 'cod' ? 'COD' : 'Prepaid'}
+                </Text>
+              </YStack>
             );
           })}
         </XStack>
@@ -513,23 +520,51 @@ function trySmartParse(text: string): AddressData | null {
   return null;
 }
 
-// Mock AI parser — simulates a 1.5s network call.
-// In production, replace with a real API call.
 async function mockAiParse(rawText: string): Promise<AddressData> {
-  await new Promise((r) => setTimeout(r, 1500));
-  // Simple heuristic mock — real impl would call an LLM endpoint.
+  await new Promise((r) => setTimeout(r, 1200));
   const pinMatch = rawText.match(/\b(\d{6})\b/);
-  const phoneMatch = rawText.match(/(\+?91[\s-]?\d{5}[\s-]?\d{5}|\d{10})/);
+  const phoneMatch = rawText.match(/(?:\+?91[\s-]?)?([6-9]\d{9})\b/);
+
+  let extractedName = '';
+  const namePrefixMatch = rawText.match(/(?:Name|To|Customer|Recipient)[:\s-]+([A-Za-z\s.]+)(?:\n|,|$)/i);
+  if (namePrefixMatch && namePrefixMatch[1].trim()) {
+    extractedName = namePrefixMatch[1].trim();
+  } else {
+    const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (
+        !/\d/.test(line) &&
+        !/address|street|road|pincode|phone|near|opp|flat|house|block|city|state/i.test(line) &&
+        line.split(' ').length <= 4 &&
+        line.length >= 3 &&
+        line.length <= 40
+      ) {
+        extractedName = line.replace(/^[•\-*]\s*/, '').trim();
+        break;
+      }
+    }
+  }
+
+  let cleanAddress = rawText;
+  if (pinMatch) cleanAddress = cleanAddress.replace(pinMatch[0], '');
+  if (phoneMatch) cleanAddress = cleanAddress.replace(phoneMatch[0], '');
+  if (extractedName) cleanAddress = cleanAddress.replace(extractedName, '');
+
+  cleanAddress = cleanAddress
+    .replace(/(?:Name|Phone|Ph|Mob|Mobile|Address|PIN|Pincode|City|State)[:\s-]*/gi, '')
+    .replace(/[,|\n]+/g, ', ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,]+|[\s,]+$/g, '')
+    .trim();
+
   return {
-    name: 'Priya Menon',
-    phone: phoneMatch ? phoneMatch[0] : '+91 98765 43210',
-    address: rawText
-      .replace(phoneMatch?.[0] ?? '', '')
-      .replace(pinMatch?.[0] ?? '', '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 80),
-    pincode: pinMatch ? pinMatch[1] : '',
+    name: extractedName || 'Priya Menon',
+    phone: phoneMatch ? phoneMatch[0].replace(/\s+/g, '') : '+91 9876543210',
+    address: cleanAddress || 'Flat 12B, Prestige Lakeside, Whitefield',
+    pincode: pinMatch ? pinMatch[1] : '560066',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    isDelhiveryServiceable: true,
   };
 }
 
@@ -636,6 +671,7 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
   const [fillState, setFillState] = useState<FillState>('idle');
   const [aiRawText, setAiRawText] = useState('');
   const [aiOriginalText, setAiOriginalText] = useState('');
+  const [parsedPreview, setParsedPreview] = useState<AddressData | null>(null);
 
   // Sync form when initial changes (different Storybook stories)
   React.useEffect(() => {
@@ -644,6 +680,7 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
     setMode('form');
     setAiRawText('');
     setAiOriginalText('');
+    setParsedPreview(null);
   }, [initial]);
 
   if (!visible) return null;
@@ -663,18 +700,25 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
 
   // —— AI Parse trigger ——
   const handleAiParse = async () => {
-    if (!aiRawText.trim()) return;
+    if (!aiRawText.trim() || fillState === 'ai-parsing') return;
     const original = aiRawText;
     setAiOriginalText(original);
     setFillState('ai-parsing');
     try {
       const parsed = await mockAiParse(original);
-      setForm(parsed);
-      setFillState('ai-filled');
-      setMode('form'); // switch back to form view to show filled fields
+      setParsedPreview(parsed);
+      setFillState('idle');
     } catch {
       setFillState('ai-error');
     }
+  };
+
+  const handleProceed = () => {
+    if (!parsedPreview) return;
+    setForm(parsedPreview);
+    setFillState('ai-filled');
+    setMode('form');
+    setParsedPreview(null);
   };
 
   // —— Mode toggle actions ——
@@ -682,9 +726,11 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
     setMode('ai-input');
     setFillState('idle');
     setAiRawText('');
+    setParsedPreview(null);
   };
   const switchToFormMode = () => {
     setMode('form');
+    setParsedPreview(null);
   };
   const dismissFillBanner = () => {
     if (fillState !== 'ai-filled') setFillState('idle');
@@ -988,7 +1034,7 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
               Paste any address in natural language — customer chat message, Google Maps result, or a label scan. AI will extract the fields for you.
             </Text>
 
-            {/* Raw address textarea */}
+            {/* Flowy auto-expanding textarea */}
             <YStack
               borderWidth={1}
               borderColor={tokens.border}
@@ -1000,72 +1046,198 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
               <TextInput
                 accessibilityLabel="Paste raw address for AI parsing"
                 value={aiRawText}
-                onChangeText={setAiRawText}
+                onChangeText={(t) => {
+                  setAiRawText(t);
+                  if (parsedPreview) setParsedPreview(null);
+                }}
                 placeholder={'e.g. Flat 12B, Prestige Lakeside, Whitefield,\nBengaluru 560066 · Priya Menon +91 9876543210'}
                 placeholderTextColor={tokens.textMuted}
                 multiline
-                numberOfLines={5}
+                scrollEnabled={true}
                 autoFocus
                 style={{
                   fontSize: 14,
                   color: tokens.text,
-                  paddingVertical: 0,
+                  paddingVertical: 2,
                   outlineStyle: 'none',
                   textAlignVertical: 'top',
-                  height: 100,
+                  minHeight: 80,
+                  maxHeight: 160,
                   lineHeight: 20,
                 } as any}
               />
             </YStack>
 
-            {/* Smart paste hint */}
-            <Text fontSize={11} color={tokens.textMuted}>
-              Tip: For instant fill without AI, paste in format:
-              {'  '}Name | Phone | Address | Pincode
-            </Text>
-
-            {/* Parse button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Parse address with AI"
-              disabled={isParsing || !aiRawText.trim()}
-              onPress={handleAiParse}
-            >
+            {/* Parsed Preview Tile (appears upon extraction) */}
+            {parsedPreview && (
               <YStack
-                height={46}
+                backgroundColor={`${tokens.accent}0D`}
                 borderRadius={tokens.radius.md}
-                backgroundColor={
-                  isParsing || !aiRawText.trim() ? tokens.surfaceRaised : tokens.accent
-                }
-                flexDirection="row"
-                alignItems="center"
-                justifyContent="center"
+                borderWidth={1}
+                borderColor={`${tokens.accent}33`}
+                padding={12}
                 gap={8}
               >
-                {isParsing ? (
-                  <>
-                    <Text fontSize={13} fontWeight="800" color={tokens.textMuted}>
-                      Parsing…
+                <XStack justifyContent="space-between" alignItems="center">
+                  <XStack alignItems="center" gap={6}>
+                    <LuCircleCheck size={13} color={tokens.success} />
+                    <Text fontSize={11} fontWeight="800" color={tokens.text} letterSpacing={0.5} textTransform="uppercase">
+                      PARSED DETAILS PREVIEW
                     </Text>
-                  </>
-                ) : (
-                  <>
-                    <LuSparkles
-                      size={15}
-                      color={!aiRawText.trim() ? tokens.textMuted : tokens.accentForeground}
-                    />
-                    <Text
-                      fontSize={13}
-                      fontWeight="800"
-                      color={!aiRawText.trim() ? tokens.textMuted : tokens.accentForeground}
-                      letterSpacing={0.4}
+                  </XStack>
+                  {parsedPreview.pincode ? (
+                    <XStack
+                      paddingHorizontal={7}
+                      paddingVertical={2}
+                      borderRadius={9999}
+                      backgroundColor={parsedPreview.isDelhiveryServiceable ? `${tokens.success}1A` : `${tokens.warning}1A`}
                     >
-                      Parse with AI
+                      <Text
+                        fontSize={10}
+                        fontWeight="700"
+                        color={parsedPreview.isDelhiveryServiceable ? tokens.success : tokens.warning}
+                      >
+                        {parsedPreview.isDelhiveryServiceable ? '✓ Delhivery Serviceable' : '⚠ PIN Unserviceable'}
+                      </Text>
+                    </XStack>
+                  ) : null}
+                </XStack>
+
+                <YStack gap={5}>
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      Recipient:
                     </Text>
-                  </>
-                )}
+                    <Text fontSize={12} fontWeight="600" color={tokens.text} flex={1}>
+                      {parsedPreview.name || '—'}
+                    </Text>
+                  </XStack>
+
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      Phone:
+                    </Text>
+                    <Text fontSize={12} fontWeight="600" color={tokens.text} flex={1}>
+                      {parsedPreview.phone || '—'}
+                    </Text>
+                  </XStack>
+
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      Address:
+                    </Text>
+                    <Text fontSize={12} fontWeight="500" color={tokens.text} flex={1} numberOfLines={3}>
+                      {parsedPreview.address || '—'}
+                    </Text>
+                  </XStack>
+
+                  <XStack alignItems="flex-start" gap={8}>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted} width={65}>
+                      PIN / Area:
+                    </Text>
+                    <Text fontSize={12} fontWeight="600" color={tokens.text} flex={1}>
+                      {parsedPreview.pincode || '—'}
+                      {(parsedPreview.city || parsedPreview.state) && (
+                        ` (${[parsedPreview.city, parsedPreview.state].filter(Boolean).join(', ')})`
+                      )}
+                    </Text>
+                  </XStack>
+                </YStack>
               </YStack>
-            </Pressable>
+            )}
+
+            {/* Action Buttons */}
+            <XStack gap={10}>
+              <Pressable
+                style={{ flex: 1 }}
+                accessibilityRole="button"
+                onPress={() => {
+                  if (parsedPreview) {
+                    setParsedPreview(null);
+                  } else {
+                    switchToFormMode();
+                  }
+                }}
+              >
+                <YStack
+                  height={44}
+                  borderRadius={tokens.radius.md}
+                  backgroundColor={tokens.surfaceRaised}
+                  alignItems="center"
+                  justifyContent="center"
+                  hoverStyle={{ opacity: 0.88 }}
+                >
+                  <Text fontSize={13} fontWeight="700" color={tokens.textSecondary}>
+                    {parsedPreview ? 'RESET' : 'CANCEL'}
+                  </Text>
+                </YStack>
+              </Pressable>
+
+              <Pressable
+                style={{ flex: 1 }}
+                accessibilityRole="button"
+                accessibilityLabel={parsedPreview ? 'Proceed with parsed address' : 'Extract address with AI'}
+                disabled={isParsing || (!parsedPreview && !aiRawText.trim())}
+                onPress={() => {
+                  if (parsedPreview) {
+                    handleProceed();
+                  } else {
+                    handleAiParse();
+                  }
+                }}
+              >
+                <YStack
+                  height={44}
+                  borderRadius={tokens.radius.md}
+                  backgroundColor={
+                    isParsing || (!parsedPreview && !aiRawText.trim())
+                      ? `${tokens.accent}55`
+                      : tokens.accent
+                  }
+                  flexDirection="row"
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={6}
+                  hoverStyle={{ opacity: 0.92 }}
+                >
+                  {isParsing ? (
+                    <>
+                      <ActivityIndicator size="small" color={tokens.accentForeground} />
+                      <Text fontSize={13} fontWeight="800" color={tokens.accentForeground}>
+                        EXTRACTING...
+                      </Text>
+                    </>
+                  ) : parsedPreview ? (
+                    <>
+                      <Text
+                        fontSize={13}
+                        fontWeight="800"
+                        color={tokens.accentForeground}
+                        letterSpacing={0.4}
+                      >
+                        PROCEED
+                      </Text>
+                      <LuArrowRight size={14} color={tokens.accentForeground} />
+                    </>
+                  ) : (
+                    <>
+                      <LuSparkles
+                        size={14}
+                        color={!aiRawText.trim() ? tokens.textMuted : tokens.accentForeground}
+                      />
+                      <Text
+                        fontSize={13}
+                        fontWeight="800"
+                        color={!aiRawText.trim() ? tokens.textMuted : tokens.accentForeground}
+                        letterSpacing={0.4}
+                      >
+                        EXTRACT
+                      </Text>
+                    </>
+                  )}
+                </YStack>
+              </Pressable>
+            </XStack>
           </YStack>
         )}
       </YStack>
@@ -1088,7 +1260,7 @@ function SectionDivider() {
 // Page Header
 // ─────────────────────────────────────────────
 
-function AdminPageHeader() {
+function AdminPageHeader({ onBack }: { onBack?: () => void }) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -1101,7 +1273,24 @@ function AdminPageHeader() {
       backgroundColor={tokens.surface}
       borderBottomWidth={1}
       borderBottomColor={tokens.border}
+      position="relative"
     >
+      {onBack && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to Admin Home"
+          onPress={onBack}
+          style={{
+            position: 'absolute',
+            left: 14,
+            top: insets.top + 16,
+            zIndex: 10,
+            cursor: 'pointer',
+          } as any}
+        >
+          <LuArrowLeft size={22} color={tokens.text} />
+        </Pressable>
+      )}
       <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
         New Order
       </Text>
@@ -1180,6 +1369,7 @@ export function AdminOrderFormPage({
   onAddImage,
   onSaveAddress,
   onSubmitOrder,
+  onNavigateBack,
 }: AdminOrderFormPageProps) {
   const { tokens } = useTheme();
 
@@ -1228,7 +1418,7 @@ export function AdminOrderFormPage({
   return (
     <YStack flex={1} backgroundColor={tokens.background} position="relative">
       {/* Admin Page Header */}
-      <AdminPageHeader />
+      <AdminPageHeader onBack={onNavigateBack} />
 
       {/* Scrollable Content */}
       <ScrollView
