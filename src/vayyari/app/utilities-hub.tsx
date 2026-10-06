@@ -60,7 +60,11 @@ function formatRelativeTime(ts: number): string {
  *  - Long press chip → open edit sheet
  *  - Recent Copies section showing last 3 clipboard actions
  */
-export default function UtilitiesHubScreen() {
+interface UtilitiesHubScreenProps {
+  onDismiss?: () => void;
+}
+
+export default function UtilitiesHubScreen({ onDismiss }: UtilitiesHubScreenProps = {}) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -149,7 +153,11 @@ export default function UtilitiesHubScreen() {
     .onEnd((e) => {
       if (e.translationX < -30 || e.velocityX < -250) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.back();
+        if (onDismiss) {
+          onDismiss();
+        } else {
+          router.back();
+        }
       }
     });
 
@@ -160,29 +168,39 @@ export default function UtilitiesHubScreen() {
   const indigo = '#6366F1';
 
   return (
-    <GestureDetector gesture={dismissGesture}>
-      <YStack flex={1} backgroundColor={tokens.background}>
-        {/* ── Header ── */}
-        <XStack
-          paddingTop={insets.top}
-          height={52 + insets.top}
-          alignItems="center"
-          justifyContent="space-between"
-          paddingHorizontal={14}
-          backgroundColor={tokens.surface}
-          borderBottomWidth={1}
-          borderBottomColor={tokens.border}
-        >
-          <YStack gap={1}>
-            <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
-              Utilities
-            </Text>
-            <Text fontSize={11} color={tokens.textMuted}>
-              Copy snippets & quick tools
-            </Text>
-          </YStack>
+    <YStack flex={1} backgroundColor={tokens.background}>
+      {/* ── Header ── */}
+      <XStack
+        paddingTop={insets.top}
+        height={52 + insets.top}
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal={14}
+        backgroundColor={tokens.surface}
+        borderBottomWidth={1}
+        borderBottomColor={tokens.border}
+      >
+        <YStack gap={1}>
+          <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+            Utilities
+          </Text>
+          <Text fontSize={11} color={tokens.textMuted}>
+            Copy snippets & quick tools
+          </Text>
+        </YStack>
 
-          {/* Swipe back indicator badge (no X button) */}
+        {/* Swipe back indicator badge (Tap or swipe left to dismiss) */}
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (onDismiss) {
+              onDismiss();
+            } else {
+              router.back();
+            }
+          }}
+          style={{ cursor: 'pointer' } as any}
+        >
           <XStack
             paddingVertical={4}
             paddingHorizontal={10}
@@ -197,7 +215,8 @@ export default function UtilitiesHubScreen() {
               Swipe ◄ back
             </Text>
           </XStack>
-        </XStack>
+        </Pressable>
+      </XStack>
 
       {/* ── Body ── */}
       <ScrollView
@@ -359,8 +378,7 @@ export default function UtilitiesHubScreen() {
           setEditingSnippet(null);
         }}
       />
-      </YStack>
-    </GestureDetector>
+    </YStack>
   );
 }
 

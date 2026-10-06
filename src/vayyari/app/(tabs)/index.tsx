@@ -1,7 +1,15 @@
-import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import React, { useMemo, useEffect } from 'react';
+import { View, StyleSheet, Pressable, useWindowDimensions, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  interpolate,
+  Extrapolation,
+  ReduceMotion,
+} from 'react-native-reanimated';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PERMISSIONS } from '@/types/authorization';
 import {
@@ -9,6 +17,8 @@ import {
   UtilityGroup,
 } from '@/components/tamagui-ui/pages/OperationsHubPage';
 import { UtilityTileItem } from '@/components/tamagui-ui/molecules/UtilityTile';
+import UtilitiesHubScreen from '@/app/utilities-hub';
+import { CustomTabBar } from '@/components/CustomTabBar';
 import {
   LuHash,
   LuUsers,
@@ -195,17 +205,46 @@ const ADMIN_UTILITIES: RawUtilityItem[] = [
   },
 ];
 
+import { useDrawerContext } from '@/utils/DrawerContext';
+
 /**
  * UtilityScreen Component (Operations Hub)
  *
  * Serves as the central hub for all DeepLens operational, system, and administrative utilities.
- * Filters utility items dynamically according to user capabilities and permissions.
- * Presents lightweight icon buttons with concise labels below in a clean, compact grid.
- * Includes a swipe-right gesture detector that navigates to the AI assistant.
+ * Includes a real-time 60fps interactive drag gesture container for the Utilities Hub screen.
  */
 export default function UtilityScreen() {
   const router = useRouter();
   const { hasPermission, isSuperAdmin } = usePermissions();
+
+  const drawerCtx = useDrawerContext();
+  const localWidth = useWindowDimensions().width;
+  const width = drawerCtx?.width ?? localWidth;
+
+  const fallbackTranslateX = useSharedValue(-width);
+  const translateX = drawerCtx?.translateX ?? fallbackTranslateX;
+  const startX = useSharedValue(0);
+
+  const springConfig = {
+    damping: 22,
+    stiffness: 220,
+    mass: 0.8,
+    reduceMotion: ReduceMotion.Never,
+  };
+
+  // Handle Android Hardware Back Button & System Back Gesture
+  useEffect(() => {
+    const onBackPress = () => {
+      if (translateX.value > -width + 10) {
+        translateX.value = withSpring(-width, springConfig);
+        return true;
+      }
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [translateX, width]);
 
   const filterItems = (items: RawUtilityItem[]): UtilityTileItem[] => {
     if (isSuperAdmin) {
@@ -228,29 +267,76 @@ export default function UtilityScreen() {
     return rawGroups.filter((g) => g.items.length > 0);
   }, [hasPermission, isSuperAdmin]);
 
-  const swipeGesture = Gesture.Pan()
-    .activeOffsetX(40)
-    .failOffsetY([-20, 20])
-    .cancelsTouchesInView(false)
-    .runOnJS(true)
+  // Real-time 60fps continuous pan gesture tracking
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-15, 15])
+    .failOffsetY([-25, 25])
+    .onStart(() => {
+      startX.value = translateX.value;
+    })
+    .onUpdate((e) => {
+      const nextPos = startX.value + e.translationX;
+      translateX.value = Math.max(-width, Math.min(0, nextPos));
+    })
     .onEnd((e) => {
-      // Swipe right means finger moves from left to right (translationX > 0)
-      if (e.translationX > 50) {
-        router.push('/ai' as any);
+      const progress = (translateX.value + width) / width;
+      if (e.velocityX > 350) {
+        translateX.value = withSpring(0, springConfig);
+      } else if (e.velocityX < -350) {
+        translateX.value = withSpring(-width, springConfig);
+      } else if (progress > 0.4) {
+        translateX.value = withSpring(0, springConfig);
+      } else {
+        translateX.value = withSpring(-width, springConfig);
       }
     });
 
+  // 1:1 dual screen animation styles
+  // Utilities Hub enters from -width to 0
+  const utilitiesAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  // Home Screen content slides 1:1 from 0 to +width (towards right wall)
+  const homeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value + width }],
+  }));
+
   return (
-    <GestureDetector gesture={swipeGesture}>
-      <View style={{ flex: 1 }}>
-        <OperationsHubPage
-          groups={groups}
-          onLaunchTool={(route) => {
-            if (route) router.push(route as any);
-          }}
-          onOpenAiAssistant={() => router.push('/ai' as any)}
-          onOpenSettings={() => router.push('/modal' as any)}
-        />
+    <GestureDetector gesture={panGesture}>
+      <View style={{ flex: 1, backgroundColor: '#000' }}>
+        {/* Home Screen Body (Operations Hub sliding towards right wall) */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { zIndex: 10, backgroundColor: '#000' },
+            homeAnimatedStyle,
+          ]}
+        >
+          <OperationsHubPage
+            groups={groups}
+            onLaunchTool={(route) => {
+              if (route) router.push(route as any);
+            }}
+            onOpenAiAssistant={() => router.push('/ai' as any)}
+            onOpenSettings={() => router.push('/modal' as any)}
+          />
+        </Animated.View>
+
+        {/* Utilities Hub Overlay Panel (Enters from left wall, NO bottom menu) */}
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { zIndex: 20 },
+            utilitiesAnimatedStyle,
+          ]}
+        >
+          <UtilitiesHubScreen
+            onDismiss={() => {
+              translateX.value = withSpring(-width, springConfig);
+            }}
+          />
+        </Animated.View>
       </View>
     </GestureDetector>
   );

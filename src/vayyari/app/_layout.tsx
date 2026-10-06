@@ -8,6 +8,7 @@ import { Platform, LogBox } from 'react-native';
 LogBox.ignoreLogs([
   'Looks like you have configured linking in multiple places',
   'Deprecated API for given entry type.',
+  '[Reanimated] Reduced motion setting is enabled',
 ]);
 import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -129,6 +130,7 @@ function InnerRootLayout() {
                 )}
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Settings', headerShown: true }} />
                 <Stack.Screen name="ai" options={{ animation: 'slide_from_left', headerShown: false }} />
+                <Stack.Screen name="utilities-hub" options={{ animation: 'slide_from_left', headerShown: false }} />
                 <Stack.Screen name="share-target" options={{ headerShown: false }} />
               </Stack>
               <StatusBar style="auto" />

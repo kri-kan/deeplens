@@ -874,23 +874,28 @@ export const AdminOrderCreateForm: React.FC = () => {
                 {(['cod', 'prepaid'] as PaymentType[]).map((p) => {
                   const isActive = paymentType === p;
                   return (
-                    <Pressable key={p} onPress={() => setPaymentType(p)}>
-                      <YStack
-                        paddingHorizontal={16}
-                        paddingVertical={8}
-                        borderRadius={tokens.radius.full}
-                        backgroundColor={isActive ? tokens.accent : 'transparent'}
+                    <YStack
+                      key={p}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${p === 'cod' ? 'Cash on Delivery' : 'Prepaid'} payment`}
+                      onPress={() => setPaymentType(p)}
+                      paddingHorizontal={16}
+                      paddingVertical={8}
+                      borderRadius={tokens.radius.full}
+                      backgroundColor={isActive ? tokens.accent : 'transparent'}
+                      overflow="hidden"
+                      cursor="pointer"
+                      pressStyle={{ opacity: 0.85 }}
+                    >
+                      <Text
+                        fontSize={13}
+                        fontWeight="700"
+                        color={isActive ? tokens.accentForeground : tokens.textSecondary}
+                        letterSpacing={0.3}
                       >
-                        <Text
-                          fontSize={13}
-                          fontWeight="700"
-                          color={isActive ? tokens.accentForeground : tokens.textSecondary}
-                          letterSpacing={0.3}
-                        >
-                          {p === 'cod' ? 'COD' : 'Prepaid'}
-                        </Text>
-                      </YStack>
-                    </Pressable>
+                        {p === 'cod' ? 'COD' : 'Prepaid'}
+                      </Text>
+                    </YStack>
                   );
                 })}
               </XStack>
