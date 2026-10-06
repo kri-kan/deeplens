@@ -36,8 +36,14 @@ export const LuClipboard: React.FC<IconProps> = ({ size = 16, color = '#333333',
 export const LuArrowLeft: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="arrow-left" size={size} color={color} style={style} />
 );
+export const LuArrowRight: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="arrow-right" size={size} color={color} style={style} />
+);
 export const LuCheck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="check" size={size} color={color} style={style} />
+);
+export const LuCheckCircle2: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="check-circle" size={size} color={color} style={style} />
 );
 export const LuCheckSquare: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="check-square" size={size} color={color} style={style} />
@@ -101,6 +107,9 @@ export const LuClock: React.FC<IconProps> = ({ size = 16, color = '#333333', sty
 );
 export const LuPackage: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="package" size={size} color={color} style={style} />
+);
+export const LuPackagePlus: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <MaterialCommunityIcons name="package-variant-closed-plus" size={size} color={color} style={style} />
 );
 export const LuTruck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <MaterialCommunityIcons name="truck-delivery-outline" size={size} color={color} style={style} />
