@@ -12,11 +12,24 @@ import {
   LuBattery,
   LuLayers,
   LuMaximize2,
+  LuSun,
+  LuMoon,
+  LuPalette,
+  LuChevronDown,
+  LuCheck,
 } from 'react-icons/lu';
-import { FormFactor, FormFactorContext, useTheme } from '../../../theme';
+import { FormFactor, FormFactorContext, useTheme, CAMPAIGN_REGISTRY, CampaignName } from '../../../theme';
 import { FormFactorShellProps, Orientation, FormFactorDimensions } from './types';
 
 export * from './types';
+
+const CAMPAIGN_LABELS: Record<CampaignName, string> = {
+  luxe: 'Luxe',
+  valentine: 'Valentine',
+  summer: 'Summer',
+  blackfriday: 'Black Friday',
+  ramadan: 'Ramadan',
+};
 
 export function FormFactorShell({
   children,
@@ -26,9 +39,13 @@ export function FormFactorShell({
   category,
   allowOrientationToggle = true,
   allowBezelToggle = true,
+  allowColorSchemeToggle = true,
+  allowCampaignToggle = true,
   defaultBezel = true,
   forceStandalone = false,
   onFactorChange,
+  onColorSchemeChange,
+  onCampaignChange,
 }: FormFactorShellProps) {
   // Context Guard: If already running inside an existing FormFactorShell / FormFactorContext,
   // do NOT double-wrap with an inner toolbar and inner chassis.
@@ -37,11 +54,33 @@ export function FormFactorShell({
     return <>{children}</>;
   }
 
-  const { tokens } = useTheme();
+  const { tokens, colorScheme, toggleColorScheme, campaign, setCampaign, availableCampaigns } = useTheme();
 
   const [factor, setFactor] = useState<FormFactor>(defaultFactor || initialFactor);
   const [orientation, setOrientation] = useState<Orientation>('portrait');
   const [showBezel, setShowBezel] = useState<boolean>(defaultBezel);
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState<boolean>(false);
+  const themeMenuRef = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    if (!isThemeMenuOpen) return;
+    const handleOutsideClick = (e: any) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains?.(e.target)) {
+        setIsThemeMenuOpen(false);
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
+      return () => {
+        document.removeEventListener('mousedown', handleOutsideClick);
+        document.removeEventListener('touchstart', handleOutsideClick);
+      };
+    }
+  }, [isThemeMenuOpen]);
+
+  const currentAccent = CAMPAIGN_REGISTRY[campaign]?.light?.accent || '#38BDF8';
+  const currentLabel = CAMPAIGN_LABELS[campaign] || campaign;
 
   const handleSelectFactor = (nextFactor: FormFactor) => {
     setFactor(nextFactor);
@@ -179,8 +218,139 @@ export function FormFactorShell({
             </Pressable>
           </XStack>
 
-          {/* Right: Dimension Pill, Orientation, and Bezel Toggle */}
+          {/* Right: Campaign Switcher, Dark Mode Toggle, Dimension Pill, Orientation, and Bezel Toggle */}
           <XStack alignItems="center" gap={8} flexWrap="wrap">
+            {/* Campaign Theme Dropdown Selector */}
+            {allowCampaignToggle && availableCampaigns && availableCampaigns.length > 0 && (
+              <View ref={themeMenuRef} style={styles.themeDropdownContainer}>
+                <Pressable
+                  onPress={() => setIsThemeMenuOpen((prev) => !prev)}
+                  style={[
+                    styles.themeDropdownTrigger,
+                    isThemeMenuOpen && styles.themeDropdownTriggerActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select Campaign Theme"
+                  accessibilityState={{ expanded: isThemeMenuOpen }}
+                >
+                  <XStack alignItems="center" gap={6}>
+                    <LuPalette size={12} color={currentAccent} />
+                    <XStack
+                      width={7}
+                      height={7}
+                      borderRadius={4}
+                      backgroundColor={currentAccent}
+                    />
+                    <Text fontSize={10.5} fontWeight="700" color="#F8FAFC">
+                      {currentLabel}
+                    </Text>
+                    <LuChevronDown
+                      size={11}
+                      color="#94A3B8"
+                      style={{
+                        transform: [{ rotate: isThemeMenuOpen ? '180deg' : '0deg' }],
+                        transition: 'transform 0.15s ease',
+                      } as any}
+                    />
+                  </XStack>
+                </Pressable>
+
+                {/* Theme Dropdown Menu */}
+                {isThemeMenuOpen && (
+                  <View style={styles.themeDropdownMenu}>
+                    <XStack
+                      paddingHorizontal={8}
+                      paddingVertical={4}
+                      borderBottomWidth={1}
+                      borderBottomColor="#334155"
+                      marginBottom={2}
+                    >
+                      <Text
+                        fontSize={9}
+                        fontWeight="800"
+                        color="#94A3B8"
+                        letterSpacing={0.5}
+                        textTransform="uppercase"
+                      >
+                        THEMES
+                      </Text>
+                    </XStack>
+                    {availableCampaigns.map((c) => {
+                      const isActive = campaign === c;
+                      const itemAccent = CAMPAIGN_REGISTRY[c]?.light?.accent || '#38BDF8';
+                      const itemLabel = CAMPAIGN_LABELS[c] || c;
+
+                      return (
+                        <Pressable
+                          key={c}
+                          onPress={() => {
+                            setCampaign(c);
+                            onCampaignChange?.(c);
+                            setIsThemeMenuOpen(false);
+                          }}
+                          style={[
+                            styles.themeMenuItem,
+                            isActive && styles.themeMenuItemActive,
+                          ]}
+                        >
+                          <XStack alignItems="center" justifyContent="space-between" width="100%" gap={8}>
+                            <XStack alignItems="center" gap={7}>
+                              <XStack
+                                width={8}
+                                height={8}
+                                borderRadius={4}
+                                backgroundColor={itemAccent}
+                              />
+                              <Text
+                                fontSize={11}
+                                fontWeight={isActive ? '800' : '600'}
+                                color={isActive ? '#FFFFFF' : '#CBD5E1'}
+                              >
+                                {itemLabel}
+                              </Text>
+                            </XStack>
+                            {isActive && (
+                              <LuCheck size={12} color="#38BDF8" />
+                            )}
+                          </XStack>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Dark Mode Toggle Button */}
+            {allowColorSchemeToggle && (
+              <Pressable
+                onPress={() => {
+                  toggleColorScheme();
+                  const nextScheme = colorScheme === 'dark' ? 'light' : 'dark';
+                  onColorSchemeChange?.(nextScheme);
+                }}
+                style={[
+                  styles.utilityButton,
+                  colorScheme === 'dark' && styles.utilityButtonDarkActive,
+                ]}
+              >
+                <XStack alignItems="center" gap={5}>
+                  {colorScheme === 'dark' ? (
+                    <LuMoon size={12} color="#FDE047" />
+                  ) : (
+                    <LuSun size={12} color="#F59E0B" />
+                  )}
+                  <Text
+                    fontSize={10}
+                    fontWeight="800"
+                    color={colorScheme === 'dark' ? '#FDE047' : '#E2E8F0'}
+                  >
+                    {colorScheme === 'dark' ? 'DARK' : 'LIGHT'}
+                  </Text>
+                </XStack>
+              </Pressable>
+            )}
+
             {/* Dimension Badge */}
             <XStack
               backgroundColor="#1E293B"
@@ -464,6 +634,53 @@ const styles = StyleSheet.create({
   },
   utilityButtonActive: {
     backgroundColor: '#334155',
+  },
+  utilityButtonDarkActive: {
+    backgroundColor: '#312E81',
+    borderColor: '#6366F1',
+    borderWidth: 1,
+  },
+  themeDropdownContainer: {
+    position: 'relative' as any,
+    zIndex: 1000,
+  },
+  themeDropdownTrigger: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    cursor: 'pointer' as any,
+  },
+  themeDropdownTriggerActive: {
+    borderColor: '#38BDF8',
+    backgroundColor: '#0F172A',
+  },
+  themeDropdownMenu: {
+    position: 'absolute' as any,
+    top: 'calc(100% + 4px)' as any,
+    right: 0,
+    minWidth: 150,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 4,
+    shadowColor: '#000000',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 1001,
+  },
+  themeMenuItem: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    cursor: 'pointer' as any,
+  },
+  themeMenuItemActive: {
+    backgroundColor: '#1E293B',
   },
   canvasBackground: {
     flex: 1,
