@@ -70,7 +70,6 @@ export function OrderIdGeneratorPage({
   const [editingItem, setEditingItem] = useState<OrderIdHistoryEntry | null>(null);
 
   const handleGenerate = () => {
-    if (!selectedSource) return;
     setLoading(true);
 
     if (onGenerateOrder) {
@@ -92,7 +91,7 @@ export function OrderIdGeneratorPage({
 
       const newHistoryEntry: OrderIdHistoryEntry = {
         id: newId,
-        source: selectedSource,
+        source: selectedSource || 'none',
         paymentMode: paymentMode,
         timestamp: new Date().toISOString(),
         sourceHandle: sourceHandle,

@@ -72,7 +72,6 @@ export function OrderIdGeneratorPage({
   const [editingItem, setEditingItem] = useState<OrderIdHistoryEntry | null>(null);
 
   const handleGenerate = () => {
-    if (!selectedSource) return;
     if (onGenerateOrder) {
       onGenerateOrder(selectedSource, paymentMode, sourceHandle);
       setSelectedSource(null);

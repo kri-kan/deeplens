@@ -62,11 +62,29 @@ export const InstagramPrepaid: Story = {
 };
 
 export const UnselectedState: Story = {
-  name: 'Unselected / Empty',
+  name: 'Unselected / Quick Generic (Ready)',
   args: {
     selectedSource: null,
     paymentMode: null,
     sourceHandle: '',
+  },
+};
+
+export const WhatsAppNoPhone: Story = {
+  name: 'WhatsApp (Optional Phone Empty - Ready)',
+  args: {
+    selectedSource: 'whatsapp',
+    paymentMode: 'cod',
+    sourceHandle: '',
+  },
+};
+
+export const InvalidPartialPhoneState: Story = {
+  name: 'WhatsApp Partial Invalid Phone (< 10 digits - Disabled)',
+  args: {
+    selectedSource: 'whatsapp',
+    paymentMode: 'cod',
+    sourceHandle: '98765',
   },
 };
 

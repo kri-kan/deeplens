@@ -81,23 +81,23 @@ export const OrderIdGenerator = () => {
     paymentMode: GeneratorPaymentMode,
     sourceHandle: string
   ) => {
-    if (!source) return;
-
     try {
       setLoading(true);
 
-      const apiSource: OrderSource = source === 'whatsapp' ? 'WhatsApp' : 'Instagram';
-      const apiPaymentMode: PaymentMode | null =
-        paymentMode === 'cod' ? 'COD' : paymentMode === 'prepaid' ? 'Prepaid' : null;
+      const apiSource: OrderSource =
+        source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None';
+      const apiPaymentMode: PaymentMode =
+        paymentMode === 'cod' ? 'COD' : paymentMode === 'prepaid' ? 'Prepaid' : 'None';
 
       let customerId: string | undefined = undefined;
 
-      // Get or create customer if phone or instagram handle provided
-      if (sourceHandle) {
+      // Get or create customer only if sourceHandle is provided and non-empty
+      const trimmedHandle = sourceHandle?.trim();
+      if (trimmedHandle && source) {
         try {
           const customer = await customersApi.getOrCreateCustomer(
-            source === 'whatsapp' ? sourceHandle : undefined,
-            source === 'instagram' ? sourceHandle : undefined
+            source === 'whatsapp' ? trimmedHandle : undefined,
+            source === 'instagram' ? trimmedHandle : undefined
           );
           customerId = customer.id;
         } catch (e) {
@@ -105,23 +105,24 @@ export const OrderIdGenerator = () => {
         }
       }
 
+      const params: Record<string, any> = {};
+      if (apiSource && apiSource !== 'None') params.source = apiSource;
+      if (apiPaymentMode && apiPaymentMode !== 'None') params.paymentMode = apiPaymentMode;
+      if (trimmedHandle) params.sourceHandle = trimmedHandle;
+      if (customerId) params.customerId = customerId;
+
       const response = await searchApiClient.post<{ orderId: string }>(API_ROUTES.ORDERS.GENERATE, null, {
-        params: { 
-          source: apiSource, 
-          paymentMode: apiPaymentMode || '',
-          sourceHandle: sourceHandle || '',
-          customerId
-        }
+        params
       });
 
       const newEntry: OrderIdEntry = {
         id: response.orderId,
-        source: apiSource,
-        paymentMode: apiPaymentMode,
+        source: apiSource || 'None',
+        paymentMode: apiPaymentMode !== 'None' ? apiPaymentMode : null,
         timestamp: new Date().toISOString(),
-        customerPhone: source === 'whatsapp' ? sourceHandle : undefined,
-        instagramHandle: source === 'instagram' ? sourceHandle : undefined,
-        sourceHandle: sourceHandle,
+        customerPhone: source === 'whatsapp' ? trimmedHandle : undefined,
+        instagramHandle: source === 'instagram' ? trimmedHandle : undefined,
+        sourceHandle: trimmedHandle || undefined,
         customerId
       };
       
@@ -192,8 +193,16 @@ export const OrderIdGenerator = () => {
   // Map to Tamagui history items
   const historyMapped: OrderIdHistoryEntry[] = recentIds.map((item) => ({
     id: item.id,
-    source: item.source?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'instagram',
-    paymentMode: item.paymentMode ? (item.paymentMode.toLowerCase() as 'cod' | 'prepaid') : null,
+    source:
+      item.source?.toLowerCase() === 'whatsapp'
+        ? 'whatsapp'
+        : item.source?.toLowerCase() === 'instagram'
+        ? 'instagram'
+        : (item.source || 'None'),
+    paymentMode:
+      item.paymentMode && item.paymentMode !== 'None'
+        ? (item.paymentMode.toLowerCase() as 'cod' | 'prepaid')
+        : null,
     timestamp: item.timestamp,
     customerPhone: item.customerPhone,
     instagramHandle: item.instagramHandle,
@@ -204,10 +213,16 @@ export const OrderIdGenerator = () => {
   const generatedMapped: GeneratedOrderResult | null = displayId
     ? {
         id: displayId.id,
-        source: displayId.source?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'instagram',
-        paymentMode: displayId.paymentMode
-          ? (displayId.paymentMode.toLowerCase() as 'cod' | 'prepaid')
-          : null,
+        source:
+          displayId.source?.toLowerCase() === 'whatsapp'
+            ? 'whatsapp'
+            : displayId.source?.toLowerCase() === 'instagram'
+            ? 'instagram'
+            : null,
+        paymentMode:
+          displayId.paymentMode && displayId.paymentMode !== 'None'
+            ? (displayId.paymentMode.toLowerCase() as 'cod' | 'prepaid')
+            : null,
         timestamp: displayId.timestamp,
         sourceHandle: displayId.sourceHandle || displayId.customerPhone || displayId.instagramHandle,
         isNew: isNewId,

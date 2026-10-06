@@ -32,8 +32,8 @@ public class IdGeneratorService : IIdGeneratorService
     {
         var result = await _sequencedIdGenerator.GetNextOrderIdAsync();
         
-        int? sourceId = source.HasValue ? (int)source.Value : null;
-        int? paymentModeId = paymentMode.HasValue ? (int)paymentMode.Value : null;
+        int? sourceId = source.HasValue && source.Value != OrderSource.None ? (int)source.Value : null;
+        int? paymentModeId = paymentMode.HasValue && paymentMode.Value != PaymentMode.None ? (int)paymentMode.Value : null;
         string? customerPhone = source == OrderSource.WhatsApp ? sourceHandle : null;
 
         await _orderRepository.CreateOrderRecordAsync(
@@ -78,8 +78,8 @@ public class IdGeneratorService : IIdGeneratorService
 
     public async Task<bool> UpdateOrderDetailsAsync(string orderId, OrderUpdateDto details)
     {
-        int? sourceId = details.Source.HasValue ? (int)details.Source.Value : null;
-        int? paymentModeId = details.PaymentMode.HasValue ? (int)details.PaymentMode.Value : null;
+        int? sourceId = details.Source.HasValue && details.Source.Value != OrderSource.None ? (int)details.Source.Value : null;
+        int? paymentModeId = details.PaymentMode.HasValue && details.PaymentMode.Value != PaymentMode.None ? (int)details.PaymentMode.Value : null;
 
         var result = await _orderRepository.UpdateDetailsAsync(
             orderId, 

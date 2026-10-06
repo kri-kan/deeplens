@@ -73,14 +73,22 @@ export function OrderIdGeneratorCard({
   };
 
   const isGenerateDisabled = () => {
-    if (!selectedSource) return true;
     if (loading) return true;
-    if (!sourceHandle || sourceHandle.trim().length === 0) return true;
-    if (selectedSource === 'whatsapp') {
-      const digits = sourceHandle.replace(/\D/g, '');
-      if (digits.length < 10) return true;
+    if (
+      selectedSource === 'whatsapp' &&
+      sourceHandle.trim().length > 0 &&
+      sourceHandle.replace(/\D/g, '').length < 10
+    ) {
+      return true;
     }
     return false;
+  };
+
+  const getButtonLabel = () => {
+    if (loading) return 'Generating ID...';
+    if (selectedSource === 'whatsapp') return 'Generate WhatsApp Order ID';
+    if (selectedSource === 'instagram') return 'Generate Instagram Order ID';
+    return 'Generate Order ID';
   };
 
   const generatedDisplayHandle = generatedEntry
@@ -254,8 +262,8 @@ export function OrderIdGeneratorCard({
               onChangeText={onChangeSourceHandle}
               placeholder={
                 selectedSource === 'whatsapp'
-                  ? 'Phone number (e.g. +91 98765 43210) *'
-                  : 'Instagram handle (e.g. @username) *'
+                  ? 'Phone number (optional)'
+                  : 'Instagram handle (optional)'
               }
               placeholderTextColor={tokens.textMuted}
               keyboardType={selectedSource === 'whatsapp' ? 'phone-pad' : 'default'}
@@ -273,11 +281,13 @@ export function OrderIdGeneratorCard({
               </Pressable>
             )}
           </XStack>
-          {selectedSource === 'whatsapp' && sourceHandle.replace(/\D/g, '').length < 10 && (
-            <Text fontSize={11} color={tokens.textMuted} paddingLeft={4}>
-              Enter at least 10 digits for phone lookup.
-            </Text>
-          )}
+          {selectedSource === 'whatsapp' &&
+            sourceHandle.trim().length > 0 &&
+            sourceHandle.replace(/\D/g, '').length < 10 && (
+              <Text fontSize={11} color={tokens.textMuted} paddingLeft={4}>
+                Enter at least 10 digits for phone lookup.
+              </Text>
+            )}
         </YStack>
       )}
 
@@ -302,11 +312,7 @@ export function OrderIdGeneratorCard({
             fontWeight="700"
             color={isGenerateDisabled() ? tokens.textMuted : tokens.surface}
           >
-            {loading
-              ? 'Generating ID...'
-              : selectedSource
-              ? 'Generate Order ID'
-              : 'Select Platform to Begin'}
+            {getButtonLabel()}
           </Text>
         </XStack>
       </Pressable>
