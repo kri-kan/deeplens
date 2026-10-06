@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Pressable, Image, Animated } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuStar, LuCheck, LuPencil, LuStore, LuImage } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
@@ -32,8 +32,9 @@ export interface ProductGridTileProps {
   selectionMode?: boolean;
   onPress?: (id: string) => void;
   onLongPress?: (id: string) => void;
-  onToggleStar?: (id: string) => void;
+  onToggleStar?: (id: string, nextStarred?: boolean) => Promise<void> | void;
   onQuickEdit?: (item: ProductGridTileData) => void;
+  onError?: (message: string) => void;
 }
 
 export function ProductGridTile({
@@ -44,8 +45,56 @@ export function ProductGridTile({
   onLongPress,
   onToggleStar,
   onQuickEdit,
+  onError,
 }: ProductGridTileProps) {
   const { tokens } = useTheme();
+
+  // Optimistic local star state for instantaneous (<16ms) UI response
+  const [localStarred, setLocalStarred] = useState(Boolean(item.isStarred));
+  const isMutatingRef = useRef(false);
+  const starScale = useRef(new Animated.Value(1)).current;
+
+  // Keep in sync with parent updates
+  useEffect(() => {
+    setLocalStarred(Boolean(item.isStarred));
+  }, [item.isStarred]);
+
+  const handleStarPress = async (e: any) => {
+    e?.stopPropagation?.();
+    if (!onToggleStar || isMutatingRef.current) return;
+
+    const prevValue = localStarred;
+    const nextValue = !prevValue;
+
+    // 1. Instant visual flip
+    setLocalStarred(nextValue);
+
+    // 2. Spring micro-interaction bounce
+    Animated.sequence([
+      Animated.timing(starScale, {
+        toValue: 1.35,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.spring(starScale, {
+        toValue: 1.0,
+        friction: 4,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // 3. Background mutation with rollback
+    isMutatingRef.current = true;
+    try {
+      await onToggleStar(item.id, nextValue);
+    } catch (err) {
+      setLocalStarred(prevValue);
+      onError?.('Failed to update star. Reverted change.');
+    } finally {
+      isMutatingRef.current = false;
+    }
+  };
 
   const hasAiFacets = Boolean(
     item.craft ||
@@ -208,12 +257,10 @@ export function ProductGridTile({
         {/* Top-Right: Star Button */}
         {!selectionMode && onToggleStar && (
           <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={item.isStarred ? 'Unstar product' : 'Star product'}
-            onPress={(e) => {
-              e.stopPropagation();
-              onToggleStar(item.id);
-            }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: localStarred }}
+            accessibilityLabel={localStarred ? 'Unstar product' : 'Star product'}
+            onPress={handleStarPress}
             style={
               {
                 position: 'absolute',
@@ -224,20 +271,22 @@ export function ProductGridTile({
               } as any
             }
           >
-            <XStack
-              width={26}
-              height={26}
-              borderRadius={tokens.radius.full}
-              backgroundColor="rgba(0,0,0,0.45)"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <LuStar
-                size={14}
-                color={item.isStarred ? '#FBBF24' : '#ffffff'}
-                style={{ fill: item.isStarred ? '#FBBF24' : 'none' } as any}
-              />
-            </XStack>
+            <Animated.View style={{ transform: [{ scale: starScale }] }}>
+              <XStack
+                width={26}
+                height={26}
+                borderRadius={tokens.radius.full}
+                backgroundColor="rgba(0,0,0,0.45)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuStar
+                  size={14}
+                  color={localStarred ? '#FBBF24' : '#ffffff'}
+                  style={{ fill: localStarred ? '#FBBF24' : 'none' } as any}
+                />
+              </XStack>
+            </Animated.View>
           </Pressable>
         )}
 

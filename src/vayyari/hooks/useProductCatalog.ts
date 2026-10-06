@@ -128,22 +128,27 @@ export const useProductCatalog = (filters: ProductCatalogFilters) => {
   }, [categoryId, query, sortBy, startDate, endDate, fabricsKey, craftsKey, motifsKey, bordersKey, stitchTypesKey, occasionsKey, blouseTypesKey, vendorNamesKey, minPrice, maxPrice, categoriesKey, includeArchived, status, isStarred]);
 
   const toggleStar = useCallback(async (productId: string, isStarred: boolean) => {
+    // 1. Optimistically update local state immediately for <16ms UI responsiveness
+    setProducts(prev => prev.map(p => {
+      if (p.id === productId) {
+        return { ...p, isStarred, IsStarred: isStarred } as VendorProduct;
+      }
+      return p;
+    }));
+
     try {
       await wrapInSpan('toggleProductStar', async () => {
         await productService.toggleStar(productId, isStarred);
       });
-      // Optionally update local state for immediate feedback
+    } catch (err) {
+      console.error('Failed to toggle star:', err);
+      // 2. Revert back on mutation failure
       setProducts(prev => prev.map(p => {
         if (p.id === productId) {
-          // If the product model has a starred/isStarred property, update it here.
-          // For now, assuming it has isStarred or we just fetch again if needed.
-          // Wait, does VendorProduct have isStarred? Let's assume it does.
-          return { ...p, isStarred };
+          return { ...p, isStarred: !isStarred, IsStarred: !isStarred } as VendorProduct;
         }
         return p;
       }));
-    } catch (err) {
-      console.error('Failed to toggle star:', err);
       throw err;
     }
   }, []);

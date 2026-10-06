@@ -7,6 +7,8 @@ export interface IconProps {
   strokeWidth?: number;
   style?: any;
   className?: string;
+  fill?: string;
+  filled?: boolean;
 }
 
 export const LuPencil: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
@@ -158,8 +160,8 @@ export const LuLayoutDashboard: React.FC<IconProps> = ({ size = 16, color = "#33
   <Feather name="layout" size={size} color={color} style={style} />
 );
 
-export const LuStar: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
-  <Ionicons name="star" size={size} color={color} style={style} />
+export const LuStar: React.FC<IconProps> = ({ size = 16, color = "#333333", filled = true, style }) => (
+  <Ionicons name={filled ? "star" : "star-outline"} size={size} color={color} style={style} />
 );
 export const LuSlidersHorizontal: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="sliders" size={size} color={color} style={style} />

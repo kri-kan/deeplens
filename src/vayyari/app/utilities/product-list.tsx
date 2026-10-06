@@ -570,11 +570,18 @@ export default function ProductCatalogScreen() {
     }
   };
 
-  const handleToggleStar = async (id: string) => {
+  const handleToggleStar = useCallback(async (id: string, nextStarred?: boolean) => {
     const current = products.find((p) => p.id === id);
-    const currentStarred = Boolean(getProp(current, 'isStarred', 'IsStarred'));
-    await toggleStar(id, !currentStarred);
-  };
+    const targetState = nextStarred !== undefined
+      ? nextStarred
+      : !Boolean(getProp(current, 'isStarred', 'IsStarred'));
+    try {
+      await toggleStar(id, targetState);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to update star status. Reverting change.');
+      throw e;
+    }
+  }, [products, toggleStar]);
 
   const handleBack = useCallback(() => {
     if (selectionMode) {
