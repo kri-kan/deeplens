@@ -80,11 +80,21 @@ export const WhatsAppNoPhone: Story = {
 };
 
 export const InvalidPartialPhoneState: Story = {
-  name: 'WhatsApp Partial Invalid Phone (< 10 digits - Disabled)',
+  name: 'WhatsApp Partial Phone (< 10 digits - Validates on Click)',
   args: {
     selectedSource: 'whatsapp',
     paymentMode: 'cod',
     sourceHandle: '98765',
+  },
+};
+
+export const ValidationErrorTriggered: Story = {
+  name: 'Validation Error Triggered (< 10 digits)',
+  args: {
+    selectedSource: 'whatsapp',
+    paymentMode: 'cod',
+    sourceHandle: '98765',
+    initialPhoneError: true,
   },
 };
 

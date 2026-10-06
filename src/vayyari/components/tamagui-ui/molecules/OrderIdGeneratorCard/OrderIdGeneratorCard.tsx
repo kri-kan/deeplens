@@ -30,6 +30,7 @@ export interface OrderIdGeneratorCardProps {
   generatedEntry?: GeneratedOrderResult | null;
   onCopy?: (id: string, includePrefix?: boolean) => void;
   onOpenPlatform?: (source: string, handle?: string) => void;
+  initialPhoneError?: boolean;
 }
 
 const WHATSAPP_GREEN = '#25D366';
@@ -47,9 +48,11 @@ export function OrderIdGeneratorCard({
   generatedEntry,
   onCopy,
   onOpenPlatform,
+  initialPhoneError = false,
 }: OrderIdGeneratorCardProps) {
   const { tokens } = useTheme();
   const [copiedType, setCopiedType] = useState<'raw' | 'prefix' | null>(null);
+  const [phoneError, setPhoneError] = useState(Boolean(initialPhoneError));
 
   const handleCopy = (includePrefix: boolean) => {
     if (!generatedEntry?.id) return;
@@ -72,16 +75,35 @@ export function OrderIdGeneratorCard({
     }
   };
 
-  const isGenerateDisabled = () => {
-    if (loading) return true;
+  const handleSelectSource = (source: GeneratorSource) => {
+    if (phoneError) {
+      setPhoneError(false);
+    }
+    onSelectSource(source);
+  };
+
+  const handleSourceHandleChange = (val: string) => {
+    if (phoneError) {
+      setPhoneError(false);
+    }
+    onChangeSourceHandle(val);
+  };
+
+  const handleGenerate = () => {
     if (
       selectedSource === 'whatsapp' &&
       sourceHandle.trim().length > 0 &&
       sourceHandle.replace(/\D/g, '').length < 10
     ) {
-      return true;
+      setPhoneError(true);
+      return;
     }
-    return false;
+    setPhoneError(false);
+    onGenerate();
+  };
+
+  const isGenerateDisabled = () => {
+    return loading;
   };
 
   const getButtonLabel = () => {
@@ -130,7 +152,7 @@ export function OrderIdGeneratorCard({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Select WhatsApp source"
-            onPress={() => onSelectSource(selectedSource === 'whatsapp' ? null : 'whatsapp')}
+            onPress={() => handleSelectSource(selectedSource === 'whatsapp' ? null : 'whatsapp')}
             style={{ cursor: 'pointer' } as any}
           >
             <XStack
@@ -157,7 +179,7 @@ export function OrderIdGeneratorCard({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Select Instagram source"
-            onPress={() => onSelectSource(selectedSource === 'instagram' ? null : 'instagram')}
+            onPress={() => handleSelectSource(selectedSource === 'instagram' ? null : 'instagram')}
             style={{ cursor: 'pointer' } as any}
           >
             <XStack
@@ -239,7 +261,7 @@ export function OrderIdGeneratorCard({
         <YStack gap={4}>
           <XStack
             borderWidth={1}
-            borderColor={tokens.border}
+            borderColor={phoneError ? tokens.error : tokens.border}
             borderRadius={tokens.radius.md}
             backgroundColor={tokens.background}
             paddingHorizontal={12}
@@ -259,7 +281,7 @@ export function OrderIdGeneratorCard({
                   : 'Customer Instagram Handle or URL'
               }
               value={sourceHandle}
-              onChangeText={onChangeSourceHandle}
+              onChangeText={handleSourceHandleChange}
               placeholder={
                 selectedSource === 'whatsapp'
                   ? 'Phone number (optional)'
@@ -274,20 +296,18 @@ export function OrderIdGeneratorCard({
               }}
             />
             {sourceHandle.length > 0 && (
-              <Pressable onPress={() => onChangeSourceHandle('')}>
+              <Pressable onPress={() => handleSourceHandleChange('')}>
                 <Text fontSize={12} color={tokens.textMuted}>
                   Clear
                 </Text>
               </Pressable>
             )}
           </XStack>
-          {selectedSource === 'whatsapp' &&
-            sourceHandle.trim().length > 0 &&
-            sourceHandle.replace(/\D/g, '').length < 10 && (
-              <Text fontSize={11} color={tokens.textMuted} paddingLeft={4}>
-                Enter at least 10 digits for phone lookup.
-              </Text>
-            )}
+          {phoneError && (
+            <Text fontSize={11} color={tokens.error} paddingLeft={4}>
+              Please enter a valid phone number with at least 10 digits.
+            </Text>
+          )}
         </YStack>
       )}
 
@@ -296,7 +316,7 @@ export function OrderIdGeneratorCard({
         accessibilityRole="button"
         accessibilityLabel="Generate Order ID CTA"
         disabled={isGenerateDisabled()}
-        onPress={onGenerate}
+        onPress={handleGenerate}
         style={{ opacity: isGenerateDisabled() ? 0.6 : 1 }}
       >
         <XStack

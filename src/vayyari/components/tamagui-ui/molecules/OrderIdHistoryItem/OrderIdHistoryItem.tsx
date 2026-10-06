@@ -155,11 +155,13 @@ export function OrderIdHistoryItem({
                 size="sm"
               />
             )}
+
+            <TimestampBadge date={item.timestamp} compact size="sm" />
           </XStack>
 
-          {/* Subtitle: Handle (Clean formatted handle) + Relative Timestamp */}
-          <XStack alignItems="center" gap={8} flexWrap="wrap">
-            {displayHandle ? (
+          {/* Subtitle: Handle (Clean formatted handle) */}
+          {displayHandle ? (
+            <XStack alignItems="center" gap={8} flexWrap="wrap">
               <TouchableOpacity
                 activeOpacity={0.7}
                 accessibilityRole="link"
@@ -177,14 +179,8 @@ export function OrderIdHistoryItem({
                   {displayHandle}
                 </Text>
               </TouchableOpacity>
-            ) : null}
-            {displayHandle && (
-              <Text fontSize={11} color={tokens.textMuted}>
-                •
-              </Text>
-            )}
-            <TimestampBadge date={item.timestamp} compact size="sm" />
-          </XStack>
+            </XStack>
+          ) : null}
         </YStack>
       </XStack>
 
