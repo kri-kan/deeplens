@@ -1,5 +1,6 @@
-import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { TouchableOpacity, Animated, Platform } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuStar, LuCheck, LuPencil, LuImage } from '../../icons/lu';
@@ -35,8 +36,9 @@ export interface ProductGridTileProps {
   selectionMode?: boolean;
   onPress?: (id: string) => void;
   onLongPress?: (id: string) => void;
-  onToggleStar?: (id: string) => void;
+  onToggleStar?: (id: string, nextStarred?: boolean) => Promise<void> | void;
   onQuickEdit?: (item: ProductGridTileData) => void;
+  onError?: (message: string) => void;
 }
 
 export function ProductGridTile({
@@ -47,8 +49,65 @@ export function ProductGridTile({
   onLongPress,
   onToggleStar,
   onQuickEdit,
+  onError,
 }: ProductGridTileProps) {
   const { tokens } = useTheme();
+
+  // Optimistic local star state for instantaneous (<16ms) UI response
+  const [localStarred, setLocalStarred] = useState(Boolean(item.isStarred));
+  const isMutatingRef = useRef(false);
+  const starScale = useRef(new Animated.Value(1)).current;
+
+  // Keep in sync with parent updates (e.g. initial load, filters, bulk actions)
+  useEffect(() => {
+    setLocalStarred(Boolean(item.isStarred));
+  }, [item.isStarred]);
+
+  const handleStarPress = async (e: any) => {
+    e?.stopPropagation?.();
+    if (!onToggleStar || isMutatingRef.current) return;
+
+    const prevValue = localStarred;
+    const nextValue = !prevValue;
+
+    // 1. Instant visual flip (<16ms)
+    setLocalStarred(nextValue);
+
+    // 2. Tactile haptic impulse
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+
+    // 3. Spring micro-interaction bounce (pop to 1.35x and spring back)
+    Animated.sequence([
+      Animated.timing(starScale, {
+        toValue: 1.35,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.spring(starScale, {
+        toValue: 1.0,
+        friction: 4,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // 4. Background mutation with rollback on error
+    isMutatingRef.current = true;
+    try {
+      await onToggleStar(item.id, nextValue);
+    } catch (err) {
+      // Rollback on error
+      setLocalStarred(prevValue);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      }
+      onError?.('Failed to update star. Reverted change.');
+    } finally {
+      isMutatingRef.current = false;
+    }
+  };
 
   const hasAiFacets = Boolean(
     item.craft ||
@@ -174,12 +233,11 @@ export function ProductGridTile({
         {/* Top-Right: Star Button */}
         {!selectionMode && onToggleStar && (
           <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={item.isStarred ? 'Unstar product' : 'Star product'}
-            onPress={(e) => {
-              e.stopPropagation?.();
-              onToggleStar(item.id);
-            }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: localStarred }}
+            accessibilityLabel={localStarred ? 'Unstar product' : 'Star product'}
+            onPress={handleStarPress}
+            activeOpacity={0.85}
             style={{
               position: 'absolute',
               top: 6,
@@ -187,19 +245,22 @@ export function ProductGridTile({
               zIndex: 10,
             }}
           >
-            <XStack
-              width={26}
-              height={26}
-              borderRadius={tokens.radius.full}
-              backgroundColor="rgba(0,0,0,0.45)"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <LuStar
-                size={14}
-                color={item.isStarred ? '#FBBF24' : '#ffffff'}
-              />
-            </XStack>
+            <Animated.View style={{ transform: [{ scale: starScale }] }}>
+              <XStack
+                width={26}
+                height={26}
+                borderRadius={tokens.radius.full}
+                backgroundColor="rgba(0,0,0,0.45)"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <LuStar
+                  size={14}
+                  color={localStarred ? '#FBBF24' : '#ffffff'}
+                  filled={localStarred}
+                />
+              </XStack>
+            </Animated.View>
           </TouchableOpacity>
         )}
 

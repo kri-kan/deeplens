@@ -54,7 +54,7 @@ export interface AdminProductCatalogPageProps {
   onApplyFilters?: (filters: FilterState) => void;
   onCreateProduct?: () => void;
   onProductPress?: (id: string) => void;
-  onToggleStar?: (id: string) => void;
+  onToggleStar?: (id: string, nextStarred?: boolean) => Promise<void> | void;
   onBulkStar?: (ids: string[]) => void;
   onBulkArchive?: (ids: string[]) => void;
   onBulkDelete?: (ids: string[]) => void;
