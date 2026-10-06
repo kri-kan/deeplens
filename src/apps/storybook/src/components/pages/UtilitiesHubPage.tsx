@@ -336,11 +336,7 @@ export function UtilitiesHubPage({ disableSafeArea = false, onBack }: UtilitiesH
                     <Text fontSize={12} fontWeight="700" color={tokens.text}>
                       {item.label}
                     </Text>
-                    {isCopied ? (
-                      <LuCheck size={13} color={item.color} />
-                    ) : (
-                      <LuCopy size={12} color={`${tokens.text}60`} />
-                    )}
+                    {isCopied && <LuCheck size={13} color={item.color} />}
                   </XStack>
                 </Pressable>
               );
