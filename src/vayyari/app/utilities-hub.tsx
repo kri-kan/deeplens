@@ -14,7 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import {
   LuPlus,
-  LuCopy,
+  LuCheck,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -286,7 +286,7 @@ export default function UtilitiesHubScreen({ onDismiss }: UtilitiesHubScreenProp
                       alignItems="center"
                       gap={5}
                     >
-                      <LuCopy size={11} color={snippet.color} />
+                      <LuCheck size={12} color={snippet.color} />
                       <Text fontSize={12} fontWeight="600" color={snippet.color}>
                         Copied!
                       </Text>

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, Text } from 'tamagui';
-import { LuCopy } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 
 export interface SnippetChipProps {
@@ -17,12 +16,12 @@ export interface SnippetChipProps {
 /**
  * SnippetChip
  *
- * A compact pill-shaped chip displaying an emoji + label + copy icon.
+ * A compact pill-shaped chip displaying an emoji + label.
  * - Tap  → copies snippet to clipboard (handled by parent)
  * - Long press → opens edit sheet (handled by parent)
  *
  * Colors are derived from the `color` prop: tinted background at 12% opacity,
- * matching border at 30% opacity, and colored text/icons.
+ * matching border at 30% opacity, and colored text.
  */
 export function SnippetChip({
   label,
@@ -73,9 +72,6 @@ export function SnippetChip({
         >
           {label}
         </Text>
-
-        {/* Copy icon */}
-        <LuCopy size={11} color={`${color}99`} />
       </XStack>
     </Pressable>
   );
