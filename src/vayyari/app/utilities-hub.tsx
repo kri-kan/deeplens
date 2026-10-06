@@ -229,18 +229,11 @@ export default function UtilitiesHubScreen({ onDismiss }: UtilitiesHubScreenProp
         }}
       >
 
-        {/* ── Copy Snippets Card ── */}
-        <YStack
-          backgroundColor={tokens.surface}
-          borderRadius={tokens.radius.md}
-          borderWidth={1}
-          borderColor={tokens.border}
-          padding={14}
-          gap={12}
-        >
+        {/* ── Copy Snippets (Uncontained Edge-to-Edge) ── */}
+        <YStack gap={10}>
           {/* Section label */}
           <Text
-            fontSize={10}
+            fontSize={11}
             fontWeight="700"
             color={tokens.textMuted}
             letterSpacing={1.2}

@@ -282,11 +282,11 @@ export function UtilitiesHubPage({ disableSafeArea = false, onBack }: UtilitiesH
           )}
         </XStack>
 
-        {/* Section 1: Snippet Chips */}
+        {/* Section 1: Snippet Chips (Uncontained Edge-to-Edge) */}
         <YStack gap={10}>
           <XStack alignItems="center" justifyContent="space-between">
-            <Text fontSize={13} fontWeight="700" color={tokens.text} letterSpacing={0.3}>
-              QUICK COPY CHIPS
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} letterSpacing={1.2}>
+              COPY SNIPPETS
             </Text>
           </XStack>
 
