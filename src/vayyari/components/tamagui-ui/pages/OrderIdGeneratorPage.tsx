@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, Switch, Pressable } from 'react-native';
+import { ScrollView, Switch, Pressable, TextInput } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LuSettings, LuArrowLeft, LuHistory, LuInbox } from '../icons/lu';
+import { LuSettings, LuArrowLeft, LuHistory, LuInbox, LuSearch, LuX } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
   OrderIdGeneratorCard,
@@ -23,6 +23,7 @@ export interface OrderIdGeneratorPageProps {
   initialPaymentMode?: GeneratorPaymentMode;
   initialSourceHandle?: string;
   initialShowDeleted?: boolean;
+  initialSearchQuery?: string;
   isLoading?: boolean;
   disableSafeArea?: boolean;
   onGenerateOrder?: (
@@ -48,6 +49,7 @@ export function OrderIdGeneratorPage({
   initialPaymentMode = null,
   initialSourceHandle = '',
   initialShowDeleted = false,
+  initialSearchQuery = '',
   isLoading = false,
   disableSafeArea = false,
   onGenerateOrder,
@@ -67,6 +69,7 @@ export function OrderIdGeneratorPage({
   const [paymentMode, setPaymentMode] = useState<GeneratorPaymentMode>(initialPaymentMode);
   const [sourceHandle, setSourceHandle] = useState(initialSourceHandle);
   const [showDeleted, setShowDeleted] = useState(initialShowDeleted);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
 
   // Edit sheet state
   const [editingItem, setEditingItem] = useState<OrderIdHistoryEntry | null>(null);
@@ -89,9 +92,18 @@ export function OrderIdGeneratorPage({
     }
   };
 
-  const filteredHistory = showDeleted
-    ? initialRecentIds
-    : initialRecentIds.filter((item) => !item.isDeleted);
+  const filteredHistory = (
+    showDeleted ? initialRecentIds : initialRecentIds.filter((item) => !item.isDeleted)
+  ).filter((item) => {
+    if (!searchQuery?.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      item.id.toLowerCase().includes(q) ||
+      (item.sourceHandle && item.sourceHandle.toLowerCase().includes(q)) ||
+      (item.customerPhone && item.customerPhone.toLowerCase().includes(q)) ||
+      (item.instagramHandle && item.instagramHandle.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
@@ -150,113 +162,150 @@ export function OrderIdGeneratorPage({
           paddingHorizontal: 16,
           paddingTop: 16,
           paddingBottom: Math.max(32, bottomInset + 24),
-          gap: 20,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Generator Card Molecule */}
-        <OrderIdGeneratorCard
-          selectedSource={selectedSource}
-          onSelectSource={setSelectedSource}
-          paymentMode={paymentMode}
-          onSelectPaymentMode={setPaymentMode}
-          sourceHandle={sourceHandle}
-          onChangeSourceHandle={setSourceHandle}
-          loading={isLoading}
-          onGenerate={handleGenerate}
-          generatedEntry={initialGeneratedEntry}
-          onCopy={onCopy}
-          onOpenPlatform={onOpenPlatform}
-        />
+        <YStack gap={24}>
+          {/* Generator Card Molecule */}
+          <OrderIdGeneratorCard
+            selectedSource={selectedSource}
+            onSelectSource={setSelectedSource}
+            paymentMode={paymentMode}
+            onSelectPaymentMode={setPaymentMode}
+            sourceHandle={sourceHandle}
+            onChangeSourceHandle={setSourceHandle}
+            loading={isLoading}
+            onGenerate={handleGenerate}
+            generatedEntry={initialGeneratedEntry}
+            onCopy={onCopy}
+            onOpenPlatform={onOpenPlatform}
+          />
 
-        {/* History Section Header */}
-        <YStack gap={12}>
-          <XStack alignItems="center" justifyContent="space-between">
-            <XStack alignItems="center" gap={8}>
-              <LuHistory size={16} color={tokens.text} />
-              <Text fontSize={15} fontWeight="700" color={tokens.text}>
-                Recent Order IDs
-              </Text>
-              <XStack
-                paddingHorizontal={7}
-                paddingVertical={2}
-                borderRadius={tokens.radius.full}
-                backgroundColor={tokens.surfaceRaised}
-                borderWidth={1}
-                borderColor={tokens.border}
-              >
-                <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-                  {filteredHistory.length}
+          {/* History Section Header */}
+          <YStack gap={12}>
+            <XStack alignItems="center" justifyContent="space-between">
+              <XStack alignItems="center" gap={8}>
+                <LuHistory size={16} color={tokens.text} />
+                <Text fontSize={15} fontWeight="700" color={tokens.text}>
+                  Recent Order IDs
                 </Text>
+                <XStack
+                  paddingHorizontal={7}
+                  paddingVertical={2}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={tokens.surfaceRaised}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                >
+                  <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                    {filteredHistory.length}
+                  </Text>
+                </XStack>
+              </XStack>
+
+              {/* Show Deleted Toggle */}
+              <XStack alignItems="center" gap={8}>
+                <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
+                  Show Deleted
+                </Text>
+                <Switch
+                  value={showDeleted}
+                  onValueChange={setShowDeleted}
+                  trackColor={{ false: tokens.border, true: tokens.accent }}
+                  thumbColor={tokens.surface}
+                />
               </XStack>
             </XStack>
 
-            {/* Show Deleted Toggle */}
-            <XStack alignItems="center" gap={8}>
-              <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
-                Show Deleted
-              </Text>
-              <Switch
-                value={showDeleted}
-                onValueChange={setShowDeleted}
-                trackColor={{ false: tokens.border, true: tokens.accent }}
-                thumbColor={tokens.surface}
-              />
-            </XStack>
-          </XStack>
-
-          {/* History List or Empty State */}
-          {filteredHistory.length === 0 ? (
-            <YStack
+            {/* Search Bar for filtering recent orders */}
+            <XStack
+              alignItems="center"
               backgroundColor={tokens.surface}
-              borderRadius={tokens.radius.lg}
               borderWidth={1}
               borderColor={tokens.border}
-              paddingVertical={36}
-              paddingHorizontal={20}
-              alignItems="center"
-              justifyContent="center"
-              gap={10}
+              borderRadius={tokens.radius.md}
+              paddingHorizontal={12}
+              height={40}
+              gap={8}
             >
-              <XStack
-                width={48}
-                height={48}
-                borderRadius={tokens.radius.full}
-                backgroundColor={tokens.surfaceRaised}
+              <LuSearch size={15} color={tokens.textMuted} />
+              <TextInput
+                placeholder="Search orders by ID, phone, or handle..."
+                placeholderTextColor={tokens.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  color: tokens.text,
+                  paddingVertical: 0,
+                }}
+              />
+              {!!searchQuery && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={8}
+                >
+                  <LuX size={14} color={tokens.textMuted} />
+                </Pressable>
+              )}
+            </XStack>
+
+            {/* History List or Empty State */}
+            {filteredHistory.length === 0 ? (
+              <YStack
+                backgroundColor={tokens.surface}
+                borderRadius={tokens.radius.lg}
+                borderWidth={1}
+                borderColor={tokens.border}
+                paddingVertical={36}
+                paddingHorizontal={20}
                 alignItems="center"
                 justifyContent="center"
+                gap={10}
               >
-                <LuInbox size={24} color={tokens.textMuted} />
-              </XStack>
-              <Text fontSize={14} fontWeight="700" color={tokens.text}>
-                No Recent Activity
-              </Text>
-              <Text
-                fontSize={12}
-                color={tokens.textMuted}
-                textAlign="center"
-                maxWidth={240}
-              >
-                Generated order IDs will appear here with instant copy and edit options.
-              </Text>
-            </YStack>
-          ) : (
-            <YStack gap={10}>
-              {filteredHistory.map((item) => (
-                <OrderIdHistoryItem
-                  key={item.id}
-                  item={item}
-                  onPress={(id) => onNavigateToDetails?.(id)}
-                  onEdit={(id) => {
-                    const target = initialRecentIds.find((x) => x.id === id);
-                    if (target) setEditingItem(target);
-                  }}
-                  onCopy={onCopy}
-                  onOpenPlatform={onOpenPlatform}
-                />
-              ))}
-            </YStack>
-          )}
+                <XStack
+                  width={48}
+                  height={48}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={tokens.surfaceRaised}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <LuInbox size={24} color={tokens.textMuted} />
+                </XStack>
+                <Text fontSize={14} fontWeight="700" color={tokens.text}>
+                  No Recent Activity
+                </Text>
+                <Text
+                  fontSize={12}
+                  color={tokens.textMuted}
+                  textAlign="center"
+                  maxWidth={240}
+                >
+                  Generated order IDs will appear here with instant copy and edit options.
+                </Text>
+              </YStack>
+            ) : (
+              <YStack gap={10}>
+                {filteredHistory.map((item) => (
+                  <OrderIdHistoryItem
+                    key={item.id}
+                    item={item}
+                    onPress={(id) => onNavigateToDetails?.(id)}
+                    onEdit={(id) => {
+                      const target = initialRecentIds.find((x) => x.id === id);
+                      if (target) setEditingItem(target);
+                    }}
+                    onCopy={onCopy}
+                    onOpenPlatform={onOpenPlatform}
+                  />
+                ))}
+              </YStack>
+            )}
+          </YStack>
         </YStack>
       </ScrollView>
 

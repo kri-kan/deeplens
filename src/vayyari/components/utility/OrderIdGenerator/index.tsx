@@ -239,6 +239,7 @@ export const OrderIdGenerator = () => {
       onCopy={copyToClipboard}
       onNavigateToDetails={(id) => router.push(`/utilities/order-details/${id}`)}
       onOpenSettings={() => router.push('/modal')}
+      onBack={() => router.back()}
     />
   );
 };

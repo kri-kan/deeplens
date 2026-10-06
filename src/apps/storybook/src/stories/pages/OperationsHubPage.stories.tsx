@@ -5,6 +5,7 @@ import {
   OperationsHubPageProps,
   UtilityGroup,
 } from '../../components/pages/OperationsHubPage';
+import { AdminHomeScreen } from '../../components/pages/AdminHomeScreen';
 import {
   LuTag,
   LuUsers,
@@ -269,3 +270,25 @@ export const TabletHub: Story = {
     groups: MOCK_GROUPS,
   },
 };
+
+/**
+ * 6. Admin Home Screen with Interactive Spinning (+) / (X) Quick Actions
+ * Matches Vayyari mobile app with bottom dock and center (+) button that spins to (X)
+ * and opens blurred overlay with "New Order" and "Edit Order" actions.
+ */
+export const AdminHomeWithQuickActionOverlay: Story = {
+  name: '6. Admin Home (Spinning + & Blurred Overlay)',
+  decorators: [withFormFactor('mobile', 'Admin Home - Interactive + FAB')],
+  render: () => <AdminHomeScreen disableSafeArea={true} initialMenuOpen={false} />,
+};
+
+/**
+ * 7. Admin Home Screen - Overlay Open State
+ * Pre-opened quick order action overlay with background blur and 2 action menus.
+ */
+export const AdminHomeOverlayOpen: Story = {
+  name: '7. Admin Home (Overlay Active - New/Edit Order)',
+  decorators: [withFormFactor('mobile', 'Admin Home - Quick Actions Active')],
+  render: () => <AdminHomeScreen disableSafeArea={true} initialMenuOpen={true} />,
+};
+

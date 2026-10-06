@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, Switch, Pressable } from 'react-native';
+import { ScrollView, Switch, Pressable, TextInput } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LuSettings, LuArrowLeft, LuHistory, LuInbox } from 'react-icons/lu';
+import { LuSettings, LuArrowLeft, LuHistory, LuInbox, LuSearch, LuX } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
   OrderIdGeneratorCard,
@@ -23,6 +23,7 @@ export interface OrderIdGeneratorPageProps {
   initialPaymentMode?: GeneratorPaymentMode;
   initialSourceHandle?: string;
   initialShowDeleted?: boolean;
+  initialSearchQuery?: string;
   isLoading?: boolean;
   disableSafeArea?: boolean;
   onGenerateOrder?: (
@@ -43,6 +44,7 @@ export function OrderIdGeneratorPage({
   initialPaymentMode = null,
   initialSourceHandle = '',
   initialShowDeleted = false,
+  initialSearchQuery = '',
   isLoading = false,
   disableSafeArea = false,
   onGenerateOrder,
@@ -60,6 +62,7 @@ export function OrderIdGeneratorPage({
   const [paymentMode, setPaymentMode] = useState<GeneratorPaymentMode>(initialPaymentMode);
   const [sourceHandle, setSourceHandle] = useState(initialSourceHandle);
   const [loading, setLoading] = useState(isLoading);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [recentIds, setRecentIds] = useState<OrderIdHistoryEntry[]>(initialRecentIds);
   const [generatedEntry, setGeneratedEntry] = useState<GeneratedOrderResult | null>(
     initialGeneratedEntry
@@ -132,9 +135,18 @@ export function OrderIdGeneratorPage({
     );
   };
 
-  const filteredHistory = showDeleted
-    ? recentIds
-    : recentIds.filter((item) => !item.isDeleted);
+  const filteredHistory = recentIds
+    .filter((item) => (showDeleted ? true : !item.isDeleted))
+    .filter((item) => {
+      if (!searchQuery?.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        item.id.toLowerCase().includes(q) ||
+        (item.sourceHandle && item.sourceHandle.toLowerCase().includes(q)) ||
+        (item.customerPhone && item.customerPhone.toLowerCase().includes(q)) ||
+        (item.instagramHandle && item.instagramHandle.toLowerCase().includes(q))
+      );
+    });
 
   return (
     <YStack flex={1} backgroundColor={tokens.background}>
@@ -195,62 +207,100 @@ export function OrderIdGeneratorPage({
           paddingHorizontal: 16,
           paddingTop: 16,
           paddingBottom: Math.max(32, bottomInset + 24),
-          gap: 20,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Generator Card Molecule */}
-        <OrderIdGeneratorCard
-          selectedSource={selectedSource}
-          onSelectSource={setSelectedSource}
-          paymentMode={paymentMode}
-          onSelectPaymentMode={setPaymentMode}
-          sourceHandle={sourceHandle}
-          onChangeSourceHandle={setSourceHandle}
-          loading={loading}
-          onGenerate={handleGenerate}
-          generatedEntry={generatedEntry}
-          onCopy={(id, includePrefix) => {
-            console.log(`Copied ${id} (prefix: ${includePrefix})`);
-          }}
-          onOpenPlatform={onOpenPlatform}
-        />
+        <YStack gap={24}>
+          {/* Generator Card Molecule */}
+          <OrderIdGeneratorCard
+            selectedSource={selectedSource}
+            onSelectSource={setSelectedSource}
+            paymentMode={paymentMode}
+            onSelectPaymentMode={setPaymentMode}
+            sourceHandle={sourceHandle}
+            onChangeSourceHandle={setSourceHandle}
+            loading={loading}
+            onGenerate={handleGenerate}
+            generatedEntry={generatedEntry}
+            onCopy={(id, includePrefix) => {
+              console.log(`Copied ${id} (prefix: ${includePrefix})`);
+            }}
+            onOpenPlatform={onOpenPlatform}
+          />
 
-        {/* History Section Header */}
-        <YStack gap={12}>
-          <XStack alignItems="center" justifyContent="space-between">
-            <XStack alignItems="center" gap={8}>
-              <LuHistory size={16} color={tokens.text} />
-              <Text fontSize={15} fontWeight="700" color={tokens.text}>
-                Recent Order IDs
-              </Text>
-              <XStack
-                paddingHorizontal={7}
-                paddingVertical={2}
-                borderRadius={tokens.radius.full}
-                backgroundColor={tokens.surfaceRaised}
-                borderWidth={1}
-                borderColor={tokens.border}
-              >
-                <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-                  {filteredHistory.length}
+          {/* History Section Header */}
+          <YStack gap={12}>
+            <XStack alignItems="center" justifyContent="space-between">
+              <XStack alignItems="center" gap={8}>
+                <LuHistory size={16} color={tokens.text} />
+                <Text fontSize={15} fontWeight="700" color={tokens.text}>
+                  Recent Order IDs
                 </Text>
+                <XStack
+                  paddingHorizontal={7}
+                  paddingVertical={2}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={tokens.surfaceRaised}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                >
+                  <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                    {filteredHistory.length}
+                  </Text>
+                </XStack>
+              </XStack>
+
+              {/* Show Deleted Toggle */}
+              <XStack alignItems="center" gap={8}>
+                <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
+                  Show Deleted
+                </Text>
+                <Switch
+                  value={showDeleted}
+                  onValueChange={setShowDeleted}
+                  trackColor={{ false: tokens.border, true: tokens.accent }}
+                  thumbColor={tokens.surface}
+                />
               </XStack>
             </XStack>
 
-            {/* Show Deleted Toggle */}
-            <XStack alignItems="center" gap={8}>
-              <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
-                Show Deleted
-              </Text>
-              <Switch
-                value={showDeleted}
-                onValueChange={setShowDeleted}
-                trackColor={{ false: tokens.border, true: tokens.accent }}
-                thumbColor={tokens.surface}
+            {/* Search Bar for filtering recent orders */}
+            <XStack
+              alignItems="center"
+              backgroundColor={tokens.surface}
+              borderWidth={1}
+              borderColor={tokens.border}
+              borderRadius={tokens.radius.md}
+              paddingHorizontal={12}
+              height={40}
+              gap={8}
+            >
+              <LuSearch size={15} color={tokens.textMuted} />
+              <TextInput
+                placeholder="Search orders by ID, phone, or handle..."
+                placeholderTextColor={tokens.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  color: tokens.text,
+                  outlineStyle: 'none',
+                  paddingVertical: 0,
+                } as any}
               />
+              {!!searchQuery && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={8}
+                  style={{ cursor: 'pointer' } as any}
+                >
+                  <LuX size={14} color={tokens.textMuted} />
+                </Pressable>
+              )}
             </XStack>
-          </XStack>
 
           {/* History List or Empty State */}
           {filteredHistory.length === 0 ? (
@@ -306,6 +356,7 @@ export function OrderIdGeneratorPage({
               ))}
             </YStack>
           )}
+        </YStack>
         </YStack>
       </ScrollView>
 

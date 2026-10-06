@@ -135,14 +135,14 @@ export function OrderIdGeneratorCard({
       shadowRadius={8}
     >
       {/* Title & Badge */}
-      <XStack alignItems="center" justifyContent="space-between">
-        <XStack alignItems="center" gap={6}>
+      <XStack alignItems="center" justifyContent="space-between" gap={8}>
+        <XStack alignItems="center" gap={6} flexShrink={1}>
           <LuSparkles size={16} color={tokens.accent} />
-          <Text fontSize={14} fontWeight="700" color={tokens.text}>
+          <Text fontSize={13.5} fontWeight="700" color={tokens.text} numberOfLines={1}>
             Quick Order ID Generator
           </Text>
         </XStack>
-        <Text fontSize={11} color={tokens.textMuted} fontWeight="500">
+        <Text fontSize={11} color={tokens.textMuted} fontWeight="500" flexShrink={0} textAlign="right">
           Source & Payment Tagged
         </Text>
       </XStack>

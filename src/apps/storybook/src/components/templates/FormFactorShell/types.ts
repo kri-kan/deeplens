@@ -1,5 +1,5 @@
 import { DimensionValue } from 'react-native';
-import { FormFactor } from '../../../theme';
+import { FormFactor, ColorScheme, CampaignName } from '../../../theme';
 
 export type Orientation = 'portrait' | 'landscape';
 
@@ -11,9 +11,13 @@ export interface FormFactorShellProps {
   category?: string;
   allowOrientationToggle?: boolean;
   allowBezelToggle?: boolean;
+  allowColorSchemeToggle?: boolean;
+  allowCampaignToggle?: boolean;
   defaultBezel?: boolean;
   forceStandalone?: boolean;
   onFactorChange?: (factor: FormFactor) => void;
+  onColorSchemeChange?: (scheme: ColorScheme) => void;
+  onCampaignChange?: (campaign: CampaignName) => void;
 }
 
 export interface FormFactorDimensions {
