@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Pressable,
   TextInput,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
@@ -217,6 +218,80 @@ export async function resolveProductTitleFromSku(sku: string): Promise<string | 
   return mockMatch?.title || null;
 }
 
+/**
+ * Animated Shimmer Skeleton for Catalog Product Items
+ * Provides smooth opacity pulsing during search debouncing, API querying,
+ * and component tree rendering.
+ */
+export function CatalogItemShimmer({ tokens }: { tokens: any }) {
+  const shimmerOpacity = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerOpacity, {
+          toValue: 0.9,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerOpacity, {
+          toValue: 0.35,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [shimmerOpacity]);
+
+  return (
+    <Animated.View style={{ opacity: shimmerOpacity, width: '100%' }}>
+      <XStack
+        backgroundColor={tokens.surface}
+        borderRadius={tokens.radius.sm}
+        borderWidth={1}
+        borderColor={tokens.border}
+        padding={8}
+        alignItems="center"
+        gap={10}
+      >
+        {/* Shimmer Thumbnail (52x52) */}
+        <YStack
+          width={52}
+          height={52}
+          borderRadius={tokens.radius.xs}
+          backgroundColor={tokens.surfaceRaised}
+        />
+
+        {/* Shimmer Metadata & Content */}
+        <YStack flex={1} gap={6}>
+          {/* Top row: SKU code & badge placeholder */}
+          <XStack alignItems="center" gap={6}>
+            <YStack width={65} height={12} borderRadius={3} backgroundColor={tokens.surfaceRaised} />
+            <YStack width={45} height={12} borderRadius={3} backgroundColor={tokens.surfaceRaised} />
+          </XStack>
+
+          {/* Title line placeholder */}
+          <YStack width="82%" height={12} borderRadius={3} backgroundColor={tokens.surfaceRaised} />
+
+          {/* Bottom row: Attributes and Price placeholder */}
+          <XStack alignItems="center" justifyContent="space-between">
+            <XStack gap={6} alignItems="center">
+              <YStack width={40} height={10} borderRadius={2} backgroundColor={tokens.surfaceRaised} />
+              <YStack width={45} height={10} borderRadius={2} backgroundColor={tokens.surfaceRaised} />
+            </XStack>
+            <YStack width={48} height={12} borderRadius={3} backgroundColor={tokens.surfaceRaised} />
+          </XStack>
+        </YStack>
+
+        {/* Shimmer Action Chevron */}
+        <YStack width={8} height={14} borderRadius={2} backgroundColor={tokens.surfaceRaised} opacity={0.6} />
+      </XStack>
+    </Animated.View>
+  );
+}
+
 export function CatalogMediaPickerModal({
   visible,
   initialSku = '',
@@ -279,7 +354,12 @@ export function CatalogMediaPickerModal({
       });
       setProducts(filtered);
     } finally {
-      setLoading(false);
+      // Allow React & React Native layout / paint cycle to complete before dismissing shimmer
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          setLoading(false);
+        }, 50);
+      });
     }
   }, []);
 
@@ -577,11 +657,10 @@ export function CatalogMediaPickerModal({
           {/* Results count & status */}
           <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
             <Text fontSize={11} fontWeight="700" color={tokens.textMuted} letterSpacing={0.3}>
-              CATALOG PRODUCTS ({products.length})
+              CATALOG PRODUCTS {loading ? '' : `(${products.length})`}
             </Text>
             {loading ? (
               <XStack alignItems="center" gap={6}>
-                <ActivityIndicator size="small" color={tokens.accent} />
                 <Text fontSize={11} fontWeight="600" color={tokens.accent}>
                   Searching catalog...
                 </Text>
@@ -595,13 +674,10 @@ export function CatalogMediaPickerModal({
             contentContainerStyle={{ paddingBottom: 24, gap: 8 }}
             style={{ maxHeight: 360 }}
           >
-            {loading && products.length === 0 ? (
-              <YStack alignItems="center" justifyContent="center" paddingVertical={48} gap={10}>
-                <ActivityIndicator size="small" color={tokens.accent} />
-                <Text fontSize={12} fontWeight="600" color={tokens.textMuted}>
-                  Searching catalog...
-                </Text>
-              </YStack>
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <CatalogItemShimmer key={`catalog-shimmer-${i}`} tokens={tokens} />
+              ))
             ) : products.length === 0 ? (
               <YStack alignItems="center" justifyContent="center" paddingVertical={40} gap={8}>
                 <LuPackage size={32} color={tokens.textMuted} />

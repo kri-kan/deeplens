@@ -320,7 +320,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const handleUploadReceipt = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 0.8,
       });
       if (!res.canceled && res.assets && res.assets.length > 0) {
