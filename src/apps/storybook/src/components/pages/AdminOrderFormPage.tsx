@@ -1278,27 +1278,32 @@ function AdminPageHeader({ onBack }: { onBack?: () => void }) {
       backgroundColor={tokens.surface}
       borderBottomWidth={1}
       borderBottomColor={tokens.border}
-      position="relative"
     >
-      {onBack && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back to Admin Home"
-          onPress={onBack}
-          style={{
-            position: 'absolute',
-            left: 14,
-            top: insets.top + 16,
-            zIndex: 10,
-            cursor: 'pointer',
-          } as any}
-        >
-          <LuArrowLeft size={22} color={tokens.text} />
-        </Pressable>
-      )}
-      <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
-        New Order
-      </Text>
+      <XStack alignItems="center" gap={10}>
+        {onBack && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to Admin Home"
+            onPress={onBack}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => ({
+              width: 36,
+              height: 36,
+              borderRadius: tokens.radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? `${tokens.text}12` : 'transparent',
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+              cursor: 'pointer',
+            })}
+          >
+            <LuArrowLeft size={20} color={tokens.text} />
+          </Pressable>
+        )}
+        <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+          New Order
+        </Text>
+      </XStack>
     </XStack>
   );
 }

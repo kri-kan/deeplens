@@ -41,7 +41,7 @@ export default function ShareTargetScreen() {
 
       // Route based on action
       if (action === 'order') {
-        router.replace('/(tabs)/new');
+        router.replace('/utilities/order-create');
       } else if (action === 'product') {
         router.replace('/utilities/create-product');
       } else {

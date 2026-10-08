@@ -88,7 +88,7 @@ export function useShareIntent() {
     setSharedMedia(modalMedia, modalSessionId);
     setModalMedia([]);
     setModalSessionId(undefined);
-    router.push('/(tabs)/new');
+    router.push('/utilities/order-create');
   };
 
   const handleCreateProduct = () => {

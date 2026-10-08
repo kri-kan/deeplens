@@ -25,6 +25,7 @@ import {
   LuCheck,
   LuCheckCircle2,
   LuArrowRight,
+  LuArrowLeft,
   LuTriangleAlert,
   LuExternalLink,
   LuTrash2,
@@ -816,7 +817,11 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
 // ─────────────────────────────────────────────
 // Main Tamagui Admin Order Create Form
 // ─────────────────────────────────────────────
-export const AdminOrderCreateForm: React.FC = () => {
+export interface AdminOrderCreateFormProps {
+  onBack?: () => void;
+}
+
+export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBack }) => {
   const { tokens } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -1013,8 +1018,12 @@ export const AdminOrderCreateForm: React.FC = () => {
           onPress: () => {
             if (createdId) {
               router.replace(`/utilities/order-details/${createdId}`);
+            } else if (onBack) {
+              onBack();
+            } else if (router.canGoBack()) {
+              router.back();
             } else {
-              router.replace('/(tabs)');
+              router.replace('/(tabs)/orders');
             }
           },
         },
@@ -1050,9 +1059,36 @@ export const AdminOrderCreateForm: React.FC = () => {
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
       >
-        <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
-          New Order
-        </Text>
+        <XStack alignItems="center" gap={10}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => {
+              if (onBack) {
+                onBack();
+              } else if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(tabs)/orders');
+              }
+            }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => ({
+              width: 36,
+              height: 36,
+              borderRadius: tokens.radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? `${tokens.text}12` : 'transparent',
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+            })}
+          >
+            <LuArrowLeft size={20} color={tokens.text} />
+          </Pressable>
+          <Text fontSize={17} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
+            New Order
+          </Text>
+        </XStack>
         {sharedMedia && sharedMedia.length > 0 && (
           <XStack
             backgroundColor={`${tokens.accent}15`}
@@ -1070,7 +1106,7 @@ export const AdminOrderCreateForm: React.FC = () => {
       {/* Scrollable Form Content */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(110, insets.bottom + 90) }}
+        contentContainerStyle={{ paddingBottom: Math.max(36, insets.bottom + 24) }}
         keyboardShouldPersistTaps="handled"
       >
         <YStack paddingHorizontal={16} paddingTop={14} gap={14}>

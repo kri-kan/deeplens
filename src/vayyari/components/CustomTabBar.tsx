@@ -66,7 +66,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
 
   const handleSelectNewOrder = () => {
     handleCloseMenu();
-    router.push('/(tabs)/new' as any);
+    router.push('/utilities/order-create' as any);
   };
 
   const handleSelectEditOrder = () => {
