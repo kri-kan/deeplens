@@ -470,6 +470,16 @@ api_complete_collab_post() {
   fi
 }
 
+cleanup_conflicting_services() {
+  adb -s "$DEVICE" shell settings put global window_animation_scale 0 >/dev/null 2>&1 || true
+  adb -s "$DEVICE" shell settings put global transition_animation_scale 0 >/dev/null 2>&1 || true
+  adb -s "$DEVICE" shell settings put global animator_duration_scale 0 >/dev/null 2>&1 || true
+  adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+  adb -s "$DEVICE" shell am force-stop dev.mobile.maestro.test >/dev/null 2>&1 || true
+  adb -s "$DEVICE" shell pkill -f dev.mobile.maestro >/dev/null 2>&1 || true
+  adb -s "$DEVICE" shell pkill -f uiautomator >/dev/null 2>&1 || true
+}
+
 switch_session_to_creator() {
   local creator="$1"
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -478,7 +488,7 @@ switch_session_to_creator() {
   fi
 
   echo -e "${BLUE}==> Resetting active Instagram session to creator @${creator}...${NC}"
-  adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+  cleanup_conflicting_services
   python3 -c "
 import sys
 sys.path.insert(0, '$WORKSPACE_ROOT/tools')
@@ -728,7 +738,7 @@ execute_post_collab_pipeline() {
   local -a removed_accounts=()
 
   if [[ "$mode" == "full" || "$mode" == "invite_only" ]]; then
-    adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+    cleanup_conflicting_services
 
     local reconcile_out=""
     local reconcile_rc=0
@@ -745,7 +755,7 @@ execute_post_collab_pipeline() {
         api_update_channel_phase "$post_id" "$t" "failed" "Reconciliation error: ${err_summary:-Script failed}"
       done
       record_summary_entry "$shortcode" "$post_id" "$creator" "FAILED" "" "${targets[*]}"
-      adb -s "$DEVICE" shell am force-stop dev.mobile.maestro >/dev/null 2>&1 || true
+      cleanup_conflicting_services
       switch_session_to_creator "$creator"
       return 1
     fi
@@ -879,18 +889,36 @@ execute_post_collab_pipeline() {
       switch_session_to_creator "$creator"
       return 0
     else
-      echo -e "${RED}✗ Warning: No new invites were sent, and targets remain unfulfilled: ${unfulfilled_targets[*]}${NC}"
-      for unfulfilled in "${unfulfilled_targets[@]}"; do
-        api_update_channel_phase "$post_id" "$unfulfilled" "failed" "Account could not be found or invited"
-      done
-      if [[ -n "$post_id" && ${#successful_collabs[@]} -gt 0 ]]; then
-        local partial_established_json
-        partial_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
-        api_sync_collaborators "$post_id" "$partial_established_json" "instagram_reconcile"
+      # Check if collaborator capacity is reached on Instagram (3-4 collaborators max) or cant_invite matches
+      if [[ ${#successful_collabs[@]} -ge 3 || ${#cant_invite[@]} -gt 0 ]]; then
+        echo -e "${YELLOW}ℹ Post ${shortcode} has reached collaborator capacity (${#successful_collabs[@]} active collaborators).${NC}"
+        echo -e "${YELLOW}  Remaining target(s) [${unfulfilled_targets[*]}] cannot be added due to Instagram platform limits.${NC}"
+        for unfulfilled in "${unfulfilled_targets[@]}"; do
+          api_update_channel_phase "$post_id" "$unfulfilled" "skipped_max_collabs" "Instagram collaborator capacity reached"
+        done
+        if [[ -n "$post_id" && ${#successful_collabs[@]} -gt 0 ]]; then
+          local cap_established_json
+          cap_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
+          api_sync_collaborators "$post_id" "$cap_established_json" "instagram_reconcile"
+          api_complete_collab_post "$post_id" "${successful_collabs[@]}"
+        fi
+        record_summary_entry "$shortcode" "$post_id" "$creator" "COMPLETED" "${successful_collabs[*]}" "${targets[*]}"
+        switch_session_to_creator "$creator"
+        return 0
+      else
+        echo -e "${RED}✗ Warning: No new invites were sent, and targets remain unfulfilled: ${unfulfilled_targets[*]}${NC}"
+        for unfulfilled in "${unfulfilled_targets[@]}"; do
+          api_update_channel_phase "$post_id" "$unfulfilled" "failed" "Account could not be found or invited"
+        done
+        if [[ -n "$post_id" && ${#successful_collabs[@]} -gt 0 ]]; then
+          local partial_established_json
+          partial_established_json=$(printf '%s\n' "${successful_collabs[@]}" | jq -R '{username: .}' | jq -s .)
+          api_sync_collaborators "$post_id" "$partial_established_json" "instagram_reconcile"
+        fi
+        record_summary_entry "$shortcode" "$post_id" "$creator" "FAILED" "${successful_collabs[*]}" "${targets[*]}"
+        switch_session_to_creator "$creator"
+        return 1
       fi
-      record_summary_entry "$shortcode" "$post_id" "$creator" "FAILED" "${successful_collabs[*]}" "${targets[*]}"
-      switch_session_to_creator "$creator"
-      return 1
     fi
   fi
 

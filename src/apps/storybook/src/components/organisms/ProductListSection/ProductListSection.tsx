@@ -35,6 +35,8 @@ export interface OrderItem {
   imageUrl?: string;
   catalogImageUrl?: string;
   selectedMediaId?: string;
+  attachmentId?: string;
+  storagePath?: string;
 }
 
 export interface ProductListSectionProps {

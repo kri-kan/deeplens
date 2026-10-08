@@ -36,10 +36,28 @@ public class OrderIdController : ControllerBase
     }
 
     [HttpGet("history")]
-    public async Task<IActionResult> GetRecentOrders([FromQuery] int limit = 20)
+    public async Task<IActionResult> GetRecentOrders([FromQuery] int limit = 20, [FromQuery] bool showDeleted = false)
     {
-        var history = await _idGenerator.GetRecentOrderHistoryAsync(limit);
+        var history = await _idGenerator.GetRecentOrderHistoryAsync(limit, showDeleted);
         return Ok(history);
+    }
+
+    /// <summary>
+    /// Search and paginate all orders with filtering and sorting.
+    /// </summary>
+    [HttpGet("all")]
+    public async Task<ActionResult<PagedOrderHistoryResult>> GetAllOrders(
+        [FromQuery] int page = 1,
+        [FromQuery] int limit = 20,
+        [FromQuery] string? q = null,
+        [FromQuery] OrderSource? source = null,
+        [FromQuery] PaymentMode? paymentMode = null,
+        [FromQuery] bool showDeleted = false,
+        [FromQuery] string sortBy = "date",
+        [FromQuery] string sortOrder = "desc")
+    {
+        var result = await _idGenerator.GetSearchOrdersAsync(page, limit, q, source, paymentMode, showDeleted, sortBy, sortOrder);
+        return Ok(result);
     }
 
     /// <summary>

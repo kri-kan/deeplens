@@ -83,6 +83,8 @@ export interface OrderItem {
   photoUrl?: string;
   comments?: string;
   attachments?: Attachment[];
+  attachmentId?: string;
+  storagePath?: string;
 }
 
 export interface OrderComment {

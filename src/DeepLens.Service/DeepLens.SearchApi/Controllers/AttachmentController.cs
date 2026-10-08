@@ -45,18 +45,22 @@ public class AttachmentController : ControllerBase
         try
         {
             using var stream = file.OpenReadStream();
-            var attachmentId = await _attachmentService.UploadAttachmentAsync(stream, file.FileName, file.ContentType, entityType, entityId, tag);
+            var uploadResult = await _attachmentService.UploadAttachmentWithResultAsync(stream, file.FileName, file.ContentType, entityType, entityId, tag);
 
             if (!string.IsNullOrEmpty(entityType) && !string.IsNullOrEmpty(entityId))
             {
-                await _attachmentService.LinkAttachmentToEntityAsync(attachmentId, entityType, entityId, tag);
+                await _attachmentService.LinkAttachmentToEntityAsync(uploadResult.Id, entityType, entityId, tag);
             }
 
             return Ok(new 
             { 
-                id = attachmentId, 
+                id = uploadResult.Id, 
                 fileName = file.FileName,
-                status = "uploaded" 
+                status = "uploaded",
+                bucket = uploadResult.BucketName,
+                key = uploadResult.ObjectKey,
+                storagePath = uploadResult.StoragePath,
+                url = uploadResult.DownloadUrl
             });
         }
         catch (Exception ex)
@@ -158,11 +162,20 @@ public class AttachmentController : ControllerBase
         }
     }
 
+    [HttpDelete("by-path")]
+    public async Task<IActionResult> DeleteByPath([FromQuery] string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return BadRequest("Path is required");
+        var result = await _attachmentService.DeleteAttachmentByPathAsync(path);
+        if (result) return Ok(new { message = "Attachment hard-deleted successfully", path });
+        return NotFound(new { message = "Attachment not found or already deleted", path });
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var result = await _attachmentService.DeleteAttachmentAsync(id);
-        if (result) return Ok();
+        if (result) return Ok(new { message = "Attachment hard-deleted successfully", id });
         return NotFound();
     }
 }

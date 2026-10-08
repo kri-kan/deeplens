@@ -14,17 +14,20 @@ public class IdGeneratorService : IIdGeneratorService
     private readonly ISequencedIdGenerator _sequencedIdGenerator;
     private readonly IOrderRepository _orderRepository;
     private readonly IInstagramSidecarService _instagramSidecar;
+    private readonly IAttachmentService _attachmentService;
     private readonly ILogger<IdGeneratorService> _logger;
 
     public IdGeneratorService(
         ISequencedIdGenerator sequencedIdGenerator, 
         IOrderRepository orderRepository, 
         IInstagramSidecarService instagramSidecar, 
+        IAttachmentService attachmentService,
         ILogger<IdGeneratorService> logger)
     {
         _sequencedIdGenerator = sequencedIdGenerator;
         _orderRepository = orderRepository;
         _instagramSidecar = instagramSidecar;
+        _attachmentService = attachmentService;
         _logger = logger;
     }
 
@@ -66,9 +69,33 @@ public class IdGeneratorService : IIdGeneratorService
         return await _sequencedIdGenerator.GetNextProductIdAsync();
     }
 
-    public async Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20)
+    public async Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20, bool showDeleted = false)
     {
-        return await _orderRepository.GetRecentHistoryAsync(limit);
+        return await _orderRepository.GetRecentHistoryAsync(limit, showDeleted);
+    }
+
+    public async Task<PagedOrderHistoryResult> GetSearchOrdersAsync(
+        int page = 1,
+        int limit = 20,
+        string? search = null,
+        OrderSource? source = null,
+        PaymentMode? paymentMode = null,
+        bool showDeleted = false,
+        string sortBy = "date",
+        string sortOrder = "desc")
+    {
+        int? sourceId = source.HasValue && source.Value != OrderSource.None ? (int)source.Value : null;
+        int? paymentModeId = paymentMode.HasValue && paymentMode.Value != PaymentMode.None ? (int)paymentMode.Value : null;
+
+        return await _orderRepository.GetSearchOrdersAsync(
+            page,
+            limit,
+            search,
+            sourceId,
+            paymentModeId,
+            showDeleted,
+            sortBy,
+            sortOrder);
     }
 
     public async Task<OrderDetailDto?> GetOrderDetailsAsync(string orderId)
@@ -112,6 +139,48 @@ public class IdGeneratorService : IIdGeneratorService
         if (details.Items != null)
         {
             var internalId = await _orderRepository.GetInternalIdAsync(orderId);
+
+            // Orphaned data prevention: Clean up previous attachments no longer retained in updated items
+            try
+            {
+                var previousDetails = await _orderRepository.GetDetailsAsync(orderId);
+                if (previousDetails?.Items != null && previousDetails.Items.Count > 0)
+                {
+                    var previousAttachments = previousDetails.Items
+                        .Where(i => i.Attachments != null)
+                        .SelectMany(i => i.Attachments!)
+                        .ToList();
+
+                    if (previousAttachments.Count > 0)
+                    {
+                        var updatedComments = details.Items
+                            .Where(i => !string.IsNullOrEmpty(i.Comments))
+                            .Select(i => i.Comments!)
+                            .ToList();
+
+                        foreach (var prevAtt in previousAttachments)
+                        {
+                            string attIdStr = prevAtt.Id.ToString();
+                            string attKey = prevAtt.Key ?? "";
+                            bool isRetained = updatedComments.Any(c => 
+                                c.Contains(attIdStr, StringComparison.OrdinalIgnoreCase) ||
+                                (!string.IsNullOrEmpty(attKey) && c.Contains(attKey, StringComparison.OrdinalIgnoreCase)));
+
+                            if (!isRetained)
+                            {
+                                _logger.LogInformation("Hard-deleting orphaned attachment {AttachmentId} ({Key}) from order {OrderId}", 
+                                    prevAtt.Id, attKey, orderId);
+                                await _attachmentService.DeleteAttachmentAsync(prevAtt.Id);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed cleaning orphaned attachments for order {OrderId}", orderId);
+            }
+
             await _orderRepository.DeleteItemsAsync(internalId);
             
             int index = 1;

@@ -13,7 +13,16 @@ public interface IIdGeneratorService
     Task<(string OrderId, IEnumerable<string> ItemIds)> GenerateOrderWithItemsAsync(int itemCount, OrderSource? source = null, PaymentMode? paymentMode = null, string? sourceHandle = null, string? instagramUserId = null, Guid? customerId = null);
     string GenerateOrderItemId(string orderId, int itemIndex);
     Task<string> GenerateProductIdAsync();
-    Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20);
+    Task<IEnumerable<OrderHistoryDto>> GetRecentOrderHistoryAsync(int limit = 20, bool showDeleted = false);
+    Task<PagedOrderHistoryResult> GetSearchOrdersAsync(
+        int page = 1,
+        int limit = 20,
+        string? search = null,
+        OrderSource? source = null,
+        PaymentMode? paymentMode = null,
+        bool showDeleted = false,
+        string sortBy = "date",
+        string sortOrder = "desc");
     Task<OrderDetailDto?> GetOrderDetailsAsync(string orderId);
     Task<bool> UpdateOrderDetailsAsync(string orderId, OrderUpdateDto details);
     Task<bool> SoftDeleteOrderAsync(string orderId);

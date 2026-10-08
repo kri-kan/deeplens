@@ -850,6 +850,30 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
   const [advancePaid, setAdvancePaid] = useState(0);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  useEffect(() => {
+    if (snackbarVisible) {
+      const timer = setTimeout(() => {
+        setSnackbarVisible(false);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [snackbarVisible]);
+
+  const resetForm = () => {
+    setSource('whatsapp');
+    setPaymentType('cod');
+    setSourceInput('');
+    setImages([]);
+    setAddress(null);
+    setItems([]);
+    setShippingCharges(0);
+    setDiscount(0);
+    setAdvancePaid(0);
+    setNotes('');
+  };
 
   // Sync staged shared media from external apps
   useEffect(() => {
@@ -1012,22 +1036,29 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         await commitCurrentSession();
       }
 
-      Alert.alert('Success', `Order #${createdId || 'created'} registered successfully!`, [
-        {
-          text: 'OK',
-          onPress: () => {
-            if (createdId) {
-              router.replace(`/utilities/order-details/${createdId}`);
-            } else if (onBack) {
-              onBack();
-            } else if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(tabs)/orders');
-            }
-          },
-        },
-      ]);
+      if (createdId) {
+        try {
+          await Clipboard.setStringAsync(createdId);
+        } catch (clipErr) {
+          console.warn('Failed to copy order ID to clipboard', clipErr);
+        }
+      }
+
+      resetForm();
+
+      const msg = createdId ? `Order #${createdId} created & ID copied to clipboard!` : 'Order created!';
+      setSnackbarMessage(msg);
+      setSnackbarVisible(true);
+
+      if (createdId) {
+        router.replace(`/utilities/order-details/${createdId}?fromCreate=true&orderCreated=true`);
+      } else if (onBack) {
+        onBack();
+      } else if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)/orders');
+      }
     } catch (err: any) {
       console.error('Order creation error:', err);
       Alert.alert('Creation Failed', err?.message || 'Failed to submit order. Please retry.');
@@ -1582,6 +1613,39 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         onSave={(data) => setAddress(data)}
         onClose={() => setSheetOpen(false)}
       />
+
+      {/* Floating Snackbar Toast */}
+      {snackbarVisible && (
+        <YStack
+          position="absolute"
+          bottom={80 + insets.bottom}
+          left={16}
+          right={16}
+          backgroundColor="#1E293B"
+          paddingVertical={12}
+          paddingHorizontal={16}
+          borderRadius={tokens.radius.md || 8}
+          flexDirection="row"
+          alignItems="center"
+          justifyContent="space-between"
+          elevation={5}
+          shadowColor="#000"
+          shadowOffset={{ width: 0, height: 2 }}
+          shadowOpacity={0.25}
+          shadowRadius={3.84}
+          zIndex={9999}
+        >
+          <XStack alignItems="center" gap={8} flex={1}>
+            <LuCheckCircle2 size={18} color="#10B981" />
+            <Text color="#FFFFFF" fontSize={13} fontWeight="600" flex={1}>
+              {snackbarMessage}
+            </Text>
+          </XStack>
+          <Pressable onPress={() => setSnackbarVisible(false)} hitSlop={8}>
+            <LuX size={16} color="#94A3B8" />
+          </Pressable>
+        </YStack>
+      )}
     </YStack>
   );
 };

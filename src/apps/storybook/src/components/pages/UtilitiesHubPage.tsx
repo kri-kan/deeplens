@@ -9,7 +9,6 @@ import {
   LuCopy,
   LuCheck,
   LuArrowLeft,
-  LuClock,
   LuSparkles,
   LuTrash2,
 } from 'react-icons/lu';
@@ -347,12 +346,9 @@ export function UtilitiesHubPage({ disableSafeArea = false, onBack }: UtilitiesH
         {/* Section 2: Recent Copies Log */}
         {recentCopies.length > 0 && (
           <YStack gap={10} marginTop={8}>
-            <XStack alignItems="center" gap={6}>
-              <LuClock size={14} color={tokens.textMuted} />
-              <Text fontSize={13} fontWeight="700" color={tokens.text} letterSpacing={0.3}>
-                RECENTLY COPIED
-              </Text>
-            </XStack>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} letterSpacing={1.2}>
+              RECENT COPIES
+            </Text>
 
             <YStack gap={8}>
               {recentCopies.map((item) => (

@@ -5,7 +5,16 @@ namespace DeepLens.Application.Abstractions.Data;
 public interface IOrderRepository
 {
     Task<int> CreateOrderRecordAsync(long id, string orderId, int? sourceId, int? paymentModeId, string? sourceHandle, string? instagramUserId, string? customerPhone, Guid? customerId = null);
-    Task<IEnumerable<OrderHistoryDto>> GetRecentHistoryAsync(int limit);
+    Task<IEnumerable<OrderHistoryDto>> GetRecentHistoryAsync(int limit, bool showDeleted = false);
+    Task<PagedOrderHistoryResult> GetSearchOrdersAsync(
+        int page = 1,
+        int limit = 20,
+        string? search = null,
+        int? sourceId = null,
+        int? paymentModeId = null,
+        bool showDeleted = false,
+        string sortBy = "date",
+        string sortOrder = "desc");
     Task<OrderDetailDto?> GetDetailsAsync(string orderId);
     Task<bool> UpdateDetailsAsync(
         string orderId, 

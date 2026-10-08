@@ -23,19 +23,20 @@ appId: com.instagram.android
 # Step 2: Open account switcher via long-press on Profile navigation tab
 - runFlow:
     when:
-      visible: "Profile"
-    commands:
-      - longPressOn:
-          text: "Profile"
-          waitToSettleTimeoutMs: 0
-- runFlow:
-    when:
-      notVisible: "Profile"
       visible:
         id: "com.instagram.android:id/profile_tab"
     commands:
       - longPressOn:
           id: "com.instagram.android:id/profile_tab"
+          waitToSettleTimeoutMs: 0
+- runFlow:
+    when:
+      notVisible:
+        id: "com.instagram.android:id/profile_tab"
+      visible: "Profile"
+    commands:
+      - longPressOn:
+          text: "Profile"
           waitToSettleTimeoutMs: 0
 - evalScript: |
     var start = new Date().getTime();

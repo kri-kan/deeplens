@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchApiClient } from '@/api/client';
 import { customersApi } from '@/api/customers';
 import { API_ROUTES } from '@/constants/api-routes';
+import { logisticsService } from '@/services/logistics.service';
 import { OrderIdEntry, PaymentMode, OrderSource } from '@/types/orders';
 import {
   OrderIdGeneratorPage,
@@ -27,24 +28,28 @@ export const OrderIdGenerator = () => {
   const [recentIds, setRecentIds] = useState<OrderIdEntry[]>([]);
   const [displayId, setDisplayId] = useState<OrderIdEntry | null>(null);
   const [isNewId, setIsNewId] = useState(false);
+  const [recentLimit, setRecentLimit] = useState<number>(50);
 
-  useEffect(() => {
-    loadRecentIds();
-  }, []);
-
-  const loadRecentIds = async () => {
+  const loadRecentIds = useCallback(async (limitToFetch: number = 50) => {
     try {
       // 1. Try to fetch latest from database
       const response = await searchApiClient.get<OrderIdEntry[]>(API_ROUTES.ORDERS.HISTORY, {
-        params: { limit: 20 }
+        params: { limit: limitToFetch, showDeleted: false }
       });
       
-      if (response && response.length > 0) {
-        setRecentIds(response);
-        setDisplayId(response[0]);
+      if (response && Array.isArray(response)) {
+        const validOrders = response.filter(
+          (item) => !item.isDeleted && !logisticsService.isOrderDeleted(item.id)
+        );
+        setRecentIds(validOrders);
+        if (validOrders.length > 0) {
+          setDisplayId(validOrders[0]);
+        } else {
+          setDisplayId(null);
+        }
         setIsNewId(false);
         // Sync local storage with DB
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(response));
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(validOrders));
         return;
       }
     } catch (e) {
@@ -55,17 +60,28 @@ export const OrderIdGenerator = () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setRecentIds(parsed);
-        if (parsed.length > 0) {
-          setDisplayId(parsed[0]);
+        const parsed: OrderIdEntry[] = JSON.parse(stored);
+        const filtered = parsed.filter(
+          (item) => !item.isDeleted && !logisticsService.isOrderDeleted(item.id)
+        );
+        setRecentIds(filtered.slice(0, limitToFetch));
+        if (filtered.length > 0) {
+          setDisplayId(filtered[0]);
           setIsNewId(false);
+        } else {
+          setDisplayId(null);
         }
       }
     } catch (e) {
       console.error('Failed to load recent IDs from local storage', e);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadRecentIds(recentLimit);
+    }, [loadRecentIds, recentLimit])
+  );
 
   const saveRecentIds = async (updated: OrderIdEntry[]) => {
     try {
@@ -233,9 +249,12 @@ export const OrderIdGenerator = () => {
     <OrderIdGeneratorPage
       initialRecentIds={historyMapped}
       initialGeneratedEntry={generatedMapped}
+      recentLimit={recentLimit}
       isLoading={loading}
       onGenerateOrder={handleGenerate}
       onUpdateOrder={handleUpdate}
+      onRecentLimitChange={setRecentLimit}
+      onNavigateToAllOrders={() => router.push('/utilities/all-orders')}
       onCopy={copyToClipboard}
       onNavigateToDetails={(id) => router.push(`/utilities/order-details/${id}`)}
       onOpenSettings={() => router.push('/modal')}

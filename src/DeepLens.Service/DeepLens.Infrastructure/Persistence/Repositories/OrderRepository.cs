@@ -36,7 +36,7 @@ public class OrderRepository : IOrderRepository
             });
     }
 
-    public async Task<IEnumerable<OrderHistoryDto>> GetRecentHistoryAsync(int limit)
+    public async Task<IEnumerable<OrderHistoryDto>> GetRecentHistoryAsync(int limit, bool showDeleted = false)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         return await connection.QueryAsync<OrderHistoryDto>(@"
@@ -60,9 +60,122 @@ public class OrderRepository : IOrderRepository
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
+            WHERE (@ShowDeleted = true OR o.is_deleted = false OR o.is_deleted IS NULL)
             ORDER BY o.created_at DESC
             LIMIT @Limit", 
-            new { Limit = limit });
+            new { Limit = limit, ShowDeleted = showDeleted });
+    }
+
+    public async Task<PagedOrderHistoryResult> GetSearchOrdersAsync(
+        int page = 1,
+        int limit = 20,
+        string? search = null,
+        int? sourceId = null,
+        int? paymentModeId = null,
+        bool showDeleted = false,
+        string sortBy = "date",
+        string sortOrder = "desc")
+    {
+        page = Math.Max(1, page);
+        limit = Math.Clamp(limit, 1, 100);
+        int offset = (page - 1) * limit;
+
+        var searchTrimmed = search?.Trim().ToLowerInvariant();
+        var searchPattern = string.IsNullOrWhiteSpace(searchTrimmed) ? null : $"%{searchTrimmed}%";
+
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+
+        string orderByClause = (sortBy?.ToLowerInvariant(), sortOrder?.ToLowerInvariant()) switch
+        {
+            ("orderid", "asc") => "o.order_id ASC",
+            ("orderid", "desc") => "o.order_id DESC",
+            ("customername", "asc") => "o.customer_name ASC NULLS LAST",
+            ("customername", "desc") => "o.customer_name DESC NULLS LAST",
+            ("date", "asc") => "o.created_at ASC",
+            _ => "o.created_at DESC"
+        };
+
+        var sql = $@"
+            SELECT 
+                o.order_id as Id, 
+                s.name as Source, 
+                p.name as PaymentMode, 
+                o.customer_name as CustomerName,
+                o.customer_phone as CustomerPhone,
+                o.source_handle as SourceHandle,
+                o.instagram_handle as InstagramHandle,
+                o.instagram_user_id as InstagramUserId,
+                o.customer_address as CustomerAddress,
+                o.transaction_id as TransactionId,
+                o.total_amount as TotalAmount,
+                o.advance_paid as AdvancePaid,
+                o.cod_balance as CodBalance,
+                o.created_at as Timestamp,
+                o.is_deleted as IsDeleted,
+                o.customer_id as CustomerId
+            FROM ""orderId"" o
+            LEFT JOIN order_sources s ON o.source_id = s.id
+            LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
+            WHERE 
+                (@ShowDeleted = true OR o.is_deleted = false)
+                AND (@SourceId IS NULL OR o.source_id = @SourceId)
+                AND (@PaymentModeId IS NULL OR o.payment_mode_id = @PaymentModeId)
+                AND (
+                    @SearchPattern IS NULL OR (
+                        LOWER(o.order_id) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.customer_name, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.customer_phone, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.source_handle, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.instagram_handle, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.customer_address, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.shipping_street, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.shipping_city, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.shipping_pincode, '')) LIKE @SearchPattern
+                    )
+                )
+            ORDER BY {orderByClause}
+            LIMIT @Limit OFFSET @Offset;
+
+            SELECT COUNT(*)
+            FROM ""orderId"" o
+            WHERE 
+                (@ShowDeleted = true OR o.is_deleted = false)
+                AND (@SourceId IS NULL OR o.source_id = @SourceId)
+                AND (@PaymentModeId IS NULL OR o.payment_mode_id = @PaymentModeId)
+                AND (
+                    @SearchPattern IS NULL OR (
+                        LOWER(o.order_id) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.customer_name, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.customer_phone, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.source_handle, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.instagram_handle, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.customer_address, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.shipping_street, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.shipping_city, '')) LIKE @SearchPattern OR
+                        LOWER(COALESCE(o.shipping_pincode, '')) LIKE @SearchPattern
+                    )
+                );";
+
+        using var multi = await connection.QueryMultipleAsync(sql, new {
+            ShowDeleted = showDeleted,
+            SourceId = sourceId,
+            PaymentModeId = paymentModeId,
+            SearchPattern = searchPattern,
+            Limit = limit,
+            Offset = offset
+        });
+
+        var items = (await multi.ReadAsync<OrderHistoryDto>()).ToList();
+        var totalCount = await multi.ReadFirstAsync<int>();
+
+        return new PagedOrderHistoryResult
+        {
+            Items = items,
+            Page = page,
+            PageSize = limit,
+            TotalCount = totalCount,
+            HasMore = (offset + items.Count) < totalCount
+        };
     }
 
     public async Task<OrderDetailDto?> GetDetailsAsync(string orderId)

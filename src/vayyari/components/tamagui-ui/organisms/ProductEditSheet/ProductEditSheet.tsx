@@ -7,6 +7,7 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -22,6 +23,9 @@ import {
   LuShare2,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
+import { searchApiClient } from '@/api/client';
+import { API_ROUTES } from '@/constants/api-routes';
+import { getSearchApiUrl } from '@/utils/api-config';
 import { DropdownField } from '../../atoms/DropdownField';
 import { CompactField } from '../../atoms/CompactField';
 import { ConfirmDialog } from '../../molecules/ConfirmDialog';
@@ -97,14 +101,118 @@ export function ProductEditSheet({
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const pickedUri = result.assets[0].uri;
-        setForm((prev) => (prev ? { ...prev, photoUri: pickedUri, image: pickedUri } : prev));
+        const asset = result.assets[0];
+        const fileUri = asset.uri;
+        const fileName = asset.fileName || fileUri.split('/').pop() || `order_item_${Date.now()}.jpg`;
+        const mimeType = asset.mimeType || (fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+
+        const formData = new FormData();
+        if (Platform.OS === 'web') {
+          const res = await fetch(fileUri);
+          const blob = await res.blob();
+          formData.append('file', blob, fileName);
+        } else {
+          formData.append('file', {
+            uri: fileUri,
+            name: fileName,
+            type: mimeType,
+          } as any);
+        }
+
+        // Upload new photo to backend attachment storage
+        const uploadRes = await searchApiClient.postFormData<{
+          id: string;
+          fileName: string;
+          status: string;
+          storagePath?: string;
+          url?: string;
+        }>(`${API_ROUTES.ATTACHMENTS.UPLOAD}?entityType=order_item&tag=reference`, formData);
+
+        const downloadPath = uploadRes.url || (uploadRes.storagePath ? API_ROUTES.ATTACHMENTS.DOWNLOAD(uploadRes.storagePath) : '');
+        const fullImageUrl = downloadPath.startsWith('http') 
+          ? downloadPath 
+          : `${getSearchApiUrl()}${downloadPath}`;
+
+        // Hard-delete the old image from the system to prevent orphaned data
+        const oldPhotoUri = form.photoUri || (form.image && form.image !== form.catalogImageUrl ? form.image : undefined);
+        const oldAttachmentId = form.attachmentId;
+        const oldStoragePath = form.storagePath;
+
+        if (oldAttachmentId) {
+          try {
+            await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(oldAttachmentId));
+            console.log(`[ProductEditSheet] Hard-deleted old attachment by ID: ${oldAttachmentId}`);
+          } catch (delErr) {
+            console.warn('[ProductEditSheet] Failed to delete old attachment by ID:', delErr);
+          }
+        } else if (oldStoragePath) {
+          try {
+            await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldStoragePath));
+            console.log(`[ProductEditSheet] Hard-deleted old attachment by storagePath: ${oldStoragePath}`);
+          } catch (delErr) {
+            console.warn('[ProductEditSheet] Failed to delete old attachment by storagePath:', delErr);
+          }
+        } else if (oldPhotoUri && (oldPhotoUri.includes('/api/v1/Attachment/') || oldPhotoUri.includes('order/'))) {
+          try {
+            await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldPhotoUri));
+            console.log(`[ProductEditSheet] Hard-deleted old attachment by photoUri: ${oldPhotoUri}`);
+          } catch (delErr) {
+            console.warn('[ProductEditSheet] Failed to delete old attachment by photoUri:', delErr);
+          }
+        }
+
+        setForm((prev) => (prev ? {
+          ...prev,
+          photoUri: fullImageUrl,
+          image: fullImageUrl,
+          attachmentId: uploadRes.id,
+          storagePath: uploadRes.storagePath,
+        } : prev));
       }
-    } catch (err) {
-      console.warn('Failed to pick image:', err);
+    } catch (err: any) {
+      console.warn('Failed to pick and upload image:', err);
+      Alert.alert('Upload Failed', err?.message || 'Could not upload image to system.');
     } finally {
       setIsPickingImage(false);
     }
+  };
+
+  const handleRemoveUploadedPhoto = async () => {
+    if (!form) return;
+    const oldPhotoUri = form.photoUri || (form.image && form.image !== form.catalogImageUrl ? form.image : undefined);
+    const oldAttachmentId = form.attachmentId;
+    const oldStoragePath = form.storagePath;
+
+    if (oldAttachmentId) {
+      try {
+        await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(oldAttachmentId));
+        console.log(`[ProductEditSheet] Hard-deleted attachment on remove: ${oldAttachmentId}`);
+      } catch (err) {
+        console.warn('Failed to delete attachment on remove:', err);
+      }
+    } else if (oldStoragePath) {
+      try {
+        await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldStoragePath));
+        console.log(`[ProductEditSheet] Hard-deleted storagePath on remove: ${oldStoragePath}`);
+      } catch (err) {
+        console.warn('Failed to delete storagePath on remove:', err);
+      }
+    } else if (oldPhotoUri && (oldPhotoUri.includes('/api/v1/Attachment/') || oldPhotoUri.includes('order/'))) {
+      try {
+        await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldPhotoUri));
+        console.log(`[ProductEditSheet] Hard-deleted photoUri on remove: ${oldPhotoUri}`);
+      } catch (err) {
+        console.warn('Failed to delete photoUri on remove:', err);
+      }
+    }
+
+    setForm((prev) => (prev ? {
+      ...prev,
+      photoUri: undefined,
+      image: prev.catalogImageUrl || undefined,
+      attachmentId: undefined,
+      storagePath: undefined,
+    } : prev));
   };
 
   const handleOpenSheetPicker = (type: 'size' | 'qty') => {
@@ -138,9 +246,9 @@ export function ProductEditSheet({
             ? prev.costPerPiece
             : (selection.product.vendorPrice || prev.costPerPiece),
         catalogImageUrl: selection.imageUrl,
-        image: selection.imageUrl,
         catalogImageColor: selection.mediaItem.color || prev.catalogImageColor,
         selectedMediaId: selection.mediaItem.id,
+        image: prev.photoUri ? prev.photoUri : (prev.image === prev.catalogImageUrl ? undefined : prev.image),
       };
     });
   };
@@ -290,129 +398,158 @@ export function ProductEditSheet({
               keyboardShouldPersistTaps="handled"
             >
               {/* ── Top Image Tiles (Square Containers) ── */}
-              <XStack gap={10}>
-                {/* Tile 1: Uploaded Photo */}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Upload photo for this product"
-                  style={{ flex: 1 }}
-                  onPress={handlePickPhoto}
-                  disabled={isPickingImage}
-                >
-                  <YStack
-                    width="100%"
-                    aspectRatio={1}
-                    borderRadius={tokens.radius.sm}
-                    backgroundColor={form.imageColor || '#f5ebe0'}
-                    alignItems="center"
-                    justifyContent="center"
-                    overflow="hidden"
-                    borderWidth={1}
-                    borderColor={tokens.border}
-                    position="relative"
-                  >
-                    {(form.photoUri || form.image) ? (
-                      <>
-                        <Image
-                          source={{ uri: form.photoUri || form.image }}
-                          style={{ width: '100%', height: '100%', position: 'absolute' }}
-                          resizeMode="cover"
-                        />
-                        {/* Top-Left Eye (Preview) & Top-Right Share */}
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Preview uploaded photo"
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          onPress={(e) => {
-                            e.stopPropagation?.();
-                            setPreviewImage({
-                              uri: (form.photoUri || form.image)!,
-                              title: form.title || form.productId || 'Uploaded Photo',
-                            });
-                          }}
-                          style={({ pressed }) => ({
-                            position: 'absolute',
-                            top: 8,
-                            left: 8,
-                            zIndex: 10,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            opacity: pressed ? 0.75 : 1,
-                          })}
-                        >
-                          <LuEye size={17} color="#ffffff" />
-                        </Pressable>
-
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Share uploaded photo"
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          onPress={(e) => {
-                            e.stopPropagation?.();
-                            shareImageUri(form.photoUri || form.image, form.title || form.productId || 'Uploaded Photo');
-                          }}
-                          style={({ pressed }) => ({
-                            position: 'absolute',
-                            top: 8,
-                            right: 8,
-                            zIndex: 10,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            opacity: pressed ? 0.75 : 1,
-                          })}
-                        >
-                          <LuShare2 size={16} color="#ffffff" />
-                        </Pressable>
-                      </>
-                    ) : null}
-
-                    {isPickingImage ? (
+              {(() => {
+                const uploadedPhotoUri = form.photoUri || (form.image && form.image !== form.catalogImageUrl ? form.image : undefined);
+                return (
+                  <XStack gap={10}>
+                    {/* Tile 1: Uploaded Photo */}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Upload photo for this product"
+                      style={{ flex: 1 }}
+                      onPress={handlePickPhoto}
+                      disabled={isPickingImage}
+                    >
                       <YStack
-                        position="absolute"
-                        top={0}
-                        left={0}
-                        right={0}
-                        bottom={0}
-                        backgroundColor="rgba(0,0,0,0.3)"
+                        width="100%"
+                        aspectRatio={1}
+                        borderRadius={tokens.radius.sm}
+                        backgroundColor={form.imageColor || '#f5ebe0'}
                         alignItems="center"
                         justifyContent="center"
-                        zIndex={2}
+                        overflow="hidden"
+                        borderWidth={1}
+                        borderColor={tokens.border}
+                        position="relative"
                       >
-                        <ActivityIndicator size="small" color="#fff" />
-                      </YStack>
-                    ) : !(form.photoUri || form.image) ? (
-                      <YStack alignItems="center" justifyContent="center" gap={6} paddingBottom={14}>
-                        <LuCamera size={26} color={tokens.textMuted} />
-                        <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
-                          Tap to Choose
-                        </Text>
-                      </YStack>
-                    ) : null}
+                        {uploadedPhotoUri ? (
+                          <>
+                            <Image
+                              source={{ uri: uploadedPhotoUri }}
+                              style={{ width: '100%', height: '100%', position: 'absolute' }}
+                              resizeMode="cover"
+                            />
+                            {/* Top-Left Eye (Preview) & Top-Right Share */}
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Preview uploaded photo"
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              onPress={(e) => {
+                                e.stopPropagation?.();
+                                setPreviewImage({
+                                  uri: uploadedPhotoUri,
+                                  title: form.title || form.productId || 'Uploaded Photo',
+                                });
+                              }}
+                              style={({ pressed }) => ({
+                                position: 'absolute',
+                                top: 8,
+                                left: 8,
+                                zIndex: 10,
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                opacity: pressed ? 0.75 : 1,
+                              })}
+                            >
+                              <LuEye size={17} color="#ffffff" />
+                            </Pressable>
 
-                    <YStack
-                      position="absolute"
-                      bottom={0}
-                      left={0}
-                      right={0}
-                      paddingVertical={6}
-                      backgroundColor="rgba(0,0,0,0.65)"
-                      alignItems="center"
-                      zIndex={3}
-                    >
-                      <Text fontSize={10} fontWeight="700" color="#fff">
-                        {(form.photoUri || form.image) ? 'Change Photo' : 'Uploaded Photo'}
-                      </Text>
-                    </YStack>
-                  </YStack>
-                </Pressable>
+                            <XStack
+                              position="absolute"
+                              top={8}
+                              right={8}
+                              zIndex={10}
+                              gap={6}
+                              alignItems="center"
+                            >
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Share uploaded photo"
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                onPress={(e) => {
+                                  e.stopPropagation?.();
+                                  shareImageUri(uploadedPhotoUri, form.title || form.productId || 'Uploaded Photo');
+                                }}
+                                style={({ pressed }) => ({
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: 16,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: pressed ? 0.75 : 1,
+                                })}
+                              >
+                                <LuShare2 size={16} color="#ffffff" />
+                              </Pressable>
+
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Remove uploaded photo"
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                onPress={(e) => {
+                                  e.stopPropagation?.();
+                                  handleRemoveUploadedPhoto();
+                                }}
+                                style={({ pressed }) => ({
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: 16,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: pressed ? 0.75 : 1,
+                                })}
+                              >
+                                <LuTrash2 size={16} color="#ff6b6b" />
+                              </Pressable>
+                            </XStack>
+                          </>
+                        ) : null}
+
+                        {isPickingImage ? (
+                          <YStack
+                            position="absolute"
+                            top={0}
+                            left={0}
+                            right={0}
+                            bottom={0}
+                            backgroundColor="rgba(0,0,0,0.3)"
+                            alignItems="center"
+                            justifyContent="center"
+                            zIndex={2}
+                          >
+                            <ActivityIndicator size="small" color="#fff" />
+                          </YStack>
+                        ) : !uploadedPhotoUri ? (
+                          <YStack alignItems="center" justifyContent="center" gap={6} paddingBottom={14}>
+                            <LuCamera size={26} color={tokens.textMuted} />
+                            <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
+                              Tap to Choose
+                            </Text>
+                          </YStack>
+                        ) : null}
+
+                        <YStack
+                          position="absolute"
+                          bottom={0}
+                          left={0}
+                          right={0}
+                          paddingVertical={6}
+                          backgroundColor="rgba(0,0,0,0.65)"
+                          alignItems="center"
+                          zIndex={3}
+                        >
+                          <Text fontSize={10} fontWeight="700" color="#fff">
+                            {uploadedPhotoUri ? 'Change Photo' : 'Uploaded Photo'}
+                          </Text>
+                        </YStack>
+                      </YStack>
+                    </Pressable>
 
                 {/* Tile 2: Linked Product Image / Catalog PDP Media */}
                 <Pressable
@@ -533,6 +670,8 @@ export function ProductEditSheet({
                   </YStack>
                 </Pressable>
               </XStack>
+            );
+          })()}
 
               {/* Form Fields — compact underline style */}
               <YStack gap={10}>

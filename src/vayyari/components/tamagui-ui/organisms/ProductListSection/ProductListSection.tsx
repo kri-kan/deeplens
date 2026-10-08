@@ -35,6 +35,8 @@ export interface OrderItem {
   imageUrl?: string;
   catalogImageUrl?: string;
   selectedMediaId?: string;
+  attachmentId?: string;
+  storagePath?: string;
 }
 
 export interface ProductListSectionProps {
@@ -180,6 +182,8 @@ export function ProductListSection({
           const paidAmount = isCod ? (item.amountPaid || 0) : 0;
           const lineTotal = Math.max(0, grossLineTotal - paidAmount);
 
+          const previewImgUri = item.photoUri || (item.image && item.image !== item.catalogImageUrl ? item.image : undefined) || item.catalogImageUrl || item.imageUrl;
+
           return (
             <YStack
               key={item.id}
@@ -192,7 +196,7 @@ export function ProductListSection({
             >
               {/* ── Top Section: Thumbnail on Left, Product Details on Right ── */}
               <XStack gap={10} alignItems="flex-start">
-                {/* Overlaid Checkbox on top-left of Thumbnail */}
+                {/* Thumbnail Container */}
                 <YStack
                   width={64}
                   height={76}
@@ -203,9 +207,9 @@ export function ProductListSection({
                   borderWidth={1}
                   borderColor={tokens.border}
                 >
-                  {(item.catalogImageUrl || item.photoUri || item.image || item.imageUrl) ? (
+                  {previewImgUri ? (
                     <Image
-                      source={{ uri: item.catalogImageUrl || item.photoUri || item.image || item.imageUrl }}
+                      source={{ uri: previewImgUri }}
                       style={{ width: '100%', height: '100%', position: 'absolute' }}
                       resizeMode="cover"
                     />
@@ -221,7 +225,7 @@ export function ProductListSection({
                   </YStack>
 
                   {/* Stacked Eye & Share buttons on the right edge of tile */}
-                  {(item.catalogImageUrl || item.photoUri || item.image || item.imageUrl) ? (
+                  {previewImgUri ? (
                     <YStack position="absolute" top={4} right={4} zIndex={6} gap={4}>
                       <Pressable
                         accessibilityRole="button"
@@ -229,8 +233,7 @@ export function ProductListSection({
                         hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                         onPress={(e) => {
                           e.stopPropagation?.();
-                          const imgUri = item.catalogImageUrl || item.photoUri || item.image || item.imageUrl;
-                          setPreviewImage({ uri: imgUri!, title: item.title || item.productId });
+                          setPreviewImage({ uri: previewImgUri!, title: item.title || item.productId });
                         }}
                         style={({ pressed }) => ({
                           width: 22,
@@ -251,8 +254,7 @@ export function ProductListSection({
                         hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                         onPress={(e) => {
                           e.stopPropagation?.();
-                          const imgUri = item.catalogImageUrl || item.photoUri || item.image || item.imageUrl;
-                          shareImageUri(imgUri, item.title || item.productId);
+                          shareImageUri(previewImgUri, item.title || item.productId);
                         }}
                         style={({ pressed }) => ({
                           width: 22,

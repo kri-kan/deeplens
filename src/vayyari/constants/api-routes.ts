@@ -28,6 +28,8 @@ export const API_ROUTES = {
   ATTACHMENTS: {
     UPLOAD: '/api/v1/Attachment/upload',
     DOWNLOAD: (path: string) => `/api/v1/Attachment/download?path=${encodeURIComponent(path)}`,
+    DELETE: (id: string) => `/api/v1/Attachment/${id}`,
+    DELETE_BY_PATH: (path: string) => `/api/v1/Attachment/by-path?path=${encodeURIComponent(path)}`,
   },
 
   // Order & ID generation
@@ -35,6 +37,7 @@ export const API_ROUTES = {
     GENERATE: '/api/v1/orderid/order',
     GENERATE_WITH_ITEMS: '/api/v1/orderid/orderwithitems',
     HISTORY: '/api/v1/orderid/history',
+    ALL: '/api/v1/orderid/all',
     GET_BY_ID: (orderId: string) => `/api/v1/orderid/${orderId}`,
     UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
     DELETE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,

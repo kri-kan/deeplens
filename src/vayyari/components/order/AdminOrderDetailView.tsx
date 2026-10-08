@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
+import { logisticsService } from '@/services/logistics.service';
 import { API_ROUTES } from '@/constants/api-routes';
 import {
   OrderIdEntry,
@@ -28,16 +29,18 @@ import { ProductListSection, OrderItem } from '@/components/tamagui-ui/organisms
 import { ProductEditSheet } from '@/components/tamagui-ui/organisms/ProductEditSheet';
 import { QuickPickerSheet } from '@/components/tamagui-ui/molecules/QuickPickerSheet';
 import { AddressCard, AddressSheet, AddressData } from './AdminOrderCreateForm';
-import { LuX, LuCheck } from '@/components/tamagui-ui/icons/lu';
+import { LuX, LuCheck, LuCheckCircle2 } from '@/components/tamagui-ui/icons/lu';
 
 export interface AdminOrderDetailViewProps {
   orderId: string;
   onBack?: () => void;
+  showCreatedSnackbar?: boolean;
 }
 
 export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   orderId,
   onBack,
+  showCreatedSnackbar = false,
 }) => {
   const { tokens } = useTheme();
   const router = useRouter();
@@ -46,6 +49,20 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [orderData, setOrderData] = useState<OrderIdEntry | null>(null);
+
+  const [snackbarVisible, setSnackbarVisible] = useState<boolean>(Boolean(showCreatedSnackbar));
+  const [snackbarMessage, setSnackbarMessage] = useState<string>(
+    `Order #${orderId} created & ID copied to clipboard!`
+  );
+
+  useEffect(() => {
+    if (snackbarVisible) {
+      const timer = setTimeout(() => {
+        setSnackbarVisible(false);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [snackbarVisible]);
 
   // Mapped mock/real state
   const [createdAt, setCreatedAt] = useState<string | Date>(new Date());
@@ -149,6 +166,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                 photoUri: parsedMeta.photoUri,
                 catalogImageUrl: catalogImg,
                 image: photo,
+                attachmentId: parsedMeta.attachmentId || (it.attachments && it.attachments[0]?.id),
+                storagePath: parsedMeta.storagePath || (it.attachments && it.attachments[0]?.key),
               };
             })
           );
@@ -228,11 +247,13 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         shippingState: address?.state,
         transactionId: transactionId || undefined,
         items: itemsList.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image)
+          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath)
             ? JSON.stringify({
                 catalogImageUrl: p.catalogImageUrl,
                 photoUri: p.photoUri,
                 image: p.image || p.catalogImageUrl || p.photoUri,
+                attachmentId: p.attachmentId,
+                storagePath: p.storagePath,
               })
             : undefined;
 
@@ -352,11 +373,13 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         shippingState: address?.state,
         transactionId: transactionId || undefined,
         items: products.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image)
+          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath)
             ? JSON.stringify({
                 catalogImageUrl: p.catalogImageUrl,
                 photoUri: p.photoUri,
                 image: p.image || p.catalogImageUrl || p.photoUri,
+                attachmentId: p.attachmentId,
+                storagePath: p.storagePath,
               })
             : undefined;
 
@@ -372,10 +395,12 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       };
 
       await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(orderId), updatePayload);
-      Alert.alert('Success', 'Order updated successfully!');
+      setSnackbarMessage(`Order #${orderId} saved successfully!`);
+      setSnackbarVisible(true);
     } catch (err: any) {
       console.error('Failed to update order:', err);
-      Alert.alert('Update Failed', err?.message || 'Could not save changes.');
+      setSnackbarMessage(`Update Failed: ${err?.message || 'Could not save changes.'}`);
+      setSnackbarVisible(true);
     } finally {
       setSaving(false);
     }
@@ -408,6 +433,19 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   const handleConfirmAction = async () => {
     if (confirmDialog.type === 'batch') {
+      const itemsToDelete = products.filter((p) => selectedItemIds.map(String).includes(String(p.id)));
+      for (const item of itemsToDelete) {
+        const photo = item.photoUri || (item.image !== item.catalogImageUrl ? item.image : undefined);
+        const attId = item.attachmentId;
+        const stPath = item.storagePath;
+        if (attId) {
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(attId)).catch(console.warn);
+        } else if (stPath) {
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(stPath)).catch(console.warn);
+        } else if (photo && (photo.includes('/api/v1/Attachment/') || photo.includes('order/'))) {
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(photo)).catch(console.warn);
+        }
+      }
       const remaining = products.filter((p) => !selectedItemIds.map(String).includes(String(p.id)));
       setProducts(remaining);
       setSelectedItemIds([]);
@@ -415,6 +453,19 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       await persistOrderItems(remaining);
     } else if (confirmDialog.type === 'single' && confirmDialog.targetId) {
       const targetIdStr = String(confirmDialog.targetId);
+      const itemToDelete = products.find((p) => String(p.id) === targetIdStr);
+      if (itemToDelete) {
+        const photo = itemToDelete.photoUri || (itemToDelete.image !== itemToDelete.catalogImageUrl ? itemToDelete.image : undefined);
+        const attId = itemToDelete.attachmentId;
+        const stPath = itemToDelete.storagePath;
+        if (attId) {
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(attId)).catch(console.warn);
+        } else if (stPath) {
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(stPath)).catch(console.warn);
+        } else if (photo && (photo.includes('/api/v1/Attachment/') || photo.includes('order/'))) {
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(photo)).catch(console.warn);
+        }
+      }
       const remaining = products.filter((p) => String(p.id) !== targetIdStr);
       setProducts(remaining);
       setSelectedItemIds((prev) => prev.filter((x) => String(x) !== targetIdStr));
@@ -424,17 +475,18 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
       try {
         await searchApiClient.delete(API_ROUTES.ORDERS.DELETE(orderId));
-        Alert.alert('Deleted', 'Order has been deleted.', [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (onBack) onBack();
-              else router.back();
-            },
-          },
-        ]);
+        logisticsService.removeOrder(orderId);
+        setSnackbarMessage(`Order #${orderId} deleted!`);
+        setSnackbarVisible(true);
+        setTimeout(() => {
+          if (onBack) onBack();
+          else if (router.canGoBack()) router.back();
+          else router.replace('/(tabs)/orders');
+        }, 500);
       } catch (err: any) {
-        Alert.alert('Delete Failed', err?.message || 'Could not delete order.');
+        console.error('Failed to delete order:', err);
+        setSnackbarMessage(`Delete Failed: ${err?.message || 'Could not delete order.'}`);
+        setSnackbarVisible(true);
       }
     }
   };
@@ -615,6 +667,38 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             />
           </YStack>
         </Modal>
+      )}
+      {/* ── Snackbar Toast Banner ── */}
+      {snackbarVisible && (
+        <YStack
+          position="absolute"
+          bottom={20 + insets.bottom}
+          left={16}
+          right={16}
+          backgroundColor="#1E293B"
+          paddingVertical={12}
+          paddingHorizontal={16}
+          borderRadius={tokens.radius.md || 8}
+          flexDirection="row"
+          alignItems="center"
+          justifyContent="space-between"
+          elevation={5}
+          shadowColor="#000"
+          shadowOffset={{ width: 0, height: 2 }}
+          shadowOpacity={0.25}
+          shadowRadius={3.84}
+          zIndex={9999}
+        >
+          <XStack alignItems="center" gap={8} flex={1}>
+            <LuCheckCircle2 size={18} color="#10B981" />
+            <Text color="#FFFFFF" fontSize={13} fontWeight="600" flex={1}>
+              {snackbarMessage}
+            </Text>
+          </XStack>
+          <Pressable onPress={() => setSnackbarVisible(false)} hitSlop={8}>
+            <LuX size={16} color="#94A3B8" />
+          </Pressable>
+        </YStack>
       )}
     </YStack>
   );

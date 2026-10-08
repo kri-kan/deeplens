@@ -529,13 +529,63 @@ function mapOrderDetailToLogisticsOrder(dto: any): LogisticsOrder {
 
 // In-memory state store for interactive development
 let ordersStore = SAMPLE_MOCK_ORDERS.map(attachItemsToPackages);
+const deletedOrderIds = new Set<string>();
+
+function isMatchingOrderId(targetId: string, candidateId: string): boolean {
+  if (!targetId || !candidateId) return false;
+  const t = String(targetId).toLowerCase().trim();
+  const c = String(candidateId).toLowerCase().trim();
+  if (t === c) return true;
+  const tClean = t.replace(/^vy-2026-/, '').replace(/^vy-/, '').replace(/^ord-/, '');
+  const cClean = c.replace(/^vy-2026-/, '').replace(/^vy-/, '').replace(/^ord-/, '');
+  return tClean === cClean;
+}
+
+function isOrderDeleted(orderId: string, orderNumber?: string): boolean {
+  if (!orderId && !orderNumber) return false;
+  for (const delId of deletedOrderIds) {
+    if (orderId && isMatchingOrderId(delId, orderId)) return true;
+    if (orderNumber && isMatchingOrderId(delId, orderNumber)) return true;
+  }
+  return false;
+}
 
 export const logisticsService = {
   /**
    * Register or prepend a newly created order into local store
    */
   registerOrder: (order: LogisticsOrder) => {
-    ordersStore = [attachItemsToPackages(order), ...ordersStore.filter(o => o.id !== order.id)];
+    deletedOrderIds.delete(order.id);
+    deletedOrderIds.delete(order.orderNumber);
+    const strippedId = order.id.toLowerCase().replace(/^vy-2026-/, '').replace(/^vy-/, '').replace(/^ord-/, '');
+    deletedOrderIds.delete(strippedId);
+
+    ordersStore = [
+      attachItemsToPackages(order),
+      ...ordersStore.filter(o => !isMatchingOrderId(order.id, o.id) && !isMatchingOrderId(order.id, o.orderNumber))
+    ];
+  },
+
+  /**
+   * Remove a deleted order from local store
+   */
+  removeOrder: (orderId: string) => {
+    if (!orderId) return;
+    const cleanId = String(orderId).toLowerCase().trim();
+    const strippedId = cleanId.replace(/^vy-2026-/, '').replace(/^vy-/, '').replace(/^ord-/, '');
+    deletedOrderIds.add(cleanId);
+    deletedOrderIds.add(strippedId);
+    deletedOrderIds.add(`vy-2026-${strippedId}`);
+    deletedOrderIds.add(`ord-${strippedId}`);
+
+    ordersStore = ordersStore.filter(o => !isOrderDeleted(o.id, o.orderNumber));
+  },
+
+  /**
+   * Check whether an order ID or number is marked as deleted
+   */
+  isOrderDeleted: (orderId: string, orderNumber?: string): boolean => {
+    return isOrderDeleted(orderId, orderNumber);
   },
 
   /**
@@ -547,7 +597,9 @@ export const logisticsService = {
         params: { status: filter !== 'All' ? filter : undefined, q: query }
       });
       if (res && Array.isArray(res) && res.length > 0) {
-        return res.map(attachItemsToPackages);
+        return res
+          .filter(o => !isOrderDeleted(o.id, o.orderNumber))
+          .map(attachItemsToPackages);
       }
     } catch {
       // Fall back to SearchApi recent history
@@ -558,16 +610,38 @@ export const logisticsService = {
         params: { limit: 50 }
       });
       if (historyRes && Array.isArray(historyRes) && historyRes.length > 0) {
-        const liveOrders = historyRes.map(mapHistoryItemToLogisticsOrder);
-        const liveIds = new Set(liveOrders.map(o => o.id));
-        const existingRemaining = ordersStore.filter(o => !liveIds.has(o.id));
+        // Track any explicit deleted items returned
+        historyRes.forEach(o => {
+          if (o.isDeleted || o.status === 'Deleted') {
+            const cleanId = String(o.id).toLowerCase().trim();
+            const strippedId = cleanId.replace(/^vy-2026-/, '').replace(/^vy-/, '').replace(/^ord-/, '');
+            deletedOrderIds.add(cleanId);
+            deletedOrderIds.add(strippedId);
+            deletedOrderIds.add(`vy-2026-${strippedId}`);
+            deletedOrderIds.add(`ord-${strippedId}`);
+            if (o.orderNumber) {
+              const numClean = String(o.orderNumber).toLowerCase().trim();
+              deletedOrderIds.add(numClean);
+            }
+          }
+        });
+
+        const liveOrders = historyRes
+          .filter(o => !o.isDeleted && o.status !== 'Deleted' && !isOrderDeleted(o.id, o.orderNumber))
+          .map(mapHistoryItemToLogisticsOrder);
+        const allHistoryIds = new Set(historyRes.map(o => String(o.id || o.orderNumber).toLowerCase()));
+        const existingRemaining = ordersStore.filter(o => 
+          !allHistoryIds.has(String(o.id).toLowerCase()) && 
+          !allHistoryIds.has(String(o.orderNumber).toLowerCase()) &&
+          !isOrderDeleted(o.id, o.orderNumber)
+        );
         ordersStore = [...liveOrders, ...existingRemaining];
       }
     } catch {
       // Fall back to local store
     }
 
-    let list = [...ordersStore];
+    let list = ordersStore.filter(o => !isOrderDeleted(o.id, o.orderNumber));
     if (filter && filter !== 'All') {
       list = list.filter(o => o.status === filter);
     }

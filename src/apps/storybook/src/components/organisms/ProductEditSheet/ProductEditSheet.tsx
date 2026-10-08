@@ -347,30 +347,62 @@ export function ProductEditSheet({
                           <LuEye size={17} color="#ffffff" />
                         </Pressable>
 
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Share uploaded photo"
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          onPress={(e: any) => {
-                            e.stopPropagation?.();
-                            shareImageUri(form.photoUri || form.image, form.title || form.productId || 'Uploaded Photo');
-                          }}
-                          style={({ pressed }: any) => ({
-                            position: 'absolute',
-                            top: 8,
-                            right: 8,
-                            zIndex: 10,
-                            width: 32,
-                            height: 32,
-                            borderRadius: 16,
-                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            opacity: pressed ? 0.75 : 1,
-                          })}
-                        >
-                          <LuShare2 size={16} color="#ffffff" />
-                        </Pressable>
+                            <XStack
+                              position="absolute"
+                              top={8}
+                              right={8}
+                              zIndex={10}
+                              gap={6}
+                              alignItems="center"
+                            >
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Share uploaded photo"
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                onPress={(e: any) => {
+                                  e.stopPropagation?.();
+                                  shareImageUri(form.photoUri || form.image, form.title || form.productId || 'Uploaded Photo');
+                                }}
+                                style={({ pressed }: any) => ({
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: 16,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: pressed ? 0.75 : 1,
+                                })}
+                              >
+                                <LuShare2 size={16} color="#ffffff" />
+                              </Pressable>
+
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Remove uploaded photo"
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                onPress={(e: any) => {
+                                  e.stopPropagation?.();
+                                  setForm((prev) => (prev ? {
+                                    ...prev,
+                                    photoUri: undefined,
+                                    image: prev.catalogImageUrl || undefined,
+                                    attachmentId: undefined,
+                                    storagePath: undefined,
+                                  } : prev));
+                                }}
+                                style={({ pressed }: any) => ({
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: 16,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: pressed ? 0.75 : 1,
+                                })}
+                              >
+                                <LuTrash2 size={16} color="#ff6b6b" />
+                              </Pressable>
+                            </XStack>
                       </>
                     ) : (
                       <YStack alignItems="center" justifyContent="center" gap={6} paddingBottom={14}>

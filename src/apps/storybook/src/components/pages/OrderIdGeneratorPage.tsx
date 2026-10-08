@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, Switch, Pressable, TextInput } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LuSettings, LuArrowLeft, LuHistory, LuInbox, LuSearch, LuX } from 'react-icons/lu';
+import { LuSettings, LuArrowLeft, LuHistory, LuInbox, LuSearch, LuX, LuChevronRight, LuChevronDown, LuCheck } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
   OrderIdGeneratorCard,
@@ -24,6 +24,7 @@ export interface OrderIdGeneratorPageProps {
   initialSourceHandle?: string;
   initialShowDeleted?: boolean;
   initialSearchQuery?: string;
+  recentLimit?: number;
   isLoading?: boolean;
   disableSafeArea?: boolean;
   onGenerateOrder?: (
@@ -31,6 +32,8 @@ export interface OrderIdGeneratorPageProps {
     paymentMode: GeneratorPaymentMode,
     handle: string
   ) => void;
+  onRecentLimitChange?: (limit: number) => void;
+  onNavigateToAllOrders?: () => void;
   onOpenPlatform?: (source: string, handle?: string) => void;
   onNavigateToDetails?: (id: string) => void;
   onBack?: () => void;
@@ -45,9 +48,12 @@ export function OrderIdGeneratorPage({
   initialSourceHandle = '',
   initialShowDeleted = false,
   initialSearchQuery = '',
+  recentLimit = 50,
   isLoading = false,
   disableSafeArea = false,
   onGenerateOrder,
+  onRecentLimitChange,
+  onNavigateToAllOrders,
   onOpenPlatform,
   onNavigateToDetails,
   onBack,
@@ -68,6 +74,8 @@ export function OrderIdGeneratorPage({
     initialGeneratedEntry
   );
   const [showDeleted, setShowDeleted] = useState(initialShowDeleted);
+  const [selectedLimit, setSelectedLimit] = useState<number>(recentLimit || 50);
+  const [showLimitDropdown, setShowLimitDropdown] = useState(false);
 
   // Edit sheet state
   const [editingItem, setEditingItem] = useState<OrderIdHistoryEntry | null>(null);
@@ -230,38 +238,131 @@ export function OrderIdGeneratorPage({
 
           {/* History Section Header */}
           <YStack gap={12}>
-            <XStack alignItems="center" justifyContent="space-between">
-              <XStack alignItems="center" gap={8}>
-                <LuHistory size={16} color={tokens.text} />
+            <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8}>
+              {/* Left Group: Title, Dropdown (20, 50, 100), Show Deleted Toggle */}
+              <XStack alignItems="center" gap={10} flexWrap="wrap">
                 <Text fontSize={15} fontWeight="700" color={tokens.text}>
-                  Recent Order IDs
+                  Recent
                 </Text>
-                <XStack
-                  paddingHorizontal={7}
-                  paddingVertical={2}
-                  borderRadius={tokens.radius.full}
-                  backgroundColor={tokens.surfaceRaised}
-                  borderWidth={1}
-                  borderColor={tokens.border}
-                >
-                  <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
-                    {filteredHistory.length}
+
+                {/* Dropdown Select Trigger for Recent Order ID Count */}
+                <YStack style={{ position: 'relative', zIndex: 100 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Select recent orders count limit"
+                    onPress={() => setShowLimitDropdown((prev) => !prev)}
+                    style={{ cursor: 'pointer' } as any}
+                  >
+                    <XStack
+                      alignItems="center"
+                      backgroundColor={tokens.surfaceRaised}
+                      borderRadius={tokens.radius.md}
+                      borderWidth={1}
+                      borderColor={tokens.border}
+                      paddingHorizontal={10}
+                      paddingVertical={5}
+                      gap={6}
+                    >
+                      <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                        {selectedLimit}
+                      </Text>
+                      <LuChevronDown size={14} color={tokens.textMuted} />
+                    </XStack>
+                  </Pressable>
+
+                  {/* Dropdown Options List */}
+                  {showLimitDropdown && (
+                    <YStack
+                      position="absolute"
+                      top={34}
+                      left={0}
+                      backgroundColor={tokens.surface}
+                      borderRadius={tokens.radius.md}
+                      borderWidth={1}
+                      borderColor={tokens.border}
+                      elevation={8}
+                      shadowColor="#000"
+                      shadowOffset={{ width: 0, height: 2 }}
+                      shadowOpacity={0.15}
+                      shadowRadius={6}
+                      width={100}
+                      paddingVertical={4}
+                      zIndex={999}
+                    >
+                      {[20, 50, 100].map((val) => {
+                        const isSelected = selectedLimit === val;
+                        return (
+                          <Pressable
+                            key={val}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Select ${val} recent orders`}
+                            onPress={() => {
+                              setSelectedLimit(val);
+                              setShowLimitDropdown(false);
+                              onRecentLimitChange?.(val);
+                            }}
+                            style={{ cursor: 'pointer' } as any}
+                          >
+                            <XStack
+                              paddingHorizontal={12}
+                              paddingVertical={8}
+                              alignItems="center"
+                              justifyContent="space-between"
+                              backgroundColor={isSelected ? tokens.surfaceRaised : 'transparent'}
+                            >
+                              <Text
+                                fontSize={12}
+                                fontWeight={isSelected ? '700' : '500'}
+                                color={isSelected ? tokens.accent : tokens.text}
+                              >
+                                {val}
+                              </Text>
+                              {isSelected && <LuCheck size={14} color={tokens.accent} />}
+                            </XStack>
+                          </Pressable>
+                        );
+                      })}
+                    </YStack>
+                  )}
+                </YStack>
+
+                {/* Show Deleted Toggle (Shifted right next to dropdown) */}
+                <XStack alignItems="center" gap={6}>
+                  <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
+                    Deleted
                   </Text>
+                  <Switch
+                    value={showDeleted}
+                    onValueChange={setShowDeleted}
+                    trackColor={{ false: tokens.border, true: tokens.accent }}
+                    thumbColor={tokens.surface}
+                  />
                 </XStack>
               </XStack>
 
-              {/* Show Deleted Toggle */}
-              <XStack alignItems="center" gap={8}>
-                <Text fontSize={12} color={tokens.textMuted} fontWeight="500">
-                  Show Deleted
-                </Text>
-                <Switch
-                  value={showDeleted}
-                  onValueChange={setShowDeleted}
-                  trackColor={{ false: tokens.border, true: tokens.accent }}
-                  thumbColor={tokens.surface}
-                />
-              </XStack>
+              {/* Right Group: Show All Button */}
+              {onNavigateToAllOrders && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Navigate to all orders page"
+                  onPress={onNavigateToAllOrders}
+                  style={{ cursor: 'pointer' } as any}
+                >
+                  <XStack
+                    alignItems="center"
+                    gap={4}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={tokens.radius.full}
+                    backgroundColor={tokens.accent}
+                  >
+                    <Text fontSize={12} fontWeight="700" color="#FFFFFF">
+                      Show All
+                    </Text>
+                    <LuChevronRight size={14} color="#FFFFFF" />
+                  </XStack>
+                </Pressable>
+              )}
             </XStack>
 
             {/* Search Bar for filtering recent orders */}

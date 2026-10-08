@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LogisticsOrder, OrderFulfillmentStatus } from '@/types/logistics';
 import { logisticsService } from '@/services/logistics.service';
 import { NdrActionCenter } from '@/components/logistics/NdrActionCenter';
@@ -39,6 +39,12 @@ export default function OrdersScreen() {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrders();
+    }, [fetchOrders])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
