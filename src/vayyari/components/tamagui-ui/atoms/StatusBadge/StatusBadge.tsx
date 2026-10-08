@@ -35,8 +35,8 @@ export function StatusBadge({
       aria-label={accessibilityLabel ?? `${intent} status: ${label}`}
       alignItems="center"
       justifyContent="center"
-      paddingHorizontal={isSmall ? 8 : 12}
-      height={isSmall ? 22 : 26}
+      paddingHorizontal={isSmall ? 6 : 12}
+      height={isSmall ? 20 : 26}
       borderRadius={tokens?.radius?.full ?? 9999}
       backgroundColor={intentColors.subtle}
       borderWidth={1}

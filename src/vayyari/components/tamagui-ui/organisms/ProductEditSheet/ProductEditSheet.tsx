@@ -18,6 +18,8 @@ import {
   LuCamera,
   LuArrowLeft,
   LuChevronDown,
+  LuEye,
+  LuShare2,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { DropdownField } from '../../atoms/DropdownField';
@@ -25,6 +27,8 @@ import { CompactField } from '../../atoms/CompactField';
 import { ConfirmDialog } from '../../molecules/ConfirmDialog';
 import { QuickPickerSheet } from '../../molecules/QuickPickerSheet';
 import { VendorPickerSheet } from '../../molecules/VendorPickerSheet';
+import { ImageViewerModal } from '../../molecules/ImageViewerModal';
+import { shareImageUri } from '@/utils/shareImage';
 import {
   CatalogMediaPickerModal,
   CatalogMediaSelection,
@@ -59,6 +63,7 @@ export function ProductEditSheet({
   const [catalogPickerVisible, setCatalogPickerVisible] = useState(false);
   const [vendorPickerVisible, setVendorPickerVisible] = useState(false);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string } | null>(null);
 
   // Internal Quick Picker for Size & Quantity dropdowns
   const [sheetPickerState, setSheetPickerState] = useState<{
@@ -307,11 +312,66 @@ export function ProductEditSheet({
                     position="relative"
                   >
                     {(form.photoUri || form.image) ? (
-                      <Image
-                        source={{ uri: form.photoUri || form.image }}
-                        style={{ width: '100%', height: '100%', position: 'absolute' }}
-                        resizeMode="cover"
-                      />
+                      <>
+                        <Image
+                          source={{ uri: form.photoUri || form.image }}
+                          style={{ width: '100%', height: '100%', position: 'absolute' }}
+                          resizeMode="cover"
+                        />
+                        {/* Top-Left Eye (Preview) & Top-Right Share */}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Preview uploaded photo"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            setPreviewImage({
+                              uri: (form.photoUri || form.image)!,
+                              title: form.title || form.productId || 'Uploaded Photo',
+                            });
+                          }}
+                          style={({ pressed }) => ({
+                            position: 'absolute',
+                            top: 8,
+                            left: 8,
+                            zIndex: 10,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: pressed ? 0.75 : 1,
+                          })}
+                        >
+                          <LuEye size={17} color="#ffffff" />
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Share uploaded photo"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            shareImageUri(form.photoUri || form.image, form.title || form.productId || 'Uploaded Photo');
+                          }}
+                          style={({ pressed }) => ({
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            zIndex: 10,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: pressed ? 0.75 : 1,
+                          })}
+                        >
+                          <LuShare2 size={16} color="#ffffff" />
+                        </Pressable>
+                      </>
                     ) : null}
 
                     {isPickingImage ? (
@@ -381,6 +441,59 @@ export function ProductEditSheet({
                           style={{ width: '100%', height: '100%', position: 'absolute' }}
                           resizeMode="cover"
                         />
+                        {/* Top-Left Eye (Preview) & Top-Right Share */}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Preview catalog photo"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            setPreviewImage({
+                              uri: form.catalogImageUrl!,
+                              title: form.productId || 'Catalog PDP Media',
+                            });
+                          }}
+                          style={({ pressed }) => ({
+                            position: 'absolute',
+                            top: 8,
+                            left: 8,
+                            zIndex: 10,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: pressed ? 0.75 : 1,
+                          })}
+                        >
+                          <LuEye size={17} color="#ffffff" />
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Share catalog photo"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            shareImageUri(form.catalogImageUrl, form.productId || 'Catalog PDP Media');
+                          }}
+                          style={({ pressed }) => ({
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            zIndex: 10,
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: pressed ? 0.75 : 1,
+                          })}
+                        >
+                          <LuShare2 size={16} color="#ffffff" />
+                        </Pressable>
                         <YStack
                           position="absolute"
                           bottom={0}
@@ -681,6 +794,14 @@ export function ProductEditSheet({
         intent="attention"
         onConfirm={handleConfirmUnlinkAndSave}
         onCancel={() => setShowUnlinkConfirm(false)}
+      />
+
+      {/* Full-Screen Image Preview Modal with Share Intent */}
+      <ImageViewerModal
+        visible={!!previewImage}
+        imageUrl={previewImage?.uri}
+        title={previewImage?.title}
+        onClose={() => setPreviewImage(null)}
       />
     </>
   );

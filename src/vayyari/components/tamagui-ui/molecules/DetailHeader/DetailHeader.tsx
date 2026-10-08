@@ -1,8 +1,8 @@
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XStack, YStack, Text } from 'tamagui';
-import { LuTrash2, LuCheck } from '@/components/tamagui-ui/icons/lu';
+import { LuTrash2, LuCheck, LuArrowLeft } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge, formatAdaptiveTimestamp } from '../../atoms/TimestampBadge';
 
@@ -11,8 +11,10 @@ export interface DetailHeaderProps {
   createdAt: string | Date;
   compactDate?: boolean;
   disableSafeArea?: boolean;
+  isSaving?: boolean;
   onSave: () => void;
   onDelete: () => void;
+  onBack?: () => void;
 }
 
 // Re-export for backwards-compatibility
@@ -23,8 +25,10 @@ export function DetailHeader({
   createdAt,
   compactDate = false,
   disableSafeArea = false,
+  isSaving = false,
   onSave,
   onDelete,
+  onBack,
 }: DetailHeaderProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -41,19 +45,40 @@ export function DetailHeader({
       borderBottomWidth={1}
       borderBottomColor={tokens.border}
     >
-      {/* Left: Order ID + Adaptive Timestamp Badge */}
-      <YStack gap={2}>
-        <XStack alignItems="center" gap={8}>
-          <Text fontSize={16} fontWeight="800" color={tokens.text} letterSpacing={0.3}>
-            #{orderId}
-          </Text>
-          <TimestampBadge
-            date={createdAt}
-            compact={compactDate}
-            size="sm"
-          />
-        </XStack>
-      </YStack>
+      {/* Left: Back (optional) + Order ID + Adaptive Timestamp Badge */}
+      <XStack alignItems="center" gap={8}>
+        {onBack && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={onBack}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => ({
+              width: 34,
+              height: 34,
+              borderRadius: tokens.radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? `${tokens.text}12` : 'transparent',
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+            })}
+          >
+            <LuArrowLeft size={18} color={tokens.text} />
+          </Pressable>
+        )}
+        <YStack gap={2}>
+          <XStack alignItems="center" gap={8}>
+            <Text fontSize={16} fontWeight="800" color={tokens.text} letterSpacing={0.3}>
+              #{orderId}
+            </Text>
+            <TimestampBadge
+              date={createdAt}
+              compact={compactDate}
+              size="sm"
+            />
+          </XStack>
+        </YStack>
+      </XStack>
 
       {/* Right: Delete & Save Action Buttons (Icon-only) */}
       <XStack alignItems="center" gap={8}>
@@ -62,22 +87,22 @@ export function DetailHeader({
           accessibilityRole="button"
           accessibilityLabel="Delete order"
           onPress={onDelete}
-          hitSlop={8}
+          disabled={isSaving}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: tokens.radius.sm,
+            backgroundColor: `${tokens.error}14`,
+            borderWidth: 1,
+            borderColor: `${tokens.error}30`,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: isSaving ? 0.4 : pressed ? 0.82 : 1,
+            transform: [{ scale: pressed && !isSaving ? 0.94 : 1 }],
+          })}
         >
-          <YStack
-            width={34}
-            height={34}
-            borderRadius={tokens.radius.sm}
-            backgroundColor={`${tokens.error}14`}
-            borderWidth={1}
-            borderColor={`${tokens.error}30`}
-            alignItems="center"
-            justifyContent="center"
-            hoverStyle={{ backgroundColor: `${tokens.error}24` }}
-            pressStyle={{ scale: 0.94 }}
-          >
-            <LuTrash2 size={16} color={tokens.error} />
-          </YStack>
+          <LuTrash2 size={16} color={tokens.error} />
         </Pressable>
 
         {/* Save Icon Button */}
@@ -85,20 +110,24 @@ export function DetailHeader({
           accessibilityRole="button"
           accessibilityLabel="Save order changes"
           onPress={onSave}
-          hitSlop={8}
+          disabled={isSaving}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: tokens.radius.sm,
+            backgroundColor: tokens.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: isSaving ? 0.8 : pressed ? 0.88 : 1,
+            transform: [{ scale: pressed && !isSaving ? 0.94 : 1 }],
+          })}
         >
-          <YStack
-            width={34}
-            height={34}
-            borderRadius={tokens.radius.sm}
-            backgroundColor={tokens.accent}
-            alignItems="center"
-            justifyContent="center"
-            hoverStyle={{ opacity: 0.92 }}
-            pressStyle={{ scale: 0.94 }}
-          >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={tokens.accentForeground} />
+          ) : (
             <LuCheck size={18} color={tokens.accentForeground} />
-          </YStack>
+          )}
         </Pressable>
       </XStack>
     </XStack>

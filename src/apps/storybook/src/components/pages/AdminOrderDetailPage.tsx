@@ -56,6 +56,8 @@ export interface AdminOrderDetailPageProps {
   onSaveOrder?: (data: any) => void;
   /** Delete order callback */
   onDeleteOrder?: () => void;
+  /** Go back callback */
+  onBack?: () => void;
 }
 
 export function AdminOrderDetailPage({
@@ -76,6 +78,7 @@ export function AdminOrderDetailPage({
   initialConfirmDialogType = 'single',
   onSaveOrder,
   onDeleteOrder,
+  onBack,
 }: AdminOrderDetailPageProps) {
   const { tokens } = useTheme();
 
@@ -172,7 +175,7 @@ export function AdminOrderDetailPage({
   // Confirmation Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
     visible: boolean;
-    type: 'single' | 'batch';
+    type: 'single' | 'batch' | 'deleteOrder';
     targetId?: string;
     title: string;
     message: string;
@@ -228,6 +231,9 @@ export function AdminOrderDetailPage({
     } else if (confirmDialog.type === 'batch') {
       setProducts((prev) => prev.filter((p) => !selectedItemIds.map(String).includes(String(p.id))));
       setSelectedItemIds([]);
+    } else if (confirmDialog.type === 'deleteOrder') {
+      if (onDeleteOrder) onDeleteOrder();
+      else alert(`Order #${orderId} deleted.`);
     }
     setConfirmDialog((prev) => ({ ...prev, visible: false }));
   };
@@ -271,8 +277,13 @@ export function AdminOrderDetailPage({
   };
 
   const handleDelete = () => {
-    if (onDeleteOrder) onDeleteOrder();
-    else alert(`Order #${orderId} marked for deletion.`);
+    setConfirmDialog({
+      visible: true,
+      type: 'deleteOrder',
+      title: 'Delete Order?',
+      message: `Are you sure you want to permanently delete order #${orderId}? This cannot be undone.`,
+      confirmLabel: 'Delete Order',
+    });
   };
 
   return (
@@ -291,6 +302,7 @@ export function AdminOrderDetailPage({
         compactDate={compactDate}
         onSave={handleSaveAll}
         onDelete={handleDelete}
+        onBack={onBack}
       />
 
       {/* ── Scrollable Body ── */}

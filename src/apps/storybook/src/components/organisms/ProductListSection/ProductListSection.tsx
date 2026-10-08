@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, TextInput, Image } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
@@ -9,9 +9,13 @@ import {
   LuX,
   LuBuilding2,
   LuPencil,
+  LuEye,
+  LuShare2,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 import { CustomCheckbox } from '../../atoms/CustomCheckbox';
+import { ImageViewerModal } from '../../molecules/ImageViewerModal';
+import { shareImageUri } from '../../../utils/shareImage';
 
 export interface OrderItem {
   id: string;
@@ -63,6 +67,7 @@ export function ProductListSection({
   onUpdateItem,
 }: ProductListSectionProps) {
   const { tokens } = useTheme();
+  const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string } | null>(null);
   const productList = products || items || [];
   const allSelected = productList.length > 0 && selectedIds.length === productList.length;
 
@@ -193,6 +198,55 @@ export function ProductListSection({
                       accessibilityLabel={`Select item ${item.title}`}
                     />
                   </YStack>
+
+                  {/* Stacked Eye & Share buttons on the right edge of tile */}
+                  {(item.catalogImageUrl || item.photoUri || item.image || item.imageUrl) ? (
+                    <YStack position="absolute" top={4} right={4} zIndex={6} gap={4}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Preview image for ${item.title}`}
+                        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                        onPress={(e: any) => {
+                          e.stopPropagation?.();
+                          const imgUri = item.catalogImageUrl || item.photoUri || item.image || item.imageUrl;
+                          setPreviewImage({ uri: imgUri!, title: item.title || item.productId });
+                        }}
+                        style={({ pressed }: any) => ({
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <LuEye size={12} color="#ffffff" />
+                      </Pressable>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Share image for ${item.title}`}
+                        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                        onPress={(e: any) => {
+                          e.stopPropagation?.();
+                          const imgUri = item.catalogImageUrl || item.photoUri || item.image || item.imageUrl;
+                          shareImageUri(imgUri, item.title || item.productId);
+                        }}
+                        style={({ pressed }: any) => ({
+                          width: 22,
+                          height: 22,
+                          borderRadius: 11,
+                          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <LuShare2 size={11} color="#ffffff" />
+                      </Pressable>
+                    </YStack>
+                  ) : null}
                 </YStack>
 
                 {/* Right: Title, SKU ID, Size, Qty, Vendor and Remove Button */}
@@ -492,6 +546,14 @@ export function ProductListSection({
           );
         })}
       </YStack>
+
+      {/* Full-Screen Image Preview Modal with Share Intent */}
+      <ImageViewerModal
+        visible={!!previewImage}
+        imageUrl={previewImage?.uri}
+        title={previewImage?.title}
+        onClose={() => setPreviewImage(null)}
+      />
     </YStack>
   );
 }

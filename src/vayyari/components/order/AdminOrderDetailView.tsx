@@ -464,8 +464,10 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       <DetailHeader
         orderId={orderId}
         createdAt={createdAt}
+        isSaving={saving}
         onSave={handleSaveOrder}
         onDelete={handleDeleteOrder}
+        onBack={onBack || (() => router.back())}
       />
 
       {/* ── Main Scrollable Body ── */}

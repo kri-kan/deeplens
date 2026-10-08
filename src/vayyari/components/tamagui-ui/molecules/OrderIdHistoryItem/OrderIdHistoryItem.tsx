@@ -72,8 +72,8 @@ export function OrderIdHistoryItem({
       borderRadius={tokens.radius.md}
       borderWidth={1}
       borderColor={tokens.border}
-      paddingVertical={12}
-      paddingHorizontal={14}
+      paddingVertical={10}
+      paddingHorizontal={12}
       alignItems="center"
       justifyContent="space-between"
       opacity={item.isDeleted ? 0.55 : 1}
@@ -83,7 +83,7 @@ export function OrderIdHistoryItem({
       shadowRadius={4}
     >
       {/* Left: Platform Icon & Order Details */}
-      <XStack alignItems="center" gap={12} flex={1}>
+      <XStack alignItems="center" gap={8} flex={1} minWidth={0}>
         {/* Platform Circle Badge (Clickable Deep-Link) */}
         <TouchableOpacity
           activeOpacity={0.7}
@@ -94,8 +94,8 @@ export function OrderIdHistoryItem({
           style={{ cursor: 'pointer' } as any}
         >
           <XStack
-            width={36}
-            height={36}
+            width={32}
+            height={32}
             borderRadius={tokens.radius.full}
             backgroundColor={
               isWhatsApp
@@ -108,25 +108,25 @@ export function OrderIdHistoryItem({
             justifyContent="center"
           >
             {isWhatsApp ? (
-              <RiWhatsappFill size={20} color={WHATSAPP_GREEN} />
+              <RiWhatsappFill size={18} color={WHATSAPP_GREEN} />
             ) : isInstagram ? (
-              <RiInstagramFill size={20} color={INSTAGRAM_PINK} />
+              <RiInstagramFill size={18} color={INSTAGRAM_PINK} />
             ) : (
-              <LuTag size={18} color={tokens.textMuted} />
+              <LuTag size={16} color={tokens.textMuted} />
             )}
           </XStack>
         </TouchableOpacity>
 
         {/* Text Info */}
-        <YStack gap={2} flex={1}>
-          <XStack alignItems="center" gap={6} flexWrap="wrap">
+        <YStack gap={2} flex={1} minWidth={0}>
+          <XStack alignItems="center" gap={5} flexWrap="nowrap">
             <Pressable
               accessibilityRole="link"
               accessibilityLabel={`View details for order ${item.id}`}
               onPress={() => onPress?.(item.id)}
             >
               <Text
-                fontSize={15}
+                fontSize={14}
                 fontWeight="800"
                 color={tokens.accent}
                 letterSpacing={0.3}
@@ -138,11 +138,11 @@ export function OrderIdHistoryItem({
             {item.isDeleted && (
               <XStack
                 backgroundColor={`${tokens.error}18`}
-                paddingHorizontal={6}
+                paddingHorizontal={5}
                 paddingVertical={2}
                 borderRadius={tokens.radius.xs}
               >
-                <Text fontSize={10} fontWeight="700" color={tokens.error}>
+                <Text fontSize={9} fontWeight="700" color={tokens.error}>
                   DELETED
                 </Text>
               </XStack>
@@ -150,7 +150,7 @@ export function OrderIdHistoryItem({
 
             {item.paymentMode && (
               <StatusBadge
-                label={item.paymentMode.toUpperCase()}
+                label={item.paymentMode.toLowerCase() === 'prepaid' ? 'PAID' : item.paymentMode.toUpperCase()}
                 intent={item.paymentMode.toLowerCase() === 'cod' ? 'attention' : 'positive'}
                 size="sm"
               />
@@ -161,7 +161,7 @@ export function OrderIdHistoryItem({
 
           {/* Subtitle: Handle (Clean formatted handle) */}
           {displayHandle ? (
-            <XStack alignItems="center" gap={8} flexWrap="wrap">
+            <XStack alignItems="center" gap={8} flexWrap="nowrap">
               <TouchableOpacity
                 activeOpacity={0.7}
                 accessibilityRole="link"
@@ -175,6 +175,7 @@ export function OrderIdHistoryItem({
                   fontWeight="600"
                   textDecorationLine="underline"
                   textDecorationColor={`${tokens.text}33`}
+                  numberOfLines={1}
                 >
                   {displayHandle}
                 </Text>
@@ -185,15 +186,17 @@ export function OrderIdHistoryItem({
       </XStack>
 
       {/* Right: Actions */}
-      <XStack alignItems="center" gap={6}>
+      <XStack alignItems="center" gap={4} flexShrink={0}>
         {/* Copy Raw ID */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Copy order ID ${item.id}`}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           onPress={() => handleCopy(false)}
         >
           <XStack
-            padding={8}
+            width={28}
+            height={28}
             borderRadius={tokens.radius.sm}
             backgroundColor={copiedType === 'raw' ? `${tokens.success}18` : tokens.surfaceRaised}
             borderWidth={1}
@@ -202,9 +205,9 @@ export function OrderIdHistoryItem({
             justifyContent="center"
           >
             {copiedType === 'raw' ? (
-              <LuCheck size={16} color={tokens.success} />
+              <LuCheck size={14} color={tokens.success} />
             ) : (
-              <LuCopy size={16} color={tokens.text} />
+              <LuCopy size={14} color={tokens.text} />
             )}
           </XStack>
         </Pressable>
@@ -213,10 +216,12 @@ export function OrderIdHistoryItem({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Copy order ID ${item.id} with prefix`}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           onPress={() => handleCopy(true)}
         >
           <XStack
-            padding={8}
+            width={28}
+            height={28}
             borderRadius={tokens.radius.sm}
             backgroundColor={copiedType === 'prefix' ? `${tokens.success}18` : tokens.surfaceRaised}
             borderWidth={1}
@@ -225,9 +230,9 @@ export function OrderIdHistoryItem({
             justifyContent="center"
           >
             {copiedType === 'prefix' ? (
-              <LuCheck size={16} color={tokens.success} />
+              <LuCheck size={14} color={tokens.success} />
             ) : (
-              <LuTag size={16} color={tokens.accent} />
+              <LuTag size={14} color={tokens.accent} />
             )}
           </XStack>
         </Pressable>
@@ -237,10 +242,12 @@ export function OrderIdHistoryItem({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Edit order ${item.id}`}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             onPress={() => onEdit?.(item.id)}
           >
             <XStack
-              padding={8}
+              width={28}
+              height={28}
               borderRadius={tokens.radius.sm}
               backgroundColor={tokens.surfaceRaised}
               borderWidth={1}
@@ -248,7 +255,7 @@ export function OrderIdHistoryItem({
               alignItems="center"
               justifyContent="center"
             >
-              <LuPencil size={16} color={tokens.textMuted} />
+              <LuPencil size={14} color={tokens.textMuted} />
             </XStack>
           </Pressable>
         )}

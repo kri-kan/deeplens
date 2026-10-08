@@ -41,9 +41,10 @@ export function formatAdaptiveTimestamp(
   const now = new Date();
   const isToday = date.toDateString() === now.toDateString();
 
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  // Calendar days difference normalized to local day boundaries
+  const startOfNow = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((startOfNow - startOfDate) / (1000 * 60 * 60 * 24));
 
   const isCurrentYear = date.getFullYear() === now.getFullYear();
 
@@ -71,8 +72,8 @@ export function formatAdaptiveTimestamp(
     hour12: true,
   });
 
-  // 1. Today
-  if (isToday) {
+  // 1. Today (diffDays <= 0)
+  if (isToday || diffDays <= 0) {
     return {
       displayText: compact ? timeFormatted : `Today, ${timeFormatted}`,
       fullDetailText,
@@ -80,12 +81,13 @@ export function formatAdaptiveTimestamp(
     };
   }
 
-  // 2. Yesterday
-  if (isYesterday) {
+  // 2. Relative Days Ago (1 to 29 days)
+  if (diffDays < 30) {
+    const daysLabel = `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
     return {
-      displayText: compact ? `Y'day ${timeFormatted}` : `Yesterday, ${timeFormatted}`,
+      displayText: daysLabel,
       fullDetailText,
-      bracket: 'yesterday',
+      bracket: diffDays === 1 ? 'yesterday' : 'recent',
     };
   }
 
@@ -112,7 +114,7 @@ export function TimestampBadge({
   compact = false,
   size = 'sm',
   accessibilityLabel,
-  maxChars = 10,
+  maxChars = 16,
 }: TimestampBadgeProps) {
   const { tokens } = useTheme();
   const [tooltipVisible, setTooltipVisible] = useState(false);
@@ -148,8 +150,8 @@ export function TimestampBadge({
         <XStack
           alignItems="center"
           justifyContent="center"
-          height={isSmall ? 22 : 26}
-          paddingHorizontal={isSmall ? 8 : 10}
+          height={isSmall ? 20 : 26}
+          paddingHorizontal={isSmall ? 6 : 10}
           borderRadius={tokens.radius.xs}
           backgroundColor={tokens.surfaces.raised}
           borderWidth={1}
