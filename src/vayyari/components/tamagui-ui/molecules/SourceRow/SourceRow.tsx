@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import { RiWhatsappFill, RiInstagramLine } from '@/components/tamagui-ui/icons/ri';
+import { LuTag } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { StatusBadge } from '../../atoms/StatusBadge';
 import { openPlatformHandle, formatDisplayHandle } from '@/utils/platformLink';
@@ -28,7 +29,11 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
 
   const displayContact = sourceContact
     ? formatDisplayHandle(source, sourceContact)
-    : (source === 'whatsapp' ? 'WhatsApp' : 'Instagram');
+    : source === 'whatsapp'
+    ? 'WhatsApp'
+    : source === 'instagram'
+    ? 'Instagram'
+    : 'None';
 
   return (
     <XStack
@@ -45,7 +50,7 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
         {/* Functional Logo Button */}
         <Pressable
           accessibilityRole="link"
-          accessibilityLabel={`Open ${source === 'whatsapp' ? 'WhatsApp' : 'Instagram'} chat`}
+          accessibilityLabel={`Open ${source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'order'} chat`}
           onPress={handleOpenSourceChat}
           style={{ cursor: 'pointer' }}
         >
@@ -55,6 +60,9 @@ export function SourceRow({ source, sourceContact, paymentType }: SourceRowProps
             )}
             {source === 'instagram' && (
               <RiInstagramLine size={20} color={INSTAGRAM_ACTIVE} />
+            )}
+            {!source && (
+              <LuTag size={18} color={tokens.textMuted} />
             )}
             <Text
               fontSize={13}

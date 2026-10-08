@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, TextInput } from 'react-native';
+import { Pressable, TextInput, Image } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuTrash2,
@@ -26,6 +26,11 @@ export interface OrderItem {
   imageColor?: string;
   catalogImageColor?: string;
   vendor?: string;
+  photoUri?: string;
+  image?: string;
+  imageUrl?: string;
+  catalogImageUrl?: string;
+  selectedMediaId?: string;
 }
 
 export interface ProductListSectionProps {
@@ -172,6 +177,13 @@ export function ProductListSection({
                   borderWidth={1}
                   borderColor={tokens.border}
                 >
+                  {(item.catalogImageUrl || item.photoUri || item.image || item.imageUrl) ? (
+                    <Image
+                      source={{ uri: item.catalogImageUrl || item.photoUri || item.image || item.imageUrl }}
+                      style={{ width: '100%', height: '100%', position: 'absolute' }}
+                      resizeMode="cover"
+                    />
+                  ) : null}
                   {/* Checkbox overlaid directly on the image with transparent background */}
                   <YStack position="absolute" top={5} left={5} zIndex={5}>
                     <CustomCheckbox
@@ -204,47 +216,50 @@ export function ProductListSection({
                       </Text>
                     </Pressable>
 
-                    <XStack alignItems="center" gap={6}>
+                    <XStack alignItems="center" gap={8}>
                       {/* Edit Details Sheet Trigger */}
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Edit details for ${item.title}`}
                         onPress={() => onEditProduct(item)}
-                        hitSlop={6}
+                        hitSlop={8}
+                        style={({ pressed }) => ({
+                          width: 28,
+                          height: 28,
+                          borderRadius: tokens.radius.full,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: tokens.surfaceRaised,
+                          borderWidth: 1,
+                          borderColor: tokens.border,
+                          opacity: pressed ? 0.7 : 1,
+                        })}
                       >
-                        <YStack
-                          width={22}
-                          height={22}
-                          borderRadius={tokens.radius.full}
-                          alignItems="center"
-                          justifyContent="center"
-                          backgroundColor={tokens.surfaceRaised}
-                          borderWidth={1}
-                          borderColor={tokens.border}
-                          hoverStyle={{ backgroundColor: tokens.border }}
-                        >
-                          <LuPencil size={11} color={tokens.accent} />
-                        </YStack>
+                        <LuPencil size={13} color={tokens.accent} />
                       </Pressable>
 
-                      {/* Remove [X] button */}
+                      {/* Remove Trash button */}
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Remove ${item.title}`}
-                        onPress={() => onRemoveProduct(item.id)}
-                        hitSlop={6}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onRemoveProduct(String(item.id));
+                        }}
+                        hitSlop={10}
+                        style={({ pressed }) => ({
+                          width: 28,
+                          height: 28,
+                          borderRadius: tokens.radius.full,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: tokens.errorSubtle || 'rgba(239, 68, 68, 0.12)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(239, 68, 68, 0.35)',
+                          opacity: pressed ? 0.7 : 1,
+                        })}
                       >
-                        <YStack
-                          width={22}
-                          height={22}
-                          borderRadius={tokens.radius.full}
-                          alignItems="center"
-                          justifyContent="center"
-                          backgroundColor={tokens.surfaceRaised}
-                          hoverStyle={{ backgroundColor: tokens.border }}
-                        >
-                          <LuX size={12} color={tokens.textMuted} />
-                        </YStack>
+                        <LuTrash2 size={13} color={tokens.error || '#EF4444'} />
                       </Pressable>
                     </XStack>
                   </XStack>

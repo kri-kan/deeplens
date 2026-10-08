@@ -105,6 +105,7 @@ public class OrderRepository : IOrderRepository
             SELECT 
                 i.id as Id,
                 i.product_id as ProductId,
+                i.product_title as ProductTitle,
                 i.quantity as Quantity,
                 COALESCE(i.unit_price, i.price, 0) as UnitPrice,
                 COALESCE(i.subtotal, 0) as Subtotal,
@@ -136,6 +137,7 @@ public class OrderRepository : IOrderRepository
             {
                 Id = item.Id,
                 ProductId = item.ProductId,
+                ProductTitle = item.ProductTitle ?? item.Comments,
                 Quantity = item.Quantity > 0 ? item.Quantity : 1,
                 UnitPrice = item.UnitPrice,
                 Subtotal = item.Subtotal > 0 ? item.Subtotal : (item.UnitPrice * (item.Quantity > 0 ? item.Quantity : 1)),
@@ -245,16 +247,17 @@ public class OrderRepository : IOrderRepository
         await connection.ExecuteAsync("DELETE FROM \"orderItem\" WHERE order_id_ref = @InternalId", new { InternalId = orderInternalId });
     }
 
-    public async Task AddOrderItemAsync(int orderInternalId, int index, string? productId, string? comments, int quantity = 1, decimal unitPrice = 0, decimal subtotal = 0, Guid? vendorId = null, string? sourceType = "catalog")
+    public async Task AddOrderItemAsync(int orderInternalId, int index, string? productId, string? productTitle, string? comments, int quantity = 1, decimal unitPrice = 0, decimal subtotal = 0, Guid? vendorId = null, string? sourceType = "catalog")
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         await connection.ExecuteAsync(@"
-            INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id, comments, quantity, price, unit_price, subtotal, vendor_id, source_type)
-            VALUES (@InternalId, @Index, @ProdId, @Comments, @Quantity, @UnitPrice, @UnitPrice, @Subtotal, @VendorId, @SourceType)",
+            INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id, product_title, comments, quantity, price, unit_price, subtotal, vendor_id, source_type)
+            VALUES (@InternalId, @Index, @ProdId, @ProductTitle, @Comments, @Quantity, @UnitPrice, @UnitPrice, @Subtotal, @VendorId, @SourceType)",
             new { 
                 InternalId = orderInternalId, 
                 Index = index, 
                 ProdId = productId, 
+                ProductTitle = productTitle,
                 Comments = comments,
                 Quantity = quantity,
                 UnitPrice = unitPrice,
@@ -308,6 +311,7 @@ public class OrderRepository : IOrderRepository
     private record OrderItemQueryResult(
         int Id, 
         string? ProductId, 
+        string? ProductTitle, 
         int Quantity, 
         decimal UnitPrice, 
         decimal Subtotal, 

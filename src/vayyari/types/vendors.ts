@@ -9,6 +9,7 @@ export interface VendorResponse {
   orderGroupLink?: string;
   email?: string;
   isActive: boolean;
+  isStarred?: boolean;
   createdAt: string;
   updatedAt: string;
 }

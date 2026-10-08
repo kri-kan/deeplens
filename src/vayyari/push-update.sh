@@ -96,7 +96,7 @@ COMMIT_COUNT=$(git rev-list --count HEAD -- "$SCRIPT_DIR" 2>/dev/null || echo "1
 SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
 DIRTY_FLAG=""
 if [[ -n "$(git status --porcelain "$SCRIPT_DIR" 2>/dev/null)" ]]; then
-  DIRTY_FLAG="-dirty"
+  DIRTY_FLAG="-dirty.$(date +%Y%m%d%H%M%S)"
 fi
 
 VERSION="${BASE_VERSION}.${COMMIT_COUNT}${DIRTY_FLAG}"

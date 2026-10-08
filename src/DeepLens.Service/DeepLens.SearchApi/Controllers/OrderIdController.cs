@@ -54,16 +54,67 @@ public class OrderIdController : ControllerBase
 
     /// <summary>
     /// Generates a new unique Order ID and a set of item sub-IDs.
+    /// Can accept parameters in query string or in JSON request body.
     /// </summary>
     [HttpPost("orderwithitems")]
-    public async Task<IActionResult> GenerateOrderWithItems([FromQuery] int itemCount = 1, [FromQuery] OrderSource? source = null, [FromQuery] PaymentMode? paymentMode = null, [FromQuery] string? sourceHandle = null, [FromQuery] string? instagramUserId = null, [FromQuery] Guid? customerId = null)
+    public async Task<IActionResult> GenerateOrderWithItems(
+        [FromQuery] int itemCount = 1, 
+        [FromQuery] OrderSource? source = null, 
+        [FromQuery] PaymentMode? paymentMode = null, 
+        [FromQuery] string? sourceHandle = null, 
+        [FromQuery] string? instagramUserId = null, 
+        [FromQuery] Guid? customerId = null,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] OrderUpdateDto? body = null)
     {
-        if (itemCount < 1 || itemCount > 100)
-            return BadRequest(new { message = "Item count must be between 1 and 100" });
+        var effectiveSource = body?.Source ?? source;
+        var effectivePaymentMode = body?.PaymentMode ?? paymentMode;
+        var effectiveSourceHandle = !string.IsNullOrWhiteSpace(body?.SourceHandle) ? body.SourceHandle : sourceHandle;
+        var effectiveCustomerId = body?.CustomerId ?? customerId;
+        var effectiveItemCount = (body?.Items != null && body.Items.Count > 0) 
+            ? body.Items.Count 
+            : (body != null ? 0 : itemCount);
 
-        var (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(itemCount, source, paymentMode, sourceHandle, instagramUserId, customerId);
+        if (effectiveItemCount > 100)
+            return BadRequest(new { message = "Item count must be between 0 and 100" });
 
-        return Ok(new { orderId, itemIds });
+        string orderId;
+        IEnumerable<string> itemIds;
+
+        if (effectiveItemCount > 0)
+        {
+            (orderId, itemIds) = await _idGenerator.GenerateOrderWithItemsAsync(
+                effectiveItemCount, 
+                effectiveSource, 
+                effectivePaymentMode, 
+                effectiveSourceHandle, 
+                instagramUserId, 
+                effectiveCustomerId);
+        }
+        else
+        {
+            orderId = await _idGenerator.GenerateOrderIdAsync(
+                effectiveSource, 
+                effectivePaymentMode, 
+                effectiveSourceHandle, 
+                instagramUserId, 
+                effectiveCustomerId);
+            itemIds = Array.Empty<string>();
+        }
+
+        if (body != null)
+        {
+            body.Source ??= effectiveSource;
+            body.PaymentMode ??= effectivePaymentMode;
+            body.SourceHandle ??= effectiveSourceHandle;
+            if (string.IsNullOrWhiteSpace(body.CustomerPhone) && effectiveSource == OrderSource.WhatsApp)
+            {
+                body.CustomerPhone = effectiveSourceHandle;
+            }
+
+            await _idGenerator.UpdateOrderDetailsAsync(orderId, body);
+        }
+
+        return Ok(new { id = orderId, orderId, itemIds });
     }
 
     /// <summary>

@@ -49,7 +49,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   // Mapped mock/real state
   const [createdAt, setCreatedAt] = useState<string | Date>(new Date());
-  const [source, setSource] = useState<OrderSource>('whatsapp');
+  const [source, setSource] = useState<OrderSource>(null);
   const [sourceContact, setSourceContact] = useState<string>('');
   const [paymentType, setPaymentType] = useState<PaymentType>('cod');
   const [products, setProducts] = useState<OrderItem[]>([]);
@@ -100,45 +100,60 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         setOrderData(res);
         setCreatedAt(res.timestamp ? new Date(res.timestamp) : new Date());
 
-        const src = (res.source || '').toLowerCase();
-        if (src.includes('insta')) setSource('instagram');
-        else if (src.includes('whats')) setSource('whatsapp');
-        else setSource(null);
+        const srcLower = String(res.source || '').toLowerCase();
+        if (srcLower === 'instagram') {
+          setSource('instagram');
+        } else if (srcLower === 'whatsapp') {
+          setSource('whatsapp');
+        } else {
+          setSource(null);
+        }
 
-        setSourceContact(res.sourceHandle || res.customerPhone || '');
-        setPaymentType((res.paymentMode || 'COD').toLowerCase() === 'prepaid' ? 'prepaid' : 'cod');
+        const resolvedContact =
+          srcLower === 'whatsapp'
+            ? (res.customerPhone || res.sourceHandle || '')
+            : srcLower === 'instagram'
+            ? (res.sourceHandle || res.instagramHandle || '')
+            : (res.sourceHandle || res.customerPhone || '');
+        setSourceContact(resolvedContact);
+        setPaymentType(res.paymentMode === 'Prepaid' ? 'prepaid' : 'cod');
 
-        // Products mapping
+        // Products mapping - strict canonical binding
         if (res.items && res.items.length > 0) {
           setProducts(
-            res.items.map((it: any, idx: number) => ({
-              id: it.id || `item-${idx}`,
-              productId: it.sku || `PRD-${idx + 1000}`,
-              title: it.productTitle || it.title || `Item #${idx + 1}`,
-              size: it.size || 'Free Size',
-              quantity: it.quantity || 1,
-              costPerPiece: it.unitPrice || 0,
-              codChargePerPiece: 0,
-              amountPaid: 0,
-              vendor: it.vendor || 'In-House',
-              imageColor: '#f0e6d3',
-            }))
+            res.items.map((it: any, idx: number) => {
+              let parsedMeta: any = {};
+              if (it.comments) {
+                try {
+                  parsedMeta = JSON.parse(it.comments);
+                } catch {
+                  if (typeof it.comments === 'string' && it.comments.startsWith('http')) {
+                    parsedMeta = { catalogImageUrl: it.comments, image: it.comments };
+                  }
+                }
+              }
+              const photo = parsedMeta.photoUri || parsedMeta.image || parsedMeta.catalogImageUrl;
+              const catalogImg = parsedMeta.catalogImageUrl || (it.productId ? parsedMeta.image : undefined);
+
+              return {
+                id: it.id ? String(it.id) : `item-${idx}`,
+                productId: it.productId ?? '',
+                title: it.productTitle ?? '',
+                size: 'Free Size',
+                quantity: it.quantity ?? 1,
+                costPerPiece: it.unitPrice ?? 0,
+                codChargePerPiece: 0,
+                amountPaid: 0,
+                vendor: it.vendorId ?? 'In-House',
+                imageColor: '#f0e6d3',
+                photoUri: parsedMeta.photoUri,
+                catalogImageUrl: catalogImg,
+                image: photo,
+              };
+            })
           );
         } else {
-          setProducts([
-            {
-              id: 'item-1',
-              productId: 'PRD-101',
-              title: 'Handloom Saree',
-              size: 'Free Size',
-              quantity: 1,
-              costPerPiece: res.totalAmount || 1499,
-              codChargePerPiece: 0,
-              amountPaid: 0,
-              vendor: 'In-House',
-              imageColor: '#f0e6d3',
-            },
-          ]);
+          setProducts([]);
         }
 
         // Address mapping
@@ -198,21 +213,61 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     });
   };
 
+  const persistOrderItems = async (itemsList: OrderItem[]) => {
+    try {
+      const updatePayload: Partial<OrderUpdateRequest> = {
+        source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
+        sourceHandle: sourceContact || undefined,
+        paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
+        customerName: address?.name,
+        customerPhone: address?.phone,
+        customerAddress: address?.address,
+        shippingStreet: address?.address,
+        shippingPincode: address?.pincode,
+        shippingCity: address?.city,
+        shippingState: address?.state,
+        transactionId: transactionId || undefined,
+        items: itemsList.map((p) => {
+          const meta = (p.catalogImageUrl || p.photoUri || p.image)
+            ? JSON.stringify({
+                catalogImageUrl: p.catalogImageUrl,
+                photoUri: p.photoUri,
+                image: p.image || p.catalogImageUrl || p.photoUri,
+              })
+            : undefined;
+
+          return {
+            productId: p.productId,
+            productTitle: p.title,
+            quantity: p.quantity,
+            unitPrice: p.costPerPiece,
+            subtotal: p.costPerPiece * p.quantity,
+            comments: meta,
+          };
+        }),
+      };
+
+      await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(orderId), updatePayload);
+    } catch (err: any) {
+      console.error('Failed to persist order items:', err);
+      Alert.alert('Save Warning', 'Could not persist item changes to server. Tap SAVE to retry.');
+    }
+  };
+
   const handleAddProduct = () => {
-    const newItem: OrderItem = {
+    const draftItem: OrderItem = {
       id: `item-${Date.now()}`,
-      productId: `PRD-${Math.floor(10000 + Math.random() * 90000)}`,
-      title: 'New Line Item',
+      productId: '',
+      title: '',
       size: 'Free Size',
       quantity: 1,
-      costPerPiece: 999,
+      costPerPiece: 0,
       codChargePerPiece: paymentType === 'cod' ? 50 : 0,
       amountPaid: 0,
-      vendor: 'Unassigned',
+      vendor: 'In-House',
       imageColor: '#f0e6d3',
     };
-    setProducts((prev) => [...prev, newItem]);
-    setActiveItem(newItem);
+    setActiveItem(draftItem);
     setProductSheetOpen(true);
   };
 
@@ -221,15 +276,24 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     setProductSheetOpen(true);
   };
 
-  const handleSaveItem = (updated: OrderItem) => {
-    setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  const handleSaveItem = async (updated: OrderItem) => {
+    const existingIndex = products.findIndex((p) => p.id === updated.id);
+    let nextProducts: OrderItem[];
+    if (existingIndex >= 0) {
+      nextProducts = products.map((p) => (p.id === updated.id ? updated : p));
+    } else {
+      nextProducts = [...products, updated];
+    }
+    setProducts(nextProducts);
     setProductSheetOpen(false);
+    setActiveItem(null);
+    await persistOrderItems(nextProducts);
   };
 
-  const handleUpdateItem = (id: string, updates: Partial<OrderItem>) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    );
+  const handleUpdateItem = async (id: string, updates: Partial<OrderItem>) => {
+    const updated = products.map((p) => (p.id === id ? { ...p, ...updates } : p));
+    setProducts(updated);
+    await persistOrderItems(updated);
   };
 
   const handleOpenPicker = (item: OrderItem, type: 'size' | 'qty') => {
@@ -241,16 +305,16 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     });
   };
 
-  const handleSelectPickerOption = (value: string) => {
-    setProducts((prev) =>
-      prev.map((item) => {
-        if (item.id !== pickerState.itemId) return item;
-        if (pickerState.type === 'size') return { ...item, size: value };
-        if (pickerState.type === 'qty') return { ...item, quantity: parseInt(value, 10) || 1 };
-        return item;
-      })
-    );
+  const handleSelectPickerOption = async (value: string) => {
+    const updated = products.map((item) => {
+      if (item.id !== pickerState.itemId) return item;
+      if (pickerState.type === 'size') return { ...item, size: value };
+      if (pickerState.type === 'qty') return { ...item, quantity: parseInt(value, 10) || 1 };
+      return item;
+    });
+    setProducts(updated);
     setPickerState((prev) => ({ ...prev, visible: false }));
+    await persistOrderItems(updated);
   };
 
   const handleUploadReceipt = async () => {
@@ -276,6 +340,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     setSaving(true);
     try {
       const updatePayload: Partial<OrderUpdateRequest> = {
+        source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
+        sourceHandle: sourceContact || undefined,
         paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
         customerName: address?.name,
         customerPhone: address?.phone,
@@ -285,14 +351,24 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         shippingCity: address?.city,
         shippingState: address?.state,
         transactionId: transactionId || undefined,
-        items: products.map((p) => ({
-          productTitle: p.title,
-          sku: p.productId,
-          size: p.size,
-          quantity: p.quantity,
-          unitPrice: p.costPerPiece,
-          totalPrice: p.costPerPiece * p.quantity,
-        })),
+        items: products.map((p) => {
+          const meta = (p.catalogImageUrl || p.photoUri || p.image)
+            ? JSON.stringify({
+                catalogImageUrl: p.catalogImageUrl,
+                photoUri: p.photoUri,
+                image: p.image || p.catalogImageUrl || p.photoUri,
+              })
+            : undefined;
+
+          return {
+            productId: p.productId,
+            productTitle: p.title,
+            quantity: p.quantity,
+            unitPrice: p.costPerPiece,
+            subtotal: p.costPerPiece * p.quantity,
+            comments: meta,
+          };
+        }),
       };
 
       await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(orderId), updatePayload);
@@ -318,12 +394,12 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   // Remove single line item with confirmation prompt
   const handleRequestRemoveProduct = (id: string) => {
-    const item = products.find((p) => p.id === id);
+    const item = products.find((p) => String(p.id) === String(id));
     const itemTitle = item ? `"${item.title}"` : 'this line item';
     setConfirmDialog({
       visible: true,
       type: 'single',
-      targetId: id,
+      targetId: String(id),
       title: 'Remove Item?',
       message: `Are you sure you want to remove ${itemTitle} from this order? This action cannot be undone.`,
       confirmLabel: 'Remove',
@@ -332,13 +408,18 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   const handleConfirmAction = async () => {
     if (confirmDialog.type === 'batch') {
-      setProducts((prev) => prev.filter((p) => !selectedItemIds.includes(p.id)));
+      const remaining = products.filter((p) => !selectedItemIds.map(String).includes(String(p.id)));
+      setProducts(remaining);
       setSelectedItemIds([]);
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
+      await persistOrderItems(remaining);
     } else if (confirmDialog.type === 'single' && confirmDialog.targetId) {
-      setProducts((prev) => prev.filter((p) => p.id !== confirmDialog.targetId));
-      setSelectedItemIds((prev) => prev.filter((x) => x !== confirmDialog.targetId));
+      const targetIdStr = String(confirmDialog.targetId);
+      const remaining = products.filter((p) => String(p.id) !== targetIdStr);
+      setProducts(remaining);
+      setSelectedItemIds((prev) => prev.filter((x) => String(x) !== targetIdStr));
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
+      await persistOrderItems(remaining);
     } else if (confirmDialog.type === 'deleteOrder') {
       setConfirmDialog((prev) => ({ ...prev, visible: false }));
       try {
@@ -471,6 +552,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         item={activeItem}
         isCod={paymentType === 'cod'}
         onSaveItem={handleSaveItem}
+        onDeleteItem={(item) => handleRequestRemoveProduct(String(item.id))}
         onClose={() => setProductSheetOpen(false)}
       />
 

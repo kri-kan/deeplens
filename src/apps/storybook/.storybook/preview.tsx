@@ -17,8 +17,9 @@ const VALID_CAMPAIGNS: CampaignName[] = [
 
 import { FormFactorShell } from "../src/components/templates/FormFactorShell";
 
-function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; tamaguiTheme: string; context: any }) {
-  const { tokens } = useTheme();
+function ThemedStoryContainer({ Story, context }: { Story: any; context: any }) {
+  const { tokens, colorScheme, campaign } = useTheme();
+  const activeTamaguiTheme = `${campaign}_${colorScheme}`;
 
   // Keep browser address bar in sync with currently active story for seamless refreshes & sharing
   React.useEffect(() => {
@@ -34,7 +35,7 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
     }
   }, [context?.id]);
 
-  // Standard architectural practice: starting from Organism level, present every story in 3 form factor shells
+  // Present stories inside FormFactorShell with Dark Mode & Campaign switching
   const storyTitle = context?.title || "";
   const isOrganismOrAbove =
     storyTitle.startsWith("Organisms") ||
@@ -44,7 +45,6 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
     context?.parameters?.formFactorShell === true;
 
   const shouldWrapWithShell =
-    isOrganismOrAbove &&
     context?.parameters?.formFactorShell !== false &&
     context?.parameters?.formFactorShell?.disabled !== true;
 
@@ -55,13 +55,15 @@ function ThemedStoryContainer({ Story, tamaguiTheme, context }: { Story: any; ta
       defaultFactor = "desktop";
     } else if (storyName.includes("tablet") || storyName.includes("ipad")) {
       defaultFactor = "tablet";
-    } else {
+    } else if (isOrganismOrAbove) {
       defaultFactor = "mobile";
+    } else {
+      defaultFactor = "desktop";
     }
   }
 
   return (
-    <TamaguiTheme name={tamaguiTheme}>
+    <TamaguiTheme name={activeTamaguiTheme}>
       {shouldWrapWithShell ? (
         <FormFactorShell
           title={context?.name || context?.story}
@@ -114,14 +116,13 @@ export const decorators = [
 
     return (
       <SafeAreaProvider>
-        <TamaguiProvider key={tamaguiTheme} config={tamaguiConfig} defaultTheme={tamaguiTheme}>
+        <TamaguiProvider config={tamaguiConfig} defaultTheme={tamaguiTheme}>
           <ThemeProvider
-            key={tamaguiTheme}
             initialCampaign={campaign}
             initialColorScheme={colorScheme}
             autoSchedule={false}
           >
-            <ThemedStoryContainer Story={Story} tamaguiTheme={tamaguiTheme} context={context} />
+            <ThemedStoryContainer Story={Story} context={context} />
           </ThemeProvider>
         </TamaguiProvider>
       </SafeAreaProvider>

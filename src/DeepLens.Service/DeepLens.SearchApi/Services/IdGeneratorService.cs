@@ -80,10 +80,18 @@ public class IdGeneratorService : IIdGeneratorService
     {
         int? sourceId = details.Source.HasValue && details.Source.Value != OrderSource.None ? (int)details.Source.Value : null;
         int? paymentModeId = details.PaymentMode.HasValue && details.PaymentMode.Value != PaymentMode.None ? (int)details.PaymentMode.Value : null;
+        string? phone = details.CustomerPhone ?? (details.Source == OrderSource.WhatsApp ? details.SourceHandle : null);
+
+        decimal? calculatedTotal = details.TotalAmount;
+        if (!calculatedTotal.HasValue && details.Items != null && details.Items.Count > 0)
+        {
+            var itemsSum = details.Items.Sum(i => i.Subtotal > 0 ? i.Subtotal : (i.UnitPrice * i.Quantity));
+            calculatedTotal = itemsSum + (details.ShippingCharges ?? 0);
+        }
 
         var result = await _orderRepository.UpdateDetailsAsync(
             orderId, 
-            details.CustomerPhone, 
+            phone, 
             details.CustomerAddress, 
             sourceId, 
             details.SourceHandle, 
@@ -93,7 +101,7 @@ public class IdGeneratorService : IIdGeneratorService
             details.CustomerName,
             details.AdvancePaid,
             details.CodBalance,
-            details.TotalAmount,
+            calculatedTotal,
             details.ShippingCharges,
             details.ShippingStreet,
             details.ShippingCity,
@@ -109,14 +117,22 @@ public class IdGeneratorService : IIdGeneratorService
             int index = 1;
             foreach (var item in details.Items)
             {
+                var prodId = item.ProductId;
+                var productTitle = item.ProductTitle;
+                var comments = item.Comments;
+                var unitPrice = item.UnitPrice;
+                var qty = item.Quantity > 0 ? item.Quantity : 1;
+                var subtotal = item.Subtotal > 0 ? item.Subtotal : (unitPrice * qty);
+
                 await _orderRepository.AddOrderItemAsync(
                     internalId, 
                     index++, 
-                    item.ProductId, 
-                    item.Comments,
-                    item.Quantity > 0 ? item.Quantity : 1,
-                    item.UnitPrice,
-                    item.Subtotal > 0 ? item.Subtotal : (item.UnitPrice * (item.Quantity > 0 ? item.Quantity : 1)),
+                    prodId, 
+                    productTitle,
+                    comments,
+                    qty,
+                    unitPrice,
+                    subtotal,
                     item.VendorId,
                     item.SourceType);
             }

@@ -69,7 +69,12 @@ export type AdminOrderFormPageProps = {
   /** Callbacks — no-ops in Storybook */
   onAddImage?: () => void;
   onSaveAddress?: (data: AddressData) => void;
-  onSubmitOrder?: () => void;
+  onSubmitOrder?: (data?: {
+    source: OrderSource;
+    paymentType: PaymentType;
+    sourceInput: string;
+    address: AddressData | null;
+  }) => void;
   onNavigateBack?: () => void;
 };
 
@@ -1455,7 +1460,7 @@ export function AdminOrderFormPage({
       {/* Sticky Submit Bar */}
       <SubmitBar
         onSubmit={() => {
-          if (onSubmitOrder) onSubmitOrder();
+          if (onSubmitOrder) onSubmitOrder({ source, paymentType, sourceInput, address });
           else alert('Order created!');
         }}
       />

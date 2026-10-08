@@ -35,7 +35,7 @@ export default function TabLayout() {
           const routeName = props.state.routes[props.state.index]?.name;
           if (routeName === 'index') {
             return (
-              <Animated.View style={tabBarAnimatedStyle}>
+              <Animated.View style={[tabBarAnimatedStyle, { overflow: 'visible' }]}>
                 <CustomTabBar {...props} />
               </Animated.View>
             );

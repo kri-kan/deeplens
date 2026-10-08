@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
-import { Pressable, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  Pressable,
+  Platform,
+  Image,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuImage, LuBuilding2 } from 'react-icons/lu';
+import {
+  LuImage,
+  LuBuilding2,
+  LuTrash2,
+  LuCamera,
+  LuArrowLeft,
+  LuChevronDown,
+} from 'react-icons/lu';
 import { useTheme } from '../../../theme';
-import { BottomSheet } from '../../atoms/BottomSheet';
 import { DropdownField } from '../../atoms/DropdownField';
 import { CompactField } from '../../atoms/CompactField';
+import { ConfirmDialog } from '../../molecules/ConfirmDialog';
 import { QuickPickerSheet } from '../../molecules/QuickPickerSheet';
+import { VendorPickerSheet } from '../../molecules/VendorPickerSheet';
+import {
+  CatalogMediaPickerModal,
+  CatalogMediaSelection,
+  resolveProductTitleFromSku,
+} from '../../molecules/CatalogMediaPickerModal';
 import { OrderItem } from '../ProductListSection';
 
 export interface ProductEditSheetProps {
@@ -14,6 +35,7 @@ export interface ProductEditSheetProps {
   item: OrderItem | null;
   isCod?: boolean;
   onSaveItem: (item: OrderItem) => void;
+  onDeleteItem?: (item: OrderItem) => void;
   onClose: () => void;
 }
 
@@ -22,10 +44,18 @@ export function ProductEditSheet({
   item,
   isCod = false,
   onSaveItem,
+  onDeleteItem,
   onClose,
 }: ProductEditSheetProps) {
   const { tokens } = useTheme();
+  const insets = useSafeAreaInsets();
   const [form, setForm] = useState<OrderItem | null>(item);
+  const [linkedCatalogSku, setLinkedCatalogSku] = useState<string>(
+    item?.catalogImageUrl ? (item.productId?.trim() || '') : ''
+  );
+  const [catalogPickerVisible, setCatalogPickerVisible] = useState(false);
+  const [vendorPickerVisible, setVendorPickerVisible] = useState(false);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
 
   // Internal Quick Picker for Size & Quantity dropdowns
   const [sheetPickerState, setSheetPickerState] = useState<{
@@ -38,14 +68,35 @@ export function ProductEditSheet({
     currentValue: '',
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     setForm(item);
+    setLinkedCatalogSku(item?.catalogImageUrl ? (item.productId?.trim() || '') : '');
   }, [item]);
 
   if (!visible || !form) return null;
 
   const updateField = (field: keyof OrderItem, val: any) => {
     setForm((prev) => (prev ? { ...prev, [field]: val } : prev));
+  };
+
+  const handlePickPhoto = () => {
+    if (typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = (e: any) => {
+        const file = e.target?.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const result = event.target?.result as string;
+            setForm((prev) => (prev ? { ...prev, photoUri: result, image: result } : prev));
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    }
   };
 
   const handleOpenSheetPicker = (type: 'size' | 'qty') => {
@@ -64,269 +115,556 @@ export function ProductEditSheet({
     }
   };
 
+  const handleSelectCatalogMedia = (selection: CatalogMediaSelection) => {
+    const newSku = (selection.product.productCode || form?.productId || '').trim();
+    setLinkedCatalogSku(newSku);
+
+    setForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        productId: newSku || prev.productId,
+        title: prev.title ? prev.title : selection.product.title,
+        costPerPiece:
+          prev.costPerPiece && prev.costPerPiece > 0
+            ? prev.costPerPiece
+            : (selection.product.vendorPrice || prev.costPerPiece),
+        catalogImageUrl: selection.imageUrl,
+        image: selection.imageUrl,
+        catalogImageColor: selection.mediaItem.color || prev.catalogImageColor,
+        selectedMediaId: selection.mediaItem.id,
+      };
+    });
+  };
+
+  const handleSkuBlur = async () => {
+    if (!form) return;
+    if (!form.title || !form.title.trim()) {
+      try {
+        const resolvedTitle = await resolveProductTitleFromSku(form.productId);
+        if (resolvedTitle) {
+          updateField('title', resolvedTitle);
+        }
+      } catch (err) {
+        console.warn('Failed to resolve product title from sku:', err);
+      }
+    }
+  };
+
+  const handleSave = () => {
+    if (!form) return;
+    const currentSku = (form.productId || '').trim();
+
+    // SKU Unlink Warning check
+    if (Boolean(form.catalogImageUrl) && Boolean(linkedCatalogSku) && currentSku !== linkedCatalogSku) {
+      setShowUnlinkConfirm(true);
+      return;
+    }
+
+    onSaveItem(form);
+    onClose();
+  };
+
+  const handleConfirmUnlinkAndSave = () => {
+    if (!form) return;
+    setShowUnlinkConfirm(false);
+
+    const unlinkedItem: OrderItem = {
+      ...form,
+      catalogImageUrl: undefined,
+      catalogImageColor: undefined,
+      selectedMediaId: undefined,
+      image: form.photoUri || (form.image === form.catalogImageUrl ? undefined : form.image),
+    };
+
+    setLinkedCatalogSku('');
+    onSaveItem(unlinkedItem);
+    onClose();
+  };
+
   const codCharge = isCod ? (form.codChargePerPiece ?? 50) : 0;
   const grossTotal = (form.quantity || 1) * ((form.costPerPiece || 0) + codCharge);
   const advancePaid = isCod ? (form.amountPaid || 0) : 0;
   const calculatedTotal = Math.max(0, grossTotal - advancePaid);
 
+  const screenTitle = (item?.title || item?.productId || item?.id) ? 'Edit Line Item' : 'New Line Item';
+
   return (
     <>
-      <BottomSheet
+      <Modal
         visible={visible}
-        onClose={onClose}
-        title="Edit Item"
-        zIndex={200}
-        paddingHorizontal={16}
-        paddingBottom={32}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={onClose}
+        statusBarTranslucent
       >
-        {/* ── Top Image Tiles (Compact 80px Height) ── */}
-        <XStack gap={10} paddingBottom={10}>
-          {/* Tile 1: Uploaded Photo */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Upload photo for this product"
-            style={{ flex: 1 }}
-            onPress={() => alert('Photo upload dialog placeholder')}
-          >
-            <YStack
-              height={80}
-              borderRadius={tokens.radius.sm}
-              backgroundColor={form.imageColor || '#f5ebe0'}
-              alignItems="center"
-              justifyContent="flex-end"
-              overflow="hidden"
-              borderWidth={1}
-              borderColor={tokens.border}
-            >
-              <YStack
-                width="100%"
-                paddingVertical={4}
-                backgroundColor="rgba(0,0,0,0.65)"
-                alignItems="center"
-              >
-                <Text fontSize={10} fontWeight="700" color="#fff">
-                  Uploaded Photo
-                </Text>
-              </YStack>
-            </YStack>
-          </Pressable>
-
-          {/* Tile 2: Selected from SKU Gallery */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Select photo from SKU gallery"
-            style={{ flex: 1 }}
-            onPress={() => alert('Opening SKU Gallery selector placeholder')}
-          >
-            <YStack
-              height={80}
-              borderRadius={tokens.radius.sm}
-              backgroundColor={form.productId ? '#c9ada7' : tokens.surfaceRaised}
-              alignItems="center"
-              justifyContent="center"
-              overflow="hidden"
-              borderWidth={1.5}
-              borderColor={form.productId ? tokens.accent : tokens.border}
-              borderStyle={form.productId ? 'solid' : 'dashed'}
-            >
-              {form.productId ? (
-                <YStack width="100%" height="100%" justifyContent="flex-end" alignItems="center">
-                  <YStack
-                    width="100%"
-                    paddingVertical={4}
-                    backgroundColor="rgba(0,0,0,0.65)"
-                    alignItems="center"
-                  >
-                    <Text fontSize={10} fontWeight="700" color="#fff">
-                      {form.productId}
-                    </Text>
-                  </YStack>
-                </YStack>
-              ) : (
-                <YStack alignItems="center" gap={2}>
-                  <LuImage size={18} color={tokens.accent} />
-                  <Text fontSize={10} fontWeight="700" color={tokens.accent}>
-                    SKU Gallery
-                  </Text>
-                  <Text fontSize={9} color={tokens.textMuted} textAlign="center">
-                    {form.productId ? 'Linked to SKU' : 'Pick from catalog'}
-                  </Text>
-                </YStack>
-              )}
-            </YStack>
-          </Pressable>
-        </XStack>
-
-        {/* Form Fields — compact underline style */}
-        <YStack gap={6}>
-          {/* Row 1: Product Title / Name */}
-          <CompactField
-            label="Product Title / Description"
-            value={form.title}
-            onChange={(v) => updateField('title', v)}
-            placeholder="e.g. Pure Zari Banarasi Saree"
-          />
-
-          {/* Row 2: Product ID / SKU, Size Dropdown & Quantity Dropdown (3 Columns) */}
-          <XStack gap={10}>
-            <YStack flex={1.2}>
-              <CompactField
-                label="Product ID / SKU"
-                value={form.productId}
-                onChange={(v) => updateField('productId', v)}
-                placeholder="PRD-84920"
-              />
-            </YStack>
-            <YStack flex={1}>
-              <DropdownField
-                label="Size"
-                value={form.size || 'Free Size'}
-                onPress={() => handleOpenSheetPicker('size')}
-              />
-            </YStack>
-            <YStack flex={0.7}>
-              <DropdownField
-                label="Qty"
-                value={String(form.quantity || 1)}
-                onPress={() => handleOpenSheetPicker('qty')}
-              />
-            </YStack>
-          </XStack>
-
-          {/* Row 3: Price / Pc, COD Charges / Pc & Advance Paid (3 Columns) */}
-          <XStack gap={10}>
-            {/* Price / Pc (Max 5 digits, e.g. 99999) */}
-            <YStack flex={1}>
-              <CompactField
-                label="Price / Pc (₹)"
-                value={String(form.costPerPiece)}
-                onChange={(v) => {
-                  const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
-                  updateField('costPerPiece', digits ? parseInt(digits, 10) : 0);
-                }}
-                placeholder="1299"
-                keyboardType="numeric"
-                maxLength={5}
-              />
-            </YStack>
-
-            {/* COD Charges / Pc (if COD, Max 4 digits, e.g. 9999) */}
-            {isCod && (
-              <YStack flex={0.9}>
-                <CompactField
-                  label="COD / Pc (₹)"
-                  value={String(form.codChargePerPiece ?? 50)}
-                  onChange={(v) => {
-                    const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
-                    updateField('codChargePerPiece', digits ? parseInt(digits, 10) : 0);
-                  }}
-                  placeholder="50"
-                  keyboardType="numeric"
-                  maxLength={4}
-                />
-              </YStack>
-            )}
-
-            {/* Advance Paid / Amount Paid (Max 4 digits, e.g. 9999) */}
-            <YStack flex={isCod ? 1.1 : 1}>
-              <CompactField
-                label={isCod ? 'Advance Paid (₹)' : 'Amount Paid (₹)'}
-                value={String(form.amountPaid ?? 0)}
-                onChange={(v) => {
-                  const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
-                  updateField('amountPaid', digits ? parseInt(digits, 10) : 0);
-                }}
-                placeholder="0"
-                keyboardType="numeric"
-                maxLength={4}
-              />
-            </YStack>
-          </XStack>
-
-          {/* Row 4: Dedicated Full-Width Row for Vendor Assignment */}
+        <YStack flex={1} backgroundColor={tokens.background}>
+          {/* ── Top Navigation Bar ── */}
           <YStack
+            paddingTop={Platform.OS === 'android' ? Math.max(insets.top, 12) : insets.top}
+            backgroundColor={tokens.surface}
             borderBottomWidth={1}
             borderBottomColor={tokens.border}
-            paddingVertical={3}
-            gap={1}
           >
-            <Text fontSize={9} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.4}>
-              Vendor Assignment
-            </Text>
-            <XStack alignItems="center" gap={6} height={24}>
-              <LuBuilding2 size={13} color={tokens.textMuted} />
-              <TextInput
-                accessibilityLabel="Vendor Assignment"
-                value={form.vendor ?? ''}
-                onChangeText={(v) => updateField('vendor', v)}
-                placeholder="e.g. Varanasi Weavers Ltd, Surat Handlooms Factory #2"
-                placeholderTextColor={tokens.textMuted}
-                style={{
-                  flex: 1,
-                  fontSize: 13,
-                  fontWeight: '700',
-                  color: tokens.text,
-                  height: 22,
-                  paddingVertical: 0,
-                  paddingHorizontal: 0,
-                  outlineStyle: 'none',
-                } as any}
-              />
+            <XStack
+              height={52}
+              alignItems="center"
+              justifyContent="space-between"
+              paddingHorizontal={16}
+            >
+              {/* Back Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                accessibilityHint="Discard changes and go back"
+                onPress={onClose}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  minWidth: 70,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <LuArrowLeft size={20} color={tokens.text} />
+                <Text fontSize={15} fontWeight="600" color={tokens.text}>
+                  Back
+                </Text>
+              </Pressable>
+
+              {/* Screen Title */}
+              <Text
+                fontSize={16}
+                fontWeight="700"
+                color={tokens.text}
+                textAlign="center"
+                numberOfLines={1}
+                flex={1}
+              >
+                {screenTitle}
+              </Text>
+
+              {/* Top Save Button */}
+              <XStack minWidth={70} justifyContent="flex-end">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Save line item changes"
+                  onPress={handleSave}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    borderRadius: tokens.radius.sm,
+                    backgroundColor: tokens.accent,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <Text fontSize={13} fontWeight="700" color={tokens.accentForeground}>
+                    Save
+                  </Text>
+                </Pressable>
+              </XStack>
             </XStack>
           </YStack>
 
-          {/* Summary pill */}
-          <XStack
-            backgroundColor={tokens.surfaceRaised}
-            borderRadius={tokens.radius.sm}
-            paddingHorizontal={12}
-            paddingVertical={8}
-            justifyContent="space-between"
-            alignItems="center"
-            marginTop={4}
+          {/* ── Scrollable Form Body ── */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
           >
-            <Text fontSize={12} color={tokens.textMuted}>
-              Line Total ({form.quantity || 1} × ₹{(form.costPerPiece || 0) + codCharge}{advancePaid > 0 ? ` - ₹${advancePaid}` : ''})
-            </Text>
-            <Text fontSize={15} fontWeight="800" color={tokens.text}>
-              ₹{calculatedTotal.toLocaleString('en-IN')}
-            </Text>
-          </XStack>
-
-          {/* Action button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Save line item changes"
-            onPress={() => {
-              onSaveItem(form);
-              onClose();
-            }}
-            style={{ marginTop: 6 }}
-          >
-            <YStack
-              backgroundColor={tokens.accent}
-              paddingVertical={12}
-              borderRadius={tokens.radius.sm}
-              alignItems="center"
-              justifyContent="center"
-              hoverStyle={{ opacity: 0.92 }}
-              pressStyle={{ scale: 0.98 }}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 16,
+                paddingBottom: 24,
+                gap: 16,
+              }}
+              keyboardShouldPersistTaps="handled"
             >
-              <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.4}>
-                SAVE ITEM
-              </Text>
-            </YStack>
-          </Pressable>
-        </YStack>
-      </BottomSheet>
+              {/* ── Top Image Tiles (Square Containers) ── */}
+              <XStack gap={10}>
+                {/* Tile 1: Uploaded Photo */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Upload photo for this product"
+                  style={{ flex: 1 }}
+                  onPress={handlePickPhoto}
+                >
+                  <YStack
+                    width="100%"
+                    aspectRatio={1}
+                    borderRadius={tokens.radius.sm}
+                    backgroundColor={form.imageColor || '#f5ebe0'}
+                    alignItems="center"
+                    justifyContent="center"
+                    overflow="hidden"
+                    borderWidth={1}
+                    borderColor={tokens.border}
+                    position="relative"
+                  >
+                    {(form.photoUri || form.image) ? (
+                      <Image
+                        source={{ uri: form.photoUri || form.image }}
+                        style={{ width: '100%', height: '100%', position: 'absolute' }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <YStack alignItems="center" justifyContent="center" gap={6} paddingBottom={14}>
+                        <LuCamera size={26} color={tokens.textMuted} />
+                        <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
+                          Tap to Choose
+                        </Text>
+                      </YStack>
+                    )}
 
-      {/* Nested QuickPickerSheet for Size / Quantity inside the Edit Sheet */}
+                    <YStack
+                      position="absolute"
+                      bottom={0}
+                      left={0}
+                      right={0}
+                      paddingVertical={6}
+                      backgroundColor="rgba(0,0,0,0.65)"
+                      alignItems="center"
+                      zIndex={3}
+                    >
+                      <Text fontSize={10} fontWeight="700" color="#fff">
+                        {(form.photoUri || form.image) ? 'Change Photo' : 'Uploaded Photo'}
+                      </Text>
+                    </YStack>
+                  </YStack>
+                </Pressable>
+
+                {/* Tile 2: Linked Product Image / Catalog PDP Media */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Select photo from Catalog PDP gallery"
+                  style={{ flex: 1 }}
+                  onPress={() => setCatalogPickerVisible(true)}
+                >
+                  <YStack
+                    width="100%"
+                    aspectRatio={1}
+                    borderRadius={tokens.radius.sm}
+                    backgroundColor={form.catalogImageUrl ? '#fff' : tokens.surfaceRaised}
+                    alignItems="center"
+                    justifyContent="center"
+                    overflow="hidden"
+                    borderWidth={1.5}
+                    borderColor={form.catalogImageUrl || form.productId ? tokens.accent : tokens.border}
+                    borderStyle={form.catalogImageUrl || form.productId ? 'solid' : 'dashed'}
+                    position="relative"
+                  >
+                    {form.catalogImageUrl ? (
+                      <>
+                        <Image
+                          source={{ uri: form.catalogImageUrl }}
+                          style={{ width: '100%', height: '100%', position: 'absolute' }}
+                          resizeMode="cover"
+                        />
+                        <YStack
+                          position="absolute"
+                          bottom={0}
+                          left={0}
+                          right={0}
+                          paddingVertical={6}
+                          backgroundColor="rgba(0,0,0,0.65)"
+                          alignItems="center"
+                          zIndex={3}
+                        >
+                          <Text fontSize={10} fontWeight="700" color="#fff">
+                            {form.productId || 'Catalog Image'}
+                          </Text>
+                        </YStack>
+                      </>
+                    ) : form.productId ? (
+                      <YStack width="100%" height="100%" justifyContent="center" alignItems="center" padding={6} gap={4}>
+                        <LuImage size={26} color={tokens.accent} />
+                        <Text fontSize={11} fontWeight="700" color={tokens.accent} textAlign="center" numberOfLines={1}>
+                          {form.productId}
+                        </Text>
+                        <Text fontSize={10} color={tokens.textMuted} textAlign="center">
+                          Tap to pick photo
+                        </Text>
+                      </YStack>
+                    ) : (
+                      <YStack alignItems="center" gap={4}>
+                        <LuImage size={26} color={tokens.accent} />
+                        <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                          Catalog PDP Media
+                        </Text>
+                        <Text fontSize={10} color={tokens.textMuted} textAlign="center">
+                          Pick from catalog
+                        </Text>
+                      </YStack>
+                    )}
+                  </YStack>
+                </Pressable>
+              </XStack>
+
+              {/* Form Fields — compact underline style */}
+              <YStack gap={10}>
+                {/* Row 1: Product Title / Name */}
+                <CompactField
+                  label="Product Title / Description"
+                  value={form.title}
+                  onChange={(v) => updateField('title', v)}
+                  placeholder="e.g. Pure Zari Banarasi Saree"
+                />
+
+                {/* Row 2: Product ID / SKU, Size Dropdown & Quantity Dropdown (3 Columns) */}
+                <XStack gap={10}>
+                  <YStack flex={1.2}>
+                    <CompactField
+                      label="Product ID / SKU"
+                      value={form.productId}
+                      onChange={(v) => updateField('productId', v)}
+                      onBlur={handleSkuBlur}
+                      onSubmitEditing={handleSkuBlur}
+                      placeholder="PRD-84920"
+                    />
+                  </YStack>
+                  <YStack flex={1}>
+                    <DropdownField
+                      label="Size"
+                      value={form.size || 'Free Size'}
+                      onPress={() => handleOpenSheetPicker('size')}
+                    />
+                  </YStack>
+                  <YStack flex={0.7}>
+                    <DropdownField
+                      label="Qty"
+                      value={String(form.quantity || 1)}
+                      onPress={() => handleOpenSheetPicker('qty')}
+                    />
+                  </YStack>
+                </XStack>
+
+                {/* Row 3: Pricing */}
+                {isCod ? (
+                  /* COD Order: 3 Columns (Price / Pc, COD Charges / Pc & Advance Paid) */
+                  <XStack gap={10}>
+                    <YStack flex={1}>
+                      <CompactField
+                        label="Price / Pc (₹)"
+                        value={String(form.costPerPiece)}
+                        onChange={(v) => {
+                          const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
+                          updateField('costPerPiece', digits ? parseInt(digits, 10) : 0);
+                        }}
+                        placeholder="1299"
+                        keyboardType="numeric"
+                        maxLength={5}
+                      />
+                    </YStack>
+
+                    <YStack flex={0.9}>
+                      <CompactField
+                        label="COD / Pc (₹)"
+                        value={String(form.codChargePerPiece ?? 50)}
+                        onChange={(v) => {
+                          const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
+                          updateField('codChargePerPiece', digits ? parseInt(digits, 10) : 0);
+                        }}
+                        placeholder="50"
+                        keyboardType="numeric"
+                        maxLength={4}
+                      />
+                    </YStack>
+
+                    <YStack flex={1.1}>
+                      <CompactField
+                        label="Advance Paid (₹)"
+                        value={String(form.amountPaid ?? 0)}
+                        onChange={(v) => {
+                          const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
+                          updateField('amountPaid', digits ? parseInt(digits, 10) : 0);
+                        }}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        maxLength={4}
+                      />
+                    </YStack>
+                  </XStack>
+                ) : (
+                  /* Prepaid Order: Price / Pc is half-width aligned to the right; left is empty spacer */
+                  <XStack gap={10}>
+                    <YStack flex={1} />
+                    <YStack flex={1}>
+                      <CompactField
+                        label="Price / Pc (₹)"
+                        value={String(form.costPerPiece)}
+                        onChange={(v) => {
+                          const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
+                          updateField('costPerPiece', digits ? parseInt(digits, 10) : 0);
+                        }}
+                        placeholder="1299"
+                        keyboardType="numeric"
+                        maxLength={5}
+                      />
+                    </YStack>
+                  </XStack>
+                )}
+
+                {/* Row 4: Dedicated Full-Width Interactive Dropdown for Vendor Assignment */}
+                <Pressable
+                  accessibilityRole="combobox"
+                  accessibilityLabel={`Vendor Assignment: ${form.vendor || 'Select Vendor'}`}
+                  accessibilityHint="Tap to choose vendor"
+                  onPress={() => setVendorPickerVisible(true)}
+                  hitSlop={4}
+                >
+                  <YStack
+                    borderBottomWidth={1}
+                    borderBottomColor={tokens.border}
+                    paddingVertical={3}
+                    gap={1}
+                  >
+                    <Text fontSize={9} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.4}>
+                      Vendor Assignment
+                    </Text>
+                    <XStack alignItems="center" justifyContent="space-between" height={24}>
+                      <XStack alignItems="center" gap={6} flex={1}>
+                        <LuBuilding2 size={13} color={tokens.textMuted} />
+                        <Text
+                          fontSize={13}
+                          fontWeight="700"
+                          color={form.vendor ? tokens.text : tokens.textMuted}
+                          numberOfLines={1}
+                        >
+                          {form.vendor || 'Select Vendor (e.g. Varanasi Weavers Ltd)'}
+                        </Text>
+                      </XStack>
+                      <LuChevronDown size={14} color={tokens.textMuted} />
+                    </XStack>
+                  </YStack>
+                </Pressable>
+
+                {/* Summary pill */}
+                <XStack
+                  backgroundColor={tokens.surfaceRaised}
+                  borderRadius={tokens.radius.sm}
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  justifyContent="space-between"
+                  alignItems="center"
+                  marginTop={6}
+                >
+                  <Text fontSize={12} color={tokens.textMuted}>
+                    Line Total ({form.quantity || 1} × ₹{(form.costPerPiece || 0) + codCharge}{advancePaid > 0 ? ` - ₹${advancePaid}` : ''})
+                  </Text>
+                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                    ₹{calculatedTotal.toLocaleString('en-IN')}
+                  </Text>
+                </XStack>
+              </YStack>
+            </ScrollView>
+
+            {/* ── Sticky Bottom Footer ── */}
+            <YStack
+              borderTopWidth={1}
+              borderTopColor={tokens.border}
+              backgroundColor={tokens.surface}
+              paddingHorizontal={16}
+              paddingTop={12}
+              paddingBottom={Math.max(insets.bottom, 12)}
+              shadowColor="#000"
+              shadowOpacity={0.08}
+              shadowRadius={8}
+              shadowOffset={{ width: 0, height: -3 }}
+            >
+              <XStack gap={10}>
+                {onDeleteItem && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete this item from order"
+                    onPress={() => {
+                      onDeleteItem(form);
+                      onClose();
+                    }}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      height: 46,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1,
+                      borderColor: tokens.error || '#EF4444',
+                      backgroundColor: tokens.errorSubtle || 'rgba(239, 68, 68, 0.12)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: pressed ? 0.75 : 1,
+                    })}
+                  >
+                    <XStack alignItems="center" gap={6}>
+                      <LuTrash2 size={16} color={tokens.error || '#EF4444'} />
+                      <Text fontSize={13} fontWeight="800" color={tokens.error || '#EF4444'} letterSpacing={0.3}>
+                        DELETE ITEM
+                      </Text>
+                    </XStack>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Save line item changes"
+                  onPress={handleSave}
+                  style={({ pressed }) => ({
+                    flex: onDeleteItem ? 1.3 : 1,
+                    height: 46,
+                    borderRadius: tokens.radius.sm,
+                    backgroundColor: tokens.accent,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.4}>
+                    SAVE ITEM
+                  </Text>
+                </Pressable>
+              </XStack>
+            </YStack>
+          </KeyboardAvoidingView>
+        </YStack>
+      </Modal>
+
+      {/* Nested QuickPickerSheet for Size / Quantity inside the Edit Screen */}
       <QuickPickerSheet
         visible={sheetPickerState.visible}
         type={sheetPickerState.type}
         selected={sheetPickerState.currentValue}
         onSelect={handleSelectSheetOption}
         onClose={() => setSheetPickerState((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Nested VendorPickerSheet for Vendor Assignment */}
+      <VendorPickerSheet
+        visible={vendorPickerVisible}
+        selectedVendor={form.vendor}
+        onSelect={(vendorName) => updateField('vendor', vendorName)}
+        onClose={() => setVendorPickerVisible(false)}
+      />
+
+      {/* Catalog PDP Media Picker Modal for Tile 2 */}
+      <CatalogMediaPickerModal
+        visible={catalogPickerVisible}
+        initialSku={form.productId}
+        onSelect={handleSelectCatalogMedia}
+        onClose={() => setCatalogPickerVisible(false)}
+      />
+
+      {/* SKU Unlink Confirmation Dialog */}
+      <ConfirmDialog
+        visible={showUnlinkConfirm}
+        title="Unlink Product Image?"
+        message={`The SKU was changed from '${linkedCatalogSku}' to '${form.productId}'. Saving will unlink the catalog product image as they are different now. Do you want to proceed?`}
+        confirmLabel="Proceed"
+        cancelLabel="Cancel"
+        intent="attention"
+        onConfirm={handleConfirmUnlinkAndSave}
+        onCancel={() => setShowUnlinkConfirm(false)}
       />
     </>
   );

@@ -88,10 +88,6 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
   }));
 
   const tabBarHeight = 60 + Math.max(12, insets.bottom);
-  // The FAB floats this many px above the dock's top edge (marginBottom in fabContainer)
-  const fabLift = 20;
-  // Vertical center of FAB from screen bottom (used to position FAB Portal)
-  const fabBottomEdge = Math.max(12, insets.bottom) + fabLift;
 
   return (
     <>
@@ -104,6 +100,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
             paddingBottom: Math.max(12, insets.bottom),
             height: tabBarHeight,
             position: 'relative',
+            overflow: 'visible',
           },
         ]}
         elevation={isMenuOpen ? 5 : 2}
@@ -163,11 +160,31 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
           const isFAB = route.name === 'new';
 
           if (isFAB) {
-            // Invisible placeholder — real FAB lives in the single Portal below
             return (
-              <View key={route.key} style={styles.tabItem} pointerEvents="none">
-                <View style={[styles.fabContainer, { opacity: 0 }]}>
-                  <View style={styles.fabButton} />
+              <View key={route.key} style={[styles.tabItem, { zIndex: 10 }]} pointerEvents="box-none">
+                <View style={styles.fabContainer}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={isMenuOpen ? 'Close order actions menu' : 'Open order actions menu'}
+                    onPress={handleToggleMenu}
+                    activeOpacity={0.88}
+                    style={[
+                      styles.fabButton,
+                      {
+                        backgroundColor: isDark
+                          ? isMenuOpen
+                            ? '#27272A'
+                            : '#3F3F46'
+                          : isMenuOpen
+                          ? '#18181B'
+                          : '#27272A',
+                      },
+                    ]}
+                  >
+                    <Animated.View style={fabAnimatedStyle}>
+                      <LuPlus size={26} color="#FFFFFF" strokeWidth={2.6} />
+                    </Animated.View>
+                  </TouchableOpacity>
                 </View>
               </View>
             );
@@ -214,14 +231,9 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
         })}
       </Surface>
 
-      {/* ─── Single Portal: overlay first (behind), FAB last (always on top) ───
-           Only rendered when inside (tabs) — prevents bleed onto stack screens.
-           In React Native, within one Portal the last rendered child paints
-           on top — no zIndex fighting between Portal instances. */}
-      {isInTabs && (
-      <Portal>
-        {/* Overlay — only rendered when menu is open */}
-        {portalVisible && (
+      {/* ─── Menu Portal: backdrop and speed-dial options rendered when open ─── */}
+      {isInTabs && portalVisible && (
+        <Portal>
           <Animated.View
             pointerEvents="box-none"
             style={[
@@ -235,7 +247,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
               overlayAnimatedStyle,
             ]}
           >
-            {/* Blurred backdrop — stops at dock top */}
+            {/* Blurred backdrop — stops above dock & FAB */}
             <Animated.View
               pointerEvents="none"
               style={{
@@ -243,7 +255,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
                 top: 0,
                 left: 0,
                 right: 0,
-                bottom: tabBarHeight,
+                bottom: tabBarHeight + 16,
                 backgroundColor: isDark
                   ? 'rgba(0, 0, 0, 0.70)'
                   : 'rgba(255, 255, 255, 0.82)',
@@ -264,7 +276,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
                 top: 0,
                 left: 0,
                 right: 0,
-                bottom: tabBarHeight,
+                bottom: tabBarHeight + 16,
               }}
             />
 
@@ -274,7 +286,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
               style={[
                 {
                   position: 'absolute',
-                  bottom: tabBarHeight + 16,
+                  bottom: tabBarHeight + 24,
                   left: 0,
                   right: 0,
                   alignItems: 'center',
@@ -330,43 +342,7 @@ export function CustomTabBar({ state, descriptors, navigation }: any) {
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
-        )}
-
-        {/* FAB — rendered LAST inside the same Portal so it always paints on top */}
-        <View
-          pointerEvents="box-none"
-          style={{
-            position: 'absolute',
-            bottom: fabBottomEdge,
-            left: 0,
-            right: 0,
-            alignItems: 'center',
-          }}
-        >
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={isMenuOpen ? 'Close order actions menu' : 'Open order actions menu'}
-            onPress={handleToggleMenu}
-            activeOpacity={0.88}
-            style={[
-              styles.fabButton,
-              {
-                backgroundColor: isDark
-                  ? isMenuOpen
-                    ? '#27272A'
-                    : '#3F3F46'
-                  : isMenuOpen
-                  ? '#18181B'
-                  : '#27272A',
-              },
-            ]}
-          >
-            <Animated.View style={fabAnimatedStyle}>
-              <LuPlus size={26} color="#FFFFFF" strokeWidth={2.6} />
-            </Animated.View>
-          </TouchableOpacity>
-        </View>
-      </Portal>
+        </Portal>
       )}
     </>
   );

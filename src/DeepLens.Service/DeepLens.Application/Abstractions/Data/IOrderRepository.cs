@@ -27,7 +27,7 @@ public interface IOrderRepository
         string? shippingPincode = null,
         bool? isServiceable = null);
     Task DeleteItemsAsync(int orderInternalId);
-    Task AddOrderItemAsync(int orderInternalId, int index, string? productId, string? comments, int quantity = 1, decimal unitPrice = 0, decimal subtotal = 0, Guid? vendorId = null, string? sourceType = "catalog");
+    Task AddOrderItemAsync(int orderInternalId, int index, string? productId, string? productTitle, string? comments, int quantity = 1, decimal unitPrice = 0, decimal subtotal = 0, Guid? vendorId = null, string? sourceType = "catalog");
     Task<int> GetInternalIdAsync(string orderId);
     Task<bool> SoftDeleteOrderAsync(string orderId);
 }

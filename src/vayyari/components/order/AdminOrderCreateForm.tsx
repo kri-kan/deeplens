@@ -38,6 +38,7 @@ import { useShareIntentContext } from '@/context/ShareIntentContext';
 import { searchApiClient } from '@/api/client';
 import { customersApi } from '@/api/customers';
 import { delhiveryService } from '@/services/delhiveryService';
+import { logisticsService } from '@/services/logistics.service';
 import { API_ROUTES } from '@/constants/api-routes';
 import {
   OrderSource as ApiOrderSource,
@@ -836,16 +837,7 @@ export const AdminOrderCreateForm: React.FC = () => {
     size: string;
     quantity: number;
     price: number;
-  }>>([
-    {
-      id: `item-${Date.now()}`,
-      title: 'Handloom Item',
-      sku: '',
-      size: 'Free Size',
-      quantity: 1,
-      price: 0,
-    },
-  ]);
+  }>>([]);
 
   // Financials
   const [shippingCharges, setShippingCharges] = useState(0);
@@ -867,9 +859,11 @@ export const AdminOrderCreateForm: React.FC = () => {
     }
   }, [sharedMedia]);
 
-  const handleSourceToggle = (tapped: 'whatsapp' | 'instagram') => {
-    setSource(source === tapped ? null : tapped);
-    setSourceInput('');
+  const handleSourceSelect = (selected: 'whatsapp' | 'instagram') => {
+    if (source !== selected) {
+      setSource(selected);
+      setSourceInput('');
+    }
   };
 
   const handlePickImage = async () => {
@@ -900,7 +894,7 @@ export const AdminOrderCreateForm: React.FC = () => {
       ...prev,
       {
         id: `item-${Date.now()}-${prev.length}`,
-        title: `Item #${prev.length + 1}`,
+        title: '',
         sku: '',
         size: 'Free Size',
         quantity: 1,
@@ -914,10 +908,6 @@ export const AdminOrderCreateForm: React.FC = () => {
   };
 
   const handleRemoveItem = (id: string) => {
-    if (items.length <= 1) {
-      Alert.alert('Cannot Remove', 'Order must have at least one item.');
-      return;
-    }
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -931,8 +921,8 @@ export const AdminOrderCreateForm: React.FC = () => {
       Alert.alert('Missing Contact', 'Please provide customer WhatsApp number or Instagram handle.');
       return;
     }
-    if (items.some((i) => !i.title.trim())) {
-      Alert.alert('Invalid Item', 'All items must have a title.');
+    if (items.length > 0 && items.some((i) => !i.title.trim())) {
+      Alert.alert('Invalid Item', 'All added items must have a title.');
       return;
     }
 
@@ -956,7 +946,7 @@ export const AdminOrderCreateForm: React.FC = () => {
         sourceHandle: sourceInput.trim(),
         paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
         customerName: address?.name || 'Customer',
-        customerPhone: address?.phone || sourceInput.trim(),
+        customerPhone: source === 'whatsapp' ? sourceInput.trim() : (address?.phone || sourceInput.trim()),
         customerAddress: address?.address,
         shippingStreet: address?.address,
         shippingPincode: address?.pincode,
@@ -967,27 +957,62 @@ export const AdminOrderCreateForm: React.FC = () => {
         shippingCharges,
         advancePaid,
         items: items.map((i) => ({
+          productId: i.sku || undefined,
           productTitle: i.title,
-          sku: i.sku,
-          size: i.size,
           quantity: i.quantity,
           unitPrice: i.price,
-          totalPrice: i.price * i.quantity,
+          subtotal: i.price * i.quantity,
         })),
       };
 
-      const res = await searchApiClient.post<OrderIdEntry>(API_ROUTES.ORDERS.GENERATE_WITH_ITEMS, orderPayload);
+      const res = await searchApiClient.post<{ id?: string; orderId?: string }>(API_ROUTES.ORDERS.GENERATE_WITH_ITEMS, orderPayload);
+      const createdId = res?.orderId || res?.id;
+
+      if (createdId) {
+        logisticsService.registerOrder({
+          id: createdId,
+          orderNumber: createdId.startsWith('VY-') ? createdId : `VY-2026-${createdId}`,
+          customerName: address?.name || 'Customer',
+          customerPhone: source === 'whatsapp' ? sourceInput.trim() : (address?.phone || sourceInput.trim()),
+          shippingAddress: address?.address || '',
+          shippingCity: address?.city || '',
+          shippingState: address?.state || '',
+          shippingPincode: address?.pincode || '',
+          source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'Manual',
+          sourceHandle: sourceInput.trim() || undefined,
+          paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
+          totalOrderValue: items.reduce((acc, it) => acc + it.price * it.quantity, 0) + shippingCharges,
+          totalCodBalance: paymentType === 'cod' ? items.reduce((acc, it) => acc + it.price * it.quantity, 0) + shippingCharges : 0,
+          orderDate: new Date().toISOString(),
+          status: 'PendingFulfillment',
+          hasNdr: false,
+          hasEscalation: false,
+          items: items.map((i, idx) => ({
+            id: `ITEM-${createdId}-${idx + 1}`,
+            orderId: createdId,
+            productId: i.sku || '',
+            productName: i.title,
+            quantity: i.quantity,
+            unitPrice: i.price,
+            totalPrice: i.price * i.quantity,
+            proportionalCodAmount: i.price * i.quantity,
+            vendorId: 'VND-DEFAULT',
+            vendorName: 'Default Vendor'
+          })),
+          packages: []
+        });
+      }
 
       if (sharedMedia && sharedMedia.length > 0) {
         await commitCurrentSession();
       }
 
-      Alert.alert('Success', `Order #${res.id || 'created'} registered successfully!`, [
+      Alert.alert('Success', `Order #${createdId || 'created'} registered successfully!`, [
         {
           text: 'OK',
           onPress: () => {
-            if (res.id) {
-              router.replace(`/utilities/order-details/${res.id}`);
+            if (createdId) {
+              router.replace(`/utilities/order-details/${createdId}`);
             } else {
               router.replace('/(tabs)');
             }
@@ -1057,7 +1082,7 @@ export const AdminOrderCreateForm: React.FC = () => {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Select WhatsApp source"
-                  onPress={() => handleSourceToggle('whatsapp')}
+                  onPress={() => handleSourceSelect('whatsapp')}
                 >
                   {source === 'whatsapp' ? (
                     <RiWhatsappFill size={36} color={WHATSAPP_GREEN} />
@@ -1069,7 +1094,7 @@ export const AdminOrderCreateForm: React.FC = () => {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Select Instagram source"
-                  onPress={() => handleSourceToggle('instagram')}
+                  onPress={() => handleSourceSelect('instagram')}
                 >
                   {source === 'instagram' ? (
                     <RiInstagramLine size={36} color={INSTAGRAM_ACTIVE} />
@@ -1294,26 +1319,50 @@ export const AdminOrderCreateForm: React.FC = () => {
               </Pressable>
             </XStack>
 
-            {items.map((item, index) => (
+            {items.length === 0 ? (
               <YStack
-                key={item.id}
                 backgroundColor={tokens.surface}
                 borderWidth={1}
                 borderColor={tokens.border}
+                borderStyle="dashed"
                 borderRadius={tokens.radius.md}
-                padding={12}
-                gap={8}
+                paddingVertical={22}
+                paddingHorizontal={16}
+                alignItems="center"
+                justifyContent="center"
+                gap={6}
               >
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} fontWeight="700" color={tokens.text}>
-                    #{index + 1}
-                  </Text>
-                  {items.length > 1 && (
+                <Text fontSize={12} color={tokens.textMuted}>
+                  No items added yet (optional).
+                </Text>
+                <Pressable onPress={handleAddItem}>
+                  <XStack alignItems="center" gap={4}>
+                    <LuPlus size={13} color={tokens.accent} />
+                    <Text fontSize={12} fontWeight="700" color={tokens.accent}>
+                      Add Item
+                    </Text>
+                  </XStack>
+                </Pressable>
+              </YStack>
+            ) : (
+              items.map((item, index) => (
+                <YStack
+                  key={item.id}
+                  backgroundColor={tokens.surface}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                  borderRadius={tokens.radius.md}
+                  padding={12}
+                  gap={8}
+                >
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                      #{index + 1}
+                    </Text>
                     <Pressable onPress={() => handleRemoveItem(item.id)}>
                       <LuTrash2 size={14} color={tokens.error} />
                     </Pressable>
-                  )}
-                </XStack>
+                  </XStack>
 
                 <UnderlineField
                   label="Title / Product Name *"
@@ -1361,7 +1410,7 @@ export const AdminOrderCreateForm: React.FC = () => {
                   </YStack>
                 </XStack>
               </YStack>
-            ))}
+            )))}
           </YStack>
 
           <YStack height={1} backgroundColor={tokens.border} />

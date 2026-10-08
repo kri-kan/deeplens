@@ -59,45 +59,15 @@ export interface AdminOrderDetailPageProps {
 }
 
 export function AdminOrderDetailPage({
-  orderId = '849201',
+  orderId = '',
   createdAt = new Date(),
   compactDate = false,
-  source = 'whatsapp',
-  sourceContact = '+91 98765 43210',
+  source = null,
+  sourceContact = '',
   paymentType = 'cod',
-  initialProducts = [
-    {
-      id: 'item-1',
-      productId: 'PRD-10291',
-      title: 'Handloom Kanjivaram Silk Saree',
-      size: 'Free Size',
-      quantity: 1,
-      costPerPiece: 2499,
-      codChargePerPiece: 50,
-      amountPaid: 500,
-      vendor: 'Varanasi Weavers Ltd',
-      imageColor: '#e8d5c4',
-    },
-    {
-      id: 'item-2',
-      productId: 'PRD-10292',
-      title: 'Zari Embroidered Blouse Piece',
-      size: 'M',
-      quantity: 2,
-      costPerPiece: 450,
-      codChargePerPiece: 50,
-      amountPaid: 0,
-      vendor: 'Surat Handlooms',
-      imageColor: '#c9b8a8',
-    },
-  ],
+  initialProducts = [],
   initialSelectedIds = [],
-  initialAddress = {
-    name: 'Priya Menon',
-    phone: '+91 98765 43210',
-    address: '12, Koramangala 4th Block, Bengaluru, Karnataka',
-    pincode: '560034',
-  },
+  initialAddress = null,
   initialTransactionId = '',
   initialReceiptUrl = null,
   initialProductSheetOpen = false,
@@ -130,7 +100,14 @@ export function AdminOrderDetailPage({
 
   // Handlers
   const handleSaveItem = (updated: OrderItem) => {
-    setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    const existingIndex = products.findIndex((p) => p.id === updated.id);
+    if (existingIndex >= 0) {
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } else {
+      setProducts((prev) => [...prev, updated]);
+    }
+    setProductSheetOpen(false);
+    setActiveItem(null);
   };
 
   const handleUpdateItem = (id: string, updates: Partial<OrderItem>) => {
@@ -159,7 +136,7 @@ export function AdminOrderDetailPage({
   };
 
   const handleAddProduct = () => {
-    const newItem: OrderItem = {
+    const draftItem: OrderItem = {
       id: `item-${Date.now()}`,
       productId: `PRD-${Math.floor(10000 + Math.random() * 90000)}`,
       title: 'New Line Item',
@@ -171,8 +148,7 @@ export function AdminOrderDetailPage({
       vendor: 'Unassigned',
       imageColor: '#f0e6d3',
     };
-    setProducts((prev) => [...prev, newItem]);
-    setActiveItem(newItem);
+    setActiveItem(draftItem);
     setProductSheetOpen(true);
   };
 
@@ -246,10 +222,11 @@ export function AdminOrderDetailPage({
 
   const handleConfirmAction = () => {
     if (confirmDialog.type === 'single' && confirmDialog.targetId) {
-      setProducts((prev) => prev.filter((p) => p.id !== confirmDialog.targetId));
-      setSelectedItemIds((prev) => prev.filter((x) => x !== confirmDialog.targetId));
+      const targetIdStr = String(confirmDialog.targetId);
+      setProducts((prev) => prev.filter((p) => String(p.id) !== targetIdStr));
+      setSelectedItemIds((prev) => prev.filter((x) => String(x) !== targetIdStr));
     } else if (confirmDialog.type === 'batch') {
-      setProducts((prev) => prev.filter((p) => !selectedItemIds.includes(p.id)));
+      setProducts((prev) => prev.filter((p) => !selectedItemIds.map(String).includes(String(p.id))));
       setSelectedItemIds([]);
     }
     setConfirmDialog((prev) => ({ ...prev, visible: false }));
@@ -384,6 +361,7 @@ export function AdminOrderDetailPage({
         item={activeItem}
         isCod={paymentType === 'cod'}
         onSaveItem={handleSaveItem}
+        onDeleteItem={(item) => handleRequestRemoveProduct(String(item.id))}
         onClose={() => setProductSheetOpen(false)}
       />
 

@@ -75,6 +75,9 @@ public class OrderItemUpdateDto
     [JsonPropertyName("productId")]
     public string? ProductId { get; set; }
 
+    [JsonPropertyName("productTitle")]
+    public string? ProductTitle { get; set; }
+
     [JsonPropertyName("quantity")]
     public int Quantity { get; set; } = 1;
 

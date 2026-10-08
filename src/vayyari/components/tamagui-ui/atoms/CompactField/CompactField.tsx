@@ -7,6 +7,8 @@ export interface CompactFieldProps {
   label: string;
   value: string;
   onChange: (val: string) => void;
+  onBlur?: () => void;
+  onSubmitEditing?: () => void;
   placeholder?: string;
   keyboardType?: 'default' | 'numeric';
   maxLength?: number;
@@ -17,6 +19,8 @@ export function CompactField({
   label,
   value,
   onChange,
+  onBlur,
+  onSubmitEditing,
   placeholder,
   keyboardType = 'default',
   maxLength,
@@ -38,6 +42,8 @@ export function CompactField({
         accessibilityLabel={accessibilityLabel ?? label}
         value={value ?? ''}
         onChangeText={onChange}
+        onBlur={onBlur}
+        onSubmitEditing={onSubmitEditing}
         placeholder={placeholder}
         placeholderTextColor={tokens.textMuted}
         keyboardType={keyboardType}

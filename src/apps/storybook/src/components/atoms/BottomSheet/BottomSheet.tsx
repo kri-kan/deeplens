@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, Modal, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { LuX } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
@@ -38,95 +38,112 @@ export function BottomSheet({
   if (!visible) return null;
 
   return (
-    <YStack
-      position="absolute"
-      top={0}
-      left={0}
-      right={0}
-      bottom={0}
-      backgroundColor="rgba(0,0,0,0.48)"
-      justifyContent="flex-end"
-      zIndex={zIndex}
-      onPress={onClose}
-      role="presentation"
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <YStack
-        backgroundColor={tokens.background}
-        borderTopLeftRadius={22}
-        borderTopRightRadius={22}
-        paddingTop={12}
-        paddingBottom={paddingBottom}
-        maxHeight={maxHeight}
-        shadowColor="#000"
-        shadowOpacity={0.22}
-        shadowRadius={24}
-        shadowOffset={{ width: 0, height: -8 }}
-        onPress={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal={true}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
       >
-        {/* Drag handle */}
-        {showDragHandle && (
-          <YStack alignItems="center" paddingBottom={10}>
-            <YStack width={36} height={4} borderRadius={2} backgroundColor={tokens.border} />
-          </YStack>
-        )}
+        <YStack
+          flex={1}
+          backgroundColor={tokens.overlay || 'rgba(0,0,0,0.48)'}
+          justifyContent="flex-end"
+        >
+          {/* Backdrop press strictly above sheet — zero overlap with sheet content */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss sheet"
+            onPress={onClose}
+            style={{ flex: 1 }}
+          />
 
-        {/* Sheet Header */}
-        {(title || showCloseButton || headerRight) && (
-          <XStack
-            paddingHorizontal={paddingHorizontal}
-            paddingBottom={12}
-            justifyContent="space-between"
-            alignItems="center"
+          <YStack
+            backgroundColor={tokens.background}
+            borderTopLeftRadius={22}
+            borderTopRightRadius={22}
+            paddingTop={12}
+            paddingBottom={paddingBottom}
+            maxHeight={maxHeight}
+            shadowColor="#000"
+            shadowOpacity={0.22}
+            shadowRadius={24}
+            shadowOffset={{ width: 0, height: -8 }}
+            role="dialog"
+            aria-modal={true}
           >
-            {title ? (
-              <Text fontSize={16} fontWeight="800" color={tokens.text}>
-                {title}
-              </Text>
-            ) : (
-              <YStack />
+            {/* Drag handle */}
+            {showDragHandle && (
+              <YStack alignItems="center" paddingBottom={10}>
+                <YStack width={36} height={4} borderRadius={2} backgroundColor={tokens.border} />
+              </YStack>
             )}
 
-            <XStack alignItems="center" gap={8}>
-              {headerRight}
+            {/* Sheet Header */}
+            {(title || showCloseButton || headerRight) && (
+              <XStack
+                paddingHorizontal={paddingHorizontal}
+                paddingBottom={12}
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                {title ? (
+                  <Text fontSize={16} fontWeight="800" color={tokens.text}>
+                    {title}
+                  </Text>
+                ) : (
+                  <YStack />
+                )}
 
-              {showCloseButton && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close sheet"
-                  onPress={onClose}
-                  hitSlop={8}
-                >
-                  <YStack
-                    width={28}
-                    height={28}
-                    borderRadius={tokens.radius.full}
-                    backgroundColor={tokens.surfaceRaised}
-                    alignItems="center"
-                    justifyContent="center"
-                    hoverStyle={{ backgroundColor: tokens.border }}
-                  >
-                    <LuX size={14} color={tokens.textSecondary} />
-                  </YStack>
-                </Pressable>
-              )}
-            </XStack>
-          </XStack>
-        )}
+                <XStack alignItems="center" gap={8}>
+                  {headerRight}
 
-        {/* Sheet Content Body */}
-        <YStack paddingHorizontal={paddingHorizontal}>
-          {children}
-        </YStack>
+                  {showCloseButton && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Close sheet"
+                      onPress={onClose}
+                      hitSlop={8}
+                    >
+                      <YStack
+                        width={28}
+                        height={28}
+                        borderRadius={tokens.radius.full}
+                        backgroundColor={tokens.surfaceRaised}
+                        alignItems="center"
+                        justifyContent="center"
+                        hoverStyle={{ backgroundColor: tokens.border }}
+                      >
+                        <LuX size={14} color={tokens.textSecondary} />
+                      </YStack>
+                    </Pressable>
+                  )}
+                </XStack>
+              </XStack>
+            )}
 
-        {/* Optional Sticky/Bottom Footer */}
-        {footer && (
-          <YStack paddingHorizontal={paddingHorizontal} paddingTop={10}>
-            {footer}
+            {/* Scrollable Sheet Content Body */}
+            <ScrollView
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal }}
+            >
+              {children}
+            </ScrollView>
+
+            {/* Optional Sticky/Bottom Footer */}
+            {footer && (
+              <YStack paddingHorizontal={paddingHorizontal} paddingTop={10}>
+                {footer}
+              </YStack>
+            )}
           </YStack>
-        )}
-      </YStack>
-    </YStack>
+        </YStack>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

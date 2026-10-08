@@ -1,4 +1,4 @@
-import { productMgmtApiClient } from '@/api/client';
+import { productMgmtApiClient, searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import {
   LogisticsOrder,
@@ -431,10 +431,113 @@ function attachItemsToPackages(order: LogisticsOrder): LogisticsOrder {
   };
 }
 
+function mapHistoryItemToLogisticsOrder(item: any): LogisticsOrder {
+  const sourceStr = String(item.source || '').toLowerCase();
+  const source: 'WhatsApp' | 'Instagram' | 'Web' | 'Manual' =
+    sourceStr === 'whatsapp' ? 'WhatsApp' :
+    sourceStr === 'instagram' ? 'Instagram' :
+    sourceStr === 'web' ? 'Web' : 'Manual';
+
+  const payStr = String(item.paymentMode || '').toUpperCase();
+  const paymentMode: 'COD' | 'Prepaid' = payStr === 'PREPAID' ? 'Prepaid' : 'COD';
+
+  const totalValue = Number(item.totalAmount) || 0;
+  const codBalance = Number(item.codBalance) || (paymentMode === 'COD' ? totalValue : 0);
+
+  const order: LogisticsOrder = {
+    id: item.id,
+    orderNumber: item.id.startsWith('VY-') ? item.id : `VY-2026-${item.id}`,
+    customerName: item.customerName || 'Customer',
+    customerPhone: item.customerPhone || item.sourceHandle || '',
+    shippingAddress: item.customerAddress || item.shippingStreet || '',
+    shippingCity: item.shippingCity || '',
+    shippingState: item.shippingState || '',
+    shippingPincode: item.shippingPincode || '',
+    source,
+    sourceHandle: item.sourceHandle || undefined,
+    paymentMode,
+    totalOrderValue: totalValue,
+    totalCodBalance: codBalance,
+    orderDate: item.timestamp || new Date().toISOString(),
+    status: 'PendingFulfillment',
+    hasNdr: false,
+    hasEscalation: false,
+    items: [],
+    packages: []
+  };
+
+  return attachItemsToPackages(order);
+}
+
+function mapOrderDetailToLogisticsOrder(dto: any): LogisticsOrder {
+  const sourceStr = String(dto.source || '').toLowerCase();
+  const source: 'WhatsApp' | 'Instagram' | 'Web' | 'Manual' =
+    sourceStr === 'whatsapp' ? 'WhatsApp' :
+    sourceStr === 'instagram' ? 'Instagram' :
+    sourceStr === 'web' ? 'Web' : 'Manual';
+
+  const payStr = String(dto.paymentMode || '').toUpperCase();
+  const paymentMode: 'COD' | 'Prepaid' = payStr === 'PREPAID' ? 'Prepaid' : 'COD';
+
+  const items: FulfillmentItem[] = Array.isArray(dto.items)
+    ? dto.items.map((it: any, idx: number) => {
+        const qty = Number(it.quantity) > 0 ? Number(it.quantity) : 1;
+        const unitPrice = Number(it.unitPrice) || 0;
+        const subtotal = Number(it.subtotal) || (unitPrice * qty);
+        return {
+          id: it.id ? String(it.id) : `ITEM-${dto.id}-${idx + 1}`,
+          orderId: dto.id,
+          productId: it.productId ?? '',
+          productName: it.productTitle ?? '',
+          quantity: qty,
+          unitPrice,
+          totalPrice: subtotal,
+          proportionalCodAmount: subtotal,
+          vendorId: it.vendorId ? String(it.vendorId) : 'VND-DEFAULT',
+          vendorName: 'Default Vendor'
+        };
+      })
+    : [];
+
+  const totalValue = Number(dto.totalAmount) || items.reduce((acc, i) => acc + i.totalPrice, 0);
+  const codBalance = Number(dto.codBalance) || (paymentMode === 'COD' ? totalValue : 0);
+
+  const order: LogisticsOrder = {
+    id: dto.id,
+    orderNumber: dto.id.startsWith('VY-') ? dto.id : `VY-2026-${dto.id}`,
+    customerName: dto.customerName || 'Customer',
+    customerPhone: dto.customerPhone || dto.sourceHandle || '',
+    shippingAddress: dto.customerAddress || dto.shippingStreet || '',
+    shippingCity: dto.shippingCity || '',
+    shippingState: dto.shippingState || '',
+    shippingPincode: dto.shippingPincode || '',
+    source,
+    sourceHandle: dto.sourceHandle || undefined,
+    paymentMode,
+    totalOrderValue: totalValue,
+    totalCodBalance: codBalance,
+    orderDate: dto.timestamp || new Date().toISOString(),
+    status: 'PendingFulfillment',
+    hasNdr: false,
+    hasEscalation: false,
+    items,
+    packages: []
+  };
+
+  return attachItemsToPackages(order);
+}
+
 // In-memory state store for interactive development
 let ordersStore = SAMPLE_MOCK_ORDERS.map(attachItemsToPackages);
 
 export const logisticsService = {
+  /**
+   * Register or prepend a newly created order into local store
+   */
+  registerOrder: (order: LogisticsOrder) => {
+    ordersStore = [attachItemsToPackages(order), ...ordersStore.filter(o => o.id !== order.id)];
+  },
+
   /**
    * List all logistics orders with optional search and filter
    */
@@ -445,6 +548,20 @@ export const logisticsService = {
       });
       if (res && Array.isArray(res) && res.length > 0) {
         return res.map(attachItemsToPackages);
+      }
+    } catch {
+      // Fall back to SearchApi recent history
+    }
+
+    try {
+      const historyRes = await searchApiClient.get<any[]>(API_ROUTES.ORDERS.HISTORY, {
+        params: { limit: 50 }
+      });
+      if (historyRes && Array.isArray(historyRes) && historyRes.length > 0) {
+        const liveOrders = historyRes.map(mapHistoryItemToLogisticsOrder);
+        const liveIds = new Set(liveOrders.map(o => o.id));
+        const existingRemaining = ordersStore.filter(o => !liveIds.has(o.id));
+        ordersStore = [...liveOrders, ...existingRemaining];
       }
     } catch {
       // Fall back to local store
@@ -475,6 +592,19 @@ export const logisticsService = {
    * Get single order logistics detail
    */
   getOrder: async (orderId: string): Promise<LogisticsOrder> => {
+    // 1. Try SearchApi canonical order details
+    try {
+      const orderDto = await searchApiClient.get<any>(API_ROUTES.ORDERS.GET_BY_ID(orderId));
+      if (orderDto && orderDto.id) {
+        const mapped = mapOrderDetailToLogisticsOrder(orderDto);
+        logisticsService.registerOrder(mapped);
+        return mapped;
+      }
+    } catch {
+      // Fall through to logistics endpoint
+    }
+
+    // 2. Try Logistics backend
     try {
       const res = await productMgmtApiClient.get<LogisticsOrder>(API_ROUTES.LOGISTICS.ORDER_DETAIL(orderId));
       if (res && res.id) {
@@ -487,61 +617,26 @@ export const logisticsService = {
     const found = ordersStore.find(o => o.id === orderId || o.orderNumber === orderId);
     if (found) return found;
 
-    // Create dynamic placeholder if not in sample
+    // 3. Fallback placeholder without dummy items
     const newOrder: LogisticsOrder = {
       id: orderId,
       orderNumber: orderId.startsWith('VY-') ? orderId : `VY-2026-${orderId}`,
       customerName: 'Customer',
-      customerPhone: '+919876543210',
-      shippingAddress: 'Delivery Address',
-      shippingCity: 'Bengaluru',
-      shippingState: 'Karnataka',
-      shippingPincode: '560001',
+      customerPhone: '',
+      shippingAddress: '',
+      shippingCity: '',
+      shippingState: '',
+      shippingPincode: '',
       source: 'WhatsApp',
       paymentMode: 'COD',
-      totalOrderValue: 2500,
-      totalCodBalance: 2500,
+      totalOrderValue: 0,
+      totalCodBalance: 0,
       orderDate: new Date().toISOString(),
       status: 'PendingFulfillment',
       hasNdr: false,
       hasEscalation: false,
-      items: [
-        {
-          id: `ITEM-${orderId}-1`,
-          orderId,
-          productId: 'PRD-DEFAULT',
-          productName: 'Order Item 1',
-          quantity: 1,
-          unitPrice: 2500,
-          totalPrice: 2500,
-          proportionalCodAmount: 2500,
-          vendorId: 'VND-DEFAULT',
-          vendorName: 'Default Vendor',
-          packageId: `PKG-${orderId}-1`
-        }
-      ],
-      packages: [
-        {
-          id: `PKG-${orderId}-1`,
-          packageNumber: 1,
-          orderId,
-          vendorId: 'VND-DEFAULT',
-          vendorName: 'Default Vendor',
-          fulfillmentPath: 'ProcureToShip',
-          items: [],
-          itemCount: 1,
-          packageValue: 2500,
-          codAmount: 2500,
-          weightKg: 0.5,
-          dimensionsCm: { length: 25, width: 20, height: 5 },
-          procurementStage: 'Pending',
-          currentTrackingStatus: 'Pending Vendor Dispatch',
-          isNdr: false,
-          escalations: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ]
+      items: [],
+      packages: []
     };
     return attachItemsToPackages(newOrder);
   },
