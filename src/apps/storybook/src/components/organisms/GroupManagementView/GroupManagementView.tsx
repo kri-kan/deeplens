@@ -628,7 +628,7 @@ export function GroupManagementView({
                           </YStack>
                         )}
 
-                        {/* Centered Qty & Size Overlay (Lil big & transparent, no 'Qty' label, supports 2-digit quantity) */}
+                        {/* Centered Qty & Size Overlay (Contrast border, big & transparent/translucent, no background box) */}
                         <XStack
                           position="absolute"
                           top={0}
@@ -639,19 +639,43 @@ export function GroupManagementView({
                           justifyContent="center"
                           pointerEvents="none"
                         >
-                          <XStack
-                            backgroundColor="rgba(0,0,0,0.48)"
-                            paddingHorizontal={8}
-                            paddingVertical={4}
-                            borderRadius={tokens.radius.sm}
-                            alignItems="center"
-                            gap={3}
-                          >
-                            <Text fontSize={16} fontWeight="900" color="#FFFFFF">
+                          <XStack alignItems="center" gap={3}>
+                            <Text
+                              fontSize={22}
+                              fontWeight="900"
+                              color="rgba(255, 255, 255, 0.92)"
+                              letterSpacing={0.5}
+                              style={{
+                                textShadowColor: '#000000',
+                                textShadowOffset: { width: 0, height: 0 },
+                                textShadowRadius: 6,
+                                ...(Platform.OS === 'web'
+                                  ? {
+                                      textShadow:
+                                        '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 5px #000',
+                                    }
+                                  : {}),
+                              }}
+                            >
                               {it.quantity || 1}
                             </Text>
                             {hasSize && (
-                              <Text fontSize={15} fontWeight="800" color="#FCD34D">
+                              <Text
+                                fontSize={17}
+                                fontWeight="900"
+                                color="rgba(252, 211, 77, 0.95)"
+                                style={{
+                                  textShadowColor: '#000000',
+                                  textShadowOffset: { width: 0, height: 0 },
+                                  textShadowRadius: 6,
+                                  ...(Platform.OS === 'web'
+                                    ? {
+                                        textShadow:
+                                          '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 5px #000',
+                                      }
+                                    : {}),
+                                }}
+                              >
                                 • {it.size}
                               </Text>
                             )}
