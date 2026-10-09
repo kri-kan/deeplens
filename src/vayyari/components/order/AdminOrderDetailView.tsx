@@ -27,6 +27,7 @@ import { SourceRow, OrderSource, PaymentType } from '@/components/tamagui-ui/mol
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 import { TransactionReceiptSection } from '@/components/tamagui-ui/molecules/TransactionReceiptSection';
 import { ProductListSection, OrderItem } from '@/components/tamagui-ui/organisms/ProductListSection';
+import { GroupManagementView } from '@/components/tamagui-ui/organisms/GroupManagementView';
 import { ProductEditSheet } from '@/components/tamagui-ui/organisms/ProductEditSheet';
 import { QuickPickerSheet } from '@/components/tamagui-ui/molecules/QuickPickerSheet';
 import { AddressCard, AddressSheet, AddressData } from './AdminOrderCreateForm';
@@ -76,6 +77,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const [transactionId, setTransactionId] = useState('');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [groupStages, setGroupStages] = useState<Record<string, string>>({});
+  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
 
   // Sheets & dialogs
   const [activeItem, setActiveItem] = useState<OrderItem | null>(null);
@@ -734,6 +736,25 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     return `${leastStage} +${distinctGroupKeys.length - 1}`;
   }, [products.length, distinctGroupKeys, groupStages]);
 
+  const vendorGroups = React.useMemo(() => {
+    const map = new Map<string, { key: string; vendorName: string; isUnassigned: boolean; items: OrderItem[] }>();
+    for (const item of products) {
+      const raw = (item.vendor || '').trim();
+      const isUnassigned = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+      const key = isUnassigned ? 'Unassigned' : raw;
+      const vendorName = isUnassigned ? 'Unassigned' : raw;
+      if (!map.has(key)) {
+        map.set(key, { key, vendorName, isUnassigned, items: [] });
+      }
+      map.get(key)!.items.push(item);
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isUnassigned && !b.isUnassigned) return 1;
+      if (!a.isUnassigned && b.isUnassigned) return -1;
+      return a.vendorName.localeCompare(b.vendorName);
+    });
+  }, [products]);
+
   if (loading) {
     return (
       <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" gap={12}>
@@ -741,6 +762,42 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         <Text fontSize={13} color={tokens.textMuted}>Loading order #{orderId}…</Text>
       </YStack>
     );
+  }
+
+  // ── Dedicated Package Group Screen (Full-Page View) ──
+  if (activeGroupKey) {
+    const targetGroup = vendorGroups.find((g) => g.key === activeGroupKey);
+    if (targetGroup) {
+      const labelInfo = groupLabelInfo[targetGroup.key];
+      const currentStage = groupStages[targetGroup.key] || 'Unconfirmed';
+      return (
+        <GroupManagementView
+          orderId={orderId}
+          orderGrpId={labelInfo?.orderGrpId || (orderId ? `${orderId}-${targetGroup.key}` : undefined)}
+          vendorName={targetGroup.vendorName}
+          isUnassigned={targetGroup.isUnassigned}
+          currentStage={currentStage}
+          isCod={paymentType === 'cod'}
+          needLabel={labelInfo?.needLabel ?? (paymentType === 'cod')}
+          awbNumber={labelInfo?.awbNumber}
+          labelUrl={labelInfo?.labelUrl}
+          isLocked={lockedVendorKeys.includes(targetGroup.key)}
+          items={targetGroup.items}
+          onUpdateStage={(newStage) => {
+            handleUpdateGroupStage(targetGroup.key, newStage);
+          }}
+          onGenerateLabel={() => {
+            const grpId = labelInfo?.orderGrpId;
+            if (grpId) {
+              handleGenerateGroupLabel(grpId);
+            }
+          }}
+          onViewLabel={(url) => setPreviewImage(url)}
+          onShareGroup={() => {}}
+          onBack={() => setActiveGroupKey(null)}
+        />
+      );
+    }
   }
 
   return (
@@ -948,6 +1005,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             onOpenPicker={handleOpenPicker}
             onUpdateItem={handleUpdateItem}
             onRemoveProduct={handleRequestRemoveProduct}
+            onManageGroup={(groupKey) => setActiveGroupKey(groupKey)}
           />
 
           <YStack height={1} backgroundColor={tokens.border} />
