@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, RefreshControl } from 'react-native';
-import { Text, Button, IconButton, Surface, TextInput, Portal, Modal, Chip, Switch, useTheme, ActivityIndicator } from 'react-native-paper';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import { Text, Button, TextInput, Portal, Modal, Switch } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { logisticsService } from '@/services/logistics.service';
 import { Warehouse, CreateWarehouseRequest, UpdateWarehouseRequest } from '@/types/logistics';
+import {
+  DelhiveryWarehousesView,
+  DelhiveryWarehouseItem,
+} from '@/components/logistics';
 
 export default function DelhiveryWarehousesScreen() {
   const router = useRouter();
-  const theme = useTheme();
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +20,7 @@ export default function DelhiveryWarehousesScreen() {
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
+  const [editingWarehouse, setEditingWarehouse] = useState<DelhiveryWarehouseItem | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Form fields
@@ -108,18 +111,18 @@ export default function DelhiveryWarehousesScreen() {
     setModalVisible(true);
   };
 
-  const handleOpenEdit = (w: Warehouse) => {
+  const handleOpenEdit = (w: DelhiveryWarehouseItem) => {
     setEditingWarehouse(w);
     setName(w.name || '');
     setCode(w.code || '');
-    setAddressLine1(w.addressLine1 || '');
-    setAddressLine2(w.addressLine2 || '');
+    setAddressLine1(w.addressLine1 || w.address_line1 || '');
+    setAddressLine2(w.addressLine2 || w.address_line2 || '');
     setCity(w.city || '');
     setState(w.state || '');
     setPincode(w.pincode || '');
     setPhone(w.phone || '');
-    setContactPerson(w.contactPerson || '');
-    setIsCentral(w.isCentral || false);
+    setContactPerson(w.contactPerson || w.contact_person || '');
+    setIsCentral(!!(w.isCentral ?? w.is_central));
     setSyncWithDelhivery(true);
     setModalVisible(true);
   };
@@ -152,7 +155,7 @@ export default function DelhiveryWarehousesScreen() {
           phone: phone.trim(),
           contactPerson: contactPerson.trim() || undefined,
           isCentral,
-          updateDelhivery: syncWithDelhivery
+          updateDelhivery: syncWithDelhivery,
         };
         await logisticsService.updateWarehouse(editingWarehouse.id, updateReq);
       } else {
@@ -167,7 +170,7 @@ export default function DelhiveryWarehousesScreen() {
           phone: phone.trim(),
           contactPerson: contactPerson.trim() || undefined,
           isCentral,
-          registerWithDelhivery: syncWithDelhivery
+          registerWithDelhivery: syncWithDelhivery,
         };
         await logisticsService.createWarehouse(createReq);
       }
@@ -191,160 +194,18 @@ export default function DelhiveryWarehousesScreen() {
       withScrollView={false}
     >
       <View style={styles.container}>
-        {/* Top Control Bar */}
-        <Surface style={styles.controlBar} elevation={1}>
-          <View style={styles.controlBarLeft}>
-            <Text variant="titleSmall" style={styles.controlBarTitle}>
-              {warehouses.length} {warehouses.length === 1 ? 'Facility' : 'Facilities'}
-            </Text>
-            {lastSyncedAt && (
-              <Text variant="bodySmall" style={styles.lastSyncedText}>
-                Last synced at {lastSyncedAt}
-              </Text>
-            )}
-          </View>
-          <View style={styles.controlBarActions}>
-            <Button
-              mode="contained-tonal"
-              icon={syncing ? undefined : "cloud-sync"}
-              onPress={handleSync}
-              loading={syncing}
-              disabled={syncing}
-              style={styles.syncBtn}
-              compact
-            >
-              {syncing ? 'Syncing...' : 'Sync'}
-            </Button>
-            <Button
-              mode="contained"
-              icon="plus"
-              onPress={handleOpenCreate}
-              style={styles.addBtn}
-              compact
-            >
-              Add Facility
-            </Button>
-          </View>
-        </Surface>
-
-        {/* Notice Card */}
-        <Surface style={styles.noticeCard} elevation={0}>
-          <IconButton icon="information-outline" size={20} iconColor="#0284C7" style={{ margin: 0 }} />
-          <View style={{ flex: 1, paddingRight: 4 }}>
-            <Text variant="labelSmall" style={{ color: '#0369A1', fontWeight: '700' }}>
-              DELHIVERY PICKUP FACILITIES DIRECTORY
-            </Text>
-            <Text variant="bodySmall" style={{ color: '#475569', fontSize: 11, marginTop: 2 }}>
-              Delhivery does not allow public GET export of portal warehouses via API. Register new facilities here or add existing pickup locations by code/name to auto-map with vendors.
-            </Text>
-          </View>
-        </Surface>
-
-        {/* Warehouses List */}
-        <FlatList
-          data={warehouses}
-          keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <Surface style={styles.card} elevation={2}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                  <View style={styles.codeRow}>
-                    <Surface style={styles.codeBadge} elevation={0}>
-                      <Text style={styles.codeText}>{item.code}</Text>
-                    </Surface>
-                    {item.isCentral && (
-                      <Chip 
-                        style={styles.centralChip} 
-                        textStyle={styles.centralChipText} 
-                        compact 
-                        icon="star"
-                      >
-                        CENTRAL HUB
-                      </Chip>
-                    )}
-                  </View>
-                  <Text variant="titleMedium" style={styles.warehouseName}>
-                    {item.name}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row' }}>
-                  <IconButton
-                    icon="pencil-outline"
-                    size={20}
-                    onPress={() => handleOpenEdit(item)}
-                  />
-                  <IconButton
-                    icon="delete-outline"
-                    size={20}
-                    iconColor="#EF4444"
-                    onPress={() => handleDelete(item.id, item.name)}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.addressBox}>
-                <Text variant="bodyMedium" style={styles.addressLine}>
-                  {item.addressLine1}
-                  {item.addressLine2 ? `, ${item.addressLine2}` : ''}
-                </Text>
-                <Text variant="bodyMedium" style={styles.cityLine}>
-                  {item.city}, {item.state} - <Text style={styles.pincode}>{item.pincode}</Text>
-                </Text>
-              </View>
-
-              <View style={styles.cardFooter}>
-                <View style={styles.metaCol}>
-                  <View style={styles.metaRow}>
-                    <IconButton icon="account-outline" size={16} style={styles.tinyIcon} />
-                    <Text variant="bodySmall" style={styles.metaText}>
-                      {item.contactPerson || 'Ops Incharge'}
-                    </Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <IconButton icon="phone-outline" size={16} style={styles.tinyIcon} />
-                    <Text variant="bodySmall" style={styles.metaText}>
-                      {item.phone || 'No phone'}
-                    </Text>
-                  </View>
-                </View>
-
-                <Chip 
-                  style={styles.delhiveryBadge} 
-                  textStyle={styles.delhiveryBadgeText} 
-                  compact 
-                  icon="truck-fast-outline"
-                >
-                  Delhivery Registered
-                </Chip>
-              </View>
-            </Surface>
-          )}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyContainer}>
-                <IconButton icon="warehouse" size={48} iconColor="#94A3B8" />
-                <Text variant="titleMedium" style={styles.emptyTitle}>No Warehouses Found</Text>
-                <Text variant="bodySmall" style={styles.emptySubtitle}>
-                  Add your first fulfillment facility or sync existing hubs from Delhivery.
-                </Text>
-                <Button 
-                  mode="contained" 
-                  icon="plus" 
-                  onPress={handleOpenCreate} 
-                  style={{ marginTop: 16 }}
-                >
-                  Add Warehouse
-                </Button>
-              </View>
-            ) : (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" />
-                <Text style={{ marginTop: 12, color: '#64748B' }}>Loading warehouses...</Text>
-              </View>
-            )
-          }
+        {/* Tamagui DelhiveryWarehousesView Organism */}
+        <DelhiveryWarehousesView
+          warehouses={warehouses}
+          loading={loading}
+          syncing={syncing}
+          lastSyncedAt={lastSyncedAt}
+          onSync={handleSync}
+          onAddFacility={handleOpenCreate}
+          onEditFacility={handleOpenEdit}
+          onDeleteFacility={(w) => handleDelete(w.id, w.name)}
+          onRefresh={fetchData}
+          showHeaderTitle={false}
         />
 
         {/* Create / Edit Facility Modal */}
@@ -494,177 +355,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
-  },
-  controlBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  controlBarLeft: {
-    flex: 1,
-  },
-  controlBarTitle: {
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  lastSyncedText: {
-    color: '#64748B',
-    marginTop: 2,
-  },
-  controlBarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  syncBtn: {
-    borderRadius: 8,
-  },
-  addBtn: {
-    borderRadius: 8,
-  },
-  noticeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
-    padding: 10,
-    gap: 8,
-  },
-  listContent: {
-    padding: 16,
-    gap: 12,
-  },
-  card: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  cardHeaderLeft: {
-    flex: 1,
-  },
-  codeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  codeBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  codeText: {
-    color: '#1D4ED8',
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  centralChip: {
-    backgroundColor: '#FEF3C7',
-    height: 24,
-  },
-  centralChipText: {
-    color: '#B45309',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  warehouseName: {
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  addressBox: {
-    backgroundColor: '#F8FAFC',
-    padding: 10,
-    borderRadius: 8,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  addressLine: {
-    color: '#334155',
-  },
-  cityLine: {
-    color: '#475569',
-    marginTop: 2,
-  },
-  pincode: {
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  metaCol: {
-    flex: 1,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tinyIcon: {
-    margin: 0,
-    width: 20,
-    height: 20,
-  },
-  metaText: {
-    color: '#64748B',
-  },
-  delhiveryBadge: {
-    backgroundColor: '#F0FDF4',
-    height: 24,
-  },
-  delhiveryBadgeText: {
-    color: '#15803D',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-    paddingHorizontal: 32,
-  },
-  emptyTitle: {
-    fontWeight: '700',
-    color: '#334155',
-    marginTop: 8,
-  },
-  emptySubtitle: {
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
