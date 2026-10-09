@@ -793,13 +793,6 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
             </Text>
           )}
         </YStack>
-        <XStack alignItems="center" gap={6}>
-          <StatusBadge
-            label={oc.leastStage.toUpperCase()}
-            intent={getStatusIntent(oc.leastStage)}
-            size="sm"
-          />
-        </XStack>
       </XStack>
 
       {/* Lean cards per group */}
@@ -847,20 +840,21 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
               {/* View Mode Toggle */}
               <XStack
                 backgroundColor={tokens.surfaceRaised}
-                borderRadius={tokens.radius.md}
-                padding={3}
-                gap={3}
+                borderRadius={tokens.radius.full}
+                padding={2}
+                gap={2}
                 borderWidth={1}
                 borderColor={tokens.border}
+                overflow="hidden"
               >
                 {(['groups', 'orders'] as ViewMode[]).map((mode) => {
                   const isActive = viewMode === mode;
                   return (
                     <Pressable key={mode} onPress={() => setViewMode(mode)}>
                       <YStack
-                        paddingHorizontal={10}
+                        paddingHorizontal={12}
                         paddingVertical={5}
-                        borderRadius={tokens.radius.sm}
+                        borderRadius={tokens.radius.full}
                         backgroundColor={isActive ? tokens.accent : 'transparent'}
                       >
                         <Text
