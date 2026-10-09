@@ -474,7 +474,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
         borderColor={tokens.border}
         borderRadius={tokens.radius.lg}
         overflow="hidden"
-        marginBottom={12}
+        marginBottom={8}
       >
         {/* Group Header — mirrors ProductListSection vendor header */}
         <Pressable
@@ -749,7 +749,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
       borderColor={tokens.border}
       borderRadius={tokens.radius.lg}
       overflow="hidden"
-      marginBottom={12}
+      marginBottom={8}
     >
       {/* Order header */}
       <XStack
@@ -822,7 +822,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
       {!disableSafeArea && (
         <YStack
           paddingTop={insets.top + 8}
-          paddingHorizontal={16}
+          paddingHorizontal={8}
           paddingBottom={10}
           backgroundColor={tokens.surface}
           borderBottomWidth={1}
@@ -887,50 +887,57 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
             </XStack>
           </XStack>
 
-          {/* Stage Tabs */}
-          <XStack
-            backgroundColor={tokens.surfaceRaised}
-            borderRadius={tokens.radius.md}
-            padding={4}
-            gap={4}
+          {/* Scrollable Stage Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 6, paddingVertical: 2 }}
           >
             {STAGES.map(({ key, label }) => {
               const isActive = activeStage === key;
               const count = tabCounts[key];
               return (
-                <Pressable key={key} style={{ flex: 1 }} onPress={() => setActiveStage(key)}>
-                  <YStack
+                <Pressable key={key} onPress={() => setActiveStage(key)}>
+                  <XStack
                     alignItems="center"
-                    justifyContent="center"
-                    paddingVertical={7}
-                    borderRadius={tokens.radius.sm}
-                    backgroundColor={isActive ? tokens.surface : 'transparent'}
-                    shadowColor={isActive ? '#000' : 'transparent'}
-                    shadowOpacity={isActive ? 0.08 : 0}
-                    shadowRadius={isActive ? 4 : 0}
-                    gap={1}
+                    gap={6}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={tokens.radius.full}
+                    backgroundColor={isActive ? tokens.accent : tokens.surfaceRaised}
+                    borderWidth={1}
+                    borderColor={isActive ? tokens.accent : tokens.border}
                   >
                     <Text
                       fontSize={12}
                       fontWeight={isActive ? '800' : '600'}
-                      color={isActive ? tokens.accent : tokens.textMuted}
+                      color={isActive ? '#FFFFFF' : tokens.text}
                     >
                       {label}
                     </Text>
                     {count > 0 && (
-                      <Text
-                        fontSize={10}
-                        fontWeight="800"
-                        color={isActive ? tokens.accent : tokens.textMuted}
+                      <YStack
+                        paddingHorizontal={6}
+                        paddingVertical={1}
+                        borderRadius={tokens.radius.full}
+                        backgroundColor={
+                          isActive ? 'rgba(255, 255, 255, 0.25)' : `${tokens.textMuted}20`
+                        }
                       >
-                        {count}
-                      </Text>
+                        <Text
+                          fontSize={10}
+                          fontWeight="800"
+                          color={isActive ? '#FFFFFF' : tokens.textMuted}
+                        >
+                          {count}
+                        </Text>
+                      </YStack>
                     )}
-                  </YStack>
+                  </XStack>
                 </Pressable>
               );
             })}
-          </XStack>
+          </ScrollView>
 
           {/* Search Bar */}
           <XStack
@@ -967,7 +974,8 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
       {/* ── Main List ── */}
       <ScrollView
         contentContainerStyle={{
-          padding: 16,
+          paddingHorizontal: 8,
+          paddingTop: 8,
           paddingBottom: insets.bottom + 40,
         }}
       >
