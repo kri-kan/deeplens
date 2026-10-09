@@ -326,10 +326,10 @@ export function GroupManagementView({
     return acc + Math.max(0, grossLineTotal - paidAmount);
   }, 0);
 
-  // Chunk items into pairs of 2 for square gallery grid
-  const itemPairs: OrderItem[][] = [];
-  for (let i = 0; i < groupItems.length; i += 2) {
-    itemPairs.push(groupItems.slice(i, i + 2));
+  // Chunk items into triplets of 3 for 3-column flush gallery grid
+  const itemTriplets: OrderItem[][] = [];
+  for (let i = 0; i < groupItems.length; i += 3) {
+    itemTriplets.push(groupItems.slice(i, i + 3));
   }
 
   return (
@@ -560,10 +560,18 @@ export function GroupManagementView({
           borderWidth={1}
           borderColor={tokens.border}
           borderRadius={tokens.radius.md}
-          padding={12}
-          gap={12}
+          overflow="hidden"
+          padding={0}
         >
-          <XStack justifyContent="space-between" alignItems="center">
+          {/* Section Header */}
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            paddingHorizontal={12}
+            paddingVertical={10}
+            borderBottomWidth={1}
+            borderBottomColor={tokens.border}
+          >
             <Text
               fontSize={11}
               fontWeight="800"
@@ -578,27 +586,37 @@ export function GroupManagementView({
             </Text>
           </XStack>
 
-          {/* 2-column square gallery grid */}
-          <YStack gap={14}>
-            {itemPairs.map((pair, rowIdx) => (
-              <XStack key={rowIdx} gap={12}>
-                {pair.map((it) => {
+          {/* 3-column flush gallery grid - Zero gaps between images and container box */}
+          <YStack gap={0}>
+            {itemTriplets.map((row, rowIdx) => (
+              <XStack
+                key={rowIdx}
+                gap={0}
+                borderBottomWidth={rowIdx < itemTriplets.length - 1 ? 1 : 0}
+                borderBottomColor={tokens.border}
+              >
+                {row.map((it, colIdx) => {
                   const photo = it.photoUri || it.catalogImageUrl || it.image || it.imageUrl;
                   const hasSize = Boolean(it.size && !isFreeSize(it.size));
                   const isItemShared = Boolean(it.isShared);
 
                   return (
-                    <YStack key={it.id || it.productId || rowIdx} flex={1} gap={8}>
-                      {/* Square Image-Focused Tile */}
+                    <YStack
+                      key={it.id || it.productId || colIdx}
+                      flex={1}
+                      gap={0}
+                      borderRightWidth={colIdx < 2 ? 1 : 0}
+                      borderRightColor={tokens.border}
+                    >
+                      {/* Square Image-Focused Tile (Flush, Zero Gap) */}
                       <YStack
                         aspectRatio={1}
                         width="100%"
-                        borderRadius={tokens.radius.md}
                         overflow="hidden"
                         backgroundColor={tokens.surfaceRaised}
                         position="relative"
-                        borderWidth={isItemShared ? 2.5 : 1}
-                        borderColor={isItemShared ? tokens.success : tokens.border}
+                        borderWidth={isItemShared ? 2.5 : 0}
+                        borderColor={isItemShared ? tokens.success : 'transparent'}
                       >
                         {photo ? (
                           <Image
@@ -608,33 +626,41 @@ export function GroupManagementView({
                           />
                         ) : (
                           <YStack flex={1} alignItems="center" justifyContent="center">
-                            <LuBuilding2 size={32} color={tokens.textMuted} />
-                            <Text fontSize={10} color={tokens.textMuted} marginTop={4}>
+                            <LuBuilding2 size={24} color={tokens.textMuted} />
+                            <Text fontSize={9} color={tokens.textMuted} marginTop={2}>
                               No Image
                             </Text>
                           </YStack>
                         )}
 
-                        {/* Top-Left Overlay Badge: Qty & Size (if present and not free size) */}
+                        {/* Centered Qty & Size Overlay (Lil big & transparent, no 'Qty' label, supports 2-digit quantity) */}
                         <XStack
                           position="absolute"
-                          top={6}
-                          left={6}
-                          backgroundColor="rgba(0,0,0,0.72)"
-                          paddingHorizontal={6}
-                          paddingVertical={3}
-                          borderRadius={tokens.radius.sm}
+                          top={0}
+                          left={0}
+                          right={0}
+                          bottom={0}
                           alignItems="center"
-                          gap={4}
+                          justifyContent="center"
+                          pointerEvents="none"
                         >
-                          <Text fontSize={10} fontWeight="800" color="#FFFFFF">
-                            QTY: {it.quantity || 1}
-                          </Text>
-                          {hasSize && (
-                            <Text fontSize={10} fontWeight="800" color="#FCD34D">
-                              • {it.size}
+                          <XStack
+                            backgroundColor="rgba(0,0,0,0.48)"
+                            paddingHorizontal={8}
+                            paddingVertical={4}
+                            borderRadius={tokens.radius.sm}
+                            alignItems="center"
+                            gap={3}
+                          >
+                            <Text fontSize={16} fontWeight="900" color="#FFFFFF">
+                              {it.quantity || 1}
                             </Text>
-                          )}
+                            {hasSize && (
+                              <Text fontSize={15} fontWeight="800" color="#FCD34D">
+                                • {it.size}
+                              </Text>
+                            )}
+                          </XStack>
                         </XStack>
 
                         {/* Top-Right Overlay Symbol: Image Preview (LuEye) */}
@@ -645,39 +671,39 @@ export function GroupManagementView({
                           hitSlop={8}
                           style={({ pressed }) => ({
                             position: 'absolute',
-                            top: 6,
-                            right: 6,
-                            width: 28,
-                            height: 28,
+                            top: 5,
+                            right: 5,
+                            width: 26,
+                            height: 26,
                             borderRadius: tokens.radius.full,
-                            backgroundColor: pressed ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.72)',
+                            backgroundColor: pressed ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.55)',
                             alignItems: 'center',
                             justifyContent: 'center',
                           })}
                         >
-                          <LuEye size={15} color="#FFFFFF" />
+                          <LuEye size={14} color="#FFFFFF" />
                         </Pressable>
 
-                        {/* Bottom Overlay: Shared Status Confirmation Badge & Price */}
+                        {/* Bottom Overlay: Shared Status & Price */}
                         <XStack
                           position="absolute"
-                          bottom={6}
-                          left={6}
-                          right={6}
+                          bottom={4}
+                          left={4}
+                          right={4}
                           justifyContent="space-between"
                           alignItems="center"
                         >
                           {isItemShared ? (
                             <XStack
                               backgroundColor={tokens.success}
-                              paddingHorizontal={6}
+                              paddingHorizontal={5}
                               paddingVertical={2}
-                              borderRadius={4}
+                              borderRadius={3}
                               alignItems="center"
-                              gap={3}
+                              gap={2}
                             >
-                              <LuCheck size={11} color="#FFFFFF" strokeWidth={3} />
-                              <Text fontSize={9} fontWeight="900" color="#FFFFFF">
+                              <LuCheck size={10} color="#FFFFFF" strokeWidth={3} />
+                              <Text fontSize={8} fontWeight="900" color="#FFFFFF">
                                 SHARED
                               </Text>
                             </XStack>
@@ -685,61 +711,49 @@ export function GroupManagementView({
                             <YStack />
                           )}
                           <XStack
-                            backgroundColor="rgba(0,0,0,0.72)"
-                            paddingHorizontal={6}
+                            backgroundColor="rgba(0,0,0,0.65)"
+                            paddingHorizontal={5}
                             paddingVertical={2}
-                            borderRadius={4}
+                            borderRadius={3}
                           >
-                            <Text fontSize={10} fontWeight="800" color="#FFFFFF">
+                            <Text fontSize={9} fontWeight="800" color="#FFFFFF">
                               ₹{((it.costPerPiece || 0) * (it.quantity || 1)).toLocaleString('en-IN')}
                             </Text>
                           </XStack>
                         </XStack>
                       </YStack>
 
-                      {/* Title & SKU */}
-                      <YStack gap={1} paddingHorizontal={2}>
-                        <Text fontSize={11} fontWeight="700" color={tokens.text} numberOfLines={1}>
-                          {it.title || 'Untitled Item'}
-                        </Text>
-                        <Text fontSize={10} color={tokens.textMuted} numberOfLines={1}>
-                          SKU: {it.productId || 'N/A'}
-                        </Text>
-                      </YStack>
-
-                      {/* Dedicated Share Button Below Tile */}
+                      {/* Dedicated Share Button Directly Below Tile */}
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Share item ${it.title || it.productId}`}
                         onPress={() => handleShareItem(it)}
                         style={({ pressed }) => ({
-                          height: 36,
-                          borderRadius: tokens.radius.sm,
+                          height: 32,
                           backgroundColor: isItemShared
-                            ? `${tokens.success}18`
+                            ? `${tokens.success}14`
                             : pressed
-                            ? `${tokens.accent}D0`
-                            : tokens.accent,
-                          borderWidth: isItemShared ? 1 : 0,
-                          borderColor: isItemShared ? tokens.success : 'transparent',
+                            ? `${tokens.accent}20`
+                            : tokens.surfaceRaised,
                           alignItems: 'center',
                           justifyContent: 'center',
                           flexDirection: 'row',
-                          gap: 6,
+                          gap: 4,
+                          paddingHorizontal: 4,
                         })}
                       >
                         {isItemShared ? (
                           <>
-                            <LuCheck size={14} color={tokens.success} strokeWidth={2.5} />
-                            <Text fontSize={11} fontWeight="800" color={tokens.success}>
+                            <LuCheck size={12} color={tokens.success} strokeWidth={2.5} />
+                            <Text fontSize={10} fontWeight="800" color={tokens.success} numberOfLines={1}>
                               SHARED ✓
                             </Text>
                           </>
                         ) : (
                           <>
-                            <LuShare2 size={13} color={tokens.accentForeground} />
-                            <Text fontSize={11} fontWeight="800" color={tokens.accentForeground}>
-                              SHARE ITEM
+                            <LuShare2 size={11} color={tokens.accent} />
+                            <Text fontSize={10} fontWeight="800" color={tokens.accent} numberOfLines={1}>
+                              SHARE
                             </Text>
                           </>
                         )}
@@ -747,8 +761,16 @@ export function GroupManagementView({
                     </YStack>
                   );
                 })}
-                {/* Spacer if odd number of items */}
-                {pair.length === 1 && <YStack flex={1} />}
+
+                {/* Pad incomplete row so items retain exact 1/3 column width */}
+                {Array.from({ length: 3 - row.length }).map((_, padIdx) => (
+                  <YStack
+                    key={`pad-${padIdx}`}
+                    flex={1}
+                    borderRightWidth={padIdx < 2 - row.length ? 1 : 0}
+                    borderRightColor={tokens.border}
+                  />
+                ))}
               </XStack>
             ))}
           </YStack>

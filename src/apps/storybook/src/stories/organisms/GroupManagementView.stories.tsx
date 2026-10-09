@@ -32,6 +32,31 @@ const MOCK_ITEMS: OrderItem[] = [
     vendor: 'Varanasi Weavers Ltd',
     imageColor: '#c9b8a8',
   },
+  {
+    id: 'item-3',
+    productId: 'PRD-10293',
+    title: 'Tussar Georgette Dupatta',
+    size: 'XL',
+    quantity: 12,
+    costPerPiece: 1200,
+    codChargePerPiece: 50,
+    amountPaid: 0,
+    vendor: 'Varanasi Weavers Ltd',
+    imageColor: '#b8c9a8',
+    isShared: true,
+  },
+  {
+    id: 'item-4',
+    productId: 'PRD-10294',
+    title: 'Pure Chiffon Floral Saree',
+    size: 'Free Size',
+    quantity: 3,
+    costPerPiece: 1850,
+    codChargePerPiece: 50,
+    amountPaid: 0,
+    vendor: 'Varanasi Weavers Ltd',
+    imageColor: '#d5c4e8',
+  },
 ];
 
 const meta: Meta<typeof GroupManagementView> = {
