@@ -20,7 +20,7 @@ import { CustomCheckbox } from '../../atoms/CustomCheckbox';
 import { StatusBadge, StatusIntent } from '../../atoms/StatusBadge';
 import { ImageViewerModal } from '../../molecules/ImageViewerModal';
 import { shareImageUri } from '../../../utils/shareImage';
-import { GroupManagementModal } from '../GroupManagementModal';
+import { GroupManagementView } from '../GroupManagementView';
 
 export interface OrderItem {
   id: string;
@@ -73,6 +73,7 @@ export interface ProductListSectionProps {
   onGenerateGroupLabel?: (orderGrpId: string) => void;
   onViewLabel?: (url: string) => void;
   onShareGroup?: (groupKey: string) => void;
+  onManageGroup?: (groupKey: string) => void;
 }
 
 export function ProductListSection({
@@ -96,6 +97,7 @@ export function ProductListSection({
   onGenerateGroupLabel,
   onViewLabel,
   onShareGroup,
+  onManageGroup,
 }: ProductListSectionProps) {
   const { tokens } = useTheme();
   const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string } | null>(null);
@@ -262,7 +264,13 @@ export function ProductListSection({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Manage package for ${group.isUnassigned ? 'No Vendor' : group.vendorName}, currently ${currentStage}`}
-                  onPress={() => setManageGroupKey(group.key)}
+                  onPress={() => {
+                    if (onManageGroup) {
+                      onManageGroup(group.key);
+                    } else {
+                      setManageGroupKey(group.key);
+                    }
+                  }}
                   style={({ pressed }) => ({
                     backgroundColor: pressed ? `${tokens.surfaceRaised}D0` : tokens.surfaceRaised,
                     paddingHorizontal: 12,
@@ -762,8 +770,7 @@ export function ProductListSection({
         const currentStage = groupStages[targetGroup.key] || 'Unconfirmed';
 
         return (
-          <GroupManagementModal
-            visible={Boolean(manageGroupKey)}
+          <GroupManagementView
             orderId={orderId || ''}
             orderGrpId={labelInfo?.orderGrpId || (orderId ? `${orderId}-${targetGroup.key}` : undefined)}
             vendorName={targetGroup.vendorName}
@@ -786,7 +793,7 @@ export function ProductListSection({
             }}
             onViewLabel={onViewLabel}
             onShareGroup={() => onShareGroup?.(targetGroup.key)}
-            onClose={() => setManageGroupKey(null)}
+            onBack={() => setManageGroupKey(null)}
           />
         );
       })()}
