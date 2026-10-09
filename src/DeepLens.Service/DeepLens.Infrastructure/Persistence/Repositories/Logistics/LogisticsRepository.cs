@@ -127,24 +127,7 @@ public class LogisticsRepository : ILogisticsRepository
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         resolved_at TIMESTAMPTZ
                     );
-
-                    INSERT INTO public.warehouses (id, name, code, address_line1, address_line2, city, state, pincode, phone, contact_person, is_central, is_active, created_at)
-                    VALUES (
-                        'a0000000-0000-0000-0000-000000000001',
-                        'Vayyari Central Hub',
-                        'VAY-CENTRAL-01',
-                        'Plot 42, Vayyari Logistics Park, Industrial Area Phase 2',
-                        'Bhatar Road',
-                        'Surat',
-                        'Gujarat',
-                        '395002',
-                        '+91-9876543210',
-                        'Operations Lead',
-                        true,
-                        true,
-                        NOW()
-                    )
-                    ON CONFLICT (code) DO NOTHING;
+                    );
                 ");
                 _schemaEnsured = true;
             }
@@ -281,6 +264,17 @@ public class LogisticsRepository : ILogisticsRepository
                 warehouse.IsCentral,
                 warehouse.IsActive
             });
+
+        return affected > 0;
+    }
+
+    public async Task<bool> DeleteWarehouseAsync(Guid id)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var affected = await connection.ExecuteAsync(@"
+            DELETE FROM public.warehouses
+            WHERE id = @Id",
+            new { Id = id });
 
         return affected > 0;
     }

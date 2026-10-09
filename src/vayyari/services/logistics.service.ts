@@ -1115,5 +1115,12 @@ export const logisticsService = {
    */
   updateWarehouse: async (id: string, request: UpdateWarehouseRequest): Promise<Warehouse> => {
     return await productMgmtApiClient.put<Warehouse>(API_ROUTES.LOGISTICS.WAREHOUSE_UPDATE(id), request);
+  },
+
+  /**
+   * Delete a warehouse facility from the registry
+   */
+  deleteWarehouse: async (id: string): Promise<void> => {
+    await productMgmtApiClient.delete(API_ROUTES.LOGISTICS.WAREHOUSE_DELETE(id));
   }
 };

@@ -485,6 +485,30 @@ public class LogisticsController : ControllerBase
     }
 
     /// <summary>
+    /// Deletes a warehouse facility from the DeepLens registry.
+    /// DELETE /api/v1/logistics/warehouses/{id}
+    /// </summary>
+    [HttpDelete("warehouses/{id}")]
+    public async Task<IActionResult> DeleteWarehouse(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var success = await _repository.DeleteWarehouseAsync(id);
+            if (!success)
+            {
+                return NotFound(new { message = $"Warehouse {id} not found" });
+            }
+
+            return Ok(new { success = true, message = "Warehouse deleted successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete warehouse {Id}", id);
+            return StatusCode(500, new { message = "Failed to delete warehouse", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Returns pending NDR items needing human-in-the-loop resolution.
     /// GET /api/v1/logistics/ndr/pending
     /// </summary>

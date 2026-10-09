@@ -13,6 +13,7 @@ public interface ILogisticsRepository
     Task<Warehouse?> GetCentralWarehouseAsync();
     Task<Guid> CreateWarehouseAsync(Warehouse warehouse);
     Task<bool> UpdateWarehouseAsync(Warehouse warehouse);
+    Task<bool> DeleteWarehouseAsync(Guid id);
 
     // Shipments
     Task<Shipment?> GetShipmentByIdAsync(Guid id);

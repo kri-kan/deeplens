@@ -57,13 +57,39 @@ export default function DelhiveryWarehousesScreen() {
       setWarehouses(res.warehouses || []);
       const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setLastSyncedAt(formattedTime);
-      Alert.alert('Sync Complete', res.message || `Successfully synchronized ${res.warehouses?.length || 0} warehouses.`);
+      Alert.alert(
+        'Warehouse Registry Synced',
+        `Loaded ${res.warehouses?.length || 0} facilities.\n\nNote: Delhivery's external API does not allow bulk GET listing of portal warehouses. Add or register your facilities here with their exact Delhivery pickup name to auto-map them to vendors.`
+      );
     } catch (error: any) {
       console.error('Failed to sync warehouses', error);
       Alert.alert('Sync Failed', error?.message || 'Failed to sync warehouses from Delhivery');
     } finally {
       setSyncing(false);
     }
+  };
+
+  const handleDelete = (id: string, facilityName: string) => {
+    Alert.alert(
+      'Delete Facility',
+      `Are you sure you want to remove "${facilityName}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logisticsService.deleteWarehouse(id);
+              await fetchData();
+              Alert.alert('Deleted', 'Warehouse facility removed successfully.');
+            } catch (err: any) {
+              Alert.alert('Delete Failed', err?.message || 'Could not delete warehouse.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleOpenCreate = () => {
@@ -201,6 +227,19 @@ export default function DelhiveryWarehousesScreen() {
           </View>
         </Surface>
 
+        {/* Notice Card */}
+        <Surface style={styles.noticeCard} elevation={0}>
+          <IconButton icon="information-outline" size={20} iconColor="#0284C7" style={{ margin: 0 }} />
+          <View style={{ flex: 1, paddingRight: 4 }}>
+            <Text variant="labelSmall" style={{ color: '#0369A1', fontWeight: '700' }}>
+              DELHIVERY PICKUP FACILITIES DIRECTORY
+            </Text>
+            <Text variant="bodySmall" style={{ color: '#475569', fontSize: 11, marginTop: 2 }}>
+              Delhivery does not allow public GET export of portal warehouses via API. Register new facilities here or add existing pickup locations by code/name to auto-map with vendors.
+            </Text>
+          </View>
+        </Surface>
+
         {/* Warehouses List */}
         <FlatList
           data={warehouses}
@@ -230,11 +269,19 @@ export default function DelhiveryWarehousesScreen() {
                     {item.name}
                   </Text>
                 </View>
-                <IconButton
-                  icon="pencil-outline"
-                  size={20}
-                  onPress={() => handleOpenEdit(item)}
-                />
+                <View style={{ flexDirection: 'row' }}>
+                  <IconButton
+                    icon="pencil-outline"
+                    size={20}
+                    onPress={() => handleOpenEdit(item)}
+                  />
+                  <IconButton
+                    icon="delete-outline"
+                    size={20}
+                    iconColor="#EF4444"
+                    onPress={() => handleDelete(item.id, item.name)}
+                  />
+                </View>
               </View>
 
               <View style={styles.addressBox}>
@@ -479,6 +526,19 @@ const styles = StyleSheet.create({
   },
   addBtn: {
     borderRadius: 8,
+  },
+  noticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 10,
+    gap: 8,
   },
   listContent: {
     padding: 16,
