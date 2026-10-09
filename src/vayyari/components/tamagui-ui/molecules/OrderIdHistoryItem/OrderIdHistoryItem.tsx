@@ -265,18 +265,12 @@ export function OrderIdHistoryItem({
               />
             )}
 
-            <StatusBadge
-              label={stageInfo.displayTag}
-              intent={stageInfo.intent}
-              size="sm"
-            />
-
             <TimestampBadge date={item.timestamp} compact size="sm" />
           </XStack>
 
-          {/* Subtitle: Handle (Clean formatted handle) */}
-          {displayHandle ? (
-            <XStack alignItems="center" gap={8} flexWrap="nowrap">
+          {/* Subtitle / Second Line: Handle (WhatsApp/Insta link) + Stage/Status Tag */}
+          <XStack alignItems="center" gap={8} flexWrap="nowrap">
+            {displayHandle ? (
               <TouchableOpacity
                 activeOpacity={0.7}
                 accessibilityRole="link"
@@ -295,8 +289,16 @@ export function OrderIdHistoryItem({
                   {displayHandle}
                 </Text>
               </TouchableOpacity>
-            </XStack>
-          ) : null}
+            ) : null}
+
+            {!!stageInfo.displayTag && (
+              <StatusBadge
+                label={stageInfo.displayTag}
+                intent={stageInfo.intent}
+                size="sm"
+              />
+            )}
+          </XStack>
         </YStack>
       </XStack>
 

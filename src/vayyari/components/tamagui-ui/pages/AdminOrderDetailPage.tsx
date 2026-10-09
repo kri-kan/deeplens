@@ -475,29 +475,8 @@ export function AdminOrderDetailPage({
             </Text>
           </YStack>
 
-          {/* Action Buttons: SAVE and CONFIRM */}
+          {/* Action Buttons: CONFIRM (left) and SAVE (right) */}
           <XStack alignItems="center" gap={8}>
-            {/* SAVE Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Save order details"
-              onPress={() => handleSaveOrder(false)}
-              style={({ pressed }) => ({
-                paddingHorizontal: 16,
-                height: 40,
-                borderRadius: tokens.radius.sm,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
-                alignItems: 'center',
-                justifyContent: 'center',
-              })}
-            >
-              <Text fontSize={12} fontWeight="700" color={tokens.text}>
-                SAVE
-              </Text>
-            </Pressable>
-
             {/* CONFIRM Button */}
             <Pressable
               accessibilityRole="button"
@@ -522,6 +501,27 @@ export function AdminOrderDetailPage({
               <LuCheck size={16} color={tokens.accentForeground} />
               <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
                 CONFIRM
+              </Text>
+            </Pressable>
+
+            {/* SAVE Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save order details"
+              onPress={() => handleSaveOrder(false)}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+              })}
+            >
+              <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                SAVE
               </Text>
             </Pressable>
           </XStack>

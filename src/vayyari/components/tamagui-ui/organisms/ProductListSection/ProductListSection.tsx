@@ -13,12 +13,14 @@ import {
   LuShare2,
   LuHelpCircle,
   LuCheck,
+  LuLock,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { CustomCheckbox } from '../../atoms/CustomCheckbox';
 import { StatusBadge, StatusIntent } from '../../atoms/StatusBadge';
 import { ImageViewerModal } from '../../molecules/ImageViewerModal';
 import { shareImageUri } from '@/utils/shareImage';
+import { GroupManagementModal } from '../GroupManagementModal';
 
 export interface OrderItem {
   id: string;
@@ -55,8 +57,10 @@ export interface ProductListSectionProps {
   items?: OrderItem[];
   selectedIds: string[];
   isCod?: boolean;
+  orderId?: string;
   groupStages?: Record<string, string>;
-  groupLabelInfo?: Record<string, { needLabel?: boolean; awbNumber?: string; labelUrl?: string }>;
+  groupLabelInfo?: Record<string, { orderGrpId?: string; needLabel?: boolean; awbNumber?: string; labelUrl?: string }>;
+  lockedVendorKeys?: string[];
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
   onBatchDelete: () => void;
@@ -66,6 +70,9 @@ export interface ProductListSectionProps {
   onUpdateItem: (id: string, updates: Partial<OrderItem>) => void;
   onRemoveProduct: (id: string) => void;
   onUpdateGroupStage?: (groupKey: string, newStage: string) => void;
+  onGenerateGroupLabel?: (orderGrpId: string) => void;
+  onViewLabel?: (url: string) => void;
+  onShareGroup?: (groupKey: string) => void;
 }
 
 export function ProductListSection({
@@ -73,8 +80,10 @@ export function ProductListSection({
   items,
   selectedIds,
   isCod = false,
+  orderId,
   groupStages = {},
   groupLabelInfo = {},
+  lockedVendorKeys = [],
   onToggleSelect,
   onToggleSelectAll,
   onRemoveProduct,
@@ -84,18 +93,13 @@ export function ProductListSection({
   onOpenPicker,
   onUpdateItem,
   onUpdateGroupStage,
+  onGenerateGroupLabel,
+  onViewLabel,
+  onShareGroup,
 }: ProductListSectionProps) {
   const { tokens } = useTheme();
   const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string } | null>(null);
-  const [stagePicker, setStagePicker] = useState<{
-    visible: boolean;
-    groupKey: string;
-    currentStage: string;
-  }>({
-    visible: false,
-    groupKey: '',
-    currentStage: 'Unconfirmed',
-  });
+  const [manageGroupKey, setManageGroupKey] = useState<string | null>(null);
 
   const getStageIntent = (stage: string): StatusIntent => {
     const s = (stage || '').toLowerCase();
@@ -246,15 +250,21 @@ export function ProductListSection({
                 overflow="hidden"
                 gap={0}
               >
-                {/* ── Group Header: Vendor Name & Single Stage Against Group ── */}
-                <XStack
-                  backgroundColor={tokens.surfaceRaised}
-                  paddingHorizontal={12}
-                  paddingVertical={10}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  borderBottomWidth={1}
-                  borderBottomColor={tokens.border}
+                {/* ── Group Header: Vendor Name, Status & Right Chevron (Opens Group Management Screen) ── */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Manage package for ${group.vendorName}, currently ${currentStage}`}
+                  onPress={() => setManageGroupKey(group.key)}
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? `${tokens.surfaceRaised}D0` : tokens.surfaceRaised,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottomWidth: 1,
+                    borderBottomColor: tokens.border,
+                  })}
                 >
                   {/* Left: Vendor Icon + Name + Count */}
                   <XStack alignItems="center" gap={8} flex={1}>
@@ -272,9 +282,9 @@ export function ProductListSection({
                         <LuBuilding2 size={15} color={tokens.accent} />
                       )}
                     </XStack>
-                    <YStack gap={1}>
+                    <YStack gap={1} flex={1}>
                       <XStack alignItems="center" gap={6}>
-                        <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                        <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
                           {group.isUnassigned ? 'Unassigned Vendor' : group.vendorName}
                         </Text>
                         {group.isUnassigned && (
@@ -296,32 +306,33 @@ export function ProductListSection({
                     </YStack>
                   </XStack>
 
-                  {/* Right: Group Stage Badge (Interactive - single stage against group) */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Change stage for ${group.vendorName}, currently ${currentStage}`}
-                    onPress={() => setStagePicker({ visible: true, groupKey: group.key, currentStage })}
-                    style={{ cursor: 'pointer' } as any}
-                  >
-                    <XStack
-                      alignItems="center"
-                      gap={4}
-                      paddingHorizontal={6}
-                      paddingVertical={3}
-                      borderRadius={tokens.radius.sm}
-                      backgroundColor={tokens.surface}
-                      borderWidth={1}
-                      borderColor={tokens.border}
-                    >
-                      <StatusBadge
-                        label={currentStage.toUpperCase()}
-                        intent={getStageIntent(currentStage)}
-                        size="sm"
-                      />
-                      <LuChevronDown size={12} color={tokens.textMuted} />
-                    </XStack>
-                  </Pressable>
-                </XStack>
+                  {/* Right: Locked badge (if locked), Status Badge & Right Chevron */}
+                  <XStack alignItems="center" gap={6}>
+                    {lockedVendorKeys.includes(group.key) && (
+                      <XStack
+                        alignItems="center"
+                        gap={3}
+                        paddingHorizontal={5}
+                        paddingVertical={2}
+                        borderRadius={tokens.radius.xs}
+                        backgroundColor={`${tokens.accent}1A`}
+                      >
+                        <LuLock size={10} color={tokens.accent} />
+                        <Text fontSize={9} fontWeight="800" color={tokens.accent}>
+                          LOCKED
+                        </Text>
+                      </XStack>
+                    )}
+
+                    <StatusBadge
+                      label={currentStage.toUpperCase()}
+                      intent={getStageIntent(currentStage)}
+                      size="sm"
+                    />
+
+                    <LuChevronRight size={18} color={tokens.textMuted} />
+                  </XStack>
+                </Pressable>
 
                 {/* Group Items */}
                 <YStack padding={10} gap={8}>
@@ -729,105 +740,43 @@ export function ProductListSection({
 }))}
 </YStack>
 
-      {/* Group Stage Picker Modal */}
-      <Modal
-        visible={stagePicker.visible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setStagePicker((prev) => ({ ...prev, visible: false }))}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-          }}
-          onPress={() => setStagePicker((prev) => ({ ...prev, visible: false }))}
-        >
-          <Pressable
-            style={{ width: '100%', maxWidth: 360 }}
-            onPress={(e) => e.stopPropagation?.()}
-          >
-            <YStack
-              backgroundColor={tokens.surface}
-              borderRadius={tokens.radius.lg}
-              borderWidth={1}
-              borderColor={tokens.border}
-              padding={16}
-              gap={12}
-            >
-              <XStack alignItems="center" justifyContent="space-between">
-                <YStack gap={2}>
-                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                    Update Group Stage
-                  </Text>
-                  <Text fontSize={12} color={tokens.textMuted}>
-                    {stagePicker.groupKey === 'Unassigned' ? 'Unassigned Vendor' : stagePicker.groupKey}
-                  </Text>
-                </YStack>
-                <Pressable
-                  onPress={() => setStagePicker((prev) => ({ ...prev, visible: false }))}
-                  hitSlop={8}
-                >
-                  <LuX size={18} color={tokens.textMuted} />
-                </Pressable>
-              </XStack>
+      {/* Dedicated Group Management Modal */}
+      {(() => {
+        if (!manageGroupKey) return null;
+        const targetGroup = vendorGroups.find((g) => g.key === manageGroupKey);
+        if (!targetGroup) return null;
+        const labelInfo = groupLabelInfo[targetGroup.key];
+        const currentStage = groupStages[targetGroup.key] || 'Unconfirmed';
 
-              <YStack gap={6}>
-                {ORDER_STAGES.map((stage) => {
-                  const isSelected = stagePicker.currentStage.toLowerCase() === stage.toLowerCase();
-                  return (
-                    <Pressable
-                      key={stage}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        if (stage.toLowerCase() === 'processed') {
-                          const labelInfo = groupLabelInfo[stagePicker.groupKey];
-                          const needsLabel = labelInfo?.needLabel ?? isCod;
-                          const hasLabel = Boolean(labelInfo?.labelUrl || labelInfo?.awbNumber);
-
-                          if (needsLabel && !hasLabel) {
-                            Alert.alert(
-                              'Shipping Label Required',
-                              'A Delhivery shipping label is required before moving this group to Processed. Please generate a shipping label first.'
-                            );
-                            return;
-                          }
-                        }
-
-                        onUpdateGroupStage?.(stagePicker.groupKey, stage);
-                        setStagePicker((prev) => ({ ...prev, visible: false, currentStage: stage }));
-                      }}
-                    >
-                      <XStack
-                        alignItems="center"
-                        justifyContent="space-between"
-                        paddingVertical={10}
-                        paddingHorizontal={12}
-                        borderRadius={tokens.radius.md}
-                        backgroundColor={isSelected ? `${tokens.accent}14` : tokens.surfaceRaised}
-                        borderWidth={1}
-                        borderColor={isSelected ? tokens.accent : tokens.border}
-                      >
-                        <XStack alignItems="center" gap={8}>
-                          <StatusBadge
-                            label={stage.toUpperCase()}
-                            intent={getStageIntent(stage)}
-                            size="sm"
-                          />
-                        </XStack>
-                        {isSelected && <LuCheck size={16} color={tokens.accent} />}
-                      </XStack>
-                    </Pressable>
-                  );
-                })}
-              </YStack>
-            </YStack>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        return (
+          <GroupManagementModal
+            visible={Boolean(manageGroupKey)}
+            orderId={orderId || ''}
+            orderGrpId={labelInfo?.orderGrpId || (orderId ? `${orderId}-${targetGroup.key}` : undefined)}
+            vendorName={targetGroup.vendorName}
+            isUnassigned={targetGroup.isUnassigned}
+            currentStage={currentStage}
+            isCod={isCod}
+            needLabel={labelInfo?.needLabel ?? isCod}
+            awbNumber={labelInfo?.awbNumber}
+            labelUrl={labelInfo?.labelUrl}
+            isLocked={lockedVendorKeys.includes(targetGroup.key)}
+            items={targetGroup.items}
+            onUpdateStage={(newStage) => {
+              onUpdateGroupStage?.(targetGroup.key, newStage);
+            }}
+            onGenerateLabel={() => {
+              const grpId = labelInfo?.orderGrpId;
+              if (grpId && onGenerateGroupLabel) {
+                onGenerateGroupLabel(grpId);
+              }
+            }}
+            onViewLabel={onViewLabel}
+            onShareGroup={() => onShareGroup?.(targetGroup.key)}
+            onClose={() => setManageGroupKey(null)}
+          />
+        );
+      })()}
 
       {/* Full-Screen Image Preview Modal with Share Intent */}
       <ImageViewerModal

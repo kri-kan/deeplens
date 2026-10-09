@@ -57,14 +57,14 @@ export function DetailHeader({
       statusText = status.includes('+') ? status.toUpperCase() : (statusCount > 0 ? `PROCESSED (+${statusCount})` : 'PROCESSED');
       badgeBg = '#6200ee1F';
       badgeTextColor = '#6200ee';
+    } else if (normStatus.includes('unconfirmed') || normStatus.includes('unformed')) {
+      statusText = status.includes('+') ? status.toUpperCase() : (statusCount > 0 ? `UNCONFIRMED (+${statusCount})` : 'UNCONFIRMED');
+      badgeBg = `${tokens.warning}1F`;
+      badgeTextColor = tokens.warning;
     } else if (normStatus.includes('confirm')) {
       statusText = status.includes('+') ? status.toUpperCase() : (statusCount > 0 ? `CONFIRMED (+${statusCount})` : 'CONFIRMED');
       badgeBg = `${tokens.accent}1F`;
       badgeTextColor = tokens.accent;
-    } else if (normStatus.includes('unconfirmed')) {
-      statusText = status.includes('+') ? status.toUpperCase() : (statusCount > 0 ? `UNCONFIRMED (+${statusCount})` : 'UNCONFIRMED');
-      badgeBg = `${tokens.warning}1F`;
-      badgeTextColor = tokens.warning;
     } else {
       statusText = status.toUpperCase();
       badgeBg = tokens.surfaceRaised;

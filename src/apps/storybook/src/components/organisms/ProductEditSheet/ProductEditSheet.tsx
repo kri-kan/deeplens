@@ -6,6 +6,7 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -38,6 +39,7 @@ export interface ProductEditSheetProps {
   visible: boolean;
   item: OrderItem | null;
   isCod?: boolean;
+  lockedVendorNames?: string[];
   onSaveItem: (item: OrderItem) => void;
   onDeleteItem?: (item: OrderItem) => void;
   onClose: () => void;
@@ -47,6 +49,7 @@ export function ProductEditSheet({
   visible,
   item,
   isCod = false,
+  lockedVendorNames = [],
   onSaveItem,
   onDeleteItem,
   onClose,
@@ -159,6 +162,19 @@ export function ProductEditSheet({
   const handleSave = () => {
     if (!form) return;
     const currentSku = (form.productId || '').trim();
+
+    const origV = (item?.vendor || '').trim();
+    const origKey = (!origV || origV.toLowerCase() === 'unassigned' || origV.toLowerCase() === 'none') ? 'Unassigned' : origV;
+    const newV = (form.vendor || '').trim();
+    const newKey = (!newV || newV.toLowerCase() === 'unassigned' || newV.toLowerCase() === 'none') ? 'Unassigned' : newV;
+
+    if (origKey !== newKey && lockedVendorNames.includes(newKey)) {
+      Alert.alert(
+        'Package Locked',
+        `Cannot assign items to package "${newKey}". It is already locked (shipping label generated or reached placed/delivered).`
+      );
+      return;
+    }
 
     // SKU Unlink Warning check
     if (Boolean(form.catalogImageUrl) && Boolean(linkedCatalogSku) && currentSku !== linkedCatalogSku) {
@@ -788,6 +804,8 @@ export function ProductEditSheet({
       <VendorPickerSheet
         visible={vendorPickerVisible}
         selectedVendor={form.vendor}
+        lockedVendors={lockedVendorNames}
+        originalVendor={item?.vendor}
         onSelect={(vendorName) => updateField('vendor', vendorName)}
         onClose={() => setVendorPickerVisible(false)}
       />

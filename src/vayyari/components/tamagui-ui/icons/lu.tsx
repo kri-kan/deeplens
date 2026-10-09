@@ -138,6 +138,9 @@ export const LuLayers: React.FC<IconProps> = ({ size = 16, color = "#333333", st
 export const LuList: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="list" size={size} color={color} style={style} />
 );
+export const LuLock: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="lock" size={size} color={color} style={style} />
+);
 export const LuDatabase: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <MaterialCommunityIcons name="database-outline" size={size} color={color} style={style} />
 );

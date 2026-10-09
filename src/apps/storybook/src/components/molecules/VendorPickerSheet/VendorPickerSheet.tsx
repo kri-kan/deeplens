@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Pressable, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuSearch,
@@ -7,6 +7,7 @@ import {
   LuBuilding2,
   LuStar,
   LuCheck,
+  LuLock,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 import { BottomSheet } from '../../atoms/BottomSheet';
@@ -30,6 +31,8 @@ export const STANDARD_VENDORS: VendorOption[] = [
 export interface VendorPickerSheetProps {
   visible: boolean;
   selectedVendor?: string;
+  lockedVendors?: string[];
+  originalVendor?: string;
   onSelect: (vendorName: string) => void;
   onClose: () => void;
 }
@@ -37,6 +40,8 @@ export interface VendorPickerSheetProps {
 export function VendorPickerSheet({
   visible,
   selectedVendor,
+  lockedVendors = [],
+  originalVendor,
   onSelect,
   onClose,
 }: VendorPickerSheetProps) {
@@ -152,38 +157,68 @@ export function VendorPickerSheet({
             keyboardShouldPersistTaps="handled"
           >
             {/* Custom search option if no exact match */}
-            {searchQuery.trim().length > 0 && !hasExactMatch && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Use ${searchQuery.trim()} as vendor`}
-                onPress={() => {
-                  onSelect(searchQuery.trim());
-                  onClose();
-                }}
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: tokens.radius.sm,
-                  backgroundColor: tokens.surfaceRaised,
-                  borderWidth: 1,
-                  borderColor: tokens.accent,
-                  borderStyle: 'dashed',
-                  opacity: pressed ? 0.75 : 1,
-                })}
-              >
-                <XStack alignItems="center" justifyContent="space-between">
-                  <XStack alignItems="center" gap={8} flex={1}>
-                    <LuBuilding2 size={16} color={tokens.accent} />
-                    <Text fontSize={13} fontWeight="700" color={tokens.accent} numberOfLines={1}>
-                      Use "{searchQuery.trim()}" as custom vendor
-                    </Text>
+            {searchQuery.trim().length > 0 && !hasExactMatch && (() => {
+              const customName = searchQuery.trim();
+              const isCustomLocked = Boolean(
+                lockedVendors &&
+                lockedVendors.some((lv) => lv.toLowerCase() === customName.toLowerCase()) &&
+                (!originalVendor || originalVendor.trim().toLowerCase() !== customName.toLowerCase())
+              );
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use ${customName} as vendor`}
+                  onPress={() => {
+                    if (isCustomLocked) {
+                      Alert.alert(
+                        'Package Locked',
+                        `Cannot assign items to package "${customName}". It is already locked (shipping label generated or reached placed/delivered).`
+                      );
+                      return;
+                    }
+                    onSelect(customName);
+                    onClose();
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: tokens.radius.sm,
+                    backgroundColor: tokens.surfaceRaised,
+                    borderWidth: 1,
+                    borderColor: isCustomLocked ? tokens.border : tokens.accent,
+                    borderStyle: 'dashed',
+                    opacity: isCustomLocked ? 0.6 : pressed ? 0.75 : 1,
+                  })}
+                >
+                  <XStack alignItems="center" justifyContent="space-between">
+                    <XStack alignItems="center" gap={8} flex={1}>
+                      {isCustomLocked ? (
+                        <LuLock size={16} color={tokens.textMuted} />
+                      ) : (
+                        <LuBuilding2 size={16} color={tokens.accent} />
+                      )}
+                      <Text
+                        fontSize={13}
+                        fontWeight="700"
+                        color={isCustomLocked ? tokens.textMuted : tokens.accent}
+                        numberOfLines={1}
+                      >
+                        Use "{customName}" as custom vendor {isCustomLocked ? '(Locked)' : ''}
+                      </Text>
+                    </XStack>
                   </XStack>
-                </XStack>
-              </Pressable>
-            )}
+                </Pressable>
+              );
+            })()}
 
             {filteredAndSortedVendors.map((item) => {
               const isSelected = selectedVendor?.trim() === item.name.trim();
+              const isItemLocked = Boolean(
+                lockedVendors &&
+                lockedVendors.some((lv) => lv.toLowerCase() === item.name.trim().toLowerCase()) &&
+                (!originalVendor || originalVendor.trim().toLowerCase() !== item.name.trim().toLowerCase())
+              );
 
               return (
                 <Pressable
@@ -191,6 +226,13 @@ export function VendorPickerSheet({
                   accessibilityRole="button"
                   accessibilityLabel={item.name}
                   onPress={() => {
+                    if (isItemLocked) {
+                      Alert.alert(
+                        'Package Locked',
+                        `Cannot assign items to package "${item.name}". It is already locked (shipping label generated or reached placed/delivered).`
+                      );
+                      return;
+                    }
                     onSelect(item.name);
                     onClose();
                   }}
@@ -205,12 +247,14 @@ export function VendorPickerSheet({
                       : 'transparent',
                     borderWidth: 1,
                     borderColor: isSelected ? tokens.accent : tokens.border,
-                    opacity: pressed ? 0.75 : 1,
+                    opacity: isItemLocked ? 0.55 : pressed ? 0.75 : 1,
                   })}
                 >
                   <XStack alignItems="center" justifyContent="space-between">
                     <XStack alignItems="center" gap={10} flex={1}>
-                      {item.isStarred ? (
+                      {isItemLocked ? (
+                        <LuLock size={16} color={tokens.textMuted} />
+                      ) : item.isStarred ? (
                         <LuStar size={16} color="#F59E0B" style={{ fill: '#F59E0B' } as any} />
                       ) : (
                         <LuBuilding2 size={16} color={tokens.textMuted} />
@@ -220,12 +264,24 @@ export function VendorPickerSheet({
                           <Text
                             fontSize={14}
                             fontWeight={isSelected ? '800' : item.isStarred ? '700' : '500'}
-                            color={isSelected ? tokens.accent : tokens.text}
+                            color={isItemLocked ? tokens.textMuted : isSelected ? tokens.accent : tokens.text}
                             numberOfLines={1}
                           >
                             {item.name}
                           </Text>
-                          {item.isStarred && (
+                          {isItemLocked && (
+                            <YStack
+                              backgroundColor={`${tokens.textMuted}1A`}
+                              paddingHorizontal={6}
+                              paddingVertical={1}
+                              borderRadius={4}
+                            >
+                              <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                                Locked
+                              </Text>
+                            </YStack>
+                          )}
+                          {!isItemLocked && item.isStarred && (
                             <YStack
                               backgroundColor="rgba(245, 158, 11, 0.12)"
                               paddingHorizontal={6}

@@ -223,6 +223,51 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     }
   }, [orderId]);
 
+  const distinctGroupKeys = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        products.map((p) => {
+          const raw = (p.vendor || '').trim();
+          const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+          return isUn ? 'Unassigned' : raw;
+        })
+      )
+    );
+  }, [products]);
+
+  const groupLabelInfo = React.useMemo(() => {
+    const map: Record<string, { orderGrpId?: string; needLabel?: boolean; awbNumber?: string; labelUrl?: string }> = {};
+    if (orderData?.groups) {
+      for (const g of orderData.groups) {
+        const rawV = (g.vendorName || '').trim();
+        const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
+        const k = isUn ? 'Unassigned' : rawV;
+        map[k] = {
+          orderGrpId: g.orderGrpId,
+          needLabel: g.needLabel ?? (paymentType === 'cod'),
+          awbNumber: g.awbNumber,
+          labelUrl: g.labelUrl,
+        };
+      }
+    }
+    return map;
+  }, [orderData?.groups, paymentType]);
+
+  const lockedVendorKeys = React.useMemo(() => {
+    return distinctGroupKeys.filter((groupKey) => {
+      const info = groupLabelInfo[groupKey];
+      const isLabelNeeded = info?.needLabel ?? (paymentType === 'cod');
+      const hasLabel = Boolean(info?.labelUrl || info?.awbNumber);
+      const stage = (groupStages[groupKey] || 'Unconfirmed').toLowerCase();
+
+      if (isLabelNeeded) {
+        return hasLabel;
+      } else {
+        return stage === 'placed' || stage === 'delivered';
+      }
+    });
+  }, [distinctGroupKeys, groupLabelInfo, paymentType, groupStages]);
+
   // Handlers
   const handleToggleSelect = (id: string) => {
     setSelectedItemIds((prev) =>
@@ -239,6 +284,21 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   };
 
   const handleBatchDelete = () => {
+    const lockedSelected = products.filter((p) => {
+      if (!selectedItemIds.map(String).includes(String(p.id))) return false;
+      const raw = (p.vendor || '').trim();
+      const groupKey = (!raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none') ? 'Unassigned' : raw;
+      return lockedVendorKeys.includes(groupKey);
+    });
+
+    if (lockedSelected.length > 0) {
+      Alert.alert(
+        'Package Locked',
+        'One or more selected items belong to locked packages (shipping label generated or placed/delivered) and cannot be deleted.'
+      );
+      return;
+    }
+
     setConfirmDialog({
       visible: true,
       type: 'batch',
@@ -345,6 +405,30 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   const handleSaveItem = async (updated: OrderItem) => {
     const existingIndex = products.findIndex((p) => p.id === updated.id);
+    const existingItem = existingIndex >= 0 ? products[existingIndex] : null;
+
+    const oldRaw = (existingItem?.vendor || '').trim();
+    const oldGroup = (!oldRaw || oldRaw.toLowerCase() === 'unassigned' || oldRaw.toLowerCase() === 'none') ? 'Unassigned' : oldRaw;
+
+    const newRaw = (updated.vendor || '').trim();
+    const newGroup = (!newRaw || newRaw.toLowerCase() === 'unassigned' || newRaw.toLowerCase() === 'none') ? 'Unassigned' : newRaw;
+
+    if (oldGroup !== newGroup && lockedVendorKeys.includes(newGroup)) {
+      Alert.alert(
+        'Package Locked',
+        `Cannot assign items to package "${newGroup}". It is already locked.`
+      );
+      return;
+    }
+
+    if (existingItem && oldGroup !== newGroup && lockedVendorKeys.includes(oldGroup)) {
+      Alert.alert(
+        'Package Locked',
+        `Cannot move items out of package "${oldGroup}". It is already locked.`
+      );
+      return;
+    }
+
     let nextProducts: OrderItem[];
     if (existingIndex >= 0) {
       nextProducts = products.map((p) => (p.id === updated.id ? updated : p));
@@ -511,6 +595,17 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   // Remove single line item with confirmation prompt
   const handleRequestRemoveProduct = (id: string) => {
     const item = products.find((p) => String(p.id) === String(id));
+    if (item) {
+      const raw = (item.vendor || '').trim();
+      const groupKey = (!raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none') ? 'Unassigned' : raw;
+      if (lockedVendorKeys.includes(groupKey)) {
+        Alert.alert(
+          'Package Locked',
+          `Cannot remove item from package "${groupKey}" because it is already locked.`
+        );
+        return;
+      }
+    }
     const itemTitle = item ? `"${item.title}"` : 'this line item';
     setConfirmDialog({
       visible: true,
@@ -582,15 +677,6 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     }
   };
 
-  if (loading) {
-    return (
-      <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" gap={12}>
-        <ActivityIndicator size="large" color={tokens.accent} />
-        <Text fontSize={13} color={tokens.textMuted}>Loading order #{orderId}…</Text>
-      </YStack>
-    );
-  }
-
   const emptyAddress: AddressData = {
     name: address?.name ?? '',
     phone: address?.phone ?? '',
@@ -614,35 +700,6 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       setSaving(false);
     }
   };
-
-  const distinctGroupKeys = React.useMemo(() => {
-    return Array.from(
-      new Set(
-        products.map((p) => {
-          const raw = (p.vendor || '').trim();
-          const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
-          return isUn ? 'Unassigned' : raw;
-        })
-      )
-    );
-  }, [products]);
-
-  const groupLabelInfo = React.useMemo(() => {
-    const map: Record<string, { needLabel?: boolean; awbNumber?: string; labelUrl?: string }> = {};
-    if (orderData?.groups) {
-      for (const g of orderData.groups) {
-        const rawV = (g.vendorName || '').trim();
-        const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
-        const k = isUn ? 'Unassigned' : rawV;
-        map[k] = {
-          needLabel: g.needLabel ?? (paymentType === 'cod'),
-          awbNumber: g.awbNumber,
-          labelUrl: g.labelUrl,
-        };
-      }
-    }
-    return map;
-  }, [orderData?.groups, paymentType]);
 
   const totalItemCount = React.useMemo(
     () => products.reduce((acc, p) => acc + (p.quantity || 1), 0),
@@ -676,6 +733,15 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     const leastStage = groupStages[sorted[0]] || 'Unconfirmed';
     return `${leastStage} +${distinctGroupKeys.length - 1}`;
   }, [products.length, distinctGroupKeys, groupStages]);
+
+  if (loading) {
+    return (
+      <YStack flex={1} backgroundColor={tokens.background} alignItems="center" justifyContent="center" gap={12}>
+        <ActivityIndicator size="large" color={tokens.accent} />
+        <Text fontSize={13} color={tokens.textMuted}>Loading order #{orderId}…</Text>
+      </YStack>
+    );
+  }
 
   return (
     <YStack flex={1} backgroundColor={tokens.background} position="relative">
@@ -864,12 +930,16 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
           {/* Products List Section */}
           <ProductListSection
+            orderId={orderId}
             products={products}
             selectedIds={selectedItemIds}
             isCod={paymentType === 'cod'}
             groupStages={groupStages}
             groupLabelInfo={groupLabelInfo}
+            lockedVendorKeys={lockedVendorKeys}
             onUpdateGroupStage={handleUpdateGroupStage}
+            onGenerateGroupLabel={handleGenerateGroupLabel}
+            onViewLabel={(url) => setPreviewImage(url)}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
             onBatchDelete={handleBatchDelete}
@@ -906,6 +976,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         visible={productSheetOpen}
         item={activeItem}
         isCod={paymentType === 'cod'}
+        lockedVendorNames={lockedVendorKeys}
         onSaveItem={handleSaveItem}
         onDeleteItem={(item) => handleRequestRemoveProduct(String(item.id))}
         onClose={() => setProductSheetOpen(false)}
@@ -999,31 +1070,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             </Text>
           </YStack>
 
-          {/* Action Buttons: SAVE and CONFIRM */}
+          {/* Action Buttons: CONFIRM (left) and SAVE (right) */}
           <XStack alignItems="center" gap={8}>
-            {/* SAVE Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Save order details"
-              onPress={() => handleSaveOrder(false)}
-              disabled={saving}
-              style={({ pressed }) => ({
-                paddingHorizontal: 16,
-                height: 40,
-                borderRadius: tokens.radius.sm,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: saving ? 0.6 : 1,
-              })}
-            >
-              <Text fontSize={12} fontWeight="700" color={tokens.text}>
-                {saving ? 'SAVING...' : 'SAVE'}
-              </Text>
-            </Pressable>
-
             {/* CONFIRM Button */}
             <Pressable
               accessibilityRole="button"
@@ -1057,6 +1105,29 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                   </Text>
                 </>
               )}
+            </Pressable>
+
+            {/* SAVE Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save order details"
+              onPress={() => handleSaveOrder(false)}
+              disabled={saving}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: saving ? 0.6 : 1,
+              })}
+            >
+              <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                {saving ? 'SAVING...' : 'SAVE'}
+              </Text>
             </Pressable>
           </XStack>
         </XStack>
