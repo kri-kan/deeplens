@@ -27,7 +27,7 @@ import { StatusBadge, StatusIntent } from '../atoms/StatusBadge';
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-export type ProcessStage = 'confirmed' | 'processed' | 'placed' | 'delivered';
+export type ProcessStage = 'confirmed' | 'processed' | 'placed' | 'delivered' | 'archived';
 export type ViewMode = 'groups' | 'orders';
 
 const STAGE_RANK: Record<string, number> = {
@@ -38,17 +38,23 @@ const STAGE_RANK: Record<string, number> = {
   placed: 3,
   dispatched: 3,
   delivered: 4,
+  archived: 5,
 };
+
+/** Delivered groups older than this are treated as archived (client-side). */
+const ARCHIVE_THRESHOLD_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
 
 const STAGES: { key: ProcessStage; label: string }[] = [
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'processed', label: 'Processed' },
   { key: 'placed', label: 'Placed' },
   { key: 'delivered', label: 'Delivered' },
+  { key: 'archived', label: 'Archived' },
 ];
 
 function getStatusIntent(stage: string): StatusIntent {
   const s = (stage || '').toLowerCase();
+  if (s === 'archived') return 'attention';
   if (s === 'delivered') return 'positive';
   if (s === 'placed' || s === 'dispatched') return 'info';
   if (s === 'processed' || s === 'processing') return 'info';
@@ -68,10 +74,20 @@ function leastStage(groups: OrderGroup[]): string {
   }, groups[0].status);
 }
 
-/** Map a raw DB status to one of the 4 tab keys */
-function statusToTab(status: string): ProcessStage {
+/**
+ * Map a raw DB status (+ optional updatedAt) to one of the 5 tab keys.
+ * Delivered groups older than ARCHIVE_THRESHOLD_MS are treated as 'archived'.
+ */
+function statusToTab(status: string, updatedAt?: string, createdAt?: string): ProcessStage {
   const s = (status || '').toLowerCase();
-  if (s === 'delivered') return 'delivered';
+  if (s === 'delivered' || s === 'archived') {
+    const deliveredAt = updatedAt || createdAt;
+    if (deliveredAt) {
+      const age = Date.now() - new Date(deliveredAt).getTime();
+      if (age >= ARCHIVE_THRESHOLD_MS) return 'archived';
+    }
+    return 'delivered';
+  }
   if (s === 'placed' || s === 'dispatched') return 'placed';
   if (s === 'processed' || s === 'processing') return 'processed';
   return 'confirmed';
@@ -206,7 +222,9 @@ const MOCK_GROUPS: OrderGroup[] = [
     customerName: 'Sunita Rao',
     customerPhone: '+919866778899',
     customerAddress: '22 MG Road, Chennai',
-    createdAt: new Date(Date.now() - 604800000).toISOString(),
+    // 7 days ago → still in Delivered tab
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+    updatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
     items: [
       {
         id: 5,
@@ -216,6 +234,66 @@ const MOCK_GROUPS: OrderGroup[] = [
         quantity: 2,
         unitPrice: 1999,
         subtotal: 3998,
+      },
+    ],
+  },
+  {
+    orderGrpId: 'ORD-84890-G1',
+    orderId: 'ORD-84890',
+    vendorName: 'Rajputana Handloom Suppliers',
+    needLabel: true,
+    awbNumber: 'DELHIVERY111222333',
+    status: 'delivered',
+    paymentMode: 'COD',
+    customerName: 'Meera Krishnan',
+    customerPhone: '+919811223344',
+    customerAddress: 'House 9, Adyar, Chennai',
+    // 14 days ago → goes into Archived tab
+    createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
+    updatedAt: new Date(Date.now() - 14 * 86400000).toISOString(),
+    items: [
+      {
+        id: 6,
+        itemId: 'ORD-84890-G1-I1',
+        orderGrpId: 'ORD-84890-G1',
+        productTitle: 'Kanchipuram Silk Saree',
+        quantity: 1,
+        unitPrice: 12999,
+        subtotal: 12999,
+      },
+    ],
+  },
+  {
+    orderGrpId: 'ORD-84880-G1',
+    orderId: 'ORD-84880',
+    vendorName: 'Vayyari In-House Workshop',
+    needLabel: false,
+    status: 'delivered',
+    paymentMode: 'Prepaid',
+    customerName: 'Divya Menon',
+    customerPhone: '+919855667788',
+    customerAddress: 'Flat 3A, Koramangala, Bengaluru',
+    // 21 days ago → goes into Archived tab
+    createdAt: new Date(Date.now() - 21 * 86400000).toISOString(),
+    updatedAt: new Date(Date.now() - 21 * 86400000).toISOString(),
+    items: [
+      {
+        id: 7,
+        itemId: 'ORD-84880-G1-I1',
+        orderGrpId: 'ORD-84880-G1',
+        productTitle: 'Chanderi Cotton Suit Set',
+        quantity: 1,
+        unitPrice: 3499,
+        subtotal: 3499,
+      },
+      {
+        id: 8,
+        itemId: 'ORD-84880-G1-I2',
+        orderGrpId: 'ORD-84880-G1',
+        productTitle: 'Dupatta – Chanderi',
+        quantity: 1,
+        unitPrice: 799,
+        subtotal: 799,
       },
     ],
   },
@@ -290,7 +368,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
   // ─── Derived: groups for current tab ─────────────────────────────────────
   const filteredGroups = useMemo(() => {
     const tabGroups = allGroups.filter(
-      (g) => statusToTab(g.status) === activeStage
+      (g) => statusToTab(g.status, g.updatedAt, g.createdAt) === activeStage
     );
     if (!searchQuery.trim()) return tabGroups;
     const q = searchQuery.toLowerCase().trim();
@@ -314,9 +392,9 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
 
     return Array.from(map.entries())
       .map(([orderId, groups]) => {
-        const ls = leastStage(groups);
-        const lt = statusToTab(ls);
         const first = groups[0];
+        const ls = leastStage(groups);
+        const lt = statusToTab(ls, first.updatedAt, first.createdAt);
         return {
           orderId,
           groups,
@@ -357,22 +435,23 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
       processed: 0,
       placed: 0,
       delivered: 0,
+      archived: 0,
     };
     if (viewMode === 'groups') {
       allGroups.forEach((g) => {
-        const t = statusToTab(g.status);
+        const t = statusToTab(g.status, g.updatedAt, g.createdAt);
         counts[t]++;
       });
     } else {
-      const map = new Map<string, string>();
+      const map = new Map<string, OrderGroup>();
       allGroups.forEach((g) => {
         const existing = map.get(g.orderId);
-        if (!existing || stageRank(g.status) < stageRank(existing)) {
-          map.set(g.orderId, g.status);
+        if (!existing || stageRank(g.status) < stageRank(existing.status)) {
+          map.set(g.orderId, g);
         }
       });
-      map.forEach((status) => {
-        counts[statusToTab(status)]++;
+      map.forEach((g) => {
+        counts[statusToTab(g.status, g.updatedAt, g.createdAt)]++;
       });
     }
     return counts;
