@@ -34,6 +34,7 @@ import {
   LuShield,
   LuStore,
   LuSparkles,
+  LuPackage,
 } from '@/components/tamagui-ui/icons/lu';
 import {
   RiWhatsappLine,
@@ -58,6 +59,14 @@ const OPERATIONAL_UTILITIES: RawUtilityItem[] = [
     icon: <LuHash size={36} color="#6200ee" />,
     route: '/utilities/order-id-generator',
     color: '#6200ee',
+    permission: PERMISSIONS.ORDERS_VIEW,
+  },
+  {
+    id: 'process-orders',
+    title: 'Process Orders',
+    icon: <LuPackage size={36} color="#E65100" />,
+    route: '/utilities/process-orders',
+    color: '#E65100',
     permission: PERMISSIONS.ORDERS_VIEW,
   },
   {

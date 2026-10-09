@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, TextInput, Image } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { Pressable, TextInput, Image, Modal } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuTrash2,
@@ -11,9 +11,12 @@ import {
   LuPencil,
   LuEye,
   LuShare2,
+  LuCircleHelp as LuHelpCircle,
+  LuCheck,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 import { CustomCheckbox } from '../../atoms/CustomCheckbox';
+import { StatusBadge, StatusIntent } from '../../atoms/StatusBadge';
 import { ImageViewerModal } from '../../molecules/ImageViewerModal';
 import { shareImageUri } from '../../../utils/shareImage';
 
@@ -39,11 +42,21 @@ export interface OrderItem {
   storagePath?: string;
 }
 
+export const ORDER_STAGES = [
+  'Unconfirmed',
+  'Confirmed',
+  'Processing',
+  'Dispatched',
+  'Delivered',
+  'Cancelled',
+] as const;
+
 export interface ProductListSectionProps {
   products?: OrderItem[];
   items?: OrderItem[];
   selectedIds: string[];
   isCod?: boolean;
+  groupStages?: Record<string, string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
   onBatchDelete: () => void;
@@ -52,6 +65,7 @@ export interface ProductListSectionProps {
   onOpenPicker: (item: OrderItem, type: 'size' | 'qty') => void;
   onUpdateItem: (id: string, updates: Partial<OrderItem>) => void;
   onRemoveProduct: (id: string) => void;
+  onUpdateGroupStage?: (groupKey: string, newStage: string) => void;
 }
 
 export function ProductListSection({
@@ -59,6 +73,7 @@ export function ProductListSection({
   items,
   selectedIds,
   isCod = false,
+  groupStages = {},
   onToggleSelect,
   onToggleSelectAll,
   onRemoveProduct,
@@ -67,11 +82,53 @@ export function ProductListSection({
   onEditProduct,
   onOpenPicker,
   onUpdateItem,
+  onUpdateGroupStage,
 }: ProductListSectionProps) {
   const { tokens } = useTheme();
   const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string } | null>(null);
+  const [stagePicker, setStagePicker] = useState<{
+    visible: boolean;
+    groupKey: string;
+    currentStage: string;
+  }>({
+    visible: false,
+    groupKey: '',
+    currentStage: 'Unconfirmed',
+  });
+
+  const getStageIntent = (stage: string): StatusIntent => {
+    const s = (stage || '').toLowerCase();
+    if (s === 'delivered') return 'positive';
+    if (s === 'cancelled') return 'critical';
+    if (s === 'confirmed' || s === 'processing') return 'info';
+    return 'attention';
+  };
+
   const productList = products || items || [];
   const allSelected = productList.length > 0 && selectedIds.length === productList.length;
+
+  // Group items automatically by vendor name; all unassigned fall naturally into "Unassigned"
+  const vendorGroups = useMemo(() => {
+    const map = new Map<string, { key: string; vendorName: string; isUnassigned: boolean; items: OrderItem[] }>();
+
+    for (const item of productList) {
+      const raw = (item.vendor || '').trim();
+      const isUnassigned = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+      const key = isUnassigned ? 'Unassigned' : raw;
+      const vendorName = isUnassigned ? 'Unassigned' : raw;
+
+      if (!map.has(key)) {
+        map.set(key, { key, vendorName, isUnassigned, items: [] });
+      }
+      map.get(key)!.items.push(item);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.isUnassigned && !b.isUnassigned) return 1;
+      if (!a.isUnassigned && b.isUnassigned) return -1;
+      return a.vendorName.localeCompare(b.vendorName);
+    });
+  }, [productList]);
 
   return (
     <YStack gap={8}>
@@ -154,7 +211,119 @@ export function ProductListSection({
 
       {/* ── Product Items List ── */}
       <YStack gap={8}>
-        {productList.map((item) => {
+        {productList.length === 0 ? (
+          <YStack
+            backgroundColor={tokens.surface}
+            borderWidth={1}
+            borderColor={tokens.border}
+            borderStyle="dashed"
+            borderRadius={tokens.radius.md}
+            paddingVertical={28}
+            paddingHorizontal={16}
+            alignItems="center"
+            justifyContent="center"
+            gap={6}
+          >
+            <Text fontSize={13} fontWeight="600" color={tokens.textMuted}>
+              No items in this order
+            </Text>
+            <Text fontSize={11} color={tokens.textMuted}>
+              Tap "ADD ITEM" above to add products
+            </Text>
+          </YStack>
+        ) : (
+          vendorGroups.map((group) => {
+            const currentStage = groupStages?.[group.key] || 'Unconfirmed';
+            return (
+              <YStack
+                key={group.key}
+                backgroundColor={tokens.surface}
+                borderWidth={1}
+                borderColor={tokens.border}
+                borderRadius={tokens.radius.lg}
+                overflow="hidden"
+                gap={0}
+              >
+                {/* ── Group Header: Vendor Name & Single Stage Against Group ── */}
+                <XStack
+                  backgroundColor={tokens.surfaceRaised}
+                  paddingHorizontal={12}
+                  paddingVertical={10}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  borderBottomWidth={1}
+                  borderBottomColor={tokens.border}
+                >
+                  {/* Left: Vendor Icon + Name + Count */}
+                  <XStack alignItems="center" gap={8} flex={1}>
+                    <XStack
+                      width={28}
+                      height={28}
+                      borderRadius={tokens.radius.full}
+                      backgroundColor={group.isUnassigned ? tokens.surface : `${tokens.accent}18`}
+                      alignItems="center"
+                      justifyContent="center"
+                    >
+                      {group.isUnassigned ? (
+                        <LuHelpCircle size={15} color={tokens.textMuted} />
+                      ) : (
+                        <LuBuilding2 size={15} color={tokens.accent} />
+                      )}
+                    </XStack>
+                    <YStack gap={1}>
+                      <XStack alignItems="center" gap={6}>
+                        <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                          {group.isUnassigned ? 'Unassigned Vendor' : group.vendorName}
+                        </Text>
+                        {group.isUnassigned && (
+                          <XStack
+                            paddingHorizontal={6}
+                            paddingVertical={2}
+                            borderRadius={tokens.radius.xs}
+                            backgroundColor={`${tokens.error}18`}
+                          >
+                            <Text fontSize={9} fontWeight="700" color={tokens.error}>
+                              UNASSIGNED
+                            </Text>
+                          </XStack>
+                        )}
+                      </XStack>
+                      <Text fontSize={10} color={tokens.textMuted} fontWeight="600">
+                        {group.items.length} {group.items.length === 1 ? 'item' : 'items'} in group
+                      </Text>
+                    </YStack>
+                  </XStack>
+
+                  {/* Right: Group Stage Badge (Interactive - single stage against group) */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Change stage for ${group.vendorName}, currently ${currentStage}`}
+                    onPress={() => setStagePicker({ visible: true, groupKey: group.key, currentStage })}
+                    style={{ cursor: 'pointer' } as any}
+                  >
+                    <XStack
+                      alignItems="center"
+                      gap={4}
+                      paddingHorizontal={6}
+                      paddingVertical={3}
+                      borderRadius={tokens.radius.sm}
+                      backgroundColor={tokens.surface}
+                      borderWidth={1}
+                      borderColor={tokens.border}
+                    >
+                      <StatusBadge
+                        label={currentStage.toUpperCase()}
+                        intent={getStageIntent(currentStage)}
+                        size="sm"
+                      />
+                      <LuChevronDown size={12} color={tokens.textMuted} />
+                    </XStack>
+                  </Pressable>
+                </XStack>
+
+                {/* Group Items */}
+                <YStack padding={10} gap={8}>
+                  {group.items.map((item) => {
           const isSelected = selectedIds.includes(item.id);
           const codCharge = isCod ? (item.codChargePerPiece ?? 50) : 0;
           const grossLineTotal = (item.quantity || 1) * ((item.costPerPiece || 0) + codCharge);
@@ -203,7 +372,7 @@ export function ProductListSection({
 
                   {/* Stacked Eye & Share buttons on the right edge of tile */}
                   {(item.catalogImageUrl || item.photoUri || item.image || item.imageUrl) ? (
-                    <YStack position="absolute" top={4} right={4} zIndex={6} gap={4}>
+                    <YStack position="absolute" top={5} right={5} zIndex={6}>
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Preview image for ${item.title}`}
@@ -217,10 +386,12 @@ export function ProductListSection({
                           width: 22,
                           height: 22,
                           borderRadius: 11,
-                          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                          backgroundColor: 'rgba(0, 0, 0, 0.32)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(255, 255, 255, 0.2)',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          opacity: pressed ? 0.75 : 1,
+                          opacity: pressed ? 0.5 : 0.85,
                         })}
                       >
                         <LuEye size={12} color="#ffffff" />
@@ -239,10 +410,13 @@ export function ProductListSection({
                           width: 22,
                           height: 22,
                           borderRadius: 11,
-                          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                          marginTop: 14,
+                          backgroundColor: 'rgba(0, 0, 0, 0.32)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(255, 255, 255, 0.2)',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          opacity: pressed ? 0.75 : 1,
+                          opacity: pressed ? 0.5 : 0.85,
                         })}
                       >
                         <LuShare2 size={11} color="#ffffff" />
@@ -547,7 +721,98 @@ export function ProductListSection({
             </YStack>
           );
         })}
+              </YStack>
+            </YStack>
+          );
+        })
+      )}
       </YStack>
+
+      {/* Group Stage Picker Modal */}
+      <Modal
+        visible={stagePicker.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStagePicker((prev) => ({ ...prev, visible: false }))}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+          onPress={() => setStagePicker((prev) => ({ ...prev, visible: false }))}
+        >
+          <Pressable
+            style={{ width: '100%', maxWidth: 360 }}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <YStack
+              backgroundColor={tokens.surface}
+              borderRadius={tokens.radius.lg}
+              borderWidth={1}
+              borderColor={tokens.border}
+              padding={16}
+              gap={12}
+            >
+              <XStack alignItems="center" justifyContent="space-between">
+                <YStack gap={2}>
+                  <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                    Update Group Stage
+                  </Text>
+                  <Text fontSize={12} color={tokens.textMuted}>
+                    {stagePicker.groupKey === 'Unassigned' ? 'Unassigned Vendor' : stagePicker.groupKey}
+                  </Text>
+                </YStack>
+                <Pressable
+                  onPress={() => setStagePicker((prev) => ({ ...prev, visible: false }))}
+                  hitSlop={8}
+                >
+                  <LuX size={18} color={tokens.textMuted} />
+                </Pressable>
+              </XStack>
+
+              <YStack gap={6}>
+                {ORDER_STAGES.map((stage) => {
+                  const isSelected = stagePicker.currentStage.toLowerCase() === stage.toLowerCase();
+                  return (
+                    <Pressable
+                      key={stage}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        onUpdateGroupStage?.(stagePicker.groupKey, stage);
+                        setStagePicker((prev) => ({ ...prev, visible: false, currentStage: stage }));
+                      }}
+                    >
+                      <XStack
+                        alignItems="center"
+                        justifyContent="space-between"
+                        paddingVertical={10}
+                        paddingHorizontal={12}
+                        borderRadius={tokens.radius.md}
+                        backgroundColor={isSelected ? `${tokens.accent}14` : tokens.surfaceRaised}
+                        borderWidth={1}
+                        borderColor={isSelected ? tokens.accent : tokens.border}
+                      >
+                        <XStack alignItems="center" gap={8}>
+                          <StatusBadge
+                            label={stage.toUpperCase()}
+                            intent={getStageIntent(stage)}
+                            size="sm"
+                          />
+                        </XStack>
+                        {isSelected && <LuCheck size={16} color={tokens.accent} />}
+                      </XStack>
+                    </Pressable>
+                  );
+                })}
+              </YStack>
+            </YStack>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Full-Screen Image Preview Modal with Share Intent */}
       <ImageViewerModal

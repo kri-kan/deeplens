@@ -13,6 +13,7 @@ import {
 import {
   OrderIdHistoryItem,
   OrderIdHistoryEntry,
+  OrderIdHistoryListShimmer,
 } from '../molecules/OrderIdHistoryItem';
 import { OrderIdEditSheet } from '../molecules/OrderIdEditSheet';
 
@@ -20,12 +21,14 @@ export interface OrderIdGeneratorPageProps {
   initialRecentIds?: OrderIdHistoryEntry[];
   initialGeneratedEntry?: GeneratedOrderResult | null;
   initialSelectedSource?: GeneratorSource;
+  paymentMode?: GeneratorPaymentMode;
   initialPaymentMode?: GeneratorPaymentMode;
   initialSourceHandle?: string;
   initialShowDeleted?: boolean;
   initialSearchQuery?: string;
   recentLimit?: number;
   isLoading?: boolean;
+  isLoadingHistory?: boolean;
   disableSafeArea?: boolean;
   onGenerateOrder?: (
     source: GeneratorSource,
@@ -55,6 +58,7 @@ export function OrderIdGeneratorPage({
   initialSearchQuery = '',
   recentLimit = 50,
   isLoading = false,
+  isLoadingHistory,
   disableSafeArea = false,
   onGenerateOrder,
   onUpdateOrder,
@@ -70,6 +74,11 @@ export function OrderIdGeneratorPage({
   const insets = useSafeAreaInsets();
   const topInset = disableSafeArea ? 0 : insets.top;
   const bottomInset = disableSafeArea ? 0 : insets.bottom;
+
+  const isHistoryLoading =
+    isLoadingHistory !== undefined
+      ? isLoadingHistory
+      : isLoading && initialRecentIds.length === 0;
 
   const [selectedSource, setSelectedSource] = useState<GeneratorSource>(initialSelectedSource);
   const [paymentMode, setPaymentMode] = useState<GeneratorPaymentMode>(initialPaymentMode);
@@ -354,8 +363,10 @@ export function OrderIdGeneratorPage({
               )}
             </XStack>
 
-            {/* History List or Empty State */}
-            {filteredHistory.length === 0 ? (
+            {/* History List, Shimmer Skeleton, or Empty State */}
+            {isHistoryLoading ? (
+              <OrderIdHistoryListShimmer count={Math.min(selectedLimit, 6)} />
+            ) : filteredHistory.length === 0 ? (
               <YStack
                 backgroundColor={tokens.surface}
                 borderRadius={tokens.radius.lg}

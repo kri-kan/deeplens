@@ -18,6 +18,7 @@ import { logisticsService } from '@/services/logistics.service';
 import { API_ROUTES } from '@/constants/api-routes';
 import {
   OrderIdEntry,
+  OrderGroup,
   OrderUpdateRequest,
 } from '@/types/orders';
 
@@ -74,6 +75,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const [address, setAddress] = useState<AddressData | null>(null);
   const [transactionId, setTransactionId] = useState('');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [groupStages, setGroupStages] = useState<Record<string, string>>({});
 
   // Sheets & dialogs
   const [activeItem, setActiveItem] = useState<OrderItem | null>(null);
@@ -151,6 +153,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
               }
               const photo = parsedMeta.photoUri || parsedMeta.image || parsedMeta.catalogImageUrl;
               const catalogImg = parsedMeta.catalogImageUrl || (it.productId ? parsedMeta.image : undefined);
+              const rawVendor = (parsedMeta.vendor || it.vendorName || (it.vendorId ? String(it.vendorId) : '')).trim();
+              const resolvedVendor = (!rawVendor || rawVendor.toLowerCase() === 'unassigned' || rawVendor.toLowerCase() === 'none') ? '' : rawVendor;
 
               return {
                 id: it.id ? String(it.id) : `item-${idx}`,
@@ -161,7 +165,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                 costPerPiece: it.unitPrice ?? 0,
                 codChargePerPiece: 0,
                 amountPaid: 0,
-                vendor: it.vendorId ?? 'In-House',
+                vendor: resolvedVendor,
                 imageColor: '#f0e6d3',
                 photoUri: parsedMeta.photoUri,
                 catalogImageUrl: catalogImg,
@@ -173,6 +177,18 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           );
         } else {
           setProducts([]);
+        }
+
+        // Group stages mapping from server order groups
+        if (res.groups && res.groups.length > 0) {
+          const stagesMap: Record<string, string> = {};
+          for (const g of res.groups) {
+            const rawV = (g.vendorName || '').trim();
+            const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
+            const k = isUn ? 'Unassigned' : rawV;
+            stagesMap[k] = g.status || 'Unconfirmed';
+          }
+          setGroupStages(stagesMap);
         }
 
         // Address mapping
@@ -232,8 +248,29 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     });
   };
 
-  const persistOrderItems = async (itemsList: OrderItem[]) => {
+  const persistOrderItems = async (itemsList: OrderItem[], stagesOverride?: Record<string, string>) => {
     try {
+      const activeStages = stagesOverride || groupStages;
+
+      // Group keys: each distinct vendor name or 'Unassigned'
+      const distinctGroupKeys = Array.from(
+        new Set(
+          itemsList.map((p) => {
+            const raw = (p.vendor || '').trim();
+            const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+            return isUn ? 'Unassigned' : raw;
+          })
+        )
+      );
+
+      const groupsPayload: OrderGroup[] = distinctGroupKeys.map((vName, idx) => ({
+        orderGrpId: `${orderId}-G${idx + 1}`,
+        orderId: orderId,
+        vendorName: vName,
+        status: activeStages[vName] || 'Unconfirmed',
+        needLabel: paymentType === 'cod',
+      }));
+
       const updatePayload: Partial<OrderUpdateRequest> = {
         source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
         sourceHandle: sourceContact || undefined,
@@ -246,14 +283,16 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         shippingCity: address?.city,
         shippingState: address?.state,
         transactionId: transactionId || undefined,
+        groups: groupsPayload,
         items: itemsList.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath)
+          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor)
             ? JSON.stringify({
                 catalogImageUrl: p.catalogImageUrl,
                 photoUri: p.photoUri,
                 image: p.image || p.catalogImageUrl || p.photoUri,
                 attachmentId: p.attachmentId,
                 storagePath: p.storagePath,
+                vendor: p.vendor,
               })
             : undefined;
 
@@ -264,6 +303,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             unitPrice: p.costPerPiece,
             subtotal: p.costPerPiece * p.quantity,
             comments: meta,
+            vendorName: p.vendor,
           };
         }),
       };
@@ -273,6 +313,12 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       console.error('Failed to persist order items:', err);
       Alert.alert('Save Warning', 'Could not persist item changes to server. Tap SAVE to retry.');
     }
+  };
+
+  const handleUpdateGroupStage = (groupKey: string, newStage: string) => {
+    const updatedStages = { ...groupStages, [groupKey]: newStage };
+    setGroupStages(updatedStages);
+    persistOrderItems(products, updatedStages);
   };
 
   const handleAddProduct = () => {
@@ -285,7 +331,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       costPerPiece: 0,
       codChargePerPiece: paymentType === 'cod' ? 50 : 0,
       amountPaid: 0,
-      vendor: 'In-House',
+      vendor: '',
       imageColor: '#f0e6d3',
     };
     setActiveItem(draftItem);
@@ -356,10 +402,43 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     setReceiptUrl(null);
   };
 
-  // Save full order changes to backend
-  const handleSaveOrder = async () => {
+  // Save or confirm full order changes to backend
+  const handleSaveOrder = async (confirmAll: boolean = false) => {
+    if (confirmAll && products.length === 0) {
+      Alert.alert('Empty Order', 'Please add at least one item before confirming the order.');
+      return;
+    }
     setSaving(true);
     try {
+      const distinctGroupKeys = Array.from(
+        new Set(
+          products.map((p) => {
+            const raw = (p.vendor || '').trim();
+            const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+            return isUn ? 'Unassigned' : raw;
+          })
+        )
+      );
+
+      let activeGroupStages = { ...groupStages };
+      if (confirmAll) {
+        distinctGroupKeys.forEach((k) => {
+          const cur = (activeGroupStages[k] || 'Unconfirmed').toLowerCase();
+          if (cur === 'unconfirmed' || cur === 'unformed') {
+            activeGroupStages[k] = 'Confirmed';
+          }
+        });
+        setGroupStages(activeGroupStages);
+      }
+
+      const groupsPayload: OrderGroup[] = distinctGroupKeys.map((vName, idx) => ({
+        orderGrpId: `${orderId}-G${idx + 1}`,
+        orderId: orderId,
+        vendorName: vName,
+        status: activeGroupStages[vName] || (confirmAll ? 'Confirmed' : 'Unconfirmed'),
+        needLabel: paymentType === 'cod',
+      }));
+
       const updatePayload: Partial<OrderUpdateRequest> = {
         source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
         sourceHandle: sourceContact || undefined,
@@ -372,14 +451,16 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         shippingCity: address?.city,
         shippingState: address?.state,
         transactionId: transactionId || undefined,
+        groups: groupsPayload,
         items: products.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath)
+          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor)
             ? JSON.stringify({
                 catalogImageUrl: p.catalogImageUrl,
                 photoUri: p.photoUri,
                 image: p.image || p.catalogImageUrl || p.photoUri,
                 attachmentId: p.attachmentId,
                 storagePath: p.storagePath,
+                vendor: p.vendor,
               })
             : undefined;
 
@@ -390,16 +471,26 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             unitPrice: p.costPerPiece,
             subtotal: p.costPerPiece * p.quantity,
             comments: meta,
+            vendorName: p.vendor,
           };
         }),
       };
 
       await searchApiClient.put(API_ROUTES.ORDERS.UPDATE(orderId), updatePayload);
-      setSnackbarMessage(`Order #${orderId} saved successfully!`);
+
+      if (confirmAll) {
+        await searchApiClient.post(API_ROUTES.ORDERS.CONFIRM(orderId), {});
+        if (orderData) {
+          setOrderData({ ...orderData, status: 'Confirmed' });
+        }
+        setSnackbarMessage(`Order #${orderId} confirmed successfully!`);
+      } else {
+        setSnackbarMessage(`Order #${orderId} saved successfully!`);
+      }
       setSnackbarVisible(true);
     } catch (err: any) {
-      console.error('Failed to update order:', err);
-      setSnackbarMessage(`Update Failed: ${err?.message || 'Could not save changes.'}`);
+      console.error('Failed to update/confirm order:', err);
+      setSnackbarMessage(`${confirmAll ? 'Confirm' : 'Update'} Failed: ${err?.message || 'Could not save changes.'}`);
       setSnackbarVisible(true);
     } finally {
       setSaving(false);
@@ -510,14 +601,90 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     isDelhiveryServiceable: address?.isDelhiveryServiceable,
   };
 
+  const handleGenerateGroupLabel = async (orderGrpId: string) => {
+    try {
+      setSaving(true);
+      const res = await searchApiClient.post<any>(`/api/v1/orderid/groups/${orderGrpId}/label`, {});
+      setSnackbarMessage(`Label generated for ${orderGrpId}! AWB: ${res.awbNumber || res.awb}`);
+      setSnackbarVisible(true);
+      await loadOrder();
+    } catch (err: any) {
+      Alert.alert('Label Generation Failed', err?.message || 'Could not generate Delhivery shipping label.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const distinctGroupKeys = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        products.map((p) => {
+          const raw = (p.vendor || '').trim();
+          const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+          return isUn ? 'Unassigned' : raw;
+        })
+      )
+    );
+  }, [products]);
+
+  const groupLabelInfo = React.useMemo(() => {
+    const map: Record<string, { needLabel?: boolean; awbNumber?: string; labelUrl?: string }> = {};
+    if (orderData?.groups) {
+      for (const g of orderData.groups) {
+        const rawV = (g.vendorName || '').trim();
+        const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
+        const k = isUn ? 'Unassigned' : rawV;
+        map[k] = {
+          needLabel: g.needLabel ?? (paymentType === 'cod'),
+          awbNumber: g.awbNumber,
+          labelUrl: g.labelUrl,
+        };
+      }
+    }
+    return map;
+  }, [orderData?.groups, paymentType]);
+
+  const totalItemCount = React.useMemo(
+    () => products.reduce((acc, p) => acc + (p.quantity || 1), 0),
+    [products]
+  );
+
+  const totalAmount = React.useMemo(
+    () => products.reduce((acc, p) => acc + (p.costPerPiece || 0) * (p.quantity || 1), 0),
+    [products]
+  );
+
+  const derivedStageTag = React.useMemo(() => {
+    if (products.length === 0) return '';
+    if (distinctGroupKeys.length === 1) {
+      return groupStages[distinctGroupKeys[0]] || 'Unconfirmed';
+    }
+    const STAGE_RANK: Record<string, number> = {
+      unconfirmed: 0,
+      confirmed: 1,
+      processed: 2,
+      processing: 2,
+      placed: 3,
+      dispatched: 3,
+      delivered: 4,
+    };
+    const sorted = [...distinctGroupKeys].sort((a, b) => {
+      const rankA = STAGE_RANK[(groupStages[a] || 'unconfirmed').toLowerCase()] ?? 0;
+      const rankB = STAGE_RANK[(groupStages[b] || 'unconfirmed').toLowerCase()] ?? 0;
+      return rankA - rankB;
+    });
+    const leastStage = groupStages[sorted[0]] || 'Unconfirmed';
+    return `${leastStage} +${distinctGroupKeys.length - 1}`;
+  }, [products.length, distinctGroupKeys, groupStages]);
+
   return (
     <YStack flex={1} backgroundColor={tokens.background} position="relative">
       {/* ── Detail Header ── */}
       <DetailHeader
         orderId={orderId}
         createdAt={createdAt}
-        isSaving={saving}
-        onSave={handleSaveOrder}
+        status={derivedStageTag}
+        statusCount={distinctGroupKeys.length > 1 ? distinctGroupKeys.length - 1 : 0}
         onDelete={handleDeleteOrder}
         onBack={onBack || (() => router.back())}
       />
@@ -525,7 +692,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       {/* ── Main Scrollable Body ── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(60, insets.bottom + 40) }}
+        contentContainerStyle={{ paddingBottom: 100 + Math.max(16, insets.bottom) }}
         keyboardShouldPersistTaps="handled"
       >
         <YStack paddingHorizontal={16} paddingTop={12} gap={14}>
@@ -535,6 +702,137 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             sourceContact={sourceContact}
             paymentType={paymentType}
           />
+
+          {/* Status & Label Requirement Summary Card */}
+          <XStack
+            backgroundColor={tokens.surface}
+            borderWidth={1}
+            borderColor={tokens.border}
+            borderRadius={tokens.radius.md}
+            padding={12}
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <YStack gap={2}>
+              <Text fontSize={10} fontWeight="800" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
+                ORDER STATUS & FULFILLMENT MODE
+              </Text>
+              <XStack alignItems="center" gap={8} marginTop={2}>
+                <YStack
+                  paddingHorizontal={8}
+                  paddingVertical={3}
+                  borderRadius={6}
+                  backgroundColor={orderData?.status === 'Unconfirmed' ? `${tokens.warning}1F` : `${tokens.success}1F`}
+                >
+                  <Text fontSize={11} fontWeight="800" color={orderData?.status === 'Unconfirmed' ? tokens.warning : tokens.success}>
+                    {orderData?.status === 'Unconfirmed' ? 'UNCONFIRMED (DRAFT)' : 'CONFIRMED'}
+                  </Text>
+                </YStack>
+
+                <YStack
+                  paddingHorizontal={8}
+                  paddingVertical={3}
+                  borderRadius={6}
+                  backgroundColor={paymentType === 'cod' || orderData?.needLabel ? `${tokens.accent}1F` : `${tokens.textMuted}1F`}
+                >
+                  <Text fontSize={11} fontWeight="800" color={paymentType === 'cod' || orderData?.needLabel ? tokens.accent : tokens.textMuted}>
+                    {paymentType === 'cod' ? 'LABEL MANDATORY (COD)' : orderData?.needLabel ? 'NEED LABEL (WAREHOUSE)' : 'VENDOR DIRECT (NO LABEL)'}
+                  </Text>
+                </YStack>
+              </XStack>
+            </YStack>
+          </XStack>
+
+          {/* Order Groups (Per Vendor) Card */}
+          {orderData?.groups && orderData.groups.length > 0 && (
+            <YStack gap={10}>
+              <Text fontSize={12} fontWeight="800" color={tokens.textMuted} letterSpacing={0.8} textTransform="uppercase">
+                VENDOR ORDER GROUPS & PACKAGES ({orderData.groups.length})
+              </Text>
+              {orderData.groups.map((grp) => (
+                <YStack
+                  key={grp.orderGrpId}
+                  backgroundColor={tokens.surface}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                  borderRadius={tokens.radius.md}
+                  padding={14}
+                  gap={10}
+                >
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <YStack gap={2}>
+                      <XStack alignItems="center" gap={6}>
+                        <Text fontSize={14} fontWeight="800" color={tokens.text}>
+                          {grp.orderGrpId}
+                        </Text>
+                        <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={4} backgroundColor={`${tokens.accent}1A`}>
+                          <Text fontSize={10} fontWeight="700" color={tokens.accent}>
+                            {grp.vendorName || 'Default Vendor'}
+                          </Text>
+                        </YStack>
+                      </XStack>
+                      {grp.awbNumber && (
+                        <Text fontSize={11} color={tokens.textMuted}>
+                          AWB: <Text fontWeight="700" color={tokens.text}>{grp.awbNumber}</Text>
+                        </Text>
+                      )}
+                    </YStack>
+
+                    {/* Label Action Button */}
+                    {grp.labelUrl ? (
+                      <Pressable onPress={() => setPreviewImage(grp.labelUrl!)}>
+                        <YStack
+                          paddingHorizontal={12}
+                          paddingVertical={6}
+                          borderRadius={tokens.radius.sm}
+                          backgroundColor={`${tokens.success}1A`}
+                          borderWidth={1}
+                          borderColor={`${tokens.success}40`}
+                        >
+                          <Text fontSize={11} fontWeight="800" color={tokens.success}>
+                            VIEW SHIPPING LABEL (PDF)
+                          </Text>
+                        </YStack>
+                      </Pressable>
+                    ) : (grp.needLabel || paymentType === 'cod') ? (
+                      <Pressable onPress={() => handleGenerateGroupLabel(grp.orderGrpId)}>
+                        <YStack
+                          paddingHorizontal={12}
+                          paddingVertical={6}
+                          borderRadius={tokens.radius.sm}
+                          backgroundColor={tokens.accent}
+                        >
+                          <Text fontSize={11} fontWeight="800" color={tokens.accentForeground}>
+                            GENERATE LABEL (DELHIVERY)
+                          </Text>
+                        </YStack>
+                      </Pressable>
+                    ) : (
+                      <YStack paddingHorizontal={10} paddingVertical={4} borderRadius={tokens.radius.sm} backgroundColor={tokens.surfaceRaised}>
+                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                          NO LABEL NEEDED
+                        </Text>
+                      </YStack>
+                    )}
+                  </XStack>
+
+                  {/* Group items display */}
+                  <YStack gap={4} paddingTop={4} borderTopWidth={1} borderTopColor={tokens.border}>
+                    {grp.items?.map((it) => (
+                      <XStack key={it.id || it.itemId} justifyContent="space-between" alignItems="center">
+                        <Text fontSize={12} color={tokens.text} flex={1} numberOfLines={1}>
+                          • {it.productTitle || 'Product Item'} ({it.itemId || `Item #${it.id}`})
+                        </Text>
+                        <Text fontSize={12} fontWeight="600" color={tokens.textSecondary}>
+                          x{it.quantity} (₹{it.subtotal})
+                        </Text>
+                      </XStack>
+                    ))}
+                  </YStack>
+                </YStack>
+              ))}
+            </YStack>
+          )}
 
           {/* Delhivery Serviceability Status Banner */}
           {address?.isDelhiveryServiceable && (
@@ -569,6 +867,9 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             products={products}
             selectedIds={selectedItemIds}
             isCod={paymentType === 'cod'}
+            groupStages={groupStages}
+            groupLabelInfo={groupLabelInfo}
+            onUpdateGroupStage={handleUpdateGroupStage}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
             onBatchDelete={handleBatchDelete}
@@ -668,11 +969,104 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           </YStack>
         </Modal>
       )}
+      {/* ── Sticky Bottom Action Bar (SAVE & CONFIRM) ── */}
+      <YStack
+        position="absolute"
+        bottom={0}
+        left={0}
+        right={0}
+        backgroundColor={tokens.surface}
+        borderTopWidth={1}
+        borderTopColor={tokens.border}
+        paddingHorizontal={16}
+        paddingTop={10}
+        paddingBottom={Math.max(12, insets.bottom + 8)}
+        shadowColor="#000"
+        shadowOffset={{ width: 0, height: -3 }}
+        shadowOpacity={0.08}
+        shadowRadius={6}
+        elevation={8}
+        zIndex={100}
+      >
+        <XStack alignItems="center" justifyContent="space-between" gap={12}>
+          {/* Order Summary: Items & Price */}
+          <YStack flex={1} gap={2}>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+              {totalItemCount} {totalItemCount === 1 ? 'ITEM' : 'ITEMS'} • {distinctGroupKeys.length} {distinctGroupKeys.length === 1 ? 'PKG' : 'PKGS'}
+            </Text>
+            <Text fontSize={17} fontWeight="900" color={tokens.text}>
+              ₹{totalAmount.toLocaleString('en-IN')}
+            </Text>
+          </YStack>
+
+          {/* Action Buttons: SAVE and CONFIRM */}
+          <XStack alignItems="center" gap={8}>
+            {/* SAVE Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save order details"
+              onPress={() => handleSaveOrder(false)}
+              disabled={saving}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: saving ? 0.6 : 1,
+              })}
+            >
+              <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                {saving ? 'SAVING...' : 'SAVE'}
+              </Text>
+            </Pressable>
+
+            {/* CONFIRM Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirm order"
+              onPress={() => handleSaveOrder(true)}
+              disabled={saving}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: saving ? 0.6 : 1,
+                shadowColor: tokens.accent,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 3,
+              })}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={tokens.accentForeground} />
+              ) : (
+                <>
+                  <LuCheck size={16} color={tokens.accentForeground} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
+                    CONFIRM
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </XStack>
+        </XStack>
+      </YStack>
+
       {/* ── Snackbar Toast Banner ── */}
       {snackbarVisible && (
         <YStack
           position="absolute"
-          bottom={20 + insets.bottom}
+          bottom={75 + insets.bottom}
           left={16}
           right={16}
           backgroundColor="#1E293B"

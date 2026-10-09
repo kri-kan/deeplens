@@ -50,6 +50,15 @@ export const AllOrders = () => {
       item.paymentMode && item.paymentMode !== 'None'
         ? (item.paymentMode.toLowerCase() as 'cod' | 'prepaid')
         : null,
+    status: item.status,
+    stageTag: item.stageTag,
+    groups: item.groups?.map((g) => ({
+      orderGrpId: g.orderGrpId,
+      vendorName: g.vendorName,
+      status: g.status,
+      updatedAt: g.updatedAt,
+      createdAt: g.createdAt,
+    })),
     timestamp: item.timestamp,
     customerPhone: item.customerPhone,
     instagramHandle: item.instagramHandle,

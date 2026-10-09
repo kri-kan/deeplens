@@ -63,8 +63,17 @@ public class OrderUpdateDto
     [JsonPropertyName("transactionId")]
     public string? TransactionId { get; set; }
 
+    [JsonPropertyName("status")]
+    public OrderStatus? Status { get; set; }
+
+    [JsonPropertyName("needLabel")]
+    public bool? NeedLabel { get; set; }
+
     [JsonPropertyName("items")]
     public List<OrderItemUpdateDto>? Items { get; set; }
+
+    [JsonPropertyName("groups")]
+    public List<DeepLens.Contracts.Orders.OrderGroupDto>? Groups { get; set; }
 }
 
 /// <summary>
@@ -72,6 +81,12 @@ public class OrderUpdateDto
 /// </summary>
 public class OrderItemUpdateDto
 {
+    [JsonPropertyName("itemId")]
+    public string? ItemId { get; set; }
+
+    [JsonPropertyName("orderGrpId")]
+    public string? OrderGrpId { get; set; }
+
     [JsonPropertyName("productId")]
     public string? ProductId { get; set; }
 
@@ -90,8 +105,14 @@ public class OrderItemUpdateDto
     [JsonPropertyName("vendorId")]
     public Guid? VendorId { get; set; }
 
+    [JsonPropertyName("vendorName")]
+    public string? VendorName { get; set; }
+
     [JsonPropertyName("sourceType")]
     public string? SourceType { get; set; }
+
+    [JsonPropertyName("labelUrl")]
+    public string? LabelUrl { get; set; }
 
     [JsonPropertyName("comments")]
     public string? Comments { get; set; }

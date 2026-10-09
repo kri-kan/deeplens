@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using DeepLens.Domain.Enums;
 
@@ -38,6 +39,12 @@ public class OrderHistoryDto
 
     [JsonPropertyName("status")]
     public string? Status { get; set; }
+
+    [JsonPropertyName("stageTag")]
+    public string? StageTag { get; set; }
+
+    [JsonPropertyName("groups")]
+    public List<OrderGroupDto>? Groups { get; set; }
 
     [JsonPropertyName("isDeleted")]
     public bool IsDeleted { get; set; }

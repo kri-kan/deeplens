@@ -25,12 +25,14 @@ const STORAGE_KEY = 'last_generated_order_ids';
 export const OrderIdGenerator = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [recentIds, setRecentIds] = useState<OrderIdEntry[]>([]);
   const [displayId, setDisplayId] = useState<OrderIdEntry | null>(null);
   const [isNewId, setIsNewId] = useState(false);
   const [recentLimit, setRecentLimit] = useState<number>(50);
 
   const loadRecentIds = useCallback(async (limitToFetch: number = 50) => {
+    setIsHistoryLoading(true);
     try {
       // 1. Try to fetch latest from database
       const response = await searchApiClient.get<OrderIdEntry[]>(API_ROUTES.ORDERS.HISTORY, {
@@ -54,26 +56,27 @@ export const OrderIdGenerator = () => {
       }
     } catch (e) {
       console.warn('[OrderIdGenerator] Failed to fetch history from API, falling back to local storage', e);
-    }
-
-    // 2. Fallback to local storage if API fails or returns empty
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed: OrderIdEntry[] = JSON.parse(stored);
-        const filtered = parsed.filter(
-          (item) => !item.isDeleted && !logisticsService.isOrderDeleted(item.id)
-        );
-        setRecentIds(filtered.slice(0, limitToFetch));
-        if (filtered.length > 0) {
-          setDisplayId(filtered[0]);
-          setIsNewId(false);
-        } else {
-          setDisplayId(null);
+      // Fallback to local storage if API fails or returns empty
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed: OrderIdEntry[] = JSON.parse(stored);
+          const filtered = parsed.filter(
+            (item) => !item.isDeleted && !logisticsService.isOrderDeleted(item.id)
+          );
+          setRecentIds(filtered.slice(0, limitToFetch));
+          if (filtered.length > 0) {
+            setDisplayId(filtered[0]);
+            setIsNewId(false);
+          } else {
+            setDisplayId(null);
+          }
         }
+      } catch (storageErr) {
+        console.error('Failed to load recent IDs from local storage', storageErr);
       }
-    } catch (e) {
-      console.error('Failed to load recent IDs from local storage', e);
+    } finally {
+      setIsHistoryLoading(false);
     }
   }, []);
 
@@ -219,6 +222,15 @@ export const OrderIdGenerator = () => {
       item.paymentMode && item.paymentMode !== 'None'
         ? (item.paymentMode.toLowerCase() as 'cod' | 'prepaid')
         : null,
+    status: item.status,
+    stageTag: item.stageTag,
+    groups: item.groups?.map((g) => ({
+      orderGrpId: g.orderGrpId,
+      vendorName: g.vendorName,
+      status: g.status,
+      updatedAt: g.updatedAt,
+      createdAt: g.createdAt,
+    })),
     timestamp: item.timestamp,
     customerPhone: item.customerPhone,
     instagramHandle: item.instagramHandle,
@@ -251,9 +263,13 @@ export const OrderIdGenerator = () => {
       initialGeneratedEntry={generatedMapped}
       recentLimit={recentLimit}
       isLoading={loading}
+      isLoadingHistory={isHistoryLoading}
       onGenerateOrder={handleGenerate}
       onUpdateOrder={handleUpdate}
-      onRecentLimitChange={setRecentLimit}
+      onRecentLimitChange={(limit) => {
+        setRecentLimit(limit);
+        loadRecentIds(limit);
+      }}
       onNavigateToAllOrders={() => router.push('/utilities/all-orders')}
       onCopy={copyToClipboard}
       onNavigateToDetails={(id) => router.push(`/utilities/order-details/${id}`)}

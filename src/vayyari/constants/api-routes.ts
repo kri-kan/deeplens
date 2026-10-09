@@ -41,6 +41,7 @@ export const API_ROUTES = {
     GET_BY_ID: (orderId: string) => `/api/v1/orderid/${orderId}`,
     UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
     DELETE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
+    CONFIRM: (orderId: string) => `/api/v1/orderid/order/${orderId}/confirm`,
   },
 
   // Product ID generation (separate concern from catalog CRUD)

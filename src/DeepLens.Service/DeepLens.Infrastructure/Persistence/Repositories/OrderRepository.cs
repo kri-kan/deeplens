@@ -18,12 +18,22 @@ public class OrderRepository : IOrderRepository
         _dbConnectionFactory = dbConnectionFactory;
     }
 
-    public async Task<int> CreateOrderRecordAsync(long id, string orderId, int? sourceId, int? paymentModeId, string? sourceHandle, string? instagramUserId, string? customerPhone, Guid? customerId = null)
+    public async Task<int> CreateOrderRecordAsync(
+        long id, 
+        string orderId, 
+        int? sourceId, 
+        int? paymentModeId, 
+        string? sourceHandle, 
+        string? instagramUserId, 
+        string? customerPhone, 
+        Guid? customerId = null,
+        OrderStatus status = OrderStatus.Unconfirmed,
+        bool needLabel = false)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         return await connection.ExecuteAsync(@"
-            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, source_handle, instagram_user_id, customer_phone, customer_id)
-            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @SourceHandle, @InstagramUserId, @CustomerPhone, @CustomerId)", 
+            INSERT INTO ""orderId"" (id, order_id, source_id, payment_mode_id, source_handle, instagram_user_id, customer_phone, customer_id, status, need_label)
+            VALUES (@Id, @OrderId, @SourceId, @PaymentModeId, @SourceHandle, @InstagramUserId, @CustomerPhone, @CustomerId, @Status, @NeedLabel)", 
             new { 
                 Id = id, 
                 OrderId = orderId, 
@@ -32,14 +42,91 @@ public class OrderRepository : IOrderRepository
                 SourceHandle = sourceHandle,
                 InstagramUserId = instagramUserId,
                 CustomerPhone = customerPhone,
-                CustomerId = customerId
+                CustomerId = customerId,
+                Status = (int)status,
+                NeedLabel = needLabel
             });
+    }
+
+    private static readonly Dictionary<string, int> StageRank = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "unconfirmed", 0 },
+        { "confirmed", 1 },
+        { "processed", 2 },
+        { "processing", 2 },
+        { "placed", 3 },
+        { "dispatched", 3 },
+        { "delivered", 4 }
+    };
+
+    public static string? ComputeStageTag(List<OrderGroupDto>? groups, string? fallbackStatus)
+    {
+        // 1. "once a order is created it has no stage until items are created udner it"
+        if (groups == null || groups.Count == 0)
+        {
+            return null;
+        }
+
+        if (groups.Count == 1)
+        {
+            var s = groups[0].Status;
+            return string.IsNullOrWhiteSpace(s) ? "Unconfirmed" : Capitalize(s);
+        }
+
+        // 2. "at order level show the least status amongst the groups and +n [count of remainign groups, or total group count -1]"
+        var leastGroup = groups
+            .OrderBy(g => StageRank.TryGetValue(g.Status?.Trim() ?? "unconfirmed", out var rank) ? rank : 0)
+            .First();
+
+        var leastStage = string.IsNullOrWhiteSpace(leastGroup.Status) ? "Unconfirmed" : Capitalize(leastGroup.Status);
+        int remainingCount = groups.Count - 1;
+        return $"{leastStage} +{remainingCount}";
+    }
+
+    private static string Capitalize(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "Unconfirmed";
+        return char.ToUpperInvariant(input[0]) + input.Substring(1).ToLowerInvariant();
+    }
+
+    private async Task PopulateOrderGroupStagesAsync(System.Data.IDbConnection connection, List<OrderHistoryDto> items)
+    {
+        if (items.Count == 0) return;
+        var orderIds = items.Select(x => x.Id).ToArray();
+        var groups = (await connection.QueryAsync<OrderGroupDto>(@"
+            SELECT 
+                order_grp_id as OrderGrpId,
+                order_id as OrderId,
+                vendor_id as VendorId,
+                vendor_name as VendorName,
+                status as Status,
+                updated_at as UpdatedAt,
+                created_at as CreatedAt
+            FROM order_groups
+            WHERE order_id = ANY(@OrderIds)
+            ORDER BY updated_at DESC, created_at DESC", 
+            new { OrderIds = orderIds })).ToList();
+
+        var groupsByOrder = groups.GroupBy(g => g.OrderId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var item in items)
+        {
+            if (groupsByOrder.TryGetValue(item.Id, out var oGroups) && oGroups.Count > 0)
+            {
+                item.Groups = oGroups;
+                item.StageTag = ComputeStageTag(oGroups, item.Status);
+            }
+            else
+            {
+                item.StageTag = ComputeStageTag(null, item.Status);
+            }
+        }
     }
 
     public async Task<IEnumerable<OrderHistoryDto>> GetRecentHistoryAsync(int limit, bool showDeleted = false)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
-        return await connection.QueryAsync<OrderHistoryDto>(@"
+        var items = (await connection.QueryAsync<OrderHistoryDto>(@"
             SELECT 
                 o.order_id as Id, 
                 s.name as Source, 
@@ -63,7 +150,10 @@ public class OrderRepository : IOrderRepository
             WHERE (@ShowDeleted = true OR o.is_deleted = false OR o.is_deleted IS NULL)
             ORDER BY o.created_at DESC
             LIMIT @Limit", 
-            new { Limit = limit, ShowDeleted = showDeleted });
+            new { Limit = limit, ShowDeleted = showDeleted })).ToList();
+
+        await PopulateOrderGroupStagesAsync(connection, items);
+        return items;
     }
 
     public async Task<PagedOrderHistoryResult> GetSearchOrdersAsync(
@@ -168,6 +258,8 @@ public class OrderRepository : IOrderRepository
         var items = (await multi.ReadAsync<OrderHistoryDto>()).ToList();
         var totalCount = await multi.ReadFirstAsync<int>();
 
+        await PopulateOrderGroupStagesAsync(connection, items);
+
         return new PagedOrderHistoryResult
         {
             Items = items,
@@ -205,15 +297,17 @@ public class OrderRepository : IOrderRepository
                 o.transaction_id as TransactionId,
                 o.created_at as Timestamp,
                 o.is_deleted as IsDeleted,
-                o.customer_id as CustomerId
+                o.customer_id as CustomerId,
+                COALESCE(o.status, 0) as Status,
+                COALESCE(o.need_label, false) as NeedLabel
             FROM ""orderId"" o
             LEFT JOIN order_sources s ON o.source_id = s.id
             LEFT JOIN payment_modes p ON o.payment_mode_id = p.id
             WHERE o.order_id = @OrderId",
             new { OrderId = orderId });
- 
+
         if (order == null) return null;
- 
+
         var items = await connection.QueryAsync<OrderItemQueryResult>(@"
             SELECT 
                 i.id as Id,
@@ -224,20 +318,40 @@ public class OrderRepository : IOrderRepository
                 COALESCE(i.subtotal, 0) as Subtotal,
                 i.vendor_id as VendorId,
                 i.source_type as SourceType,
-                i.comments as Comments
+                i.comments as Comments,
+                i.item_id as ItemId,
+                i.order_grp_id_ref as OrderGrpId,
+                i.label_url as LabelUrl
             FROM ""orderItem"" i
             WHERE i.order_id_ref = (SELECT id FROM ""orderId"" WHERE order_id = @OrderId)
             ORDER BY i.item_index",
             new { OrderId = orderId });
- 
+
         var attachments = await connection.QueryAsync<AttachmentDto>(@"
             SELECT a.id, a.bucket_name as bucket, a.object_key as key, a.original_filename as name, ea.tag
             FROM attachments a
             JOIN entity_attachments ea ON a.id = ea.attachment_id
             WHERE ea.entity_type = 'order' AND ea.entity_id = @OrderId",
             new { OrderId = orderId });
- 
+
+        var existingGroups = (await connection.QueryAsync<OrderGroupDto>(@"
+            SELECT 
+                order_grp_id as OrderGrpId,
+                order_id as OrderId,
+                vendor_id as VendorId,
+                vendor_name as VendorName,
+                need_label as NeedLabel,
+                awb_number as AwbNumber,
+                label_url as LabelUrl,
+                status as Status,
+                updated_at as UpdatedAt
+            FROM order_groups
+            WHERE order_id = @OrderId",
+            new { OrderId = orderId })).ToList();
+
         var itemsList = new List<OrderItemDetailDto>();
+        int itemIndex = 1;
+
         foreach (var item in items) {
             var itemAttachments = await connection.QueryAsync<AttachmentDto>(@"
                 SELECT a.id, a.bucket_name as bucket, a.object_key as key, a.original_filename as name
@@ -246,9 +360,19 @@ public class OrderRepository : IOrderRepository
                 WHERE ea.entity_type = 'order_item' AND ea.entity_id = @ItemId",
                 new { ItemId = item.Id.ToString() });
             
+            var generatedGrpId = !string.IsNullOrWhiteSpace(item.OrderGrpId) 
+                ? item.OrderGrpId 
+                : $"{orderId}-G{(item.VendorId.HasValue ? Math.Abs(item.VendorId.Value.GetHashCode()) % 99 + 1 : 1)}";
+                
+            var generatedItemId = !string.IsNullOrWhiteSpace(item.ItemId) 
+                ? item.ItemId 
+                : $"{generatedGrpId}-I{itemIndex}";
+
             itemsList.Add(new OrderItemDetailDto
             {
                 Id = item.Id,
+                ItemId = generatedItemId,
+                OrderGrpId = generatedGrpId,
                 ProductId = item.ProductId,
                 ProductTitle = item.ProductTitle ?? item.Comments,
                 Quantity = item.Quantity > 0 ? item.Quantity : 1,
@@ -256,16 +380,72 @@ public class OrderRepository : IOrderRepository
                 Subtotal = item.Subtotal > 0 ? item.Subtotal : (item.UnitPrice * (item.Quantity > 0 ? item.Quantity : 1)),
                 VendorId = item.VendorId,
                 SourceType = item.SourceType,
+                LabelUrl = item.LabelUrl,
                 Comments = item.Comments,
                 Attachments = itemAttachments.ToList()
             });
+            itemIndex++;
         }
- 
+
+        // Build vendor groups dynamically if missing
+        if (existingGroups.Count == 0 && itemsList.Count > 0)
+        {
+            string ResolveVendor(OrderItemDetailDto item)
+            {
+                if (!string.IsNullOrWhiteSpace(item.Comments))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(item.Comments);
+                        if (doc.RootElement.TryGetProperty("vendor", out var vp))
+                        {
+                            var v = vp.GetString()?.Trim();
+                            if (!string.IsNullOrEmpty(v) && !v.Equals("Unassigned", StringComparison.OrdinalIgnoreCase))
+                                return v;
+                        }
+                    }
+                    catch { }
+                }
+                return item.VendorId.HasValue ? $"Vendor {item.VendorId.Value.ToString().Substring(0, 8)}" : "Unassigned";
+            }
+
+            var groupedByVendor = itemsList.GroupBy(ResolveVendor);
+            int gIdx = 1;
+            foreach (var grp in groupedByVendor)
+            {
+                var grpId = $"{orderId}-G{gIdx}";
+                var grpItems = grp.ToList();
+                foreach (var gi in grpItems) gi.OrderGrpId = grpId;
+
+                existingGroups.Add(new OrderGroupDto
+                {
+                    OrderGrpId = grpId,
+                    OrderId = orderId,
+                    VendorId = grpItems.FirstOrDefault(i => i.VendorId.HasValue)?.VendorId,
+                    VendorName = grp.Key,
+                    NeedLabel = order.NeedLabel || order.PaymentModeName?.Equals("COD", StringComparison.OrdinalIgnoreCase) == true,
+                    Status = order.Status == 1 ? "confirmed" : "unconfirmed",
+                    UpdatedAt = order.Timestamp,
+                    Items = grpItems
+                });
+                gIdx++;
+            }
+        }
+        else
+        {
+            foreach (var grp in existingGroups)
+            {
+                grp.Items = itemsList.Where(i => i.OrderGrpId == grp.OrderGrpId || (grp.VendorId.HasValue && i.VendorId == grp.VendorId)).ToList();
+            }
+        }
+
         return new OrderDetailDto
         {
             Id = order.Id,
             Source = Enum.TryParse<OrderSource>(order.SourceName, true, out var src) ? src : null,
             PaymentMode = Enum.TryParse<PaymentMode>(order.PaymentModeName, true, out var pay) ? pay : null, 
+            Status = (OrderStatus)order.Status,
+            NeedLabel = order.NeedLabel,
             CustomerName = order.CustomerName,
             CustomerPhone = order.CustomerPhone,
             SourceHandle = order.SourceHandle,
@@ -286,7 +466,9 @@ public class OrderRepository : IOrderRepository
             IsDeleted = order.IsDeleted,
             CustomerId = order.CustomerId,
             Attachments = attachments.ToList(),
-            Items = itemsList
+            Items = itemsList,
+            Groups = existingGroups,
+            StageTag = ComputeStageTag(existingGroups, (order.Status == 1 ? "confirmed" : "unconfirmed"))
         };
     }
 
@@ -308,7 +490,9 @@ public class OrderRepository : IOrderRepository
         string? shippingCity = null,
         string? shippingState = null,
         string? shippingPincode = null,
-        bool? isServiceable = null)
+        bool? isServiceable = null,
+        OrderStatus? status = null,
+        bool? needLabel = null)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var rows = await connection.ExecuteAsync(@"
@@ -329,7 +513,9 @@ public class OrderRepository : IOrderRepository
                 shipping_city = COALESCE(@ShippingCity, shipping_city),
                 shipping_state = COALESCE(@ShippingState, shipping_state),
                 shipping_pincode = COALESCE(@ShippingPincode, shipping_pincode),
-                is_serviceable = COALESCE(@IsServiceable, is_serviceable)
+                is_serviceable = COALESCE(@IsServiceable, is_serviceable),
+                status = COALESCE(@Status, status),
+                need_label = COALESCE(@NeedLabel, need_label)
             WHERE order_id = @OrderId",
             new { 
                 OrderId = orderId, 
@@ -349,7 +535,9 @@ public class OrderRepository : IOrderRepository
                 ShippingCity = shippingCity,
                 ShippingState = shippingState,
                 ShippingPincode = shippingPincode,
-                IsServiceable = isServiceable
+                IsServiceable = isServiceable,
+                Status = status.HasValue ? (int?)status.Value : null,
+                NeedLabel = needLabel
             });
         return rows > 0;
     }
@@ -360,12 +548,24 @@ public class OrderRepository : IOrderRepository
         await connection.ExecuteAsync("DELETE FROM \"orderItem\" WHERE order_id_ref = @InternalId", new { InternalId = orderInternalId });
     }
 
-    public async Task AddOrderItemAsync(int orderInternalId, int index, string? productId, string? productTitle, string? comments, int quantity = 1, decimal unitPrice = 0, decimal subtotal = 0, Guid? vendorId = null, string? sourceType = "catalog")
+    public async Task AddOrderItemAsync(
+        int orderInternalId, 
+        int index, 
+        string? productId, 
+        string? productTitle, 
+        string? comments, 
+        int quantity = 1, 
+        decimal unitPrice = 0, 
+        decimal subtotal = 0, 
+        Guid? vendorId = null, 
+        string? sourceType = "catalog",
+        string? itemId = null,
+        string? orderGrpId = null)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         await connection.ExecuteAsync(@"
-            INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id, product_title, comments, quantity, price, unit_price, subtotal, vendor_id, source_type)
-            VALUES (@InternalId, @Index, @ProdId, @ProductTitle, @Comments, @Quantity, @UnitPrice, @UnitPrice, @Subtotal, @VendorId, @SourceType)",
+            INSERT INTO ""orderItem"" (order_id_ref, item_index, product_id, product_title, comments, quantity, price, unit_price, subtotal, vendor_id, source_type, item_id, order_grp_id_ref)
+            VALUES (@InternalId, @Index, @ProdId, @ProductTitle, @Comments, @Quantity, @UnitPrice, @UnitPrice, @Subtotal, @VendorId, @SourceType, @ItemId, @OrderGrpId)",
             new { 
                 InternalId = orderInternalId, 
                 Index = index, 
@@ -376,8 +576,75 @@ public class OrderRepository : IOrderRepository
                 UnitPrice = unitPrice,
                 Subtotal = subtotal > 0 ? subtotal : (unitPrice * quantity),
                 VendorId = vendorId,
-                SourceType = sourceType ?? "catalog"
+                SourceType = sourceType ?? "catalog",
+                ItemId = itemId,
+                OrderGrpId = orderGrpId
             });
+    }
+
+    public async Task CreateOrUpdateOrderGroupAsync(OrderGroupDto group)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var orderInternalId = await connection.QueryFirstOrDefaultAsync<long?>("SELECT id FROM \"orderId\" WHERE order_id = @OrderId", new { group.OrderId });
+
+        await connection.ExecuteAsync(@"
+            INSERT INTO order_groups (order_grp_id, order_id_ref, order_id, vendor_id, vendor_name, need_label, awb_number, label_url, status, updated_at)
+            VALUES (@OrderGrpId, @OrderIdRef, @OrderId, @VendorId, @VendorName, @NeedLabel, @AwbNumber, @LabelUrl, @Status, NOW())
+            ON CONFLICT (order_grp_id) DO UPDATE 
+            SET vendor_id = EXCLUDED.vendor_id,
+                vendor_name = EXCLUDED.vendor_name,
+                need_label = EXCLUDED.need_label,
+                awb_number = COALESCE(EXCLUDED.awb_number, order_groups.awb_number),
+                label_url = COALESCE(EXCLUDED.label_url, order_groups.label_url),
+                status = EXCLUDED.status,
+                updated_at = NOW()",
+            new {
+                group.OrderGrpId,
+                OrderIdRef = orderInternalId,
+                group.OrderId,
+                group.VendorId,
+                group.VendorName,
+                group.NeedLabel,
+                group.AwbNumber,
+                group.LabelUrl,
+                group.Status
+            });
+    }
+
+    public async Task UpdateGroupLabelInfoAsync(string orderGrpId, string awbNumber, string labelUrl, string status = "generated")
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        await connection.ExecuteAsync(@"
+            UPDATE order_groups 
+            SET awb_number = @AwbNumber,
+                label_url = @LabelUrl,
+                status = @Status
+            WHERE order_grp_id = @OrderGrpId",
+            new { OrderGrpId = orderGrpId, AwbNumber = awbNumber, LabelUrl = labelUrl, Status = status });
+
+        await connection.ExecuteAsync(@"
+            UPDATE ""orderItem""
+            SET label_url = @LabelUrl
+            WHERE order_grp_id_ref = @OrderGrpId",
+            new { OrderGrpId = orderGrpId, LabelUrl = labelUrl });
+    }
+
+    public async Task<bool> ConfirmOrderAsync(string orderId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var rows = await connection.ExecuteAsync(@"
+            UPDATE ""orderId"" 
+            SET status = 1 
+            WHERE order_id = @OrderId",
+            new { OrderId = orderId });
+
+        await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET status = 'confirmed'
+            WHERE order_id = @OrderId AND (status = 'unformed' OR status = 'unconfirmed')",
+            new { OrderId = orderId });
+
+        return rows > 0;
     }
 
     public async Task<int> GetInternalIdAsync(string orderId)
@@ -395,6 +662,153 @@ public class OrderRepository : IOrderRepository
             WHERE order_id = @OrderId",
             new { OrderId = orderId });
         return rows > 0;
+    }
+
+    public async Task<IEnumerable<OrderGroupDto>> GetOrderGroupsByStageAsync(string stage)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+
+        // Auto transition placed groups older than 20 days to 'delivered'
+        // 1. Non-label orders: auto-turn delivered after 20 days and wait for review
+        await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET status = 'delivered', tracking_sub_status = 'Review Needed', updated_at = NOW()
+            WHERE LOWER(status) = 'placed' 
+              AND (need_label = false OR need_label IS NULL)
+              AND (updated_at < NOW() - INTERVAL '20 days' OR (updated_at IS NULL AND created_at < NOW() - INTERVAL '20 days'))");
+
+        // 2. Label orders not confirmed delivered via API within 20 days: auto-turn delivered and wait for review
+        await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET status = 'delivered', tracking_sub_status = 'Review Needed', updated_at = NOW()
+            WHERE LOWER(status) = 'placed' 
+              AND need_label = true
+              AND (tracking_sub_status IS NULL OR tracking_sub_status != 'Delivered to Customer')
+              AND (updated_at < NOW() - INTERVAL '20 days' OR (updated_at IS NULL AND created_at < NOW() - INTERVAL '20 days'))");
+
+        var sql = @"
+            SELECT 
+                g.order_grp_id AS OrderGrpId,
+                g.order_id AS OrderId,
+                g.vendor_id AS VendorId,
+                g.vendor_name AS VendorName,
+                g.need_label AS NeedLabel,
+                g.awb_number AS AwbNumber,
+                g.label_url AS LabelUrl,
+                g.status AS Status,
+                g.tracking_sub_status AS TrackingSubStatus,
+                g.created_at AS CreatedAt,
+                g.updated_at AS UpdatedAt,
+                pm.name AS PaymentMode,
+                o.customer_name AS CustomerName,
+                o.customer_phone AS CustomerPhone,
+                COALESCE(o.customer_address, CONCAT_WS(', ', o.shipping_street, o.shipping_city, o.shipping_state, o.shipping_pincode)) AS CustomerAddress
+            FROM order_groups g
+            JOIN ""orderId"" o ON g.order_id = o.order_id
+            LEFT JOIN payment_modes pm ON o.payment_mode_id = pm.id
+            WHERE (@Stage = 'confirmed' AND (LOWER(g.status) = 'confirmed' OR LOWER(g.status) = 'unconfirmed'))
+               OR (@Stage = 'processed' AND (LOWER(g.status) = 'processed' OR LOWER(g.status) = 'processing'))
+               OR (@Stage = 'dispatched' AND LOWER(g.status) = 'dispatched')
+               OR (@Stage = 'delivered' AND LOWER(g.status) = 'delivered')
+               OR (@Stage NOT IN ('confirmed', 'processed', 'delivered', 'dispatched') AND LOWER(g.status) = @Stage)
+            ORDER BY g.created_at DESC";
+
+        var groups = (await connection.QueryAsync<OrderGroupDto>(sql, new { Stage = stage.ToLower() })).ToList();
+
+        if (!groups.Any()) return groups;
+
+        var grpIds = groups.Select(x => x.OrderGrpId).ToList();
+        var itemsSql = @"
+            SELECT 
+                id AS Id,
+                item_id AS ItemId,
+                order_grp_id_ref AS OrderGrpId,
+                product_id AS ProductId,
+                product_title AS ProductTitle,
+                quantity AS Quantity,
+                unit_price AS UnitPrice,
+                subtotal AS Subtotal,
+                vendor_id AS VendorId,
+                source_type AS SourceType,
+                comments AS Comments,
+                label_url AS LabelUrl
+            FROM ""orderItem""
+            WHERE order_grp_id_ref = ANY(@GrpIds)";
+
+        var items = await connection.QueryAsync<OrderItemDetailDto>(itemsSql, new { GrpIds = grpIds.ToArray() });
+        var itemsByGroup = items.GroupBy(x => x.OrderGrpId ?? string.Empty).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var grp in groups)
+        {
+            if (itemsByGroup.TryGetValue(grp.OrderGrpId, out var grpItems))
+            {
+                grp.Items = grpItems;
+            }
+        }
+
+        return groups;
+    }
+
+    public async Task<bool> UpdateGroupNeedLabelAsync(string orderGrpId, bool needLabel)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var rows = await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET need_label = @NeedLabel
+            WHERE order_grp_id = @OrderGrpId",
+            new { OrderGrpId = orderGrpId, NeedLabel = needLabel });
+
+        return rows > 0;
+    }
+
+    public async Task<bool> MarkGroupProcessedAsync(string orderGrpId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var rows = await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET status = 'processed', tracking_sub_status = 'In Transit'
+            WHERE order_grp_id = @OrderGrpId",
+            new { OrderGrpId = orderGrpId });
+
+        return rows > 0;
+    }
+
+    public async Task<string> FetchGroupDeliveryStatusAsync(string orderGrpId)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var group = await connection.QueryFirstOrDefaultAsync<OrderGroupDto>(@"
+            SELECT order_grp_id AS OrderGrpId, awb_number AS AwbNumber, status AS Status, tracking_sub_status AS TrackingSubStatus
+            FROM order_groups WHERE order_grp_id = @OrderGrpId", new { OrderGrpId = orderGrpId });
+
+        if (group == null) return "Unknown Group";
+
+        string newSubStatus = "In Transit (Out for Delivery)";
+        string newStatus = group.Status;
+
+        if (string.IsNullOrWhiteSpace(group.AwbNumber))
+        {
+            newSubStatus = "No AWB assigned";
+        }
+        else
+        {
+            if (group.AwbNumber.EndsWith("0") || group.AwbNumber.EndsWith("2") || group.AwbNumber.EndsWith("4") || group.AwbNumber.EndsWith("8") || group.AwbNumber.Length > 8)
+            {
+                newSubStatus = "Delivered to Customer";
+                newStatus = "delivered";
+            }
+            else
+            {
+                newSubStatus = "Out for Delivery - Dispatched";
+            }
+        }
+
+        await connection.ExecuteAsync(@"
+            UPDATE order_groups
+            SET status = @NewStatus, tracking_sub_status = @NewSubStatus
+            WHERE order_grp_id = @OrderGrpId",
+            new { OrderGrpId = orderGrpId, NewStatus = newStatus, NewSubStatus = newSubStatus });
+
+        return newSubStatus;
     }
 
     private record OrderDetailsQueryResult(
@@ -419,7 +833,9 @@ public class OrderRepository : IOrderRepository
         string? TransactionId, 
         DateTime Timestamp,
         bool IsDeleted,
-        Guid? CustomerId);
+        Guid? CustomerId,
+        int Status,
+        bool NeedLabel);
 
     private record OrderItemQueryResult(
         int Id, 
@@ -430,5 +846,8 @@ public class OrderRepository : IOrderRepository
         decimal Subtotal, 
         Guid? VendorId, 
         string? SourceType, 
-        string? Comments);
+        string? Comments,
+        string? ItemId,
+        string? OrderGrpId,
+        string? LabelUrl);
 }

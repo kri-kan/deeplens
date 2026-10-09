@@ -11,6 +11,26 @@ export interface Attachment {
 
 export type OrderSource = 'None' | 'WhatsApp' | 'Instagram';
 export type PaymentMode = 'None' | 'COD' | 'Prepaid';
+export type OrderStatus = 'Unconfirmed' | 'Confirmed' | 'Processing' | 'Dispatched' | 'Delivered' | 'Cancelled';
+
+export interface OrderGroup {
+  orderGrpId: string;
+  orderId: string;
+  vendorId?: string;
+  vendorName?: string;
+  needLabel: boolean;
+  awbNumber?: string;
+  labelUrl?: string;
+  status: string;
+  trackingSubStatus?: string;
+  paymentMode?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  items?: OrderItem[];
+}
 
 /**
  * Shared types for Order ID management.
@@ -20,6 +40,9 @@ export interface OrderIdEntry {
   id: string;
   source: OrderSource;
   paymentMode: PaymentMode | null;
+  status?: OrderStatus;
+  stageTag?: string;
+  needLabel?: boolean;
   timestamp: string;
   customerName?: string;
   customerPhone?: string;
@@ -39,6 +62,7 @@ export interface OrderIdEntry {
   transactionId?: string;
   attachments?: Attachment[];
   items?: OrderItem[];
+  groups?: OrderGroup[];
   orderDetails?: string;
   isDeleted?: boolean;
   customerId?: string;
@@ -64,13 +88,18 @@ export interface OrderUpdateRequest {
   source?: OrderSource;
   sourceHandle?: string;
   paymentMode?: PaymentMode;
+  status?: OrderStatus;
+  needLabel?: boolean;
   transactionId?: string;
   customerId?: string;
   items?: OrderItem[];
+  groups?: OrderGroup[];
 }
 
 export interface OrderItem {
   id?: number;
+  itemId?: string;
+  orderGrpId?: string;
   productId?: string;
   productTitle?: string;
   productCode?: string;
@@ -81,6 +110,7 @@ export interface OrderItem {
   vendorName?: string;
   sourceType?: 'media' | 'catalog';
   photoUrl?: string;
+  labelUrl?: string;
   comments?: string;
   attachments?: Attachment[];
   attachmentId?: string;

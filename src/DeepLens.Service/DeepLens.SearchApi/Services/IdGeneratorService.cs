@@ -134,7 +134,9 @@ public class IdGeneratorService : IIdGeneratorService
             details.ShippingCity,
             details.ShippingState,
             details.ShippingPincode,
-            details.IsServiceable);
+            details.IsServiceable,
+            details.Status,
+            details.NeedLabel);
 
         if (details.Items != null)
         {
@@ -183,27 +185,81 @@ public class IdGeneratorService : IIdGeneratorService
 
             await _orderRepository.DeleteItemsAsync(internalId);
             
-            int index = 1;
-            foreach (var item in details.Items)
+            // Group items by vendor to create Order Group IDs
+            string ResolveVendorForGroup(OrderItemUpdateDto item)
             {
-                var prodId = item.ProductId;
-                var productTitle = item.ProductTitle;
-                var comments = item.Comments;
-                var unitPrice = item.UnitPrice;
-                var qty = item.Quantity > 0 ? item.Quantity : 1;
-                var subtotal = item.Subtotal > 0 ? item.Subtotal : (unitPrice * qty);
+                var vn = (item.VendorName ?? string.Empty).Trim();
+                if (!string.IsNullOrEmpty(vn) && !vn.Equals("Unassigned", StringComparison.OrdinalIgnoreCase)) return vn;
+                if (!string.IsNullOrEmpty(item.Comments))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(item.Comments);
+                        if (doc.RootElement.TryGetProperty("vendor", out var vp))
+                        {
+                            var vStr = vp.GetString()?.Trim();
+                            if (!string.IsNullOrEmpty(vStr) && !vStr.Equals("Unassigned", StringComparison.OrdinalIgnoreCase)) return vStr;
+                        }
+                    }
+                    catch { }
+                }
+                if (item.VendorId.HasValue) return $"Vendor {item.VendorId.Value.ToString().Substring(0, 8)}";
+                return "Unassigned";
+            }
 
-                await _orderRepository.AddOrderItemAsync(
-                    internalId, 
-                    index++, 
-                    prodId, 
-                    productTitle,
-                    comments,
-                    qty,
-                    unitPrice,
-                    subtotal,
-                    item.VendorId,
-                    item.SourceType);
+            var groupedByVendor = details.Items.GroupBy(ResolveVendorForGroup).ToList();
+            int grpIndex = 1;
+
+            foreach (var grp in groupedByVendor)
+            {
+                var grpId = $"{orderId}-G{grpIndex}";
+                var needLabelForGroup = (details.NeedLabel ?? false) || (details.PaymentMode == PaymentMode.COD);
+                var groupVendorName = grp.Key;
+
+                var matchingClientGroup = details.Groups?.FirstOrDefault(g => 
+                    (!string.IsNullOrEmpty(g.OrderGrpId) && g.OrderGrpId.Equals(grpId, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(g.VendorName) && g.VendorName.Equals(groupVendorName, StringComparison.OrdinalIgnoreCase)) ||
+                    (groupVendorName.Equals("Unassigned", StringComparison.OrdinalIgnoreCase) && (string.IsNullOrEmpty(g.VendorName) || g.VendorName.Equals("Unassigned", StringComparison.OrdinalIgnoreCase))));
+
+                var groupStatus = matchingClientGroup?.Status ?? (details.Status == OrderStatus.Confirmed ? "confirmed" : "unconfirmed");
+
+                await _orderRepository.CreateOrUpdateOrderGroupAsync(new OrderGroupDto
+                {
+                    OrderGrpId = grpId,
+                    OrderId = orderId,
+                    VendorId = grp.FirstOrDefault(i => i.VendorId.HasValue)?.VendorId,
+                    VendorName = groupVendorName,
+                    NeedLabel = needLabelForGroup,
+                    Status = groupStatus
+                });
+
+                int itemIdx = 1;
+                foreach (var item in grp)
+                {
+                    var prodId = item.ProductId;
+                    var productTitle = item.ProductTitle;
+                    var comments = item.Comments;
+                    var unitPrice = item.UnitPrice;
+                    var qty = item.Quantity > 0 ? item.Quantity : 1;
+                    var subtotal = item.Subtotal > 0 ? item.Subtotal : (unitPrice * qty);
+                    var itemId = item.ItemId ?? $"{grpId}-I{itemIdx++}";
+
+                    await _orderRepository.AddOrderItemAsync(
+                        internalId, 
+                        itemIdx, 
+                        prodId, 
+                        productTitle,
+                        comments,
+                        qty,
+                        unitPrice,
+                        subtotal,
+                        item.VendorId,
+                        item.SourceType,
+                        itemId,
+                        grpId);
+                }
+
+                grpIndex++;
             }
         }
 

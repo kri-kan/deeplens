@@ -45,6 +45,7 @@ import {
   OrderSource as ApiOrderSource,
   PaymentMode,
   OrderIdEntry,
+  OrderStatus,
 } from '@/types/orders';
 
 // Brand colors
@@ -829,10 +830,20 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
 
   const [source, setSource] = useState<OrderSource>('whatsapp');
   const [paymentType, setPaymentType] = useState<PaymentType>('cod');
+  const [needLabel, setNeedLabel] = useState<boolean>(true);
   const [sourceInput, setSourceInput] = useState('');
   const [images, setImages] = useState<LocalImage[]>([]);
   const [address, setAddress] = useState<AddressData | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  const handlePaymentTypeChange = (type: PaymentType) => {
+    setPaymentType(type);
+    if (type === 'cod') {
+      setNeedLabel(true);
+    } else {
+      setNeedLabel(false);
+    }
+  };
 
   // Line items
   const [items, setItems] = useState<Array<{
@@ -842,6 +853,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
     size: string;
     quantity: number;
     price: number;
+    vendorId?: string;
   }>>([]);
 
   // Financials
@@ -865,6 +877,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
   const resetForm = () => {
     setSource('whatsapp');
     setPaymentType('cod');
+    setNeedLabel(true);
     setSourceInput('');
     setImages([]);
     setAddress(null);
@@ -945,14 +958,20 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
   const totalAmount = Math.max(0, itemsSubtotal + shippingCharges - discount);
   const pendingBalance = Math.max(0, totalAmount - advancePaid);
 
-  const handleSubmit = async () => {
-    if (!sourceInput.trim()) {
-      Alert.alert('Missing Contact', 'Please provide customer WhatsApp number or Instagram handle.');
-      return;
-    }
-    if (items.length > 0 && items.some((i) => !i.title.trim())) {
-      Alert.alert('Invalid Item', 'All added items must have a title.');
-      return;
+  const handleSubmit = async (statusTarget: OrderStatus = 'Unconfirmed') => {
+    if (statusTarget === 'Confirmed') {
+      if (!sourceInput.trim()) {
+        Alert.alert('Missing Contact', 'Please provide customer WhatsApp number or Instagram handle.');
+        return;
+      }
+      if (items.length === 0) {
+        Alert.alert('No Items', 'Please add at least one item before confirming the order.');
+        return;
+      }
+      if (items.some((i) => !i.title.trim())) {
+        Alert.alert('Invalid Item', 'All added items must have a title before confirming.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -970,10 +989,14 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         }
       }
 
+      const effectiveNeedLabel = paymentType === 'cod' ? true : needLabel;
+
       const orderPayload: Partial<OrderIdEntry> = {
         source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
         sourceHandle: sourceInput.trim(),
         paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
+        status: statusTarget,
+        needLabel: effectiveNeedLabel,
         customerName: address?.name || 'Customer',
         customerPhone: source === 'whatsapp' ? sourceInput.trim() : (address?.phone || sourceInput.trim()),
         customerAddress: address?.address,
@@ -991,6 +1014,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
           quantity: i.quantity,
           unitPrice: i.price,
           subtotal: i.price * i.quantity,
+          vendorId: i.vendorId,
         })),
       };
 
@@ -1187,7 +1211,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
                       key={p}
                       accessibilityRole="button"
                       accessibilityLabel={`${p === 'cod' ? 'Cash on Delivery' : 'Prepaid'} payment`}
-                      onPress={() => setPaymentType(p)}
+                      onPress={() => handlePaymentTypeChange(p)}
                       paddingHorizontal={16}
                       paddingVertical={8}
                       borderRadius={tokens.radius.full}
@@ -1208,6 +1232,66 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
                   );
                 })}
               </XStack>
+            </XStack>
+
+            {/* Need Label Toggle Switch */}
+            <XStack
+              backgroundColor={tokens.surface}
+              borderWidth={1}
+              borderColor={tokens.border}
+              borderRadius={tokens.radius.md}
+              padding={12}
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <YStack gap={2} flex={1}>
+                <XStack alignItems="center" gap={6}>
+                  <Text fontSize={13} fontWeight="700" color={tokens.text}>
+                    Delhivery Shipping Label
+                  </Text>
+                  {paymentType === 'cod' ? (
+                    <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={4} backgroundColor={`${tokens.accent}20`}>
+                      <Text fontSize={9} fontWeight="800" color={tokens.accent}>MANDATORY FOR COD</Text>
+                    </YStack>
+                  ) : (
+                    <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={4} backgroundColor={needLabel ? `${tokens.success}20` : `${tokens.textMuted}20`}>
+                      <Text fontSize={9} fontWeight="800" color={needLabel ? tokens.success : tokens.textMuted}>
+                        {needLabel ? 'ENABLED' : 'VENDOR DIRECT'}
+                      </Text>
+                    </YStack>
+                  )}
+                </XStack>
+                <Text fontSize={11} color={tokens.textMuted}>
+                  {paymentType === 'cod'
+                    ? 'All COD orders require auto-generated Delhivery thermal label before dispatch.'
+                    : needLabel
+                    ? 'Enabled: Dispatched from own warehouse (Delhivery label auto-generated).'
+                    : 'Disabled: Direct vendor dispatch (Image & address details shared with vendor).'}
+                </Text>
+              </YStack>
+
+              <Pressable
+                disabled={paymentType === 'cod'}
+                onPress={() => setNeedLabel((prev) => !prev)}
+                style={{ opacity: paymentType === 'cod' ? 0.6 : 1 }}
+              >
+                <YStack
+                  width={44}
+                  height={26}
+                  borderRadius={13}
+                  backgroundColor={needLabel ? tokens.accent : tokens.border}
+                  padding={3}
+                  justifyContent="center"
+                >
+                  <YStack
+                    width={20}
+                    height={20}
+                    borderRadius={10}
+                    backgroundColor="#FFFFFF"
+                    alignSelf={needLabel ? 'flex-end' : 'flex-start'}
+                  />
+                </YStack>
+              </Pressable>
             </XStack>
 
             {/* Input with Quick Launcher */}
@@ -1583,27 +1667,59 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         shadowOffset={{ width: 0, height: -4 }}
         zIndex={50}
       >
-        <Pressable
-          accessibilityRole="button"
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-        >
-          <YStack
-            height={50}
-            borderRadius={tokens.radius.md}
-            backgroundColor={isSubmitting ? tokens.surfaceRaised : tokens.accent}
-            alignItems="center"
-            justifyContent="center"
+        <XStack gap={10}>
+          {/* Save Draft (Unconfirmed) Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save order draft"
+            style={{ flex: 1 }}
+            onPress={() => handleSubmit('Unconfirmed')}
+            disabled={isSubmitting}
           >
-            {isSubmitting ? (
-              <ActivityIndicator color={tokens.textMuted} />
-            ) : (
-              <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.8}>
-                CREATE ORDER
-              </Text>
-            )}
-          </YStack>
-        </Pressable>
+            <YStack
+              height={48}
+              borderRadius={tokens.radius.md}
+              backgroundColor={tokens.surfaceRaised}
+              borderWidth={1}
+              borderColor={tokens.border}
+              alignItems="center"
+              justifyContent="center"
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={tokens.textMuted} />
+              ) : (
+                <Text fontSize={13} fontWeight="700" color={tokens.textSecondary} letterSpacing={0.5}>
+                  SAVE DRAFT
+                </Text>
+              )}
+            </YStack>
+          </Pressable>
+
+          {/* Confirm Order Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Confirm order"
+            style={{ flex: 1.5 }}
+            onPress={() => handleSubmit('Confirmed')}
+            disabled={isSubmitting}
+          >
+            <YStack
+              height={48}
+              borderRadius={tokens.radius.md}
+              backgroundColor={isSubmitting ? tokens.surfaceRaised : tokens.accent}
+              alignItems="center"
+              justifyContent="center"
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={tokens.textMuted} />
+              ) : (
+                <Text fontSize={13} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.8}>
+                  CONFIRM ORDER
+                </Text>
+              )}
+            </YStack>
+          </Pressable>
+        </XStack>
       </YStack>
 
       {/* Address Sheet Modal */}

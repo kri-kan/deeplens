@@ -16,11 +16,19 @@ namespace DeepLens.SearchApi.Controllers;
 public class OrderIdController : ControllerBase
 {
     private readonly IIdGeneratorService _idGenerator;
+    private readonly DeepLens.Application.Abstractions.Data.IOrderRepository _orderRepository;
+    private readonly MediatR.IMediator _mediator;
     private readonly ILogger<OrderIdController> _logger;
 
-    public OrderIdController(IIdGeneratorService idGenerator, ILogger<OrderIdController> logger)
+    public OrderIdController(
+        IIdGeneratorService idGenerator, 
+        DeepLens.Application.Abstractions.Data.IOrderRepository orderRepository,
+        MediatR.IMediator mediator,
+        ILogger<OrderIdController> logger)
     {
         _idGenerator = idGenerator;
+        _orderRepository = orderRepository;
+        _mediator = mediator;
         _logger = logger;
     }
 
@@ -171,6 +179,76 @@ public class OrderIdController : ControllerBase
     }
 
     /// <summary>
+    /// Confirms an unconfirmed order, transitioning it to Confirmed status.
+    /// </summary>
+    [HttpPost("order/{orderId}/confirm")]
+    public async Task<IActionResult> ConfirmOrder(string orderId)
+    {
+        var success = await _orderRepository.ConfirmOrderAsync(orderId);
+        if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
+        return Ok(new { message = "Order confirmed successfully", status = "Confirmed" });
+    }
+
+    /// <summary>
+    /// Generates Delhivery shipping label for a specific order group.
+    /// </summary>
+    [HttpPost("groups/{grpId}/label")]
+    public async Task<IActionResult> GenerateGroupLabel(string grpId)
+    {
+        var command = new DeepLens.Infrastructure.Services.Logistics.GenerateGroupLabelCommand(grpId);
+        var result = await _mediator.Send(command);
+
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.Error.Code, message = result.Error.Description });
+        }
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>
+    /// Gets order groups for the specified processing stage (confirmed, processed, delivered).
+    /// </summary>
+    [HttpGet("groups/processing")]
+    public async Task<ActionResult<IEnumerable<OrderGroupDto>>> GetProcessingGroups([FromQuery] string stage = "confirmed")
+    {
+        var groups = await _orderRepository.GetOrderGroupsByStageAsync(stage);
+        return Ok(groups);
+    }
+
+    /// <summary>
+    /// Toggles the need_label setting for an order group.
+    /// </summary>
+    [HttpPut("groups/{grpId}/need-label")]
+    public async Task<IActionResult> UpdateGroupNeedLabel(string grpId, [FromBody] NeedLabelUpdateRequest request)
+    {
+        var success = await _orderRepository.UpdateGroupNeedLabelAsync(grpId, request.NeedLabel);
+        if (!success) return NotFound(new { message = $"Group {grpId} not found" });
+        return Ok(new { message = "Need label updated", needLabel = request.NeedLabel });
+    }
+
+    /// <summary>
+    /// Marks an order group as processed.
+    /// </summary>
+    [HttpPost("groups/{grpId}/process")]
+    public async Task<IActionResult> MarkGroupProcessed(string grpId)
+    {
+        var success = await _orderRepository.MarkGroupProcessedAsync(grpId);
+        if (!success) return NotFound(new { message = $"Group {grpId} not found" });
+        return Ok(new { message = "Order group processed successfully", status = "processed" });
+    }
+
+    /// <summary>
+    /// Fetches live carrier tracking delivery status for an order group.
+    /// </summary>
+    [HttpPost("groups/{grpId}/fetch-delivery-status")]
+    public async Task<IActionResult> FetchGroupDeliveryStatus(string grpId)
+    {
+        var subStatus = await _orderRepository.FetchGroupDeliveryStatusAsync(grpId);
+        return Ok(new { message = "Delivery status fetched", trackingSubStatus = subStatus });
+    }
+
+    /// <summary>
     /// Soft deletes an order by its ID.
     /// </summary>
     [HttpDelete("order/{orderId}")]
@@ -180,4 +258,9 @@ public class OrderIdController : ControllerBase
         if (!success) return NotFound(new { message = $"Order ID {orderId} not found" });
         return Ok(new { message = "Order deleted successfully" });
     }
+}
+
+public class NeedLabelUpdateRequest
+{
+    public bool NeedLabel { get; set; }
 }

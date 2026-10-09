@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ScrollView } from 'react-native';
-import { YStack } from 'tamagui';
+import { ScrollView, Pressable } from 'react-native';
+import { YStack, XStack, Text } from 'tamagui';
+import { LuCheck } from 'react-icons/lu';
 import { useTheme } from '../../theme';
 import {
   OrderSource,
@@ -88,6 +89,7 @@ export function AdminOrderDetailPage({
   const [address, setAddress] = useState<AddressData | null>(initialAddress);
   const [transactionId, setTransactionId] = useState(initialTransactionId ?? '');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(initialReceiptUrl);
+  const [groupStages, setGroupStages] = useState<Record<string, string>>({});
 
   // Sheets
   const [activeItem, setActiveItem] = useState<OrderItem | null>(null);
@@ -260,7 +262,62 @@ export function AdminOrderDetailPage({
     }
   };
 
-  const handleSaveAll = () => {
+  const distinctGroupKeys = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        products.map((p) => {
+          const raw = (p.vendor || '').trim();
+          const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+          return isUn ? 'Unassigned' : raw;
+        })
+      )
+    );
+  }, [products]);
+
+  const totalItemCount = React.useMemo(
+    () => products.reduce((acc, p) => acc + (p.quantity || 1), 0),
+    [products]
+  );
+
+  const totalAmount = React.useMemo(
+    () => products.reduce((acc, p) => acc + (p.costPerPiece || 0) * (p.quantity || 1), 0),
+    [products]
+  );
+
+  const derivedStageTag = React.useMemo(() => {
+    if (products.length === 0) return '';
+    if (distinctGroupKeys.length === 1) {
+      return groupStages[distinctGroupKeys[0]] || 'Unconfirmed';
+    }
+    const STAGE_RANK: Record<string, number> = {
+      unconfirmed: 0,
+      confirmed: 1,
+      processed: 2,
+      processing: 2,
+      placed: 3,
+      dispatched: 3,
+      delivered: 4,
+    };
+    const sorted = [...distinctGroupKeys].sort((a, b) => {
+      const rankA = STAGE_RANK[(groupStages[a] || 'unconfirmed').toLowerCase()] ?? 0;
+      const rankB = STAGE_RANK[(groupStages[b] || 'unconfirmed').toLowerCase()] ?? 0;
+      return rankA - rankB;
+    });
+    const leastStage = groupStages[sorted[0]] || 'Unconfirmed';
+    return `${leastStage} +${distinctGroupKeys.length - 1}`;
+  }, [products.length, distinctGroupKeys, groupStages]);
+
+  const handleSaveOrder = (confirmAll: boolean = false) => {
+    let nextStages = { ...groupStages };
+    if (confirmAll) {
+      distinctGroupKeys.forEach((k) => {
+        const cur = (nextStages[k] || 'Unconfirmed').toLowerCase();
+        if (cur === 'unconfirmed' || cur === 'unformed') {
+          nextStages[k] = 'Confirmed';
+        }
+      });
+      setGroupStages(nextStages);
+    }
     const orderData = {
       orderId,
       createdAt,
@@ -271,9 +328,11 @@ export function AdminOrderDetailPage({
       address,
       transactionId,
       receiptUrl,
+      groupStages: nextStages,
+      status: confirmAll ? 'Confirmed' : 'Unconfirmed',
     };
     if (onSaveOrder) onSaveOrder(orderData);
-    else alert(`Order #${orderId} saved successfully!`);
+    else alert(`Order #${orderId} ${confirmAll ? 'confirmed' : 'saved'} successfully!`);
   };
 
   const handleDelete = () => {
@@ -299,8 +358,9 @@ export function AdminOrderDetailPage({
       <DetailHeader
         orderId={orderId}
         createdAt={createdAt}
+        status={derivedStageTag}
+        statusCount={distinctGroupKeys.length > 1 ? distinctGroupKeys.length - 1 : 0}
         compactDate={compactDate}
-        onSave={handleSaveAll}
         onDelete={handleDelete}
         onBack={onBack}
       />
@@ -308,7 +368,7 @@ export function AdminOrderDetailPage({
       {/* ── Scrollable Body ── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 80 }}
         keyboardShouldPersistTaps="handled"
       >
         <YStack paddingHorizontal={12} paddingTop={10} gap={10}>
@@ -326,6 +386,8 @@ export function AdminOrderDetailPage({
             products={products}
             selectedIds={selectedItemIds}
             isCod={paymentType === 'cod'}
+            groupStages={groupStages}
+            onUpdateGroupStage={(key, stage) => setGroupStages((prev) => ({ ...prev, [key]: stage }))}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
             onBatchDelete={handleRequestBatchDelete}
@@ -391,6 +453,88 @@ export function AdminOrderDetailPage({
         onSave={(data) => setAddress(data)}
         onClose={() => setAddressSheetOpen(false)}
       />
+
+      {/* ── Sticky Bottom Action Bar (SAVE & CONFIRM) ── */}
+      <YStack
+        position="absolute"
+        bottom={0}
+        left={0}
+        right={0}
+        backgroundColor={tokens.surface}
+        borderTopWidth={1}
+        borderTopColor={tokens.border}
+        paddingHorizontal={16}
+        paddingVertical={10}
+        shadowColor="#000"
+        shadowOffset={{ width: 0, height: -3 }}
+        shadowOpacity={0.08}
+        shadowRadius={6}
+        elevation={8}
+        zIndex={100}
+      >
+        <XStack alignItems="center" justifyContent="space-between" gap={12}>
+          {/* Order Summary: Items & Price */}
+          <YStack flex={1} gap={2}>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+              {totalItemCount} {totalItemCount === 1 ? 'ITEM' : 'ITEMS'} • {distinctGroupKeys.length} {distinctGroupKeys.length === 1 ? 'PKG' : 'PKGS'}
+            </Text>
+            <Text fontSize={17} fontWeight="900" color={tokens.text}>
+              ₹{totalAmount.toLocaleString('en-IN')}
+            </Text>
+          </YStack>
+
+          {/* Action Buttons: SAVE and CONFIRM */}
+          <XStack alignItems="center" gap={8}>
+            {/* SAVE Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save order details"
+              onPress={() => handleSaveOrder(false)}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+              })}
+            >
+              <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                SAVE
+              </Text>
+            </Pressable>
+
+            {/* CONFIRM Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirm order"
+              onPress={() => handleSaveOrder(true)}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                shadowColor: tokens.accent,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 3,
+              })}
+            >
+              <LuCheck size={16} color={tokens.accentForeground} />
+              <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
+                CONFIRM
+              </Text>
+            </Pressable>
+          </XStack>
+        </XStack>
+      </YStack>
 
       {/* ── Action Confirmation Dialog (Root Level) ── */}
       <ConfirmDialog

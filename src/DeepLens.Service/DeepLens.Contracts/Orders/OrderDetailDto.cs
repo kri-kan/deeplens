@@ -70,11 +70,23 @@ public class OrderDetailDto
     [JsonPropertyName("timestamp")]
     public DateTime Timestamp { get; set; }
 
+    [JsonPropertyName("status")]
+    public OrderStatus Status { get; set; } = OrderStatus.Unconfirmed;
+
+    [JsonPropertyName("stageTag")]
+    public string? StageTag { get; set; }
+
+    [JsonPropertyName("needLabel")]
+    public bool NeedLabel { get; set; }
+
     [JsonPropertyName("attachments")]
     public List<AttachmentDto>? Attachments { get; set; }
 
     [JsonPropertyName("items")]
     public List<OrderItemDetailDto>? Items { get; set; }
+
+    [JsonPropertyName("groups")]
+    public List<OrderGroupDto>? Groups { get; set; }
 
     [JsonPropertyName("isDeleted")]
     public bool IsDeleted { get; set; }
@@ -84,6 +96,12 @@ public class OrderItemDetailDto
 {
     [JsonPropertyName("id")]
     public int Id { get; set; }
+
+    [JsonPropertyName("itemId")]
+    public string? ItemId { get; set; }
+
+    [JsonPropertyName("orderGrpId")]
+    public string? OrderGrpId { get; set; }
 
     [JsonPropertyName("productId")]
     public string? ProductId { get; set; }
@@ -105,6 +123,9 @@ public class OrderItemDetailDto
 
     [JsonPropertyName("sourceType")]
     public string? SourceType { get; set; }
+
+    [JsonPropertyName("labelUrl")]
+    public string? LabelUrl { get; set; }
 
     [JsonPropertyName("comments")]
     public string? Comments { get; set; }

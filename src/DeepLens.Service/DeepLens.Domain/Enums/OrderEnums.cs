@@ -17,3 +17,24 @@ public enum PaymentMode
     COD = 1,
     Prepaid = 2
 }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum OrderStatus
+{
+    Unconfirmed = 0,
+    Confirmed = 1,
+    Processing = 2,
+    Dispatched = 3,
+    Delivered = 4,
+    Cancelled = 5
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum LabelStatus
+{
+    NotRequired = 0,
+    Pending = 1,
+    Generated = 2,
+    Failed = 3
+}
+

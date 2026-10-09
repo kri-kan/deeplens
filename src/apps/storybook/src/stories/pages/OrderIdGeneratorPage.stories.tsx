@@ -186,3 +186,18 @@ export const TabletView: Story = {
     },
   },
 };
+
+/**
+ * 7. Loading / Shimmer State
+ * Demonstrates smooth animated pulse shimmer skeleton placeholders while loading recent order history.
+ */
+export const LoadingShimmerState: Story = {
+  name: '7. Loading / Shimmer State',
+  decorators: [withFormFactor('mobile', 'Order ID Hub - Loading')],
+  args: {
+    disableSafeArea: true,
+    initialRecentIds: [],
+    isLoadingHistory: true,
+  },
+};
+

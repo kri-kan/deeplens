@@ -53,6 +53,9 @@ export const LuCheckSquare: React.FC<IconProps> = ({ size = 16, color = '#333333
 export const LuTriangleAlert: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="alert-triangle" size={size} color={color} style={style} />
 );
+export const LuHelpCircle: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="help-circle" size={size} color={color} style={style} />
+);
 export const LuPhone: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="phone" size={size} color={color} style={style} />
 );
@@ -101,20 +104,23 @@ export const LuHistory: React.FC<IconProps> = ({ size = 16, color = '#333333', s
 export const LuInbox: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="inbox" size={size} color={color} style={style} />
 );
+export const LuPackage: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="package" size={size} color={color} style={style} />
+);
+export const LuTruck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="truck" size={size} color={color} style={style} />
+);
+export const LuBox: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="box" size={size} color={color} style={style} />
+);
 export const LuSearch: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="search" size={size} color={color} style={style} />
 );
 export const LuClock: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="clock" size={size} color={color} style={style} />
 );
-export const LuPackage: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
-  <Feather name="package" size={size} color={color} style={style} />
-);
 export const LuPackagePlus: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <MaterialCommunityIcons name="package-variant-closed-plus" size={size} color={color} style={style} />
-);
-export const LuTruck: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
-  <MaterialCommunityIcons name="truck-delivery-outline" size={size} color={color} style={style} />
 );
 export const LuUser: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="user" size={size} color={color} style={style} />
