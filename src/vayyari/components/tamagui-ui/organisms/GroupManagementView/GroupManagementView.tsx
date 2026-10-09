@@ -180,7 +180,7 @@ export function GroupManagementView({
       {/* ── Top Navigation Bar with Back Button ── */}
       <XStack
         height={56}
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         alignItems="center"
         justifyContent="space-between"
         borderBottomWidth={1}
@@ -242,9 +242,10 @@ export function GroupManagementView({
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          padding: 16,
+          paddingHorizontal: 8,
+          paddingTop: 10,
           paddingBottom: Math.max(90, insets.bottom + 80),
-          gap: 16,
+          gap: 10,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -256,10 +257,11 @@ export function GroupManagementView({
             color={tokens.textMuted}
             textTransform="uppercase"
             letterSpacing={0.8}
+            paddingHorizontal={4}
           >
             STATUS TRANSITION TIMELINE GRAPH
           </Text>
-          <YStack marginHorizontal={-16}>
+          <YStack marginHorizontal={-8}>
             <StateTransitionGraph
               currentStage={stagedStage}
               history={history}
@@ -276,7 +278,7 @@ export function GroupManagementView({
             borderWidth={1}
             borderColor={`${tokens.accent}40`}
             borderRadius={tokens.radius.md}
-            padding={12}
+            padding={10}
             alignItems="center"
             gap={10}
           >
@@ -300,8 +302,8 @@ export function GroupManagementView({
           borderWidth={1}
           borderColor={tokens.border}
           borderRadius={tokens.radius.md}
-          padding={16}
-          gap={14}
+          padding={12}
+          gap={12}
         >
           <XStack justifyContent="space-between" alignItems="center">
             <Text
@@ -401,8 +403,8 @@ export function GroupManagementView({
           borderWidth={1}
           borderColor={tokens.border}
           borderRadius={tokens.radius.md}
-          padding={16}
-          gap={12}
+          padding={12}
+          gap={10}
         >
           <Text
             fontSize={11}
@@ -521,8 +523,8 @@ export function GroupManagementView({
           borderWidth={1}
           borderColor={tokens.border}
           borderRadius={tokens.radius.md}
-          padding={16}
-          gap={12}
+          padding={12}
+          gap={10}
         >
           <XStack justifyContent="space-between" alignItems="center">
             <Text
@@ -622,7 +624,7 @@ export function GroupManagementView({
         backgroundColor={tokens.surface}
         borderTopWidth={1}
         borderTopColor={tokens.border}
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         paddingTop={12}
         paddingBottom={Math.max(12, insets.bottom + 8)}
         elevation={8}
