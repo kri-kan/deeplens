@@ -781,6 +781,9 @@ export function ProductListSection({
             onUpdateStage={(newStage) => {
               onUpdateGroupStage?.(targetGroup.key, newStage);
             }}
+            onSave={(newStage) => {
+              onUpdateGroupStage?.(targetGroup.key, newStage);
+            }}
             onGenerateLabel={() => {
               const grpId = labelInfo?.orderGrpId;
               if (grpId && onGenerateGroupLabel) {

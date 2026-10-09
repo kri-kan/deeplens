@@ -27,6 +27,7 @@ export interface StateTransitionGraphProps {
   onNodePress?: (stage: string) => void;
   style?: StyleProp<ViewStyle>;
   containerHeight?: number;
+  fullBleed?: boolean;
 }
 
 export function StateTransitionGraph({
@@ -35,6 +36,7 @@ export function StateTransitionGraph({
   onNodePress,
   style,
   containerHeight = 72,
+  fullBleed = false,
 }: StateTransitionGraphProps) {
   const { tokens } = useTheme();
 
@@ -70,9 +72,12 @@ export function StateTransitionGraph({
       height={containerHeight}
       justifyContent="center"
       backgroundColor={tokens.surface}
-      borderWidth={1}
+      borderTopWidth={1}
+      borderBottomWidth={1}
+      borderLeftWidth={fullBleed ? 0 : 1}
+      borderRightWidth={fullBleed ? 0 : 1}
       borderColor={tokens.border}
-      borderRadius={tokens.radius.md}
+      borderRadius={fullBleed ? 0 : tokens.radius.md}
       style={style}
     >
       <ScrollView
@@ -80,7 +85,7 @@ export function StateTransitionGraph({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{
           alignItems: 'center',
-          paddingHorizontal: 12,
+          paddingHorizontal: fullBleed ? 16 : 12,
           minHeight: containerHeight - 4,
         }}
       >

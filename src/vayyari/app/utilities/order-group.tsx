@@ -130,6 +130,22 @@ export default function OrderGroupScreen() {
     }
   };
 
+  const handleSaveStage = async (newStage: string) => {
+    try {
+      if (groupInfo?.orderGrpId) {
+        await searchApiClient.patch(`/api/v1/orderid/groups/${groupInfo.orderGrpId}/status`, {
+          status: newStage,
+        });
+      }
+      setGroupStages((prev) => ({ ...prev, [effectiveGroupKey]: newStage }));
+      Alert.alert('Saved', `Package status updated to ${newStage}.`);
+    } catch (err: any) {
+      console.error('Failed to save group stage:', err);
+      Alert.alert('Save Failed', err?.message || 'Could not update package status.');
+      throw err;
+    }
+  };
+
   return (
     <GroupManagementView
       orderId={orderId || ''}
@@ -143,6 +159,7 @@ export default function OrderGroupScreen() {
       labelUrl={groupInfo?.labelUrl}
       items={items}
       onUpdateStage={handleUpdateStage}
+      onSave={handleSaveStage}
       onBack={() => router.back()}
     />
   );

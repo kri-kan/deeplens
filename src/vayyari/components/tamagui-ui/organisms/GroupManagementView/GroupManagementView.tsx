@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Pressable,
   ScrollView,
   Image,
   Alert,
   BackHandler,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -15,6 +16,7 @@ import {
   LuLock,
   LuShare2,
   LuFileText,
+  LuCheck,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { StatusBadge, StatusIntent } from '../../atoms/StatusBadge';
@@ -40,6 +42,7 @@ export interface GroupManagementViewProps {
   items: OrderItem[];
   history?: StateTransitionRecord[];
   onUpdateStage: (newStage: string) => void;
+  onSave?: (newStage: string) => Promise<void> | void;
   onGenerateLabel?: () => void;
   onViewLabel?: (url: string) => void;
   onShareGroup?: () => void;
@@ -60,6 +63,7 @@ export function GroupManagementView({
   items,
   history,
   onUpdateStage,
+  onSave,
   onGenerateLabel,
   onViewLabel,
   onShareGroup,
@@ -67,6 +71,16 @@ export function GroupManagementView({
 }: GroupManagementViewProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
+
+  // Local staged stage state to support drafting and explicit Save action
+  const [stagedStage, setStagedStage] = useState<string>(currentStage);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setStagedStage(currentStage);
+  }, [currentStage]);
+
+  const isDirty = (stagedStage || '').toLowerCase() !== (currentStage || '').toLowerCase();
 
   // Android hardware back button handler
   useEffect(() => {
@@ -88,7 +102,7 @@ export function GroupManagementView({
   };
 
   const currentIndex = ORDER_STAGES.findIndex(
-    (s) => s.toLowerCase() === (currentStage || '').toLowerCase()
+    (s) => s.toLowerCase() === (stagedStage || '').toLowerCase()
   );
   const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
 
@@ -101,14 +115,14 @@ export function GroupManagementView({
 
   const handleStageTransition = (targetStage: string) => {
     const check = canTransitionStage({
-      currentStage,
+      currentStage: stagedStage,
       targetStage,
       requiresLabel,
       hasLabel,
     });
 
     if (check.allowed) {
-      onUpdateStage(targetStage);
+      setStagedStage(targetStage);
       return;
     }
 
@@ -133,6 +147,24 @@ export function GroupManagementView({
     }
 
     Alert.alert('Action Blocked', 'Cannot transition to this stage.');
+  };
+
+  const handleSave = async () => {
+    if (isSaving) return;
+    try {
+      setIsSaving(true);
+      if (onSave) {
+        await onSave(stagedStage);
+      } else {
+        onUpdateStage(stagedStage);
+        Alert.alert('Saved', `Package status set to ${stagedStage}.`);
+      }
+    } catch (err: any) {
+      console.error('Failed to save group stage:', err);
+      Alert.alert('Save Failed', err?.message || 'Could not update package stage.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const totalItemsCount = items.reduce((acc, it) => acc + (it.quantity || 1), 0);
@@ -200,8 +232,8 @@ export function GroupManagementView({
         </XStack>
 
         <StatusBadge
-          label={currentStage.toUpperCase()}
-          intent={getStageIntent(currentStage)}
+          label={stagedStage.toUpperCase()}
+          intent={getStageIntent(stagedStage)}
           size="sm"
         />
       </XStack>
@@ -211,12 +243,12 @@ export function GroupManagementView({
         style={{ flex: 1 }}
         contentContainerStyle={{
           padding: 16,
-          paddingBottom: Math.max(40, insets.bottom + 24),
+          paddingBottom: Math.max(90, insets.bottom + 80),
           gap: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── State Transition Progress Graph (Azure DevOps Visual Model) ── */}
+        {/* ── State Transition Progress Graph (Spans Screen End-to-End without side bounds) ── */}
         <YStack gap={8}>
           <Text
             fontSize={11}
@@ -227,11 +259,14 @@ export function GroupManagementView({
           >
             STATUS TRANSITION TIMELINE GRAPH
           </Text>
-          <StateTransitionGraph
-            currentStage={currentStage}
-            history={history}
-            containerHeight={76}
-          />
+          <YStack marginHorizontal={-16}>
+            <StateTransitionGraph
+              currentStage={stagedStage}
+              history={history}
+              containerHeight={76}
+              fullBleed
+            />
+          </YStack>
         </YStack>
 
         {/* Group Lock Banner if applicable */}
@@ -279,7 +314,7 @@ export function GroupManagementView({
               STAGE PROGRESSION (ADJACENT ONLY)
             </Text>
             <AdjacentStageDropdown
-              currentStage={currentStage}
+              currentStage={stagedStage}
               onSelectStage={handleStageTransition}
               requiresLabel={requiresLabel}
               hasLabel={hasLabel}
@@ -577,6 +612,90 @@ export function GroupManagementView({
           </Pressable>
         )}
       </ScrollView>
+
+      {/* ── Sticky Bottom Action Bar with SAVE Button ── */}
+      <YStack
+        position="absolute"
+        bottom={0}
+        left={0}
+        right={0}
+        backgroundColor={tokens.surface}
+        borderTopWidth={1}
+        borderTopColor={tokens.border}
+        paddingHorizontal={16}
+        paddingTop={12}
+        paddingBottom={Math.max(12, insets.bottom + 8)}
+        elevation={8}
+        shadowColor="#000"
+        shadowOffset={{ width: 0, height: -2 }}
+        shadowOpacity={0.08}
+        shadowRadius={4}
+      >
+        <XStack justifyContent="space-between" alignItems="center">
+          <YStack gap={2}>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
+              TARGET STAGE
+            </Text>
+            <XStack alignItems="center" gap={6}>
+              <StatusBadge
+                label={stagedStage.toUpperCase()}
+                intent={getStageIntent(stagedStage)}
+                size="sm"
+              />
+              {isDirty && (
+                <XStack
+                  backgroundColor={`${tokens.accent}1A`}
+                  paddingHorizontal={6}
+                  paddingVertical={2}
+                  borderRadius={4}
+                >
+                  <Text fontSize={10} fontWeight="800" color={tokens.accent}>
+                    UNSAVED
+                  </Text>
+                </XStack>
+              )}
+            </XStack>
+          </YStack>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save group status changes"
+            disabled={!isDirty || isSaving}
+            onPress={handleSave}
+            style={({ pressed }) => ({
+              height: 42,
+              paddingHorizontal: 22,
+              borderRadius: tokens.radius.sm,
+              backgroundColor: !isDirty
+                ? `${tokens.textMuted}20`
+                : pressed
+                ? `${tokens.accent}D0`
+                : tokens.accent,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 8,
+              opacity: !isDirty ? 0.6 : 1,
+            })}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={tokens.accentForeground} />
+            ) : (
+              <>
+                <LuCheck size={16} color={!isDirty ? tokens.textMuted : tokens.accentForeground} />
+                <Text
+                  fontSize={13}
+                  fontWeight="800"
+                  color={!isDirty ? tokens.textMuted : tokens.accentForeground}
+                  letterSpacing={0.5}
+                >
+                  SAVE
+                </Text>
+              </>
+            )}
+          </Pressable>
+        </XStack>
+      </YStack>
     </YStack>
   );
 }

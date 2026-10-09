@@ -786,6 +786,11 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           onUpdateStage={(newStage) => {
             handleUpdateGroupStage(targetGroup.key, newStage);
           }}
+          onSave={(newStage) => {
+            handleUpdateGroupStage(targetGroup.key, newStage);
+            setSnackbarMessage(`Package status updated to ${newStage}`);
+            setSnackbarVisible(true);
+          }}
           onGenerateLabel={() => {
             const grpId = labelInfo?.orderGrpId;
             if (grpId) {

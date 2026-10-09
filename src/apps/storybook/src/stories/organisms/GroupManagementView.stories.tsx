@@ -68,6 +68,7 @@ function InteractiveGroupManagement(props: Partial<GroupManagementViewProps>) {
       labelUrl="https://example.com/delhivery-label.pdf"
       items={MOCK_ITEMS}
       onUpdateStage={setStage}
+      onSave={setStage}
       onBack={() => {}}
       {...props}
     />
