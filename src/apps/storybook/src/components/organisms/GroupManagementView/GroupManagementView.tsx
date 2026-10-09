@@ -628,7 +628,7 @@ export function GroupManagementView({
                           </YStack>
                         )}
 
-                        {/* Centered Qty & Size Overlay (Contrast border, big & transparent/translucent, no background box) */}
+                        {/* Centered Qty & Size Overlay (Large number, darker contrast border, stacked size if present) */}
                         <XStack
                           position="absolute"
                           top={0}
@@ -639,20 +639,21 @@ export function GroupManagementView({
                           justifyContent="center"
                           pointerEvents="none"
                         >
-                          <XStack alignItems="center" gap={3}>
+                          <YStack alignItems="center" justifyContent="center">
                             <Text
-                              fontSize={22}
+                              fontSize={32}
                               fontWeight="900"
-                              color="rgba(255, 255, 255, 0.92)"
+                              color="rgba(255, 255, 255, 0.95)"
                               letterSpacing={0.5}
+                              lineHeight={34}
                               style={{
                                 textShadowColor: '#000000',
-                                textShadowOffset: { width: 0, height: 0 },
-                                textShadowRadius: 6,
+                                textShadowOffset: { width: 0, height: 1.5 },
+                                textShadowRadius: 3,
                                 ...(Platform.OS === 'web'
                                   ? {
                                       textShadow:
-                                        '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 5px #000',
+                                        '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 6px #000, 0 0 10px #000',
                                     }
                                   : {}),
                               }}
@@ -661,25 +662,27 @@ export function GroupManagementView({
                             </Text>
                             {hasSize && (
                               <Text
-                                fontSize={17}
+                                fontSize={15}
                                 fontWeight="900"
-                                color="rgba(252, 211, 77, 0.95)"
+                                color="rgba(252, 211, 77, 0.98)"
+                                letterSpacing={0.5}
+                                marginTop={1}
                                 style={{
                                   textShadowColor: '#000000',
-                                  textShadowOffset: { width: 0, height: 0 },
-                                  textShadowRadius: 6,
+                                  textShadowOffset: { width: 0, height: 1.5 },
+                                  textShadowRadius: 3,
                                   ...(Platform.OS === 'web'
                                     ? {
                                         textShadow:
-                                          '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 5px #000',
+                                          '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 5px #000',
                                       }
                                     : {}),
                                 }}
                               >
-                                • {it.size}
+                                {it.size}
                               </Text>
                             )}
-                          </XStack>
+                          </YStack>
                         </XStack>
 
                         {/* Top-Right Overlay Symbol: Image Preview (LuEye) */}
