@@ -43,5 +43,12 @@ export const vendorService = {
 
   setDefaultAddress: async (vendorId: string, addressId: string): Promise<void> => {
     await productMgmtApiClient.post(API_ROUTES.VENDORS.SET_DEFAULT_ADDRESS(vendorId, addressId), {});
+  },
+
+  toggleFavorite: async (vendorId: string): Promise<{ vendorId: string; isFavorite: boolean }> => {
+    return await productMgmtApiClient.post<{ vendorId: string; isFavorite: boolean }>(
+      API_ROUTES.VENDORS.TOGGLE_FAVORITE(vendorId),
+      {}
+    );
   }
 };

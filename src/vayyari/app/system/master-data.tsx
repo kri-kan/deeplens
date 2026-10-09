@@ -23,6 +23,16 @@ const MASTER_DATA_ITEMS = [
   // You can add more master data items here later (e.g., Sizes, etc.)
 ];
 
+const DELHIVERY_ITEMS = [
+  { 
+    id: 'delhivery-warehouses', 
+    title: 'Warehouses', 
+    icon: 'warehouse', 
+    route: '/system/delhivery/warehouses', 
+    color: '#0284C7' 
+  },
+];
+
 export default function MasterDataHub() {
   const router = useRouter();
 
@@ -35,6 +45,19 @@ export default function MasterDataHub() {
       >
         <GridMenu 
           items={MASTER_DATA_ITEMS.map(item => ({
+            ...item,
+            onPress: () => router.push(item.route as any)
+          }))} 
+        />
+      </Section>
+
+      <Section 
+        title="Delhivery Logistics" 
+        subtitle="Manage Delhivery registered pickup warehouses, surface logistics, and fulfillment locations."
+        style={styles.section}
+      >
+        <GridMenu 
+          items={DELHIVERY_ITEMS.map(item => ({
             ...item,
             onPress: () => router.push(item.route as any)
           }))} 

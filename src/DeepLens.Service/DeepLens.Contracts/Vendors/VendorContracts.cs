@@ -38,6 +38,10 @@ public record CreateVendorRequest
     public string? Website { get; init; }
     [JsonPropertyName("notes")]
     public string? Notes { get; init; }
+    [JsonPropertyName("defaultWarehouseId")]
+    public Guid? DefaultWarehouseId { get; init; }
+    [JsonPropertyName("isFavorite")]
+    public bool? IsFavorite { get; init; }
 }
 
 /// <summary>
@@ -76,6 +80,10 @@ public record UpdateVendorRequest
     public string? Notes { get; init; }
     [JsonPropertyName("isActive")]
     public bool? IsActive { get; init; }
+    [JsonPropertyName("defaultWarehouseId")]
+    public Guid? DefaultWarehouseId { get; init; }
+    [JsonPropertyName("isFavorite")]
+    public bool? IsFavorite { get; init; }
 }
 
 
@@ -112,10 +120,26 @@ public record VendorResponse
     public string? Notes { get; init; }
     [JsonPropertyName("isActive")]
     public bool IsActive { get; init; }
+    [JsonPropertyName("defaultWarehouseId")]
+    public Guid? DefaultWarehouseId { get; init; }
+    [JsonPropertyName("defaultWarehouseName")]
+    public string? DefaultWarehouseName { get; init; }
+    [JsonPropertyName("defaultWarehouseCode")]
+    public string? DefaultWarehouseCode { get; init; }
+    [JsonPropertyName("isFavorite")]
+    public bool IsFavorite { get; init; }
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; init; }
     [JsonPropertyName("updatedAt")]
     public DateTime UpdatedAt { get; init; }
+}
+
+public record ToggleFavoriteVendorResponse
+{
+    [JsonPropertyName("vendorId")]
+    public Guid VendorId { get; init; }
+    [JsonPropertyName("isFavorite")]
+    public bool IsFavorite { get; init; }
 }
 
 /// <summary>

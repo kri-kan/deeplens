@@ -45,8 +45,8 @@ public class VendorService : IVendorService
 
             // Insert Vendor
             var vendorId = await conn.QuerySingleAsync<Guid>(
-                @"INSERT INTO Vendors (vendor_name, vendor_code, first_name, last_name, whatsapp_primary, whatsapp_secondary, order_group_link, email, website, notes)
-                  VALUES (@VendorName, @VendorCode, @FirstName, @LastName, @WhatsappPrimary, @WhatsappSecondary, @OrderGroupLink, @Email, @Website, @Notes)
+                @"INSERT INTO Vendors (vendor_name, vendor_code, first_name, last_name, whatsapp_primary, whatsapp_secondary, order_group_link, email, website, notes, default_warehouse_id, is_favorite)
+                  VALUES (@VendorName, @VendorCode, @FirstName, @LastName, @WhatsappPrimary, @WhatsappSecondary, @OrderGroupLink, @Email, @Website, @Notes, @DefaultWarehouseId, COALESCE(@IsFavorite, FALSE))
                   RETURNING id",
                 new
                 {
@@ -59,12 +59,12 @@ public class VendorService : IVendorService
                     request.OrderGroupLink,
                     request.Email,
                     request.Website,
-                    request.Notes
+                    request.Notes,
+                    request.DefaultWarehouseId,
+                    request.IsFavorite
                 },
                 transaction
             );
-
-
 
             await transaction.CommitAsync();
             _logger.LogInformation("Created Vendor {VendorId}", vendorId);
@@ -84,10 +84,14 @@ public class VendorService : IVendorService
         using var conn = await GetConnectionAsync();
 
         var vendor = await conn.QuerySingleOrDefaultAsync<VendorResponse>(
-            @"SELECT id, vendor_name as VendorName, vendor_code as VendorCode, first_name as FirstName, last_name as LastName, whatsapp_primary as WhatsappPrimary, whatsapp_secondary as WhatsappSecondary, order_group_link as OrderGroupLink, 
-                     email, website, notes, is_active as IsActive, created_at as CreatedAt, updated_at as UpdatedAt
-              FROM Vendors
-              WHERE id = @VendorId",
+            @"SELECT v.id, v.vendor_name as VendorName, v.vendor_code as VendorCode, v.first_name as FirstName, v.last_name as LastName, 
+                     v.whatsapp_primary as WhatsappPrimary, v.whatsapp_secondary as WhatsappSecondary, v.order_group_link as OrderGroupLink, 
+                     v.email, v.website, v.notes, v.is_active as IsActive, COALESCE(v.is_favorite, FALSE) as IsFavorite,
+                     v.default_warehouse_id as DefaultWarehouseId, w.name as DefaultWarehouseName, w.code as DefaultWarehouseCode,
+                     v.created_at as CreatedAt, v.updated_at as UpdatedAt
+              FROM Vendors v
+              LEFT JOIN warehouses w ON v.default_warehouse_id = w.id
+              WHERE v.id = @VendorId",
             new { VendorId = vendorId }
         );
 
@@ -99,17 +103,21 @@ public class VendorService : IVendorService
         using var conn = await GetConnectionAsync();
 
         var offset = (page - 1) * pageSize;
-        var whereClause = activeOnly == true ? "WHERE is_active = TRUE" : "";
+        var whereClause = activeOnly == true ? "WHERE v.is_active = TRUE" : "";
 
         var totalCount = await conn.QuerySingleAsync<int>(
-            $@"SELECT COUNT(*) FROM Vendors {whereClause}");
+            $@"SELECT COUNT(*) FROM Vendors v {whereClause}");
 
         var vendors = await conn.QueryAsync<VendorResponse>(
-            $@"SELECT id, vendor_name as VendorName, vendor_code as VendorCode, first_name as FirstName, last_name as LastName, whatsapp_primary as WhatsappPrimary, whatsapp_secondary as WhatsappSecondary, order_group_link as OrderGroupLink, 
-                      email, website, notes, is_active as IsActive, created_at as CreatedAt, updated_at as UpdatedAt
-               FROM Vendors
+            $@"SELECT v.id, v.vendor_name as VendorName, v.vendor_code as VendorCode, v.first_name as FirstName, v.last_name as LastName, 
+                      v.whatsapp_primary as WhatsappPrimary, v.whatsapp_secondary as WhatsappSecondary, v.order_group_link as OrderGroupLink, 
+                      v.email, v.website, v.notes, v.is_active as IsActive, COALESCE(v.is_favorite, FALSE) as IsFavorite,
+                      v.default_warehouse_id as DefaultWarehouseId, w.name as DefaultWarehouseName, w.code as DefaultWarehouseCode,
+                      v.created_at as CreatedAt, v.updated_at as UpdatedAt
+               FROM Vendors v
+               LEFT JOIN warehouses w ON v.default_warehouse_id = w.id
                {whereClause}
-               ORDER BY vendor_name
+               ORDER BY v.is_favorite DESC, v.vendor_name ASC
                LIMIT @PageSize OFFSET @Offset",
             new { PageSize = pageSize, Offset = offset }
         );
@@ -157,6 +165,8 @@ public class VendorService : IVendorService
         if (request.Website != null) { updates.Add("website = @Website"); parameters.Add("Website", request.Website); }
         if (request.Notes != null) { updates.Add("notes = @Notes"); parameters.Add("Notes", request.Notes); }
         if (request.IsActive.HasValue) { updates.Add("is_active = @IsActive"); parameters.Add("IsActive", request.IsActive.Value); }
+        if (request.DefaultWarehouseId.HasValue) { updates.Add("default_warehouse_id = @DefaultWarehouseId"); parameters.Add("DefaultWarehouseId", request.DefaultWarehouseId.Value); }
+        if (request.IsFavorite.HasValue) { updates.Add("is_favorite = @IsFavorite"); parameters.Add("IsFavorite", request.IsFavorite.Value); }
 
         if (!updates.Any())
             throw new InvalidOperationException("No fields to update");
@@ -173,6 +183,32 @@ public class VendorService : IVendorService
 
         return await GetVendorByIdAsync(vendorId)
             ?? throw new InvalidOperationException("Vendor not found after update");
+    }
+
+    public async Task<ToggleFavoriteVendorResponse> ToggleFavoriteAsync(Guid vendorId)
+    {
+        using var conn = await GetConnectionAsync();
+        var current = await conn.QuerySingleOrDefaultAsync<bool?>(
+            "SELECT is_favorite FROM Vendors WHERE id = @VendorId",
+            new { VendorId = vendorId }
+        );
+
+        if (!current.HasValue)
+        {
+            throw new KeyNotFoundException($"Vendor '{vendorId}' not found");
+        }
+
+        bool newValue = !current.Value;
+        await conn.ExecuteAsync(
+            "UPDATE Vendors SET is_favorite = @NewValue, updated_at = NOW() WHERE id = @VendorId",
+            new { NewValue = newValue, VendorId = vendorId }
+        );
+
+        return new ToggleFavoriteVendorResponse
+        {
+            VendorId = vendorId,
+            IsFavorite = newValue
+        };
     }
 
     public async Task<bool> DeleteVendorAsync(Guid vendorId)

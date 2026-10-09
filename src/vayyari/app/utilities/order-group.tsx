@@ -8,6 +8,7 @@ import { API_ROUTES } from '@/constants/api-routes';
 import { OrderIdEntry } from '@/types/orders';
 import { OrderItem } from '@/components/tamagui-ui/organisms/ProductListSection';
 import { GroupManagementView } from '@/components/tamagui-ui/organisms/GroupManagementView';
+import { GenerateDelhiveryLabelModal } from '@/components/utility/logistics/GenerateDelhiveryLabelModal';
 
 export default function OrderGroupScreen() {
   const { orderId, groupKey } = useLocalSearchParams<{
@@ -20,6 +21,7 @@ export default function OrderGroupScreen() {
   const [loading, setLoading] = useState(true);
   const [orderData, setOrderData] = useState<OrderIdEntry | null>(null);
   const [groupStages, setGroupStages] = useState<Record<string, string>>({});
+  const [labelModalVisible, setLabelModalVisible] = useState(false);
 
   useEffect(() => {
     async function fetchOrder() {
@@ -196,23 +198,68 @@ export default function OrderGroupScreen() {
     }
   };
 
+  const handleOpenGenerateLabel = () => {
+    if (!groupInfo?.orderGrpId) {
+      Alert.alert('Error', 'Order group identifier is missing.');
+      return;
+    }
+    setLabelModalVisible(true);
+  };
+
+  const handleLabelSuccess = (data: { awbNumber: string; labelUrl: string }) => {
+    setOrderData((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        groups: (prev.groups || []).map((g: any) =>
+          g.orderGrpId === groupInfo?.orderGrpId
+            ? { ...g, awbNumber: data.awbNumber, labelUrl: data.labelUrl }
+            : g
+        ),
+      };
+    });
+  };
+
+  const groupTotal = items.reduce(
+    (sum, it) => sum + (it.costPerPiece || 0) * (it.quantity || 1),
+    0
+  );
+  const totalItemsCount = items.reduce((sum, it) => sum + (it.quantity || 1), 0);
+
   return (
-    <GroupManagementView
-      orderId={orderId || ''}
-      orderGrpId={groupInfo?.orderGrpId}
-      vendorName={effectiveGroupKey}
-      isUnassigned={isUnassigned}
-      currentStage={currentStage}
-      isCod={isCod}
-      needLabel={groupInfo?.needLabel ?? isCod}
-      awbNumber={groupInfo?.awbNumber}
-      labelUrl={groupInfo?.labelUrl}
-      items={items}
-      address={address}
-      onUpdateItem={handleUpdateItem}
-      onUpdateStage={handleUpdateStage}
-      onSave={handleSaveStage}
-      onBack={() => router.back()}
-    />
+    <>
+      <GroupManagementView
+        orderId={orderId || ''}
+        orderGrpId={groupInfo?.orderGrpId}
+        vendorName={effectiveGroupKey}
+        isUnassigned={isUnassigned}
+        currentStage={currentStage}
+        isCod={isCod}
+        needLabel={groupInfo?.needLabel ?? isCod}
+        awbNumber={groupInfo?.awbNumber}
+        labelUrl={groupInfo?.labelUrl}
+        items={items}
+        address={address}
+        onUpdateItem={handleUpdateItem}
+        onUpdateStage={handleUpdateStage}
+        onSave={handleSaveStage}
+        onGenerateLabel={handleOpenGenerateLabel}
+        onBack={() => router.back()}
+      />
+
+      {groupInfo?.orderGrpId && (
+        <GenerateDelhiveryLabelModal
+          visible={labelModalVisible}
+          onDismiss={() => setLabelModalVisible(false)}
+          orderGrpId={groupInfo.orderGrpId}
+          vendorName={effectiveGroupKey}
+          itemsCount={totalItemsCount}
+          isCod={isCod}
+          groupTotal={groupTotal}
+          customerAddress={address?.address}
+          onSuccess={handleLabelSuccess}
+        />
+      )}
+    </>
   );
 }

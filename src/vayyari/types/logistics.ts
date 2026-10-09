@@ -245,3 +245,57 @@ export interface CreateEscalationRequest {
   description: string;
   claimAmount?: number;
 }
+
+// --- Warehouse / Facility Types ---
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  phone?: string;
+  contactPerson?: string;
+  isCentral: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CreateWarehouseRequest {
+  name: string;
+  code: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  phone: string;
+  contactPerson?: string;
+  isCentral: boolean;
+  registerWithDelhivery?: boolean;
+}
+
+export interface UpdateWarehouseRequest {
+  name?: string;
+  code?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  phone?: string;
+  contactPerson?: string;
+  isCentral?: boolean;
+  isActive?: boolean;
+  updateDelhivery?: boolean;
+}
+
+export interface WarehouseSyncResponse {
+  success: boolean;
+  message: string;
+  warehouses: Warehouse[];
+  syncedAt: string;
+}

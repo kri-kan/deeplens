@@ -46,4 +46,28 @@ public interface IDelhiveryClient
     /// POST /api/p/edit
     /// </summary>
     Task<DelhiveryNdrEditResponse> SubmitNdrActionAsync(DelhiveryNdrEditRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates / registers a new client warehouse (pickup location) with Delhivery.
+    /// POST /api/backend/clientwarehouse/create/
+    /// </summary>
+    Task<DelhiveryWarehouseResponse> CreateWarehouseAsync(DelhiveryWarehouseCreateRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Edits an existing client warehouse with Delhivery.
+    /// POST /api/backend/clientwarehouse/edit/
+    /// </summary>
+    Task<DelhiveryWarehouseResponse> EditWarehouseAsync(DelhiveryWarehouseEditRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cancels a manifested waybill/shipment with Delhivery.
+    /// POST /api/p/edit (cancellation: "true")
+    /// </summary>
+    Task<DelhiveryCancelResponse> CancelShipmentAsync(string waybill, string? reason = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tracks multiple shipment waybills in bulk.
+    /// GET /api/v1/packages/json/?waybill={awb1,awb2,...}
+    /// </summary>
+    Task<DelhiveryTrackingResponse> TrackShipmentsBulkAsync(IEnumerable<string> awbs, CancellationToken ct = default);
 }

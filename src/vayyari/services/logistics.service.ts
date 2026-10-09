@@ -13,7 +13,11 @@ import {
   LogisticsEscalation,
   CreateEscalationRequest,
   ProcurementStage,
-  FulfillmentPath
+  FulfillmentPath,
+  Warehouse,
+  CreateWarehouseRequest,
+  UpdateWarehouseRequest,
+  WarehouseSyncResponse
 } from '@/types/logistics';
 
 // Sample mock orders for fallback / local development
@@ -1083,5 +1087,33 @@ export const logisticsService = {
     });
 
     return escalation;
+  },
+
+  /**
+   * Fetch all warehouses / facilities registered in DeepLens
+   */
+  getWarehouses: async (): Promise<Warehouse[]> => {
+    return await productMgmtApiClient.get<Warehouse[]>(API_ROUTES.LOGISTICS.WAREHOUSES_LIST);
+  },
+
+  /**
+   * Trigger on-demand sync of warehouses from Delhivery / master registry
+   */
+  syncWarehouses: async (): Promise<WarehouseSyncResponse> => {
+    return await productMgmtApiClient.post<WarehouseSyncResponse>(API_ROUTES.LOGISTICS.WAREHOUSES_SYNC, {});
+  },
+
+  /**
+   * Create a new warehouse in DeepLens and optionally register with Delhivery
+   */
+  createWarehouse: async (request: CreateWarehouseRequest): Promise<Warehouse> => {
+    return await productMgmtApiClient.post<Warehouse>(API_ROUTES.LOGISTICS.WAREHOUSE_CREATE, request);
+  },
+
+  /**
+   * Update an existing warehouse in DeepLens and optionally update Delhivery
+   */
+  updateWarehouse: async (id: string, request: UpdateWarehouseRequest): Promise<Warehouse> => {
+    return await productMgmtApiClient.put<Warehouse>(API_ROUTES.LOGISTICS.WAREHOUSE_UPDATE(id), request);
   }
 };

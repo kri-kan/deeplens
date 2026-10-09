@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Text, TextInput, Button, useTheme, Switch, Card, Chip, ActivityIndicator } from 'react-native-paper';
-import { View, KeyboardAvoidingView, Platform, StyleSheet, Alert } from 'react-native';
+import { Text, TextInput, Button, useTheme, Switch, Card, Chip, ActivityIndicator, Portal, Modal, IconButton, Surface } from 'react-native-paper';
+import { View, KeyboardAvoidingView, Platform, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { vendorService } from '@/services/vendorService';
+import { logisticsService } from '@/services/logistics.service';
 import { waProcessorService } from '@/services/wa-processor.service';
 import { AddressFormComponent, AddressFormState } from '@/components/utility/customer/AddressFormComponent';
 import type { VendorResponse, VendorAddressResponse } from '@/types/vendors';
+import type { Warehouse } from '@/types/logistics';
 import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 export default function VendorFormScreen() {
@@ -18,6 +20,10 @@ export default function VendorFormScreen() {
   const [editingVendor, setEditingVendor] = useState<Partial<VendorResponse>>({ isActive: true });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [warehouseModalVisible, setWarehouseModalVisible] = useState(false);
 
   const [addresses, setAddresses] = useState<VendorAddressResponse[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
@@ -36,6 +42,22 @@ export default function VendorFormScreen() {
   });
   const [isAddressDefault, setIsAddressDefault] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
+
+  useEffect(() => {
+    fetchWarehouses();
+  }, []);
+
+  const fetchWarehouses = async () => {
+    try {
+      setWarehousesLoading(true);
+      const data = await logisticsService.getWarehouses();
+      setWarehouses(data || []);
+    } catch (err) {
+      console.error('Failed to load warehouses', err);
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isNew && id) {
@@ -274,6 +296,118 @@ export default function VendorFormScreen() {
           </View>
         )}
 
+        {/* Logistics & Fulfillment (Delhivery) */}
+        <Text variant="titleSmall" style={styles.sectionTitle}>Logistics & Fulfillment (Delhivery)</Text>
+        <Card style={styles.sectionCard} elevation={1}>
+          <Card.Content>
+            <View style={{ marginBottom: 12 }}>
+              <Text variant="titleMedium" style={{ fontWeight: '600', marginBottom: 2 }}>
+                Default Pickup Warehouse
+              </Text>
+              <Text variant="bodySmall" style={{ color: '#64748B', marginBottom: 10 }}>
+                Orders fulfilled by this vendor will automatically pre-select this Delhivery pickup facility.
+              </Text>
+
+              {(() => {
+                const wh = warehouses.find(w => w.id === editingVendor.defaultWarehouseId) || 
+                  (editingVendor.defaultWarehouseId ? {
+                    id: editingVendor.defaultWarehouseId,
+                    name: editingVendor.defaultWarehouseName || 'Assigned Warehouse',
+                    code: editingVendor.defaultWarehouseCode || 'WH',
+                    city: '',
+                    state: '',
+                    pincode: '',
+                    isCentral: false
+                  } : null);
+
+                if (wh) {
+                  return (
+                    <Card mode="outlined" style={styles.selectedWarehouseCard}>
+                      <Card.Content>
+                        <View style={styles.whHeaderRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <Surface style={styles.whCodeBadge} elevation={0}>
+                              <Text style={styles.whCodeText}>{wh.code}</Text>
+                            </Surface>
+                            <Text variant="titleSmall" style={{ fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
+                              {wh.name}
+                            </Text>
+                            {wh.isCentral && (
+                              <Chip compact style={{ backgroundColor: '#FEF3C7', height: 22 }} textStyle={{ fontSize: 9, color: '#B45309', fontWeight: '700' }}>
+                                CENTRAL
+                              </Chip>
+                            )}
+                          </View>
+                        </View>
+                        {(wh.city || wh.state || wh.pincode) ? (
+                          <Text variant="bodySmall" style={{ color: '#475569', marginTop: 4 }}>
+                            {[wh.city, wh.state].filter(Boolean).join(', ')}{wh.pincode ? ` - ${wh.pincode}` : ''}
+                          </Text>
+                        ) : null}
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
+                          <Button
+                            mode="text"
+                            compact
+                            onPress={() => setEditingVendor(prev => ({
+                              ...prev,
+                              defaultWarehouseId: null as any,
+                              defaultWarehouseName: undefined,
+                              defaultWarehouseCode: undefined
+                            }))}
+                            textColor="#EF4444"
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            mode="outlined"
+                            compact
+                            onPress={() => setWarehouseModalVisible(true)}
+                          >
+                            Change
+                          </Button>
+                        </View>
+                      </Card.Content>
+                    </Card>
+                  );
+                }
+
+                return (
+                  <View style={styles.noWarehouseBox}>
+                    <Text variant="bodySmall" style={{ color: '#64748B', flex: 1 }}>
+                      No warehouse assigned (defaults to Central Fulfillment Hub).
+                    </Text>
+                    <Button
+                      mode="contained-tonal"
+                      compact
+                      icon="warehouse"
+                      onPress={() => setWarehouseModalVisible(true)}
+                    >
+                      Select Warehouse
+                    </Button>
+                  </View>
+                );
+              })()}
+            </View>
+
+            <View style={[styles.switchContainer, { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12, marginTop: 4, marginBottom: 0 }]}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <IconButton icon="star" size={18} iconColor="#F59E0B" style={{ margin: 0, padding: 0, width: 20, height: 20 }} />
+                  <Text variant="bodyLarge" style={{ fontWeight: '600' }}>Favorite Vendor</Text>
+                </View>
+                <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 2 }}>
+                  Pins vendor to the top of directory and order assignment dropdowns.
+                </Text>
+              </View>
+              <Switch
+                value={!!editingVendor.isFavorite}
+                onValueChange={(val) => setEditingVendor(prev => ({ ...prev, isFavorite: val }))}
+                color="#F59E0B"
+              />
+            </View>
+          </Card.Content>
+        </Card>
+
         <Text variant="titleSmall" style={styles.sectionTitle}>Addresses</Text>
         {!isNew ? (
           <Card style={styles.sectionCard} elevation={1}>
@@ -435,6 +569,93 @@ export default function VendorFormScreen() {
         <View style={{ height: 40 }} />
       </ScreenWrapper>
 
+      {/* Warehouse Selection Modal */}
+      <Portal>
+        <Modal
+          visible={warehouseModalVisible}
+          onDismiss={() => setWarehouseModalVisible(false)}
+          contentContainerStyle={styles.whModalContent}
+        >
+          <View style={styles.whModalHeader}>
+            <Text variant="titleLarge" style={{ fontWeight: '700' }}>Select Pickup Facility</Text>
+            <IconButton icon="close" size={20} onPress={() => setWarehouseModalVisible(false)} />
+          </View>
+          <Text variant="bodySmall" style={{ color: '#64748B', marginBottom: 12 }}>
+            Choose a registered Delhivery warehouse for this vendor:
+          </Text>
+
+          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+            {/* None Option */}
+            <Card
+              mode="outlined"
+              style={[
+                styles.whOptionCard,
+                !editingVendor.defaultWarehouseId && styles.whOptionCardSelected
+              ]}
+              onPress={() => {
+                setEditingVendor(prev => ({
+                  ...prev,
+                  defaultWarehouseId: null as any,
+                  defaultWarehouseName: undefined,
+                  defaultWarehouseCode: undefined
+                }));
+                setWarehouseModalVisible(false);
+              }}
+            >
+              <Card.Content style={{ paddingVertical: 10 }}>
+                <Text variant="titleSmall" style={{ fontWeight: '600' }}>None (Default to Central Hub)</Text>
+                <Text variant="bodySmall" style={{ color: '#64748B' }}>Uses Central Hub stock & pickup configuration.</Text>
+              </Card.Content>
+            </Card>
+
+            {warehouses.map(wh => {
+              const isSelected = editingVendor.defaultWarehouseId === wh.id;
+              return (
+                <Card
+                  key={wh.id}
+                  mode="outlined"
+                  style={[
+                    styles.whOptionCard,
+                    isSelected && styles.whOptionCardSelected
+                  ]}
+                  onPress={() => {
+                    setEditingVendor(prev => ({
+                      ...prev,
+                      defaultWarehouseId: wh.id,
+                      defaultWarehouseName: wh.name,
+                      defaultWarehouseCode: wh.code
+                    }));
+                    setWarehouseModalVisible(false);
+                  }}
+                >
+                  <Card.Content style={{ paddingVertical: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Surface style={styles.whCodeBadge} elevation={0}>
+                          <Text style={styles.whCodeText}>{wh.code}</Text>
+                        </Surface>
+                        <Text variant="titleSmall" style={{ fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
+                          {wh.name}
+                        </Text>
+                        {wh.isCentral && (
+                          <Chip compact style={{ backgroundColor: '#FEF3C7', height: 20 }} textStyle={{ fontSize: 9, color: '#B45309', fontWeight: '700' }}>
+                            CENTRAL
+                          </Chip>
+                        )}
+                      </View>
+                      {isSelected && <IconButton icon="check-circle" iconColor="#0284C7" size={18} style={{ margin: 0 }} />}
+                    </View>
+                    <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 4 }}>
+                      {wh.city}, {wh.state} ({wh.pincode})
+                    </Text>
+                  </Card.Content>
+                </Card>
+              );
+            })}
+          </ScrollView>
+        </Modal>
+      </Portal>
+
     </KeyboardAvoidingView>
   );
 }
@@ -516,5 +737,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
     borderRadius: 8,
+  },
+  selectedWarehouseCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#BAE6FD',
+    marginTop: 4,
+  },
+  whHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  whCodeBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  whCodeText: {
+    color: '#1D4ED8',
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  noWarehouseBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  whModalContent: {
+    backgroundColor: '#FFFFFF',
+    margin: 20,
+    padding: 20,
+    borderRadius: 16,
+    maxHeight: '80%',
+  },
+  whModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  whOptionCard: {
+    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+  },
+  whOptionCardSelected: {
+    borderColor: '#0284C7',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 2,
   },
 });

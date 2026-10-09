@@ -48,6 +48,25 @@ export default function VendorManagement() {
     ]);
   };
 
+  const handleToggleFavorite = async (id: string) => {
+    // Optimistic update and sort favorites to top
+    setVendors(prev => {
+      const updated = prev.map(v => v.id === id ? { ...v, isFavorite: !v.isFavorite } : v);
+      return [...updated].sort((a, b) => {
+        if (a.isFavorite === b.isFavorite) return a.vendorName.localeCompare(b.vendorName);
+        return a.isFavorite ? -1 : 1;
+      });
+    });
+
+    try {
+      const res = await vendorService.toggleFavorite(id);
+      setVendors(prev => prev.map(v => v.id === id ? { ...v, isFavorite: res.isFavorite } : v));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to toggle favorite status');
+      fetchData();
+    }
+  };
+
   return (
     <ScreenWrapper title="Vendor Directory" withScrollView={false}>
       <View style={styles.container}>
@@ -62,7 +81,7 @@ export default function VendorManagement() {
             icon="plus" 
             onPress={() => { 
               router.push('/system/vendor/new');
-            }}
+            }} 
             style={styles.addBtn}
             contentStyle={{ paddingHorizontal: 8 }}
           >
@@ -95,6 +114,13 @@ export default function VendorManagement() {
                         <Text style={styles.tagText}>{item.vendorCode}</Text>
                       </Surface>
                     )}
+                    {(item.defaultWarehouseName || item.defaultWarehouseCode) && (
+                      <Surface style={[styles.tag, styles.warehouseTag]} elevation={0}>
+                        <Text style={styles.warehouseTagText}>
+                          🏭 {item.defaultWarehouseName || item.defaultWarehouseCode}
+                        </Text>
+                      </Surface>
+                    )}
                     {!item.isActive && (
                       <Surface style={[styles.tag, { backgroundColor: '#ffebee' }]} elevation={0}>
                         <Text style={[styles.tagText, { color: '#c62828' }]}>Inactive</Text>
@@ -103,6 +129,12 @@ export default function VendorManagement() {
                   </View>
                 </View>
                 <View style={styles.actions}>
+                  <IconButton
+                    icon={item.isFavorite ? 'star' : 'star-outline'}
+                    iconColor={item.isFavorite ? '#F59E0B' : '#94A3B8'}
+                    size={20}
+                    onPress={() => handleToggleFavorite(item.id)}
+                  />
                   <IconButton 
                     icon="map-marker-outline" 
                     size={20} 
@@ -216,6 +248,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
+  },
+  warehouseTag: {
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  warehouseTagText: {
+    fontSize: 11,
+    color: '#0369a1',
+    fontWeight: '700',
   },
   tagText: {
     fontSize: 12,

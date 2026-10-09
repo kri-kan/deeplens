@@ -377,6 +377,156 @@ public class DelhiveryClient : IDelhiveryClient
         }, ct);
     }
 
+    public async Task<DelhiveryWarehouseResponse> CreateWarehouseAsync(DelhiveryWarehouseCreateRequest request, CancellationToken ct = default)
+    {
+        var url = $"{_options.BaseUrl.TrimEnd('/')}/api/backend/clientwarehouse/create/";
+
+        return await _resiliencePipeline.ExecuteAsync(async state =>
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
+            ApplyAuthHeader(httpRequest);
+            httpRequest.Content = JsonContent.Create(request);
+
+            _logger.LogInformation("Registering client warehouse {Name} with Delhivery", request.Name);
+            using var response = await _httpClient.SendAsync(httpRequest, ct);
+            var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+            try
+            {
+                var result = JsonSerializer.Deserialize<DelhiveryWarehouseResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                return result ?? new DelhiveryWarehouseResponse { Success = response.IsSuccessStatusCode, Message = responseContent };
+            }
+            catch
+            {
+                return new DelhiveryWarehouseResponse
+                {
+                    Success = response.IsSuccessStatusCode,
+                    Message = responseContent
+                };
+            }
+        }, ct);
+    }
+
+    public async Task<DelhiveryWarehouseResponse> EditWarehouseAsync(DelhiveryWarehouseEditRequest request, CancellationToken ct = default)
+    {
+        var url = $"{_options.BaseUrl.TrimEnd('/')}/api/backend/clientwarehouse/edit/";
+
+        return await _resiliencePipeline.ExecuteAsync(async state =>
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
+            ApplyAuthHeader(httpRequest);
+            httpRequest.Content = JsonContent.Create(request);
+
+            _logger.LogInformation("Updating client warehouse {Name} with Delhivery", request.Name);
+            using var response = await _httpClient.SendAsync(httpRequest, ct);
+            var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+            try
+            {
+                var result = JsonSerializer.Deserialize<DelhiveryWarehouseResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                return result ?? new DelhiveryWarehouseResponse { Success = response.IsSuccessStatusCode, Message = responseContent };
+            }
+            catch
+            {
+                return new DelhiveryWarehouseResponse
+                {
+                    Success = response.IsSuccessStatusCode,
+                    Message = responseContent
+                };
+            }
+        }, ct);
+    }
+
+    public async Task<DelhiveryCancelResponse> CancelShipmentAsync(string waybill, string? reason = null, CancellationToken ct = default)
+    {
+        var cleanAwb = waybill?.Trim() ?? string.Empty;
+        var url = $"{_options.BaseUrl.TrimEnd('/')}/api/p/edit";
+
+        return await _resiliencePipeline.ExecuteAsync(async state =>
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
+            ApplyAuthHeader(httpRequest);
+            httpRequest.Content = JsonContent.Create(new DelhiveryCancelRequest
+            {
+                Waybill = cleanAwb,
+                Cancellation = "true"
+            });
+
+            _logger.LogInformation("Submitting cancellation to Delhivery for waybill {Waybill}", cleanAwb);
+            using var response = await _httpClient.SendAsync(httpRequest, ct);
+            var responseContent = await response.Content.ReadAsStringAsync(ct);
+
+            try
+            {
+                var result = JsonSerializer.Deserialize<DelhiveryCancelResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                return result ?? new DelhiveryCancelResponse
+                {
+                    Status = response.IsSuccessStatusCode,
+                    Success = response.IsSuccessStatusCode,
+                    Message = responseContent
+                };
+            }
+            catch
+            {
+                return new DelhiveryCancelResponse
+                {
+                    Status = response.IsSuccessStatusCode,
+                    Success = response.IsSuccessStatusCode,
+                    Message = responseContent
+                };
+            }
+        }, ct);
+    }
+
+    public async Task<DelhiveryTrackingResponse> TrackShipmentsBulkAsync(IEnumerable<string> awbs, CancellationToken ct = default)
+    {
+        var cleanList = awbs?.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList() ?? new List<string>();
+        if (!cleanList.Any())
+        {
+            return new DelhiveryTrackingResponse();
+        }
+
+        var joinedWaybills = string.Join(",", cleanList);
+        var url = $"{_options.BaseUrl.TrimEnd('/')}/api/v1/packages/json/?waybill={Uri.EscapeDataString(joinedWaybills)}";
+
+        return await _resiliencePipeline.ExecuteAsync(async state =>
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            ApplyAuthHeader(request);
+
+            _logger.LogInformation("Querying Delhivery bulk tracking for {Count} waybills", cleanList.Count);
+            using var response = await _httpClient.SendAsync(request, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(ct);
+                try
+                {
+                    var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+                    if (trackingData?.ShipmentData != null && trackingData.ShipmentData.Count > 0)
+                    {
+                        return trackingData;
+                    }
+                }
+                catch { }
+            }
+
+            return new DelhiveryTrackingResponse();
+        }, ct);
+    }
+
     // --- Helpers and Mock Fallbacks ---
 
     private bool IsMockableEnvironment()

@@ -456,3 +456,103 @@ public class DelhiveryNdrEditResponse
     [JsonPropertyName("waybill")]
     public string? Waybill { get; set; }
 }
+
+// --- 7. Warehouse Management ---
+
+public class DelhiveryWarehouseCreateRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("email")]
+    public string? Email { get; set; }
+
+    [JsonPropertyName("phone")]
+    public string Phone { get; set; } = string.Empty;
+
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = string.Empty;
+
+    [JsonPropertyName("city")]
+    public string City { get; set; } = string.Empty;
+
+    [JsonPropertyName("country")]
+    public string Country { get; set; } = "India";
+
+    [JsonPropertyName("pin")]
+    public string Pin { get; set; } = string.Empty;
+
+    [JsonPropertyName("return_address")]
+    public string? ReturnAddress { get; set; }
+
+    [JsonPropertyName("return_pin")]
+    public string? ReturnPin { get; set; }
+
+    [JsonPropertyName("return_city")]
+    public string? ReturnCity { get; set; }
+
+    [JsonPropertyName("return_state")]
+    public string? ReturnState { get; set; }
+
+    [JsonPropertyName("return_country")]
+    public string? ReturnCountry { get; set; } = "India";
+}
+
+public class DelhiveryWarehouseEditRequest
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("pin")]
+    public string? Pin { get; set; }
+
+    [JsonPropertyName("registered_name")]
+    public string? RegisteredName { get; set; }
+
+    [JsonPropertyName("address")]
+    public string? Address { get; set; }
+
+    [JsonPropertyName("phone")]
+    public string? Phone { get; set; }
+}
+
+public class DelhiveryWarehouseResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("data")]
+    public object? Data { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
+}
+
+// --- 8. Order Cancellation ---
+
+public class DelhiveryCancelRequest
+{
+    [JsonPropertyName("waybill")]
+    public string Waybill { get; set; } = string.Empty;
+
+    [JsonPropertyName("cancellation")]
+    public string Cancellation { get; set; } = "true";
+}
+
+public class DelhiveryCancelResponse
+{
+    [JsonPropertyName("status")]
+    public bool? Status { get; set; }
+
+    [JsonPropertyName("success")]
+    public bool? Success { get; set; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}

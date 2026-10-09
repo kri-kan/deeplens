@@ -11,6 +11,8 @@ public interface ILogisticsRepository
     Task<List<Warehouse>> GetAllWarehousesAsync();
     Task<Warehouse?> GetWarehouseByIdAsync(Guid id);
     Task<Warehouse?> GetCentralWarehouseAsync();
+    Task<Guid> CreateWarehouseAsync(Warehouse warehouse);
+    Task<bool> UpdateWarehouseAsync(Warehouse warehouse);
 
     // Shipments
     Task<Shipment?> GetShipmentByIdAsync(Guid id);

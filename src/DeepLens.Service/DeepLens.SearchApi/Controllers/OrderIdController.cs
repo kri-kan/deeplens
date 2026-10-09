@@ -193,9 +193,16 @@ public class OrderIdController : ControllerBase
     /// Generates Delhivery shipping label for a specific order group.
     /// </summary>
     [HttpPost("groups/{grpId}/label")]
-    public async Task<IActionResult> GenerateGroupLabel(string grpId)
+    public async Task<IActionResult> GenerateGroupLabel(string grpId, [FromBody] GenerateGroupLabelRequest? request = null)
     {
-        var command = new DeepLens.Infrastructure.Services.Logistics.GenerateGroupLabelCommand(grpId);
+        var command = new DeepLens.Infrastructure.Services.Logistics.GenerateGroupLabelCommand(
+            grpId,
+            request?.PickupLocation,
+            request?.ShippingMode,
+            request?.WeightGrams,
+            request?.LengthCm,
+            request?.WidthCm,
+            request?.HeightCm);
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -263,4 +270,14 @@ public class OrderIdController : ControllerBase
 public class NeedLabelUpdateRequest
 {
     public bool NeedLabel { get; set; }
+}
+
+public class GenerateGroupLabelRequest
+{
+    public string? PickupLocation { get; set; }
+    public string? ShippingMode { get; set; }
+    public int? WeightGrams { get; set; }
+    public double? LengthCm { get; set; }
+    public double? WidthCm { get; set; }
+    public double? HeightCm { get; set; }
 }

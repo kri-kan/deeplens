@@ -219,10 +219,15 @@ export const API_ROUTES = {
     UPDATE_ADDRESS: (addressId: string) => `/api/v1/Vendors/addresses/${addressId}`,
     DELETE_ADDRESS: (addressId: string) => `/api/v1/Vendors/addresses/${addressId}`,
     SET_DEFAULT_ADDRESS: (vendorId: string, addressId: string) => `/api/v1/Vendors/${vendorId}/addresses/${addressId}/default`,
+    TOGGLE_FAVORITE: (vendorId: string) => `/api/v1/Vendors/${vendorId}/toggle-favorite`,
   },
 
   // Logistics & Fulfillment
   LOGISTICS: {
+    WAREHOUSES_LIST: '/api/v1/logistics/warehouses',
+    WAREHOUSES_SYNC: '/api/v1/logistics/warehouses/sync',
+    WAREHOUSE_CREATE: '/api/v1/logistics/warehouses',
+    WAREHOUSE_UPDATE: (id: string) => `/api/v1/logistics/warehouses/${id}`,
     ORDERS_LIST: '/api/v1/logistics/orders',
     ORDER_DETAIL: (id: string) => `/api/v1/logistics/orders/${id}`,
     SPLIT_PACKAGES: (orderId: string) => `/api/v1/logistics/orders/${orderId}/packages`,

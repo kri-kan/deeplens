@@ -214,6 +214,77 @@ public class LogisticsRepository : ILogisticsRepository
             LIMIT 1");
     }
 
+    public async Task<Guid> CreateWarehouseAsync(Warehouse warehouse)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var id = warehouse.Id != Guid.Empty ? warehouse.Id : Guid.NewGuid();
+
+        await connection.ExecuteAsync(@"
+            INSERT INTO public.warehouses (
+                id, name, code, address_line1, address_line2, 
+                city, state, pincode, phone, contact_person, 
+                is_central, is_active, created_at
+            ) VALUES (
+                @Id, @Name, @Code, @AddressLine1, @AddressLine2, 
+                @City, @State, @Pincode, @Phone, @ContactPerson, 
+                @IsCentral, @IsActive, @CreatedAt
+            )",
+            new
+            {
+                Id = id,
+                warehouse.Name,
+                warehouse.Code,
+                warehouse.AddressLine1,
+                warehouse.AddressLine2,
+                warehouse.City,
+                warehouse.State,
+                warehouse.Pincode,
+                warehouse.Phone,
+                warehouse.ContactPerson,
+                warehouse.IsCentral,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            });
+
+        return id;
+    }
+
+    public async Task<bool> UpdateWarehouseAsync(Warehouse warehouse)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        var affected = await connection.ExecuteAsync(@"
+            UPDATE public.warehouses SET
+                name = @Name,
+                code = @Code,
+                address_line1 = @AddressLine1,
+                address_line2 = @AddressLine2,
+                city = @City,
+                state = @State,
+                pincode = @Pincode,
+                phone = @Phone,
+                contact_person = @ContactPerson,
+                is_central = @IsCentral,
+                is_active = @IsActive
+            WHERE id = @Id",
+            new
+            {
+                warehouse.Id,
+                warehouse.Name,
+                warehouse.Code,
+                warehouse.AddressLine1,
+                warehouse.AddressLine2,
+                warehouse.City,
+                warehouse.State,
+                warehouse.Pincode,
+                warehouse.Phone,
+                warehouse.ContactPerson,
+                warehouse.IsCentral,
+                warehouse.IsActive
+            });
+
+        return affected > 0;
+    }
+
     // --- Shipments ---
 
     public async Task<Shipment?> GetShipmentByIdAsync(Guid id)

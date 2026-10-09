@@ -636,6 +636,96 @@ public class WarehouseDto
     public DateTime CreatedAt { get; set; }
 }
 
+public class CreateWarehouseDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("code")]
+    public string Code { get; set; } = string.Empty;
+
+    [JsonPropertyName("addressLine1")]
+    public string AddressLine1 { get; set; } = string.Empty;
+
+    [JsonPropertyName("addressLine2")]
+    public string? AddressLine2 { get; set; }
+
+    [JsonPropertyName("city")]
+    public string City { get; set; } = string.Empty;
+
+    [JsonPropertyName("state")]
+    public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("pincode")]
+    public string Pincode { get; set; } = string.Empty;
+
+    [JsonPropertyName("phone")]
+    public string Phone { get; set; } = string.Empty;
+
+    [JsonPropertyName("contactPerson")]
+    public string? ContactPerson { get; set; }
+
+    [JsonPropertyName("isCentral")]
+    public bool IsCentral { get; set; }
+
+    [JsonPropertyName("registerWithDelhivery")]
+    public bool RegisterWithDelhivery { get; set; } = true;
+}
+
+public class UpdateWarehouseDto
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("code")]
+    public string? Code { get; set; }
+
+    [JsonPropertyName("addressLine1")]
+    public string? AddressLine1 { get; set; }
+
+    [JsonPropertyName("addressLine2")]
+    public string? AddressLine2 { get; set; }
+
+    [JsonPropertyName("city")]
+    public string? City { get; set; }
+
+    [JsonPropertyName("state")]
+    public string? State { get; set; }
+
+    [JsonPropertyName("pincode")]
+    public string? Pincode { get; set; }
+
+    [JsonPropertyName("phone")]
+    public string? Phone { get; set; }
+
+    [JsonPropertyName("contactPerson")]
+    public string? ContactPerson { get; set; }
+
+    [JsonPropertyName("isCentral")]
+    public bool? IsCentral { get; set; }
+
+    [JsonPropertyName("isActive")]
+    public bool? IsActive { get; set; }
+
+    [JsonPropertyName("updateDelhivery")]
+    public bool UpdateDelhivery { get; set; } = false;
+}
+
+public class WarehouseSyncResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("message")]
+    public string Message { get; set; } = string.Empty;
+
+    [JsonPropertyName("warehouses")]
+    public List<WarehouseDto> Warehouses { get; set; } = new();
+
+    [JsonPropertyName("syncedAt")]
+    public DateTime SyncedAt { get; set; }
+}
+
 // --- Escalation DTOs ---
 
 public class LogisticsEscalationDto

@@ -8,8 +8,14 @@ export interface VendorResponse {
   whatsappSecondary?: string;
   orderGroupLink?: string;
   email?: string;
+  notes?: string;
+  website?: string;
   isActive: boolean;
   isStarred?: boolean;
+  isFavorite?: boolean;
+  defaultWarehouseId?: string;
+  defaultWarehouseName?: string;
+  defaultWarehouseCode?: string;
   createdAt: string;
   updatedAt: string;
 }

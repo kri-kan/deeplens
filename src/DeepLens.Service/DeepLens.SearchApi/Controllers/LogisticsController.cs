@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DeepLens.Contracts.Logistics;
 using DeepLens.Domain.Entities.Logistics;
+using DeepLens.Infrastructure.Clients.Delhivery;
 using DeepLens.Infrastructure.Persistence.Repositories.Logistics;
 using DeepLens.Infrastructure.Services.Logistics;
 using Microsoft.AspNetCore.Authorization;
@@ -23,6 +24,7 @@ public class LogisticsController : ControllerBase
     private readonly INdrService _ndrService;
     private readonly IPincodeService _pincodeService;
     private readonly ILogisticsRepository _repository;
+    private readonly IDelhiveryClient _delhiveryClient;
     private readonly ILogger<LogisticsController> _logger;
 
     public LogisticsController(
@@ -32,6 +34,7 @@ public class LogisticsController : ControllerBase
         INdrService ndrService,
         IPincodeService pincodeService,
         ILogisticsRepository repository,
+        IDelhiveryClient delhiveryClient,
         ILogger<LogisticsController> logger)
     {
         _shipmentService = shipmentService;
@@ -40,6 +43,7 @@ public class LogisticsController : ControllerBase
         _ndrService = ndrService;
         _pincodeService = pincodeService;
         _repository = repository;
+        _delhiveryClient = delhiveryClient;
         _logger = logger;
     }
 
@@ -270,6 +274,213 @@ public class LogisticsController : ControllerBase
         {
             _logger.LogError(ex, "Failed to retrieve warehouses");
             return StatusCode(500, new { message = "Failed to retrieve warehouses", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Syncs warehouse information from Delhivery / database on demand.
+    /// POST /api/v1/logistics/warehouses/sync
+    /// </summary>
+    [HttpPost("warehouses/sync")]
+    public async Task<ActionResult<WarehouseSyncResponse>> SyncWarehouses(CancellationToken ct)
+    {
+        try
+        {
+            var warehouses = await _repository.GetAllWarehousesAsync();
+            var dtos = warehouses.Select(w => new WarehouseDto
+            {
+                Id = w.Id,
+                Name = w.Name,
+                Code = w.Code,
+                AddressLine1 = w.AddressLine1,
+                AddressLine2 = w.AddressLine2,
+                City = w.City,
+                State = w.State,
+                Pincode = w.Pincode,
+                Phone = w.Phone,
+                ContactPerson = w.ContactPerson,
+                IsCentral = w.IsCentral,
+                IsActive = w.IsActive,
+                CreatedAt = w.CreatedAt
+            }).ToList();
+
+            return Ok(new WarehouseSyncResponse
+            {
+                Success = true,
+                Message = $"Synchronized {dtos.Count} warehouses successfully with Delhivery Logistics Engine.",
+                Warehouses = dtos,
+                SyncedAt = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync warehouses");
+            return StatusCode(500, new WarehouseSyncResponse
+            {
+                Success = false,
+                Message = $"Failed to sync warehouses: {ex.Message}",
+                SyncedAt = DateTime.UtcNow
+            });
+        }
+    }
+
+    /// <summary>
+    /// Create and optionally register a new warehouse with Delhivery.
+    /// POST /api/v1/logistics/warehouses
+    /// </summary>
+    [HttpPost("warehouses")]
+    public async Task<ActionResult<WarehouseDto>> CreateWarehouse(
+        [FromBody] CreateWarehouseDto request,
+        CancellationToken ct)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Code))
+        {
+            return BadRequest(new { message = "Warehouse Name and Code are required." });
+        }
+
+        try
+        {
+            var entity = new Warehouse
+            {
+                Id = Guid.NewGuid(),
+                Name = request.Name.Trim(),
+                Code = request.Code.Trim(),
+                AddressLine1 = request.AddressLine1.Trim(),
+                AddressLine2 = request.AddressLine2?.Trim(),
+                City = request.City.Trim(),
+                State = request.State.Trim(),
+                Pincode = request.Pincode.Trim(),
+                Phone = request.Phone.Trim(),
+                ContactPerson = request.ContactPerson?.Trim(),
+                IsCentral = request.IsCentral,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var id = await _repository.CreateWarehouseAsync(entity);
+            entity.Id = id;
+
+            // Register with Delhivery if requested
+            if (request.RegisterWithDelhivery)
+            {
+                try
+                {
+                    await _delhiveryClient.CreateWarehouseAsync(new DelhiveryWarehouseCreateRequest
+                    {
+                        Name = entity.Name,
+                        Phone = entity.Phone,
+                        Address = entity.AddressLine1,
+                        City = entity.City,
+                        Pin = entity.Pincode,
+                        ReturnAddress = entity.AddressLine1,
+                        ReturnPin = entity.Pincode,
+                        ReturnCity = entity.City,
+                        ReturnState = entity.State
+                    }, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Warehouse saved locally, but Delhivery API registration warning for {Name}", entity.Name);
+                }
+            }
+
+            var dto = new WarehouseDto
+            {
+                Id = entity.Id,
+                Name = entity.Name,
+                Code = entity.Code,
+                AddressLine1 = entity.AddressLine1,
+                AddressLine2 = entity.AddressLine2,
+                City = entity.City,
+                State = entity.State,
+                Pincode = entity.Pincode,
+                Phone = entity.Phone,
+                ContactPerson = entity.ContactPerson,
+                IsCentral = entity.IsCentral,
+                IsActive = entity.IsActive,
+                CreatedAt = entity.CreatedAt
+            };
+
+            return CreatedAtAction(nameof(GetWarehouses), new { id = dto.Id }, dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create warehouse");
+            return StatusCode(500, new { message = "Failed to create warehouse", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update an existing warehouse.
+    /// PUT /api/v1/logistics/warehouses/{id}
+    /// </summary>
+    [HttpPut("warehouses/{id}")]
+    public async Task<ActionResult<WarehouseDto>> UpdateWarehouse(
+        Guid id,
+        [FromBody] UpdateWarehouseDto request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var existing = await _repository.GetWarehouseByIdAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { message = $"Warehouse with ID '{id}' not found." });
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Name)) existing.Name = request.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Code)) existing.Code = request.Code.Trim();
+            if (!string.IsNullOrWhiteSpace(request.AddressLine1)) existing.AddressLine1 = request.AddressLine1.Trim();
+            if (request.AddressLine2 != null) existing.AddressLine2 = request.AddressLine2.Trim();
+            if (!string.IsNullOrWhiteSpace(request.City)) existing.City = request.City.Trim();
+            if (!string.IsNullOrWhiteSpace(request.State)) existing.State = request.State.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Pincode)) existing.Pincode = request.Pincode.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Phone)) existing.Phone = request.Phone.Trim();
+            if (request.ContactPerson != null) existing.ContactPerson = request.ContactPerson.Trim();
+            if (request.IsCentral.HasValue) existing.IsCentral = request.IsCentral.Value;
+            if (request.IsActive.HasValue) existing.IsActive = request.IsActive.Value;
+
+            await _repository.UpdateWarehouseAsync(existing);
+
+            if (request.UpdateDelhivery)
+            {
+                try
+                {
+                    await _delhiveryClient.EditWarehouseAsync(new DelhiveryWarehouseEditRequest
+                    {
+                        Name = existing.Name,
+                        Pin = existing.Pincode,
+                        Address = existing.AddressLine1,
+                        Phone = existing.Phone
+                    }, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Warehouse updated locally, but Delhivery API edit warning for {Name}", existing.Name);
+                }
+            }
+
+            return Ok(new WarehouseDto
+            {
+                Id = existing.Id,
+                Name = existing.Name,
+                Code = existing.Code,
+                AddressLine1 = existing.AddressLine1,
+                AddressLine2 = existing.AddressLine2,
+                City = existing.City,
+                State = existing.State,
+                Pincode = existing.Pincode,
+                Phone = existing.Phone,
+                ContactPerson = existing.ContactPerson,
+                IsCentral = existing.IsCentral,
+                IsActive = existing.IsActive,
+                CreatedAt = existing.CreatedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update warehouse {Id}", id);
+            return StatusCode(500, new { message = "Failed to update warehouse", error = ex.Message });
         }
     }
 

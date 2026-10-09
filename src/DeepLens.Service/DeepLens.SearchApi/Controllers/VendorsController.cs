@@ -182,4 +182,27 @@ public class VendorsController : ControllerBase
 
         return Ok();
     }
+
+    /// <summary>
+    /// Toggle favorite status of a vendor
+    /// POST /api/v1/Vendors/{vendorId}/toggle-favorite
+    /// </summary>
+    [HttpPost("{vendorId}/toggle-favorite")]
+    public async Task<ActionResult<ToggleFavoriteVendorResponse>> ToggleFavorite(Guid vendorId)
+    {
+        try
+        {
+            var result = await _vendorService.ToggleFavoriteAsync(vendorId);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Vendor not found" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to toggle favorite for vendor {VendorId}", vendorId);
+            return StatusCode(500, new { message = "Failed to toggle favorite", error = ex.Message });
+        }
+    }
 }

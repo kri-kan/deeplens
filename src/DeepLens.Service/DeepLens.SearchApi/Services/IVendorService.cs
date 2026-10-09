@@ -18,4 +18,5 @@ public interface IVendorService
     Task<VendorAddressResponse> UpdateVendorAddressAsync(Guid addressId, VendorAddressRequest request);
     Task<bool> DeleteVendorAddressAsync(Guid addressId);
     Task<bool> SetDefaultAddressAsync(Guid vendorId, Guid addressId);
+    Task<ToggleFavoriteVendorResponse> ToggleFavoriteAsync(Guid vendorId);
 }
