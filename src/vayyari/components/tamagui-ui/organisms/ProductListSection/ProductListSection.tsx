@@ -260,7 +260,7 @@ export function ProductListSection({
                 overflow="hidden"
                 gap={0}
               >
-                {/* ── Group Header: Vendor Name, Subtitle (Count & Total), Status & Blue Chevron Action Button ── */}
+                {/* ── Group Header: Vendor Info, Subtitle, Status Badge & Full-Bleed Blue Chevron Action Button ── */}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Manage package for ${group.isUnassigned ? 'No Vendor' : group.vendorName}, currently ${currentStage}`}
@@ -273,86 +273,82 @@ export function ProductListSection({
                   }}
                   style={({ pressed }) => ({
                     backgroundColor: pressed ? `${tokens.surfaceRaised}D0` : tokens.surfaceRaised,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
                     flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    alignItems: 'stretch',
                     borderBottomWidth: 1,
                     borderBottomColor: tokens.border,
                   })}
                 >
-                  {/* Left: Vendor Icon + Name + Subtitle (n items : ₹xxxx) */}
-                  <XStack alignItems="center" gap={8} flex={1}>
-                    <XStack
-                      width={28}
-                      height={28}
-                      borderRadius={tokens.radius.full}
-                      backgroundColor={group.isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      <LuBuilding2 size={15} color={group.isUnassigned ? tokens.textMuted : tokens.accent} />
-                    </XStack>
-                    <YStack gap={2} flex={1}>
-                      <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                        {group.isUnassigned ? 'No Vendor' : group.vendorName}
-                      </Text>
-                      <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                        {groupItemCount} {groupItemCount === 1 ? 'item' : 'items'} : <Text fontWeight="800" color={tokens.text}>₹{groupTotal.toLocaleString('en-IN')}</Text>
-                      </Text>
-                    </YStack>
-                  </XStack>
-
-                  {/* Right: Locked badge (if locked), Status Badge, Dividing Line & Blue Chevron Action Button */}
-                  <XStack alignItems="center" gap={6}>
-                    {lockedVendorKeys.includes(group.key) && (
+                  {/* Left & Center: Vendor Icon + Name + Subtitle + Status Badge */}
+                  <XStack
+                    flex={1}
+                    paddingLeft={12}
+                    paddingRight={10}
+                    paddingVertical={10}
+                    alignItems="center"
+                    justifyContent="space-between"
+                    gap={8}
+                  >
+                    {/* Vendor Icon + Name + Subtitle (n items : ₹xxxx) */}
+                    <XStack alignItems="center" gap={8} flex={1}>
                       <XStack
+                        width={28}
+                        height={28}
+                        borderRadius={tokens.radius.full}
+                        backgroundColor={group.isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
                         alignItems="center"
-                        gap={3}
-                        paddingHorizontal={5}
-                        paddingVertical={2}
-                        borderRadius={tokens.radius.xs}
-                        backgroundColor={`${tokens.accent}1A`}
+                        justifyContent="center"
                       >
-                        <LuLock size={10} color={tokens.accent} />
-                        <Text fontSize={9} fontWeight="800" color={tokens.accent}>
-                          LOCKED
-                        </Text>
+                        <LuBuilding2 size={15} color={group.isUnassigned ? tokens.textMuted : tokens.accent} />
                       </XStack>
-                    )}
+                      <YStack gap={2} flex={1}>
+                        <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                          {group.isUnassigned ? 'No Vendor' : group.vendorName}
+                        </Text>
+                        <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                          {groupItemCount} {groupItemCount === 1 ? 'item' : 'items'} : <Text fontWeight="800" color={tokens.text}>₹{groupTotal.toLocaleString('en-IN')}</Text>
+                        </Text>
+                      </YStack>
+                    </XStack>
 
-                    <StatusBadge
-                      label={currentStage.toUpperCase()}
-                      intent={getStageIntent(currentStage)}
-                      size="sm"
-                    />
+                    {/* Status Badge & Locked Badge */}
+                    <XStack alignItems="center" gap={6}>
+                      {lockedVendorKeys.includes(group.key) && (
+                        <XStack
+                          alignItems="center"
+                          gap={3}
+                          paddingHorizontal={5}
+                          paddingVertical={2}
+                          borderRadius={tokens.radius.xs}
+                          backgroundColor={`${tokens.accent}1A`}
+                        >
+                          <LuLock size={10} color={tokens.accent} />
+                          <Text fontSize={9} fontWeight="800" color={tokens.accent}>
+                            LOCKED
+                          </Text>
+                        </XStack>
+                      )}
 
-                    {/* Vertical Dividing Line */}
-                    <YStack
-                      width={1}
-                      height={24}
-                      backgroundColor={tokens.border}
-                      marginHorizontal={3}
-                    />
-
-                    {/* Blue Chevron Button */}
-                    <YStack
-                      width={28}
-                      height={28}
-                      borderRadius={6}
-                      backgroundColor="#2563EB"
-                      alignItems="center"
-                      justifyContent="center"
-                      shadowColor="#2563EB"
-                      shadowOffset={{ width: 0, height: 1 }}
-                      shadowOpacity={0.25}
-                      shadowRadius={2}
-                      elevation={2}
-                    >
-                      <LuChevronRight size={16} color="#FFFFFF" />
-                    </YStack>
+                      <StatusBadge
+                        label={currentStage.toUpperCase()}
+                        intent={getStageIntent(currentStage)}
+                        size="sm"
+                      />
+                    </XStack>
                   </XStack>
+
+                  {/* Top-to-Bottom Dividing Line & Full-Bleed Blue Action Button */}
+                  <YStack
+                    width={44}
+                    alignSelf="stretch"
+                    backgroundColor="#2563EB"
+                    borderLeftWidth={1}
+                    borderLeftColor={tokens.border}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <LuChevronRight size={18} color="#FFFFFF" />
+                  </YStack>
                 </Pressable>
 
                 {/* Group Items */}
