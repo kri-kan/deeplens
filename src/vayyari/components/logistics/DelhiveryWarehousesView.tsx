@@ -428,9 +428,9 @@ export function DelhiveryWarehousesView({
                   borderRadius={radiusMd}
                   borderWidth={isCentral ? 1.5 : 1}
                   borderColor={isCentral ? '#F59E0B' : borderColor}
-                  paddingVertical={8}
-                  paddingHorizontal={10}
-                  gap={4}
+                  paddingVertical={9}
+                  paddingHorizontal={12}
+                  gap={6}
                   shadowColor="#000"
                   shadowOffset={{ width: 0, height: 1 }}
                   shadowOpacity={0.03}
@@ -439,15 +439,15 @@ export function DelhiveryWarehousesView({
                 >
                   {/* Card Header Row: Facility Name + Star + Delhivery Logo Badge + Actions */}
                   <XStack justifyContent="space-between" alignItems="center">
-                    <XStack alignItems="center" gap={6} flex={1} marginRight={6}>
-                      <Text fontSize={14} fontWeight="700" color={textColor} numberOfLines={1}>
+                    <XStack alignItems="center" gap={6} flex={1} marginRight={8}>
+                      <Text fontSize={14.5} fontWeight="700" color={textColor} numberOfLines={1}>
                         {warehouse.name}
                       </Text>
 
                       {/* Central Hub Star Indicator Only */}
                       {isCentral && (
                         <YStack>
-                          <LuStar size={13} color="#F59E0B" filled={true} />
+                          <LuStar size={13.5} color="#F59E0B" filled={true} />
                         </YStack>
                       )}
 
@@ -455,10 +455,10 @@ export function DelhiveryWarehousesView({
                       {isRegistered && (
                         <XStack
                           alignItems="center"
-                          gap={3}
-                          paddingHorizontal={5}
-                          paddingVertical={1.5}
-                          borderRadius={3}
+                          gap={3.5}
+                          paddingHorizontal={5.5}
+                          paddingVertical={2}
+                          borderRadius={3.5}
                           backgroundColor="#FEF2F2"
                           borderWidth={1}
                           borderColor="#FECACA"
@@ -484,8 +484,8 @@ export function DelhiveryWarehousesView({
                           onPress={() => onEditFacility(warehouse)}
                           style={({ pressed }) => [
                             {
-                              padding: 4,
-                              borderRadius: 4,
+                              padding: 5,
+                              borderRadius: 5,
                               backgroundColor: surfaceRaised,
                               borderWidth: 1,
                               borderColor: borderColor,
@@ -504,8 +504,8 @@ export function DelhiveryWarehousesView({
                           onPress={() => onDeleteFacility(warehouse)}
                           style={({ pressed }) => [
                             {
-                              padding: 4,
-                              borderRadius: 4,
+                              padding: 5,
+                              borderRadius: 5,
                               backgroundColor: '#FEF2F2',
                               borderWidth: 1,
                               borderColor: '#FEE2E2',
@@ -521,55 +521,50 @@ export function DelhiveryWarehousesView({
                     </XStack>
                   </XStack>
 
-                  {/* Ultra-Compact Address Line */}
-                  <XStack alignItems="flex-start" gap={5}>
-                    <YStack marginTop={1}>
-                      <LuMapPin size={12} color={textMuted} />
-                    </YStack>
-                    <Text fontSize={11.5} lineHeight={16} color={textSecondary} flex={1} numberOfLines={2}>
-                      {addressLine1}{addressLine2 ? `, ${addressLine2}` : ''}, {warehouse.city}, {warehouse.state} -{' '}
-                      <Text fontWeight="700" color={textColor}>
-                        {warehouse.pincode}
+                  {/* Second Row: Contact Person & Tap-to-Dial Phone (Well-spaced, clean) */}
+                  <XStack justifyContent="space-between" alignItems="center">
+                    {/* Contact Person */}
+                    <XStack alignItems="center" gap={5} flex={1} marginRight={8}>
+                      <LuUser size={12} color={textMuted} />
+                      <Text fontSize={12} color={textSecondary} numberOfLines={1} fontWeight="500">
+                        {contactPerson || 'Ops Incharge'}
                       </Text>
-                    </Text>
-                  </XStack>
-
-                  {/* Compact Contact & Phone Row */}
-                  <XStack justifyContent="space-between" alignItems="center" paddingTop={1}>
-                    <XStack alignItems="center" gap={12} flex={1}>
-                      {/* Contact Person */}
-                      <XStack alignItems="center" gap={3}>
-                        <LuUser size={11} color={textMuted} />
-                        <Text fontSize={11} color={textSecondary} numberOfLines={1}>
-                          {contactPerson || 'Ops Incharge'}
-                        </Text>
-                      </XStack>
-
-                      {/* Phone with Tap-to-Dial */}
-                      {warehouse.phone && (
-                        <Pressable
-                          onPress={() => {
-                            const telUri = `tel:${warehouse.phone?.replace(/[^0-9+]/g, '')}`;
-                            Linking.canOpenURL(telUri).then((supported) => {
-                              if (supported) Linking.openURL(telUri);
-                            }).catch(() => {});
-                          }}
-                          style={({ pressed }) => [
-                            {
-                              opacity: pressed ? 0.7 : 1,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 3,
-                            },
-                          ]}
-                        >
-                          <LuPhone size={11} color={textMuted} />
-                          <Text fontSize={11} fontWeight="600" color={textColor}>
-                            {warehouse.phone}
-                          </Text>
-                        </Pressable>
-                      )}
                     </XStack>
+
+                    {/* Phone with Tap-to-Dial Pill */}
+                    {warehouse.phone ? (
+                      <Pressable
+                        onPress={() => {
+                          const telUri = `tel:${warehouse.phone?.replace(/[^0-9+]/g, '')}`;
+                          Linking.canOpenURL(telUri).then((supported) => {
+                            if (supported) Linking.openURL(telUri);
+                          }).catch(() => {});
+                        }}
+                        style={({ pressed }) => [
+                          {
+                            opacity: pressed ? 0.7 : 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2.5,
+                            borderRadius: radiusFull,
+                            backgroundColor: surfaceRaised,
+                            borderWidth: 1,
+                            borderColor: borderColor,
+                          },
+                        ]}
+                      >
+                        <LuPhone size={10.5} color={accentColor} />
+                        <Text fontSize={11.5} fontWeight="600" color={textColor}>
+                          {warehouse.phone}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text fontSize={11} color={textMuted} fontStyle="italic">
+                        No phone
+                      </Text>
+                    )}
                   </XStack>
                 </YStack>
               );
