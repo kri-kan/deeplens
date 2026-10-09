@@ -240,6 +240,14 @@ export function ProductListSection({
         ) : (
           vendorGroups.map((group) => {
             const currentStage = groupStages?.[group.key] || 'Unconfirmed';
+            const groupItemCount = group.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+            const groupTotal = group.items.reduce((acc, it) => {
+              const codCharge = isCod ? (it.codChargePerPiece ?? 50) : 0;
+              const grossLineTotal = (it.quantity || 1) * ((it.costPerPiece || 0) + codCharge);
+              const paidAmount = isCod ? (it.amountPaid || 0) : 0;
+              return acc + Math.max(0, grossLineTotal - paidAmount);
+            }, 0);
+
             return (
               <YStack
                 key={group.key}
@@ -250,10 +258,10 @@ export function ProductListSection({
                 overflow="hidden"
                 gap={0}
               >
-                {/* ── Group Header: Vendor Name, Status & Right Chevron (Opens Group Management Screen) ── */}
+                {/* ── Group Header: Vendor Name, Subtitle (Count & Total), Status & Blue Chevron Action Button ── */}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Manage package for ${group.vendorName}, currently ${currentStage}`}
+                  accessibilityLabel={`Manage package for ${group.isUnassigned ? 'No Vendor' : group.vendorName}, currently ${currentStage}`}
                   onPress={() => setManageGroupKey(group.key)}
                   style={({ pressed }) => ({
                     backgroundColor: pressed ? `${tokens.surfaceRaised}D0` : tokens.surfaceRaised,
@@ -266,47 +274,29 @@ export function ProductListSection({
                     borderBottomColor: tokens.border,
                   })}
                 >
-                  {/* Left: Vendor Icon + Name + Count */}
+                  {/* Left: Vendor Icon + Name + Subtitle (n items : ₹xxxx) */}
                   <XStack alignItems="center" gap={8} flex={1}>
                     <XStack
                       width={28}
                       height={28}
                       borderRadius={tokens.radius.full}
-                      backgroundColor={group.isUnassigned ? tokens.surface : `${tokens.accent}18`}
+                      backgroundColor={group.isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
                       alignItems="center"
                       justifyContent="center"
                     >
-                      {group.isUnassigned ? (
-                        <LuHelpCircle size={15} color={tokens.textMuted} />
-                      ) : (
-                        <LuBuilding2 size={15} color={tokens.accent} />
-                      )}
+                      <LuBuilding2 size={15} color={group.isUnassigned ? tokens.textMuted : tokens.accent} />
                     </XStack>
-                    <YStack gap={1} flex={1}>
-                      <XStack alignItems="center" gap={6}>
-                        <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                          {group.isUnassigned ? 'Unassigned Vendor' : group.vendorName}
-                        </Text>
-                        {group.isUnassigned && (
-                          <XStack
-                            paddingHorizontal={6}
-                            paddingVertical={2}
-                            borderRadius={tokens.radius.xs}
-                            backgroundColor={`${tokens.error}18`}
-                          >
-                            <Text fontSize={9} fontWeight="700" color={tokens.error}>
-                              UNASSIGNED
-                            </Text>
-                          </XStack>
-                        )}
-                      </XStack>
-                      <Text fontSize={10} color={tokens.textMuted} fontWeight="600">
-                        {group.items.length} {group.items.length === 1 ? 'item' : 'items'} in group
+                    <YStack gap={2} flex={1}>
+                      <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                        {group.isUnassigned ? 'No Vendor' : group.vendorName}
+                      </Text>
+                      <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                        {groupItemCount} {groupItemCount === 1 ? 'item' : 'items'} : <Text fontWeight="800" color={tokens.text}>₹{groupTotal.toLocaleString('en-IN')}</Text>
                       </Text>
                     </YStack>
                   </XStack>
 
-                  {/* Right: Locked badge (if locked), Status Badge & Right Chevron */}
+                  {/* Right: Locked badge (if locked), Status Badge, Dividing Line & Blue Chevron Action Button */}
                   <XStack alignItems="center" gap={6}>
                     {lockedVendorKeys.includes(group.key) && (
                       <XStack
@@ -330,7 +320,30 @@ export function ProductListSection({
                       size="sm"
                     />
 
-                    <LuChevronRight size={18} color={tokens.textMuted} />
+                    {/* Vertical Dividing Line */}
+                    <YStack
+                      width={1}
+                      height={24}
+                      backgroundColor={tokens.border}
+                      marginHorizontal={3}
+                    />
+
+                    {/* Blue Chevron Button */}
+                    <YStack
+                      width={28}
+                      height={28}
+                      borderRadius={6}
+                      backgroundColor="#2563EB"
+                      alignItems="center"
+                      justifyContent="center"
+                      shadowColor="#2563EB"
+                      shadowOffset={{ width: 0, height: 1 }}
+                      shadowOpacity={0.25}
+                      shadowRadius={2}
+                      elevation={2}
+                    >
+                      <LuChevronRight size={16} color="#FFFFFF" />
+                    </YStack>
                   </XStack>
                 </Pressable>
 

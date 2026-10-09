@@ -120,10 +120,12 @@ export function GroupManagementModal({
   };
 
   const totalItemsCount = items.reduce((acc, it) => acc + (it.quantity || 1), 0);
-  const totalSubtotal = items.reduce(
-    (acc, it) => acc + (it.costPerPiece || 0) * (it.quantity || 1),
-    0
-  );
+  const totalSubtotal = items.reduce((acc, it) => {
+    const codCharge = isCod ? (it.codChargePerPiece ?? 50) : 0;
+    const grossLineTotal = (it.quantity || 1) * ((it.costPerPiece || 0) + codCharge);
+    const paidAmount = isCod ? (it.amountPaid || 0) : 0;
+    return acc + Math.max(0, grossLineTotal - paidAmount);
+  }, 0);
 
   return (
     <Modal
@@ -149,22 +151,18 @@ export function GroupManagementModal({
               width={32}
               height={32}
               borderRadius={tokens.radius.full}
-              backgroundColor={isUnassigned ? `${tokens.textMuted}1A` : `${tokens.accent}1A`}
+              backgroundColor={isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}1A`}
               alignItems="center"
               justifyContent="center"
             >
-              {isUnassigned ? (
-                <LuHelpCircle size={18} color={tokens.textMuted} />
-              ) : (
-                <LuBuilding2 size={18} color={tokens.accent} />
-              )}
+              <LuBuilding2 size={18} color={isUnassigned ? tokens.textMuted : tokens.accent} />
             </XStack>
             <YStack flex={1}>
               <Text fontSize={15} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                {orderGrpId || (isUnassigned ? 'Unassigned Package' : `${vendorName} Package`)}
+                {orderGrpId ? `${orderGrpId} • ${isUnassigned ? 'No Vendor' : vendorName}` : (isUnassigned ? 'No Vendor' : `${vendorName} Package`)}
               </Text>
               <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                Order #{orderId} • {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'}
+                Order #{orderId} • {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'} : ₹{totalSubtotal.toLocaleString('en-IN')}
               </Text>
             </YStack>
           </XStack>
