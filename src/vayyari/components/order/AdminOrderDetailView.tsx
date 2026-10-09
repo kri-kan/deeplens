@@ -162,7 +162,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                 id: it.id ? String(it.id) : `item-${idx}`,
                 productId: it.productId ?? '',
                 title: it.productTitle ?? '',
-                size: 'Free Size',
+                size: parsedMeta.size || 'Free Size',
                 quantity: it.quantity ?? 1,
                 costPerPiece: it.unitPrice ?? 0,
                 codChargePerPiece: 0,
@@ -174,6 +174,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                 image: photo,
                 attachmentId: parsedMeta.attachmentId || (it.attachments && it.attachments[0]?.id),
                 storagePath: parsedMeta.storagePath || (it.attachments && it.attachments[0]?.key),
+                isShared: Boolean(parsedMeta.isShared || parsedMeta.sharedAt),
+                sharedAt: parsedMeta.sharedAt || undefined,
               };
             })
           );
@@ -347,7 +349,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         transactionId: transactionId || undefined,
         groups: groupsPayload,
         items: itemsList.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor)
+          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor || p.size || p.sharedAt || p.isShared)
             ? JSON.stringify({
                 catalogImageUrl: p.catalogImageUrl,
                 photoUri: p.photoUri,
@@ -355,6 +357,9 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                 attachmentId: p.attachmentId,
                 storagePath: p.storagePath,
                 vendor: p.vendor,
+                size: p.size,
+                sharedAt: p.sharedAt,
+                isShared: p.isShared,
               })
             : undefined;
 
@@ -539,7 +544,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         transactionId: transactionId || undefined,
         groups: groupsPayload,
         items: products.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor)
+          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor || p.size || p.sharedAt || p.isShared)
             ? JSON.stringify({
                 catalogImageUrl: p.catalogImageUrl,
                 photoUri: p.photoUri,
@@ -547,6 +552,9 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                 attachmentId: p.attachmentId,
                 storagePath: p.storagePath,
                 vendor: p.vendor,
+                size: p.size,
+                sharedAt: p.sharedAt,
+                isShared: p.isShared,
               })
             : undefined;
 
@@ -783,6 +791,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           labelUrl={labelInfo?.labelUrl}
           isLocked={lockedVendorKeys.includes(targetGroup.key)}
           items={targetGroup.items}
+          address={address}
+          onUpdateItem={handleUpdateItem}
           onUpdateStage={(newStage) => {
             handleUpdateGroupStage(targetGroup.key, newStage);
           }}

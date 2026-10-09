@@ -42,6 +42,8 @@ export interface OrderItem {
   selectedMediaId?: string;
   attachmentId?: string;
   storagePath?: string;
+  isShared?: boolean;
+  sharedAt?: string;
 }
 
 export const ORDER_STAGES = [

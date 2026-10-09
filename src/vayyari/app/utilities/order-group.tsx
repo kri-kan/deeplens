@@ -97,18 +97,41 @@ export default function OrderGroupScreen() {
       const isItemUnassigned = !v || v.toLowerCase() === 'unassigned' || v.toLowerCase() === 'none';
       return isUnassigned ? isItemUnassigned : v.toLowerCase() === effectiveGroupKey.toLowerCase();
     })
-    .map((it: any) => ({
-      id: it.id || it.itemId,
-      productId: it.productId,
-      title: it.productTitle || it.title || 'Product Item',
-      quantity: it.quantity || 1,
-      costPerPiece: it.unitPrice || it.costPerPiece || 0,
-      subtotal: it.subtotal,
-      vendor: it.vendorName || it.vendor,
-      photoUri: it.catalogImageUrl || it.image,
-    }));
+    .map((it: any) => {
+      let parsedMeta: any = {};
+      if (it.comments) {
+        try {
+          parsedMeta = JSON.parse(it.comments);
+        } catch {}
+      }
+      return {
+        id: it.id || it.itemId,
+        productId: it.productId,
+        title: it.productTitle || it.title || 'Product Item',
+        quantity: it.quantity || 1,
+        costPerPiece: it.unitPrice || it.costPerPiece || 0,
+        subtotal: it.subtotal,
+        vendor: it.vendorName || it.vendor,
+        photoUri: it.catalogImageUrl || it.image,
+        size: parsedMeta.size || 'Free Size',
+        isShared: Boolean(parsedMeta.isShared || parsedMeta.sharedAt),
+        sharedAt: parsedMeta.sharedAt || undefined,
+      };
+    });
 
-  const groupInfo = orderData.groups?.find((g) => {
+  const address = (orderData.customerAddress || orderData.shippingStreet)
+    ? {
+        name: orderData.customerName || 'Customer',
+        phone: orderData.customerPhone || orderData.sourceHandle || '',
+        address: orderData.shippingStreet || orderData.customerAddress || '',
+        pincode: orderData.shippingPincode || '',
+        city: orderData.shippingCity,
+        state: orderData.shippingState,
+        isDelhiveryServiceable: orderData.isServiceable,
+      }
+    : null;
+
+  const groupInfo = orderData.groups?.find((g: any) => {
     const raw = (g.vendorName || '').trim();
     const isGUnassigned = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
     return isUnassigned ? isGUnassigned : raw.toLowerCase() === effectiveGroupKey.toLowerCase();
@@ -116,6 +139,33 @@ export default function OrderGroupScreen() {
 
   const currentStage = groupStages[effectiveGroupKey] || groupInfo?.status || 'Unconfirmed';
   const isCod = orderData.paymentMode?.toLowerCase() === 'cod';
+
+  const handleUpdateItem = async (itemId: string, updates: Partial<OrderItem>) => {
+    try {
+      if (!orderData?.items) return;
+      const updatedItems = orderData.items.map((it: any) => {
+        if ((it.id || it.itemId) !== itemId) return it;
+        let meta: any = {};
+        if (it.comments) {
+          try {
+            meta = JSON.parse(it.comments);
+          } catch {}
+        }
+        const mergedMeta = { ...meta, ...updates };
+        return {
+          ...it,
+          comments: JSON.stringify(mergedMeta),
+        };
+      });
+      await searchApiClient.put(`/api/v1/orders/${orderId}`, {
+        ...orderData,
+        items: updatedItems,
+      });
+      setOrderData((prev: any) => ({ ...prev, items: updatedItems }));
+    } catch (err) {
+      console.error('Failed to update item:', err);
+    }
+  };
 
   const handleUpdateStage = async (newStage: string) => {
     setGroupStages((prev) => ({ ...prev, [effectiveGroupKey]: newStage }));
@@ -158,6 +208,8 @@ export default function OrderGroupScreen() {
       awbNumber={groupInfo?.awbNumber}
       labelUrl={groupInfo?.labelUrl}
       items={items}
+      address={address}
+      onUpdateItem={handleUpdateItem}
       onUpdateStage={handleUpdateStage}
       onSave={handleSaveStage}
       onBack={() => router.back()}
