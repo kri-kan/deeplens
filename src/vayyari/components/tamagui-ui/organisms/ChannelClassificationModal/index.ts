@@ -1,1 +1,1 @@
-export * from './ChannelClassificationModal';
+export * from '@/components/curation/ChannelClassificationModal';

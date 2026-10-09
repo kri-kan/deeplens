@@ -1,0 +1,254 @@
+/* ==========================================================================
+   VAYYARI HAUTE COUTURE — DESIGN TOKENS & GLOBAL STYLES
+   ========================================================================== */
+
+:root {
+  --bg-dark: #0a0305;
+  --bg-surface: #13060a;
+  --bg-card: #18090e;
+  --bg-card-hover: #220e15;
+  
+  --primary: #671424;
+  --primary-deep: #430c17;
+  --primary-light: #8e1f35;
+  
+  --gold: #d4af37;
+  --gold-champagne: #dfbe64;
+  --gold-bright: #f3d57d;
+  --gold-muted: rgba(212, 175, 55, 0.45);
+  --gold-glow: rgba(212, 175, 55, 0.22);
+  --gold-border: rgba(212, 175, 55, 0.25);
+  
+  --text-main: #fbf6f0;
+  --text-ivory: #faeee2;
+  --text-muted: #bfaaa0;
+  --text-subtle: #7a6660;
+
+  --font-heading: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Jost', -apple-system, BlinkMacSystemFont, sans-serif;
+  
+  --glass-bg: rgba(19, 6, 10, 0.75);
+  --glass-border: rgba(212, 175, 55, 0.2);
+  --glass-blur: blur(16px);
+  
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --transition-smooth: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+  background-color: var(--bg-dark);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  line-height: 1.6;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  selection-background-color: var(--gold);
+  selection-color: var(--bg-dark);
+}
+
+::selection {
+  background-color: var(--gold);
+  color: var(--bg-dark);
+}
+
+/* Custom Luxury Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.3);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-champagne);
+}
+
+/* Typography Helpers */
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #fff7ea 0%, #dfbe64 45%, #b48529 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gold-shimmer {
+  background: linear-gradient(90deg, #dfbe64 0%, #fff4db 50%, #dfbe64 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Gold Dividers */
+.gold-divider {
+  width: 48px;
+  height: 1px;
+  background: var(--gold);
+}
+
+.gold-gradient-line {
+  height: 1px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+
+.gold-center-line {
+  width: 1px;
+  height: 48px;
+  background: linear-gradient(to bottom, transparent, var(--gold));
+}
+
+/* Buttons */
+.btn-gold {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #dfbe64 0%, #c99c38 100%);
+  color: #0d0406;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 16px 34px;
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.25);
+}
+
+.btn-gold:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.4);
+  background: linear-gradient(135deg, #ebd082 0%, #dfbe64 100%);
+}
+
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+.btn-outline-gold {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: transparent;
+  color: var(--gold-champagne);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 15px 30px;
+  border: 1px solid var(--gold-border);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: var(--transition-smooth);
+}
+
+.btn-outline-gold:hover {
+  border-color: var(--gold);
+  background: rgba(212, 175, 55, 0.08);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+/* Glass Panels */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-card {
+  background: rgba(24, 9, 14, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 175, 55, 0.16);
+  transition: var(--transition-smooth);
+}
+
+.glass-card:hover {
+  border-color: rgba(212, 175, 55, 0.45);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 25px rgba(212, 175, 55, 0.12);
+  transform: translateY(-4px);
+}
+
+
+
+/* Animations */
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-float {
+  animation: floatGentle 5s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.05); }
+}
+
+.animate-glow {
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+/* Utility Layouts */
+.container-luxury {
+  width: 100%;
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+@media (min-width: 768px) {
+  .container-luxury {
+    padding-left: 48px;
+    padding-right: 48px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .container-luxury {
+    padding-left: 64px;
+    padding-right: 64px;
+  }
+}

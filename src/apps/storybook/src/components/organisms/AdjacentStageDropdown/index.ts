@@ -1,2 +1,1 @@
-export { AdjacentStageDropdown } from './AdjacentStageDropdown';
-export type { AdjacentStageDropdownProps } from './AdjacentStageDropdown';
+export * from '../../../../../../vayyari/components/order/AdjacentStageDropdown';

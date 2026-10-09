@@ -12,12 +12,12 @@ import {
   LuStar,
   LuLayers,
   LuSparkles,
-} from '../../icons/lu';
+} from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import {
   TargetCollabAccountPicker,
   TargetCollabAccount,
-} from '../../molecules/TargetCollabAccountPicker';
+} from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
 import type {
   PostPlannerItem,
   PostPlannerChannelOption,

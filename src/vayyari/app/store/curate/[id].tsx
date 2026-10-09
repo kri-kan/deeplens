@@ -8,7 +8,7 @@ import {
 import {
   StoreCurationMediaItem,
   StoreColorGroup,
-} from '@/components/tamagui-ui/organisms/StoreCuration/types';
+} from '@/types/curation';
 import { storeAdminService, StoreProductCuration, StoreMediaItem } from '@/services/storeAdminService';
 import { useTheme } from '@/theme';
 

@@ -37,8 +37,8 @@ import {
 import {
   CollabCurationModal,
   CollabPostItem,
-} from '../organisms/CollabCurationModal';
-import { CollabQueueDrawer } from '../organisms/CollabQueueDrawer/CollabQueueDrawer';
+  CollabQueueDrawer,
+} from '@/components/curation';
 
 export const DEFAULT_COLLAB_ACCOUNTS: TargetCollabAccount[] = [
   {

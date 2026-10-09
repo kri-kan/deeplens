@@ -6,7 +6,7 @@ import {
   toggleMediaCommonStatus,
   unlinkDiscardedMedia,
 } from '../utils/curationMediaRules';
-import { StoreCurationMediaItem, StoreColorGroup } from '../components/tamagui-ui/organisms/StoreCuration/types';
+import { StoreCurationMediaItem, StoreColorGroup } from '../types/curation';
 
 describe('Store Curation Media Qualification & Filtering Rules', () => {
   const mockGroups: StoreColorGroup[] = [

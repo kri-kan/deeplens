@@ -5,7 +5,7 @@ import {
   DelhiveryWarehousesView,
   DelhiveryWarehousesViewProps,
   DelhiveryWarehouseItem,
-} from './DelhiveryWarehousesView';
+} from './index';
 
 export const REAL_DELHIVERY_WAREHOUSES: DelhiveryWarehouseItem[] = [
   {
@@ -303,7 +303,7 @@ function InteractiveDelhiveryWarehouses(props: Partial<DelhiveryWarehousesViewPr
       lastSyncedAt={lastSyncedAt}
       onSync={handleSync}
       onAddFacility={handleAddFacility}
-      onEditFacility={(wh) => {
+      onEditFacility={(wh: DelhiveryWarehouseItem) => {
         alert(`Edit facility: ${wh.name} (${wh.code})`);
       }}
       onDeleteFacility={handleDeleteFacility}

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
+import * as Clipboard from 'expo-clipboard';
 import {
   LuArrowLeft,
   LuArrowRight,
@@ -22,17 +23,17 @@ import {
   LuEye,
   LuMapPin,
   LuX,
-} from 'react-icons/lu';
-import { useTheme } from '../../../theme';
-import { StatusBadge, StatusIntent } from '../../atoms/StatusBadge';
-import { OrderItem } from '../ProductListSection';
-import { StateTransitionGraph, StateTransitionRecord } from '../StateTransitionGraph';
-import { AdjacentStageDropdown } from '../AdjacentStageDropdown';
+} from '@/components/tamagui-ui/icons/lu';
+import { useTheme } from '@/theme';
+import { StatusBadge, StatusIntent } from '@/components/tamagui-ui/atoms/StatusBadge';
+import { OrderItem } from './ProductListSection';
+import { StateTransitionGraph, StateTransitionRecord } from './StateTransitionGraph';
+import { AdjacentStageDropdown } from './AdjacentStageDropdown';
 import {
   ORDER_STAGES,
   canTransitionStage,
-} from '../../../utils/stageTransitionRules';
-import { shareImageUri } from '../../../utils/shareImage';
+} from '@/utils/stageTransitionRules';
+import { shareImageUri } from '@/utils/shareImage';
 
 export interface AddressData {
   name: string;
@@ -133,15 +134,6 @@ export function GroupManagementView({
     setGroupItems(items);
   }, [items]);
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-      }
-    } catch {}
-  };
-
   // Share handlers
   const handleShareItem = async (item: OrderItem) => {
     try {
@@ -153,7 +145,7 @@ export function GroupManagementView({
       if (item.productId && item.productId !== 'N/A') {
         clipText += `\nSKU: ${item.productId}`;
       }
-      await copyToClipboard(clipText);
+      await Clipboard.setStringAsync(clipText);
 
       // 2. Open image for intent sharing
       const photo = item.photoUri || item.catalogImageUrl || item.image || item.imageUrl;
@@ -175,7 +167,7 @@ export function GroupManagementView({
   const handleShareLabel = async () => {
     try {
       const clipText = `Delhivery Shipping Label\nAWB: ${awbNumber || 'N/A'}\nPackage: ${orderGrpId || orderId}`;
-      await copyToClipboard(clipText);
+      await Clipboard.setStringAsync(clipText);
 
       if (labelUrl) {
         await shareImageUri(labelUrl, `Shipping Label ${awbNumber || ''}`);
@@ -200,12 +192,17 @@ export function GroupManagementView({
         `Phone: ${address?.phone || ''}`,
       ].filter(Boolean).join('\n');
 
-      await copyToClipboard(clipText);
+      await Clipboard.setStringAsync(clipText);
 
       if (Platform.OS === 'web') {
         if (typeof navigator !== 'undefined' && (navigator as any).share) {
           await (navigator as any).share({ title: 'Customer Delivery Address', text: clipText });
         }
+      } else {
+        try {
+          const RNShare = require('react-native-share').default;
+          await RNShare.open({ title: 'Customer Delivery Address', message: clipText, failOnCancel: false });
+        } catch {}
       }
 
       setShareConfirmTarget({
@@ -236,15 +233,14 @@ export function GroupManagementView({
 
   const isDirty = (stagedStage || '').toLowerCase() !== (currentStage || '').toLowerCase();
 
+  // Android hardware back button handler
   useEffect(() => {
-    if (BackHandler && BackHandler.addEventListener) {
-      const onBackPress = () => {
-        onBack();
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-    }
+    const onBackPress = () => {
+      onBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
   }, [onBack]);
 
   const getStageIntent = (stage: string): StatusIntent => {
@@ -312,11 +308,7 @@ export function GroupManagementView({
         await onSave(stagedStage);
       } else {
         onUpdateStage(stagedStage);
-        if (typeof alert !== 'undefined') {
-          alert(`Package status set to ${stagedStage}.`);
-        } else {
-          Alert.alert('Saved', `Package status set to ${stagedStage}.`);
-        }
+        Alert.alert('Saved', `Package status set to ${stagedStage}.`);
       }
     } catch (err: any) {
       console.error('Failed to save group stage:', err);
@@ -424,25 +416,44 @@ export function GroupManagementView({
             letterSpacing={0.8}
             paddingHorizontal={4}
           >
-            PACKAGE STATUS TIMELINE
+            STATUS TRANSITION TIMELINE GRAPH
           </Text>
-
-          <YStack
-            backgroundColor={tokens.surface}
-            borderWidth={1}
-            borderColor={tokens.border}
-            borderRadius={tokens.radius.md}
-            marginHorizontal={-8}
-            overflow="hidden"
-          >
+          <YStack marginHorizontal={-8}>
             <StateTransitionGraph
               currentStage={stagedStage}
               history={history}
+              containerHeight={76}
+              fullBleed
             />
           </YStack>
         </YStack>
 
-        {/* ── 1. Group Stage Selector & Transition Rules Card ── */}
+        {/* Group Lock Banner if applicable */}
+        {isLocked && (
+          <XStack
+            backgroundColor={`${tokens.accent}12`}
+            borderWidth={1}
+            borderColor={`${tokens.accent}40`}
+            borderRadius={tokens.radius.md}
+            padding={10}
+            alignItems="center"
+            gap={10}
+          >
+            <LuLock size={20} color={tokens.accent} />
+            <YStack flex={1} gap={2}>
+              <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                PACKAGE GROUP LOCKED
+              </Text>
+              <Text fontSize={11} color={tokens.text} lineHeight={16}>
+                {requiresLabel
+                  ? 'Shipping label has been generated. This package is sealed for dispatch; items cannot be added or reassigned.'
+                  : 'This package has reached Placed status. Items cannot be added or reassigned.'}
+              </Text>
+            </YStack>
+          </XStack>
+        )}
+
+        {/* ── 1. Sequential Stage Progression Card with Adjacent-Only Dropdown ── */}
         <YStack
           backgroundColor={tokens.surface}
           borderWidth={1}
@@ -459,29 +470,19 @@ export function GroupManagementView({
               textTransform="uppercase"
               letterSpacing={0.8}
             >
-              CHANGE STAGE (SEQUENTIAL ONLY)
+              STAGE PROGRESSION (ADJACENT ONLY)
             </Text>
-            {isLocked && (
-              <XStack alignItems="center" gap={4}>
-                <LuLock size={12} color={tokens.textMuted} />
-                <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-                  Locked
-                </Text>
-              </XStack>
-            )}
+            <AdjacentStageDropdown
+              currentStage={stagedStage}
+              onSelectStage={handleStageTransition}
+              requiresLabel={requiresLabel}
+              hasLabel={hasLabel}
+              size="sm"
+            />
           </XStack>
 
-          {/* Adjacent Stage Dropdown */}
-          <AdjacentStageDropdown
-            currentStage={stagedStage}
-            onSelectStage={handleStageTransition}
-            requiresLabel={requiresLabel}
-            hasLabel={hasLabel}
-            disabled={isLocked}
-          />
-
-          {/* Adjacent Step Buttons */}
-          <XStack gap={10}>
+          {/* Quick Step navigation buttons: Previous / Next */}
+          <XStack gap={10} alignItems="center">
             {/* Previous Step */}
             <Pressable
               accessibilityRole="button"
@@ -492,9 +493,13 @@ export function GroupManagementView({
                 flex: 1,
                 height: 42,
                 borderRadius: tokens.radius.sm,
-                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
                 borderWidth: 1,
-                borderColor: tokens.border,
+                borderColor: prevStage ? tokens.border : `${tokens.border}40`,
+                backgroundColor: !prevStage
+                  ? `${tokens.surfaceRaised}50`
+                  : pressed
+                  ? `${tokens.text}10`
+                  : tokens.surfaceRaised,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'row',
@@ -674,7 +679,7 @@ export function GroupManagementView({
                                   ...(Platform.OS === 'web'
                                     ? {
                                         textShadow:
-                                          '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 0 5px #000',
+                                          '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 0 5px #000',
                                       }
                                     : {}),
                                 }}

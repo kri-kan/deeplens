@@ -1,1 +1,1 @@
-export * from './GroupManagementModal';
+export * from '@/components/order/GroupManagementModal';

@@ -2,7 +2,7 @@ import {
   SwatchTemplateType,
   STANDARD_PALETTE,
 } from '../constants/palette';
-import { StoreColorGroup, ExtractedColorCentroid } from '../components/tamagui-ui/organisms/StoreCuration/types';
+import { StoreColorGroup, ExtractedColorCentroid } from '@/types/curation';
 
 export const FALLBACK_PALETTE: readonly string[] = [
   '#1B4D3E', // Emerald

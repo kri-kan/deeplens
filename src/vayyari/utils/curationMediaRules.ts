@@ -1,4 +1,4 @@
-import { StoreCurationMediaItem, StoreColorGroup } from '../components/tamagui-ui/organisms/StoreCuration/types';
+import { StoreCurationMediaItem, StoreColorGroup } from '@/types/curation';
 
 /**
  * Filter qualified media for PDP preview or live catalog display based on active color group.

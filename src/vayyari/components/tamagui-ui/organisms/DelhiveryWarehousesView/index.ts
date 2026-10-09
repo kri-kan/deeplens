@@ -1,1 +1,1 @@
-export * from './DelhiveryWarehousesView';
+export * from '@/components/logistics/DelhiveryWarehousesView';

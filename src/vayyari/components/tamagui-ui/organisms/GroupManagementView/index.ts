@@ -1,2 +1,1 @@
-export { GroupManagementView } from './GroupManagementView';
-export type { GroupManagementViewProps } from './GroupManagementView';
+export * from '@/components/order/GroupManagementView';

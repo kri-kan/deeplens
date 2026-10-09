@@ -5,9 +5,8 @@ import { YStack, Text } from 'tamagui';
 import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
+import { GroupManagementView, OrderItem } from '@/components/order';
 import { OrderIdEntry } from '@/types/orders';
-import { OrderItem } from '@/components/tamagui-ui/organisms/ProductListSection';
-import { GroupManagementView } from '@/components/tamagui-ui/organisms/GroupManagementView';
 import { GenerateDelhiveryLabelModal } from '@/components/utility/logistics/GenerateDelhiveryLabelModal';
 
 export default function OrderGroupScreen() {
@@ -33,7 +32,7 @@ export default function OrderGroupScreen() {
 
         const initialStages: Record<string, string> = {};
         if (data.groups) {
-          data.groups.forEach((g) => {
+          data.groups.forEach((g: any) => {
             const raw = (g.vendorName || '').trim();
             const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
             const k = isUn ? 'Unassigned' : raw;

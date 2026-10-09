@@ -16,11 +16,11 @@ import {
   LuLock,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
-import { CustomCheckbox } from '../../atoms/CustomCheckbox';
-import { StatusBadge, StatusIntent } from '../../atoms/StatusBadge';
-import { ImageViewerModal } from '../../molecules/ImageViewerModal';
+import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
+import { StatusBadge, StatusIntent } from '@/components/tamagui-ui/atoms/StatusBadge';
+import { ImageViewerModal } from '@/components/tamagui-ui/molecules/ImageViewerModal';
 import { shareImageUri } from '@/utils/shareImage';
-import { GroupManagementView } from '../GroupManagementView';
+import { GroupManagementView } from './GroupManagementView';
 
 export interface OrderItem {
   id: string;

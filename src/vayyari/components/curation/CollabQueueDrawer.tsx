@@ -8,10 +8,10 @@ import {
   LuClock,
   LuUsers,
   LuLayers,
-} from '../../icons/lu';
+} from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
-import { CollabPostItem } from '../CollabCurationModal';
-import { getChannelColor } from '../../molecules/TargetCollabAccountPicker';
+import { CollabPostItem } from './CollabCurationModal';
+import { getChannelColor } from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
 
 export interface CollabQueueDrawerProps {
   visible: boolean;

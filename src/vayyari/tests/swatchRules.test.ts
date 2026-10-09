@@ -8,7 +8,7 @@ import {
   FALLBACK_PALETTE,
 } from '../utils/swatchRules';
 import { resolveColorHex, STANDARD_PALETTE } from '../constants/palette';
-import { StoreColorGroup, ExtractedColorCentroid } from '../components/tamagui-ui/organisms/StoreCuration/types';
+import { StoreColorGroup, ExtractedColorCentroid } from '../types/curation';
 
 describe('Swatch Rules & Template Limit Validation', () => {
   test('solid template enforces exactly 1 fixed slot', () => {

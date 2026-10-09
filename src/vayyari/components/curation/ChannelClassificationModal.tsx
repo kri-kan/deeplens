@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Pressable, StyleSheet, Modal, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuX, LuCheck, LuTarget, LuPackage } from '../../icons/lu';
+import { LuX, LuCheck, LuTarget, LuPackage } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import type { PostPlannerChannelOption } from '@/services/instagram.service';
 

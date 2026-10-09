@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal } from 'react-native';
-import { GroupManagementView, GroupManagementViewProps } from '../GroupManagementView';
+import { GroupManagementView, GroupManagementViewProps } from './GroupManagementView';
 
 export interface GroupManagementModalProps extends Omit<GroupManagementViewProps, 'onBack'> {
   visible: boolean;

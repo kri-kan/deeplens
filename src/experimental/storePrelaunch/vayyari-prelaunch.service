@@ -1,0 +1,14 @@
+[Unit]
+Description=Vayyari Store Prelaunch Web Server (Tmux)
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/krikan/productivity/deeplens/src/experimental/storePrelaunch
+Environment="PATH=/home/krikan/.nvm/versions/node/v25.9.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/usr/bin/tmux new-session -s prelaunch -d '/home/krikan/.nvm/versions/node/v25.9.0/bin/npm run dev -- --host'
+ExecStop=/usr/bin/tmux kill-session -t prelaunch
+
+[Install]
+WantedBy=default.target

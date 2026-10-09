@@ -8,7 +8,7 @@ import {
   CollabPlannerPostDto,
 } from '@/services/instagram.service';
 import { TargetCollabAccount } from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
-import { CollabPostItem } from '@/components/tamagui-ui/organisms/CollabCurationModal';
+import { CollabPostItem } from '@/components/curation';
 import { getSearchApiUrl } from '@/utils/api-config';
 import { getMediaUri } from '@/utils/instagram-helpers';
 

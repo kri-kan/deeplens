@@ -1,1 +1,1 @@
-export * from './CollabCurationModal';
+export * from '../../../../../../vayyari/components/curation/CollabCurationModal';

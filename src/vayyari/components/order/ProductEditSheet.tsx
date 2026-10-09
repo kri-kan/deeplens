@@ -26,19 +26,19 @@ import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
 import { getSearchApiUrl } from '@/utils/api-config';
-import { DropdownField } from '../../atoms/DropdownField';
-import { CompactField } from '../../atoms/CompactField';
-import { ConfirmDialog } from '../../molecules/ConfirmDialog';
-import { QuickPickerSheet } from '../../molecules/QuickPickerSheet';
-import { VendorPickerSheet } from '../../molecules/VendorPickerSheet';
-import { ImageViewerModal } from '../../molecules/ImageViewerModal';
+import { DropdownField } from '@/components/tamagui-ui/atoms/DropdownField';
+import { CompactField } from '@/components/tamagui-ui/atoms/CompactField';
+import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
+import { QuickPickerSheet } from '@/components/tamagui-ui/molecules/QuickPickerSheet';
+import { VendorPickerSheet } from '@/components/tamagui-ui/molecules/VendorPickerSheet';
+import { ImageViewerModal } from '@/components/tamagui-ui/molecules/ImageViewerModal';
 import { shareImageUri } from '@/utils/shareImage';
 import {
   CatalogMediaPickerModal,
   CatalogMediaSelection,
   resolveProductTitleFromSku,
-} from '../../molecules/CatalogMediaPickerModal';
-import { OrderItem } from '../ProductListSection';
+} from '@/components/tamagui-ui/molecules/CatalogMediaPickerModal';
+import { OrderItem } from './ProductListSection';
 
 export interface ProductEditSheetProps {
   visible: boolean;

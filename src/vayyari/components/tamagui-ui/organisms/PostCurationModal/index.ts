@@ -1,1 +1,1 @@
-export * from './PostCurationModal';
+export * from '@/components/curation/PostCurationModal';

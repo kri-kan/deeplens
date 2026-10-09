@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Pressable, StyleSheet, Image, Modal, ScrollView } from 'react-native';
+import { View, Pressable, StyleSheet, Modal, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { YStack, XStack, Text } from 'tamagui';
 import {
   LuX,
@@ -9,12 +10,12 @@ import {
   LuCalendar,
   LuHeart,
   LuMessageCircle,
-} from 'react-icons/lu';
-import { useTheme } from '../../../theme';
+} from '@/components/tamagui-ui/icons/lu';
+import { useTheme } from '@/theme';
 import {
   TargetCollabAccountPicker,
   TargetCollabAccount,
-} from '../../molecules/TargetCollabAccountPicker';
+} from '@/components/tamagui-ui/molecules/TargetCollabAccountPicker';
 
 export interface CollabChannelPhaseInfo {
   username: string;
@@ -39,6 +40,7 @@ export interface CollabPostItem {
   targetCollabAccounts?: string[];
   channelPhases?: CollabChannelPhaseInfo[];
   curationStatus?: 'pending' | 'curated' | 'queued' | 'completed';
+  isStarred?: boolean;
 }
 
 export interface CollabCurationModalProps {
@@ -81,6 +83,17 @@ export function CollabCurationModal({
     setSelectedAccountIds(initialSelection);
   }, [initialSelection, visible]);
 
+  // Filter out the post's owner account so the channel cannot collaborate with itself
+  const eligibleAccounts = useMemo(() => {
+    if (!post?.ownerUsername) return accounts;
+    const owner = post.ownerUsername.toLowerCase();
+    return accounts.filter(
+      (acc) =>
+        acc.username.toLowerCase() !== owner &&
+        acc.id.toLowerCase() !== owner
+    );
+  }, [accounts, post?.ownerUsername]);
+
   if (!visible || !post) return null;
 
   // Change detection: compare selectedAccountIds with baselineIds
@@ -96,17 +109,6 @@ export function CollabCurationModal({
         : [...prev, accountId]
     );
   };
-
-  // Filter out the post's owner account so the channel cannot collaborate with itself
-  const eligibleAccounts = useMemo(() => {
-    if (!post?.ownerUsername) return accounts;
-    const owner = post.ownerUsername.toLowerCase();
-    return accounts.filter(
-      (acc) =>
-        acc.username.toLowerCase() !== owner &&
-        acc.id.toLowerCase() !== owner
-    );
-  }, [accounts, post?.ownerUsername]);
 
   const statusColorMap: Record<string, { bg: string; text: string }> = {
     pending: { bg: '#FEF3C7', text: '#D97706' },
@@ -135,7 +137,7 @@ export function CollabCurationModal({
             <XStack alignItems="center" gap={8}>
               <View style={styles.ownerAvatar}>
                 {post.ownerAvatarUri ? (
-                  <Image source={{ uri: post.ownerAvatarUri }} style={styles.ownerAvatarImg} />
+                  <Image source={{ uri: post.ownerAvatarUri }} style={styles.ownerAvatarImg} contentFit="cover" />
                 ) : (
                   <Text fontSize={11} fontWeight="800" color="#374151">
                     {post.ownerUsername.substring(0, 2).toUpperCase()}
@@ -185,7 +187,7 @@ export function CollabCurationModal({
                 <Image
                   source={{ uri: post.thumbnailUrl }}
                   style={styles.thumbnailImg}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
               </View>
 

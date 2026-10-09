@@ -1,1 +1,1 @@
-export * from './StateTransitionGraph';
+export * from '@/components/order/StateTransitionGraph';

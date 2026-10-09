@@ -19,16 +19,11 @@ import {
   LuPencil,
   LuTrash2,
   LuStar,
-  LuCheck,
-  LuInfo,
   LuX,
   LuSearch,
-  LuChevronDown,
-  LuChevronUp,
-  LuArrowLeft,
+  LuTruck,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
-import { StatusBadge } from '@/components/tamagui-ui/atoms/StatusBadge';
 
 export interface DelhiveryWarehouseItem {
   id: string;
@@ -65,33 +60,32 @@ export interface DelhiveryWarehousesViewProps {
   onAddFacility?: () => void;
   onEditFacility?: (warehouse: DelhiveryWarehouseItem) => void;
   onDeleteFacility?: (warehouse: DelhiveryWarehouseItem) => void;
-  searchQuery?: string;
-  onSearchChange?: (query: string) => void;
-  onBack?: () => void;
   onRefresh?: () => void;
   showHeaderTitle?: boolean;
+  onBack?: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function DelhiveryWarehousesView({
-  warehouses = [],
+  warehouses,
   loading = false,
   syncing = false,
-  lastSyncedAt,
+  lastSyncedAt = null,
   onSync,
   onAddFacility,
   onEditFacility,
   onDeleteFacility,
+  onRefresh,
+  showHeaderTitle = false,
+  onBack,
   searchQuery,
   onSearchChange,
-  onBack,
-  onRefresh,
-  showHeaderTitle = true,
 }: DelhiveryWarehousesViewProps) {
   const { tokens } = useTheme();
 
   const [internalSearch, setInternalSearch] = useState('');
-  const [isTipDismissed, setIsTipDismissed] = useState(false);
-  const [isTipCollapsed, setIsTipCollapsed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const activeQuery = searchQuery !== undefined ? searchQuery : internalSearch;
 
@@ -106,6 +100,17 @@ export function DelhiveryWarehousesView({
     handleSearchChange('');
   };
 
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      setRefreshing(true);
+      try {
+        await onRefresh();
+      } finally {
+        setRefreshing(false);
+      }
+    }
+  };
+
   const filteredWarehouses = useMemo(() => {
     if (!activeQuery.trim()) {
       return warehouses;
@@ -113,7 +118,6 @@ export function DelhiveryWarehousesView({
     const q = activeQuery.toLowerCase().trim();
     return warehouses.filter((item) => {
       const name = item.name?.toLowerCase() || '';
-      const code = item.code?.toLowerCase() || '';
       const city = item.city?.toLowerCase() || '';
       const state = item.state?.toLowerCase() || '';
       const pincode = item.pincode?.toLowerCase() || '';
@@ -123,7 +127,6 @@ export function DelhiveryWarehousesView({
 
       return (
         name.includes(q) ||
-        code.includes(q) ||
         city.includes(q) ||
         state.includes(q) ||
         pincode.includes(q) ||
@@ -138,245 +141,125 @@ export function DelhiveryWarehousesView({
     if (!timestamp) return null;
     try {
       const date = new Date(timestamp);
-      if (isNaN(date.getTime())) return timestamp;
-      return (
-        date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-        ', ' +
-        date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-      );
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } catch {
       return timestamp;
     }
   };
 
-  // Safe color fallbacks from tokens
   const surfaceColor = tokens?.surface ?? '#FFFFFF';
   const surfaceRaised = tokens?.surfaceRaised ?? '#F8FAFC';
-  const backgroundColor = tokens?.background ?? '#F1F5F9';
   const borderColor = tokens?.border ?? '#E2E8F0';
-  const borderStrong = tokens?.borderStrong ?? '#CBD5E1';
   const textColor = tokens?.text ?? '#0F172A';
-  const textSecondary = tokens?.textSecondary ?? '#64748B';
+  const textSecondary = tokens?.textSecondary ?? '#475569';
   const textMuted = tokens?.textMuted ?? '#94A3B8';
-  const accentColor = tokens?.accent ?? '#0F172A';
+  const accentColor = tokens?.accent ?? '#0F766E';
   const radiusMd = tokens?.radius?.md ?? 8;
-  const radiusLg = tokens?.radius?.lg ?? 12;
   const radiusFull = tokens?.radius?.full ?? 9999;
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
-      showsVerticalScrollIndicator={false}
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 24,
+      }}
       refreshControl={
         onRefresh ? (
-          <RefreshControl refreshing={loading} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[accentColor]}
+            tintColor={accentColor}
+          />
         ) : undefined
       }
+      showsVerticalScrollIndicator={false}
     >
-      <YStack gap={14} width="100%" maxWidth={1120} alignSelf="center">
-        {/* Header Title Section (if enabled) */}
-        {showHeaderTitle ? (
-          <XStack
-            justifyContent="space-between"
-            alignItems="flex-start"
-            flexWrap="wrap"
-            gap={12}
-          >
-            <XStack alignItems="center" gap={8} flex={1}>
-              {onBack && (
-                <Pressable
-                  onPress={onBack}
-                  style={({ pressed }) => [
-                    {
-                      padding: 8,
-                      borderRadius: radiusMd,
-                      backgroundColor: surfaceColor,
-                      borderWidth: 1,
-                      borderColor: borderColor,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Go back"
-                >
-                  <LuArrowLeft size={16} color={textColor} />
-                </Pressable>
-              )}
-              <YStack gap={4} flex={1}>
-                <XStack alignItems="center" gap={10} flexWrap="wrap">
-                  <Text
-                    fontSize={20}
-                    lineHeight={26}
-                    fontWeight="800"
-                    color={textColor}
-                    letterSpacing={-0.5}
-                  >
-                    Delhivery Pickup Warehouses
-                  </Text>
-                  <XStack
-                    backgroundColor={surfaceRaised}
-                    borderWidth={1}
-                    borderColor={borderColor}
-                    paddingHorizontal={10}
-                    paddingVertical={3}
-                    borderRadius={radiusFull}
-                    alignItems="center"
-                    gap={5}
-                  >
-                    <LuBuilding2 size={13} color={textSecondary} />
-                    <Text fontSize={12} fontWeight="700" color={textSecondary}>
-                      {warehouses.length} {warehouses.length === 1 ? 'Hub' : 'Hubs'}
-                    </Text>
-                  </XStack>
-                </XStack>
-                <Text fontSize={13} lineHeight={18} color={textSecondary}>
-                  Manage synchronized dispatch origin facilities, pickup hubs, and return locations.
-                </Text>
-              </YStack>
-            </XStack>
-
-            {/* Header Action Buttons */}
-            <XStack alignItems="center" gap={10}>
-              {/* Sync Button */}
-              <Pressable
-                onPress={onSync}
-                disabled={syncing || loading}
-                style={({ pressed }) => [
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    paddingHorizontal: 14,
-                    paddingVertical: 9,
-                    backgroundColor: surfaceColor,
-                    borderRadius: radiusMd,
-                    borderWidth: 1,
-                    borderColor: borderColor,
-                    opacity: syncing || loading ? 0.7 : pressed ? 0.85 : 1,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 2,
-                    elevation: 1,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Sync with Delhivery"
-              >
-                {syncing ? (
-                  <ActivityIndicator size="small" color={textColor} />
-                ) : (
-                  <LuRefreshCw size={14} color={textColor} />
-                )}
-                <Text fontSize={13} fontWeight="600" color={textColor}>
-                  {syncing ? 'Syncing...' : 'Sync Hubs'}
-                </Text>
-              </Pressable>
-
-              {/* Add Facility Button */}
-              <Pressable
-                onPress={onAddFacility}
-                style={({ pressed }) => [
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    paddingHorizontal: 16,
-                    paddingVertical: 9,
-                    backgroundColor: accentColor,
-                    borderRadius: radiusMd,
-                    opacity: pressed ? 0.9 : 1,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 3,
-                    elevation: 2,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Add New Facility"
-              >
-                <LuPlus size={16} color="#FFFFFF" />
-                <Text fontSize={13} fontWeight="700" color="#FFFFFF">
-                  Add Facility
-                </Text>
-              </Pressable>
+      <YStack gap={8} width="100%" maxWidth={960} alignSelf="center">
+        {/* Optional Header when rendered standalone */}
+        {showHeaderTitle && (
+          <XStack justifyContent="space-between" alignItems="center">
+            <XStack alignItems="center" gap={6}>
+              <LuBuilding2 size={18} color={accentColor} />
+              <Text fontSize={17} fontWeight="800" color={textColor} letterSpacing={-0.3}>
+                Delhivery Warehouses
+              </Text>
             </XStack>
           </XStack>
-        ) : (
-          /* Compact Control Bar when header title is provided by parent screen */
-          <XStack
-            justifyContent="space-between"
-            alignItems="center"
-            flexWrap="wrap"
-            gap={10}
-            backgroundColor={surfaceColor}
-            paddingHorizontal={14}
-            paddingVertical={10}
-            borderRadius={radiusLg}
-            borderWidth={1}
-            borderColor={borderColor}
-            shadowColor="#000"
-            shadowOffset={{ width: 0, height: 1 }}
-            shadowOpacity={0.03}
-            shadowRadius={2}
-            elevation={1}
-          >
-            <YStack gap={2}>
-              <XStack alignItems="center" gap={6}>
-                <LuBuilding2 size={15} color={textSecondary} />
-                <Text fontSize={14} fontWeight="700" color={textColor}>
-                  {warehouses.length} {warehouses.length === 1 ? 'Pickup Facility' : 'Pickup Facilities'}
-                </Text>
-              </XStack>
-              {lastSyncedAt && (
-                <Text fontSize={11} color={textMuted} fontWeight="500">
-                  Last synced: {formatLastSynced(lastSyncedAt)}
-                </Text>
-              )}
-            </YStack>
+        )}
 
-            <XStack alignItems="center" gap={8}>
+        {/* Top Control Bar: Compact Counter & Actions */}
+        <XStack justifyContent="space-between" alignItems="center" gap={8}>
+          <XStack alignItems="center" gap={6}>
+            <XStack
+              backgroundColor={surfaceRaised}
+              borderWidth={1}
+              borderColor={borderColor}
+              paddingHorizontal={8}
+              paddingVertical={3}
+              borderRadius={radiusFull}
+              alignItems="center"
+              gap={4}
+            >
+              <LuBuilding2 size={12} color={accentColor} />
+              <Text fontSize={12} fontWeight="700" color={textColor}>
+                {warehouses.length} {warehouses.length === 1 ? 'Facility' : 'Facilities'}
+              </Text>
+            </XStack>
+
+            {lastSyncedAt && (
+              <Text fontSize={11} color={textMuted} fontWeight="500">
+                Synced {formatLastSynced(lastSyncedAt)}
+              </Text>
+            )}
+          </XStack>
+
+          {/* Action Buttons */}
+          <XStack alignItems="center" gap={6}>
+            {onSync && (
               <Pressable
                 onPress={onSync}
-                disabled={syncing || loading}
+                disabled={syncing}
                 style={({ pressed }) => [
                   {
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    backgroundColor: surfaceRaised,
+                    gap: 4,
+                    paddingHorizontal: 9,
+                    paddingVertical: 5,
                     borderRadius: radiusMd,
+                    backgroundColor: surfaceRaised,
                     borderWidth: 1,
                     borderColor: borderColor,
-                    opacity: syncing || loading ? 0.7 : pressed ? 0.85 : 1,
+                    opacity: syncing ? 0.6 : pressed ? 0.75 : 1,
                   },
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel="Sync with Delhivery"
+                accessibilityLabel="Sync warehouses from Delhivery"
               >
                 {syncing ? (
-                  <ActivityIndicator size="small" color={textColor} />
+                  <ActivityIndicator size="small" color={accentColor} />
                 ) : (
-                  <LuRefreshCw size={13} color={textColor} />
+                  <LuRefreshCw size={12} color={textSecondary} />
                 )}
                 <Text fontSize={12} fontWeight="600" color={textColor}>
                   {syncing ? 'Syncing...' : 'Sync'}
                 </Text>
               </Pressable>
+            )}
 
+            {onAddFacility && (
               <Pressable
                 onPress={onAddFacility}
                 style={({ pressed }) => [
                   {
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 14,
-                    paddingVertical: 8,
+                    gap: 4,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
                     backgroundColor: accentColor,
                     borderRadius: radiusMd,
                     opacity: pressed ? 0.9 : 1,
@@ -385,134 +268,57 @@ export function DelhiveryWarehousesView({
                 accessibilityRole="button"
                 accessibilityLabel="Add New Facility"
               >
-                <LuPlus size={14} color="#FFFFFF" />
+                <LuPlus size={13} color="#FFFFFF" />
                 <Text fontSize={12} fontWeight="700" color="#FFFFFF">
                   Add Facility
                 </Text>
               </Pressable>
-            </XStack>
-          </XStack>
-        )}
-
-        {/* Sync Status Banner (Only for Standalone / Storybook mode) */}
-        {showHeaderTitle && lastSyncedAt && (
-          <XStack alignItems="center" gap={6} marginTop={-6}>
-            <Text fontSize={11} color={textMuted} fontWeight="500">
-              Last synced with Delhivery Express API:
-            </Text>
-            <Text fontSize={11} color={textSecondary} fontWeight="600">
-              {formatLastSynced(lastSyncedAt)}
-            </Text>
-          </XStack>
-        )}
-
-        {/* Informational Tip Card */}
-        {!isTipDismissed && (
-          <YStack
-            backgroundColor={surfaceRaised}
-            borderWidth={1}
-            borderColor={borderColor}
-            borderRadius={radiusLg}
-            padding={14}
-            gap={8}
-          >
-            <XStack justifyContent="space-between" alignItems="center">
-              <XStack alignItems="center" gap={8} flex={1}>
-                <YStack
-                  backgroundColor="#E0F2FE"
-                  borderRadius={radiusFull}
-                  padding={5}
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  <LuInfo size={14} color="#0369A1" />
-                </YStack>
-                <Text fontSize={13} fontWeight="700" color={textColor}>
-                  Delhivery Pickup Registry & Reverse Logistics
-                </Text>
-              </XStack>
-
-              <XStack alignItems="center" gap={6}>
-                <Pressable
-                  onPress={() => setIsTipCollapsed((prev) => !prev)}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, padding: 4 }]}
-                  accessibilityLabel="Toggle tip banner"
-                >
-                  {isTipCollapsed ? (
-                    <LuChevronDown size={16} color={textSecondary} />
-                  ) : (
-                    <LuChevronUp size={16} color={textSecondary} />
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => setIsTipDismissed(true)}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, padding: 4 }]}
-                  accessibilityLabel="Dismiss tip banner"
-                >
-                  <LuX size={15} color={textMuted} />
-                </Pressable>
-              </XStack>
-            </XStack>
-
-            {!isTipCollapsed && (
-              <Text fontSize={12} lineHeight={18} color={textSecondary}>
-                Facilities listed here are registered origin points for courier pickup scheduling.
-                When generating shipping labels in fulfillment workflows, packages are assigned to
-                these registered pickup codes. The <Text fontWeight="700" color={textColor}>Central Hub</Text> serves
-                as the primary consolidation point for multi-item and returned shipments.
-              </Text>
             )}
-          </YStack>
-        )}
+          </XStack>
+        </XStack>
 
-        {/* Search & Filter Bar */}
+        {/* Compact Search & Filter Bar */}
         <XStack
           backgroundColor={surfaceColor}
           borderWidth={1}
           borderColor={borderColor}
-          borderRadius={radiusLg}
-          paddingHorizontal={12}
-          paddingVertical={8}
+          borderRadius={radiusMd}
+          paddingHorizontal={9}
+          paddingVertical={5}
           alignItems="center"
-          gap={10}
-          shadowColor="#000"
-          shadowOffset={{ width: 0, height: 1 }}
-          shadowOpacity={0.04}
-          shadowRadius={2}
-          elevation={1}
+          gap={8}
         >
-          <LuSearch size={16} color={textMuted} />
+          <LuSearch size={14} color={textMuted} />
           <TextInput
             value={activeQuery}
             onChangeText={handleSearchChange}
-            placeholder="Search by facility name, code, city, pincode, or contact..."
+            placeholder="Search facilities, city, pincode, or contact..."
             placeholderTextColor={textMuted}
             style={{
               flex: 1,
-              fontSize: 13,
+              fontSize: 12,
               color: textColor,
-              paddingVertical: Platform.OS === 'web' ? 4 : 2,
-              ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
-            }}
+              paddingVertical: Platform.OS === 'web' ? 2 : 0,
+            } as any}
           />
           {activeQuery.length > 0 && (
             <Pressable
               onPress={handleClearSearch}
-              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, padding: 4 }]}
+              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, padding: 2 }]}
               accessibilityLabel="Clear search"
             >
-              <LuX size={15} color={textSecondary} />
+              <LuX size={13} color={textSecondary} />
             </Pressable>
           )}
           {activeQuery.trim().length > 0 && (
             <XStack
               backgroundColor={surfaceRaised}
-              paddingHorizontal={8}
-              paddingVertical={2}
+              paddingHorizontal={6}
+              paddingVertical={1}
               borderRadius={radiusFull}
             >
-              <Text fontSize={11} fontWeight="600" color={textSecondary}>
-                {filteredWarehouses.length} matching
+              <Text fontSize={10} fontWeight="600" color={textSecondary}>
+                {filteredWarehouses.length}
               </Text>
             </XStack>
           )}
@@ -524,15 +330,15 @@ export function DelhiveryWarehousesView({
             backgroundColor={surfaceColor}
             borderWidth={1}
             borderColor={borderColor}
-            borderRadius={radiusLg}
-            paddingVertical={48}
+            borderRadius={radiusMd}
+            paddingVertical={32}
             alignItems="center"
             justifyContent="center"
-            gap={14}
+            gap={10}
           >
-            <ActivityIndicator size="large" color={accentColor} />
-            <Text fontSize={13} fontWeight="600" color={textSecondary}>
-              Loading Delhivery pickup facilities...
+            <ActivityIndicator size="small" color={accentColor} />
+            <Text fontSize={12} fontWeight="600" color={textSecondary}>
+              Loading pickup facilities...
             </Text>
           </YStack>
         )}
@@ -543,44 +349,30 @@ export function DelhiveryWarehousesView({
             backgroundColor={surfaceColor}
             borderWidth={1}
             borderColor={borderColor}
-            borderRadius={radiusLg}
-            paddingVertical={48}
-            paddingHorizontal={24}
+            borderRadius={radiusMd}
+            paddingVertical={32}
+            paddingHorizontal={16}
             alignItems="center"
             justifyContent="center"
-            gap={12}
+            gap={8}
           >
-            <YStack
-              backgroundColor={surfaceRaised}
-              borderRadius={radiusFull}
-              padding={16}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <LuBuilding2 size={32} color={textMuted} />
-            </YStack>
-            <Text fontSize={16} fontWeight="700" color={textColor} textAlign="center">
+            <LuBuilding2 size={24} color={textMuted} />
+            <Text fontSize={14} fontWeight="700" color={textColor} textAlign="center">
               No pickup facilities found
             </Text>
-            <Text
-              fontSize={13}
-              lineHeight={18}
-              color={textSecondary}
-              textAlign="center"
-              maxWidth={380}
-            >
+            <Text fontSize={12} color={textSecondary} textAlign="center">
               {activeQuery.trim()
-                ? `No facilities matched "${activeQuery}". Check the search term or clear the filter.`
-                : 'No Delhivery warehouses are currently configured. Add your first facility to enable automated label generation.'}
+                ? `No facilities matched "${activeQuery}".`
+                : 'No Delhivery pickup facilities configured.'}
             </Text>
             {activeQuery.trim() ? (
               <Pressable
                 onPress={handleClearSearch}
                 style={({ pressed }) => [
                   {
-                    marginTop: 6,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
+                    marginTop: 4,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
                     borderRadius: radiusMd,
                     backgroundColor: surfaceRaised,
                     borderWidth: 1,
@@ -589,7 +381,7 @@ export function DelhiveryWarehousesView({
                   },
                 ]}
               >
-                <Text fontSize={12} fontWeight="600" color={textColor}>
+                <Text fontSize={11} fontWeight="600" color={textColor}>
                   Clear Search
                 </Text>
               </Pressable>
@@ -598,20 +390,20 @@ export function DelhiveryWarehousesView({
                 onPress={onAddFacility}
                 style={({ pressed }) => [
                   {
-                    marginTop: 6,
+                    marginTop: 4,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
+                    gap: 4,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
                     borderRadius: radiusMd,
                     backgroundColor: accentColor,
                     opacity: pressed ? 0.9 : 1,
                   },
                 ]}
               >
-                <LuPlus size={14} color="#FFFFFF" />
-                <Text fontSize={12} fontWeight="700" color="#FFFFFF">
+                <LuPlus size={12} color="#FFFFFF" />
+                <Text fontSize={11} fontWeight="700" color="#FFFFFF">
                   Add First Facility
                 </Text>
               </Pressable>
@@ -619,99 +411,81 @@ export function DelhiveryWarehousesView({
           </YStack>
         )}
 
-        {/* Facility Cards Grid / List */}
+        {/* Ultra-Compact Facility Cards List */}
         {!loading && filteredWarehouses.length > 0 && (
-          <YStack gap={12}>
+          <YStack gap={6}>
             {filteredWarehouses.map((warehouse) => {
-              const addressLine1 =
-                warehouse.addressLine1 || warehouse.address_line1 || '';
-              const addressLine2 =
-                warehouse.addressLine2 || warehouse.address_line2 || '';
-              const contactPerson =
-                warehouse.contactPerson || warehouse.contact_person || '';
+              const addressLine1 = warehouse.addressLine1 || warehouse.address_line1 || '';
+              const addressLine2 = warehouse.addressLine2 || warehouse.address_line2 || '';
+              const contactPerson = warehouse.contactPerson || warehouse.contact_person || '';
               const isCentral = !!(warehouse.isCentral ?? warehouse.is_central);
-              const isRegistered =
-                warehouse.registeredWithDelhivery ??
-                warehouse.isRegistered ??
-                true;
+              const isRegistered = warehouse.registeredWithDelhivery ?? warehouse.isRegistered ?? true;
 
               return (
                 <YStack
                   key={warehouse.id}
                   backgroundColor={surfaceColor}
-                  borderRadius={radiusLg}
-                  borderWidth={isCentral ? 2 : 1}
+                  borderRadius={radiusMd}
+                  borderWidth={isCentral ? 1.5 : 1}
                   borderColor={isCentral ? '#F59E0B' : borderColor}
-                  padding={16}
-                  gap={12}
+                  paddingVertical={8}
+                  paddingHorizontal={10}
+                  gap={4}
                   shadowColor="#000"
                   shadowOffset={{ width: 0, height: 1 }}
-                  shadowOpacity={0.04}
-                  shadowRadius={3}
+                  shadowOpacity={0.03}
+                  shadowRadius={2}
                   elevation={1}
                 >
-                  {/* Card Header */}
-                  <XStack
-                    justifyContent="space-between"
-                    alignItems="flex-start"
-                    flexWrap="wrap"
-                    gap={8}
-                  >
-                    {/* Title, Code & Status Badges */}
-                    <XStack alignItems="center" flexWrap="wrap" gap={8} flex={1}>
-                      <Text fontSize={16} fontWeight="700" color={textColor}>
+                  {/* Card Header Row: Facility Name + Star + Delhivery Logo Badge + Actions */}
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <XStack alignItems="center" gap={6} flex={1} marginRight={6}>
+                      <Text fontSize={14} fontWeight="700" color={textColor} numberOfLines={1}>
                         {warehouse.name}
                       </Text>
 
-                      {/* Code Badge */}
-                      <XStack
-                        backgroundColor={surfaceRaised}
-                        borderWidth={1}
-                        borderColor={borderColor}
-                        paddingHorizontal={8}
-                        paddingVertical={2}
-                        borderRadius={tokens?.radius?.xs ?? 4}
-                      >
-                        <Text
-                          fontSize={11}
-                          fontWeight="700"
-                          color={textSecondary}
-                          style={{ letterSpacing: 0.5 } as any}
-                        >
-                          {warehouse.code}
-                        </Text>
-                      </XStack>
-
-                      {/* Central Hub Badge */}
+                      {/* Central Hub Star Indicator Only */}
                       {isCentral && (
-                        <StatusBadge
-                          intent="attention"
-                          label="Central Hub"
-                          size="sm"
-                          icon={<LuStar size={11} color="#B06000" />}
-                        />
+                        <YStack>
+                          <LuStar size={13} color="#F59E0B" filled={true} />
+                        </YStack>
                       )}
 
-                      {/* Delhivery Registered Badge */}
+                      {/* Delhivery Logo Micro-Badge */}
                       {isRegistered && (
-                        <StatusBadge
-                          intent="positive"
-                          label="Delhivery Registered"
-                          size="sm"
-                          icon={<LuCheck size={11} color="#047857" />}
-                        />
+                        <XStack
+                          alignItems="center"
+                          gap={3}
+                          paddingHorizontal={5}
+                          paddingVertical={1.5}
+                          borderRadius={3}
+                          backgroundColor="#FEF2F2"
+                          borderWidth={1}
+                          borderColor="#FECACA"
+                        >
+                          <LuTruck size={10} color="#DC2626" />
+                          <Text
+                            fontSize={9}
+                            fontWeight="900"
+                            color="#DC2626"
+                            letterSpacing={0.4}
+                            style={{ includeFontPadding: false } as any}
+                          >
+                            DELHIVERY
+                          </Text>
+                        </XStack>
                       )}
                     </XStack>
 
-                    {/* Action Buttons (Edit & Delete) */}
-                    <XStack alignItems="center" gap={6}>
+                    {/* Compact Actions */}
+                    <XStack alignItems="center" gap={4}>
                       {onEditFacility && (
                         <Pressable
                           onPress={() => onEditFacility(warehouse)}
                           style={({ pressed }) => [
                             {
-                              padding: 6,
-                              borderRadius: radiusMd,
+                              padding: 4,
+                              borderRadius: 4,
                               backgroundColor: surfaceRaised,
                               borderWidth: 1,
                               borderColor: borderColor,
@@ -721,7 +495,7 @@ export function DelhiveryWarehousesView({
                           accessibilityRole="button"
                           accessibilityLabel={`Edit ${warehouse.name}`}
                         >
-                          <LuPencil size={14} color={textSecondary} />
+                          <LuPencil size={12} color={textSecondary} />
                         </Pressable>
                       )}
 
@@ -730,110 +504,71 @@ export function DelhiveryWarehousesView({
                           onPress={() => onDeleteFacility(warehouse)}
                           style={({ pressed }) => [
                             {
-                              padding: 6,
-                              borderRadius: radiusMd,
-                              backgroundColor: surfaceRaised,
+                              padding: 4,
+                              borderRadius: 4,
+                              backgroundColor: '#FEF2F2',
                               borderWidth: 1,
-                              borderColor: borderColor,
+                              borderColor: '#FEE2E2',
                               opacity: pressed ? 0.7 : 1,
                             },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Delete ${warehouse.name}`}
                         >
-                          <LuTrash2 size={14} color="#EF4444" />
+                          <LuTrash2 size={12} color="#EF4444" />
                         </Pressable>
                       )}
                     </XStack>
                   </XStack>
 
-                  {/* Address Section */}
-                  <XStack alignItems="flex-start" gap={8}>
-                    <YStack marginTop={2}>
-                      <LuMapPin size={15} color={textSecondary} />
+                  {/* Ultra-Compact Address Line */}
+                  <XStack alignItems="flex-start" gap={5}>
+                    <YStack marginTop={1}>
+                      <LuMapPin size={12} color={textMuted} />
                     </YStack>
-                    <YStack flex={1} gap={2}>
-                      {(addressLine1 || addressLine2) && (
-                        <Text fontSize={13} lineHeight={18} color={textColor}>
-                          {addressLine1}
-                          {addressLine2 ? `, ${addressLine2}` : ''}
-                        </Text>
-                      )}
-                      <Text fontSize={12} fontWeight="600" color={textSecondary}>
-                        {[warehouse.city, warehouse.state].filter(Boolean).join(', ')}
-                        {warehouse.pincode ? ` - ${warehouse.pincode}` : ''}
+                    <Text fontSize={11.5} lineHeight={16} color={textSecondary} flex={1} numberOfLines={2}>
+                      {addressLine1}{addressLine2 ? `, ${addressLine2}` : ''}, {warehouse.city}, {warehouse.state} -{' '}
+                      <Text fontWeight="700" color={textColor}>
+                        {warehouse.pincode}
                       </Text>
-                    </YStack>
+                    </Text>
                   </XStack>
 
-                  {/* Divider */}
-                  <YStack height={1} backgroundColor={borderColor} width="100%" />
-
-                  {/* Contact & Status Details Footer */}
-                  <XStack
-                    justifyContent="space-between"
-                    alignItems="center"
-                    flexWrap="wrap"
-                    gap={12}
-                  >
-                    <XStack alignItems="center" flexWrap="wrap" gap={16}>
+                  {/* Compact Contact & Phone Row */}
+                  <XStack justifyContent="space-between" alignItems="center" paddingTop={1}>
+                    <XStack alignItems="center" gap={12} flex={1}>
                       {/* Contact Person */}
-                      <XStack alignItems="center" gap={5}>
-                        <LuUser size={13} color={textMuted} />
-                        <Text fontSize={12} color={textSecondary}>
-                          Contact:
-                        </Text>
-                        <Text fontSize={12} fontWeight="600" color={textColor}>
-                          {contactPerson || 'N/A'}
+                      <XStack alignItems="center" gap={3}>
+                        <LuUser size={11} color={textMuted} />
+                        <Text fontSize={11} color={textSecondary} numberOfLines={1}>
+                          {contactPerson || 'Ops Incharge'}
                         </Text>
                       </XStack>
 
-                      {/* Phone with Tap-to-call */}
-                      <Pressable
-                        onPress={() => {
-                          if (warehouse.phone) {
-                            Linking.openURL(`tel:${warehouse.phone}`).catch(() => {});
-                          }
-                        }}
-                        style={({ pressed }) => [
-                          {
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 5,
-                            opacity: pressed && warehouse.phone ? 0.7 : 1,
-                          },
-                        ]}
-                      >
-                        <LuPhone size={13} color={textMuted} />
-                        <Text fontSize={12} color={textSecondary}>
-                          Phone:
-                        </Text>
-                        <Text
-                          fontSize={12}
-                          fontWeight="600"
-                          color={warehouse.phone ? textColor : textMuted}
-                          style={
-                            warehouse.phone && Platform.OS === 'web'
-                              ? ({ textDecorationLine: 'underline' } as any)
-                              : {}
-                          }
+                      {/* Phone with Tap-to-Dial */}
+                      {warehouse.phone && (
+                        <Pressable
+                          onPress={() => {
+                            const telUri = `tel:${warehouse.phone?.replace(/[^0-9+]/g, '')}`;
+                            Linking.canOpenURL(telUri).then((supported) => {
+                              if (supported) Linking.openURL(telUri);
+                            }).catch(() => {});
+                          }}
+                          style={({ pressed }) => [
+                            {
+                              opacity: pressed ? 0.7 : 1,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                            },
+                          ]}
                         >
-                          {warehouse.phone || 'N/A'}
-                        </Text>
-                      </Pressable>
-                    </XStack>
-
-                    {/* Active Status Indicator */}
-                    <XStack alignItems="center" gap={5}>
-                      <YStack
-                        width={7}
-                        height={7}
-                        borderRadius={radiusFull}
-                        backgroundColor={warehouse.isActive !== false ? '#10B981' : '#94A3B8'}
-                      />
-                      <Text fontSize={11} fontWeight="600" color={textSecondary}>
-                        {warehouse.isActive !== false ? 'Active' : 'Inactive'}
-                      </Text>
+                          <LuPhone size={11} color={textMuted} />
+                          <Text fontSize={11} fontWeight="600" color={textColor}>
+                            {warehouse.phone}
+                          </Text>
+                        </Pressable>
+                      )}
                     </XStack>
                   </XStack>
                 </YStack>
