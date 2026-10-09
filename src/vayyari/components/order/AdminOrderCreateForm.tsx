@@ -1109,7 +1109,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         height={56 + insets.top}
         alignItems="center"
         justifyContent="space-between"
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
@@ -1164,7 +1164,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         contentContainerStyle={{ paddingBottom: Math.max(36, insets.bottom + 24) }}
         keyboardShouldPersistTaps="handled"
       >
-        <YStack paddingHorizontal={16} paddingTop={14} gap={14}>
+        <YStack paddingHorizontal={8} paddingTop={10} gap={10}>
           {/* ── Section 1: Order Type & Channel ── */}
           <YStack gap={8}>
             <XStack alignItems="center" justifyContent="space-between">
@@ -1658,7 +1658,7 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         backgroundColor={tokens.surface}
         borderTopWidth={1}
         borderTopColor={tokens.border}
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         paddingVertical={12}
         paddingBottom={Math.max(24, insets.bottom + 12)}
         shadowColor="#000"

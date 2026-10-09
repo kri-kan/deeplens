@@ -397,7 +397,7 @@ export function AdminOrderDetailPage({
         contentContainerStyle={{ paddingBottom: 80 }}
         keyboardShouldPersistTaps="handled"
       >
-        <YStack paddingHorizontal={12} paddingTop={10} gap={10}>
+        <YStack paddingHorizontal={8} paddingTop={10} gap={10}>
           {/* ── 2. Source & Payment Row ── */}
           <SourceRow
             source={source}
@@ -493,7 +493,7 @@ export function AdminOrderDetailPage({
         backgroundColor={tokens.surface}
         borderTopWidth={1}
         borderTopColor={tokens.border}
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         paddingVertical={10}
         shadowColor="#000"
         shadowOffset={{ width: 0, height: -3 }}

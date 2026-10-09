@@ -1274,7 +1274,7 @@ function AdminPageHeader({ onBack }: { onBack?: () => void }) {
       height={56 + insets.top}
       alignItems="center"
       justifyContent="center"
-      paddingHorizontal={16}
+      paddingHorizontal={12}
       backgroundColor={tokens.surface}
       borderBottomWidth={1}
       borderBottomColor={tokens.border}
@@ -1329,7 +1329,7 @@ function SubmitBar({ onSubmit, disabled }: SubmitBarProps) {
       backgroundColor={tokens.surface}
       borderTopWidth={1}
       borderTopColor={tokens.border}
-      paddingHorizontal={16}
+      paddingHorizontal={12}
       paddingVertical={12}
       paddingBottom={Math.max(24, insets.bottom + 12)}
       shadowColor="#000"
@@ -1436,7 +1436,7 @@ export function AdminOrderFormPage({
         contentContainerStyle={{ paddingBottom: 80 }}
         keyboardShouldPersistTaps="handled"
       >
-        <YStack paddingHorizontal={16} paddingTop={14} gap={12}>
+        <YStack paddingHorizontal={8} paddingTop={10} gap={10}>
           {/* ── Section 1: Order Type ── */}
           <OrderTypeSection
             source={source}

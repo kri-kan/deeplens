@@ -823,7 +823,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         contentContainerStyle={{ paddingBottom: 100 + Math.max(16, insets.bottom) }}
         keyboardShouldPersistTaps="handled"
       >
-        <YStack paddingHorizontal={16} paddingTop={12} gap={14}>
+        <YStack paddingHorizontal={8} paddingTop={10} gap={10}>
           {/* Source & Payment Row */}
           <SourceRow
             source={source}
@@ -884,7 +884,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                   borderWidth={1}
                   borderColor={tokens.border}
                   borderRadius={tokens.radius.md}
-                  padding={14}
+                  padding={12}
                   gap={10}
                 >
                   <XStack justifyContent="space-between" alignItems="center">
@@ -1112,7 +1112,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         backgroundColor={tokens.surface}
         borderTopWidth={1}
         borderTopColor={tokens.border}
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         paddingTop={10}
         paddingBottom={Math.max(12, insets.bottom + 8)}
         shadowColor="#000"
