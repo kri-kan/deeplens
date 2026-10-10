@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Pressable, ActivityIndicator } from 'react-native';
+import { Pressable, ActivityIndicator, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XStack, YStack, Text } from 'tamagui';
 import * as Clipboard from 'expo-clipboard';
-import { LuTrash2, LuCheck, LuArrowLeft, LuCopy, LuCopyPlus } from '@/components/tamagui-ui/icons/lu';
+import { LuTrash2, LuCheck, LuArrowLeft, LuCopy, LuCopyPlus, LuEllipsisVertical } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge, formatAdaptiveTimestamp } from '../../atoms/TimestampBadge';
 
@@ -43,6 +43,7 @@ export function DetailHeader({
   const insets = useSafeAreaInsets();
   const topInset = disableSafeArea ? 0 : insets.top;
   const [copied, setCopied] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleCopyId = async () => {
     if (!orderId) return;
@@ -168,56 +169,116 @@ export function DetailHeader({
         )}
       </XStack>
 
-      {/* Right: Clone & Delete Action Buttons */}
-      <XStack alignItems="center" gap={6}>
-        {onClone && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Clone order"
-            onPress={onClone}
-            disabled={isSaving || isCloning}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={({ pressed }) => ({
-              width: 34,
-              height: 34,
-              borderRadius: tokens.radius.sm,
-              backgroundColor: tokens.surfaceRaised,
-              borderWidth: 1,
-              borderColor: tokens.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: isSaving || isCloning ? 0.4 : pressed ? 0.82 : 1,
-              transform: [{ scale: pressed && !isSaving && !isCloning ? 0.94 : 1 }],
-            })}
-          >
-            {isCloning ? (
-              <ActivityIndicator size="small" color={tokens.accent} />
-            ) : (
-              <LuCopyPlus size={16} color={tokens.textSecondary} />
-            )}
-          </Pressable>
-        )}
+      {/* Right: 3-Dots Overflow Menu Button */}
+      <XStack alignItems="center" position="relative">
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Delete order"
-          onPress={onDelete}
+          accessibilityLabel="More options"
+          onPress={() => setMenuOpen(true)}
           disabled={isSaving || isCloning}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => ({
             width: 34,
             height: 34,
             borderRadius: tokens.radius.sm,
-            backgroundColor: `${tokens.error}14`,
+            backgroundColor: menuOpen ? `${tokens.text}12` : tokens.surfaceRaised,
             borderWidth: 1,
-            borderColor: `${tokens.error}30`,
+            borderColor: tokens.border,
             alignItems: 'center',
             justifyContent: 'center',
             opacity: isSaving || isCloning ? 0.4 : pressed ? 0.82 : 1,
             transform: [{ scale: pressed && !isSaving && !isCloning ? 0.94 : 1 }],
           })}
         >
-          <LuTrash2 size={16} color={tokens.error} />
+          {isCloning ? (
+            <ActivityIndicator size="small" color={tokens.accent} />
+          ) : (
+            <LuEllipsisVertical size={18} color={tokens.text} />
+          )}
         </Pressable>
+
+        {/* Overflow Context Menu Modal */}
+        <Modal
+          visible={menuOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMenuOpen(false)}
+        >
+          <Pressable
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }}
+            onPress={() => setMenuOpen(false)}
+          >
+            <YStack
+              position="absolute"
+              top={topInset + 54}
+              right={12}
+              minWidth={170}
+              backgroundColor={tokens.surface}
+              borderRadius={tokens.radius.md}
+              borderWidth={1}
+              borderColor={tokens.border}
+              paddingVertical={4}
+              shadowColor="#000"
+              shadowOpacity={0.18}
+              shadowRadius={14}
+              shadowOffset={{ width: 0, height: 4 }}
+              elevation={8}
+            >
+              {/* Clone Order */}
+              {onClone && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clone order"
+                  disabled={isSaving || isCloning}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    onClone();
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    backgroundColor: pressed ? tokens.surfaceRaised : 'transparent',
+                  })}
+                >
+                  <LuCopyPlus size={16} color={tokens.text} />
+                  <Text fontSize={13} fontWeight="600" color={tokens.text}>
+                    Clone Order
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Divider if both exist */}
+              {onClone && <YStack height={1} backgroundColor={tokens.border} marginVertical={2} />}
+
+              {/* Delete Order */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Delete order"
+                disabled={isSaving || isCloning}
+                onPress={() => {
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  backgroundColor: pressed ? `${tokens.error}10` : 'transparent',
+                })}
+              >
+                <LuTrash2 size={16} color={tokens.error} />
+                <Text fontSize={13} fontWeight="600" color={tokens.error}>
+                  Delete Order
+                </Text>
+              </Pressable>
+            </YStack>
+          </Pressable>
+        </Modal>
       </XStack>
     </XStack>
   );
