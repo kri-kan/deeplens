@@ -19,6 +19,7 @@ import {
   LuTriangleAlert,
   LuPhone,
   LuExternalLink,
+  LuRotateCcw,
 } from '@/components/tamagui-ui/icons/lu';
 import {
   RiWhatsappLine,
@@ -769,18 +770,57 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
 
         {/* ── Mode switcher badge buttons (only in form mode) ── */}
         {!isAiMode && (
-          <XStack marginHorizontal={20} marginBottom={14} gap={10}>
+          <XStack marginHorizontal={20} marginBottom={14} gap={8} alignItems="center">
+            {/* Reset button to the left */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reset address fields"
+              onPress={() => {
+                setForm({ name: '', phone: '', address: '', pincode: '' });
+                setFillState('idle');
+                setAiOriginalText('');
+                setAiRawText('');
+              }}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.75 : 1,
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              })}
+            >
+              <XStack
+                height={26}
+                paddingHorizontal={10}
+                alignItems="center"
+                justifyContent="center"
+                borderRadius={9999}
+                borderWidth={1}
+                borderColor={tokens.border}
+                backgroundColor={tokens.surfaceRaised}
+                gap={4}
+              >
+                <LuRotateCcw size={12} color={tokens.textSecondary} />
+                <Text
+                  fontSize={11}
+                  fontWeight="700"
+                  letterSpacing={0.3}
+                  color={tokens.textSecondary}
+                  textTransform="uppercase"
+                >
+                  Reset
+                </Text>
+              </XStack>
+            </Pressable>
+
             {/* Smart Paste badge button */}
             <XStack
               flex={1}
-              height={28}
+              height={26}
               alignItems="center"
               justifyContent="center"
               borderRadius={9999}
               borderWidth={1}
               borderColor={tokens.accent}
               backgroundColor={tokens.accentSubtle}
-              gap={5}
+              gap={4}
               cursor="pointer"
               accessibilityRole="button"
               accessibilityLabel="Smart paste address from clipboard"
@@ -795,14 +835,14 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
               hoverStyle={{ opacity: 0.88 }}
               pressStyle={{ opacity: 0.75, scale: 0.98 }}
             >
-              <LuClipboardPaste size={13} color={tokens.accent} />
+              <LuClipboardPaste size={12} color={tokens.accent} />
               <Text
-                fontSize={12}
+                fontSize={11}
                 fontWeight="700"
-                letterSpacing={0.4}
+                letterSpacing={0.3}
                 color={tokens.accent}
                 textTransform="uppercase"
-                lineHeight={16}
+                lineHeight={15}
               >
                 Smart Paste
               </Text>
@@ -811,12 +851,12 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
             {/* AI Fill badge button */}
             <XStack
               flex={1}
-              height={28}
+              height={26}
               alignItems="center"
               justifyContent="center"
               borderRadius={9999}
               backgroundColor={tokens.accent}
-              gap={5}
+              gap={4}
               cursor="pointer"
               accessibilityRole="button"
               accessibilityLabel="Fill address using AI"
@@ -824,16 +864,16 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
               hoverStyle={{ opacity: 0.92 }}
               pressStyle={{ opacity: 0.85, scale: 0.98 }}
             >
-              <LuSparkles size={13} color={tokens.accentForeground} />
+              <LuSparkles size={12} color={tokens.accentForeground} />
               <Text
-                fontSize={12}
+                fontSize={11}
                 fontWeight="700"
-                letterSpacing={0.4}
+                letterSpacing={0.3}
                 color={tokens.accentForeground}
                 textTransform="uppercase"
-                lineHeight={16}
+                lineHeight={15}
               >
-                AI Fill
+                AI Parse
               </Text>
             </XStack>
           </XStack>

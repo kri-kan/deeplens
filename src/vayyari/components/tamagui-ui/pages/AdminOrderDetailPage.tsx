@@ -57,6 +57,8 @@ export interface AdminOrderDetailPageProps {
   onSaveOrder?: (data: any) => void;
   /** Delete order callback */
   onDeleteOrder?: () => void;
+  /** Clone order callback */
+  onCloneOrder?: () => void;
   /** Go back callback */
   onBack?: () => void;
 }
@@ -79,6 +81,7 @@ export function AdminOrderDetailPage({
   initialConfirmDialogType = 'single',
   onSaveOrder,
   onDeleteOrder,
+  onCloneOrder,
   onBack,
 }: AdminOrderDetailPageProps) {
   const { tokens } = useTheme();
@@ -355,6 +358,7 @@ export function AdminOrderDetailPage({
         statusCount={distinctGroupKeys.length > 1 ? distinctGroupKeys.length - 1 : 0}
         compactDate={compactDate}
         onDelete={handleDelete}
+        onClone={onCloneOrder}
         onBack={onBack}
       />
 

@@ -31,6 +31,7 @@ import {
   LuTrash2,
   LuEye,
   LuImage,
+  LuRotateCcw,
 } from '@/components/tamagui-ui/icons/lu';
 import { ImageViewerModal } from '@/components/tamagui-ui/molecules/ImageViewerModal';
 import { CapsuleSegmentControl } from '@/components/tamagui-ui/atoms/CapsuleSegmentControl';
@@ -484,25 +485,43 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
 
         {/* Actions row */}
         {!isAiMode && (
-          <XStack marginHorizontal={20} marginBottom={14} gap={10}>
+          <XStack marginHorizontal={20} marginBottom={14} gap={8} alignItems="center">
+            {/* Reset button to the left */}
             <Pressable
-              style={{ flex: 1 }}
               accessibilityRole="button"
-              onPress={handleSmartPaste}
+              accessibilityLabel="Reset address fields"
+              onPress={() => {
+                setForm({ name: '', phone: '', address: '', pincode: '', city: '', state: '' });
+                setPinServiceable(null);
+                setFillState('idle');
+                setParsedPreview(null);
+                setAiRawText('');
+              }}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.75 : 1,
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+              })}
             >
               <XStack
-                height={32}
+                height={26}
+                paddingHorizontal={10}
                 alignItems="center"
                 justifyContent="center"
                 borderRadius={9999}
                 borderWidth={1}
-                borderColor={tokens.accent}
-                backgroundColor={tokens.accentSubtle}
-                gap={6}
+                borderColor={tokens.border}
+                backgroundColor={tokens.surfaceRaised}
+                gap={4}
               >
-                <LuClipboardPaste size={14} color={tokens.accent} />
-                <Text fontSize={12} fontWeight="700" color={tokens.accent} letterSpacing={0.4}>
-                  SMART PASTE
+                <LuRotateCcw size={12} color={tokens.textSecondary} />
+                <Text
+                  fontSize={11}
+                  fontWeight="700"
+                  color={tokens.textSecondary}
+                  letterSpacing={0.3}
+                  textTransform="uppercase"
+                >
+                  Reset
                 </Text>
               </XStack>
             </Pressable>
@@ -510,19 +529,55 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
             <Pressable
               style={{ flex: 1 }}
               accessibilityRole="button"
+              accessibilityLabel="Smart paste address from clipboard"
+              onPress={handleSmartPaste}
+            >
+              <XStack
+                height={26}
+                alignItems="center"
+                justifyContent="center"
+                borderRadius={9999}
+                borderWidth={1}
+                borderColor={tokens.accent}
+                backgroundColor={tokens.accentSubtle}
+                gap={4}
+              >
+                <LuClipboardPaste size={12} color={tokens.accent} />
+                <Text
+                  fontSize={11}
+                  fontWeight="700"
+                  color={tokens.accent}
+                  letterSpacing={0.3}
+                  textTransform="uppercase"
+                >
+                  Smart Paste
+                </Text>
+              </XStack>
+            </Pressable>
+
+            <Pressable
+              style={{ flex: 1 }}
+              accessibilityRole="button"
+              accessibilityLabel="Fill address using AI"
               onPress={() => setIsAiMode(true)}
             >
               <XStack
-                height={32}
+                height={26}
                 alignItems="center"
                 justifyContent="center"
                 borderRadius={9999}
                 backgroundColor={tokens.accent}
-                gap={6}
+                gap={4}
               >
-                <LuSparkles size={14} color={tokens.accentForeground} />
-                <Text fontSize={12} fontWeight="700" color={tokens.accentForeground} letterSpacing={0.4}>
-                  AI PARSE
+                <LuSparkles size={12} color={tokens.accentForeground} />
+                <Text
+                  fontSize={11}
+                  fontWeight="700"
+                  color={tokens.accentForeground}
+                  letterSpacing={0.3}
+                  textTransform="uppercase"
+                >
+                  AI Parse
                 </Text>
               </XStack>
             </Pressable>

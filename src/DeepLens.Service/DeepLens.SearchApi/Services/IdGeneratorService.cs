@@ -103,6 +103,72 @@ public class IdGeneratorService : IIdGeneratorService
         return await _orderRepository.GetDetailsAsync(orderId);
     }
 
+    public async Task<OrderDetailDto?> CloneOrderAsync(string orderId)
+    {
+        var source = await GetOrderDetailsAsync(orderId);
+        if (source == null) return null;
+
+        var newOrderId = await GenerateOrderIdAsync(
+            source.Source,
+            source.PaymentMode,
+            source.SourceHandle,
+            source.InstagramUserId,
+            source.CustomerId);
+
+        var clonedItems = new List<OrderItemUpdateDto>();
+        if (source.Items != null && source.Items.Count > 0)
+        {
+            foreach (var item in source.Items)
+            {
+                clonedItems.Add(new OrderItemUpdateDto
+                {
+                    ProductId = item.ProductId,
+                    ProductTitle = item.ProductTitle,
+                    Quantity = item.Quantity > 0 ? item.Quantity : 1,
+                    UnitPrice = item.UnitPrice,
+                    Subtotal = item.Subtotal > 0 ? item.Subtotal : (item.UnitPrice * (item.Quantity > 0 ? item.Quantity : 1)),
+                    VendorId = item.VendorId,
+                    VendorName = null,
+                    SourceType = item.SourceType,
+                    Comments = item.Comments,
+                    LabelUrl = null
+                });
+            }
+        }
+
+        var updateDto = new OrderUpdateDto
+        {
+            CustomerName = source.CustomerName,
+            CustomerPhone = source.CustomerPhone,
+            CustomerAddress = source.CustomerAddress,
+            ShippingStreet = source.ShippingStreet,
+            ShippingCity = source.ShippingCity,
+            ShippingState = source.ShippingState,
+            ShippingPincode = source.ShippingPincode,
+            IsServiceable = source.IsServiceable,
+            TotalAmount = source.TotalAmount,
+            ShippingCharges = source.ShippingCharges,
+            AdvancePaid = null,
+            CodBalance = source.PaymentMode == PaymentMode.COD ? source.TotalAmount : null,
+            CustomerId = source.CustomerId,
+            Source = source.Source,
+            SourceHandle = source.SourceHandle,
+            PaymentMode = source.PaymentMode,
+            TransactionId = null,
+            Status = OrderStatus.Unconfirmed,
+            NeedLabel = source.NeedLabel,
+            Items = clonedItems,
+            Groups = null
+        };
+
+        await UpdateOrderDetailsAsync(newOrderId, updateDto);
+
+        _logger.LogInformation("Cloned order {SourceOrderId} to new unconfirmed order {NewOrderId} with {ItemCount} items",
+            orderId, newOrderId, clonedItems.Count);
+
+        return await GetOrderDetailsAsync(newOrderId);
+    }
+
     public async Task<bool> UpdateOrderDetailsAsync(string orderId, OrderUpdateDto details)
     {
         int? sourceId = details.Source.HasValue && details.Source.Value != OrderSource.None ? (int)details.Source.Value : null;

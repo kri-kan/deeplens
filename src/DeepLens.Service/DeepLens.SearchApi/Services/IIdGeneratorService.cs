@@ -24,6 +24,7 @@ public interface IIdGeneratorService
         string sortBy = "date",
         string sortOrder = "desc");
     Task<OrderDetailDto?> GetOrderDetailsAsync(string orderId);
+    Task<OrderDetailDto?> CloneOrderAsync(string orderId);
     Task<bool> UpdateOrderDetailsAsync(string orderId, OrderUpdateDto details);
     Task<bool> SoftDeleteOrderAsync(string orderId);
 }

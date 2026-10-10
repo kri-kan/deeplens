@@ -3,7 +3,7 @@ import { Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XStack, YStack, Text } from 'tamagui';
 import * as Clipboard from 'expo-clipboard';
-import { LuTrash2, LuCheck, LuArrowLeft, LuCopy } from '@/components/tamagui-ui/icons/lu';
+import { LuTrash2, LuCheck, LuArrowLeft, LuCopy, LuCopyPlus } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge, formatAdaptiveTimestamp } from '../../atoms/TimestampBadge';
 
@@ -17,6 +17,8 @@ export interface DetailHeaderProps {
   isSaving?: boolean;
   onSave?: () => void;
   onDelete: () => void;
+  onClone?: () => void;
+  isCloning?: boolean;
   onBack?: () => void;
 }
 
@@ -33,6 +35,8 @@ export function DetailHeader({
   isSaving = false,
   onSave,
   onDelete,
+  onClone,
+  isCloning = false,
   onBack,
 }: DetailHeaderProps) {
   const { tokens } = useTheme();
@@ -164,13 +168,40 @@ export function DetailHeader({
         )}
       </XStack>
 
-      {/* Right: Delete Action Button */}
+      {/* Right: Clone & Delete Action Buttons */}
       <XStack alignItems="center" gap={6}>
+        {onClone && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Clone order"
+            onPress={onClone}
+            disabled={isSaving || isCloning}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => ({
+              width: 34,
+              height: 34,
+              borderRadius: tokens.radius.sm,
+              backgroundColor: tokens.surfaceRaised,
+              borderWidth: 1,
+              borderColor: tokens.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: isSaving || isCloning ? 0.4 : pressed ? 0.82 : 1,
+              transform: [{ scale: pressed && !isSaving && !isCloning ? 0.94 : 1 }],
+            })}
+          >
+            {isCloning ? (
+              <ActivityIndicator size="small" color={tokens.accent} />
+            ) : (
+              <LuCopyPlus size={16} color={tokens.textSecondary} />
+            )}
+          </Pressable>
+        )}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Delete order"
           onPress={onDelete}
-          disabled={isSaving}
+          disabled={isSaving || isCloning}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => ({
             width: 34,
@@ -181,8 +212,8 @@ export function DetailHeader({
             borderColor: `${tokens.error}30`,
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: isSaving ? 0.4 : pressed ? 0.82 : 1,
-            transform: [{ scale: pressed && !isSaving ? 0.94 : 1 }],
+            opacity: isSaving || isCloning ? 0.4 : pressed ? 0.82 : 1,
+            transform: [{ scale: pressed && !isSaving && !isCloning ? 0.94 : 1 }],
           })}
         >
           <LuTrash2 size={16} color={tokens.error} />
