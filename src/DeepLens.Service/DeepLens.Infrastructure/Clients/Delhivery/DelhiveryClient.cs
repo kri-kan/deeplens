@@ -202,8 +202,21 @@ public class DelhiveryClient : IDelhiveryClient
                     {
                         return Convert.FromBase64String(pkg.PdfEncoded);
                     }
+
+                    if (!string.IsNullOrWhiteSpace(pkg?.PdfDownloadLink))
+                    {
+                        _logger.LogInformation("Downloading official Delhivery packing slip PDF from S3 link for AWB {Awb}", cleanAwb);
+                        using var s3Response = await _httpClient.GetAsync(pkg.PdfDownloadLink, ct);
+                        if (s3Response.IsSuccessStatusCode)
+                        {
+                            return await s3Response.Content.ReadAsByteArrayAsync(ct);
+                        }
+                    }
                 }
-                catch { }
+                catch (Exception parseEx)
+                {
+                    _logger.LogWarning(parseEx, "Failed to parse Delhivery packing slip JSON for AWB {Awb}", cleanAwb);
+                }
             }
 
             _logger.LogWarning("Delhivery packing slip API not returning binary PDF for AWB {Awb}. Generating mock thermal label PDF.", cleanAwb);
