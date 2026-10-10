@@ -31,7 +31,7 @@ import { GroupManagementView } from './GroupManagementView';
 import { ProductEditSheet } from './ProductEditSheet';
 import { QuickPickerSheet } from '@/components/tamagui-ui/molecules/QuickPickerSheet';
 import { AddressCard, AddressSheet, AddressData } from './AdminOrderCreateForm';
-import { LuX, LuCheck, LuCheckCircle2 } from '@/components/tamagui-ui/icons/lu';
+import { LuX, LuCheck, LuCheckCircle2, LuCopyPlus } from '@/components/tamagui-ui/icons/lu';
 
 export interface AdminOrderDetailViewProps {
   orderId: string;
@@ -100,11 +100,14 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   const [confirmDialog, setConfirmDialog] = useState<{
     visible: boolean;
-    type: 'single' | 'batch' | 'deleteOrder';
+    type: 'single' | 'batch' | 'deleteOrder' | 'cloneOrder';
     targetId?: string;
     title: string;
     message: string;
     confirmLabel: string;
+    cancelLabel?: string;
+    intent?: 'critical' | 'attention' | 'info';
+    icon?: React.ReactNode;
   }>({
     visible: false,
     type: 'single',
@@ -594,40 +597,16 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   // Clone order with items and address in unconfirmed state
   const handleCloneOrder = () => {
-    Alert.alert(
-      'Clone Order',
-      `Create a new unconfirmed order copying all items and delivery address from order #${orderId}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clone',
-          onPress: async () => {
-            setIsCloning(true);
-            try {
-              const res = await searchApiClient.post<OrderIdEntry>(API_ROUTES.ORDERS.CLONE(orderId), {});
-              const clonedId = res?.id || (res as any)?.orderId;
-              if (clonedId) {
-                setSnackbarMessage(`Order #${clonedId} cloned in unconfirmed state!`);
-                setSnackbarVisible(true);
-                setTimeout(() => {
-                  router.replace({
-                    pathname: '/utilities/order-details/[id]',
-                    params: { id: clonedId },
-                  } as any);
-                }, 400);
-              } else {
-                throw new Error('No cloned order ID returned');
-              }
-            } catch (err: any) {
-              console.error('Failed to clone order:', err);
-              Alert.alert('Clone Failed', err?.message || 'Could not clone order.');
-            } finally {
-              setIsCloning(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      type: 'cloneOrder',
+      title: 'Clone Order',
+      message: 'Cloning an order will copy all the items and address as a new unconfirmed order. Would you like to proceed?',
+      confirmLabel: 'Proceed',
+      cancelLabel: 'Cancel',
+      intent: 'info',
+      icon: <LuCopyPlus size={20} color={tokens.accent} />,
+    });
   };
 
   // Delete full order
@@ -722,6 +701,31 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         console.error('Failed to delete order:', err);
         setSnackbarMessage(`Delete Failed: ${err?.message || 'Could not delete order.'}`);
         setSnackbarVisible(true);
+      }
+    } else if (confirmDialog.type === 'cloneOrder') {
+      setConfirmDialog((prev) => ({ ...prev, visible: false }));
+      setIsCloning(true);
+      try {
+        const res = await searchApiClient.post<OrderIdEntry>(API_ROUTES.ORDERS.CLONE(orderId), {});
+        const clonedId = res?.id || (res as any)?.orderId;
+        if (clonedId) {
+          setSnackbarMessage(`Order #${clonedId} cloned in unconfirmed state!`);
+          setSnackbarVisible(true);
+          setTimeout(() => {
+            router.replace({
+              pathname: '/utilities/order-details/[id]',
+              params: { id: clonedId },
+            } as any);
+          }, 400);
+        } else {
+          throw new Error('No cloned order ID returned');
+        }
+      } catch (err: any) {
+        console.error('Failed to clone order:', err);
+        setSnackbarMessage(`Clone Failed: ${err?.message || 'Could not clone order.'}`);
+        setSnackbarVisible(true);
+      } finally {
+        setIsCloning(false);
       }
     }
   };
@@ -1020,7 +1024,9 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         title={confirmDialog.title}
         message={confirmDialog.message}
         confirmLabel={confirmDialog.confirmLabel}
-        intent="critical"
+        cancelLabel={confirmDialog.cancelLabel || 'Cancel'}
+        intent={confirmDialog.intent || 'critical'}
+        icon={confirmDialog.icon}
         onConfirm={handleConfirmAction}
         onCancel={() => setConfirmDialog((prev) => ({ ...prev, visible: false }))}
       />
