@@ -28,17 +28,19 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
 
     let localUri = uri;
 
-    // Remote HTTP/HTTPS image: download to local cache directory first
+    // Remote HTTP/HTTPS file or image: download to local cache directory first
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
-      const isPng = uri.toLowerCase().includes('.png');
-      const ext = isPng ? 'png' : 'jpg';
+      const lower = uri.toLowerCase();
+      const isPdf = lower.includes('.pdf');
+      const isPng = lower.includes('.png');
+      const ext = isPdf ? 'pdf' : isPng ? 'png' : 'jpg';
       const filename = `share_${Date.now()}.${ext}`;
       const targetPath = `${cacheDirectory || ''}${filename}`;
 
       const downloadResumable = createDownloadResumable(uri, targetPath);
       const res = await downloadResumable.downloadAsync();
       if (!res?.uri) {
-        throw new Error('Failed to download image for sharing');
+        throw new Error('Failed to download file for sharing');
       }
       localUri = res.uri;
     }
@@ -48,10 +50,14 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
       ? localUri
       : `file://${localUri}`;
 
+    const isPdfFile = fileIntentUri.toLowerCase().endsWith('.pdf');
+    const isPngFile = fileIntentUri.toLowerCase().endsWith('.png');
+    const mimeType = isPdfFile ? 'application/pdf' : isPngFile ? 'image/png' : 'image/jpeg';
+
     if (await ExpoSharing.isAvailableAsync()) {
       await ExpoSharing.shareAsync(fileIntentUri, {
-        mimeType: fileIntentUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg',
-        dialogTitle: title || 'Share Product Image',
+        mimeType,
+        dialogTitle: title || (isPdfFile ? 'Share Document' : 'Share Image'),
       });
       return;
     }

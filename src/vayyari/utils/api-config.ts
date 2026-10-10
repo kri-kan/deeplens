@@ -45,3 +45,16 @@ export const getOtelEndpointUrl = () =>
 
 export const getStoreApiUrl = () =>
   process.env.EXPO_PUBLIC_STORE_API_URL || 'http://storeapi.vayyarifashions.com';
+
+/**
+ * Resolves a shipping label URL or storage path to a fully qualified downloadable HTTP URL.
+ */
+export const resolveLabelUrl = (pathOrUrl?: string | null): string => {
+  if (!pathOrUrl) return '';
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  const cleanBase = (getSearchApiUrl() || '').replace(/\/$/, '');
+  const cleanPath = pathOrUrl.replace(/^\/+/, '');
+  return `${cleanBase}/api/v1/Attachment/download?path=${encodeURIComponent(cleanPath)}`;
+};

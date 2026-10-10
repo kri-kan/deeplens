@@ -74,7 +74,8 @@ public class AttachmentController : ControllerBase
     {
         if (string.IsNullOrEmpty(path)) return BadRequest("Path is required");
 
-        string contentType = path.EndsWith(".webp") ? "image/webp" : 
+        string contentType = path.EndsWith(".pdf") ? "application/pdf" :
+                            path.EndsWith(".webp") ? "image/webp" : 
                             path.EndsWith(".png") ? "image/png" : 
                             path.EndsWith(".mp4") ? "video/mp4" :
                             path.EndsWith(".mov") ? "video/quicktime" : "image/jpeg";
