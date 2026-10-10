@@ -28,6 +28,7 @@ import {
   LuExternalLink,
   LuStar,
   LuReceipt,
+  LuCalendar,
 } from '@/components/tamagui-ui/icons/lu';
 import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { useTheme } from '@/theme';
@@ -39,6 +40,7 @@ import { shareImageUri } from '@/utils/shareImage';
 import { resolveLabelUrl } from '@/utils/api-config';
 import { AddressData } from './GroupManagementView';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
+import { SchedulePickupModal } from './SchedulePickupModal';
 
 export interface SubmittedForwardOrderAudit {
   awbNumber: string;
@@ -168,6 +170,7 @@ export function ForwardOrderLabelModal({
   // Accordion toggle for non-editable audit form below PDF
   const [isAuditExpanded, setIsAuditExpanded] = useState<boolean>(false);
   const [copiedAwb, setCopiedAwb] = useState(false);
+  const [showSchedulePickup, setShowSchedulePickup] = useState(false);
 
   // Shipping Rate Estimation state
   const [estimating, setEstimating] = useState(false);
@@ -1657,7 +1660,7 @@ export function ForwardOrderLabelModal({
 
         {/* ── Sticky Bottom Action Bar (PDF View Mode) ── */}
         {viewMode === 'pdf' && (
-          <XStack
+          <YStack
             position="absolute"
             bottom={0}
             left={0}
@@ -1668,58 +1671,83 @@ export function ForwardOrderLabelModal({
             paddingHorizontal={16}
             paddingTop={12}
             paddingBottom={Math.max(insets.bottom, 12)}
-            gap={12}
+            gap={10}
             shadowColor="#000"
             shadowOffset={{ width: 0, height: -2 }}
             shadowOpacity={0.08}
             shadowRadius={4}
             elevation={8}
-            alignItems="center"
           >
+            {/* Row 1: Schedule Pickup CTA */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Copy AWB number"
-              onPress={handleCopyAwb}
+              accessibilityLabel="Schedule Delhivery Pickup"
+              onPress={() => setShowSchedulePickup(true)}
               style={({ pressed }) => ({
-                flex: 1,
-                height: 44,
+                height: 42,
                 borderRadius: tokens.radius.sm,
                 borderWidth: 1.5,
-                borderColor: tokens.border,
-                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                borderColor: tokens.accent,
+                backgroundColor: pressed ? `${tokens.accent}15` : `${tokens.accent}0A`,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'row',
                 gap: 8,
               })}
             >
-              <LuCopy size={16} color={tokens.text} />
-              <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                {copiedAwb ? 'AWB COPIED ✓' : `COPY AWB (${generatedAwb || 'AWB'})`}
+              <LuCalendar size={16} color={tokens.accent} />
+              <Text fontSize={12} fontWeight="800" color={tokens.accent} letterSpacing={0.5}>
+                SCHEDULE PICKUP
               </Text>
             </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Share PDF shipping label"
-              onPress={handleSharePdf}
-              style={({ pressed }) => ({
-                flex: 1,
-                height: 44,
-                borderRadius: tokens.radius.sm,
-                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 8,
-              })}
-            >
-              <LuShare2 size={16} color={tokens.accentForeground} />
-              <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-                SHARE PDF
-              </Text>
-            </Pressable>
-          </XStack>
+            {/* Row 2: Copy AWB + Share PDF */}
+            <XStack gap={12} alignItems="center">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Copy AWB number"
+                onPress={handleCopyAwb}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 44,
+                  borderRadius: tokens.radius.sm,
+                  borderWidth: 1.5,
+                  borderColor: tokens.border,
+                  backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                })}
+              >
+                <LuCopy size={16} color={tokens.text} />
+                <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                  {copiedAwb ? 'AWB COPIED ✓' : `COPY AWB (${generatedAwb || 'AWB'})`}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share PDF shipping label"
+                onPress={handleSharePdf}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 44,
+                  borderRadius: tokens.radius.sm,
+                  backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                })}
+              >
+                <LuShare2 size={16} color={tokens.accentForeground} />
+                <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
+                  SHARE PDF
+                </Text>
+              </Pressable>
+            </XStack>
+          </YStack>
         )}
 
         {/* ── Sub-Modal: Pickup Warehouse Facility Picker ── */}
@@ -1841,6 +1869,15 @@ export function ForwardOrderLabelModal({
             </YStack>
           </Modal>
         )}
+
+        {/* ── Schedule Pickup Modal ── */}
+        <SchedulePickupModal
+          visible={showSchedulePickup}
+          onDismiss={() => setShowSchedulePickup(false)}
+          onSuccess={() => setShowSchedulePickup(false)}
+          pickupLocation={selectedWarehouse?.name || 'HYDERABAD'}
+          expectedPackageCount={1}
+        />
 
         {/* ── Design System Feedback Dialog (Success, Validation & Error) ── */}
         <ConfirmDialog
