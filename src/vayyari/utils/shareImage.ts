@@ -1,10 +1,10 @@
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, Linking } from 'react-native';
 import * as ExpoSharing from 'expo-sharing';
-import { cacheDirectory, createDownloadResumable, getContentUriAsync } from 'expo-file-system/legacy';
+import { cacheDirectory, createDownloadResumable } from 'expo-file-system/legacy';
 
 /**
  * Shares an image or PDF (local file or remote URL) with other apps via Android/iOS share intent.
- * On Android 10+, converts file:// URIs to content:// URIs via FileProvider for cross-app sharing.
+ * Note: ExpoSharing.shareAsync requires a file:// URI on Android.
  */
 export async function shareImageUri(uri?: string | null, title?: string): Promise<void> {
   if (!uri) {
@@ -46,29 +46,17 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
       localUri = res.uri;
     }
 
-    // Ensure valid file:// protocol
-    const fileIntentUri = localUri.startsWith('file://') || localUri.startsWith('content://')
+    // ExpoSharing strictly requires a file:// URI
+    const fileIntentUri = localUri.startsWith('file://')
       ? localUri
-      : `file://${localUri}`;
+      : `file://${localUri.replace(/^[^/]+:\/\//, '')}`;
 
     const isPdfFile = fileIntentUri.toLowerCase().endsWith('.pdf');
     const isPngFile = fileIntentUri.toLowerCase().endsWith('.png');
     const mimeType = isPdfFile ? 'application/pdf' : isPngFile ? 'image/png' : 'image/jpeg';
 
-    // On Android 10+: convert file:// to content:// URI via FileProvider.
-    // This is required for cross-app file sharing — file:// is blocked by FileProvider policies.
-    let shareUri = fileIntentUri;
-    if (Platform.OS === 'android' && fileIntentUri.startsWith('file://')) {
-      try {
-        shareUri = await getContentUriAsync(fileIntentUri);
-      } catch (contentUriErr) {
-        console.warn('[shareImageUri] getContentUriAsync failed, using file:// URI:', contentUriErr);
-        shareUri = fileIntentUri;
-      }
-    }
-
     if (await ExpoSharing.isAvailableAsync()) {
-      await ExpoSharing.shareAsync(shareUri, {
+      await ExpoSharing.shareAsync(fileIntentUri, {
         mimeType,
         dialogTitle: title || (isPdfFile ? 'Share Document' : 'Share Image'),
         UTI: isPdfFile ? 'com.adobe.pdf' : isPngFile ? 'public.png' : 'public.jpeg',
@@ -76,7 +64,12 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
       return;
     }
 
-    // ExpoSharing not available on this device/platform
+    // Fallback: open URL in external browser/viewer
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      await Linking.openURL(uri);
+      return;
+    }
+
     Alert.alert('Sharing Unavailable', 'Sharing is not supported on this device.');
   } catch (err: any) {
     const msg = String(err?.message || '');
@@ -84,6 +77,17 @@ export async function shareImageUri(uri?: string | null, title?: string): Promis
       return;
     }
     console.warn('[shareImageUri] Error:', err);
+
+    // Fallback to open URL directly in browser if sharing failed
+    if (uri && (uri.startsWith('http://') || uri.startsWith('https://'))) {
+      try {
+        await Linking.openURL(uri);
+        return;
+      } catch (linkErr) {
+        console.warn('[shareImageUri] Fallback Linking.openURL failed:', linkErr);
+      }
+    }
+
     Alert.alert('Share Failed', 'Unable to share this file. Please try again.');
   }
 }

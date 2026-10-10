@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -560,11 +561,19 @@ export function ForwardOrderLabelModal({
     }
 
     try {
+      // First try in-app browser
       await openBrowserAsync(resolvedUrl, {
         presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
       });
-    } catch {
-      await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
+    } catch (browserErr) {
+      console.warn('[handleOpenPdfViewer] openBrowserAsync failed, trying Linking.openURL:', browserErr);
+      try {
+        // Fallback to opening external system browser / PDF viewer
+        await Linking.openURL(resolvedUrl);
+      } catch (linkErr) {
+        console.warn('[handleOpenPdfViewer] Linking.openURL failed, falling back to shareImageUri:', linkErr);
+        await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
+      }
     }
   };
 
