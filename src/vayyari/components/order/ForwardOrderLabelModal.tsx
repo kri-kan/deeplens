@@ -38,6 +38,7 @@ import { vendorService } from '@/services/vendorService';
 import { searchApiClient } from '@/api/client';
 import { Warehouse } from '@/types/logistics';
 import { shareImageUri } from '@/utils/shareImage';
+import { openPdfViewer } from '@/utils/viewPdf';
 import { resolveLabelUrl } from '@/utils/api-config';
 import { AddressData } from './GroupManagementView';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
@@ -554,27 +555,7 @@ export function ForwardOrderLabelModal({
     const rawUrl = generatedLabelUrl || (initialLabelUrl ? initialLabelUrl : '');
     const resolvedUrl = resolveLabelUrl(rawUrl);
     if (!resolvedUrl) return;
-
-    if (Platform.OS === 'web') {
-      window.open(resolvedUrl, '_blank');
-      return;
-    }
-
-    try {
-      // First try in-app browser
-      await openBrowserAsync(resolvedUrl, {
-        presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
-      });
-    } catch (browserErr) {
-      console.warn('[handleOpenPdfViewer] openBrowserAsync failed, trying Linking.openURL:', browserErr);
-      try {
-        // Fallback to opening external system browser / PDF viewer
-        await Linking.openURL(resolvedUrl);
-      } catch (linkErr) {
-        console.warn('[handleOpenPdfViewer] Linking.openURL failed, falling back to shareImageUri:', linkErr);
-        await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
-      }
-    }
+    await openPdfViewer(resolvedUrl, `Delhivery Label ${generatedAwb}`);
   };
 
   const handleSharePdf = async () => {
