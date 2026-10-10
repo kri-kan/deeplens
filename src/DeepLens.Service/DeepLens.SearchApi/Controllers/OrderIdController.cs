@@ -202,7 +202,10 @@ public class OrderIdController : ControllerBase
             request?.WeightGrams,
             request?.LengthCm,
             request?.WidthCm,
-            request?.HeightCm);
+            request?.HeightCm,
+            request?.PaymentMode,
+            request?.CodAmount,
+            request?.TotalAmount);
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -280,4 +283,7 @@ public class GenerateGroupLabelRequest
     public double? LengthCm { get; set; }
     public double? WidthCm { get; set; }
     public double? HeightCm { get; set; }
+    public string? PaymentMode { get; set; }
+    public decimal? CodAmount { get; set; }
+    public decimal? TotalAmount { get; set; }
 }

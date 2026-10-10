@@ -22,7 +22,10 @@ public record GenerateGroupLabelCommand(
     int? WeightGrams = null,
     double? LengthCm = null,
     double? WidthCm = null,
-    double? HeightCm = null) : IRequest<Result<GenerateGroupLabelResponse>>;
+    double? HeightCm = null,
+    string? PaymentMode = null,
+    decimal? CodAmount = null,
+    decimal? TotalAmount = null) : IRequest<Result<GenerateGroupLabelResponse>>;
 
 public record GenerateGroupLabelResponse(
     string OrderGrpId,
@@ -126,9 +129,20 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
             var heightCm = request.HeightCm ?? 3.0;   // 3cm rule
             var shippingMode = !string.IsNullOrWhiteSpace(request.ShippingMode) ? request.ShippingMode : "Surface"; // Surface default
 
-            var isCod = order.PaymentMode == Domain.Enums.PaymentMode.COD;
-            var codAmountVal = isCod ? (order.CodBalance ?? order.TotalAmount ?? 0) : 0m;
-            var totalAmountVal = group.Items?.Sum(i => i.Subtotal) ?? 0m;
+            // Determine Payment Mode & COD Amount
+            var isCod = !string.IsNullOrWhiteSpace(request.PaymentMode)
+                ? request.PaymentMode.Equals("COD", StringComparison.OrdinalIgnoreCase)
+                : (order.PaymentMode == Domain.Enums.PaymentMode.COD);
+
+            var codAmountVal = isCod
+                ? (request.CodAmount ?? order.CodBalance ?? order.TotalAmount ?? 0m)
+                : 0m;
+
+            // Total Amount: 4 times actual amount for declared consignment value per user specification
+            var actualAmount = group.Items?.Sum(i => i.Subtotal) ?? (order.TotalAmount ?? 0m);
+            var totalAmountVal = request.TotalAmount ?? (actualAmount * 4m);
+
+            var productDesc = $"{group.VendorName ?? "Apparel"} ({totalItemsCount} items)";
 
             var payload = new DelhiveryCmuPayload
             {
@@ -159,7 +173,8 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                         Weight = weightGrams,
                         ShipmentWidth = widthCm,
                         ShipmentHeight = heightCm,
-                        Quantity = totalItemsCount.ToString()
+                        Quantity = totalItemsCount.ToString(),
+                        ProductsDesc = productDesc
                     }
                 }
             };

@@ -23,6 +23,7 @@ import {
   LuPackage,
 } from '../icons/lu';
 import { StatusBadge, StatusIntent } from '../atoms/StatusBadge';
+import { CapsuleSegmentControl } from '../atoms/CapsuleSegmentControl';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -365,6 +366,10 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
     router.push(`/utilities/order-details/${orderId}` as any);
   };
 
+  const openEditGroup = (orderId: string, groupKey: string) => {
+    router.push(`/utilities/order-group?orderId=${orderId}&groupKey=${encodeURIComponent(groupKey)}` as any);
+  };
+
   // ─── Derived: groups for current tab ─────────────────────────────────────
   const filteredGroups = useMemo(() => {
     const tabGroups = allGroups.filter(
@@ -462,6 +467,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
   // ─────────────────────────────────────────────────────────────────────────
 
   /** A lean vendor group card that matches the Edit Order ProductListSection style */
+  /** A lean vendor group card that matches the Edit Order ProductListSection style */
   const ItemGroupCard = ({ group }: { group: OrderGroup }) => {
     const itemCount = (group.items || []).reduce((s, i) => s + (i.quantity || 1), 0);
     const total = (group.items || []).reduce((s, i) => s + (i.subtotal || i.unitPrice || 0), 0);
@@ -472,15 +478,15 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
         backgroundColor={tokens.surface}
         borderWidth={1}
         borderColor={tokens.border}
-        borderRadius={tokens.radius.lg}
+        borderRadius={0}
         overflow="hidden"
         marginBottom={8}
       >
         {/* Group Header — mirrors ProductListSection vendor header */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Open order for ${isUnassigned ? 'Unassigned' : group.vendorName}`}
-          onPress={() => openEditOrder(group.orderId)}
+          accessibilityLabel={`Open package group for ${isUnassigned ? 'Unassigned' : group.vendorName}`}
+          onPress={() => openEditGroup(group.orderId, group.orderGrpId || group.vendorName || '')}
           style={({ pressed }) => ({
             backgroundColor: pressed ? `${tokens.surfaceRaised}D0` : tokens.surfaceRaised,
             flexDirection: 'row',
@@ -489,7 +495,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
             borderBottomColor: tokens.border,
           })}
         >
-          {/* Left: Vendor Icon + Name + Subtitle */}
+          {/* Left: Vendor Icon + Name + Subtitle + Status Badge */}
           <XStack
             flex={1}
             paddingLeft={12}
@@ -511,10 +517,16 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
                 <LuBuilding2 size={15} color={isUnassigned ? tokens.textMuted : tokens.accent} />
               </XStack>
               <YStack gap={2} flex={1}>
-                <XStack alignItems="center" gap={6}>
+                <XStack alignItems="center" gap={6} flexWrap="wrap">
                   <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
                     {isUnassigned ? 'Unassigned' : group.vendorName}
                   </Text>
+                  {/* Status Badge beside Vendor Name */}
+                  <StatusBadge
+                    label={group.status ? group.status.toUpperCase() : 'UNCONFIRMED'}
+                    intent={getStatusIntent(group.status)}
+                    size="sm"
+                  />
                   {/* Order ID badge */}
                   <YStack
                     paddingHorizontal={5}
@@ -536,9 +548,9 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
               </YStack>
             </XStack>
 
-            {/* Status Badge & Payment mode */}
-            <XStack alignItems="center" gap={6}>
-              {group.paymentMode && (
+            {/* Payment mode badge */}
+            {group.paymentMode && (
+              <XStack alignItems="center">
                 <YStack
                   paddingHorizontal={5}
                   paddingVertical={2}
@@ -559,16 +571,11 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
                     {group.paymentMode.toUpperCase()}
                   </Text>
                 </YStack>
-              )}
-              <StatusBadge
-                label={group.status ? group.status.toUpperCase() : 'UNCONFIRMED'}
-                intent={getStatusIntent(group.status)}
-                size="sm"
-              />
-            </XStack>
+              </XStack>
+            )}
           </XStack>
 
-          {/* Full-bleed blue chevron — identical to Edit Order */}
+          {/* Full-bleed blue chevron button — opens edit group */}
           <YStack
             width={44}
             alignSelf="stretch"
@@ -672,16 +679,16 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
   };
 
   /** Lean group card inside an order container for Orders view */
-  const LeanGroupCard = ({ group, onPress }: { group: OrderGroup; onPress: () => void }) => {
+  const LeanGroupCard = ({ group }: { group: OrderGroup }) => {
     const itemCount = (group.items || []).reduce((s, i) => s + (i.quantity || 1), 0);
     const total = (group.items || []).reduce((s, i) => s + (i.subtotal || i.unitPrice || 0), 0);
     const isUnassigned = !group.vendorName || group.vendorName.toLowerCase() === 'unassigned';
 
     return (
       <Pressable
-        onPress={onPress}
+        onPress={() => openEditGroup(group.orderId, group.orderGrpId || group.vendorName || '')}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${group.orderGrpId}`}
+        accessibilityLabel={`Open group ${group.orderGrpId} for ${isUnassigned ? 'Unassigned' : group.vendorName}`}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'stretch',
@@ -693,7 +700,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
         <XStack
           flex={1}
           paddingLeft={12}
-          paddingRight={10}
+          paddingRight={12}
           paddingVertical={10}
           alignItems="center"
           justifyContent="space-between"
@@ -701,19 +708,26 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
         >
           <XStack alignItems="center" gap={8} flex={1}>
             <XStack
-              width={24}
-              height={24}
+              width={26}
+              height={26}
               borderRadius={tokens.radius.full}
               backgroundColor={isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
               alignItems="center"
               justifyContent="center"
             >
-              <LuBuilding2 size={13} color={isUnassigned ? tokens.textMuted : tokens.accent} />
+              <LuBuilding2 size={14} color={isUnassigned ? tokens.textMuted : tokens.accent} />
             </XStack>
-            <YStack flex={1} gap={1}>
-              <Text fontSize={12} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                {isUnassigned ? 'Unassigned' : group.vendorName}
-              </Text>
+            <YStack flex={1} gap={2}>
+              <XStack alignItems="center" gap={6} flexWrap="wrap">
+                <Text fontSize={12.5} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                  {isUnassigned ? 'Unassigned' : group.vendorName}
+                </Text>
+                <StatusBadge
+                  label={group.status ? group.status.toUpperCase() : 'UNCONFIRMED'}
+                  intent={getStatusIntent(group.status)}
+                  size="sm"
+                />
+              </XStack>
               <Text fontSize={10} color={tokens.textMuted} fontWeight="600">
                 {group.orderGrpId} · {itemCount} {itemCount === 1 ? 'item' : 'items'} ·{' '}
                 <Text fontWeight="800" color={tokens.textSecondary}>
@@ -728,13 +742,9 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
             </YStack>
           </XStack>
 
-          <XStack alignItems="center" gap={6}>
-            <StatusBadge
-              label={group.status ? group.status.toUpperCase() : 'UNCONFIRMED'}
-              intent={getStatusIntent(group.status)}
-              size="sm"
-            />
-            <LuChevronRight size={14} color={tokens.textMuted} />
+          {/* Larger Group Chevron */}
+          <XStack alignItems="center" paddingRight={4}>
+            <LuChevronRight size={20} color={tokens.text} />
           </XStack>
         </XStack>
       </Pressable>
@@ -747,57 +757,81 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
       backgroundColor={tokens.surface}
       borderWidth={1}
       borderColor={tokens.border}
-      borderRadius={tokens.radius.lg}
+      borderRadius={0}
       overflow="hidden"
       marginBottom={8}
     >
-      {/* Order header */}
-      <XStack
-        paddingHorizontal={12}
-        paddingVertical={10}
-        alignItems="center"
-        justifyContent="space-between"
-        backgroundColor={tokens.surfaceRaised}
+      {/* Order header with full-bleed blue action button */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Edit order ${oc.orderId}`}
+        onPress={() => openEditOrder(oc.orderId)}
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? `${tokens.surfaceRaised}D0` : tokens.surfaceRaised,
+          flexDirection: 'row',
+          alignItems: 'stretch',
+        })}
       >
-        <YStack gap={2}>
-          <XStack alignItems="center" gap={6}>
-            <Text fontSize={14} fontWeight="800" color={tokens.text}>
-              {oc.orderId}
-            </Text>
-            {oc.paymentMode && (
-              <YStack
-                paddingHorizontal={5}
-                paddingVertical={2}
-                borderRadius={4}
-                backgroundColor={
-                  oc.paymentMode.toUpperCase() === 'COD'
-                    ? `${tokens.warning}1F`
-                    : `${tokens.success}1F`
-                }
-              >
-                <Text
-                  fontSize={9}
-                  fontWeight="800"
-                  color={
-                    oc.paymentMode.toUpperCase() === 'COD' ? tokens.warning : tokens.success
+        <XStack
+          flex={1}
+          paddingHorizontal={12}
+          paddingVertical={10}
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          <YStack gap={2}>
+            <XStack alignItems="center" gap={6}>
+              <Text fontSize={14} fontWeight="800" color={tokens.text}>
+                {oc.orderId}
+              </Text>
+              {oc.paymentMode && (
+                <YStack
+                  paddingHorizontal={5}
+                  paddingVertical={2}
+                  borderRadius={4}
+                  backgroundColor={
+                    oc.paymentMode.toUpperCase() === 'COD'
+                      ? `${tokens.warning}1F`
+                      : `${tokens.success}1F`
                   }
                 >
-                  {oc.paymentMode.toUpperCase()}
-                </Text>
-              </YStack>
+                  <Text
+                    fontSize={9}
+                    fontWeight="800"
+                    color={
+                      oc.paymentMode.toUpperCase() === 'COD' ? tokens.warning : tokens.success
+                    }
+                  >
+                    {oc.paymentMode.toUpperCase()}
+                  </Text>
+                </YStack>
+              )}
+            </XStack>
+            {oc.customerName && (
+              <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                {oc.customerName}{oc.customerPhone ? ` · ${oc.customerPhone}` : ''}
+              </Text>
             )}
-          </XStack>
-          {oc.customerName && (
-            <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
-              {oc.customerName}{oc.customerPhone ? ` · ${oc.customerPhone}` : ''}
-            </Text>
-          )}
+          </YStack>
+        </XStack>
+
+        {/* Order-level full-bleed blue action button */}
+        <YStack
+          width={44}
+          alignSelf="stretch"
+          backgroundColor="#2563EB"
+          borderLeftWidth={1}
+          borderLeftColor={tokens.border}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <LuChevronRight size={18} color="#FFFFFF" />
         </YStack>
-      </XStack>
+      </Pressable>
 
       {/* Lean cards per group */}
       {oc.groups.map((g) => (
-        <LeanGroupCard key={g.orderGrpId} group={g} onPress={() => openEditOrder(oc.orderId)} />
+        <LeanGroupCard key={g.orderGrpId} group={g} />
       ))}
     </YStack>
   );
@@ -838,38 +872,15 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
             </XStack>
             <XStack alignItems="center" gap={10}>
               {/* View Mode Toggle */}
-              <XStack
-                backgroundColor={tokens.surfaceRaised}
-                borderRadius={tokens.radius.full}
-                padding={2}
-                gap={2}
-                borderWidth={1}
-                borderColor={tokens.border}
-                overflow="hidden"
-              >
-                {(['groups', 'orders'] as ViewMode[]).map((mode) => {
-                  const isActive = viewMode === mode;
-                  return (
-                    <Pressable key={mode} onPress={() => setViewMode(mode)}>
-                      <YStack
-                        paddingHorizontal={12}
-                        paddingVertical={5}
-                        borderRadius={tokens.radius.full}
-                        backgroundColor={isActive ? tokens.accent : 'transparent'}
-                      >
-                        <Text
-                          fontSize={11}
-                          fontWeight="800"
-                          color={isActive ? '#FFFFFF' : tokens.textMuted}
-                          textTransform="capitalize"
-                        >
-                          {mode === 'groups' ? 'Groups' : 'Orders'}
-                        </Text>
-                      </YStack>
-                    </Pressable>
-                  );
-                })}
-              </XStack>
+              <CapsuleSegmentControl<ViewMode>
+                options={[
+                  { value: 'groups', label: 'Groups' },
+                  { value: 'orders', label: 'Orders' },
+                ]}
+                value={viewMode}
+                onChange={(val) => val && setViewMode(val)}
+                accessibilityLabel="Select view mode"
+              />
 
               {/* Refresh */}
               <Pressable onPress={() => fetchAllGroups(true)} hitSlop={8}>
@@ -909,24 +920,22 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
                     >
                       {label}
                     </Text>
-                    {count > 0 && (
-                      <YStack
-                        paddingHorizontal={6}
-                        paddingVertical={1}
-                        borderRadius={tokens.radius.full}
-                        backgroundColor={
-                          isActive ? 'rgba(255, 255, 255, 0.25)' : `${tokens.textMuted}20`
-                        }
+                    <YStack
+                      paddingHorizontal={6}
+                      paddingVertical={1}
+                      borderRadius={tokens.radius.full}
+                      backgroundColor={
+                        isActive ? 'rgba(255, 255, 255, 0.25)' : `${tokens.textMuted}20`
+                      }
+                    >
+                      <Text
+                        fontSize={10}
+                        fontWeight="800"
+                        color={isActive ? '#FFFFFF' : tokens.textMuted}
                       >
-                        <Text
-                          fontSize={10}
-                          fontWeight="800"
-                          color={isActive ? '#FFFFFF' : tokens.textMuted}
-                        >
-                          {count}
-                        </Text>
-                      </YStack>
-                    )}
+                        {count}
+                      </Text>
+                    </YStack>
                   </XStack>
                 </Pressable>
               );

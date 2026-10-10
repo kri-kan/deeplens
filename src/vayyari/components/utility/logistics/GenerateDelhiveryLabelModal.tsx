@@ -38,15 +38,22 @@ export function GenerateDelhiveryLabelModal({
   // Form states initialized with business rules
   const [shippingMode, setShippingMode] = useState<'Surface' | 'Express'>('Surface');
   const [weightGrams, setWeightGrams] = useState<string>((Math.max(1, itemsCount) * 400).toString());
+  const [paymentMode, setPaymentMode] = useState<'COD' | 'Pre-paid'>(isCod ? 'COD' : 'Pre-paid');
+  const [codAmount, setCodAmount] = useState<string>(isCod && groupTotal > 0 ? groupTotal.toString() : '');
   const [generating, setGenerating] = useState(false);
   const [warehousePickerVisible, setWarehousePickerVisible] = useState(false);
+
+  const actualTotal = groupTotal;
+  const declaredTotal = actualTotal * 4;
 
   useEffect(() => {
     if (visible) {
       loadInitialData();
       setWeightGrams((Math.max(1, itemsCount) * 400).toString());
+      setPaymentMode(isCod ? 'COD' : 'Pre-paid');
+      setCodAmount(isCod && groupTotal > 0 ? groupTotal.toString() : '');
     }
-  }, [visible, vendorName, itemsCount]);
+  }, [visible, vendorName, itemsCount, isCod, groupTotal]);
 
   const loadInitialData = async () => {
     try {
@@ -94,6 +101,14 @@ export function GenerateDelhiveryLabelModal({
       return;
     }
 
+    if (paymentMode === 'COD') {
+      const parsedCod = parseFloat(codAmount);
+      if (isNaN(parsedCod) || parsedCod <= 0) {
+        Alert.alert('Validation Error', 'Please enter a valid COD Collectible Amount greater than ₹0.');
+        return;
+      }
+    }
+
     try {
       setGenerating(true);
 
@@ -104,6 +119,9 @@ export function GenerateDelhiveryLabelModal({
         lengthCm: 40.0,
         widthCm: 25.0,
         heightCm: 3.0,
+        paymentMode,
+        codAmount: paymentMode === 'COD' ? parseFloat(codAmount) : 0,
+        totalAmount: declaredTotal,
       };
 
       const res: any = await searchApiClient.post(
@@ -252,24 +270,93 @@ export function GenerateDelhiveryLabelModal({
             </View>
           </View>
 
-          {/* Payment & Collectible */}
-          <Surface style={styles.paymentInfoCard} elevation={0}>
-            <View style={styles.paymentRow}>
-              <Text variant="bodySmall" style={{ color: '#475569' }}>Payment Mode:</Text>
-              <Chip
-                compact
-                style={{ backgroundColor: isCod ? '#FEF3C7' : '#DCFCE7', height: 22 }}
-                textStyle={{ fontSize: 10, fontWeight: '700', color: isCod ? '#B45309' : '#15803D' }}
-              >
-                {isCod ? 'CASH ON DELIVERY (COD)' : 'PREPAID'}
-              </Chip>
-            </View>
-            <View style={styles.paymentRow}>
-              <Text variant="bodySmall" style={{ color: '#475569' }}>Collectible Amount:</Text>
-              <Text style={{ fontWeight: '700', color: '#0F172A' }}>
-                ₹{isCod ? groupTotal.toLocaleString('en-IN') : '0'}
+          {/* Payment Mode Selector */}
+          <Text variant="labelLarge" style={styles.sectionLabel}>
+            Payment Mode (Parent Order: {isCod ? 'COD' : 'Prepaid'})
+          </Text>
+          <View style={styles.modeRow}>
+            <Chip
+              selected={paymentMode === 'Pre-paid'}
+              onPress={() => setPaymentMode('Pre-paid')}
+              style={[styles.modeChip, paymentMode === 'Pre-paid' && styles.prepaidChipActive]}
+              textStyle={paymentMode === 'Pre-paid' ? styles.prepaidTextActive : undefined}
+              icon="credit-card-check-outline"
+            >
+              Prepaid
+            </Chip>
+            <Chip
+              selected={paymentMode === 'COD'}
+              onPress={() => setPaymentMode('COD')}
+              style={[styles.modeChip, paymentMode === 'COD' && styles.codChipActive]}
+              textStyle={paymentMode === 'COD' ? styles.codTextActive : undefined}
+              icon="cash"
+            >
+              Cash on Delivery (COD)
+            </Chip>
+          </View>
+
+          {/* Conditional Mandatory COD Amount Input */}
+          {paymentMode === 'COD' && (
+            <View style={{ marginTop: 12 }}>
+              <Text variant="labelLarge" style={styles.sectionLabel}>
+                COD Collectible Amount (Mandatory) *
+              </Text>
+              <TextInput
+                value={codAmount}
+                onChangeText={setCodAmount}
+                mode="outlined"
+                keyboardType="numeric"
+                left={<TextInput.Affix text="₹" />}
+                placeholder="Enter collectible amount"
+                style={styles.input}
+              />
+              <Text variant="bodySmall" style={styles.hintText}>
+                Amount Delhivery courier must collect from customer on delivery.
               </Text>
             </View>
+          )}
+
+          {/* Declared Consignment Value (4x Rule) & Aggregate Package Summary */}
+          <Surface style={styles.paymentInfoCard} elevation={0}>
+            <View style={styles.paymentRow}>
+              <Text variant="bodySmall" style={{ color: '#475569' }}>Total Items (Quantity):</Text>
+              <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                {itemsCount} {itemsCount === 1 ? 'item' : 'items'}
+              </Text>
+            </View>
+
+            <View style={styles.paymentRow}>
+              <Text variant="bodySmall" style={{ color: '#475569' }}>Actual Group Total:</Text>
+              <Text style={{ fontWeight: '600', color: '#334155' }}>
+                ₹{actualTotal.toLocaleString('en-IN')}
+              </Text>
+            </View>
+
+            <View style={styles.paymentRow}>
+              <View>
+                <Text variant="bodySmall" style={{ fontWeight: '700', color: '#0F172A' }}>
+                  Declared Value (4×):
+                </Text>
+                <Text style={{ fontSize: 10, color: '#64748B' }}>
+                  Courier liability / insurance value
+                </Text>
+              </View>
+              <Chip
+                compact
+                style={{ backgroundColor: '#EEF2FF', height: 24 }}
+                textStyle={{ fontSize: 11, fontWeight: '800', color: '#4338CA' }}
+              >
+                ₹{declaredTotal.toLocaleString('en-IN')}
+              </Chip>
+            </View>
+
+            <View style={styles.paymentRow}>
+              <Text variant="bodySmall" style={{ color: '#475569' }}>Collectible by Courier:</Text>
+              <Text style={{ fontWeight: '700', color: paymentMode === 'COD' ? '#B45309' : '#15803D' }}>
+                {paymentMode === 'COD' ? `₹${(parseFloat(codAmount) || 0).toLocaleString('en-IN')}` : '₹0 (Prepaid - None)'}
+              </Text>
+            </View>
+
             <View style={styles.paymentRow}>
               <Text variant="bodySmall" style={{ color: '#475569' }}>Pickup Window:</Text>
               <Text style={{ fontSize: 11, color: '#0369A1', fontWeight: '600' }}>
@@ -427,6 +514,22 @@ const styles = StyleSheet.create({
   },
   modeTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  prepaidChipActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#16A34A',
+  },
+  prepaidTextActive: {
+    color: '#15803D',
+    fontWeight: '700',
+  },
+  codChipActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D97706',
+  },
+  codTextActive: {
+    color: '#B45309',
     fontWeight: '700',
   },
   twoColRow: {
