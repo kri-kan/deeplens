@@ -15,6 +15,7 @@ public class Warehouse
     public string? Phone { get; set; }
     public string? ContactPerson { get; set; }
     public bool IsCentral { get; set; }
+    public bool IsStarred { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

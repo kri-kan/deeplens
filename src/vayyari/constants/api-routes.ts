@@ -229,6 +229,7 @@ export const API_ROUTES = {
     WAREHOUSE_CREATE: '/api/v1/logistics/warehouses',
     WAREHOUSE_UPDATE: (id: string) => `/api/v1/logistics/warehouses/${id}`,
     WAREHOUSE_DELETE: (id: string) => `/api/v1/logistics/warehouses/${id}`,
+    WAREHOUSE_TOGGLE_STAR: (id: string) => `/api/v1/logistics/warehouses/${id}/toggle-star`,
     ORDERS_LIST: '/api/v1/logistics/orders',
     ORDER_DETAIL: (id: string) => `/api/v1/logistics/orders/${id}`,
     SPLIT_PACKAGES: (orderId: string) => `/api/v1/logistics/orders/${orderId}/packages`,

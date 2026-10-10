@@ -205,7 +205,10 @@ public class OrderIdController : ControllerBase
             request?.HeightCm,
             request?.PaymentMode,
             request?.CodAmount,
-            request?.TotalAmount);
+            request?.TotalAmount,
+            request?.OrderId,
+            request?.Quantity,
+            request?.ProductsDesc);
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -307,6 +310,9 @@ public class GenerateGroupLabelRequest
     public string? PaymentMode { get; set; }
     public decimal? CodAmount { get; set; }
     public decimal? TotalAmount { get; set; }
+    public string? OrderId { get; set; }
+    public int? Quantity { get; set; }
+    public string? ProductsDesc { get; set; }
 }
 
 public class CancelGroupLabelRequest

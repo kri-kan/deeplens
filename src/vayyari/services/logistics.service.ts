@@ -1125,6 +1125,21 @@ export const logisticsService = {
   },
 
   /**
+   * Toggle starred/favorite status for a warehouse facility
+   */
+  toggleWarehouseStar: async (id: string): Promise<boolean> => {
+    try {
+      const res = await productMgmtApiClient.post<{ id: string; isStarred: boolean }>(
+        API_ROUTES.LOGISTICS.WAREHOUSE_TOGGLE_STAR(id)
+      );
+      return res?.isStarred ?? true;
+    } catch (err) {
+      console.warn('Failed to toggle warehouse star:', err);
+      return false;
+    }
+  },
+
+  /**
    * Cancel an active Delhivery shipment / AWB
    */
   cancelDelhiveryAwb: async (awbNumber: string): Promise<boolean> => {

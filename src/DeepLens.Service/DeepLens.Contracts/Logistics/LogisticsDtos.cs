@@ -629,6 +629,9 @@ public class WarehouseDto
     [JsonPropertyName("isCentral")]
     public bool IsCentral { get; set; }
 
+    [JsonPropertyName("isStarred")]
+    public bool IsStarred { get; set; }
+
     [JsonPropertyName("isActive")]
     public bool IsActive { get; set; }
 

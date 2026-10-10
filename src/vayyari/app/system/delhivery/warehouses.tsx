@@ -95,6 +95,27 @@ export default function DelhiveryWarehousesScreen() {
     );
   };
 
+  const handleToggleStar = async (warehouse: DelhiveryWarehouseItem) => {
+    try {
+      const newStarred = await logisticsService.toggleWarehouseStar(warehouse.id);
+      setWarehouses((prev) =>
+        prev
+          .map((w) => (w.id === warehouse.id ? { ...w, isStarred: newStarred } : w))
+          .sort((a, b) => {
+            if (Boolean(b.isStarred) !== Boolean(a.isStarred)) {
+              return Boolean(b.isStarred) ? 1 : -1;
+            }
+            if (Boolean(b.isCentral) !== Boolean(a.isCentral)) {
+              return Boolean(b.isCentral) ? 1 : -1;
+            }
+            return (a.name || '').localeCompare(b.name || '');
+          })
+      );
+    } catch (err: any) {
+      console.warn('Failed to toggle star for warehouse:', err);
+    }
+  };
+
   const handleOpenCreate = () => {
     setEditingWarehouse(null);
     setName('');
@@ -204,6 +225,7 @@ export default function DelhiveryWarehousesScreen() {
           onAddFacility={handleOpenCreate}
           onEditFacility={handleOpenEdit}
           onDeleteFacility={(w) => handleDelete(w.id, w.name)}
+          onToggleStar={handleToggleStar}
           onRefresh={fetchData}
           showHeaderTitle={false}
         />

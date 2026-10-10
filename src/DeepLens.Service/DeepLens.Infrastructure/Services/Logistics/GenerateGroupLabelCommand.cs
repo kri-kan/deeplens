@@ -25,7 +25,10 @@ public record GenerateGroupLabelCommand(
     double? HeightCm = null,
     string? PaymentMode = null,
     decimal? CodAmount = null,
-    decimal? TotalAmount = null) : IRequest<Result<GenerateGroupLabelResponse>>;
+    decimal? TotalAmount = null,
+    string? OrderId = null,
+    int? Quantity = null,
+    string? ProductsDesc = null) : IRequest<Result<GenerateGroupLabelResponse>>;
 
 public record GenerateGroupLabelResponse(
     string OrderGrpId,
@@ -122,7 +125,7 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
             var pickupPhone = resolvedWarehouse?.Phone ?? "9876543210";
 
             // Calculations per user specs
-            var totalItemsCount = group.Items?.Sum(i => i.Quantity) ?? 1;
+            var totalItemsCount = request.Quantity ?? group.Items?.Sum(i => i.Quantity) ?? 1;
             var weightGrams = request.WeightGrams ?? Math.Max(400, totalItemsCount * 400); // 400gm per item rule
             var lengthCm = request.LengthCm ?? 40.0; // 40cm plastic cover rule
             var widthCm = request.WidthCm ?? 25.0;   // 25cm rule
@@ -142,7 +145,8 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
             var actualAmount = group.Items?.Sum(i => i.Subtotal) ?? (order.TotalAmount ?? 0m);
             var totalAmountVal = request.TotalAmount ?? (actualAmount * 4m);
 
-            var productDesc = $"{group.VendorName ?? "Apparel"} ({totalItemsCount} items)";
+            var effectiveOrder = !string.IsNullOrWhiteSpace(request.OrderId) ? request.OrderId : group.OrderGrpId;
+            var productDesc = !string.IsNullOrWhiteSpace(request.ProductsDesc) ? request.ProductsDesc : $"{group.VendorName ?? "Apparel"} ({totalItemsCount} items)";
 
             var payload = new DelhiveryCmuPayload
             {
@@ -159,7 +163,7 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                 {
                     new DelhiveryShipmentDetail
                     {
-                        Order = group.OrderGrpId,
+                        Order = effectiveOrder,
                         Name = order.CustomerName ?? "Customer",
                         Address = !string.IsNullOrWhiteSpace(order.ShippingStreet) ? order.ShippingStreet : (order.CustomerAddress ?? "Main Address"),
                         Pin = !string.IsNullOrWhiteSpace(order.ShippingPincode) ? order.ShippingPincode : "395002",

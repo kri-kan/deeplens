@@ -152,11 +152,12 @@ public class LogisticsRepository : ILogisticsRepository
                 city, state, pincode, phone, 
                 contact_person as ContactPerson, 
                 is_central as IsCentral, 
+                is_starred as IsStarred,
                 is_active as IsActive, 
                 created_at as CreatedAt
             FROM public.warehouses
             WHERE is_active = true
-            ORDER BY is_central DESC, name ASC");
+            ORDER BY is_starred DESC, is_central DESC, name ASC");
 
         return result.ToList();
     }
@@ -172,6 +173,7 @@ public class LogisticsRepository : ILogisticsRepository
                 city, state, pincode, phone, 
                 contact_person as ContactPerson, 
                 is_central as IsCentral, 
+                is_starred as IsStarred,
                 is_active as IsActive, 
                 created_at as CreatedAt
             FROM public.warehouses
@@ -190,6 +192,7 @@ public class LogisticsRepository : ILogisticsRepository
                 city, state, pincode, phone, 
                 contact_person as ContactPerson, 
                 is_central as IsCentral, 
+                is_starred as IsStarred,
                 is_active as IsActive, 
                 created_at as CreatedAt
             FROM public.warehouses
@@ -206,11 +209,11 @@ public class LogisticsRepository : ILogisticsRepository
             INSERT INTO public.warehouses (
                 id, name, code, address_line1, address_line2, 
                 city, state, pincode, phone, contact_person, 
-                is_central, is_active, created_at
+                is_central, is_starred, is_active, created_at
             ) VALUES (
                 @Id, @Name, @Code, @AddressLine1, @AddressLine2, 
                 @City, @State, @Pincode, @Phone, @ContactPerson, 
-                @IsCentral, @IsActive, @CreatedAt
+                @IsCentral, @IsStarred, @IsActive, @CreatedAt
             )",
             new
             {
@@ -225,6 +228,7 @@ public class LogisticsRepository : ILogisticsRepository
                 warehouse.Phone,
                 warehouse.ContactPerson,
                 warehouse.IsCentral,
+                warehouse.IsStarred,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             });
@@ -247,6 +251,7 @@ public class LogisticsRepository : ILogisticsRepository
                 phone = @Phone,
                 contact_person = @ContactPerson,
                 is_central = @IsCentral,
+                is_starred = @IsStarred,
                 is_active = @IsActive
             WHERE id = @Id",
             new
@@ -262,6 +267,7 @@ public class LogisticsRepository : ILogisticsRepository
                 warehouse.Phone,
                 warehouse.ContactPerson,
                 warehouse.IsCentral,
+                warehouse.IsStarred,
                 warehouse.IsActive
             });
 
