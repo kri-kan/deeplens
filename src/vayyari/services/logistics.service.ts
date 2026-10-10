@@ -17,7 +17,9 @@ import {
   Warehouse,
   CreateWarehouseRequest,
   UpdateWarehouseRequest,
-  WarehouseSyncResponse
+  WarehouseSyncResponse,
+  ShippingEstimateRequest,
+  ShippingEstimateResponse
 } from '@/types/logistics';
 
 // Sample mock orders for fallback / local development
@@ -1166,6 +1168,39 @@ export const logisticsService = {
     } catch (err) {
       console.warn('Backend cancelGroupLabel call failed:', err);
       return { success: false, awbNumber };
+    }
+  },
+
+  /**
+   * Calculates shipping charges and transit delivery days based on origin, destination, mode, weight, and COD.
+   */
+  estimateShipping: async (request: ShippingEstimateRequest): Promise<ShippingEstimateResponse> => {
+    try {
+      const response = await searchApiClient.post<ShippingEstimateResponse>(
+        API_ROUTES.LOGISTICS.ESTIMATE_SHIPPING,
+        request
+      );
+      return response;
+    } catch (err) {
+      console.warn('Backend estimateShipping call failed, using client fallback estimation:', err);
+      const weight = Math.max(100, request.weightGrams || 400);
+      const slabs = Math.ceil(weight / 500);
+      const isExpress = request.shippingMode === 'Express';
+      const isCod = request.paymentMode === 'COD';
+      const codSurcharge = isCod ? Math.max(35, Math.round((request.codAmount || 0) * 0.015)) : 0;
+      const baseCost = isExpress ? 85 : 55;
+      const extraCost = (slabs - 1) * (isExpress ? 45 : 35);
+      const totalCost = baseCost + extraCost + codSurcharge;
+      const days = isExpress ? '2 - 3 days' : '3 - 5 days';
+      return {
+        estimatedCost: totalCost,
+        estimatedCostFormatted: `₹${totalCost}`,
+        estimatedMinDays: isExpress ? 2 : 3,
+        estimatedMaxDays: isExpress ? 3 : 5,
+        estimatedDaysFormatted: days,
+        zone: 'National',
+        isServiceable: true,
+      };
     }
   }
 };

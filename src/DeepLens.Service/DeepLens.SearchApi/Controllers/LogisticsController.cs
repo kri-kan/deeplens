@@ -673,6 +673,122 @@ public class LogisticsController : ControllerBase
     }
 
     /// <summary>
+    /// Estimates courier shipping charges and transit delivery days based on origin, destination, mode, weight, and COD.
+    /// POST /api/v1/logistics/estimate
+    /// </summary>
+    [HttpPost("estimate")]
+    public async Task<ActionResult<ShippingEstimateResponse>> EstimateShipping(
+        [FromBody] ShippingEstimateRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var destPin = request.DestinationPincode?.Trim() ?? string.Empty;
+            var originPin = request.OriginPincode?.Trim() ?? "502325";
+            bool isExpress = string.Equals(request.ShippingMode, "Express", StringComparison.OrdinalIgnoreCase);
+            bool isCod = string.Equals(request.PaymentMode, "COD", StringComparison.OrdinalIgnoreCase);
+            int weightGrams = Math.Max(100, request.WeightGrams);
+            int slabs = (int)Math.Ceiling(weightGrams / 500.0);
+
+            string zone = "National";
+            int minDays = 3;
+            int maxDays = 5;
+            decimal baseRate = isExpress ? 95m : 65m;
+            decimal extraRate = isExpress ? 50m : 38m;
+
+            string originPrefix = originPin.Length >= 2 ? originPin.Substring(0, 2) : "50";
+            string destPrefix = destPin.Length >= 2 ? destPin.Substring(0, 2) : "";
+
+            var apTelanganaPrefixes = new HashSet<string> { "50", "51", "52", "53" };
+            var metroPrefixes = new HashSet<string> { "11", "40", "70", "60", "56", "50" };
+            var specialPrefixes = new HashSet<string> { "18", "19", "78", "79" };
+
+            if (!string.IsNullOrEmpty(destPrefix))
+            {
+                if (originPrefix == destPrefix)
+                {
+                    zone = "Intra-City";
+                    baseRate = isExpress ? 50m : 38m;
+                    extraRate = isExpress ? 25m : 20m;
+                    minDays = 1;
+                    maxDays = 2;
+                }
+                else if (apTelanganaPrefixes.Contains(originPrefix) && apTelanganaPrefixes.Contains(destPrefix))
+                {
+                    zone = "Regional (AP/TG)";
+                    baseRate = isExpress ? 65m : 45m;
+                    extraRate = isExpress ? 30m : 25m;
+                    minDays = 1;
+                    maxDays = 2;
+                }
+                else if (metroPrefixes.Contains(originPrefix) && metroPrefixes.Contains(destPrefix))
+                {
+                    zone = "Metro";
+                    baseRate = isExpress ? 85m : 55m;
+                    extraRate = isExpress ? 45m : 35m;
+                    minDays = isExpress ? 1 : 2;
+                    maxDays = isExpress ? 2 : 3;
+                }
+                else if (specialPrefixes.Contains(destPrefix))
+                {
+                    zone = "Special Zone (NE/J&K)";
+                    baseRate = isExpress ? 135m : 85m;
+                    extraRate = isExpress ? 70m : 50m;
+                    minDays = isExpress ? 3 : 5;
+                    maxDays = isExpress ? 5 : 7;
+                }
+                else
+                {
+                    zone = "National";
+                    baseRate = isExpress ? 100m : 68m;
+                    extraRate = isExpress ? 55m : 40m;
+                    minDays = isExpress ? 2 : 3;
+                    maxDays = isExpress ? 3 : 5;
+                }
+            }
+
+            decimal totalCost = baseRate + ((slabs - 1) * extraRate);
+            if (isCod && request.CodAmount > 0)
+            {
+                totalCost += Math.Max(35m, Math.Round(request.CodAmount * 0.015m));
+            }
+
+            bool isServiceable = true;
+            if (destPin.Length == 6)
+            {
+                try
+                {
+                    var pinCheck = await _pincodeService.CheckPincodeAsync(destPin, ct);
+                    if (pinCheck != null && !pinCheck.IsServiceable)
+                    {
+                        isServiceable = false;
+                    }
+                }
+                catch
+                {
+                    // Ignore transient error for estimate
+                }
+            }
+
+            return Ok(new ShippingEstimateResponse
+            {
+                EstimatedCost = totalCost,
+                EstimatedCostFormatted = $"₹{totalCost:N0}",
+                EstimatedMinDays = minDays,
+                EstimatedMaxDays = maxDays,
+                EstimatedDaysFormatted = $"{minDays}-{maxDays} days",
+                Zone = zone,
+                IsServiceable = isServiceable
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to calculate shipping estimate");
+            return StatusCode(500, new { message = "Failed to calculate estimate", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Tracks shipment live scans and EDD by AWB number.
     /// GET /api/v1/logistics/track/{awb}
     /// </summary>

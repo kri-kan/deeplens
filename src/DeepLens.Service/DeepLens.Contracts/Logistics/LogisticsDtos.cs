@@ -920,3 +920,48 @@ public class TrackingScanEventDto
     [JsonPropertyName("instructions")]
     public string? Instructions { get; set; }
 }
+
+public class ShippingEstimateRequest
+{
+    [JsonPropertyName("originPincode")]
+    public string? OriginPincode { get; set; }
+
+    [JsonPropertyName("destinationPincode")]
+    public string DestinationPincode { get; set; } = string.Empty;
+
+    [JsonPropertyName("shippingMode")]
+    public string ShippingMode { get; set; } = "Surface";
+
+    [JsonPropertyName("weightGrams")]
+    public int WeightGrams { get; set; } = 400;
+
+    [JsonPropertyName("paymentMode")]
+    public string PaymentMode { get; set; } = "Prepaid";
+
+    [JsonPropertyName("codAmount")]
+    public decimal CodAmount { get; set; } = 0;
+}
+
+public class ShippingEstimateResponse
+{
+    [JsonPropertyName("estimatedCost")]
+    public decimal EstimatedCost { get; set; }
+
+    [JsonPropertyName("estimatedCostFormatted")]
+    public string EstimatedCostFormatted { get; set; } = string.Empty;
+
+    [JsonPropertyName("estimatedMinDays")]
+    public int EstimatedMinDays { get; set; }
+
+    [JsonPropertyName("estimatedMaxDays")]
+    public int EstimatedMaxDays { get; set; }
+
+    [JsonPropertyName("estimatedDaysFormatted")]
+    public string EstimatedDaysFormatted { get; set; } = string.Empty;
+
+    [JsonPropertyName("zone")]
+    public string Zone { get; set; } = "National";
+
+    [JsonPropertyName("isServiceable")]
+    public bool IsServiceable { get; set; } = true;
+}
