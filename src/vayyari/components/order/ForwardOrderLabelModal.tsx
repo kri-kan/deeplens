@@ -27,6 +27,7 @@ import {
   LuShare2,
   LuExternalLink,
   LuStar,
+  LuReceipt,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { logisticsService } from '@/services/logistics.service';
@@ -165,6 +166,14 @@ export function ForwardOrderLabelModal({
   const [isAuditExpanded, setIsAuditExpanded] = useState<boolean>(false);
   const [copiedAwb, setCopiedAwb] = useState(false);
 
+  // Shipping Rate Estimation state
+  const [estimating, setEstimating] = useState(false);
+  const [estimateResult, setEstimateResult] = useState<{
+    estimatedCostFormatted: string;
+    estimatedDaysFormatted: string;
+    zone: string;
+  } | null>(null);
+
   useEffect(() => {
     if (visible) {
       if (initialAwb || initialLabelUrl) {
@@ -173,6 +182,7 @@ export function ForwardOrderLabelModal({
         setGeneratedLabelUrl(initialLabelUrl || '');
       } else {
         setViewMode('form');
+        setEstimateResult(null);
         setCustomOrderId(orderGrpId || '');
         setQuantity((itemsCount || 1).toString());
         setProductDesc(
@@ -293,6 +303,31 @@ export function ForwardOrderLabelModal({
     } catch (err: any) {
       console.warn('Failed to toggle warehouse star:', err);
       Alert.alert('Error', err?.message || 'Could not toggle star status');
+    }
+  };
+
+  const handleEstimateShipping = async () => {
+    try {
+      setEstimating(true);
+      const parsedWeight = parseInt(weightGrams, 10) || (Math.max(1, itemsCount) * 400);
+      const parsedCod = paymentMode === 'COD' ? parseFloat(codAmount) || groupTotal : 0;
+      const res = await logisticsService.estimateShipping({
+        originPincode: selectedWarehouse?.pincode || '502325',
+        destinationPincode: recipientPincode.trim(),
+        shippingMode,
+        weightGrams: parsedWeight,
+        paymentMode,
+        codAmount: parsedCod,
+      });
+      setEstimateResult({
+        estimatedCostFormatted: res.estimatedCostFormatted,
+        estimatedDaysFormatted: res.estimatedDaysFormatted,
+        zone: res.zone,
+      });
+    } catch (err: any) {
+      console.warn('Failed to estimate shipping:', err);
+    } finally {
+      setEstimating(false);
     }
   };
 
@@ -508,22 +543,6 @@ export function ForwardOrderLabelModal({
                1. FORM VIEW: Default values filled & user editable
                ───────────────────────────────────────────────────────────── */
             <YStack gap={14}>
-              {/* Info banner */}
-              <XStack
-                backgroundColor={`${tokens.accent}10`}
-                borderWidth={1}
-                borderColor={`${tokens.accent}30`}
-                borderRadius={tokens.radius.sm}
-                padding={12}
-                alignItems="center"
-                gap={10}
-              >
-                <LuBox size={18} color={tokens.accent} />
-                <Text fontSize={12} color={tokens.text} flex={1} lineHeight={16}>
-                  Review default forward order values for Delhivery label generation. User may modify any field before manifesting.
-                </Text>
-              </XStack>
-
               {/* 1. Pickup Facility / Warehouse */}
               <YStack
                 backgroundColor={tokens.surface}
@@ -598,7 +617,241 @@ export function ForwardOrderLabelModal({
                 )}
               </YStack>
 
-              {/* 2. Shipping Mode & Package Weight / Dimensions */}
+              {/* 2. Payment Mode & Collectible Cash */}
+              <YStack
+                backgroundColor={tokens.surface}
+                borderRadius={tokens.radius.md}
+                borderWidth={1}
+                borderColor={tokens.border}
+                padding={14}
+                gap={10}
+              >
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                  2. PAYMENT & COLLECTIBLE CASH
+                </Text>
+
+                {/* Side-by-side row: Left half is Payment Mode buttons, Right half is COD Amount */}
+                <XStack gap={10} alignItems="flex-start">
+                  {/* Left half: Prepaid and COD buttons */}
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                      Payment Mode
+                    </Text>
+                    <XStack gap={6} height={38}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setPaymentMode('Prepaid')}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          borderRadius: tokens.radius.sm,
+                          borderWidth: 1.5,
+                          borderColor: paymentMode === 'Prepaid' ? '#15803D' : tokens.border,
+                          backgroundColor: paymentMode === 'Prepaid' ? '#DCFCE7' : tokens.surfaceRaised,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text
+                          fontSize={11}
+                          fontWeight={paymentMode === 'Prepaid' ? '800' : '600'}
+                          color={paymentMode === 'Prepaid' ? '#15803D' : tokens.text}
+                        >
+                          Prepaid
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setPaymentMode('COD')}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          borderRadius: tokens.radius.sm,
+                          borderWidth: 1.5,
+                          borderColor: paymentMode === 'COD' ? '#B45309' : tokens.border,
+                          backgroundColor: paymentMode === 'COD' ? '#FEF3C7' : tokens.surfaceRaised,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text
+                          fontSize={11}
+                          fontWeight={paymentMode === 'COD' ? '800' : '600'}
+                          color={paymentMode === 'COD' ? '#B45309' : tokens.text}
+                        >
+                          COD
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                  </YStack>
+
+                  {/* Right half: COD Amount field */}
+                  <YStack flex={1} gap={4}>
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                        COD Amount {paymentMode === 'COD' ? '*' : ''}
+                      </Text>
+                      {paymentMode === 'COD' && (
+                        <Text fontSize={9} color="#B45309" fontWeight="700">
+                          Mandatory
+                        </Text>
+                      )}
+                    </XStack>
+
+                    {paymentMode === 'COD' ? (
+                      <XStack
+                        height={38}
+                        borderRadius={tokens.radius.sm}
+                        borderWidth={1}
+                        borderColor={tokens.border}
+                        backgroundColor={tokens.background}
+                        alignItems="center"
+                        paddingHorizontal={8}
+                      >
+                        <Text fontSize={12} fontWeight="800" color={tokens.textMuted} marginRight={3}>
+                          ₹
+                        </Text>
+                        <TextInput
+                          value={codAmount}
+                          onChangeText={setCodAmount}
+                          keyboardType="numeric"
+                          placeholder="Amount"
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            fontWeight: '800',
+                            color: tokens.text,
+                          }}
+                        />
+                      </XStack>
+                    ) : (
+                      <XStack
+                        height={38}
+                        borderRadius={tokens.radius.sm}
+                        borderWidth={1}
+                        borderColor={`${tokens.success}30`}
+                        backgroundColor={`${tokens.success}10`}
+                        alignItems="center"
+                        paddingHorizontal={8}
+                        gap={6}
+                      >
+                        <LuCheck size={13} color={tokens.success} />
+                        <Text fontSize={11} fontWeight="700" color={tokens.success}>
+                          ₹0 (Prepaid)
+                        </Text>
+                      </XStack>
+                    )}
+                  </YStack>
+                </XStack>
+              </YStack>
+
+              {/* 3. Recipient Delivery Address */}
+              <YStack
+                backgroundColor={tokens.surface}
+                borderRadius={tokens.radius.md}
+                borderWidth={1}
+                borderColor={tokens.border}
+                padding={14}
+                gap={10}
+              >
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                  3. RECIPIENT DELIVERY ADDRESS
+                </Text>
+
+                <XStack gap={10}>
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                      Customer Name
+                    </Text>
+                    <TextInput
+                      value={recipientName}
+                      onChangeText={setRecipientName}
+                      placeholder="Customer Name"
+                      style={{
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1,
+                        borderColor: tokens.border,
+                        backgroundColor: tokens.background,
+                        paddingHorizontal: 10,
+                        fontSize: 12,
+                        color: tokens.text,
+                      }}
+                    />
+                  </YStack>
+
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                      Phone Number
+                    </Text>
+                    <TextInput
+                      value={recipientPhone}
+                      onChangeText={setRecipientPhone}
+                      placeholder="10-digit phone"
+                      keyboardType="phone-pad"
+                      style={{
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1,
+                        borderColor: tokens.border,
+                        backgroundColor: tokens.background,
+                        paddingHorizontal: 10,
+                        fontSize: 12,
+                        color: tokens.text,
+                      }}
+                    />
+                  </YStack>
+                </XStack>
+
+                <YStack gap={4}>
+                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                    Street Address & Landmarks
+                  </Text>
+                  <TextInput
+                    value={recipientAddress}
+                    onChangeText={setRecipientAddress}
+                    placeholder="House / Flat, Street, Area"
+                    multiline
+                    style={{
+                      height: 54,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.background,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      fontSize: 12,
+                      color: tokens.text,
+                      textAlignVertical: 'top',
+                    }}
+                  />
+                </YStack>
+
+                <YStack gap={4}>
+                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                    Pincode
+                  </Text>
+                  <TextInput
+                    value={recipientPincode}
+                    onChangeText={setRecipientPincode}
+                    placeholder="6-digit PIN"
+                    keyboardType="numeric"
+                    style={{
+                      height: 38,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.background,
+                      paddingHorizontal: 10,
+                      fontSize: 12,
+                      color: tokens.text,
+                    }}
+                  />
+                </YStack>
+              </YStack>
+
+              {/* 4. Shipping Specifications */}
               <YStack
                 backgroundColor={tokens.surface}
                 borderRadius={tokens.radius.md}
@@ -608,7 +861,7 @@ export function ForwardOrderLabelModal({
                 gap={12}
               >
                 <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
-                  2. SHIPPING SPECIFICATIONS
+                  4. SHIPPING SPECIFICATIONS
                 </Text>
 
                 {/* Order ID */}
@@ -876,239 +1129,78 @@ export function ForwardOrderLabelModal({
                     </Text>
                   </YStack>
                 </XStack>
-              </YStack>
 
-              {/* 3. Recipient Delivery Address */}
-              <YStack
-                backgroundColor={tokens.surface}
-                borderRadius={tokens.radius.md}
-                borderWidth={1}
-                borderColor={tokens.border}
-                padding={14}
-                gap={10}
-              >
-                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
-                  3. RECIPIENT DELIVERY ADDRESS
-                </Text>
-
-                <XStack gap={10}>
-                  <YStack flex={1} gap={4}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                      Customer Name
-                    </Text>
-                    <TextInput
-                      value={recipientName}
-                      onChangeText={setRecipientName}
-                      placeholder="Customer Name"
-                      style={{
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1,
-                        borderColor: tokens.border,
-                        backgroundColor: tokens.background,
-                        paddingHorizontal: 10,
-                        fontSize: 12,
-                        color: tokens.text,
-                      }}
-                    />
-                  </YStack>
-
-                  <YStack flex={1} gap={4}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                      Phone Number
-                    </Text>
-                    <TextInput
-                      value={recipientPhone}
-                      onChangeText={setRecipientPhone}
-                      placeholder="10-digit phone"
-                      keyboardType="phone-pad"
-                      style={{
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1,
-                        borderColor: tokens.border,
-                        backgroundColor: tokens.background,
-                        paddingHorizontal: 10,
-                        fontSize: 12,
-                        color: tokens.text,
-                      }}
-                    />
-                  </YStack>
-                </XStack>
-
-                <YStack gap={4}>
-                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                    Street Address & Landmarks
-                  </Text>
-                  <TextInput
-                    value={recipientAddress}
-                    onChangeText={setRecipientAddress}
-                    placeholder="House / Flat, Street, Area"
-                    multiline
-                    style={{
-                      height: 54,
-                      borderRadius: tokens.radius.sm,
-                      borderWidth: 1,
-                      borderColor: tokens.border,
-                      backgroundColor: tokens.background,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      fontSize: 12,
-                      color: tokens.text,
-                      textAlignVertical: 'top',
-                    }}
-                  />
-                </YStack>
-
-                <YStack gap={4}>
-                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                    Pincode
-                  </Text>
-                  <TextInput
-                    value={recipientPincode}
-                    onChangeText={setRecipientPincode}
-                    placeholder="6-digit PIN"
-                    keyboardType="numeric"
-                    style={{
-                      height: 38,
-                      borderRadius: tokens.radius.sm,
-                      borderWidth: 1,
-                      borderColor: tokens.border,
-                      backgroundColor: tokens.background,
-                      paddingHorizontal: 10,
-                      fontSize: 12,
-                      color: tokens.text,
-                    }}
-                  />
-                </YStack>
-              </YStack>
-
-              {/* 4. Payment Mode & Collectible Cash */}
-              <YStack
-                backgroundColor={tokens.surface}
-                borderRadius={tokens.radius.md}
-                borderWidth={1}
-                borderColor={tokens.border}
-                padding={14}
-                gap={10}
-              >
-                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
-                  4. PAYMENT & COLLECTIBLE CASH
-                </Text>
-
-                {/* Side-by-side row: Left half is Payment Mode buttons, Right half is COD Amount */}
-                <XStack gap={10} alignItems="flex-start">
-                  {/* Left half: Prepaid and COD buttons */}
-                  <YStack flex={1} gap={4}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                      Payment Mode
-                    </Text>
-                    <XStack gap={6} height={38}>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => setPaymentMode('Prepaid')}
-                        style={({ pressed }) => ({
-                          flex: 1,
-                          borderRadius: tokens.radius.sm,
-                          borderWidth: 1.5,
-                          borderColor: paymentMode === 'Prepaid' ? '#15803D' : tokens.border,
-                          backgroundColor: paymentMode === 'Prepaid' ? '#DCFCE7' : tokens.surfaceRaised,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: pressed ? 0.8 : 1,
-                        })}
-                      >
-                        <Text
-                          fontSize={11}
-                          fontWeight={paymentMode === 'Prepaid' ? '800' : '600'}
-                          color={paymentMode === 'Prepaid' ? '#15803D' : tokens.text}
-                        >
-                          Prepaid
+                {/* Rate Estimation Row: Cost and Days on Left, Estimate Button on Right taking half-width */}
+                <XStack
+                  backgroundColor={tokens.surfaceRaised}
+                  borderRadius={tokens.radius.sm}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                  padding={10}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  gap={10}
+                >
+                  {/* Left half: Estimation Results (Cost & Days) */}
+                  <YStack flex={1} gap={2} justifyContent="center">
+                    {estimating ? (
+                      <XStack alignItems="center" gap={6}>
+                        <ActivityIndicator size="small" color={tokens.accent} />
+                        <Text fontSize={11} color={tokens.textMuted}>
+                          Estimating rate...
                         </Text>
-                      </Pressable>
-
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => setPaymentMode('COD')}
-                        style={({ pressed }) => ({
-                          flex: 1,
-                          borderRadius: tokens.radius.sm,
-                          borderWidth: 1.5,
-                          borderColor: paymentMode === 'COD' ? '#B45309' : tokens.border,
-                          backgroundColor: paymentMode === 'COD' ? '#FEF3C7' : tokens.surfaceRaised,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: pressed ? 0.8 : 1,
-                        })}
-                      >
-                        <Text
-                          fontSize={11}
-                          fontWeight={paymentMode === 'COD' ? '800' : '600'}
-                          color={paymentMode === 'COD' ? '#B45309' : tokens.text}
-                        >
-                          COD
-                        </Text>
-                      </Pressable>
-                    </XStack>
-                  </YStack>
-
-                  {/* Right half: COD Amount field */}
-                  <YStack flex={1} gap={4}>
-                    <XStack justifyContent="space-between" alignItems="center">
-                      <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                        COD Amount {paymentMode === 'COD' ? '*' : ''}
-                      </Text>
-                      {paymentMode === 'COD' && (
-                        <Text fontSize={9} color="#B45309" fontWeight="700">
-                          Mandatory
-                        </Text>
-                      )}
-                    </XStack>
-
-                    {paymentMode === 'COD' ? (
-                      <XStack
-                        height={38}
-                        borderRadius={tokens.radius.sm}
-                        borderWidth={1}
-                        borderColor={tokens.border}
-                        backgroundColor={tokens.background}
-                        alignItems="center"
-                        paddingHorizontal={8}
-                      >
-                        <Text fontSize={12} fontWeight="800" color={tokens.textMuted} marginRight={3}>
-                          ₹
-                        </Text>
-                        <TextInput
-                          value={codAmount}
-                          onChangeText={setCodAmount}
-                          keyboardType="numeric"
-                          placeholder="Amount"
-                          style={{
-                            flex: 1,
-                            fontSize: 12,
-                            fontWeight: '800',
-                            color: tokens.text,
-                          }}
-                        />
                       </XStack>
+                    ) : estimateResult ? (
+                      <YStack gap={1}>
+                        <XStack alignItems="baseline" gap={6}>
+                          <Text fontSize={15} fontWeight="900" color={tokens.text}>
+                            {estimateResult.estimatedCostFormatted}
+                          </Text>
+                          <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+                            {estimateResult.estimatedDaysFormatted}
+                          </Text>
+                        </XStack>
+                        <Text fontSize={9} color={tokens.textMuted}>
+                          Delhivery {shippingMode} • {estimateResult.zone}
+                        </Text>
+                      </YStack>
                     ) : (
-                      <XStack
-                        height={38}
-                        borderRadius={tokens.radius.sm}
-                        borderWidth={1}
-                        borderColor={`${tokens.success}30`}
-                        backgroundColor={`${tokens.success}10`}
-                        alignItems="center"
-                        paddingHorizontal={8}
-                        gap={6}
-                      >
-                        <LuCheck size={13} color={tokens.success} />
-                        <Text fontSize={11} fontWeight="700" color={tokens.success}>
-                          ₹0 (Prepaid)
+                      <YStack gap={1}>
+                        <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                          Courier Rate Estimate
                         </Text>
-                      </XStack>
+                        <Text fontSize={10} color={tokens.textMuted}>
+                          Est. charges & transit days
+                        </Text>
+                      </YStack>
                     )}
                   </YStack>
+
+                  {/* Right half: Estimate Button taking half-width */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Calculate shipping rate estimate"
+                    disabled={estimating}
+                    onPress={handleEstimateShipping}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      height: 38,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1.5,
+                      borderColor: tokens.accent,
+                      backgroundColor: pressed ? `${tokens.accent}25` : `${tokens.accent}12`,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                      opacity: estimating ? 0.7 : 1,
+                    })}
+                  >
+                    <LuReceipt size={14} color={tokens.accent} />
+                    <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                      {estimateResult ? 'RE-ESTIMATE' : 'ESTIMATE RATE'}
+                    </Text>
+                  </Pressable>
                 </XStack>
               </YStack>
 

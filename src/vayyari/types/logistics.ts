@@ -300,3 +300,22 @@ export interface WarehouseSyncResponse {
   warehouses: Warehouse[];
   syncedAt: string;
 }
+
+export interface ShippingEstimateRequest {
+  originPincode?: string;
+  destinationPincode: string;
+  shippingMode: 'Surface' | 'Express';
+  weightGrams: number;
+  paymentMode: 'Prepaid' | 'COD';
+  codAmount?: number;
+}
+
+export interface ShippingEstimateResponse {
+  estimatedCost: number;
+  estimatedCostFormatted: string;
+  estimatedMinDays: number;
+  estimatedMaxDays: number;
+  estimatedDaysFormatted: string;
+  zone: string;
+  isServiceable: boolean;
+}
