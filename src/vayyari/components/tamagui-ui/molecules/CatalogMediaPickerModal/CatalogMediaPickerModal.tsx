@@ -205,17 +205,10 @@ export async function resolveProductTitleFromSku(sku: string): Promise<string | 
       if (res.products[0]?.title) return res.products[0].title;
     }
   } catch (err) {
-    console.warn('resolveProductTitleFromSku: Failed API lookup, falling back to mock products', err);
+    console.warn('resolveProductTitleFromSku: Failed API lookup', err);
   }
 
-  const q = trimmed.toLowerCase();
-  const mockMatch = MOCK_CATALOG_PRODUCTS.find(
-    (p) =>
-      p.productCode?.toLowerCase() === q ||
-      p.productCode?.toLowerCase().includes(q) ||
-      p.title?.toLowerCase().includes(q)
-  );
-  return mockMatch?.title || null;
+  return null;
 }
 
 /**
@@ -329,30 +322,11 @@ export function CatalogMediaPickerModal({
       if (res && Array.isArray(res.products) && res.products.length > 0) {
         setProducts(res.products);
       } else {
-        // Filter mock items if backend returns empty or during offline dev
-        const filtered = MOCK_CATALOG_PRODUCTS.filter((p) => {
-          if (!trimmed) return true;
-          const q = trimmed.toLowerCase();
-          return (
-            p.title.toLowerCase().includes(q) ||
-            p.productCode.toLowerCase().includes(q) ||
-            (p.category && p.category.toLowerCase().includes(q))
-          );
-        });
-        setProducts(filtered);
+        setProducts([]);
       }
     } catch (err) {
-      console.warn('CatalogMediaPickerModal: Failed to fetch catalog from API, falling back to mock data', err);
-      const trimmed = query.trim().toLowerCase();
-      const filtered = MOCK_CATALOG_PRODUCTS.filter((p) => {
-        if (!trimmed) return true;
-        return (
-          p.title.toLowerCase().includes(trimmed) ||
-          p.productCode.toLowerCase().includes(trimmed) ||
-          (p.category && p.category.toLowerCase().includes(trimmed))
-        );
-      });
-      setProducts(filtered);
+      console.warn('CatalogMediaPickerModal: Failed to fetch catalog from API', err);
+      setProducts([]);
     } finally {
       // Allow React & React Native layout / paint cycle to complete before dismissing shimmer
       requestAnimationFrame(() => {
