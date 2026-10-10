@@ -17,6 +17,8 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Visual intent controlling danger vs alert coloring */
   intent?: 'critical' | 'attention' | 'info';
+  /** Optional custom icon node */
+  icon?: React.ReactNode;
   /** Callback fired when the user confirms the action */
   onConfirm: () => void;
   /** Callback fired when the user cancels or dismisses the prompt */
@@ -30,6 +32,7 @@ export function ConfirmDialog({
   confirmLabel = 'Delete',
   cancelLabel = 'Cancel',
   intent = 'critical',
+  icon,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -107,7 +110,9 @@ export function ConfirmDialog({
               alignItems="center"
               justifyContent="center"
             >
-              {intent === 'critical' ? (
+              {icon ? (
+                icon
+              ) : intent === 'critical' ? (
                 <LuTrash2 size={20} color={intentColor.text} />
               ) : intent === 'attention' ? (
                 <LuTriangleAlert size={20} color={intentColor.text} />
