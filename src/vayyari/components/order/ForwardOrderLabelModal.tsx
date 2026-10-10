@@ -552,19 +552,43 @@ export function ForwardOrderLabelModal({
   };
 
   const handleOpenPdfViewer = async () => {
-    const rawUrl = generatedLabelUrl || (initialLabelUrl ? initialLabelUrl : '');
+    const rawUrl =
+      generatedLabelUrl ||
+      initialLabelUrl ||
+      (generatedAwb ? `labels/${generatedAwb}.pdf` : '');
     const resolvedUrl = resolveLabelUrl(rawUrl);
-    if (!resolvedUrl) return;
+    if (!resolvedUrl) {
+      setFeedbackDialog({
+        visible: true,
+        title: 'No Label Document',
+        message: 'No PDF shipping label is attached to this order.',
+        intent: 'attention',
+        singleButton: true,
+      });
+      return;
+    }
     await openPdfViewer(resolvedUrl, `Delhivery Label ${generatedAwb}`);
   };
 
   const handleSharePdf = async () => {
-    const rawUrl = generatedLabelUrl || (initialLabelUrl ? initialLabelUrl : '');
+    const rawUrl =
+      generatedLabelUrl ||
+      initialLabelUrl ||
+      (generatedAwb ? `labels/${generatedAwb}.pdf` : '');
     const resolvedUrl = resolveLabelUrl(rawUrl);
-    if (resolvedUrl) {
-      await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
+    if (!resolvedUrl) {
+      setFeedbackDialog({
+        visible: true,
+        title: 'No Label Document',
+        message: 'No PDF shipping label is attached to this order.',
+        intent: 'attention',
+        singleButton: true,
+      });
+      return;
     }
+    await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
   };
+
 
   return (
     <YStack flex={1} backgroundColor={tokens.background} paddingTop={insets.top}>

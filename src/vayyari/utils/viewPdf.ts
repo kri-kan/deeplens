@@ -1,9 +1,11 @@
-import { Platform, Linking, Alert } from 'react-native';
-import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
+import { Platform, Alert } from 'react-native';
+import { shareImageUri } from './shareImage';
 
 /**
- * Opens a shipping label PDF reliably in the device's default browser or PDF reader.
- * Uses direct HTTP URL so Android/Chrome handles download & print preview natively.
+ * Opens a shipping label PDF reliably on the device.
+ * On web: opens in a new browser tab.
+ * On mobile (Android / iOS): uses shareImageUri which safely caches the PDF
+ * and grants read URI permissions to system viewers and print services.
  */
 export async function openPdfViewer(url?: string | null, title?: string): Promise<void> {
   if (!url) {
@@ -17,28 +19,12 @@ export async function openPdfViewer(url?: string | null, title?: string): Promis
       return;
     }
 
-    // Try opening via external browser directly (Chrome, Samsung Internet, Drive PDF)
-    // Linking.openURL on a direct HTTP/HTTPS PDF URL prompts the system app chooser:
-    // Chrome, Drive PDF Viewer, Samsung Print Service, etc.
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-      return;
-    }
-
-    // Fallback: in-app browser
-    await openBrowserAsync(url, {
-      presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
-      toolbarColor: '#0F172A',
-    });
+    // On mobile devices, shareImageUri handles download, caching,
+    // FileProvider URI resolution, and FLAG_GRANT_READ_URI_PERMISSION seamlessly.
+    await shareImageUri(url, title || 'Delhivery Shipping Label');
   } catch (err: any) {
-    console.warn('[openPdfViewer] Linking failed, trying openBrowserAsync:', err);
-    try {
-      await openBrowserAsync(url, {
-        presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
-      });
-    } catch {
-      Alert.alert('Unable to Open PDF', 'Please check your internet connection or PDF viewer app.');
-    }
+    console.warn('[openPdfViewer] Failed to open PDF viewer:', err);
+    Alert.alert('Unable to Open PDF', 'Please check your connection or PDF viewer app.');
   }
 }
+
