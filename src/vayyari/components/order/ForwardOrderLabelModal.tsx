@@ -9,7 +9,9 @@ import {
   Alert,
   Platform,
   Linking,
+  Dimensions,
 } from 'react-native';
+import { ZoomableImage } from '@/components/ui/ZoomableImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
 import * as Clipboard from 'expo-clipboard';
@@ -701,6 +703,18 @@ export function ForwardOrderLabelModal({
                       <Text fontSize={13} fontWeight="700" color={tokens.text} flex={1}>
                         {selectedWarehouse.name}
                       </Text>
+                      {selectedWarehouse.alias ? (
+                        <XStack
+                          backgroundColor="#E0F2FE"
+                          paddingHorizontal={6}
+                          paddingVertical={2}
+                          borderRadius={4}
+                        >
+                          <Text fontSize={9.5} fontWeight="700" color="#0369A1">
+                            🏷️ {selectedWarehouse.alias}
+                          </Text>
+                        </XStack>
+                      ) : null}
                     </XStack>
                     <Text fontSize={11} color={tokens.textMuted}>
                       {[selectedWarehouse.city, selectedWarehouse.state, selectedWarehouse.pincode]
@@ -1893,6 +1907,18 @@ export function ForwardOrderLabelModal({
                             <Text fontSize={12} fontWeight="700" color={tokens.text} flex={1}>
                               {wh.name}
                             </Text>
+                            {wh.alias ? (
+                              <XStack
+                                backgroundColor="#E0F2FE"
+                                paddingHorizontal={5}
+                                paddingVertical={2}
+                                borderRadius={3}
+                              >
+                                <Text fontSize={9} fontWeight="700" color="#0369A1">
+                                  🏷️ {wh.alias}
+                                </Text>
+                              </XStack>
+                            ) : null}
                             {wh.isCentral && (
                               <XStack
                                 backgroundColor="#FEF3C7"
@@ -2006,37 +2032,22 @@ export function ForwardOrderLabelModal({
               </XStack>
             </XStack>
 
-            {/* High-res Thermal Label Canvas */}
-            <ScrollView
-              contentContainerStyle={{
-                flexGrow: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 16,
-              }}
-              maximumZoomScale={3.0}
-              minimumZoomScale={1.0}
-              showsVerticalScrollIndicator={false}
+            {/* High-res Thermal Label Canvas with Native Pinch, Pan, and Double-Tap Zoom */}
+            <YStack
+              flex={1}
+              alignItems="center"
+              justifyContent="center"
+              padding={16}
+              backgroundColor="#0F172A"
             >
               {resolvedPreviewImageUrl ? (
-                <YStack
-                  backgroundColor="#FFFFFF"
-                  borderRadius={8}
-                  overflow="hidden"
-                  shadowColor="#000"
-                  shadowOffset={{ width: 0, height: 4 }}
-                  shadowOpacity={0.3}
-                  shadowRadius={8}
-                  elevation={8}
-                  style={{ width: '100%', maxWidth: 440, aspectRatio: 4 / 6 }}
-                >
-                  <Image
-                    source={{ uri: resolvedPreviewImageUrl }}
-                    style={{ width: '100%', height: '100%' }}
-                    contentFit="contain"
-                    priority="high"
-                  />
-                </YStack>
+                <ZoomableImage
+                  uri={resolvedPreviewImageUrl}
+                  containerWidth={Dimensions.get('window').width}
+                  containerHeight={Dimensions.get('window').height - 180}
+                  contentFit="contain"
+                  isActive={showFullPreviewModal}
+                />
               ) : (
                 <YStack alignItems="center" justifyContent="center" gap={12}>
                   <LuFileText size={48} color="#94A3B8" />
@@ -2045,7 +2056,7 @@ export function ForwardOrderLabelModal({
                   </Text>
                 </YStack>
               )}
-            </ScrollView>
+            </YStack>
 
             {/* Bottom Bar with Actions */}
             <XStack
