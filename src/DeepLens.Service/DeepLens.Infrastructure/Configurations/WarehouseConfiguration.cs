@@ -15,6 +15,7 @@ public class WarehouseConfiguration : IEntityTypeConfiguration<Warehouse>
         builder.Property(x => x.Code).IsRequired();
         builder.HasIndex(x => x.Code).IsUnique();
         builder.Property(x => x.IsCentral).HasDefaultValue(false);
+        builder.Property(x => x.IsStarred).HasDefaultValue(false);
         builder.Property(x => x.IsActive).HasDefaultValue(true);
         builder.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
     }

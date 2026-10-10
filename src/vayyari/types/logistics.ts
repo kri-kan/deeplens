@@ -260,6 +260,7 @@ export interface Warehouse {
   phone?: string;
   contactPerson?: string;
   isCentral: boolean;
+  isStarred?: boolean;
   isActive: boolean;
   createdAt: string;
 }

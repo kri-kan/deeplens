@@ -41,6 +41,8 @@ export interface DelhiveryWarehouseItem {
   contact_person?: string;
   isCentral?: boolean;
   is_central?: boolean;
+  isStarred?: boolean;
+  is_starred?: boolean;
   isActive?: boolean;
   is_active?: boolean;
   registeredWithDelhivery?: boolean;
@@ -60,6 +62,7 @@ export interface DelhiveryWarehousesViewProps {
   onAddFacility?: () => void;
   onEditFacility?: (warehouse: DelhiveryWarehouseItem) => void;
   onDeleteFacility?: (warehouse: DelhiveryWarehouseItem) => void;
+  onToggleStar?: (warehouse: DelhiveryWarehouseItem) => void;
   onRefresh?: () => void;
   showHeaderTitle?: boolean;
   onBack?: () => void;
@@ -76,6 +79,7 @@ export function DelhiveryWarehousesView({
   onAddFacility,
   onEditFacility,
   onDeleteFacility,
+  onToggleStar,
   onRefresh,
   showHeaderTitle = false,
   onBack,
@@ -112,28 +116,40 @@ export function DelhiveryWarehousesView({
   };
 
   const filteredWarehouses = useMemo(() => {
-    if (!activeQuery.trim()) {
-      return warehouses;
-    }
-    const q = activeQuery.toLowerCase().trim();
-    return warehouses.filter((item) => {
-      const name = item.name?.toLowerCase() || '';
-      const city = item.city?.toLowerCase() || '';
-      const state = item.state?.toLowerCase() || '';
-      const pincode = item.pincode?.toLowerCase() || '';
-      const contact = (item.contactPerson || item.contact_person || '').toLowerCase();
-      const phone = item.phone?.toLowerCase() || '';
-      const address1 = (item.addressLine1 || item.address_line1 || '').toLowerCase();
+    let list = warehouses;
+    if (activeQuery.trim()) {
+      const q = activeQuery.toLowerCase().trim();
+      list = warehouses.filter((item) => {
+        const name = item.name?.toLowerCase() || '';
+        const city = item.city?.toLowerCase() || '';
+        const state = item.state?.toLowerCase() || '';
+        const pincode = item.pincode?.toLowerCase() || '';
+        const contact = (item.contactPerson || item.contact_person || '').toLowerCase();
+        const phone = item.phone?.toLowerCase() || '';
+        const address1 = (item.addressLine1 || item.address_line1 || '').toLowerCase();
 
-      return (
-        name.includes(q) ||
-        city.includes(q) ||
-        state.includes(q) ||
-        pincode.includes(q) ||
-        contact.includes(q) ||
-        phone.includes(q) ||
-        address1.includes(q)
-      );
+        return (
+          name.includes(q) ||
+          city.includes(q) ||
+          state.includes(q) ||
+          pincode.includes(q) ||
+          contact.includes(q) ||
+          phone.includes(q) ||
+          address1.includes(q)
+        );
+      });
+    }
+
+    return [...list].sort((a, b) => {
+      const aStarred = Boolean(a.isStarred ?? a.is_starred);
+      const bStarred = Boolean(b.isStarred ?? b.is_starred);
+      if (aStarred !== bStarred) return bStarred ? 1 : -1;
+
+      const aCentral = Boolean(a.isCentral ?? a.is_central);
+      const bCentral = Boolean(b.isCentral ?? b.is_central);
+      if (aCentral !== bCentral) return bCentral ? 1 : -1;
+
+      return (a.name || '').localeCompare(b.name || '');
     });
   }, [warehouses, activeQuery]);
 
@@ -419,6 +435,7 @@ export function DelhiveryWarehousesView({
               const addressLine2 = warehouse.addressLine2 || warehouse.address_line2 || '';
               const contactPerson = warehouse.contactPerson || warehouse.contact_person || '';
               const isCentral = !!(warehouse.isCentral ?? warehouse.is_central);
+              const isStarred = Boolean(warehouse.isStarred ?? warehouse.is_starred);
               const isRegistered = warehouse.registeredWithDelhivery ?? warehouse.isRegistered ?? true;
 
               return (
@@ -426,8 +443,8 @@ export function DelhiveryWarehousesView({
                   key={warehouse.id}
                   backgroundColor={surfaceColor}
                   borderRadius={radiusMd}
-                  borderWidth={isCentral ? 1.5 : 1}
-                  borderColor={isCentral ? '#F59E0B' : borderColor}
+                  borderWidth={isStarred ? 1.5 : isCentral ? 1.5 : 1}
+                  borderColor={isStarred ? '#F59E0B' : isCentral ? '#0284C7' : borderColor}
                   paddingVertical={9}
                   paddingHorizontal={12}
                   gap={6}
@@ -440,15 +457,42 @@ export function DelhiveryWarehousesView({
                   {/* Card Header Row: Facility Name + Star + Delhivery Logo Badge + Actions */}
                   <XStack justifyContent="space-between" alignItems="center">
                     <XStack alignItems="center" gap={6} flex={1} marginRight={8}>
+                      {/* Star Favorite Toggle Button */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={isStarred ? `Unstar ${warehouse.name}` : `Star ${warehouse.name}`}
+                        onPress={() => onToggleStar?.(warehouse)}
+                        hitSlop={8}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.7 : 1,
+                          padding: 2,
+                        })}
+                      >
+                        <LuStar
+                          size={15}
+                          color={isStarred ? '#F59E0B' : '#94A3B8'}
+                          fill={isStarred ? '#F59E0B' : 'transparent'}
+                        />
+                      </Pressable>
+
                       <Text fontSize={14.5} fontWeight="700" color={textColor} numberOfLines={1}>
                         {warehouse.name}
                       </Text>
 
-                      {/* Central Hub Star Indicator Only */}
+                      {/* Central Hub Pill */}
                       {isCentral && (
-                        <YStack>
-                          <LuStar size={13.5} color="#F59E0B" filled={true} />
-                        </YStack>
+                        <XStack
+                          backgroundColor="#E0F2FE"
+                          paddingHorizontal={5}
+                          paddingVertical={1.5}
+                          borderRadius={3}
+                          borderWidth={1}
+                          borderColor="#BAE6FD"
+                        >
+                          <Text fontSize={8.5} fontWeight="900" color="#0284C7" letterSpacing={0.5}>
+                            CENTRAL HUB
+                          </Text>
+                        </XStack>
                       )}
 
                       {/* Delhivery Logo Micro-Badge */}

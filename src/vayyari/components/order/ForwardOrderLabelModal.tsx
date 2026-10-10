@@ -26,6 +26,7 @@ import {
   LuChevronRight,
   LuShare2,
   LuExternalLink,
+  LuStar,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { logisticsService } from '@/services/logistics.service';
@@ -38,6 +39,10 @@ import { AddressData } from './GroupManagementView';
 export interface SubmittedForwardOrderAudit {
   awbNumber: string;
   orderGrpId: string;
+  orderId?: string;
+  quantity?: number;
+  productsDesc?: string;
+  totalAmount?: number;
   submittedAt: string;
   pickupFacility: {
     code: string;
@@ -116,6 +121,19 @@ export function ForwardOrderLabelModal({
   const [showWarehousePicker, setShowWarehousePicker] = useState(false);
 
   // Editable Form Fields (Default values pre-filled)
+  const [customOrderId, setCustomOrderId] = useState<string>(orderGrpId || '');
+  const [quantity, setQuantity] = useState<string>((itemsCount || 1).toString());
+  const [productDesc, setProductDesc] = useState<string>(
+    vendorName && !vendorName.toLowerCase().includes('unassigned')
+      ? `${vendorName} - (${itemsCount || 1} items)`
+      : `Apparel - (${itemsCount || 1} items)`
+  );
+  const [totalAmount, setTotalAmount] = useState<string>(
+    ((parseFloat(groupTotal as any) || 0) * 4).toString()
+  );
+  const [paymentMode, setPaymentMode] = useState<'COD' | 'Prepaid'>(
+    isCod ? 'COD' : 'Prepaid'
+  );
   const [shippingMode, setShippingMode] = useState<'Surface' | 'Express'>('Surface');
   const [weightGrams, setWeightGrams] = useState<string>(
     (Math.max(1, itemsCount) * 400).toString()
@@ -132,7 +150,7 @@ export function ForwardOrderLabelModal({
   const [recipientCity, setRecipientCity] = useState<string>(address?.city || '');
   const [recipientState, setRecipientState] = useState<string>(address?.state || '');
   const [codAmount, setCodAmount] = useState<string>(
-    isCod ? groupTotal.toString() : '0'
+    isCod ? (groupTotal || 0).toString() : '0'
   );
 
   // Execution & Output state
@@ -155,8 +173,17 @@ export function ForwardOrderLabelModal({
         setGeneratedLabelUrl(initialLabelUrl || '');
       } else {
         setViewMode('form');
+        setCustomOrderId(orderGrpId || '');
+        setQuantity((itemsCount || 1).toString());
+        setProductDesc(
+          vendorName && !vendorName.toLowerCase().includes('unassigned')
+            ? `${vendorName} - (${itemsCount || 1} items)`
+            : `Apparel - (${itemsCount || 1} items)`
+        );
+        setTotalAmount(((parseFloat(groupTotal as any) || 0) * 4).toString());
+        setPaymentMode(isCod ? 'COD' : 'Prepaid');
         setWeightGrams((Math.max(1, itemsCount) * 400).toString());
-        setCodAmount(isCod ? groupTotal.toString() : '0');
+        setCodAmount(isCod ? (groupTotal || 0).toString() : '0');
         if (address) {
           setRecipientName(address.name || '');
           setRecipientPhone(address.phone || '');
@@ -168,7 +195,15 @@ export function ForwardOrderLabelModal({
       }
       loadWarehouses();
     }
-  }, [visible, initialAwb, initialLabelUrl, itemsCount, isCod, groupTotal, address, vendorName]);
+  }, [visible, initialAwb, initialLabelUrl, itemsCount, isCod, groupTotal, address, vendorName, orderGrpId]);
+
+  const sortWarehouses = (list: Warehouse[]): Warehouse[] => {
+    return [...list].sort((a: Warehouse, b: Warehouse) => {
+      if (Boolean(a.isStarred) !== Boolean(b.isStarred)) return a.isStarred ? -1 : 1;
+      if (Boolean(a.isCentral) !== Boolean(b.isCentral)) return a.isCentral ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  };
 
   const loadWarehouses = async () => {
     try {
@@ -178,20 +213,35 @@ export function ForwardOrderLabelModal({
         vendorService.listVendors(1, 100).catch(() => ({ vendors: [] })),
       ]);
 
-      const available = whList || [];
+      const available = sortWarehouses(whList || []);
       setWarehouses(available);
 
-      // Match vendor's default warehouse
-      const matchedVendor = vendorsData.vendors?.find(
-        (v: any) => v.vendorName?.trim().toLowerCase() === vendorName.trim().toLowerCase()
-      );
+      // Match vendor's default warehouse if vendor is present & assigned
+      const isVendorAssigned = vendorName && !vendorName.toLowerCase().includes('unassigned');
+      const matchedVendor = isVendorAssigned
+        ? vendorsData.vendors?.find(
+            (v: any) => v.vendorName?.trim().toLowerCase() === vendorName.trim().toLowerCase()
+          )
+        : null;
 
       let initialWh: Warehouse | undefined;
       if (matchedVendor?.defaultWarehouseId) {
         initialWh = available.find((w: Warehouse) => w.id === matchedVendor.defaultWarehouseId);
       }
+
+      // If no vendor warehouse is assigned, default pickup to Hyderabad facility (e.g. Hyd apartment / HYD-APT / 502325),
+      // prioritizing starred ones at the very top.
       if (!initialWh && available.length > 0) {
-        initialWh = available.find((w: Warehouse) => w.isCentral) || available[0];
+        const hydWh = available.find(
+          (w: Warehouse) =>
+            w.name?.toLowerCase().includes('hyd') ||
+            w.code?.toLowerCase().includes('hyd') ||
+            w.city?.toLowerCase().includes('hyderabad') ||
+            w.pincode === '502325'
+        );
+        const starredWh = available.find((w: Warehouse) => w.isStarred);
+        const centralWh = available.find((w: Warehouse) => w.isCentral);
+        initialWh = hydWh || starredWh || centralWh || available[0];
       }
 
       if (initialWh) {
@@ -206,6 +256,7 @@ export function ForwardOrderLabelModal({
           state: 'Telangana',
           pincode: '500081',
           isCentral: true,
+          isStarred: true,
           isActive: true,
           createdAt: new Date().toISOString(),
         });
@@ -220,6 +271,7 @@ export function ForwardOrderLabelModal({
         state: 'Telangana',
         pincode: '500081',
         isCentral: true,
+        isStarred: true,
         isActive: true,
         createdAt: new Date().toISOString(),
       });
@@ -228,11 +280,47 @@ export function ForwardOrderLabelModal({
     }
   };
 
+  const handleToggleWarehouseStar = async (whId: string) => {
+    try {
+      const newStatus = await logisticsService.toggleWarehouseStar(whId);
+      setWarehouses((prev) => {
+        const updated = prev.map((w) => (w.id === whId ? { ...w, isStarred: newStatus } : w));
+        return sortWarehouses(updated);
+      });
+      if (selectedWarehouse?.id === whId) {
+        setSelectedWarehouse((prev) => (prev ? { ...prev, isStarred: newStatus } : prev));
+      }
+    } catch (err: any) {
+      console.warn('Failed to toggle warehouse star:', err);
+      Alert.alert('Error', err?.message || 'Could not toggle star status');
+    }
+  };
+
   const handleCreateForwardOrder = async () => {
     const parsedWeight = parseInt(weightGrams, 10);
     if (isNaN(parsedWeight) || parsedWeight <= 0) {
       Alert.alert('Validation Error', 'Please enter a valid weight in grams.');
       return;
+    }
+
+    const parsedQty = parseInt(quantity, 10);
+    if (isNaN(parsedQty) || parsedQty <= 0) {
+      Alert.alert('Validation Error', 'Please enter a valid items quantity.');
+      return;
+    }
+
+    const parsedTotal = parseFloat(totalAmount);
+    if (isNaN(parsedTotal) || parsedTotal <= 0) {
+      Alert.alert('Validation Error', 'Please enter a valid total declared package amount.');
+      return;
+    }
+
+    if (paymentMode === 'COD') {
+      const parsedCod = parseFloat(codAmount);
+      if (isNaN(parsedCod) || parsedCod <= 0) {
+        Alert.alert('Validation Error', 'Please enter a valid COD collection amount.');
+        return;
+      }
     }
 
     if (!selectedWarehouse) {
@@ -249,6 +337,12 @@ export function ForwardOrderLabelModal({
       setCreatingOrder(true);
 
       const requestPayload = {
+        orderId: customOrderId.trim() || orderGrpId,
+        quantity: parsedQty,
+        productsDesc: productDesc.trim() || `${vendorName || 'Apparel'} (${parsedQty} items)`,
+        totalAmount: parsedTotal,
+        paymentMode: paymentMode === 'COD' ? 'COD' : 'Pre-paid',
+        codAmount: paymentMode === 'COD' ? (parseFloat(codAmount) || 0) : 0,
         pickupLocation: selectedWarehouse.code || selectedWarehouse.name,
         shippingMode,
         weightGrams: parsedWeight,
@@ -259,10 +353,8 @@ export function ForwardOrderLabelModal({
         recipientPhone: recipientPhone.trim(),
         recipientAddress: recipientAddress.trim(),
         recipientPincode: recipientPincode.trim(),
-        recipientCity: recipientCity.trim(),
-        recipientState: recipientState.trim(),
-        paymentMode: isCod ? 'COD' : 'Pre-paid',
-        codAmount: isCod ? parseFloat(codAmount) || groupTotal : 0,
+        recipientCity: recipientCity.trim() || '',
+        recipientState: recipientState.trim() || '',
       };
 
       let res: any;
@@ -289,6 +381,10 @@ export function ForwardOrderLabelModal({
         const auditData: SubmittedForwardOrderAudit = {
           awbNumber: awb,
           orderGrpId,
+          orderId: customOrderId.trim() || orderGrpId,
+          quantity: parsedQty,
+          productsDesc: productDesc.trim(),
+          totalAmount: parsedTotal,
           submittedAt: new Date().toISOString(),
           pickupFacility: {
             code: selectedWarehouse.code,
@@ -312,8 +408,8 @@ export function ForwardOrderLabelModal({
             city: recipientCity,
             state: recipientState,
           },
-          paymentMode: isCod ? 'COD' : 'Prepaid',
-          collectibleAmount: isCod ? parseFloat(codAmount) || groupTotal : 0,
+          paymentMode: paymentMode === 'COD' ? 'COD' : 'Prepaid',
+          collectibleAmount: paymentMode === 'COD' ? (parseFloat(codAmount) || 0) : 0,
         };
 
         setGeneratedAwb(awb);
@@ -514,6 +610,112 @@ export function ForwardOrderLabelModal({
                 <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
                   2. SHIPPING SPECIFICATIONS
                 </Text>
+
+                {/* Order ID */}
+                <YStack gap={4}>
+                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                    Order ID
+                  </Text>
+                  <TextInput
+                    value={customOrderId}
+                    onChangeText={setCustomOrderId}
+                    placeholder="Order ID"
+                    style={{
+                      height: 38,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.background,
+                      paddingHorizontal: 10,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: tokens.text,
+                    }}
+                  />
+                </YStack>
+
+                {/* Quantity & Total Amount (4x declared liability value) */}
+                <XStack gap={10}>
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                      Quantity (Items)
+                    </Text>
+                    <TextInput
+                      value={quantity}
+                      onChangeText={setQuantity}
+                      keyboardType="numeric"
+                      placeholder="Qty"
+                      style={{
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1,
+                        borderColor: tokens.border,
+                        backgroundColor: tokens.background,
+                        paddingHorizontal: 10,
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: tokens.text,
+                      }}
+                    />
+                  </YStack>
+
+                  <YStack flex={1.5} gap={4}>
+                    <XStack alignItems="center" justifyContent="space-between">
+                      <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                        Total Amount (₹)
+                      </Text>
+                      <XStack
+                        backgroundColor={`${tokens.accent}14`}
+                        paddingHorizontal={5}
+                        paddingVertical={1}
+                        borderRadius={3}
+                      >
+                        <Text fontSize={9} fontWeight="800" color={tokens.accent}>
+                          4× Transit Cover
+                        </Text>
+                      </XStack>
+                    </XStack>
+                    <TextInput
+                      value={totalAmount}
+                      onChangeText={setTotalAmount}
+                      keyboardType="numeric"
+                      placeholder="Total Amount"
+                      style={{
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1,
+                        borderColor: tokens.border,
+                        backgroundColor: tokens.background,
+                        paddingHorizontal: 10,
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: tokens.text,
+                      }}
+                    />
+                  </YStack>
+                </XStack>
+
+                {/* Product Description */}
+                <YStack gap={4}>
+                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                    Product Description
+                  </Text>
+                  <TextInput
+                    value={productDesc}
+                    onChangeText={setProductDesc}
+                    placeholder="e.g. Apparel / Saree"
+                    style={{
+                      height: 38,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.background,
+                      paddingHorizontal: 10,
+                      fontSize: 12,
+                      color: tokens.text,
+                    }}
+                  />
+                </YStack>
 
                 {/* Shipping Mode Selector */}
                 <YStack gap={6}>
@@ -758,106 +960,147 @@ export function ForwardOrderLabelModal({
                   />
                 </YStack>
 
-                <XStack gap={10}>
-                  <YStack flex={1} gap={4}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                      Pincode
-                    </Text>
-                    <TextInput
-                      value={recipientPincode}
-                      onChangeText={setRecipientPincode}
-                      placeholder="6-digit PIN"
-                      keyboardType="numeric"
-                      style={{
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1,
-                        borderColor: tokens.border,
-                        backgroundColor: tokens.background,
-                        paddingHorizontal: 10,
-                        fontSize: 12,
-                        color: tokens.text,
-                      }}
-                    />
-                  </YStack>
-
-                  <YStack flex={1} gap={4}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                      City
-                    </Text>
-                    <TextInput
-                      value={recipientCity}
-                      onChangeText={setRecipientCity}
-                      placeholder="City"
-                      style={{
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1,
-                        borderColor: tokens.border,
-                        backgroundColor: tokens.background,
-                        paddingHorizontal: 10,
-                        fontSize: 12,
-                        color: tokens.text,
-                      }}
-                    />
-                  </YStack>
-
-                  <YStack flex={1} gap={4}>
-                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                      State
-                    </Text>
-                    <TextInput
-                      value={recipientState}
-                      onChangeText={setRecipientState}
-                      placeholder="State"
-                      style={{
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1,
-                        borderColor: tokens.border,
-                        backgroundColor: tokens.background,
-                        paddingHorizontal: 10,
-                        fontSize: 12,
-                        color: tokens.text,
-                      }}
-                    />
-                  </YStack>
-                </XStack>
+                <YStack gap={4}>
+                  <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                    Pincode
+                  </Text>
+                  <TextInput
+                    value={recipientPincode}
+                    onChangeText={setRecipientPincode}
+                    placeholder="6-digit PIN"
+                    keyboardType="numeric"
+                    style={{
+                      height: 38,
+                      borderRadius: tokens.radius.sm,
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                      backgroundColor: tokens.background,
+                      paddingHorizontal: 10,
+                      fontSize: 12,
+                      color: tokens.text,
+                    }}
+                  />
+                </YStack>
               </YStack>
 
-              {/* 4. Payment & Collectible */}
+              {/* 4. Payment Mode & Collectible Cash */}
               <YStack
                 backgroundColor={tokens.surfaceRaised}
                 borderRadius={tokens.radius.md}
                 borderWidth={1}
                 borderColor={tokens.border}
                 padding={14}
-                gap={8}
+                gap={12}
               >
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color={tokens.textSecondary}>
-                    Payment Mode:
+                <YStack gap={6}>
+                  <Text fontSize={11} fontWeight="700" color={tokens.textSecondary}>
+                    Payment Mode
                   </Text>
+                  <XStack gap={10}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setPaymentMode('Prepaid')}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1.5,
+                        borderColor: paymentMode === 'Prepaid' ? '#15803D' : tokens.border,
+                        backgroundColor: paymentMode === 'Prepaid' ? '#DCFCE7' : tokens.surface,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.8 : 1,
+                      })}
+                    >
+                      <Text
+                        fontSize={12}
+                        fontWeight={paymentMode === 'Prepaid' ? '800' : '600'}
+                        color={paymentMode === 'Prepaid' ? '#15803D' : tokens.text}
+                      >
+                        PREPAID
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setPaymentMode('COD')}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1.5,
+                        borderColor: paymentMode === 'COD' ? '#B45309' : tokens.border,
+                        backgroundColor: paymentMode === 'COD' ? '#FEF3C7' : tokens.surface,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: pressed ? 0.8 : 1,
+                      })}
+                    >
+                      <Text
+                        fontSize={12}
+                        fontWeight={paymentMode === 'COD' ? '800' : '600'}
+                        color={paymentMode === 'COD' ? '#B45309' : tokens.text}
+                      >
+                        CASH ON DELIVERY (COD)
+                      </Text>
+                    </Pressable>
+                  </XStack>
+                </YStack>
+
+                {/* When COD: show mandatory Collectible Cash input. When Prepaid: hide it completely */}
+                {paymentMode === 'COD' ? (
+                  <YStack gap={4}>
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                        Collectible Cash (COD Amount) *
+                      </Text>
+                      <Text fontSize={10} color="#B45309" fontWeight="700">
+                        Mandatory
+                      </Text>
+                    </XStack>
+                    <XStack
+                      height={40}
+                      borderRadius={tokens.radius.sm}
+                      borderWidth={1}
+                      borderColor={tokens.border}
+                      backgroundColor={tokens.background}
+                      alignItems="center"
+                      paddingHorizontal={10}
+                    >
+                      <Text fontSize={13} fontWeight="800" color={tokens.textMuted} marginRight={4}>
+                        ₹
+                      </Text>
+                      <TextInput
+                        value={codAmount}
+                        onChangeText={setCodAmount}
+                        keyboardType="numeric"
+                        placeholder="Enter cash to collect"
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          fontWeight: '800',
+                          color: tokens.text,
+                        }}
+                      />
+                    </XStack>
+                    <Text fontSize={10} color={tokens.textMuted}>
+                      Amount to be collected in cash by Delhivery delivery agent
+                    </Text>
+                  </YStack>
+                ) : (
                   <XStack
-                    backgroundColor={isCod ? '#FEF3C7' : '#DCFCE7'}
-                    paddingHorizontal={8}
-                    paddingVertical={3}
-                    borderRadius={4}
+                    backgroundColor={`${tokens.success}10`}
+                    padding={10}
+                    borderRadius={tokens.radius.sm}
+                    alignItems="center"
+                    gap={8}
                   >
-                    <Text fontSize={11} fontWeight="800" color={isCod ? '#B45309' : '#15803D'}>
-                      {isCod ? 'CASH ON DELIVERY (COD)' : 'PREPAID'}
+                    <LuCheck size={14} color={tokens.success} />
+                    <Text fontSize={11} color={tokens.text}>
+                      Prepaid shipment: Zero cash collection at delivery destination.
                     </Text>
                   </XStack>
-                </XStack>
-
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={12} color={tokens.textSecondary}>
-                    Collectible Cash:
-                  </Text>
-                  <Text fontSize={14} fontWeight="800" color={tokens.text}>
-                    ₹{isCod ? groupTotal.toLocaleString('en-IN') : '0'}
-                  </Text>
-                </XStack>
+                )}
               </YStack>
 
               {/* Action Button: Create Forward Order */}
@@ -1167,6 +1410,33 @@ export function ForwardOrderLabelModal({
 
                     <XStack justifyContent="space-between" alignItems="center">
                       <Text fontSize={11} color={tokens.textMuted}>
+                        Order ID:
+                      </Text>
+                      <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                        {submittedAudit?.orderId || customOrderId || orderGrpId}
+                      </Text>
+                    </XStack>
+
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={11} color={tokens.textMuted}>
+                        Quantity & Declared Value:
+                      </Text>
+                      <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                        {submittedAudit?.quantity || quantity} items • ₹{submittedAudit?.totalAmount || totalAmount}
+                      </Text>
+                    </XStack>
+
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={11} color={tokens.textMuted}>
+                        Product Description:
+                      </Text>
+                      <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                        {submittedAudit?.productsDesc || productDesc}
+                      </Text>
+                    </XStack>
+
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text fontSize={11} color={tokens.textMuted}>
                         Carrier & Service:
                       </Text>
                       <Text fontSize={11} fontWeight="700" color={tokens.text}>
@@ -1269,8 +1539,8 @@ export function ForwardOrderLabelModal({
                         Payment & Collectible:
                       </Text>
                       <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                        {submittedAudit?.paymentMode || (isCod ? 'COD' : 'Prepaid')} (₹
-                        {submittedAudit?.collectibleAmount ?? (isCod ? groupTotal : 0)})
+                        {submittedAudit?.paymentMode || (paymentMode === 'COD' ? 'COD' : 'Prepaid')} (₹
+                        {submittedAudit?.collectibleAmount ?? (paymentMode === 'COD' ? parseFloat(codAmount) || 0 : 0)})
                       </Text>
                     </XStack>
                   </YStack>
@@ -1345,6 +1615,22 @@ export function ForwardOrderLabelModal({
                           })}
                         >
                           <XStack alignItems="center" gap={6}>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={wh.isStarred ? 'Unstar warehouse' : 'Star warehouse'}
+                              hitSlop={8}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleToggleWarehouseStar(wh.id);
+                              }}
+                              style={{ padding: 2 }}
+                            >
+                              <LuStar
+                                size={15}
+                                color={wh.isStarred ? '#F59E0B' : tokens.textMuted}
+                                filled={Boolean(wh.isStarred)}
+                              />
+                            </Pressable>
                             <XStack
                               backgroundColor={`${tokens.accent}20`}
                               paddingHorizontal={5}

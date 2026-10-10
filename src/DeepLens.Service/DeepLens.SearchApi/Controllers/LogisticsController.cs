@@ -264,6 +264,7 @@ public class LogisticsController : ControllerBase
                 Phone = w.Phone,
                 ContactPerson = w.ContactPerson,
                 IsCentral = w.IsCentral,
+                IsStarred = w.IsStarred,
                 IsActive = w.IsActive,
                 CreatedAt = w.CreatedAt
             }).ToList();
@@ -300,6 +301,7 @@ public class LogisticsController : ControllerBase
                 Phone = w.Phone,
                 ContactPerson = w.ContactPerson,
                 IsCentral = w.IsCentral,
+                IsStarred = w.IsStarred,
                 IsActive = w.IsActive,
                 CreatedAt = w.CreatedAt
             }).ToList();
@@ -505,6 +507,33 @@ public class LogisticsController : ControllerBase
         {
             _logger.LogError(ex, "Failed to delete warehouse {Id}", id);
             return StatusCode(500, new { message = "Failed to delete warehouse", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Toggles the starred/favorite status for a warehouse facility.
+    /// POST /api/v1/logistics/warehouses/{id}/toggle-star
+    /// </summary>
+    [HttpPost("warehouses/{id}/toggle-star")]
+    public async Task<IActionResult> ToggleWarehouseStar(Guid id)
+    {
+        try
+        {
+            var existing = await _repository.GetWarehouseByIdAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { message = $"Warehouse with ID '{id}' not found." });
+            }
+
+            existing.IsStarred = !existing.IsStarred;
+            await _repository.UpdateWarehouseAsync(existing);
+
+            return Ok(new { id = existing.Id, isStarred = existing.IsStarred });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to toggle star for warehouse {Id}", id);
+            return StatusCode(500, new { message = "Failed to toggle star for warehouse", error = ex.Message });
         }
     }
 
