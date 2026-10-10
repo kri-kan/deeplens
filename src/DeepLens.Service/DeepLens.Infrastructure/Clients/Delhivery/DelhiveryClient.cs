@@ -652,41 +652,96 @@ public class DelhiveryClient : IDelhiveryClient
 
     private byte[] GenerateMockLabelPdf(string awb)
     {
-        // Generates a minimal valid PDF format document containing thermal shipping label info
-        var pdfContent = 
-            "%PDF-1.4\n" +
-            "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n" +
-            "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n" +
-            "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n" +
-            "4 0 obj << /Length 200 >> stream\n" +
-            "BT\n" +
-            "/F1 14 Tf\n" +
-            "20 400 Td\n" +
-            "(DELHIVERY SURFACE SHIPPING LABEL) Tj\n" +
-            "/F1 10 Tf\n" +
-            "0 -20 Td\n" +
-            $"(AWB: {awb}) Tj\n" +
-            "0 -20 Td\n" +
-            "(Shipper: VAYYARI FASHION HUB - SURAT) Tj\n" +
-            "0 -20 Td\n" +
-            $"(Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC) Tj\n" +
-            "ET\n" +
-            "endstream\n" +
-            "endobj\n" +
-            "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n" +
-            "xref\n" +
-            "0 6\n" +
-            "0000000000 65535 f \n" +
-            "0000000009 00000 n \n" +
-            "0000000058 00000 n \n" +
-            "0000000115 00000 n \n" +
-            "0000000244 00000 n \n" +
-            "0000000495 00000 n \n" +
-            "trailer << /Size 6 /Root 1 0 R >>\n" +
-            "startxref\n" +
-            "568\n" +
-            "%%EOF\n";
+        // Generates a fully compliant standard 4x6 inch (288 x 432 pt) PDF document with exact byte offsets
+        var textLines = new List<string>
+        {
+            "BT",
+            "/F1 16 Tf",
+            "20 400 Td",
+            "(DELHIVERY SURFACE SHIPPING LABEL) Tj",
+            "0 -24 Td",
+            "/F1 12 Tf",
+            $"(AWB: {awb}) Tj",
+            "0 -18 Td",
+            "/F1 10 Tf",
+            "(Shipper: VAYYARI FASHION HUB - SURAT) Tj",
+            "0 -16 Td",
+            "(Package: 1 of 1) Tj",
+            "0 -16 Td",
+            "(Dimensions: 10 x 10 x 10 cm | Weight: 0.5 kg) Tj",
+            "0 -20 Td",
+            "(----------------------------------------------------) Tj",
+            "0 -20 Td",
+            "/F1 12 Tf",
+            "(ROUTING & BARCODE) Tj",
+            "0 -18 Td",
+            "/F1 10 Tf",
+            "(|||||| |||||||||| ||||| |||||||||||| ||||||) Tj",
+            "0 -18 Td",
+            $"({awb}) Tj",
+            "0 -20 Td",
+            "(----------------------------------------------------) Tj",
+            "0 -20 Td",
+            "(DELIVER TO: CUSTOMER) Tj",
+            "0 -16 Td",
+            "(Standard Surface Delivery - Prepaid) Tj",
+            "ET"
+        };
 
-        return Encoding.ASCII.GetBytes(pdfContent);
+        var streamContent = string.Join("\n", textLines) + "\n";
+        var streamBytes = Encoding.ASCII.GetBytes(streamContent);
+
+        using var ms = new MemoryStream();
+        using var writer = new StreamWriter(ms, Encoding.ASCII, leaveOpen: true);
+
+        writer.Write("%PDF-1.4\n");
+        writer.Flush();
+
+        var offsets = new List<long>();
+
+        // 1: Catalog
+        offsets.Add(ms.Position);
+        writer.Write("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n");
+        writer.Flush();
+
+        // 2: Pages
+        offsets.Add(ms.Position);
+        writer.Write("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n");
+        writer.Flush();
+
+        // 3: Page (4x6 in = 288 x 432 pt)
+        offsets.Add(ms.Position);
+        writer.Write("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n");
+        writer.Flush();
+
+        // 4: Stream Contents
+        offsets.Add(ms.Position);
+        writer.Write($"4 0 obj << /Length {streamBytes.Length} >> stream\n");
+        writer.Flush();
+        ms.Write(streamBytes, 0, streamBytes.Length);
+        writer.Write("endstream\nendobj\n");
+        writer.Flush();
+
+        // 5: Helvetica Font
+        offsets.Add(ms.Position);
+        writer.Write("5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n");
+        writer.Flush();
+
+        // Cross-reference table
+        var startXref = ms.Position;
+        writer.Write($"xref\n0 {offsets.Count + 1}\n");
+        writer.Write("0000000000 65535 f \n");
+        foreach (var off in offsets)
+        {
+            writer.Write($"{off:D10} 00000 n \n");
+        }
+
+        // Trailer
+        writer.Write($"trailer << /Size {offsets.Count + 1} /Root 1 0 R >>\n");
+        writer.Write($"startxref\n{startXref}\n");
+        writer.Write("%%EOF\n");
+        writer.Flush();
+
+        return ms.ToArray();
     }
 }
