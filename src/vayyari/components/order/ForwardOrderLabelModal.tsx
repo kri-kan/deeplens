@@ -985,122 +985,131 @@ export function ForwardOrderLabelModal({
 
               {/* 4. Payment Mode & Collectible Cash */}
               <YStack
-                backgroundColor={tokens.surfaceRaised}
+                backgroundColor={tokens.surface}
                 borderRadius={tokens.radius.md}
                 borderWidth={1}
                 borderColor={tokens.border}
                 padding={14}
-                gap={12}
+                gap={10}
               >
-                <YStack gap={6}>
-                  <Text fontSize={11} fontWeight="700" color={tokens.textSecondary}>
-                    Payment Mode
-                  </Text>
-                  <XStack gap={10}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setPaymentMode('Prepaid')}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1.5,
-                        borderColor: paymentMode === 'Prepaid' ? '#15803D' : tokens.border,
-                        backgroundColor: paymentMode === 'Prepaid' ? '#DCFCE7' : tokens.surface,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.8 : 1,
-                      })}
-                    >
-                      <Text
-                        fontSize={12}
-                        fontWeight={paymentMode === 'Prepaid' ? '800' : '600'}
-                        color={paymentMode === 'Prepaid' ? '#15803D' : tokens.text}
-                      >
-                        PREPAID
-                      </Text>
-                    </Pressable>
+                <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                  4. PAYMENT & COLLECTIBLE CASH
+                </Text>
 
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setPaymentMode('COD')}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        height: 38,
-                        borderRadius: tokens.radius.sm,
-                        borderWidth: 1.5,
-                        borderColor: paymentMode === 'COD' ? '#B45309' : tokens.border,
-                        backgroundColor: paymentMode === 'COD' ? '#FEF3C7' : tokens.surface,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        opacity: pressed ? 0.8 : 1,
-                      })}
-                    >
-                      <Text
-                        fontSize={12}
-                        fontWeight={paymentMode === 'COD' ? '800' : '600'}
-                        color={paymentMode === 'COD' ? '#B45309' : tokens.text}
+                {/* Side-by-side row: Left half is Payment Mode buttons, Right half is COD Amount */}
+                <XStack gap={10} alignItems="flex-start">
+                  {/* Left half: Prepaid and COD buttons */}
+                  <YStack flex={1} gap={4}>
+                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                      Payment Mode
+                    </Text>
+                    <XStack gap={6} height={38}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setPaymentMode('Prepaid')}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          borderRadius: tokens.radius.sm,
+                          borderWidth: 1.5,
+                          borderColor: paymentMode === 'Prepaid' ? '#15803D' : tokens.border,
+                          backgroundColor: paymentMode === 'Prepaid' ? '#DCFCE7' : tokens.surfaceRaised,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.8 : 1,
+                        })}
                       >
-                        CASH ON DELIVERY (COD)
-                      </Text>
-                    </Pressable>
-                  </XStack>
-                </YStack>
+                        <Text
+                          fontSize={11}
+                          fontWeight={paymentMode === 'Prepaid' ? '800' : '600'}
+                          color={paymentMode === 'Prepaid' ? '#15803D' : tokens.text}
+                        >
+                          Prepaid
+                        </Text>
+                      </Pressable>
 
-                {/* When COD: show mandatory Collectible Cash input. When Prepaid: hide it completely */}
-                {paymentMode === 'COD' ? (
-                  <YStack gap={4}>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setPaymentMode('COD')}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          borderRadius: tokens.radius.sm,
+                          borderWidth: 1.5,
+                          borderColor: paymentMode === 'COD' ? '#B45309' : tokens.border,
+                          backgroundColor: paymentMode === 'COD' ? '#FEF3C7' : tokens.surfaceRaised,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text
+                          fontSize={11}
+                          fontWeight={paymentMode === 'COD' ? '800' : '600'}
+                          color={paymentMode === 'COD' ? '#B45309' : tokens.text}
+                        >
+                          COD
+                        </Text>
+                      </Pressable>
+                    </XStack>
+                  </YStack>
+
+                  {/* Right half: COD Amount field */}
+                  <YStack flex={1} gap={4}>
                     <XStack justifyContent="space-between" alignItems="center">
                       <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
-                        Collectible Cash (COD Amount) *
+                        COD Amount {paymentMode === 'COD' ? '*' : ''}
                       </Text>
-                      <Text fontSize={10} color="#B45309" fontWeight="700">
-                        Mandatory
-                      </Text>
+                      {paymentMode === 'COD' && (
+                        <Text fontSize={9} color="#B45309" fontWeight="700">
+                          Mandatory
+                        </Text>
+                      )}
                     </XStack>
-                    <XStack
-                      height={40}
-                      borderRadius={tokens.radius.sm}
-                      borderWidth={1}
-                      borderColor={tokens.border}
-                      backgroundColor={tokens.background}
-                      alignItems="center"
-                      paddingHorizontal={10}
-                    >
-                      <Text fontSize={13} fontWeight="800" color={tokens.textMuted} marginRight={4}>
-                        ₹
-                      </Text>
-                      <TextInput
-                        value={codAmount}
-                        onChangeText={setCodAmount}
-                        keyboardType="numeric"
-                        placeholder="Enter cash to collect"
-                        style={{
-                          flex: 1,
-                          fontSize: 13,
-                          fontWeight: '800',
-                          color: tokens.text,
-                        }}
-                      />
-                    </XStack>
-                    <Text fontSize={10} color={tokens.textMuted}>
-                      Amount to be collected in cash by Delhivery delivery agent
-                    </Text>
+
+                    {paymentMode === 'COD' ? (
+                      <XStack
+                        height={38}
+                        borderRadius={tokens.radius.sm}
+                        borderWidth={1}
+                        borderColor={tokens.border}
+                        backgroundColor={tokens.background}
+                        alignItems="center"
+                        paddingHorizontal={8}
+                      >
+                        <Text fontSize={12} fontWeight="800" color={tokens.textMuted} marginRight={3}>
+                          ₹
+                        </Text>
+                        <TextInput
+                          value={codAmount}
+                          onChangeText={setCodAmount}
+                          keyboardType="numeric"
+                          placeholder="Amount"
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            fontWeight: '800',
+                            color: tokens.text,
+                          }}
+                        />
+                      </XStack>
+                    ) : (
+                      <XStack
+                        height={38}
+                        borderRadius={tokens.radius.sm}
+                        borderWidth={1}
+                        borderColor={`${tokens.success}30`}
+                        backgroundColor={`${tokens.success}10`}
+                        alignItems="center"
+                        paddingHorizontal={8}
+                        gap={6}
+                      >
+                        <LuCheck size={13} color={tokens.success} />
+                        <Text fontSize={11} fontWeight="700" color={tokens.success}>
+                          ₹0 (Prepaid)
+                        </Text>
+                      </XStack>
+                    )}
                   </YStack>
-                ) : (
-                  <XStack
-                    backgroundColor={`${tokens.success}10`}
-                    padding={10}
-                    borderRadius={tokens.radius.sm}
-                    alignItems="center"
-                    gap={8}
-                  >
-                    <LuCheck size={14} color={tokens.success} />
-                    <Text fontSize={11} color={tokens.text}>
-                      Prepaid shipment: Zero cash collection at delivery destination.
-                    </Text>
-                  </XStack>
-                )}
+                </XStack>
               </YStack>
 
               {/* Action Button: Create Forward Order */}
