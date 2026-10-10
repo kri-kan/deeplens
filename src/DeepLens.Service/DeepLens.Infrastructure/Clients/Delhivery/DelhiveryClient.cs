@@ -100,19 +100,12 @@ public class DelhiveryClient : IDelhiveryClient
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync(ct);
-                _logger.LogWarning("Delhivery pincode check returned HTTP {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
-                
-                // Return default serviceable fallback in test/staging if live API fails
-                return CreateDefaultPincodeResponse(cleanPin);
+                _logger.LogError("Delhivery pincode check returned HTTP {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
+                throw new HttpRequestException($"Delhivery pincode check failed with HTTP {response.StatusCode}: {errorBody}");
             }
 
             var result = await response.Content.ReadFromJsonAsync<DelhiveryPincodeResponse>(cancellationToken: ct);
-            if (result == null || result.DeliveryCodes == null || result.DeliveryCodes.Count == 0)
-            {
-                return CreateDefaultPincodeResponse(cleanPin);
-            }
-
-            return result;
+            return result ?? new DelhiveryPincodeResponse();
         }, ct);
     }
 
@@ -146,13 +139,6 @@ public class DelhiveryClient : IDelhiveryClient
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("Delhivery CMU shipment creation failed with status {StatusCode}: {Response}", response.StatusCode, responseContent);
-                
-                // If in staging/test and returns error, provide structured mock manifest for non-blocking local dev
-                if (IsMockableEnvironment())
-                {
-                    return GenerateMockCmuResponse(payload);
-                }
-
                 throw new HttpRequestException($"Delhivery CMU API error: {response.StatusCode} - {responseContent}");
             }
 
@@ -162,12 +148,12 @@ public class DelhiveryClient : IDelhiveryClient
                 {
                     PropertyNameCaseInsensitive = true
                 });
-                return result ?? GenerateMockCmuResponse(payload);
+                return result ?? throw new InvalidOperationException("Delhivery CMU returned an empty response.");
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not InvalidOperationException)
             {
-                _logger.LogWarning(ex, "Failed to parse Delhivery CMU response. Raw content: {Content}", responseContent);
-                return GenerateMockCmuResponse(payload);
+                _logger.LogError(ex, "Failed to parse Delhivery CMU response. Raw content: {Content}", responseContent);
+                throw new InvalidOperationException($"Failed to parse Delhivery CMU response: {ex.Message}");
             }
         }, ct);
     }
@@ -185,42 +171,47 @@ public class DelhiveryClient : IDelhiveryClient
             _logger.LogInformation("Fetching packing slip for AWB {Awb}", cleanAwb);
             using var response = await _httpClient.SendAsync(request, ct);
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                var contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
-                if (contentType.Contains("application/pdf") || contentType.Contains("octet-stream"))
-                {
-                    return await response.Content.ReadAsByteArrayAsync(ct);
-                }
-
-                var textContent = await response.Content.ReadAsStringAsync(ct);
-                try
-                {
-                    var slipResponse = JsonSerializer.Deserialize<DelhiveryPackingSlipResponse>(textContent);
-                    var pkg = slipResponse?.Packages?.FirstOrDefault();
-                    if (!string.IsNullOrWhiteSpace(pkg?.PdfEncoded))
-                    {
-                        return Convert.FromBase64String(pkg.PdfEncoded);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(pkg?.PdfDownloadLink))
-                    {
-                        _logger.LogInformation("Downloading official Delhivery packing slip PDF from S3 link for AWB {Awb}", cleanAwb);
-                        using var s3Response = await _httpClient.GetAsync(pkg.PdfDownloadLink, ct);
-                        if (s3Response.IsSuccessStatusCode)
-                        {
-                            return await s3Response.Content.ReadAsByteArrayAsync(ct);
-                        }
-                    }
-                }
-                catch (Exception parseEx)
-                {
-                    _logger.LogWarning(parseEx, "Failed to parse Delhivery packing slip JSON for AWB {Awb}", cleanAwb);
-                }
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogError("Delhivery packing slip API returned HTTP {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
+                throw new HttpRequestException($"Delhivery packing slip API error ({response.StatusCode}): {errorBody}");
             }
 
-            _logger.LogWarning("Delhivery packing slip API not returning binary PDF for AWB {Awb}. Generating mock thermal label PDF.", cleanAwb);
-            return GenerateMockLabelPdf(cleanAwb);
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+            if (contentType.Contains("application/pdf") || contentType.Contains("octet-stream"))
+            {
+                return await response.Content.ReadAsByteArrayAsync(ct);
+            }
+
+            var textContent = await response.Content.ReadAsStringAsync(ct);
+            try
+            {
+                var slipResponse = JsonSerializer.Deserialize<DelhiveryPackingSlipResponse>(textContent);
+                var pkg = slipResponse?.Packages?.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(pkg?.PdfEncoded))
+                {
+                    return Convert.FromBase64String(pkg.PdfEncoded);
+                }
+
+                if (!string.IsNullOrWhiteSpace(pkg?.PdfDownloadLink))
+                {
+                    _logger.LogInformation("Downloading official Delhivery packing slip PDF from S3 link for AWB {Awb}", cleanAwb);
+                    using var s3Response = await _httpClient.GetAsync(pkg.PdfDownloadLink, ct);
+                    if (s3Response.IsSuccessStatusCode)
+                    {
+                        return await s3Response.Content.ReadAsByteArrayAsync(ct);
+                    }
+                    _logger.LogError("Failed to download PDF from Delhivery S3 link. Status: {StatusCode}", s3Response.StatusCode);
+                }
+            }
+            catch (Exception parseEx)
+            {
+                _logger.LogError(parseEx, "Failed to parse Delhivery packing slip JSON for AWB {Awb}", cleanAwb);
+                throw;
+            }
+
+            throw new InvalidOperationException($"Delhivery packing slip API did not return a valid PDF download link or payload for AWB {cleanAwb}.");
         }, ct);
     }
 
@@ -262,17 +253,8 @@ public class DelhiveryClient : IDelhiveryClient
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Delhivery pickup request failed with status {StatusCode}: {Response}", response.StatusCode, responseContent);
-                return new DelhiveryPickupResponse
-                {
-                    PickupId = $"PK-{Guid.NewGuid():N}".Substring(0, 12).ToUpper(),
-                    PickupToken = $"TKN-{DateTime.UtcNow:yyyyMMdd}-{new Random().Next(1000, 9999)}",
-                    PickupDate = request.PickupDate,
-                    PickupTime = request.PickupTime,
-                    PickupLocation = request.PickupLocation,
-                    PrExist = true,
-                    Message = "Pickup scheduled (Staging/Fallback Mode)"
-                };
+                _logger.LogError("Delhivery pickup request failed with status {StatusCode}: {Response}", response.StatusCode, responseContent);
+                throw new HttpRequestException($"Delhivery pickup request failed ({response.StatusCode}): {responseContent}");
             }
 
             try
@@ -281,23 +263,12 @@ public class DelhiveryClient : IDelhiveryClient
                 {
                     PropertyNameCaseInsensitive = true
                 });
-                return result ?? new DelhiveryPickupResponse
-                {
-                    PickupId = $"PK-{Guid.NewGuid():N}".Substring(0, 12).ToUpper(),
-                    PickupDate = request.PickupDate,
-                    PickupLocation = request.PickupLocation,
-                    Message = "Pickup scheduled successfully"
-                };
+                return result ?? throw new InvalidOperationException("Delhivery pickup returned an empty response.");
             }
-            catch
+            catch (Exception ex) when (ex is not InvalidOperationException)
             {
-                return new DelhiveryPickupResponse
-                {
-                    PickupId = $"PK-{Guid.NewGuid():N}".Substring(0, 12).ToUpper(),
-                    PickupDate = request.PickupDate,
-                    PickupLocation = request.PickupLocation,
-                    Message = responseContent
-                };
+                _logger.LogError(ex, "Failed to parse Delhivery pickup response. Raw content: {Content}", responseContent);
+                throw new InvalidOperationException($"Failed to parse Delhivery pickup response: {ex.Message}");
             }
         }, ct);
     }
@@ -315,25 +286,32 @@ public class DelhiveryClient : IDelhiveryClient
             _logger.LogInformation("Querying Delhivery tracking status for AWB {Awb}", cleanAwb);
             using var response = await _httpClient.SendAsync(request, ct);
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                var content = await response.Content.ReadAsStringAsync(ct);
-                try
-                {
-                    var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
-                    if (trackingData?.ShipmentData != null && trackingData.ShipmentData.Count > 0)
-                    {
-                        return trackingData;
-                    }
-                }
-                catch { }
+                var errorBody = await response.Content.ReadAsStringAsync(ct);
+                _logger.LogError("Delhivery tracking API returned HTTP {StatusCode}: {ErrorBody}", response.StatusCode, errorBody);
+                throw new HttpRequestException($"Delhivery tracking API error ({response.StatusCode}): {errorBody}");
             }
 
-            // Provide structured tracking info
-            return GenerateMockTrackingResponse(cleanAwb);
+            var content = await response.Content.ReadAsStringAsync(ct);
+            try
+            {
+                var trackingData = JsonSerializer.Deserialize<DelhiveryTrackingResponse>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (trackingData?.ShipmentData != null && trackingData.ShipmentData.Count > 0)
+                {
+                    return trackingData;
+                }
+            }
+            catch (Exception parseEx)
+            {
+                _logger.LogError(parseEx, "Failed to parse Delhivery tracking JSON for AWB {Awb}", cleanAwb);
+                throw;
+            }
+
+            throw new InvalidOperationException($"No shipment tracking records found for AWB '{cleanAwb}' on Delhivery.");
         }, ct);
     }
 
@@ -353,14 +331,8 @@ public class DelhiveryClient : IDelhiveryClient
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Delhivery NDR action returned status {StatusCode}: {Response}", response.StatusCode, responseContent);
-                return new DelhiveryNdrEditResponse
-                {
-                    Status = true,
-                    Success = true,
-                    Waybill = request.Waybill,
-                    Message = $"Action {request.Action} recorded successfully in fallback/staging mode"
-                };
+                _logger.LogError("Delhivery NDR action returned status {StatusCode}: {Response}", response.StatusCode, responseContent);
+                throw new HttpRequestException($"Delhivery NDR action failed ({response.StatusCode}): {responseContent}");
             }
 
             try
@@ -369,23 +341,12 @@ public class DelhiveryClient : IDelhiveryClient
                 {
                     PropertyNameCaseInsensitive = true
                 });
-                return result ?? new DelhiveryNdrEditResponse
-                {
-                    Status = true,
-                    Success = true,
-                    Waybill = request.Waybill,
-                    Message = "Action recorded"
-                };
+                return result ?? throw new InvalidOperationException("Delhivery NDR action returned empty response.");
             }
-            catch
+            catch (Exception ex) when (ex is not InvalidOperationException)
             {
-                return new DelhiveryNdrEditResponse
-                {
-                    Status = true,
-                    Success = true,
-                    Waybill = request.Waybill,
-                    Message = responseContent
-                };
+                _logger.LogError(ex, "Failed to parse Delhivery NDR response. Raw content: {Content}", responseContent);
+                throw new InvalidOperationException($"Failed to parse Delhivery NDR response: {ex.Message}");
             }
         }, ct);
     }
@@ -540,222 +501,4 @@ public class DelhiveryClient : IDelhiveryClient
         }, ct);
     }
 
-    // --- Helpers and Mock Fallbacks ---
-
-    private bool IsMockableEnvironment()
-    {
-        return string.IsNullOrWhiteSpace(_options.ApiToken) ||
-               _options.ApiToken == "delhivery_demo_token" ||
-               _options.BaseUrl.Contains("staging");
-    }
-
-    private DelhiveryPincodeResponse CreateDefaultPincodeResponse(string pin)
-    {
-        int.TryParse(pin, out var pinNumber);
-        return new DelhiveryPincodeResponse
-        {
-            DeliveryCodes = new List<DelhiveryDeliveryCode>
-            {
-                new DelhiveryDeliveryCode
-                {
-                    PostalCode = new DelhiveryPostalCodeDetail
-                    {
-                        Pin = pinNumber,
-                        District = "Surat",
-                        StateCode = "GJ",
-                        PrePaid = "Y",
-                        Cash = "Y",
-                        Cod = "Y",
-                        Pickup = "Y",
-                        RevPickup = "Y",
-                        IsOda = "N",
-                        CountryCode = "IN"
-                    }
-                }
-            }
-        };
-    }
-
-    private DelhiveryCmuResponse GenerateMockCmuResponse(DelhiveryCmuPayload payload)
-    {
-        var random = new Random();
-        var packages = new List<DelhiveryPackageResponse>();
-
-        foreach (var shp in payload.Shipments)
-        {
-            var waybill = !string.IsNullOrWhiteSpace(shp.Waybill)
-                ? shp.Waybill
-                : $"DEL{DateTime.UtcNow:yyMMdd}{random.Next(1000000, 9999999)}";
-
-            packages.Add(new DelhiveryPackageResponse
-            {
-                Waybill = waybill,
-                Refnum = shp.Order,
-                Status = "Manifested",
-                Client = _options.ClientName,
-                Service = shp.ShippingMode,
-                SortCode = "SUR/HUB"
-            });
-        }
-
-        return new DelhiveryCmuResponse
-        {
-            Status = true,
-            Success = true,
-            PackageCount = packages.Count,
-            Packages = packages,
-            UploadWbn = $"UPL-{DateTime.UtcNow:yyyyMMddHHmmss}"
-        };
-    }
-
-    private DelhiveryTrackingResponse GenerateMockTrackingResponse(string awb)
-    {
-        return new DelhiveryTrackingResponse
-        {
-            ShipmentData = new List<DelhiveryTrackingShipmentWrapper>
-            {
-                new DelhiveryTrackingShipmentWrapper
-                {
-                    Shipment = new DelhiveryTrackingShipment
-                    {
-                        Awb = awb,
-                        Status = new DelhiveryTrackingStatus
-                        {
-                            Status = "In Transit",
-                            StatusType = "UD",
-                            StatusDateTime = DateTime.UtcNow.ToString("o"),
-                            StatusLocation = "Surat Hub",
-                            Instructions = "Package in transit to destination hub",
-                            StatusCode = "IT"
-                        },
-                        Origin = "Surat",
-                        Destination = "Customer Pincode Hub",
-                        ExpectedDeliveryDate = DateTime.UtcNow.AddDays(3).ToString("yyyy-MM-dd"),
-                        PickUpDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                        Scans = new List<DelhiveryTrackingScanWrapper>
-                        {
-                            new DelhiveryTrackingScanWrapper
-                            {
-                                ScanDetail = new DelhiveryTrackingScanDetail
-                                {
-                                    ScanDateTime = DateTime.UtcNow.ToString("o"),
-                                    ScanType = "UD",
-                                    Scan = "In Transit to Destination Hub",
-                                    ScannedLocation = "Surat Hub",
-                                    StatusCode = "IT"
-                                }
-                            },
-                            new DelhiveryTrackingScanWrapper
-                            {
-                                ScanDetail = new DelhiveryTrackingScanDetail
-                                {
-                                    ScanDateTime = DateTime.UtcNow.AddHours(-6).ToString("o"),
-                                    ScanType = "PU",
-                                    Scan = "Manifested and Picked Up",
-                                    ScannedLocation = "Vayyari Central Hub",
-                                    StatusCode = "PU"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    private byte[] GenerateMockLabelPdf(string awb)
-    {
-        // Generates a fully compliant standard PDF document with exact byte offsets and universal print preview support
-        var textLines = new List<string>
-        {
-            "0 0 0 rg",
-            "BT",
-            "/F1 16 Tf",
-            "20 400 Td",
-            "(DELHIVERY SURFACE SHIPPING LABEL) Tj",
-            "0 -24 Td",
-            "/F1 12 Tf",
-            $"(AWB: {awb}) Tj",
-            "0 -18 Td",
-            "/F1 10 Tf",
-            "(Shipper: VAYYARI FASHION HUB - SURAT) Tj",
-            "0 -16 Td",
-            "(Package: 1 of 1) Tj",
-            "0 -16 Td",
-            "(Dimensions: 10 x 10 x 10 cm | Weight: 0.5 kg) Tj",
-            "0 -20 Td",
-            "(----------------------------------------------------) Tj",
-            "0 -20 Td",
-            "/F1 12 Tf",
-            "(ROUTING & BARCODE) Tj",
-            "0 -18 Td",
-            "/F1 10 Tf",
-            "(|||||| |||||||||| ||||| |||||||||||| ||||||) Tj",
-            "0 -18 Td",
-            $"({awb}) Tj",
-            "0 -20 Td",
-            "(----------------------------------------------------) Tj",
-            "0 -20 Td",
-            "(DELIVER TO: CUSTOMER) Tj",
-            "0 -16 Td",
-            "(Standard Surface Delivery - Prepaid) Tj",
-            "ET"
-        };
-
-        var streamContent = string.Join("\n", textLines) + "\n";
-        var streamBytes = Encoding.ASCII.GetBytes(streamContent);
-
-        using var ms = new MemoryStream();
-        using var writer = new StreamWriter(ms, Encoding.ASCII, leaveOpen: true);
-
-        writer.Write("%PDF-1.4\n");
-        writer.Flush();
-
-        var offsets = new List<long>();
-
-        // 1: Catalog
-        offsets.Add(ms.Position);
-        writer.Write("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n");
-        writer.Flush();
-
-        // 2: Pages
-        offsets.Add(ms.Position);
-        writer.Write("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n");
-        writer.Flush();
-
-        // 3: Page (4x6 in = 288 x 432 pt, with standard ProcSet for print renderers)
-        offsets.Add(ms.Position);
-        writer.Write("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ProcSet [/PDF /Text] >> >> endobj\n");
-        writer.Flush();
-
-        // 4: Stream Contents
-        offsets.Add(ms.Position);
-        writer.Write($"4 0 obj << /Length {streamBytes.Length} >> stream\n");
-        writer.Flush();
-        ms.Write(streamBytes, 0, streamBytes.Length);
-        writer.Write("endstream\nendobj\n");
-        writer.Flush();
-
-        // 5: Helvetica Font with WinAnsiEncoding
-        offsets.Add(ms.Position);
-        writer.Write("5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj\n");
-        writer.Flush();
-
-        // Cross-reference table
-        var startXref = ms.Position;
-        writer.Write($"xref\n0 {offsets.Count + 1}\n");
-        writer.Write("0000000000 65535 f \n");
-        foreach (var off in offsets)
-        {
-            writer.Write($"{off:D10} 00000 n \n");
-        }
-
-        // Trailer
-        writer.Write($"trailer << /Size {offsets.Count + 1} /Root 1 0 R >>\n");
-        writer.Write($"startxref\n{startXref}\n");
-        writer.Write("%%EOF\n");
-        writer.Flush();
-
-        return ms.ToArray();
-    }
 }

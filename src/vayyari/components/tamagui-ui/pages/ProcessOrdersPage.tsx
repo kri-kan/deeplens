@@ -113,192 +113,8 @@ interface OrderContainer {
   createdAt?: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock Data (covers all 4 stages with multi-group orders)
-// ─────────────────────────────────────────────────────────────────────────────
-const MOCK_GROUPS: OrderGroup[] = [
-  {
-    orderGrpId: 'ORD-84920-G1',
-    orderId: 'ORD-84920',
-    vendorName: 'Vayyari In-House Workshop',
-    needLabel: false,
-    status: 'confirmed',
-    paymentMode: 'Prepaid',
-    customerName: 'Ananya Sharma',
-    customerPhone: '+919876543210',
-    customerAddress: 'Plot 42, Jubilee Hills, Hyderabad',
-    createdAt: new Date().toISOString(),
-    items: [
-      {
-        id: 1,
-        itemId: 'ORD-84920-G1-I1',
-        orderGrpId: 'ORD-84920-G1',
-        productTitle: 'Emerald Silk Anarkali Set',
-        quantity: 1,
-        unitPrice: 4999,
-        subtotal: 4999,
-      },
-    ],
-  },
-  {
-    orderGrpId: 'ORD-84920-G2',
-    orderId: 'ORD-84920',
-    vendorName: 'Rajputana Handloom Suppliers',
-    needLabel: true,
-    status: 'processed',
-    paymentMode: 'COD',
-    customerName: 'Ananya Sharma',
-    customerPhone: '+919876543210',
-    customerAddress: 'Plot 42, Jubilee Hills, Hyderabad',
-    createdAt: new Date().toISOString(),
-    items: [
-      {
-        id: 2,
-        itemId: 'ORD-84920-G2-I1',
-        orderGrpId: 'ORD-84920-G2',
-        productTitle: 'Zari Border Dupatta',
-        quantity: 2,
-        unitPrice: 1299,
-        subtotal: 2598,
-      },
-    ],
-  },
-  {
-    orderGrpId: 'ORD-84915-G1',
-    orderId: 'ORD-84915',
-    vendorName: 'Vayyari In-House Workshop',
-    needLabel: true,
-    awbNumber: 'DELHIVERY987654321',
-    labelUrl: 'https://minio.deeplens.internal/labels/DELHIVERY987654321.pdf',
-    status: 'processed',
-    trackingSubStatus: 'In Transit',
-    paymentMode: 'COD',
-    customerName: 'Rohan Mehta',
-    customerPhone: '+919988776655',
-    customerAddress: '12B Palm Meadows, Whitefield, Bengaluru',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    items: [
-      {
-        id: 3,
-        itemId: 'ORD-84915-G1-I1',
-        orderGrpId: 'ORD-84915-G1',
-        productTitle: 'Royal Velvet Kurta Set',
-        quantity: 1,
-        unitPrice: 6499,
-        subtotal: 6499,
-      },
-    ],
-  },
-  {
-    orderGrpId: 'ORD-84910-G1',
-    orderId: 'ORD-84910',
-    vendorName: 'Rajputana Handloom Suppliers',
-    needLabel: true,
-    awbNumber: 'DELHIVERY123456789',
-    status: 'placed',
-    paymentMode: 'COD',
-    customerName: 'Priya Nair',
-    customerPhone: '+919844556677',
-    customerAddress: 'Flat 5B, Indiranagar, Bengaluru',
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
-    items: [
-      {
-        id: 4,
-        itemId: 'ORD-84910-G1-I1',
-        orderGrpId: 'ORD-84910-G1',
-        productTitle: 'Banarasi Silk Saree',
-        quantity: 1,
-        unitPrice: 8999,
-        subtotal: 8999,
-      },
-    ],
-  },
-  {
-    orderGrpId: 'ORD-84905-G1',
-    orderId: 'ORD-84905',
-    vendorName: 'Vayyari In-House Workshop',
-    needLabel: false,
-    status: 'delivered',
-    paymentMode: 'Prepaid',
-    customerName: 'Sunita Rao',
-    customerPhone: '+919866778899',
-    customerAddress: '22 MG Road, Chennai',
-    // 7 days ago → still in Delivered tab
-    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-    items: [
-      {
-        id: 5,
-        itemId: 'ORD-84905-G1-I1',
-        orderGrpId: 'ORD-84905-G1',
-        productTitle: 'Embroidered Cotton Kurti',
-        quantity: 2,
-        unitPrice: 1999,
-        subtotal: 3998,
-      },
-    ],
-  },
-  {
-    orderGrpId: 'ORD-84890-G1',
-    orderId: 'ORD-84890',
-    vendorName: 'Rajputana Handloom Suppliers',
-    needLabel: true,
-    awbNumber: 'DELHIVERY111222333',
-    status: 'delivered',
-    paymentMode: 'COD',
-    customerName: 'Meera Krishnan',
-    customerPhone: '+919811223344',
-    customerAddress: 'House 9, Adyar, Chennai',
-    // 14 days ago → goes into Archived tab
-    createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-    items: [
-      {
-        id: 6,
-        itemId: 'ORD-84890-G1-I1',
-        orderGrpId: 'ORD-84890-G1',
-        productTitle: 'Kanchipuram Silk Saree',
-        quantity: 1,
-        unitPrice: 12999,
-        subtotal: 12999,
-      },
-    ],
-  },
-  {
-    orderGrpId: 'ORD-84880-G1',
-    orderId: 'ORD-84880',
-    vendorName: 'Vayyari In-House Workshop',
-    needLabel: false,
-    status: 'delivered',
-    paymentMode: 'Prepaid',
-    customerName: 'Divya Menon',
-    customerPhone: '+919855667788',
-    customerAddress: 'Flat 3A, Koramangala, Bengaluru',
-    // 21 days ago → goes into Archived tab
-    createdAt: new Date(Date.now() - 21 * 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 21 * 86400000).toISOString(),
-    items: [
-      {
-        id: 7,
-        itemId: 'ORD-84880-G1-I1',
-        orderGrpId: 'ORD-84880-G1',
-        productTitle: 'Chanderi Cotton Suit Set',
-        quantity: 1,
-        unitPrice: 3499,
-        subtotal: 3499,
-      },
-      {
-        id: 8,
-        itemId: 'ORD-84880-G1-I2',
-        orderGrpId: 'ORD-84880-G1',
-        productTitle: 'Dupatta – Chanderi',
-        quantity: 1,
-        unitPrice: 799,
-        subtotal: 799,
-      },
-    ],
-  },
-];
+// No mock data in production — live data only
+const MOCK_GROUPS: OrderGroup[] = [];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
@@ -338,19 +154,15 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
         }
       });
 
-      if (merged.length > 0) {
-        // Deduplicate by orderGrpId
-        const seen = new Set<string>();
-        setAllGroups(merged.filter((g) => {
-          if (seen.has(g.orderGrpId)) return false;
-          seen.add(g.orderGrpId);
-          return true;
-        }));
-      } else {
-        setAllGroups(MOCK_GROUPS);
-      }
+      // Deduplicate by orderGrpId
+      const seen = new Set<string>();
+      setAllGroups(merged.filter((g) => {
+        if (seen.has(g.orderGrpId)) return false;
+        seen.add(g.orderGrpId);
+        return true;
+      }));
     } catch {
-      setAllGroups(MOCK_GROUPS);
+      setAllGroups([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
