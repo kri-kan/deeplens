@@ -58,3 +58,13 @@ export const resolveLabelUrl = (pathOrUrl?: string | null): string => {
   const cleanPath = pathOrUrl.replace(/^\/+/, '');
   return `${cleanBase}/api/v1/Attachment/download?path=${encodeURIComponent(cleanPath)}`;
 };
+
+/**
+ * Resolves a shipping label URL or storage path to an image preview HTTP URL (.png).
+ */
+export const resolveLabelImageUrl = (pathOrUrl?: string | null): string => {
+  if (!pathOrUrl) return '';
+  const cleanPath = pathOrUrl.replace(/\.pdf$/i, '.png');
+  return resolveLabelUrl(cleanPath);
+};
+

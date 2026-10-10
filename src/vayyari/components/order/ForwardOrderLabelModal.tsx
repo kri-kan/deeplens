@@ -30,6 +30,8 @@ import {
   LuStar,
   LuReceipt,
   LuCalendar,
+  LuMaximize2,
+  LuPrinter,
 } from '@/components/tamagui-ui/icons/lu';
 import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { useTheme } from '@/theme';
@@ -37,9 +39,10 @@ import { logisticsService } from '@/services/logistics.service';
 import { vendorService } from '@/services/vendorService';
 import { searchApiClient } from '@/api/client';
 import { Warehouse } from '@/types/logistics';
+import { Image } from 'expo-image';
 import { shareImageUri } from '@/utils/shareImage';
 import { openPdfViewer } from '@/utils/viewPdf';
-import { resolveLabelUrl } from '@/utils/api-config';
+import { resolveLabelUrl, resolveLabelImageUrl } from '@/utils/api-config';
 import { AddressData } from './GroupManagementView';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 import { SchedulePickupModal } from './SchedulePickupModal';
@@ -173,6 +176,7 @@ export function ForwardOrderLabelModal({
   const [isAuditExpanded, setIsAuditExpanded] = useState<boolean>(false);
   const [copiedAwb, setCopiedAwb] = useState(false);
   const [showSchedulePickup, setShowSchedulePickup] = useState(false);
+  const [showFullPreviewModal, setShowFullPreviewModal] = useState(false);
 
   // Shipping Rate Estimation state
   const [estimating, setEstimating] = useState(false);
@@ -551,13 +555,15 @@ export function ForwardOrderLabelModal({
     setTimeout(() => setCopiedAwb(false), 2000);
   };
 
+  const rawLabelUrl =
+    generatedLabelUrl ||
+    initialLabelUrl ||
+    (generatedAwb ? `labels/${generatedAwb}.pdf` : '');
+  const resolvedPdfUrl = resolveLabelUrl(rawLabelUrl);
+  const resolvedPreviewImageUrl = resolveLabelImageUrl(rawLabelUrl);
+
   const handleOpenPdfViewer = async () => {
-    const rawUrl =
-      generatedLabelUrl ||
-      initialLabelUrl ||
-      (generatedAwb ? `labels/${generatedAwb}.pdf` : '');
-    const resolvedUrl = resolveLabelUrl(rawUrl);
-    if (!resolvedUrl) {
+    if (!resolvedPdfUrl && !resolvedPreviewImageUrl) {
       setFeedbackDialog({
         visible: true,
         title: 'No Label Document',
@@ -567,16 +573,15 @@ export function ForwardOrderLabelModal({
       });
       return;
     }
-    await openPdfViewer(resolvedUrl, `Delhivery Label ${generatedAwb}`);
+    if (Platform.OS === 'web') {
+      window.open(resolvedPdfUrl, '_blank');
+      return;
+    }
+    setShowFullPreviewModal(true);
   };
 
   const handleSharePdf = async () => {
-    const rawUrl =
-      generatedLabelUrl ||
-      initialLabelUrl ||
-      (generatedAwb ? `labels/${generatedAwb}.pdf` : '');
-    const resolvedUrl = resolveLabelUrl(rawUrl);
-    if (!resolvedUrl) {
+    if (!resolvedPdfUrl) {
       setFeedbackDialog({
         visible: true,
         title: 'No Label Document',
@@ -586,8 +591,9 @@ export function ForwardOrderLabelModal({
       });
       return;
     }
-    await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
+    await shareImageUri(resolvedPdfUrl, `Delhivery Label ${generatedAwb}`);
   };
+
 
 
   return (
@@ -1393,19 +1399,48 @@ export function ForwardOrderLabelModal({
 
                 {/* PDF Viewer / Interactive Embed Area */}
                 <YStack
-                  height={320}
-                  backgroundColor="#F8FAFC"
+                  height={340}
+                  backgroundColor="#FFFFFF"
                   alignItems="center"
                   justifyContent="center"
                   position="relative"
                   overflow="hidden"
                 >
-                  {Platform.OS === 'web' && resolveLabelUrl(generatedLabelUrl || initialLabelUrl) ? (
+                  {Platform.OS === 'web' && resolvedPdfUrl ? (
                     <iframe
-                      src={resolveLabelUrl(generatedLabelUrl || initialLabelUrl)}
+                      src={resolvedPdfUrl}
                       title="Delhivery Shipping Label"
                       style={{ width: '100%', height: '100%', border: 'none' }}
                     />
+                  ) : resolvedPreviewImageUrl ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Open Fullscreen Shipping Label Preview"
+                      onPress={handleOpenPdfViewer}
+                      style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Image
+                        source={{ uri: resolvedPreviewImageUrl }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="contain"
+                      />
+                      <YStack
+                        position="absolute"
+                        bottom={10}
+                        backgroundColor="rgba(15, 23, 42, 0.85)"
+                        paddingHorizontal={12}
+                        paddingVertical={6}
+                        borderRadius={tokens.radius.sm}
+                        flexDirection="row"
+                        alignItems="center"
+                        gap={6}
+                      >
+                        <LuMaximize2 size={13} color="#FFFFFF" />
+                        <Text fontSize={11} fontWeight="800" color="#FFFFFF">
+                          Tap to Zoom / Fullscreen
+                        </Text>
+                      </YStack>
+                    </Pressable>
                   ) : (
                     <YStack alignItems="center" justifyContent="center" padding={20} gap={12} width="100%">
                       <YStack
@@ -1883,6 +1918,176 @@ export function ForwardOrderLabelModal({
             </YStack>
           </Modal>
         )}
+
+        {/* ── Fullscreen Shipping Label Preview Modal ── */}
+        <Modal
+          visible={showFullPreviewModal}
+          transparent={false}
+          animationType="slide"
+          onRequestClose={() => setShowFullPreviewModal(false)}
+        >
+          <YStack flex={1} backgroundColor="#0F172A" paddingTop={insets.top}>
+            {/* Header */}
+            <XStack
+              height={56}
+              paddingHorizontal={16}
+              alignItems="center"
+              justifyContent="space-between"
+              backgroundColor="#1E293B"
+              borderBottomWidth={1}
+              borderBottomColor="#334155"
+            >
+              <XStack alignItems="center" gap={10} flex={1}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close Preview"
+                  onPress={() => setShowFullPreviewModal(false)}
+                  hitSlop={12}
+                  style={({ pressed }) => ({
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  })}
+                >
+                  <LuArrowLeft size={22} color="#FFFFFF" />
+                </Pressable>
+                <YStack flex={1}>
+                  <Text fontSize={14} fontWeight="800" color="#FFFFFF" numberOfLines={1}>
+                    Shipping Label Preview
+                  </Text>
+                  <Text fontSize={11} color="#94A3B8" numberOfLines={1}>
+                    AWB {generatedAwb} • Delhivery Thermal (4×6)
+                  </Text>
+                </YStack>
+              </XStack>
+
+              <XStack alignItems="center" gap={8}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Share Label"
+                  onPress={handleSharePdf}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: pressed ? '#334155' : 'rgba(255,255,255,0.08)',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: tokens.radius.sm,
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.15)',
+                  })}
+                >
+                  <LuShare2 size={15} color="#FFFFFF" />
+                  <Text fontSize={12} fontWeight="700" color="#FFFFFF">
+                    Share
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  onPress={() => setShowFullPreviewModal(false)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+                  })}
+                >
+                  <LuX size={20} color="#FFFFFF" />
+                </Pressable>
+              </XStack>
+            </XStack>
+
+            {/* High-res Thermal Label Canvas */}
+            <ScrollView
+              contentContainerStyle={{
+                flexGrow: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+              }}
+              maximumZoomScale={3.0}
+              minimumZoomScale={1.0}
+              showsVerticalScrollIndicator={false}
+            >
+              {resolvedPreviewImageUrl ? (
+                <YStack
+                  backgroundColor="#FFFFFF"
+                  borderRadius={8}
+                  overflow="hidden"
+                  shadowColor="#000"
+                  shadowOffset={{ width: 0, height: 4 }}
+                  shadowOpacity={0.3}
+                  shadowRadius={8}
+                  elevation={8}
+                  style={{ width: '100%', maxWidth: 440, aspectRatio: 4 / 6 }}
+                >
+                  <Image
+                    source={{ uri: resolvedPreviewImageUrl }}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="contain"
+                    priority="high"
+                  />
+                </YStack>
+              ) : (
+                <YStack alignItems="center" justifyContent="center" gap={12}>
+                  <LuFileText size={48} color="#94A3B8" />
+                  <Text fontSize={14} color="#94A3B8">
+                    Preview unavailable
+                  </Text>
+                </YStack>
+              )}
+            </ScrollView>
+
+            {/* Bottom Bar with Actions */}
+            <XStack
+              paddingHorizontal={16}
+              paddingVertical={12}
+              backgroundColor="#1E293B"
+              borderTopWidth={1}
+              borderTopColor="#334155"
+              alignItems="center"
+              justifyContent="space-between"
+              gap={12}
+            >
+              <YStack flex={1}>
+                <Text fontSize={12} fontWeight="700" color="#F1F5F9">
+                  Ready for Thermal Printing
+                </Text>
+                <Text fontSize={10} color="#94A3B8">
+                  Pinch or double tap to zoom in on barcode
+                </Text>
+              </YStack>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share PDF to Print or External App"
+                onPress={handleSharePdf}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: pressed ? '#1D4ED8' : tokens.accent,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: tokens.radius.sm,
+                })}
+              >
+                <LuShare2 size={16} color="#FFFFFF" />
+                <Text fontSize={13} fontWeight="800" color="#FFFFFF">
+                  Share / Print PDF
+                </Text>
+              </Pressable>
+            </XStack>
+          </YStack>
+        </Modal>
 
         {/* ── Schedule Pickup Modal ── */}
         <SchedulePickupModal

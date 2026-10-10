@@ -290,3 +290,8 @@ export const LuTarget: React.FC<IconProps> = ({ size = 16, color = "#333333", st
 export const LuFolder: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="folder" size={size} color={color} style={style} />
 );
+export const LuPrinter: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="printer" size={size} color={color} style={style} />
+);
+
+
