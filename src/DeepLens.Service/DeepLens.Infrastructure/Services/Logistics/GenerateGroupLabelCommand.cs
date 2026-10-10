@@ -67,8 +67,28 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                 return Result<GenerateGroupLabelResponse>.Failure(new Error("GroupLabel.InvalidId", "Order Group ID cannot be empty."));
             }
 
-            var parts = request.OrderGrpId.Split('-');
-            var orderId = parts.Length >= 2 ? $"{parts[0]}-{parts[1]}" : request.OrderGrpId;
+            // Look up orderId from order_groups first, falling back to stripping group suffix -G\d+
+            string? orderId = null;
+            using (var conn = await _dbConnectionFactory.CreateConnectionAsync())
+            {
+                orderId = await conn.QueryFirstOrDefaultAsync<string>(
+                    "SELECT order_id FROM order_groups WHERE order_grp_id = @OrderGrpId LIMIT 1",
+                    new { OrderGrpId = request.OrderGrpId });
+            }
+
+            if (string.IsNullOrWhiteSpace(orderId))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(request.OrderGrpId, @"^(.*?)-G\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    orderId = match.Groups[1].Value;
+                }
+                else
+                {
+                    var parts = request.OrderGrpId.Split('-');
+                    orderId = parts.Length > 1 ? string.Join("-", parts.Take(parts.Length - 1)) : request.OrderGrpId;
+                }
+            }
 
             var order = await _orderRepository.GetDetailsAsync(orderId);
             if (order == null)
@@ -188,7 +208,15 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
 
             var shipmentResult = await _delhiveryClient.CreateShipmentAsync(payload, cancellationToken);
             var pkg = shipmentResult.Packages?.FirstOrDefault();
-            var awbNumber = pkg?.Waybill ?? $"DEL{DateTime.UtcNow:yyMMdd}{new Random().Next(10000, 99999)}";
+            var awbNumber = pkg?.Waybill;
+
+            if (string.IsNullOrWhiteSpace(awbNumber))
+            {
+                var errRemarks = string.Join("; ", shipmentResult.Packages?.SelectMany(p => p.Remarks ?? Enumerable.Empty<string>()) ?? Enumerable.Empty<string>());
+                var errDetail = !string.IsNullOrWhiteSpace(errRemarks) ? errRemarks : (!string.IsNullOrWhiteSpace(shipmentResult.Error) ? shipmentResult.Error : "Delhivery did not return a valid waybill.");
+                _logger.LogError("Delhivery shipment creation failed for group {GroupGrpId}: {Error}", group.OrderGrpId, errDetail);
+                return Result<GenerateGroupLabelResponse>.Failure(new Error("GroupLabel.DelhiveryFailed", $"Delhivery manifestation failed: {errDetail}"));
+            }
 
             _logger.LogInformation("Generating and persisting PDF thermal label for AWB {Awb}", awbNumber);
             var labelUrl = await _delhiveryClient.GeneratePackingSlipAndPersistAsync(awbNumber, cancellationToken);

@@ -748,7 +748,14 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       setSnackbarVisible(true);
       await loadOrder();
     } catch (err: any) {
-      Alert.alert('Label Generation Failed', err?.message || 'Could not generate Delhivery shipping label.');
+      setConfirmDialog({
+        visible: true,
+        type: 'single',
+        title: 'Label Generation Failed',
+        message: err?.message || 'Could not generate Delhivery shipping label.',
+        confirmLabel: 'OK',
+        intent: 'critical',
+      });
     } finally {
       setSaving(false);
     }

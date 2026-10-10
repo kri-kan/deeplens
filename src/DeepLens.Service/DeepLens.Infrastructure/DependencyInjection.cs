@@ -41,6 +41,12 @@ public static class DependencyInjection
         services.AddScoped<DeepLens.Infrastructure.Services.Logistics.INdrService, DeepLens.Infrastructure.Services.Logistics.NdrService>();
         services.AddScoped<DeepLens.Infrastructure.Services.Logistics.IShipmentService, DeepLens.Infrastructure.Services.Logistics.ShipmentService>();
 
+        // MediatR Handlers in Infrastructure
+        services.AddMediatR(config =>
+        {
+            config.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);
+        });
+
         return services;
     }
 }
