@@ -652,9 +652,10 @@ public class DelhiveryClient : IDelhiveryClient
 
     private byte[] GenerateMockLabelPdf(string awb)
     {
-        // Generates a fully compliant standard 4x6 inch (288 x 432 pt) PDF document with exact byte offsets
+        // Generates a fully compliant standard PDF document with exact byte offsets and universal print preview support
         var textLines = new List<string>
         {
+            "0 0 0 rg",
             "BT",
             "/F1 16 Tf",
             "20 400 Td",
@@ -709,9 +710,9 @@ public class DelhiveryClient : IDelhiveryClient
         writer.Write("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n");
         writer.Flush();
 
-        // 3: Page (4x6 in = 288 x 432 pt)
+        // 3: Page (4x6 in = 288 x 432 pt, with standard ProcSet for print renderers)
         offsets.Add(ms.Position);
-        writer.Write("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n");
+        writer.Write("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /ProcSet [/PDF /Text] >> >> endobj\n");
         writer.Flush();
 
         // 4: Stream Contents
@@ -722,9 +723,9 @@ public class DelhiveryClient : IDelhiveryClient
         writer.Write("endstream\nendobj\n");
         writer.Flush();
 
-        // 5: Helvetica Font
+        // 5: Helvetica Font with WinAnsiEncoding
         offsets.Add(ms.Position);
-        writer.Write("5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n");
+        writer.Write("5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj\n");
         writer.Flush();
 
         // Cross-reference table
