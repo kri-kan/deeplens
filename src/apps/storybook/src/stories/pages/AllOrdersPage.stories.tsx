@@ -65,8 +65,22 @@ export const DefaultMobile: Story = {
   },
 };
 
+/**
+ * 2. Loading / Shimmer State
+ * Demonstrates smooth animated pulse shimmer skeleton placeholders while loading all orders.
+ */
+export const LoadingShimmerState: Story = {
+  name: '2. Loading / Shimmer State',
+  decorators: [withFormFactor('mobile', 'All Orders - Loading Shimmer')],
+  args: {
+    disableSafeArea: true,
+    orders: [],
+    isLoading: true,
+  },
+};
+
 export const LoadingMoreState: Story = {
-  name: '2. Loading More (Infinite Scroll Footer)',
+  name: '3. Loading More (Infinite Scroll Footer)',
   decorators: [withFormFactor('mobile', 'All Orders - Loading More')],
   args: {
     disableSafeArea: true,
@@ -78,7 +92,7 @@ export const LoadingMoreState: Story = {
 };
 
 export const EmptyState: Story = {
-  name: '3. Search No Results',
+  name: '4. Search No Results',
   decorators: [withFormFactor('mobile', 'All Orders - Empty')],
   args: {
     disableSafeArea: true,
@@ -90,7 +104,7 @@ export const EmptyState: Story = {
 };
 
 export const TabletView: Story = {
-  name: '4. Tablet Viewport',
+  name: '5. Tablet Viewport',
   decorators: [withFormFactor('tablet', 'All Orders - Tablet')],
   args: {
     disableSafeArea: true,
@@ -98,3 +112,4 @@ export const TabletView: Story = {
     totalCount: 142,
   },
 };
+

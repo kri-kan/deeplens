@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ScrollView,
   TextInput,
@@ -29,7 +29,11 @@ import {
   LuTriangleAlert,
   LuExternalLink,
   LuTrash2,
+  LuEye,
+  LuImage,
 } from '@/components/tamagui-ui/icons/lu';
+import { ImageViewerModal } from '@/components/tamagui-ui/molecules/ImageViewerModal';
+import { CapsuleSegmentControl } from '@/components/tamagui-ui/atoms/CapsuleSegmentControl';
 import {
   RiWhatsappLine,
   RiWhatsappFill,
@@ -48,17 +52,18 @@ import {
   OrderStatus,
 } from '@/types/orders';
 
+import { ProductListSection, OrderItem } from './ProductListSection';
+import { ProductEditSheet } from './ProductEditSheet';
+import { QuickPickerSheet } from '@/components/tamagui-ui/molecules/QuickPickerSheet';
+import { TransactionReceiptSection } from '@/components/tamagui-ui/molecules/TransactionReceiptSection';
+import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
+
 // Brand colors
 export const WHATSAPP_GREEN = '#25D366';
 export const INSTAGRAM_ACTIVE = '#E1306C';
 
 export type OrderSource = 'whatsapp' | 'instagram' | null;
 export type PaymentType = 'cod' | 'prepaid';
-
-export interface LocalImage {
-  id: string;
-  uri: string;
-}
 
 export interface AddressData {
   name: string;
@@ -826,41 +831,54 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
   const { tokens } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { sharedMedia, commitCurrentSession, discardCurrentSession, removeSharedMedia } = useShareIntentContext();
+  const { sharedMedia, commitCurrentSession, removeSharedMedia } = useShareIntentContext();
 
+  // Top Section States (UNTOUCHED)
   const [source, setSource] = useState<OrderSource>('whatsapp');
   const [paymentType, setPaymentType] = useState<PaymentType>('cod');
-  const [needLabel, setNeedLabel] = useState<boolean>(true);
   const [sourceInput, setSourceInput] = useState('');
-  const [images, setImages] = useState<LocalImage[]>([]);
+
+  // Rest of Screen States (Matching Edit Order Screen)
   const [address, setAddress] = useState<AddressData | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false); // Address sheet
+  const [products, setProducts] = useState<OrderItem[]>([]);
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [transactionId, setTransactionId] = useState('');
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
 
-  const handlePaymentTypeChange = (type: PaymentType) => {
-    setPaymentType(type);
-    if (type === 'cod') {
-      setNeedLabel(true);
-    } else {
-      setNeedLabel(false);
-    }
-  };
+  // Sheets & Dialogs matching Edit Order screen
+  const [activeItem, setActiveItem] = useState<OrderItem | null>(null);
+  const [productSheetOpen, setProductSheetOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ uri: string; title?: string } | null>(null);
+  const handledMediaUris = useRef<Set<string>>(new Set());
 
-  // Line items
-  const [items, setItems] = useState<Array<{
-    id: string;
+  const [pickerState, setPickerState] = useState<{
+    visible: boolean;
+    type: 'size' | 'qty';
+    itemId: string;
+    currentValue: string;
+  }>({
+    visible: false,
+    type: 'size',
+    itemId: '',
+    currentValue: '',
+  });
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    type: 'single' | 'batch';
+    targetId?: string;
     title: string;
-    sku: string;
-    size: string;
-    quantity: number;
-    price: number;
-    vendorId?: string;
-  }>>([]);
+    message: string;
+    confirmLabel: string;
+  }>({
+    visible: false,
+    type: 'single',
+    title: '',
+    message: '',
+    confirmLabel: '',
+  });
 
-  // Financials
-  const [shippingCharges, setShippingCharges] = useState(0);
-  const [discount, setDiscount] = useState(0);
-  const [advancePaid, setAdvancePaid] = useState(0);
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -874,32 +892,9 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
     }
   }, [snackbarVisible]);
 
-  const resetForm = () => {
-    setSource('whatsapp');
-    setPaymentType('cod');
-    setNeedLabel(true);
-    setSourceInput('');
-    setImages([]);
-    setAddress(null);
-    setItems([]);
-    setShippingCharges(0);
-    setDiscount(0);
-    setAdvancePaid(0);
-    setNotes('');
+  const handlePaymentTypeChange = (type: PaymentType) => {
+    setPaymentType(type);
   };
-
-  // Sync staged shared media from external apps
-  useEffect(() => {
-    if (sharedMedia && sharedMedia.length > 0) {
-      setImages((prev) => {
-        const existingUris = new Set(prev.map((i) => i.uri));
-        const newImgs = sharedMedia
-          .filter((m) => !existingUris.has(m.uri))
-          .map((m, idx) => ({ id: `share-${idx}-${Date.now()}`, uri: m.uri }));
-        return [...prev, ...newImgs];
-      });
-    }
-  }, [sharedMedia]);
 
   const handleSourceSelect = (selected: 'whatsapp' | 'instagram') => {
     if (source !== selected) {
@@ -908,55 +903,204 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
     }
   };
 
-  const handlePickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const picked = result.assets.map((a, idx) => ({
-          id: `local-${idx}-${Date.now()}`,
-          uri: a.uri,
+  const resetForm = () => {
+    setSource('whatsapp');
+    setPaymentType('cod');
+    setSourceInput('');
+    setAddress(null);
+    setProducts([]);
+    setSelectedItemIds([]);
+    setTransactionId('');
+    setReceiptUrl(null);
+    handledMediaUris.current.clear();
+  };
+
+  // Sync staged shared media from external apps directly into order items
+  useEffect(() => {
+    if (sharedMedia && sharedMedia.length > 0) {
+      setProducts((prev) => {
+        const existingUris = new Set(prev.map((i) => i.photoUri || i.image).filter(Boolean));
+        const unhandled = sharedMedia.filter(
+          (m) => !existingUris.has(m.uri) && !handledMediaUris.current.has(m.uri)
+        );
+        if (unhandled.length === 0) return prev;
+
+        unhandled.forEach((m) => handledMediaUris.current.add(m.uri));
+        const newItems: OrderItem[] = unhandled.map((m, idx) => ({
+          id: `item-shared-${Date.now()}-${idx}`,
+          title: '',
+          productId: '',
+          size: 'Free Size',
+          quantity: 1,
+          costPerPiece: 0,
+          photoUri: m.uri,
+          image: m.uri,
         }));
-        setImages((prev) => [...prev, ...picked]);
-      }
-    } catch (e) {
-      console.warn('Image picker error', e);
+        return [...prev, ...newItems];
+      });
+    }
+  }, [sharedMedia]);
+
+  // Product List Handlers matching Edit Order Screen
+  const handleToggleSelect = (id: string) => {
+    setSelectedItemIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedItemIds.length === products.length) {
+      setSelectedItemIds([]);
+    } else {
+      setSelectedItemIds(products.map((p) => p.id));
     }
   };
 
-  const handleRemoveImage = (id: string) => {
-    setImages((prev) => prev.filter((i) => i.id !== id));
+  const handleBatchDelete = () => {
+    if (selectedItemIds.length === 0) return;
+    setConfirmDialog({
+      visible: true,
+      type: 'batch',
+      title: `Delete ${selectedItemIds.length} Items?`,
+      message: `Are you sure you want to remove ${selectedItemIds.length} selected items from this order draft?`,
+      confirmLabel: `Delete (${selectedItemIds.length})`,
+    });
   };
 
-  const handleAddItem = () => {
-    setItems((prev) => [
-      ...prev,
-      {
-        id: `item-${Date.now()}-${prev.length}`,
-        title: '',
-        sku: '',
-        size: 'Free Size',
-        quantity: 1,
-        price: 0,
-      },
-    ]);
+  const handleAddProduct = () => {
+    const newItem: OrderItem = {
+      id: `item-${Date.now()}-${products.length}`,
+      title: '',
+      productId: '',
+      size: 'Free Size',
+      quantity: 1,
+      costPerPiece: 0,
+    };
+    setActiveItem(newItem);
+    setProductSheetOpen(true);
   };
 
-  const handleUpdateItem = (id: string, updates: Partial<typeof items[0]>) => {
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
+  const handleEditProduct = (item: OrderItem) => {
+    setActiveItem(item);
+    setProductSheetOpen(true);
   };
 
-  const handleRemoveItem = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+  const handleSaveProductItem = (savedItem: OrderItem) => {
+    setProducts((prev) => {
+      const idx = prev.findIndex((p) => p.id === savedItem.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = savedItem;
+        return updated;
+      }
+      return [...prev, savedItem];
+    });
   };
 
-  // Calculations
-  const itemsSubtotal = items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
-  const totalAmount = Math.max(0, itemsSubtotal + shippingCharges - discount);
-  const pendingBalance = Math.max(0, totalAmount - advancePaid);
+  const handleRequestRemoveProduct = (id: string) => {
+    setConfirmDialog({
+      visible: true,
+      type: 'single',
+      targetId: id,
+      title: 'Remove Item?',
+      message: 'Are you sure you want to remove this item from the order draft?',
+      confirmLabel: 'Remove Item',
+    });
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmDialog.type === 'batch') {
+      const remaining = products.filter((p) => !selectedItemIds.includes(p.id));
+      setProducts(remaining);
+      setSelectedItemIds([]);
+    } else if (confirmDialog.type === 'single' && confirmDialog.targetId) {
+      const targetIdStr = String(confirmDialog.targetId);
+      const itemToRemove = products.find((i) => String(i.id) === targetIdStr);
+      if (itemToRemove?.photoUri && sharedMedia && sharedMedia.length > 0) {
+        const sIdx = sharedMedia.findIndex((m) => m.uri === itemToRemove.photoUri);
+        if (sIdx >= 0) {
+          removeSharedMedia(sIdx);
+        }
+      }
+      setProducts((prev) => prev.filter((x) => String(x.id) !== targetIdStr));
+      setSelectedItemIds((prev) => prev.filter((x) => String(x) !== targetIdStr));
+    }
+    setConfirmDialog((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleOpenPicker = (item: OrderItem, type: 'size' | 'qty') => {
+    setPickerState({
+      visible: true,
+      type,
+      itemId: item.id,
+      currentValue: type === 'size' ? (item.size || 'Free Size') : String(item.quantity || 1),
+    });
+  };
+
+  const handleSelectPickerOption = (value: string) => {
+    if (!pickerState.itemId) return;
+    setProducts((prev) =>
+      prev.map((item) => {
+        if (item.id !== pickerState.itemId) return item;
+        if (pickerState.type === 'size') {
+          return { ...item, size: value };
+        } else {
+          return { ...item, quantity: parseInt(value, 10) || 1 };
+        }
+      })
+    );
+    setPickerState((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleUpdateItem = (id: string, updates: Partial<OrderItem>) => {
+    setProducts((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
+  };
+
+  // Receipt Handlers matching Edit Order screen
+  const handleUploadReceipt = async (mockUrl: string) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setReceiptUrl(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.warn('Failed to pick receipt image:', err);
+    }
+  };
+
+  const handleRemoveReceipt = () => {
+    setReceiptUrl(null);
+  };
+
+  // Calculations matching Edit Order screen
+  const distinctGroupKeys = useMemo(() => {
+    return Array.from(
+      new Set(
+        products.map((p) => {
+          const raw = (p.vendor || '').trim();
+          const isUn = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+          return isUn ? 'Unassigned' : raw;
+        })
+      )
+    );
+  }, [products]);
+
+  const totalItemCount = useMemo(() => {
+    return products.reduce((sum, item) => sum + (item.quantity || 1), 0);
+  }, [products]);
+
+  const itemsSubtotal = useMemo(() => {
+    return products.reduce((sum, item) => {
+      const codCharge = paymentType === 'cod' ? (item.codChargePerPiece ?? 50) : 0;
+      return sum + (item.quantity || 1) * ((item.costPerPiece || 0) + codCharge);
+    }, 0);
+  }, [products, paymentType]);
+
+  const totalAmount = itemsSubtotal;
 
   const handleSubmit = async (statusTarget: OrderStatus = 'Unconfirmed') => {
     if (statusTarget === 'Confirmed') {
@@ -964,12 +1108,12 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         Alert.alert('Missing Contact', 'Please provide customer WhatsApp number or Instagram handle.');
         return;
       }
-      if (items.length === 0) {
+      if (products.length === 0) {
         Alert.alert('No Items', 'Please add at least one item before confirming the order.');
         return;
       }
-      if (items.some((i) => !i.title.trim())) {
-        Alert.alert('Invalid Item', 'All added items must have a title before confirming.');
+      if (products.some((i) => !i.title?.trim() && !i.productId?.trim() && !i.photoUri && !i.image)) {
+        Alert.alert('Invalid Item', 'All added items must have a photo, title or SKU before confirming.');
         return;
       }
     }
@@ -989,14 +1133,12 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         }
       }
 
-      const effectiveNeedLabel = paymentType === 'cod' ? true : needLabel;
-
       const orderPayload: Partial<OrderIdEntry> = {
         source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
         sourceHandle: sourceInput.trim(),
         paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
         status: statusTarget,
-        needLabel: effectiveNeedLabel,
+        needLabel: paymentType === 'cod',
         customerName: address?.name || 'Customer',
         customerPhone: source === 'whatsapp' ? sourceInput.trim() : (address?.phone || sourceInput.trim()),
         customerAddress: address?.address,
@@ -1006,16 +1148,34 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         shippingState: address?.state,
         customerId,
         isServiceable: address?.isDelhiveryServiceable ?? false,
-        shippingCharges,
-        advancePaid,
-        items: items.map((i) => ({
-          productId: i.sku || undefined,
-          productTitle: i.title,
-          quantity: i.quantity,
-          unitPrice: i.price,
-          subtotal: i.price * i.quantity,
-          vendorId: i.vendorId,
-        })),
+        transactionId: transactionId.trim() || undefined,
+        attachments: receiptUrl
+          ? [{ id: `receipt-${Date.now()}`, key: receiptUrl, name: 'receipt_screenshot.png', tag: 'order_receipt' }]
+          : undefined,
+        items: products.map((i, idx) => {
+          const meta = (i.photoUri || i.image || i.size || i.catalogImageUrl || i.vendor || i.attachmentId || i.storagePath)
+            ? JSON.stringify({
+                photoUri: i.photoUri || (i.image && i.image !== i.catalogImageUrl ? i.image : undefined),
+                image: i.photoUri || i.image,
+                catalogImageUrl: i.catalogImageUrl,
+                size: i.size || 'Free Size',
+                vendor: i.vendor,
+                attachmentId: i.attachmentId,
+                storagePath: i.storagePath,
+              })
+            : undefined;
+          const itemTitle = i.title?.trim() || (i.productId?.trim() ? `Item ${i.productId.trim()}` : `Product Item #${idx + 1}`);
+          return {
+            productId: i.productId?.trim() || undefined,
+            productTitle: itemTitle,
+            quantity: i.quantity || 1,
+            unitPrice: i.costPerPiece || 0,
+            subtotal: (i.costPerPiece || 0) * (i.quantity || 1),
+            vendorId: i.vendor || undefined,
+            vendorName: i.vendor || undefined,
+            comments: meta,
+          };
+        }),
       };
 
       const res = await searchApiClient.post<{ id?: string; orderId?: string }>(API_ROUTES.ORDERS.GENERATE_WITH_ITEMS, orderPayload);
@@ -1034,24 +1194,28 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
           source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'Manual',
           sourceHandle: sourceInput.trim() || undefined,
           paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
-          totalOrderValue: items.reduce((acc, it) => acc + it.price * it.quantity, 0) + shippingCharges,
-          totalCodBalance: paymentType === 'cod' ? items.reduce((acc, it) => acc + it.price * it.quantity, 0) + shippingCharges : 0,
+          totalOrderValue: totalAmount,
+          totalCodBalance: paymentType === 'cod' ? totalAmount : 0,
           orderDate: new Date().toISOString(),
           status: 'PendingFulfillment',
           hasNdr: false,
           hasEscalation: false,
-          items: items.map((i, idx) => ({
-            id: `ITEM-${createdId}-${idx + 1}`,
-            orderId: createdId,
-            productId: i.sku || '',
-            productName: i.title,
-            quantity: i.quantity,
-            unitPrice: i.price,
-            totalPrice: i.price * i.quantity,
-            proportionalCodAmount: i.price * i.quantity,
-            vendorId: 'VND-DEFAULT',
-            vendorName: 'Default Vendor'
-          })),
+          items: products.map((i, idx) => {
+            const itemTitle = i.title?.trim() || (i.productId?.trim() ? `Item ${i.productId.trim()}` : `Product Item #${idx + 1}`);
+            return {
+              id: `ITEM-${createdId}-${idx + 1}`,
+              orderId: createdId,
+              productId: i.productId?.trim() || '',
+              productName: itemTitle,
+              quantity: i.quantity || 1,
+              unitPrice: i.costPerPiece || 0,
+              totalPrice: (i.costPerPiece || 0) * (i.quantity || 1),
+              proportionalCodAmount: (i.costPerPiece || 0) * (i.quantity || 1),
+              vendorId: i.vendor || 'VND-DEFAULT',
+              vendorName: i.vendor || 'Default Vendor',
+              photoUri: i.photoUri || i.image,
+            };
+          }),
           packages: []
         });
       }
@@ -1161,11 +1325,11 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
       {/* Scrollable Form Content */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(36, insets.bottom + 24) }}
+        contentContainerStyle={{ paddingBottom: 100 + Math.max(16, insets.bottom) }}
         keyboardShouldPersistTaps="handled"
       >
         <YStack paddingHorizontal={8} paddingTop={10} gap={10}>
-          {/* ── Section 1: Order Type & Channel ── */}
+          {/* ── Section 1: Order Type & Channel (LEFT EXACTLY AS REQUESTED) ── */}
           <YStack gap={8}>
             <XStack alignItems="center" justifyContent="space-between">
               {/* Bare Source Brand Icons */}
@@ -1196,102 +1360,15 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
               </XStack>
 
               {/* Payment Type Pills */}
-              <XStack
-                backgroundColor={tokens.surfaceRaised}
-                borderRadius={tokens.radius.full}
-                borderWidth={1}
-                borderColor={tokens.border}
-                padding={3}
-                gap={2}
-              >
-                {(['cod', 'prepaid'] as PaymentType[]).map((p) => {
-                  const isActive = paymentType === p;
-                  return (
-                    <YStack
-                      key={p}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${p === 'cod' ? 'Cash on Delivery' : 'Prepaid'} payment`}
-                      onPress={() => handlePaymentTypeChange(p)}
-                      paddingHorizontal={16}
-                      paddingVertical={8}
-                      borderRadius={tokens.radius.full}
-                      backgroundColor={isActive ? tokens.accent : 'transparent'}
-                      overflow="hidden"
-                      cursor="pointer"
-                      pressStyle={{ opacity: 0.85 }}
-                    >
-                      <Text
-                        fontSize={13}
-                        fontWeight="700"
-                        color={isActive ? tokens.accentForeground : tokens.textSecondary}
-                        letterSpacing={0.3}
-                      >
-                        {p === 'cod' ? 'COD' : 'Prepaid'}
-                      </Text>
-                    </YStack>
-                  );
-                })}
-              </XStack>
-            </XStack>
-
-            {/* Need Label Toggle Switch */}
-            <XStack
-              backgroundColor={tokens.surface}
-              borderWidth={1}
-              borderColor={tokens.border}
-              borderRadius={tokens.radius.md}
-              padding={12}
-              alignItems="center"
-              justifyContent="space-between"
-            >
-              <YStack gap={2} flex={1}>
-                <XStack alignItems="center" gap={6}>
-                  <Text fontSize={13} fontWeight="700" color={tokens.text}>
-                    Delhivery Shipping Label
-                  </Text>
-                  {paymentType === 'cod' ? (
-                    <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={4} backgroundColor={`${tokens.accent}20`}>
-                      <Text fontSize={9} fontWeight="800" color={tokens.accent}>MANDATORY FOR COD</Text>
-                    </YStack>
-                  ) : (
-                    <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={4} backgroundColor={needLabel ? `${tokens.success}20` : `${tokens.textMuted}20`}>
-                      <Text fontSize={9} fontWeight="800" color={needLabel ? tokens.success : tokens.textMuted}>
-                        {needLabel ? 'ENABLED' : 'VENDOR DIRECT'}
-                      </Text>
-                    </YStack>
-                  )}
-                </XStack>
-                <Text fontSize={11} color={tokens.textMuted}>
-                  {paymentType === 'cod'
-                    ? 'All COD orders require auto-generated Delhivery thermal label before dispatch.'
-                    : needLabel
-                    ? 'Enabled: Dispatched from own warehouse (Delhivery label auto-generated).'
-                    : 'Disabled: Direct vendor dispatch (Image & address details shared with vendor).'}
-                </Text>
-              </YStack>
-
-              <Pressable
-                disabled={paymentType === 'cod'}
-                onPress={() => setNeedLabel((prev) => !prev)}
-                style={{ opacity: paymentType === 'cod' ? 0.6 : 1 }}
-              >
-                <YStack
-                  width={44}
-                  height={26}
-                  borderRadius={13}
-                  backgroundColor={needLabel ? tokens.accent : tokens.border}
-                  padding={3}
-                  justifyContent="center"
-                >
-                  <YStack
-                    width={20}
-                    height={20}
-                    borderRadius={10}
-                    backgroundColor="#FFFFFF"
-                    alignSelf={needLabel ? 'flex-end' : 'flex-start'}
-                  />
-                </YStack>
-              </Pressable>
+              <CapsuleSegmentControl<PaymentType>
+                options={[
+                  { value: 'cod', label: 'COD' },
+                  { value: 'prepaid', label: 'Prepaid' },
+                ]}
+                value={paymentType}
+                onChange={(val) => val && handlePaymentTypeChange(val)}
+                accessibilityLabel="Select payment type"
+              />
             </XStack>
 
             {/* Input with Quick Launcher */}
@@ -1376,77 +1453,52 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
             )}
           </YStack>
 
-          <YStack height={1} backgroundColor={tokens.border} />
-
-          {/* ── Section 2: Reference Images Gallery ── */}
-          <YStack gap={6}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
-              Reference Images ({images.length})
-            </Text>
-            <XStack flexWrap="wrap" gap={8}>
-              {images.map((img) => (
-                <YStack
-                  key={img.id}
-                  width={76}
-                  height={76}
-                  borderRadius={tokens.radius.md}
-                  overflow="hidden"
-                  position="relative"
-                  backgroundColor={tokens.surfaceRaised}
-                >
-                  <Image source={{ uri: img.uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                  <Pressable
-                    style={{ position: 'absolute', top: 4, right: 4 }}
-                    onPress={() => handleRemoveImage(img.id)}
-                  >
-                    <YStack
-                      width={20}
-                      height={20}
-                      borderRadius={10}
-                      backgroundColor="rgba(0,0,0,0.6)"
-                      alignItems="center"
-                      justifyContent="center"
-                    >
-                      <LuX size={10} color="#FFFFFF" />
-                    </YStack>
-                  </Pressable>
-                </YStack>
-              ))}
-
-              <Pressable accessibilityRole="button" onPress={handlePickImage}>
-                <YStack
-                  width={76}
-                  height={76}
-                  borderRadius={tokens.radius.md}
-                  borderWidth={1.5}
-                  borderColor={tokens.border}
-                  borderStyle="dashed"
-                  backgroundColor={tokens.surface}
-                  alignItems="center"
-                  justifyContent="center"
-                  gap={4}
-                >
-                  <YStack
-                    width={30}
-                    height={30}
-                    borderRadius={15}
-                    backgroundColor={tokens.accentSubtle}
-                    alignItems="center"
-                    justifyContent="center"
-                  >
-                    <LuPlus size={16} color={tokens.accent} />
-                  </YStack>
-                  <Text fontSize={10} color={tokens.textMuted} fontWeight="600">
-                    Add Photo
-                  </Text>
-                </YStack>
-              </Pressable>
+          {/* ── Delhivery Express Serviceability Status Banner (Matching Edit Order Screen) ── */}
+          {address?.isDelhiveryServiceable && (
+            <XStack
+              backgroundColor={`${tokens.accent}12`}
+              borderWidth={1}
+              borderColor={`${tokens.accent}30`}
+              borderRadius={tokens.radius.md}
+              padding={12}
+              alignItems="center"
+              justifyContent="space-between"
+            >
+              <YStack gap={2}>
+                <Text fontSize={11} fontWeight="700" color={tokens.accent} textTransform="uppercase">
+                  Delhivery Express
+                </Text>
+                <Text fontSize={13} fontWeight="800" color={tokens.text}>
+                  PIN: {address.pincode}
+                </Text>
+              </YStack>
+              <XStack gap={4} alignItems="center">
+                <LuCheck size={14} color={tokens.success} />
+                <Text fontSize={12} fontWeight="700" color={tokens.success}>
+                  Serviceable
+                </Text>
+              </XStack>
             </XStack>
-          </YStack>
+          )}
+
+          {/* ── Product List Section (Matching Edit Order Screen) ── */}
+          <ProductListSection
+            products={products}
+            selectedIds={selectedItemIds}
+            isCod={paymentType === 'cod'}
+            onToggleSelect={handleToggleSelect}
+            onToggleSelectAll={handleToggleSelectAll}
+            onBatchDelete={handleBatchDelete}
+            onAddProduct={handleAddProduct}
+            onEditProduct={handleEditProduct}
+            onOpenPicker={handleOpenPicker}
+            onUpdateItem={handleUpdateItem}
+            onRemoveProduct={handleRequestRemoveProduct}
+          />
 
           <YStack height={1} backgroundColor={tokens.border} />
 
-          {/* ── Section 3: Delivery Address Card ── */}
+          {/* ── Address Preview Card (Matching Edit Order Screen) ── */}
           <AddressCard
             address={address}
             onEditPress={() => setSheetOpen(true)}
@@ -1454,202 +1506,18 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
 
           <YStack height={1} backgroundColor={tokens.border} />
 
-          {/* ── Section 4: Line Items ── */}
-          <YStack gap={8}>
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
-                Order Items ({items.length})
-              </Text>
-              <Pressable onPress={handleAddItem}>
-                <XStack alignItems="center" gap={4}>
-                  <LuPlus size={14} color={tokens.accent} />
-                  <Text fontSize={12} fontWeight="700" color={tokens.accent}>
-                    Add Item
-                  </Text>
-                </XStack>
-              </Pressable>
-            </XStack>
-
-            {items.length === 0 ? (
-              <YStack
-                backgroundColor={tokens.surface}
-                borderWidth={1}
-                borderColor={tokens.border}
-                borderStyle="dashed"
-                borderRadius={tokens.radius.md}
-                paddingVertical={22}
-                paddingHorizontal={16}
-                alignItems="center"
-                justifyContent="center"
-                gap={6}
-              >
-                <Text fontSize={12} color={tokens.textMuted}>
-                  No items added yet (optional).
-                </Text>
-                <Pressable onPress={handleAddItem}>
-                  <XStack alignItems="center" gap={4}>
-                    <LuPlus size={13} color={tokens.accent} />
-                    <Text fontSize={12} fontWeight="700" color={tokens.accent}>
-                      Add Item
-                    </Text>
-                  </XStack>
-                </Pressable>
-              </YStack>
-            ) : (
-              items.map((item, index) => (
-                <YStack
-                  key={item.id}
-                  backgroundColor={tokens.surface}
-                  borderWidth={1}
-                  borderColor={tokens.border}
-                  borderRadius={tokens.radius.md}
-                  padding={12}
-                  gap={8}
-                >
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text fontSize={12} fontWeight="700" color={tokens.text}>
-                      #{index + 1}
-                    </Text>
-                    <Pressable onPress={() => handleRemoveItem(item.id)}>
-                      <LuTrash2 size={14} color={tokens.error} />
-                    </Pressable>
-                  </XStack>
-
-                <UnderlineField
-                  label="Title / Product Name *"
-                  value={item.title}
-                  onChange={(v) => handleUpdateItem(item.id, { title: v })}
-                  placeholder="e.g. Pure Silk Banarasi Saree"
-                />
-
-                <XStack gap={10}>
-                  <YStack flex={1}>
-                    <UnderlineField
-                      label="SKU / Code"
-                      value={item.sku}
-                      onChange={(v) => handleUpdateItem(item.id, { sku: v })}
-                      placeholder="e.g. BNR-01"
-                    />
-                  </YStack>
-                  <YStack flex={1}>
-                    <UnderlineField
-                      label="Size"
-                      value={item.size}
-                      onChange={(v) => handleUpdateItem(item.id, { size: v })}
-                      placeholder="e.g. Free Size, M, L"
-                    />
-                  </YStack>
-                </XStack>
-
-                <XStack gap={10}>
-                  <YStack flex={1}>
-                    <UnderlineField
-                      label="Qty"
-                      value={String(item.quantity)}
-                      onChange={(v) => handleUpdateItem(item.id, { quantity: parseInt(v, 10) || 1 })}
-                      keyboardType="numeric"
-                    />
-                  </YStack>
-                  <YStack flex={1}>
-                    <UnderlineField
-                      label="Unit Price (₹)"
-                      value={String(item.price || '')}
-                      onChange={(v) => handleUpdateItem(item.id, { price: parseFloat(v) || 0 })}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </YStack>
-                </XStack>
-              </YStack>
-            )))}
-          </YStack>
-
-          <YStack height={1} backgroundColor={tokens.border} />
-
-          {/* ── Section 5: Financials & Notes ── */}
-          <YStack gap={8}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
-              Financials & Summary
-            </Text>
-
-            <XStack gap={10}>
-              <YStack flex={1}>
-                <UnderlineField
-                  label="Shipping (₹)"
-                  value={String(shippingCharges || '')}
-                  onChange={(v) => setShippingCharges(parseFloat(v) || 0)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
-              </YStack>
-              <YStack flex={1}>
-                <UnderlineField
-                  label="Discount (₹)"
-                  value={String(discount || '')}
-                  onChange={(v) => setDiscount(parseFloat(v) || 0)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
-              </YStack>
-              <YStack flex={1}>
-                <UnderlineField
-                  label="Advance (₹)"
-                  value={String(advancePaid || '')}
-                  onChange={(v) => setAdvancePaid(parseFloat(v) || 0)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                />
-              </YStack>
-            </XStack>
-
-            <UnderlineField
-              label="Order Notes / Instructions"
-              value={notes}
-              onChange={setNotes}
-              placeholder="e.g. Urgent festive dispatch, gift wrap"
-              multiline
-              multilineHeight={44}
-            />
-
-            {/* Financial Summary Card */}
-            <YStack
-              backgroundColor={tokens.surfaceRaised}
-              borderRadius={tokens.radius.md}
-              padding={12}
-              gap={6}
-              marginTop={4}
-            >
-              <XStack justifyContent="space-between">
-                <Text fontSize={12} color={tokens.textMuted}>Items Subtotal</Text>
-                <Text fontSize={12} fontWeight="600" color={tokens.text}>₹{itemsSubtotal}</Text>
-              </XStack>
-              <XStack justifyContent="space-between">
-                <Text fontSize={12} color={tokens.textMuted}>Shipping</Text>
-                <Text fontSize={12} fontWeight="600" color={tokens.text}>+₹{shippingCharges}</Text>
-              </XStack>
-              {discount > 0 && (
-                <XStack justifyContent="space-between">
-                  <Text fontSize={12} color={tokens.textMuted}>Discount</Text>
-                  <Text fontSize={12} fontWeight="600" color={tokens.success}>-₹{discount}</Text>
-                </XStack>
-              )}
-              <YStack height={1} backgroundColor={tokens.border} marginVertical={2} />
-              <XStack justifyContent="space-between">
-                <Text fontSize={13} fontWeight="800" color={tokens.text}>Total Order Value</Text>
-                <Text fontSize={15} fontWeight="800" color={tokens.accent}>₹{totalAmount}</Text>
-              </XStack>
-              {advancePaid > 0 && (
-                <XStack justifyContent="space-between">
-                  <Text fontSize={12} color={tokens.textMuted}>Pending Balance (on delivery)</Text>
-                  <Text fontSize={12} fontWeight="700" color={tokens.textSecondary}>₹{pendingBalance}</Text>
-                </XStack>
-              )}
-            </YStack>
-          </YStack>
+          {/* ── Transaction & Receipt Section (Matching Edit Order Screen) ── */}
+          <TransactionReceiptSection
+            transactionId={transactionId}
+            receiptUrl={receiptUrl}
+            onChangeTransactionId={setTransactionId}
+            onUploadReceipt={handleUploadReceipt}
+            onRemoveReceipt={handleRemoveReceipt}
+          />
         </YStack>
       </ScrollView>
 
-      {/* Sticky Submit Bar */}
+      {/* ── Sticky Bottom Action Bar (Matching Edit Order Screen) ── */}
       <YStack
         position="absolute"
         bottom={0}
@@ -1659,70 +1527,109 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         borderTopWidth={1}
         borderTopColor={tokens.border}
         paddingHorizontal={12}
-        paddingVertical={12}
-        paddingBottom={Math.max(24, insets.bottom + 12)}
+        paddingTop={10}
+        paddingBottom={Math.max(12, insets.bottom + 8)}
         shadowColor="#000"
+        shadowOffset={{ width: 0, height: -3 }}
         shadowOpacity={0.08}
-        shadowRadius={12}
-        shadowOffset={{ width: 0, height: -4 }}
-        zIndex={50}
+        shadowRadius={6}
+        elevation={8}
+        zIndex={100}
       >
-        <XStack gap={10}>
-          {/* Save Draft (Unconfirmed) Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Save order draft"
-            style={{ flex: 1 }}
-            onPress={() => handleSubmit('Unconfirmed')}
-            disabled={isSubmitting}
-          >
-            <YStack
-              height={48}
-              borderRadius={tokens.radius.md}
-              backgroundColor={tokens.surfaceRaised}
-              borderWidth={1}
-              borderColor={tokens.border}
-              alignItems="center"
-              justifyContent="center"
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={tokens.textMuted} />
-              ) : (
-                <Text fontSize={13} fontWeight="700" color={tokens.textSecondary} letterSpacing={0.5}>
-                  SAVE DRAFT
-                </Text>
-              )}
-            </YStack>
-          </Pressable>
+        <XStack alignItems="center" justifyContent="space-between" gap={12}>
+          {/* Order Summary: Items & Total Price */}
+          <YStack flex={1} gap={2}>
+            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.5}>
+              {totalItemCount} {totalItemCount === 1 ? 'ITEM' : 'ITEMS'} • {distinctGroupKeys.length} {distinctGroupKeys.length === 1 ? 'PKG' : 'PKGS'}
+            </Text>
+            <Text fontSize={17} fontWeight="900" color={tokens.text}>
+              ₹{totalAmount.toLocaleString('en-IN')}
+            </Text>
+          </YStack>
 
-          {/* Confirm Order Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Confirm order"
-            style={{ flex: 1.5 }}
-            onPress={() => handleSubmit('Confirmed')}
-            disabled={isSubmitting}
-          >
-            <YStack
-              height={48}
-              borderRadius={tokens.radius.md}
-              backgroundColor={isSubmitting ? tokens.surfaceRaised : tokens.accent}
-              alignItems="center"
-              justifyContent="center"
+          {/* Action Buttons: CONFIRM (accent button) and SAVE DRAFT (surface button) */}
+          <XStack alignItems="center" gap={8}>
+            {/* CONFIRM ORDER Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirm order"
+              onPress={() => handleSubmit('Confirmed')}
+              disabled={isSubmitting}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: isSubmitting ? 0.6 : 1,
+                shadowColor: tokens.accent,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 4,
+                elevation: 3,
+              })}
             >
               {isSubmitting ? (
-                <ActivityIndicator color={tokens.textMuted} />
+                <ActivityIndicator size="small" color={tokens.accentForeground} />
               ) : (
-                <Text fontSize={13} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.8}>
-                  CONFIRM ORDER
-                </Text>
+                <>
+                  <LuCheck size={16} color={tokens.accentForeground} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
+                    CONFIRM
+                  </Text>
+                </>
               )}
-            </YStack>
-          </Pressable>
+            </Pressable>
+
+            {/* SAVE DRAFT Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save order draft"
+              onPress={() => handleSubmit('Unconfirmed')}
+              disabled={isSubmitting}
+              style={({ pressed }) => ({
+                paddingHorizontal: 16,
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isSubmitting ? 0.6 : 1,
+              })}
+            >
+              <Text fontSize={12} fontWeight="700" color={tokens.text}>
+                {isSubmitting ? 'SAVING...' : 'SAVE DRAFT'}
+              </Text>
+            </Pressable>
+          </XStack>
         </XStack>
       </YStack>
 
-      {/* Address Sheet Modal */}
+      {/* ── Product Edit Sheet ── */}
+      <ProductEditSheet
+        visible={productSheetOpen}
+        item={activeItem}
+        isCod={paymentType === 'cod'}
+        onSaveItem={handleSaveProductItem}
+        onDeleteItem={(item) => handleRequestRemoveProduct(String(item.id))}
+        onClose={() => setProductSheetOpen(false)}
+      />
+
+      {/* ── Quick Size / Qty Picker ── */}
+      <QuickPickerSheet
+        visible={pickerState.visible}
+        type={pickerState.type}
+        selected={pickerState.currentValue}
+        onSelect={handleSelectPickerOption}
+        onClose={() => setPickerState((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* ── Address Pull-up Sheet ── */}
       <AddressSheet
         visible={sheetOpen}
         initial={emptyAddress}
@@ -1730,11 +1637,30 @@ export const AdminOrderCreateForm: React.FC<AdminOrderCreateFormProps> = ({ onBa
         onClose={() => setSheetOpen(false)}
       />
 
-      {/* Floating Snackbar Toast */}
+      {/* ── Confirmation Modal ── */}
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        intent="critical"
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* ── Fullscreen Photo Viewer ── */}
+      <ImageViewerModal
+        visible={Boolean(previewImage)}
+        imageUrl={previewImage?.uri || ''}
+        title={previewImage?.title}
+        onClose={() => setPreviewImage(null)}
+      />
+
+      {/* ── Floating Snackbar Toast ── */}
       {snackbarVisible && (
         <YStack
           position="absolute"
-          bottom={80 + insets.bottom}
+          bottom={75 + insets.bottom}
           left={16}
           right={16}
           backgroundColor="#1E293B"

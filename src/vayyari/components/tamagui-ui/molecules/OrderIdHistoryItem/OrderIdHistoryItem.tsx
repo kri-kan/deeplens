@@ -178,7 +178,7 @@ export function OrderIdHistoryItem({
   return (
     <XStack
       backgroundColor={tokens.surface}
-      borderRadius={tokens.radius.md}
+      borderRadius={0}
       borderWidth={1}
       borderColor={tokens.border}
       paddingVertical={10}
@@ -503,13 +503,15 @@ export function OrderIdHistoryItemShimmer({ tokens: customTokens }: { tokens?: a
  */
 export function OrderIdHistoryListShimmer({
   count = 5,
+  gap = 10,
   tokens,
 }: {
   count?: number;
+  gap?: number;
   tokens?: any;
 }) {
   return (
-    <YStack gap={10} width="100%">
+    <YStack gap={gap} width="100%">
       {Array.from({ length: count }).map((_, index) => (
         <OrderIdHistoryItemShimmer key={`order-history-shimmer-${index}`} tokens={tokens} />
       ))}

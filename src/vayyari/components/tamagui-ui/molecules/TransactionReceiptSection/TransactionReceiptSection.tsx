@@ -1,8 +1,12 @@
-import React from 'react';
-import { Pressable, TextInput } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
+import * as ImagePicker from 'expo-image-picker';
 import { LuPlus, LuX, LuReceipt } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
+import { searchApiClient } from '@/api/client';
+import { getSearchApiUrl } from '@/utils/api-config';
+import { API_ROUTES } from '@/constants/api-routes';
 
 export interface TransactionReceiptSectionProps {
   transactionId: string;
@@ -20,6 +24,81 @@ export function TransactionReceiptSection({
   onRemoveReceipt,
 }: TransactionReceiptSectionProps) {
   const { tokens } = useTheme();
+  const [uploading, setUploading] = useState(false);
+
+  const handlePickAndUploadReceipt = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Media library access is required to upload receipt screenshots.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      setUploading(true);
+      const asset = result.assets[0];
+      const fileUri = asset.uri;
+      const fileName = fileUri.split('/').pop() || 'receipt.png';
+      const ext = fileName.split('.').pop()?.toLowerCase() || 'png';
+      const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const res = await fetch(fileUri);
+        const blob = await res.blob();
+        formData.append('file', blob, fileName);
+      } else {
+        formData.append('file', {
+          uri: fileUri,
+          name: fileName,
+          type: mimeType,
+        } as any);
+      }
+
+      const uploadRes = await searchApiClient.postFormData<{
+        id: string;
+        fileName: string;
+        status: string;
+        storagePath?: string;
+        url?: string;
+      }>(`${API_ROUTES.ATTACHMENTS.UPLOAD}?entityType=order_receipt&tag=receipt`, formData);
+
+      const downloadPath = uploadRes.url || (uploadRes.storagePath ? API_ROUTES.ATTACHMENTS.DOWNLOAD(uploadRes.storagePath) : '');
+      const fullImageUrl = downloadPath.startsWith('http')
+        ? downloadPath
+        : `${getSearchApiUrl()}${downloadPath}`;
+
+      onUploadReceipt(fullImageUrl);
+    } catch (err: any) {
+      console.error('Receipt upload failed:', err);
+      Alert.alert('Upload Error', err?.message || 'Could not upload receipt screenshot.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveReceiptWithHardDelete = async () => {
+    if (receiptUrl) {
+      try {
+        if (receiptUrl.includes('/api/v1/Attachment/')) {
+          await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(receiptUrl));
+          console.log('[TransactionReceiptSection] Hard-deleted receipt attachment by path:', receiptUrl);
+        }
+      } catch (err) {
+        console.warn('Failed to hard delete receipt attachment:', err);
+      }
+    }
+    onRemoveReceipt();
+  };
 
   return (
     <YStack gap={8}>
@@ -99,7 +178,7 @@ export function TransactionReceiptSection({
                 </YStack>
                 <YStack flex={1}>
                   <Text fontSize={12} fontWeight="700" color={tokens.text} numberOfLines={1}>
-                    receipt_screenshot.png
+                    {receiptUrl.split('/').pop() || 'receipt_screenshot.png'}
                   </Text>
                   <Text fontSize={10} color={tokens.success}>
                     ✓ Receipt Attached
@@ -109,8 +188,8 @@ export function TransactionReceiptSection({
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Remove receipt screenshot"
-                onPress={onRemoveReceipt}
+                accessibilityLabel="Hard delete receipt screenshot"
+                onPress={handleRemoveReceiptWithHardDelete}
                 hitSlop={8}
               >
                 <YStack
@@ -132,7 +211,8 @@ export function TransactionReceiptSection({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Upload transaction receipt screenshot"
-              onPress={() => onUploadReceipt('mock://receipt-screenshot.png')}
+              disabled={uploading}
+              onPress={handlePickAndUploadReceipt}
             >
               <YStack
                 height={56}
@@ -146,15 +226,26 @@ export function TransactionReceiptSection({
                 gap={3}
                 hoverStyle={{ borderColor: tokens.accent }}
               >
-                <XStack alignItems="center" gap={6}>
-                  <LuPlus size={14} color={tokens.accent} />
-                  <Text fontSize={12} fontWeight="600" color={tokens.accent}>
-                    Attach Receipt Screenshot
-                  </Text>
-                </XStack>
-                <Text fontSize={10} color={tokens.textMuted}>
-                  PNG, JPG up to 5MB
-                </Text>
+                {uploading ? (
+                  <XStack alignItems="center" gap={6}>
+                    <ActivityIndicator size="small" color={tokens.accent} />
+                    <Text fontSize={12} fontWeight="600" color={tokens.accent}>
+                      Uploading Receipt…
+                    </Text>
+                  </XStack>
+                ) : (
+                  <>
+                    <XStack alignItems="center" gap={6}>
+                      <LuPlus size={14} color={tokens.accent} />
+                      <Text fontSize={12} fontWeight="600" color={tokens.accent}>
+                        Attach Receipt Screenshot
+                      </Text>
+                    </XStack>
+                    <Text fontSize={10} color={tokens.textMuted}>
+                      PNG, JPG up to 5MB
+                    </Text>
+                  </>
+                )}
               </YStack>
             </Pressable>
           )}

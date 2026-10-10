@@ -148,3 +148,24 @@ export const NonLabelWithAddress: Story = {
   ),
 };
 
+export const CreateForwardOrderFlow: Story = {
+  render: () => (
+    <InteractiveGroupManagement
+      vendorName="Varanasi Weavers Ltd"
+      currentStage="Confirmed"
+      needLabel={true}
+      isCod={true}
+      awbNumber={undefined}
+      labelUrl={undefined}
+      address={{
+        name: 'Priyanka Sharma',
+        phone: '+91 98765 43210',
+        address: 'Flat 402, Lotus Towers, 5th Main, Indiranagar',
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        pincode: '560038',
+      }}
+    />
+  ),
+};
+

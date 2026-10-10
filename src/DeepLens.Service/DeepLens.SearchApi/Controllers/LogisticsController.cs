@@ -698,4 +698,37 @@ public class LogisticsController : ControllerBase
 
         return Ok(shipment);
     }
+
+    /// <summary>
+    /// Cancels a manifested Delhivery shipment by AWB number.
+    /// POST /api/v1/logistics/delhivery/cancel
+    /// </summary>
+    [HttpPost("delhivery/cancel")]
+    public async Task<IActionResult> CancelDelhiveryShipment(
+        [FromBody] CancelDelhiveryShipmentRequest request,
+        CancellationToken ct)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.AwbNumber))
+        {
+            return BadRequest(new { message = "AWB number is required." });
+        }
+
+        try
+        {
+            var cleanAwb = request.AwbNumber.Trim();
+            var response = await _delhiveryClient.CancelShipmentAsync(cleanAwb, request.Reason, ct);
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cancel shipment with Delhivery for AWB {Awb}", request.AwbNumber);
+            return StatusCode(500, new { message = "Failed to cancel shipment with Delhivery", error = ex.Message });
+        }
+    }
+}
+
+public class CancelDelhiveryShipmentRequest
+{
+    public string AwbNumber { get; set; } = string.Empty;
+    public string? Reason { get; set; }
 }

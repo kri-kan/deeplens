@@ -227,94 +227,151 @@ export function AdjacentStageDropdown({
               </Pressable>
             </XStack>
 
-            {/* Stage Items List */}
+            {/* Stage Items List: Only Adjacent (Previous and Next) & Current */}
             <YStack gap={8} paddingTop={4}>
-              {stages.map((st, idx) => {
-                const isCurrent = idx === safeCurrentIndex;
-                const isNext = idx === safeCurrentIndex + 1;
-                const isPrev = idx === safeCurrentIndex - 1;
-                const isAdjacent = isNext || isPrev;
-                const dotColor = getStageColor(st);
-                const isBlockedPlaced =
-                  st.toLowerCase() === 'placed' && requiresLabel && !hasLabel;
-
-                return (
-                  <Pressable
-                    key={st}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isCurrent }}
-                    accessibilityLabel={`${st}${
-                      isCurrent
-                        ? ', current stage'
-                        : isNext
-                        ? ', advance'
-                        : isPrev
-                        ? ', revert'
-                        : ', locked'
-                    }`}
-                    onPress={() => handleStagePress(st)}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      borderRadius: tokens.radius.sm,
-                      borderWidth: 1,
-                      borderColor: isCurrent
-                        ? tokens.accent
-                        : isAdjacent
-                        ? isBlockedPlaced
-                          ? tokens.warning
-                          : tokens.border
-                        : `${tokens.border}40`,
-                      backgroundColor: isCurrent
-                        ? `${tokens.accent}14`
-                        : isAdjacent
-                        ? pressed
-                          ? `${tokens.text}08`
-                          : tokens.surfaceRaised
-                        : `${tokens.surface}30`,
-                      opacity: isCurrent ? 1 : isAdjacent ? (pressed ? 0.8 : 1) : 0.4,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    })}
+              {/* Previous Stage (if available) */}
+              {prevStage ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Revert to ${prevStage}`}
+                  onPress={() => handleStagePress(prevStage)}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderRadius: tokens.radius.sm,
+                    borderWidth: 1,
+                    borderColor: tokens.border,
+                    backgroundColor: pressed ? `${tokens.text}08` : tokens.surfaceRaised,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  })}
+                >
+                  <XStack alignItems="center" gap={8} flex={1}>
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: getStageColor(prevStage),
+                      }}
+                    />
+                    <Text fontSize={13} fontWeight="600" color={tokens.text}>
+                      {prevStage}
+                    </Text>
+                  </XStack>
+                  <XStack
+                    backgroundColor={`${tokens.textMuted}14`}
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={tokens.radius.sm}
+                    alignItems="center"
                   >
-                    {/* Left: Stage dot and name */}
-                    <XStack alignItems="center" gap={8} flex={1}>
-                      <View
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 4,
-                          backgroundColor: dotColor,
-                        }}
-                      />
-                      <Text
-                        fontSize={13}
-                        fontWeight={isCurrent ? '800' : '600'}
-                        color={isCurrent ? tokens.accent : isAdjacent ? tokens.text : tokens.textMuted}
-                        numberOfLines={1}
-                      >
-                        {st}
-                      </Text>
-                    </XStack>
+                    <Text fontSize={11} fontWeight="700" color={tokens.textMuted}>
+                      ← Revert
+                    </Text>
+                  </XStack>
+                </Pressable>
+              ) : (
+                <XStack
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  borderRadius={tokens.radius.sm}
+                  backgroundColor={`${tokens.textMuted}0A`}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text fontSize={11} color={tokens.textMuted} fontStyle="italic">
+                    At starting stage (no previous stage)
+                  </Text>
+                </XStack>
+              )}
 
-                    {/* Right: Status indicator or transition action */}
-                    {isCurrent && (
-                      <XStack alignItems="center" gap={5}>
-                        <Text
-                          fontSize={10}
-                          fontWeight="800"
-                          color={tokens.accent}
-                          textTransform="uppercase"
-                        >
-                          Current
+              {/* Current Stage */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: true }}
+                accessibilityLabel={`${currentStage}, current stage`}
+                onPress={() => setIsOpen(false)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: tokens.radius.sm,
+                  borderWidth: 1.5,
+                  borderColor: tokens.accent,
+                  backgroundColor: `${tokens.accent}14`,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <XStack alignItems="center" gap={8} flex={1}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: currentDotColor,
+                    }}
+                  />
+                  <Text fontSize={13} fontWeight="800" color={tokens.accent}>
+                    {currentStage}
+                  </Text>
+                </XStack>
+                <XStack alignItems="center" gap={5}>
+                  <Text
+                    fontSize={10}
+                    fontWeight="800"
+                    color={tokens.accent}
+                    textTransform="uppercase"
+                  >
+                    Current
+                  </Text>
+                  <LuCheck size={14} color={tokens.accent} />
+                </XStack>
+              </Pressable>
+
+              {/* Next Stage (if available) */}
+              {nextStage ? (
+                (() => {
+                  const isBlockedPlaced =
+                    nextStage.toLowerCase() === 'placed' && requiresLabel && !hasLabel;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Advance to ${nextStage}`}
+                      onPress={() => handleStagePress(nextStage)}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1,
+                        borderColor: isBlockedPlaced ? tokens.warning : tokens.accent,
+                        backgroundColor: isBlockedPlaced
+                          ? '#FEF3C720'
+                          : pressed
+                          ? `${tokens.accent}24`
+                          : `${tokens.accent}10`,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      })}
+                    >
+                      <XStack alignItems="center" gap={8} flex={1}>
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: getStageColor(nextStage),
+                          }}
+                        />
+                        <Text fontSize={13} fontWeight="700" color={tokens.text}>
+                          {nextStage}
                         </Text>
-                        <LuCheck size={14} color={tokens.accent} />
                       </XStack>
-                    )}
 
-                    {isNext && (
-                      isBlockedPlaced ? (
+                      {isBlockedPlaced ? (
                         <XStack
                           backgroundColor="#FEF3C7"
                           borderWidth={1}
@@ -332,52 +389,34 @@ export function AdjacentStageDropdown({
                         </XStack>
                       ) : (
                         <XStack
-                          backgroundColor={`${tokens.accent}14`}
+                          backgroundColor={`${tokens.accent}20`}
                           paddingHorizontal={8}
                           paddingVertical={3}
                           borderRadius={tokens.radius.sm}
                           alignItems="center"
                         >
-                          <Text
-                            fontSize={11}
-                            fontWeight="800"
-                            color={tokens.accent}
-                          >
+                          <Text fontSize={11} fontWeight="800" color={tokens.accent}>
                             Advance →
                           </Text>
                         </XStack>
-                      )
-                    )}
-
-                    {isPrev && (
-                      <XStack
-                        backgroundColor={`${tokens.textMuted}14`}
-                        paddingHorizontal={8}
-                        paddingVertical={3}
-                        borderRadius={tokens.radius.sm}
-                        alignItems="center"
-                      >
-                        <Text
-                          fontSize={11}
-                          fontWeight="700"
-                          color={tokens.textMuted}
-                        >
-                          ← Revert
-                        </Text>
-                      </XStack>
-                    )}
-
-                    {!isCurrent && !isAdjacent && (
-                      <XStack alignItems="center" gap={4}>
-                        <LuLock size={12} color={tokens.textMuted} />
-                        <Text fontSize={10} color={tokens.textMuted}>
-                          Locked
-                        </Text>
-                      </XStack>
-                    )}
-                  </Pressable>
-                );
-              })}
+                      )}
+                    </Pressable>
+                  );
+                })()
+              ) : (
+                <XStack
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  borderRadius={tokens.radius.sm}
+                  backgroundColor={`${tokens.textMuted}0A`}
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text fontSize={11} color={tokens.textMuted} fontStyle="italic">
+                    At final stage (package completed)
+                  </Text>
+                </XStack>
+              )}
             </YStack>
           </YStack>
         </View>

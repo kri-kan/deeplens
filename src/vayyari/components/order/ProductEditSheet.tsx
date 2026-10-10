@@ -818,7 +818,7 @@ export function ProductEditSheet({
                           color={form.vendor ? tokens.text : tokens.textMuted}
                           numberOfLines={1}
                         >
-                          {form.vendor || 'Select Vendor (e.g. Varanasi Weavers Ltd)'}
+                          {form.vendor || 'Select Vendor (e.g. In-House)'}
                         </Text>
                       </XStack>
                       <LuChevronDown size={14} color={tokens.textMuted} />

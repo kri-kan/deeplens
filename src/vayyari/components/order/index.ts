@@ -39,3 +39,9 @@ export {
   StateTransitionGraph,
   type StateTransitionGraphProps,
 } from './StateTransitionGraph';
+
+export {
+  ForwardOrderLabelModal,
+  type ForwardOrderLabelModalProps,
+  type SubmittedForwardOrderAudit,
+} from './ForwardOrderLabelModal';

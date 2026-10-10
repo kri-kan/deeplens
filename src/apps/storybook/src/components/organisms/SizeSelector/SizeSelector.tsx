@@ -111,65 +111,86 @@ export function SizeSelector({
 
       {/* Chips Row */}
       {isNoSize ? (
-        /* No Size: Informational Non-Selectable Badges / Buttons (One Size / Free Size) */
+        /* No Size: Informational Selectable Badges / Buttons (One Size / Free Size) */
         <XStack flexWrap="wrap" gap={8} alignItems="center" width="100%">
-          {normalizedSizes.map((opt) => (
-            <XStack
-              key={opt.id}
-              alignItems="center"
-              gap={8}
-              paddingHorizontal={12}
-              paddingVertical={8}
-              borderRadius={10}
-              borderWidth={1.5}
-              borderColor={tokens.accent}
-              backgroundColor={`${tokens.accent}10`}
-              cursor="default"
-              maxWidth="100%"
-            >
-              <LuInfo size={14} color={tokens.accent} />
-              <YStack gap={1} flex={1}>
-                <XStack alignItems="center" gap={6} flexWrap="wrap">
-                  <Text fontSize={13} fontWeight="800" color={tokens.accent}>
-                    {opt.label}
-                  </Text>
-                  {opt.badge && (
-                    <XStack
-                      backgroundColor="#FEF3C7"
-                      paddingHorizontal={6}
-                      paddingVertical={1.5}
-                      borderRadius={4}
-                    >
-                      <Text fontSize={9} fontWeight="800" color="#B45309">
-                        {opt.badge}
-                      </Text>
-                    </XStack>
+          {normalizedSizes.map((opt) => {
+            const isSelected =
+              Boolean(selected) &&
+              (selected?.toLowerCase() === opt.id.toLowerCase() ||
+                selected?.toLowerCase() === opt.label.toLowerCase() ||
+                (opt.label.toLowerCase().includes('free') && selected?.toLowerCase().includes('free')));
+
+            return (
+              <XStack
+                key={opt.id}
+                alignItems="center"
+                gap={8}
+                paddingHorizontal={12}
+                paddingVertical={8}
+                borderRadius={10}
+                borderWidth={1.5}
+                borderColor={isSelected ? tokens.accent : tokens.border}
+                backgroundColor={isSelected ? `${tokens.accent}18` : tokens.surface}
+                cursor="pointer"
+                onPress={() => onSelect?.(opt.id || opt.label)}
+                hoverStyle={{ borderColor: tokens.accent, opacity: 0.92 }}
+                pressStyle={{ scale: 0.97 }}
+                maxWidth="100%"
+              >
+                <LuInfo size={14} color={tokens.accent} />
+                <YStack gap={1} flex={1}>
+                  <XStack alignItems="center" gap={6} flexWrap="wrap">
+                    <Text fontSize={13} fontWeight="800" color={tokens.accent}>
+                      {opt.label}
+                    </Text>
+                    {opt.badge && (
+                      <XStack
+                        backgroundColor="#FEF3C7"
+                        paddingHorizontal={6}
+                        paddingVertical={1.5}
+                        borderRadius={4}
+                      >
+                        <Text fontSize={9} fontWeight="800" color="#B45309">
+                          {opt.badge}
+                        </Text>
+                      </XStack>
+                    )}
+                  </XStack>
+                  {opt.subtitle && (
+                    <Text fontSize={11} color={tokens.textMuted} fontWeight="600" lineHeight={15}>
+                      {opt.subtitle}
+                    </Text>
                   )}
-                </XStack>
-                {opt.subtitle && (
-                  <Text fontSize={11} color={tokens.textMuted} fontWeight="600" lineHeight={15}>
-                    {opt.subtitle}
-                  </Text>
-                )}
-              </YStack>
-            </XStack>
-          ))}
+                </YStack>
+                {isSelected && <LuCheck size={14} color={tokens.accent} />}
+              </XStack>
+            );
+          })}
         </XStack>
       ) : (
         /* Multi-size Selection Row (Letter, Numeric, Kids) */
         <XStack flexWrap="wrap" gap={8} alignItems="center">
-          {normalizedSizes.map((opt) => (
-            <SizeChip
-              key={opt.id}
-              label={opt.label}
-              subtitle={opt.subtitle}
-              badge={opt.badge}
-              variant={variant === 'kids' || opt.subtitle ? 'detailed' : 'standard'}
-              selected={selected === opt.id || selected === opt.label}
-              disabled={opt.disabled}
-              onPress={() => onSelect?.(opt.id)}
-            />
-          ))}
+          {normalizedSizes.map((opt) => {
+            const isSelected =
+              Boolean(selected) &&
+              (selected === opt.id ||
+                selected === opt.label ||
+                selected?.toLowerCase() === opt.id.toLowerCase() ||
+                selected?.toLowerCase() === opt.label.toLowerCase());
+
+            return (
+              <SizeChip
+                key={opt.id}
+                label={opt.label}
+                subtitle={opt.subtitle}
+                badge={opt.badge}
+                variant={variant === 'kids' || opt.subtitle ? 'detailed' : 'standard'}
+                selected={isSelected}
+                disabled={opt.disabled}
+                onPress={() => onSelect?.(opt.id)}
+              />
+            );
+          })}
         </XStack>
       )}
 

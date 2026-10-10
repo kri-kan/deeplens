@@ -130,7 +130,7 @@ export function OrderIdGeneratorPage({
         height={56 + topInset}
         alignItems="center"
         justifyContent="space-between"
-        paddingHorizontal={16}
+        paddingHorizontal={12}
         backgroundColor={tokens.surface}
         borderBottomWidth={1}
         borderBottomColor={tokens.border}
@@ -176,13 +176,13 @@ export function OrderIdGeneratorPage({
       {/* Main Scrollable View */}
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: 16,
+          paddingHorizontal: 8,
+          paddingTop: 10,
           paddingBottom: Math.max(32, bottomInset + 24),
         }}
         showsVerticalScrollIndicator={false}
       >
-        <YStack gap={24}>
+        <YStack gap={16}>
           {/* Generator Card Molecule */}
           <OrderIdGeneratorCard
             selectedSource={selectedSource}
@@ -199,8 +199,8 @@ export function OrderIdGeneratorPage({
           />
 
           {/* History Section Header */}
-          <YStack gap={12}>
-            <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8}>
+          <YStack gap={10}>
+            <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={8} paddingHorizontal={2}>
               {/* Left Group: Title, Dropdown (20, 50, 100), Show Deleted Toggle */}
               <XStack alignItems="center" gap={10} flexWrap="wrap">
                 <Text fontSize={15} fontWeight="700" color={tokens.text}>

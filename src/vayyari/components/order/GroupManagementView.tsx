@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -23,6 +24,7 @@ import {
   LuEye,
   LuMapPin,
   LuX,
+  LuTruck,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { StatusBadge, StatusIntent } from '@/components/tamagui-ui/atoms/StatusBadge';
@@ -30,10 +32,17 @@ import { OrderItem } from './ProductListSection';
 import { StateTransitionGraph, StateTransitionRecord } from './StateTransitionGraph';
 import { AdjacentStageDropdown } from './AdjacentStageDropdown';
 import {
+  ForwardOrderLabelModal,
+  SubmittedForwardOrderAudit,
+} from './ForwardOrderLabelModal';
+import {
   ORDER_STAGES,
   canTransitionStage,
 } from '@/utils/stageTransitionRules';
 import { shareImageUri } from '@/utils/shareImage';
+import { logisticsService } from '@/services/logistics.service';
+import { searchApiClient } from '@/api/client';
+import { API_ROUTES } from '@/constants/api-routes';
 
 export interface AddressData {
   name: string;
@@ -74,7 +83,8 @@ export interface GroupManagementViewProps {
   history?: StateTransitionRecord[];
   address?: AddressData | null;
   onUpdateStage: (newStage: string) => void;
-  onSave?: (newStage: string) => Promise<void> | void;
+  onUpdateNeedLabel?: (needLabel: boolean) => void;
+  onSave?: (newStage: string, needLabel?: boolean) => Promise<void> | void;
   onGenerateLabel?: () => void;
   onViewLabel?: (url: string) => void;
   onUpdateItem?: (itemId: string, updates: Partial<OrderItem>) => void;
@@ -97,6 +107,7 @@ export function GroupManagementView({
   history,
   address,
   onUpdateStage,
+  onUpdateNeedLabel,
   onSave,
   onGenerateLabel,
   onViewLabel,
@@ -107,8 +118,13 @@ export function GroupManagementView({
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
 
-  // Local staged stage state to support drafting and explicit Save action
+  // Local staged stage and needLabel states
   const [stagedStage, setStagedStage] = useState<string>(currentStage);
+  const [stagedNeedLabel, setStagedNeedLabel] = useState<boolean>(Boolean(needLabel));
+  const [stagedAwb, setStagedAwb] = useState<string | undefined>(awbNumber);
+  const [stagedLabelUrl, setStagedLabelUrl] = useState<string | undefined>(labelUrl);
+  const [auditData, setAuditData] = useState<SubmittedForwardOrderAudit | null>(null);
+  const [isForwardOrderModalOpen, setIsForwardOrderModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Gallery items and shared confirmation state
@@ -129,6 +145,15 @@ export function GroupManagementView({
   useEffect(() => {
     setStagedStage(currentStage);
   }, [currentStage]);
+
+  useEffect(() => {
+    setStagedNeedLabel(Boolean(needLabel));
+  }, [needLabel]);
+
+  useEffect(() => {
+    setStagedAwb(awbNumber);
+    setStagedLabelUrl(labelUrl);
+  }, [awbNumber, labelUrl]);
 
   useEffect(() => {
     setGroupItems(items);
@@ -231,17 +256,30 @@ export function GroupManagementView({
     setShareConfirmTarget(null);
   };
 
-  const isDirty = (stagedStage || '').toLowerCase() !== (currentStage || '').toLowerCase();
+  const hasLabel = Boolean(stagedLabelUrl);
+  const requiresLabel = Boolean(stagedNeedLabel);
+  const isDirty =
+    (stagedStage || '').toLowerCase() !== (currentStage || '').toLowerCase() ||
+    stagedNeedLabel !== Boolean(needLabel);
+
+  const allMediaShared = groupItems.length > 0 && groupItems.every((it) => Boolean(it.isShared));
+  const fulfillmentShared = stagedNeedLabel ? (hasLabel && isLabelShared) : isAddressShared;
+  const isAllSharedAndSaved = allMediaShared && fulfillmentShared;
+  const isPlacedStage = (stagedStage || '').toLowerCase() === 'placed';
 
   // Android hardware back button handler
   useEffect(() => {
     const onBackPress = () => {
+      if (isForwardOrderModalOpen) {
+        setIsForwardOrderModalOpen(false);
+        return true;
+      }
       onBack();
       return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [onBack]);
+  }, [onBack, isForwardOrderModalOpen]);
 
   const getStageIntent = (stage: string): StatusIntent => {
     const s = (stage || '').toLowerCase();
@@ -260,9 +298,6 @@ export function GroupManagementView({
   const prevStage = safeCurrentIndex > 0 ? ORDER_STAGES[safeCurrentIndex - 1] : null;
   const nextStage =
     safeCurrentIndex < ORDER_STAGES.length - 1 ? ORDER_STAGES[safeCurrentIndex + 1] : null;
-
-  const hasLabel = Boolean(labelUrl || awbNumber);
-  const requiresLabel = Boolean(needLabel || isCod);
 
   const handleStageTransition = (targetStage: string) => {
     const check = canTransitionStage({
@@ -300,14 +335,27 @@ export function GroupManagementView({
     Alert.alert('Action Blocked', 'Cannot transition to this stage.');
   };
 
+  const handleForwardOrderSuccess = (data: {
+    awbNumber: string;
+    labelUrl: string;
+    auditData: SubmittedForwardOrderAudit;
+  }) => {
+    setStagedAwb(data.awbNumber);
+    setStagedLabelUrl(data.labelUrl);
+    setAuditData(data.auditData);
+    setStagedNeedLabel(true);
+    onUpdateNeedLabel?.(true);
+  };
+
   const handleSave = async () => {
     if (isSaving) return;
     try {
       setIsSaving(true);
       if (onSave) {
-        await onSave(stagedStage);
+        await onSave(stagedStage, stagedNeedLabel);
       } else {
         onUpdateStage(stagedStage);
+        onUpdateNeedLabel?.(stagedNeedLabel);
         Alert.alert('Saved', `Package status set to ${stagedStage}.`);
       }
     } catch (err: any) {
@@ -330,6 +378,26 @@ export function GroupManagementView({
   const itemTriplets: OrderItem[][] = [];
   for (let i = 0; i < groupItems.length; i += 3) {
     itemTriplets.push(groupItems.slice(i, i + 3));
+  }
+
+  // Dedicated Screen View for Forward Order / Delhivery Label Creation
+  if (isForwardOrderModalOpen) {
+    return (
+      <ForwardOrderLabelModal
+        visible={true}
+        onDismiss={() => setIsForwardOrderModalOpen(false)}
+        orderGrpId={orderGrpId || (orderId ? `${orderId}-${vendorName}` : 'GRP-1')}
+        vendorName={vendorName}
+        itemsCount={totalItemsCount}
+        isCod={isCod}
+        groupTotal={totalSubtotal}
+        address={address}
+        awbNumber={stagedAwb}
+        labelUrl={stagedLabelUrl}
+        initialAuditData={auditData}
+        onSuccess={handleForwardOrderSuccess}
+      />
+    );
   }
 
   return (
@@ -453,105 +521,145 @@ export function GroupManagementView({
           </XStack>
         )}
 
-        {/* ── 1. Sequential Stage Progression Card with Adjacent-Only Dropdown ── */}
+        {/* ── 1. Package Stage Dropdown & Need Label Toggle ── */}
         <YStack
           backgroundColor={tokens.surface}
           borderWidth={1}
           borderColor={tokens.border}
           borderRadius={tokens.radius.md}
           padding={12}
-          gap={12}
+          gap={8}
         >
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text
-              fontSize={11}
-              fontWeight="800"
-              color={tokens.textMuted}
-              textTransform="uppercase"
-              letterSpacing={0.8}
-            >
-              STAGE PROGRESSION (ADJACENT ONLY)
-            </Text>
-            <AdjacentStageDropdown
-              currentStage={stagedStage}
-              onSelectStage={handleStageTransition}
-              requiresLabel={requiresLabel}
-              hasLabel={hasLabel}
-              size="sm"
-            />
-          </XStack>
-
-          {/* Quick Step navigation buttons: Previous / Next */}
-          <XStack gap={10} alignItems="center">
-            {/* Previous Step */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Revert to ${prevStage}`}
-              disabled={!prevStage}
-              onPress={() => prevStage && handleStageTransition(prevStage)}
-              style={({ pressed }) => ({
-                flex: 1,
-                height: 42,
-                borderRadius: tokens.radius.sm,
-                borderWidth: 1,
-                borderColor: prevStage ? tokens.border : `${tokens.border}40`,
-                backgroundColor: !prevStage
-                  ? `${tokens.surfaceRaised}50`
-                  : pressed
-                  ? `${tokens.text}10`
-                  : tokens.surfaceRaised,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                opacity: prevStage ? 1 : 0.4,
-              })}
-            >
-              <LuArrowLeft size={16} color={prevStage ? tokens.text : tokens.textMuted} />
-              <Text fontSize={12} fontWeight="700" color={prevStage ? tokens.text : tokens.textMuted}>
-                {prevStage ? prevStage : 'At Start'}
-              </Text>
-            </Pressable>
-
-            {/* Next Step */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Advance to ${nextStage}`}
-              disabled={!nextStage}
-              onPress={() => nextStage && handleStageTransition(nextStage)}
-              style={({ pressed }) => ({
-                flex: 1,
-                height: 42,
-                borderRadius: tokens.radius.sm,
-                backgroundColor: !nextStage
-                  ? `${tokens.accent}40`
-                  : nextStage.toLowerCase() === 'placed' && requiresLabel && !hasLabel
-                  ? tokens.warning
-                  : pressed
-                  ? `${tokens.accent}D0`
-                  : tokens.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                opacity: nextStage ? 1 : 0.4,
-              })}
-            >
+          <XStack justifyContent="space-between" alignItems="center" gap={12}>
+            {/* Stage Dropdown (Adjacent Only: Previous & Next) */}
+            <YStack flex={1} gap={4}>
               <Text
-                fontSize={12}
+                fontSize={10}
                 fontWeight="800"
-                color={tokens.accentForeground}
-                numberOfLines={1}
+                color={tokens.textMuted}
+                textTransform="uppercase"
+                letterSpacing={0.8}
               >
-                {nextStage ? `Advance: ${nextStage}` : 'Completed'}
+                STAGE PROGRESSION
               </Text>
-              <LuArrowRight size={16} color={tokens.accentForeground} />
-            </Pressable>
-          </XStack>
+              <AdjacentStageDropdown
+                currentStage={stagedStage}
+                onSelectStage={handleStageTransition}
+                requiresLabel={requiresLabel}
+                hasLabel={hasLabel}
+                size="md"
+              />
+            </YStack>
 
-          <Text fontSize={10} color={tokens.textMuted} fontStyle="italic">
-            * Note: Direct stage leaps are blocked. Packages must advance sequentially through each operational gate.
-          </Text>
+            {/* Need Label Toggle beside Stage Dropdown */}
+            <YStack alignItems="flex-end" gap={4}>
+              <Text
+                fontSize={10}
+                fontWeight="800"
+                color={tokens.textMuted}
+                textTransform="uppercase"
+                letterSpacing={0.8}
+              >
+                NEED LABEL
+              </Text>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: stagedNeedLabel }}
+                accessibilityLabel={`Need shipping label: ${stagedNeedLabel ? 'On' : 'Off'}`}
+                onPress={() => {
+                  if (stagedNeedLabel && (hasLabel || stagedAwb)) {
+                    Alert.alert(
+                      'Cancel Generated Shipping Label?',
+                      `A Delhivery shipping label (${stagedAwb ? `AWB: ${stagedAwb}` : 'Generated'}) is active for this package.\n\nSwitching to direct vendor order will cancel the shipping label with Delhivery, hard delete the PDF attachment from storage, and retain the AWB submission record.\n\nDo you want to proceed with cancelling the shipping label?`,
+                      [
+                        { text: 'Keep Label', style: 'cancel' },
+                        {
+                          text: 'Cancel Label & Turn Off',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              if (orderGrpId) {
+                                await logisticsService.cancelGroupLabel(orderGrpId, stagedAwb, 'Need Label toggled off');
+                              } else if (stagedAwb) {
+                                await logisticsService.cancelDelhiveryAwb(stagedAwb);
+                              }
+                              if (stagedLabelUrl && (stagedLabelUrl.includes('/api/v1/Attachment/') || stagedLabelUrl.includes('label'))) {
+                                try {
+                                  await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(stagedLabelUrl));
+                                  console.log('[GroupManagementView] Hard-deleted shipping label file from storage:', stagedLabelUrl);
+                                } catch (delErr) {
+                                  console.warn('Failed to hard delete label file asset:', delErr);
+                                }
+                              }
+                            } catch (err) {
+                              console.warn('Label cancellation error:', err);
+                            } finally {
+                              // Retain stagedAwb for audit! Clear PDF label and share state
+                              setStagedLabelUrl(undefined);
+                              setIsLabelShared(false);
+                              setLabelSharedAt(null);
+                              setStagedNeedLabel(false);
+                              onUpdateNeedLabel?.(false);
+
+                              Alert.alert(
+                                'Label Cancelled',
+                                `Shipping label PDF deleted from storage. Delhivery AWB (${stagedAwb || 'Recorded'}) retained in manifest audit log.`
+                              );
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  } else {
+                    const nextVal = !stagedNeedLabel;
+                    setStagedNeedLabel(nextVal);
+                    onUpdateNeedLabel?.(nextVal);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  height: 38,
+                  paddingHorizontal: 12,
+                  borderRadius: tokens.radius.sm,
+                  borderWidth: 1.5,
+                  borderColor: stagedNeedLabel ? tokens.accent : tokens.border,
+                  backgroundColor: stagedNeedLabel ? `${tokens.accent}14` : tokens.surfaceRaised,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                {/* Switch track & thumb */}
+                <View
+                  style={{
+                    width: 32,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: stagedNeedLabel ? tokens.accent : `${tokens.textMuted}40`,
+                    padding: 2,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      backgroundColor: '#FFFFFF',
+                      alignSelf: stagedNeedLabel ? 'flex-end' : 'flex-start',
+                    }}
+                  />
+                </View>
+                <Text
+                  fontSize={11}
+                  fontWeight="800"
+                  color={stagedNeedLabel ? tokens.accent : tokens.textSecondary}
+                >
+                  {stagedNeedLabel ? 'YES' : 'NO'}
+                </Text>
+              </Pressable>
+            </YStack>
+          </XStack>
         </YStack>
 
         {/* ── 2. Package Items Gallery Grid ── */}
@@ -803,313 +911,374 @@ export function GroupManagementView({
           </YStack>
         </YStack>
 
-        {/* ── 3. Fulfillment Row (Below Items) ── */}
-        <YStack
-          backgroundColor={tokens.surface}
-          borderWidth={1}
-          borderColor={tokens.border}
-          borderRadius={tokens.radius.md}
-          padding={12}
-          gap={10}
-        >
-          <XStack justifyContent="space-between" alignItems="center">
-            <Text
-              fontSize={11}
-              fontWeight="800"
-              color={tokens.textMuted}
-              textTransform="uppercase"
-              letterSpacing={0.8}
+        {/* ── 3. Fulfillment Row (Below Items): Dynamically decided by stagedNeedLabel ── */}
+        {!stagedNeedLabel ? (
+          /* ── Case A: NO LABEL NEEDED -> Address Share Card ── */
+          <YStack
+            backgroundColor={tokens.surface}
+            borderWidth={1}
+            borderColor={tokens.border}
+            borderRadius={tokens.radius.md}
+            padding={12}
+            gap={10}
+          >
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text
+                fontSize={11}
+                fontWeight="800"
+                color={tokens.textMuted}
+                textTransform="uppercase"
+                letterSpacing={0.8}
+              >
+                CUSTOMER DELIVERY ADDRESS (DIRECT VENDOR)
+              </Text>
+              {Boolean(stagedAwb) && (
+                <XStack
+                  paddingHorizontal={8}
+                  paddingVertical={3}
+                  borderRadius={4}
+                  backgroundColor={`${tokens.textMuted}20`}
+                  borderWidth={1}
+                  borderColor={`${tokens.textMuted}40`}
+                  alignItems="center"
+                  gap={4}
+                >
+                  <Text fontSize={10} fontWeight="800" color={tokens.textMuted}>
+                    AWB: {stagedAwb}
+                  </Text>
+                  <Text fontSize={9} fontWeight="900" color={tokens.error}>
+                    [CANCELLED]
+                  </Text>
+                  <Text fontSize={9} fontWeight="700" color={tokens.textMuted}>
+                    (Manifest Retained)
+                  </Text>
+                </XStack>
+              )}
+            </XStack>
+
+            <YStack
+              borderRadius={tokens.radius.md}
+              backgroundColor={tokens.surfaceRaised}
+              borderWidth={isAddressShared ? 2.5 : 1}
+              borderColor={isAddressShared ? tokens.success : tokens.border}
+              padding={12}
+              gap={8}
+              position="relative"
             >
-              {requiresLabel ? 'SHIPPING LABEL & LOGISTICS' : 'DIRECT VENDOR FULFILLMENT'}
-            </Text>
-            {requiresLabel ? (
-              hasLabel ? (
+              <XStack justifyContent="space-between" alignItems="center">
+                <XStack alignItems="center" gap={6}>
+                  <LuMapPin size={16} color={tokens.accent} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                    {address?.name || 'Customer Delivery Address'}
+                  </Text>
+                </XStack>
+                {isAddressShared && (
+                  <XStack
+                    backgroundColor={tokens.success}
+                    paddingHorizontal={6}
+                    paddingVertical={2}
+                    borderRadius={4}
+                    alignItems="center"
+                    gap={3}
+                  >
+                    <LuCheck size={11} color="#FFFFFF" strokeWidth={3} />
+                    <Text fontSize={9} fontWeight="900" color="#FFFFFF">
+                      SHARED
+                    </Text>
+                  </XStack>
+                )}
+              </XStack>
+
+              {address?.phone && (
+                <Text fontSize={12} fontWeight="700" color={tokens.textSecondary}>
+                  Phone: {address.phone}
+                </Text>
+              )}
+
+              <Text fontSize={12} color={tokens.text} lineHeight={18}>
+                {address?.address || 'No street address specified'}
+              </Text>
+
+              <Text fontSize={11} fontWeight="600" color={tokens.textMuted}>
+                {[address?.city, address?.state, address?.pincode].filter(Boolean).join(', ') ||
+                  'City / State / Pincode not set'}
+              </Text>
+            </YStack>
+
+            {/* Share Address Button Below Tile */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share customer delivery address"
+              onPress={handleShareAddress}
+              style={({ pressed }) => ({
+                height: 40,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: isAddressShared
+                  ? `${tokens.success}18`
+                  : pressed
+                  ? `${tokens.accent}D0`
+                  : tokens.accent,
+                borderWidth: isAddressShared ? 1 : 0,
+                borderColor: isAddressShared ? tokens.success : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+              })}
+            >
+              {isAddressShared ? (
+                <>
+                  <LuCheck size={15} color={tokens.success} strokeWidth={2.5} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.success}>
+                    DELIVERY ADDRESS SHARED ✓
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <LuShare2 size={14} color={tokens.accentForeground} />
+                  <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
+                    SHARE DELIVERY ADDRESS
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </YStack>
+        ) : (
+          /* ── Case B: NEED LABEL = TRUE -> Create Label Card or Label Ready Card ── */
+          <YStack
+            backgroundColor={tokens.surface}
+            borderWidth={1}
+            borderColor={tokens.border}
+            borderRadius={tokens.radius.md}
+            padding={12}
+            gap={10}
+          >
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text
+                fontSize={11}
+                fontWeight="800"
+                color={tokens.textMuted}
+                textTransform="uppercase"
+                letterSpacing={0.8}
+              >
+                DELHIVERY LOGISTICS & SHIPPING LABEL
+              </Text>
+              {hasLabel && (
                 <XStack
                   paddingHorizontal={8}
                   paddingVertical={2}
                   borderRadius={4}
                   backgroundColor={`${tokens.success}1F`}
                 >
-                  <Text fontSize={10} fontWeight="800" color={tokens.success}>
+                  <Text
+                    fontSize={10}
+                    fontWeight="800"
+                    color={tokens.success}
+                  >
                     LABEL READY
                   </Text>
                 </XStack>
-              ) : (
-                <XStack
-                  paddingHorizontal={8}
-                  paddingVertical={2}
-                  borderRadius={4}
-                  backgroundColor={`${tokens.warning}1F`}
-                >
-                  <Text fontSize={10} fontWeight="800" color={tokens.warning}>
-                    LABEL NEEDED
-                  </Text>
-                </XStack>
-              )
-            ) : (
-              <XStack
-                paddingHorizontal={8}
-                paddingVertical={2}
-                borderRadius={4}
-                backgroundColor={`${tokens.accent}1A`}
-              >
-                <Text fontSize={10} fontWeight="800" color={tokens.accent}>
-                  NO LABEL REQUIRED
-                </Text>
-              </XStack>
-            )}
-          </XStack>
+              )}
+            </XStack>
 
-          {requiresLabel ? (
-            hasLabel ? (
-              /* PDF Preview Tile with Overlaid AWB Badge */
+            {hasLabel ? (
+              /* Label Ready: PDF Preview Tile with Overlaid AWB Badge */
               <YStack gap={8}>
-                <YStack
-                  height={130}
-                  borderRadius={tokens.radius.md}
-                  backgroundColor={tokens.surfaceRaised}
-                  borderWidth={isLabelShared ? 2.5 : 1}
-                  borderColor={isLabelShared ? tokens.success : tokens.border}
-                  overflow="hidden"
-                  position="relative"
-                  justifyContent="center"
-                  alignItems="center"
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="View shipping label and audit details"
+                  onPress={() => setIsForwardOrderModalOpen(true)}
                 >
-                  {/* PDF Document Preview Mockup */}
-                  <YStack alignItems="center" gap={6}>
-                    <LuFileText size={38} color={tokens.accent} />
-                    <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                      DELHIVERY SHIPPING LABEL (PDF)
-                    </Text>
-                    <Text fontSize={11} color={tokens.textMuted}>
-                      Click eye icon to view document
-                    </Text>
-                  </YStack>
-
-                  {/* Overlaid AWB Tracking Badge on Top of Preview */}
-                  {awbNumber && (
-                    <XStack
-                      position="absolute"
-                      top={8}
-                      left={8}
-                      backgroundColor="rgba(0,0,0,0.75)"
-                      paddingHorizontal={8}
-                      paddingVertical={4}
-                      borderRadius={tokens.radius.sm}
-                      alignItems="center"
-                      gap={4}
-                    >
-                      <Text fontSize={9} fontWeight="700" color="#94A3B8">
-                        AWB:
+                  <YStack
+                    height={130}
+                    borderRadius={tokens.radius.md}
+                    backgroundColor={tokens.surfaceRaised}
+                    borderWidth={isLabelShared ? 2.5 : 1}
+                    borderColor={isLabelShared ? tokens.success : tokens.border}
+                    overflow="hidden"
+                    position="relative"
+                    justifyContent="center"
+                    alignItems="center"
+                  >
+                    <YStack alignItems="center" gap={6}>
+                      <LuFileText size={38} color={tokens.accent} />
+                      <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                        DELHIVERY SHIPPING LABEL (PDF)
                       </Text>
-                      <Text fontSize={11} fontWeight="900" color="#FFFFFF">
-                        {awbNumber}
+                      <Text fontSize={11} color={tokens.textMuted}>
+                        Tap to view document & audit log
                       </Text>
-                    </XStack>
-                  )}
+                    </YStack>
 
-                  {/* Top-Right Preview Symbol (LuEye) */}
-                  {labelUrl && (
+                    {stagedAwb && (
+                      <XStack
+                        position="absolute"
+                        top={8}
+                        left={8}
+                        backgroundColor="rgba(0,0,0,0.75)"
+                        paddingHorizontal={8}
+                        paddingVertical={4}
+                        borderRadius={tokens.radius.sm}
+                        alignItems="center"
+                        gap={4}
+                      >
+                        <Text fontSize={9} fontWeight="700" color="#94A3B8">
+                          AWB:
+                        </Text>
+                        <Text fontSize={11} fontWeight="900" color="#FFFFFF">
+                          {stagedAwb}
+                        </Text>
+                      </XStack>
+                    )}
+
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel="View PDF shipping label"
-                      onPress={() => onViewLabel?.(labelUrl)}
+                      onPress={() => setIsForwardOrderModalOpen(true)}
                       hitSlop={8}
-                      style={({ pressed }) => ({
+                      style={{
                         position: 'absolute',
                         top: 8,
                         right: 8,
                         width: 32,
                         height: 32,
                         borderRadius: tokens.radius.full,
-                        backgroundColor: pressed ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.75)',
+                        backgroundColor: 'rgba(0,0,0,0.75)',
                         alignItems: 'center',
                         justifyContent: 'center',
-                      })}
+                      }}
                     >
                       <LuEye size={17} color="#FFFFFF" />
                     </Pressable>
-                  )}
 
-                  {/* Bottom-Left Shared Confirmation Status */}
-                  {isLabelShared && (
-                    <XStack
-                      position="absolute"
-                      bottom={8}
-                      left={8}
-                      backgroundColor={tokens.success}
-                      paddingHorizontal={6}
-                      paddingVertical={2}
-                      borderRadius={4}
-                      alignItems="center"
-                      gap={3}
-                    >
-                      <LuCheck size={11} color="#FFFFFF" strokeWidth={3} />
-                      <Text fontSize={9} fontWeight="900" color="#FFFFFF">
-                        LABEL SHARED
-                      </Text>
-                    </XStack>
-                  )}
-                </YStack>
-
-                {/* Share Label Button Below Tile */}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Share shipping label PDF"
-                  onPress={handleShareLabel}
-                  style={({ pressed }) => ({
-                    height: 40,
-                    borderRadius: tokens.radius.sm,
-                    backgroundColor: isLabelShared
-                      ? `${tokens.success}18`
-                      : pressed
-                      ? `${tokens.accent}D0`
-                      : tokens.accent,
-                    borderWidth: isLabelShared ? 1 : 0,
-                    borderColor: isLabelShared ? tokens.success : 'transparent',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 6,
-                  })}
-                >
-                  {isLabelShared ? (
-                    <>
-                      <LuCheck size={15} color={tokens.success} strokeWidth={2.5} />
-                      <Text fontSize={12} fontWeight="800" color={tokens.success}>
-                        SHIPPING LABEL SHARED ✓
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <LuShare2 size={14} color={tokens.accentForeground} />
-                      <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-                        SHARE SHIPPING LABEL
-                      </Text>
-                    </>
-                  )}
+                    {isLabelShared && (
+                      <XStack
+                        position="absolute"
+                        bottom={8}
+                        left={8}
+                        backgroundColor={tokens.success}
+                        paddingHorizontal={6}
+                        paddingVertical={2}
+                        borderRadius={4}
+                        alignItems="center"
+                        gap={3}
+                      >
+                        <LuCheck size={11} color="#FFFFFF" strokeWidth={3} />
+                        <Text fontSize={9} fontWeight="900" color="#FFFFFF">
+                          LABEL SHARED
+                        </Text>
+                      </XStack>
+                    )}
+                  </YStack>
                 </Pressable>
-              </YStack>
-            ) : (
-              /* Generate Delhivery Label Button */
-              <YStack gap={8}>
-                <Text fontSize={12} color={tokens.textSecondary}>
-                  A Delhivery shipping label is required before advancing package to Placed.
-                </Text>
-                {onGenerateLabel && (
+
+                {/* Actions Row */}
+                <XStack gap={8}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Generate Delhivery shipping label"
-                    onPress={onGenerateLabel}
+                    accessibilityLabel="Open forward order screen"
+                    onPress={() => setIsForwardOrderModalOpen(true)}
                     style={({ pressed }) => ({
-                      height: 42,
+                      flex: 1,
+                      height: 40,
                       borderRadius: tokens.radius.sm,
-                      backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                      borderWidth: 1,
+                      borderColor: tokens.border,
+                      backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    })}
+                  >
+                    <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                      VIEW LABEL & AUDIT
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Share shipping label PDF"
+                    onPress={handleShareLabel}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      height: 40,
+                      borderRadius: tokens.radius.sm,
+                      backgroundColor: isLabelShared
+                        ? `${tokens.success}18`
+                        : pressed
+                        ? `${tokens.accent}D0`
+                        : tokens.accent,
+                      borderWidth: isLabelShared ? 1 : 0,
+                      borderColor: isLabelShared ? tokens.success : 'transparent',
                       alignItems: 'center',
                       justifyContent: 'center',
                       flexDirection: 'row',
                       gap: 6,
                     })}
                   >
-                    <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-                      GENERATE DELHIVERY LABEL
+                    <LuShare2 size={13} color={isLabelShared ? tokens.success : tokens.accentForeground} />
+                    <Text
+                      fontSize={11}
+                      fontWeight="800"
+                      color={isLabelShared ? tokens.success : tokens.accentForeground}
+                    >
+                      {isLabelShared ? 'LABEL SHARED ✓' : 'SHARE LABEL'}
                     </Text>
                   </Pressable>
-                )}
-              </YStack>
-            )
-          ) : (
-            /* Non-Label Order: Customer Delivery Address Preview Tile */
-            <YStack gap={8}>
-              <YStack
-                borderRadius={tokens.radius.md}
-                backgroundColor={tokens.surfaceRaised}
-                borderWidth={isAddressShared ? 2.5 : 1}
-                borderColor={isAddressShared ? tokens.success : tokens.border}
-                padding={12}
-                gap={8}
-                position="relative"
-              >
-                <XStack justifyContent="space-between" alignItems="center">
-                  <XStack alignItems="center" gap={6}>
-                    <LuMapPin size={16} color={tokens.accent} />
-                    <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                      {address?.name || 'Customer Delivery Address'}
-                    </Text>
-                  </XStack>
-                  {isAddressShared && (
-                    <XStack
-                      backgroundColor={tokens.success}
-                      paddingHorizontal={6}
-                      paddingVertical={2}
-                      borderRadius={4}
-                      alignItems="center"
-                      gap={3}
-                    >
-                      <LuCheck size={11} color="#FFFFFF" strokeWidth={3} />
-                      <Text fontSize={9} fontWeight="900" color="#FFFFFF">
-                        SHARED
-                      </Text>
-                    </XStack>
-                  )}
                 </XStack>
-
-                {address?.phone && (
-                  <Text fontSize={12} fontWeight="700" color={tokens.textSecondary}>
-                    Phone: {address.phone}
-                  </Text>
-                )}
-
-                <Text fontSize={12} color={tokens.text} lineHeight={18}>
-                  {address?.address || 'No street address specified'}
-                </Text>
-
-                <Text fontSize={11} fontWeight="600" color={tokens.textMuted}>
-                  {[address?.city, address?.state, address?.pincode].filter(Boolean).join(', ') ||
-                    'City / State / Pincode not set'}
-                </Text>
               </YStack>
-
-              {/* Share Address Button Below Tile */}
+            ) : (
+              /* Manifest Order Card: Big pressable box to open forward order / manifest modal */
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Share customer delivery address"
-                onPress={handleShareAddress}
+                accessibilityLabel="Manifest Order"
+                onPress={() => setIsForwardOrderModalOpen(true)}
                 style={({ pressed }) => ({
-                  height: 40,
-                  borderRadius: tokens.radius.sm,
-                  backgroundColor: isAddressShared
-                    ? `${tokens.success}18`
-                    : pressed
-                    ? `${tokens.accent}D0`
-                    : tokens.accent,
-                  borderWidth: isAddressShared ? 1 : 0,
-                  borderColor: isAddressShared ? tokens.success : 'transparent',
+                  minHeight: 100,
+                  paddingVertical: 20,
+                  paddingHorizontal: 16,
+                  borderRadius: tokens.radius.md,
+                  borderWidth: 1.5,
+                  borderColor: tokens.accent,
+                  backgroundColor: pressed ? `${tokens.accent}24` : `${tokens.accent}14`,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  flexDirection: 'row',
-                  gap: 6,
+                  gap: 8,
                 })}
               >
-                {isAddressShared ? (
-                  <>
-                    <LuCheck size={15} color={tokens.success} strokeWidth={2.5} />
-                    <Text fontSize={12} fontWeight="800" color={tokens.success}>
-                      DELIVERY ADDRESS SHARED ✓
+                <XStack alignItems="center" gap={10}>
+                  <LuFileText size={22} color={tokens.accent} />
+                  <Text
+                    fontSize={16}
+                    fontWeight="900"
+                    color={tokens.accent}
+                    letterSpacing={0.8}
+                    textTransform="uppercase"
+                  >
+                    MANIFEST ORDER
+                  </Text>
+                </XStack>
+                <Text fontSize={11} fontWeight="600" color={tokens.textMuted} textAlign="center" lineHeight={16}>
+                  Tap to configure package details & generate Delhivery Express shipping label
+                </Text>
+                {Boolean(stagedAwb) && (
+                  <XStack
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={4}
+                    backgroundColor={`${tokens.textMuted}14`}
+                    alignItems="center"
+                    gap={4}
+                    marginTop={4}
+                  >
+                    <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                      Previous AWB {stagedAwb} was cancelled. Tap to generate new shipping label.
                     </Text>
-                  </>
-                ) : (
-                  <>
-                    <LuShare2 size={14} color={tokens.accentForeground} />
-                    <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
-                      SHARE DELIVERY ADDRESS
-                    </Text>
-                  </>
+                  </XStack>
                 )}
               </Pressable>
-            </YStack>
-          )}
-        </YStack>
+            )}
+          </YStack>
+        )}
 
         {/* ── 4. Package Dispatch / Media Sharing ── */}
         {onShareGroup && (
@@ -1300,7 +1469,7 @@ export function GroupManagementView({
         </YStack>
       </Modal>
 
-      {/* ── Sticky Bottom Action Bar with SAVE Button ── */}
+      {/* ── Sticky Bottom Action Bar with SAVE & ORDER PLACED ── */}
       <YStack
         position="absolute"
         bottom={0}
@@ -1310,76 +1479,147 @@ export function GroupManagementView({
         borderTopWidth={1}
         borderTopColor={tokens.border}
         paddingHorizontal={12}
-        paddingTop={12}
-        paddingBottom={Math.max(12, insets.bottom + 8)}
+        paddingTop={10}
+        paddingBottom={Math.max(10, insets.bottom + 6)}
         elevation={8}
         shadowColor="#000"
         shadowOffset={{ width: 0, height: -2 }}
         shadowOpacity={0.08}
         shadowRadius={4}
       >
-        <XStack justifyContent="space-between" alignItems="center">
-          <YStack gap={2}>
-            <Text fontSize={11} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
-              TARGET STAGE
-            </Text>
-            <XStack alignItems="center" gap={6}>
-              <StatusBadge
-                label={stagedStage.toUpperCase()}
-                intent={getStageIntent(stagedStage)}
-                size="sm"
-              />
-              {isDirty && (
-                <XStack
-                  backgroundColor={`${tokens.accent}1A`}
-                  paddingHorizontal={6}
-                  paddingVertical={2}
-                  borderRadius={4}
-                >
-                  <Text fontSize={10} fontWeight="800" color={tokens.accent}>
-                    UNSAVED
-                  </Text>
-                </XStack>
-              )}
-            </XStack>
-          </YStack>
+        <XStack justifyContent="space-between" alignItems="center" gap={8}>
+          {/* Left Side: Target Stage & Shifted SAVE Button */}
+          <XStack alignItems="center" gap={8} flex={1}>
+            <YStack gap={2}>
+              <Text fontSize={10} fontWeight="700" color={tokens.textMuted} textTransform="uppercase">
+                TARGET STAGE
+              </Text>
+              <XStack alignItems="center" gap={4}>
+                <StatusBadge
+                  label={stagedStage.toUpperCase()}
+                  intent={getStageIntent(stagedStage)}
+                  size="sm"
+                />
+                {isDirty && (
+                  <XStack
+                    backgroundColor={`${tokens.accent}1A`}
+                    paddingHorizontal={4}
+                    paddingVertical={1}
+                    borderRadius={3}
+                  >
+                    <Text fontSize={9} fontWeight="800" color={tokens.accent}>
+                      UNSAVED
+                    </Text>
+                  </XStack>
+                )}
+              </XStack>
+            </YStack>
 
+            {/* Shifted SAVE Button on Left */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save group status changes"
+              disabled={!isDirty || isSaving}
+              onPress={handleSave}
+              style={({ pressed }) => ({
+                height: 38,
+                paddingHorizontal: 12,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1,
+                borderColor: isDirty ? tokens.accent : tokens.border,
+                backgroundColor: !isDirty
+                  ? `${tokens.textMuted}14`
+                  : pressed
+                  ? `${tokens.accent}20`
+                  : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 5,
+                opacity: !isDirty ? 0.6 : 1,
+              })}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color={tokens.accent} />
+              ) : (
+                <>
+                  <LuCheck size={14} color={!isDirty ? tokens.textMuted : tokens.accent} />
+                  <Text
+                    fontSize={11}
+                    fontWeight="800"
+                    color={!isDirty ? tokens.textMuted : tokens.accent}
+                    letterSpacing={0.5}
+                  >
+                    SAVE
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </XStack>
+
+          {/* Right Side: ORDER PLACED Button */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save group status changes"
-            disabled={!isDirty || isSaving}
-            onPress={handleSave}
+            accessibilityLabel="Mark package order as placed"
+            disabled={isSaving}
+            onPress={async () => {
+              if (isPlacedStage) return;
+
+              if (!isAllSharedAndSaved) {
+                const missingText = [];
+                if (!allMediaShared) missingText.push('all item media shared with vendor');
+                if (!fulfillmentShared) missingText.push(stagedNeedLabel ? 'shipping label generated & shared' : 'delivery address shared with vendor');
+                Alert.alert(
+                  'Fulfillment Incomplete',
+                  `To place package order, please ensure:\n• ${missingText.join('\n• ')}`
+                );
+                return;
+              }
+
+              try {
+                setStagedStage('Placed');
+                if (onSave) {
+                  await onSave('Placed', stagedNeedLabel);
+                } else {
+                  onUpdateStage('Placed');
+                  onUpdateNeedLabel?.(stagedNeedLabel);
+                  Alert.alert('Order Placed', 'Package status set to PLACED.');
+                }
+              } catch (err: any) {
+                Alert.alert('Placed Failed', err?.message || 'Could not update stage to Placed.');
+              }
+            }}
             style={({ pressed }) => ({
-              height: 42,
-              paddingHorizontal: 22,
+              height: 40,
+              paddingHorizontal: 14,
               borderRadius: tokens.radius.sm,
-              backgroundColor: !isDirty
-                ? `${tokens.textMuted}20`
+              backgroundColor: isPlacedStage
+                ? tokens.success
+                : !isAllSharedAndSaved
+                ? `${tokens.textMuted}25`
                 : pressed
                 ? `${tokens.accent}D0`
                 : tokens.accent,
               alignItems: 'center',
               justifyContent: 'center',
               flexDirection: 'row',
-              gap: 8,
-              opacity: !isDirty ? 0.6 : 1,
+              gap: 6,
+              opacity: !isAllSharedAndSaved && !isPlacedStage ? 0.6 : 1,
             })}
           >
-            {isSaving ? (
-              <ActivityIndicator size="small" color={tokens.accentForeground} />
-            ) : (
-              <>
-                <LuCheck size={16} color={!isDirty ? tokens.textMuted : tokens.accentForeground} />
-                <Text
-                  fontSize={13}
-                  fontWeight="800"
-                  color={!isDirty ? tokens.textMuted : tokens.accentForeground}
-                  letterSpacing={0.5}
-                >
-                  SAVE
-                </Text>
-              </>
-            )}
+            <LuCheck
+              size={15}
+              color={!isAllSharedAndSaved && !isPlacedStage ? tokens.textMuted : tokens.accentForeground}
+              strokeWidth={2.5}
+            />
+            <Text
+              fontSize={12}
+              fontWeight="900"
+              color={!isAllSharedAndSaved && !isPlacedStage ? tokens.textMuted : tokens.accentForeground}
+              letterSpacing={0.5}
+            >
+              {isPlacedStage ? 'ORDER PLACED ✓' : 'ORDER PLACED'}
+            </Text>
           </Pressable>
         </XStack>
       </YStack>

@@ -10,6 +10,8 @@ import { SizeChip } from '../../atoms/SizeChip/SizeChip';
 
 export const SAREE_DRESS_SIZES = [
   'Free Size',
+  'Unstitched',
+  'Semi-Stitched',
   'XS',
   'S',
   'M',
@@ -19,6 +21,13 @@ export const SAREE_DRESS_SIZES = [
   '3XL',
   '4XL',
   '5XL',
+  '32',
+  '34',
+  '36',
+  '38',
+  '40',
+  '42',
+  '44',
 ];
 
 export const KIDS_SIZES = [
@@ -78,6 +87,15 @@ export function QuickPickerSheet({
     }
   }, [visible, type, isCurrentKids]);
 
+  const isSareeDressSelected = (opt: string) => {
+    if (!selected) return false;
+    const normSelected = selected.trim().toLowerCase();
+    const normOpt = opt.trim().toLowerCase();
+    if (normSelected === normOpt) return true;
+    if (normOpt === 'free size' && (normSelected.includes('free') || normSelected === 'one size')) return true;
+    return false;
+  };
+
   const headerTitle = title || (type === 'size' ? 'Select Size' : 'Select Quantity');
 
   return (
@@ -130,7 +148,7 @@ export function QuickPickerSheet({
                 <SizeChip
                   key={opt}
                   label={opt}
-                  selected={opt === selected}
+                  selected={isSareeDressSelected(opt)}
                   onPress={() => {
                     onSelect(opt);
                     onClose();

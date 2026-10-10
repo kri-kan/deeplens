@@ -259,6 +259,27 @@ public class OrderIdController : ControllerBase
     }
 
     /// <summary>
+    /// Cancels a generated group shipping label with Delhivery, hard-deletes the PDF from MinIO storage,
+    /// sets status to cancelled while retaining the AWB number for audit.
+    /// </summary>
+    [HttpPost("groups/{grpId}/label/cancel")]
+    public async Task<IActionResult> CancelGroupLabel(string grpId, [FromBody] CancelGroupLabelRequest? request)
+    {
+        var command = new DeepLens.Infrastructure.Services.Logistics.CancelGroupLabelCommand(
+            grpId,
+            request?.AwbNumber,
+            request?.Reason);
+        var result = await _mediator.Send(command);
+
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new { error = result.Error.Code, message = result.Error.Description });
+        }
+
+        return Ok(result.Value);
+    }
+
+    /// <summary>
     /// Soft deletes an order by its ID.
     /// </summary>
     [HttpDelete("order/{orderId}")]
@@ -286,4 +307,10 @@ public class GenerateGroupLabelRequest
     public string? PaymentMode { get; set; }
     public decimal? CodAmount { get; set; }
     public decimal? TotalAmount { get; set; }
+}
+
+public class CancelGroupLabelRequest
+{
+    public string? AwbNumber { get; set; }
+    public string? Reason { get; set; }
 }

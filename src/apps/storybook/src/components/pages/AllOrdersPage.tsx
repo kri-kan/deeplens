@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ScrollView, Pressable, TextInput, ActivityIndicator, FlatList } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, Pressable, TextInput, FlatList, ActivityIndicator } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -14,6 +14,8 @@ import { useTheme } from '../../theme';
 import {
   OrderIdHistoryItem,
   OrderIdHistoryEntry,
+  OrderIdHistoryItemShimmer,
+  OrderIdHistoryListShimmer,
 } from '../molecules/OrderIdHistoryItem';
 import { OrderIdEditSheet } from '../molecules/OrderIdEditSheet';
 
@@ -83,6 +85,22 @@ export function AllOrdersPage({
 
   const [showFilters, setShowFilters] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderIdHistoryEntry | null>(null);
+  const [isPainted, setIsPainted] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const timer = setTimeout(() => {
+      if (mounted) {
+        setIsPainted(true);
+      }
+    }, 50);
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, []);
+
+  const shouldShowShimmer = isLoading || !isPainted;
 
   const handleUpdateItem = (
     id: string,
@@ -108,11 +126,9 @@ export function AllOrdersPage({
   const renderFooter = () => {
     if (!isLoadingMore) return null;
     return (
-      <YStack paddingVertical={16} alignItems="center" justifyContent="center">
-        <ActivityIndicator size="small" color={tokens.accent} />
-        <Text fontSize={11} color={tokens.textMuted} marginTop={6}>
-          Loading more orders...
-        </Text>
+      <YStack paddingHorizontal={16} paddingVertical={4} gap={8} width="100%">
+        <OrderIdHistoryItemShimmer tokens={tokens} />
+        <OrderIdHistoryItemShimmer tokens={tokens} />
       </YStack>
     );
   };
@@ -162,9 +178,13 @@ export function AllOrdersPage({
                 borderWidth={1}
                 borderColor={tokens.border}
               >
-                <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                  {totalCount || orders.length}
-                </Text>
+                {shouldShowShimmer && !totalCount && orders.length === 0 ? (
+                  <YStack width={18} height={12} backgroundColor={tokens.border} borderRadius={tokens.radius.xs} opacity={0.6} />
+                ) : (
+                  <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                    {totalCount || orders.length}
+                  </Text>
+                )}
               </XStack>
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
@@ -417,14 +437,18 @@ export function AllOrdersPage({
         )}
       </YStack>
 
-      {/* Main List View with Infinite Scroll */}
-      {isLoading && orders.length === 0 ? (
-        <YStack flex={1} alignItems="center" justifyContent="center" gap={12}>
-          <ActivityIndicator size="large" color={tokens.accent} />
-          <Text fontSize={13} color={tokens.textMuted}>
-            Loading orders catalog...
-          </Text>
-        </YStack>
+      {/* Main List View with Shimmers, Empty State, or Paginated FlatList */}
+      {shouldShowShimmer ? (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingTop: 12,
+            paddingHorizontal: 16,
+            paddingBottom: Math.max(32, bottomInset + 24),
+          }}
+        >
+          <OrderIdHistoryListShimmer count={8} gap={8} tokens={tokens} />
+        </ScrollView>
       ) : orders.length === 0 ? (
         <YStack flex={1} alignItems="center" justifyContent="center" padding={32} gap={12}>
           <XStack

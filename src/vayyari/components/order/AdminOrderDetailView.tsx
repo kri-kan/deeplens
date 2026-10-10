@@ -796,8 +796,36 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           onUpdateStage={(newStage) => {
             handleUpdateGroupStage(targetGroup.key, newStage);
           }}
-          onSave={(newStage) => {
+          onUpdateNeedLabel={(need) => {
+            setOrderData((prev) => {
+              if (!prev || !prev.groups) return prev;
+              return {
+                ...prev,
+                groups: prev.groups.map((g) => {
+                  const rawV = (g.vendorName || '').trim();
+                  const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
+                  const k = isUn ? 'Unassigned' : rawV;
+                  return k === targetGroup.key ? { ...g, needLabel: need } : g;
+                }),
+              };
+            });
+          }}
+          onSave={(newStage, need) => {
             handleUpdateGroupStage(targetGroup.key, newStage);
+            if (typeof need === 'boolean') {
+              setOrderData((prev) => {
+                if (!prev || !prev.groups) return prev;
+                return {
+                  ...prev,
+                  groups: prev.groups.map((g) => {
+                    const rawV = (g.vendorName || '').trim();
+                    const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
+                    const k = isUn ? 'Unassigned' : rawV;
+                    return k === targetGroup.key ? { ...g, needLabel: need } : g;
+                  }),
+                };
+              });
+            }
             setSnackbarMessage(`Package status updated to ${newStage}`);
             setSnackbarVisible(true);
           }}
@@ -841,136 +869,6 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             paymentType={paymentType}
           />
 
-          {/* Status & Label Requirement Summary Card */}
-          <XStack
-            backgroundColor={tokens.surface}
-            borderWidth={1}
-            borderColor={tokens.border}
-            borderRadius={tokens.radius.md}
-            padding={12}
-            alignItems="center"
-            justifyContent="space-between"
-          >
-            <YStack gap={2}>
-              <Text fontSize={10} fontWeight="800" color={tokens.textMuted} textTransform="uppercase" letterSpacing={0.8}>
-                ORDER STATUS & FULFILLMENT MODE
-              </Text>
-              <XStack alignItems="center" gap={8} marginTop={2}>
-                <YStack
-                  paddingHorizontal={8}
-                  paddingVertical={3}
-                  borderRadius={6}
-                  backgroundColor={orderData?.status === 'Unconfirmed' ? `${tokens.warning}1F` : `${tokens.success}1F`}
-                >
-                  <Text fontSize={11} fontWeight="800" color={orderData?.status === 'Unconfirmed' ? tokens.warning : tokens.success}>
-                    {orderData?.status === 'Unconfirmed' ? 'UNCONFIRMED (DRAFT)' : 'CONFIRMED'}
-                  </Text>
-                </YStack>
-
-                <YStack
-                  paddingHorizontal={8}
-                  paddingVertical={3}
-                  borderRadius={6}
-                  backgroundColor={paymentType === 'cod' || orderData?.needLabel ? `${tokens.accent}1F` : `${tokens.textMuted}1F`}
-                >
-                  <Text fontSize={11} fontWeight="800" color={paymentType === 'cod' || orderData?.needLabel ? tokens.accent : tokens.textMuted}>
-                    {paymentType === 'cod' ? 'LABEL MANDATORY (COD)' : orderData?.needLabel ? 'NEED LABEL (WAREHOUSE)' : 'VENDOR DIRECT (NO LABEL)'}
-                  </Text>
-                </YStack>
-              </XStack>
-            </YStack>
-          </XStack>
-
-          {/* Order Groups (Per Vendor) Card */}
-          {orderData?.groups && orderData.groups.length > 0 && (
-            <YStack gap={10}>
-              <Text fontSize={12} fontWeight="800" color={tokens.textMuted} letterSpacing={0.8} textTransform="uppercase">
-                VENDOR ORDER GROUPS & PACKAGES ({orderData.groups.length})
-              </Text>
-              {orderData.groups.map((grp) => (
-                <YStack
-                  key={grp.orderGrpId}
-                  backgroundColor={tokens.surface}
-                  borderWidth={1}
-                  borderColor={tokens.border}
-                  borderRadius={tokens.radius.md}
-                  padding={12}
-                  gap={10}
-                >
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <YStack gap={2}>
-                      <XStack alignItems="center" gap={6}>
-                        <Text fontSize={14} fontWeight="800" color={tokens.text}>
-                          {grp.orderGrpId}
-                        </Text>
-                        <YStack paddingHorizontal={6} paddingVertical={2} borderRadius={4} backgroundColor={`${tokens.accent}1A`}>
-                          <Text fontSize={10} fontWeight="700" color={tokens.accent}>
-                            {grp.vendorName || 'Default Vendor'}
-                          </Text>
-                        </YStack>
-                      </XStack>
-                      {grp.awbNumber && (
-                        <Text fontSize={11} color={tokens.textMuted}>
-                          AWB: <Text fontWeight="700" color={tokens.text}>{grp.awbNumber}</Text>
-                        </Text>
-                      )}
-                    </YStack>
-
-                    {/* Label Action Button */}
-                    {grp.labelUrl ? (
-                      <Pressable onPress={() => setPreviewImage(grp.labelUrl!)}>
-                        <YStack
-                          paddingHorizontal={12}
-                          paddingVertical={6}
-                          borderRadius={tokens.radius.sm}
-                          backgroundColor={`${tokens.success}1A`}
-                          borderWidth={1}
-                          borderColor={`${tokens.success}40`}
-                        >
-                          <Text fontSize={11} fontWeight="800" color={tokens.success}>
-                            VIEW SHIPPING LABEL (PDF)
-                          </Text>
-                        </YStack>
-                      </Pressable>
-                    ) : (grp.needLabel || paymentType === 'cod') ? (
-                      <Pressable onPress={() => handleGenerateGroupLabel(grp.orderGrpId)}>
-                        <YStack
-                          paddingHorizontal={12}
-                          paddingVertical={6}
-                          borderRadius={tokens.radius.sm}
-                          backgroundColor={tokens.accent}
-                        >
-                          <Text fontSize={11} fontWeight="800" color={tokens.accentForeground}>
-                            GENERATE LABEL (DELHIVERY)
-                          </Text>
-                        </YStack>
-                      </Pressable>
-                    ) : (
-                      <YStack paddingHorizontal={10} paddingVertical={4} borderRadius={tokens.radius.sm} backgroundColor={tokens.surfaceRaised}>
-                        <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                          NO LABEL NEEDED
-                        </Text>
-                      </YStack>
-                    )}
-                  </XStack>
-
-                  {/* Group items display */}
-                  <YStack gap={4} paddingTop={4} borderTopWidth={1} borderTopColor={tokens.border}>
-                    {grp.items?.map((it) => (
-                      <XStack key={it.id || it.itemId} justifyContent="space-between" alignItems="center">
-                        <Text fontSize={12} color={tokens.text} flex={1} numberOfLines={1}>
-                          • {it.productTitle || 'Product Item'} ({it.itemId || `Item #${it.id}`})
-                        </Text>
-                        <Text fontSize={12} fontWeight="600" color={tokens.textSecondary}>
-                          x{it.quantity} (₹{it.subtotal})
-                        </Text>
-                      </XStack>
-                    ))}
-                  </YStack>
-                </YStack>
-              ))}
-            </YStack>
-          )}
 
           {/* Delhivery Serviceability Status Banner */}
           {address?.isDelhiveryServiceable && (

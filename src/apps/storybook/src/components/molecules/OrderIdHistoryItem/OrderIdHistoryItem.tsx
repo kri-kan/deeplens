@@ -504,13 +504,15 @@ export function OrderIdHistoryItemShimmer({ tokens: customTokens }: { tokens?: a
  */
 export function OrderIdHistoryListShimmer({
   count = 5,
+  gap = 10,
   tokens,
 }: {
   count?: number;
+  gap?: number;
   tokens?: any;
 }) {
   return (
-    <YStack gap={10} width="100%">
+    <YStack gap={gap} width="100%">
       {Array.from({ length: count }).map((_, index) => (
         <OrderIdHistoryItemShimmer key={`order-history-shimmer-${index}`} tokens={tokens} />
       ))}

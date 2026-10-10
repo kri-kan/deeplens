@@ -304,18 +304,25 @@ export function ProductListSection({
                         <LuBuilding2 size={15} color={group.isUnassigned ? tokens.textMuted : tokens.accent} />
                       </XStack>
                       <YStack gap={2} flex={1}>
-                        <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                          {group.isUnassigned ? 'No Vendor' : group.vendorName}
-                        </Text>
+                        <XStack alignItems="center" gap={6} flexWrap="wrap">
+                          <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                            {group.isUnassigned ? 'No Vendor' : group.vendorName}
+                          </Text>
+                          <StatusBadge
+                            label={currentStage.toUpperCase()}
+                            intent={getStageIntent(currentStage)}
+                            size="sm"
+                          />
+                        </XStack>
                         <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
                           {groupItemCount} {groupItemCount === 1 ? 'item' : 'items'} : <Text fontWeight="800" color={tokens.text}>₹{groupTotal.toLocaleString('en-IN')}</Text>
                         </Text>
                       </YStack>
                     </XStack>
 
-                    {/* Status Badge & Locked Badge */}
-                    <XStack alignItems="center" gap={6}>
-                      {lockedVendorKeys.includes(group.key) && (
+                    {/* Locked Badge */}
+                    {lockedVendorKeys.includes(group.key) && (
+                      <XStack alignItems="center" gap={6}>
                         <XStack
                           alignItems="center"
                           gap={3}
@@ -329,14 +336,8 @@ export function ProductListSection({
                             LOCKED
                           </Text>
                         </XStack>
-                      )}
-
-                      <StatusBadge
-                        label={currentStage.toUpperCase()}
-                        intent={getStageIntent(currentStage)}
-                        size="sm"
-                      />
-                    </XStack>
+                      </XStack>
+                    )}
                   </XStack>
 
                   {/* Top-to-Bottom Dividing Line & Full-Bleed Blue Action Button */}

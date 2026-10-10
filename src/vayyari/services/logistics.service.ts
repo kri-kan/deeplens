@@ -1122,5 +1122,35 @@ export const logisticsService = {
    */
   deleteWarehouse: async (id: string): Promise<void> => {
     await productMgmtApiClient.delete(API_ROUTES.LOGISTICS.WAREHOUSE_DELETE(id));
+  },
+
+  /**
+   * Cancel an active Delhivery shipment / AWB
+   */
+  cancelDelhiveryAwb: async (awbNumber: string): Promise<boolean> => {
+    try {
+      await searchApiClient.post('/api/v1/logistics/delhivery/cancel', { awbNumber });
+      return true;
+    } catch (err) {
+      console.warn('Backend cancel shipment call failed, clearing local state:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Cancel group shipping label, cancel carrier shipment, hard delete label from storage,
+   * soft delete manifest submission while retaining the AWB number for audit.
+   */
+  cancelGroupLabel: async (orderGrpId: string, awbNumber?: string, reason?: string): Promise<{ success: boolean; awbNumber?: string }> => {
+    try {
+      const response = await searchApiClient.post<{ orderGrpId: string; awbNumber?: string; status: string; success: boolean }>(
+        `/api/v1/orderid/groups/${orderGrpId}/label/cancel`,
+        { awbNumber, reason }
+      );
+      return { success: response?.success ?? true, awbNumber: response?.awbNumber ?? awbNumber };
+    } catch (err) {
+      console.warn('Backend cancelGroupLabel call failed:', err);
+      return { success: false, awbNumber };
+    }
   }
 };

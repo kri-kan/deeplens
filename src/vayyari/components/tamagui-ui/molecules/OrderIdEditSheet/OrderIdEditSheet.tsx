@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TextInput, Pressable } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { BottomSheet } from '../../atoms/BottomSheet';
+import { CapsuleSegmentControl } from '../../atoms/CapsuleSegmentControl';
 import { useTheme } from '@/theme';
 import { OrderIdHistoryEntry } from '../OrderIdHistoryItem';
 import { RiWhatsappFill, RiInstagramFill } from '../../icons/ri';
@@ -203,61 +204,16 @@ export function OrderIdEditSheet({
           <Text fontSize={12} fontWeight="600" color={tokens.textMuted}>
             Payment Mode
           </Text>
-          <XStack gap={10}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Set COD"
-              onPress={() => setEditPaymentMode('cod')}
-              style={{ flex: 1 }}
-            >
-              <XStack
-                paddingVertical={10}
-                borderRadius={tokens.radius.md}
-                borderWidth={1}
-                borderColor={editPaymentMode === 'cod' ? tokens.accent : tokens.border}
-                backgroundColor={
-                  editPaymentMode === 'cod' ? tokens.accent : tokens.surfaceRaised
-                }
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text
-                  fontSize={13}
-                  fontWeight={editPaymentMode === 'cod' ? '700' : '500'}
-                  color={editPaymentMode === 'cod' ? tokens.surface : tokens.text}
-                >
-                  COD
-                </Text>
-              </XStack>
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Set Prepaid"
-              onPress={() => setEditPaymentMode('prepaid')}
-              style={{ flex: 1 }}
-            >
-              <XStack
-                paddingVertical={10}
-                borderRadius={tokens.radius.md}
-                borderWidth={1}
-                borderColor={editPaymentMode === 'prepaid' ? tokens.accent : tokens.border}
-                backgroundColor={
-                  editPaymentMode === 'prepaid' ? tokens.accent : tokens.surfaceRaised
-                }
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Text
-                  fontSize={13}
-                  fontWeight={editPaymentMode === 'prepaid' ? '700' : '500'}
-                  color={editPaymentMode === 'prepaid' ? tokens.surface : tokens.text}
-                >
-                  Prepaid
-                </Text>
-              </XStack>
-            </Pressable>
-          </XStack>
+          <CapsuleSegmentControl<'cod' | 'prepaid'>
+            options={[
+              { value: 'cod', label: 'COD' },
+              { value: 'prepaid', label: 'Prepaid' },
+            ]}
+            value={editPaymentMode}
+            onChange={(val) => setEditPaymentMode(val)}
+            allowDeselect={true}
+            accessibilityLabel="Select payment mode"
+          />
         </YStack>
       </YStack>
     </BottomSheet>

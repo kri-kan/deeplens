@@ -754,9 +754,44 @@ public class OrderRepository : IOrderRepository
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var rows = await connection.ExecuteAsync(@"
             UPDATE order_groups
-            SET need_label = @NeedLabel
+            SET need_label = @NeedLabel, updated_at = NOW()
             WHERE order_grp_id = @OrderGrpId",
             new { OrderGrpId = orderGrpId, NeedLabel = needLabel });
+
+        return rows > 0;
+    }
+
+    public async Task<bool> CancelGroupLabelAsync(string orderGrpId, string? awbNumber = null)
+    {
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync();
+        
+        var rows = await connection.ExecuteAsync(@"
+            UPDATE order_groups 
+            SET need_label = false,
+                label_url = NULL,
+                status = 'cancelled',
+                updated_at = NOW()
+            WHERE order_grp_id = @OrderGrpId",
+            new { OrderGrpId = orderGrpId });
+
+        await connection.ExecuteAsync(@"
+            UPDATE ""orderItem""
+            SET label_url = NULL
+            WHERE order_grp_id_ref = @OrderGrpId",
+            new { OrderGrpId = orderGrpId });
+
+        if (!string.IsNullOrWhiteSpace(awbNumber))
+        {
+            await connection.ExecuteAsync(@"
+                UPDATE shipments
+                SET status = 'cancelled',
+                    label_url = NULL,
+                    minio_label_key = NULL,
+                    metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('cancelled_at', NOW(), 'cancellation_reason', 'Need Label toggled off'),
+                    updated_at = NOW()
+                WHERE awb_number = @AwbNumber",
+                new { AwbNumber = awbNumber.Trim() });
+        }
 
         return rows > 0;
     }

@@ -68,6 +68,7 @@ public interface IOrderRepository
     Task<bool> ConfirmOrderAsync(string orderId);
     Task<IEnumerable<OrderGroupDto>> GetOrderGroupsByStageAsync(string stage);
     Task<bool> UpdateGroupNeedLabelAsync(string orderGrpId, bool needLabel);
+    Task<bool> CancelGroupLabelAsync(string orderGrpId, string? awbNumber = null);
     Task<bool> MarkGroupProcessedAsync(string orderGrpId);
     Task<string> FetchGroupDeliveryStatusAsync(string orderGrpId);
     Task<int> GetInternalIdAsync(string orderId);

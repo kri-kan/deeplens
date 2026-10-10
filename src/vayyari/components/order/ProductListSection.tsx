@@ -8,7 +8,6 @@ import {
   LuChevronDown,
   LuX,
   LuBuilding2,
-  LuPencil,
   LuEye,
   LuShare2,
   LuHelpCircle,
@@ -227,7 +226,7 @@ export function ProductListSection({
             borderWidth={1}
             borderColor={tokens.border}
             borderStyle="dashed"
-            borderRadius={tokens.radius.md}
+            borderRadius={0}
             paddingVertical={28}
             paddingHorizontal={16}
             alignItems="center"
@@ -258,7 +257,7 @@ export function ProductListSection({
                 backgroundColor={tokens.surface}
                 borderWidth={1}
                 borderColor={tokens.border}
-                borderRadius={tokens.radius.lg}
+                borderRadius={0}
                 overflow="hidden"
                 gap={0}
               >
@@ -304,18 +303,25 @@ export function ProductListSection({
                         <LuBuilding2 size={15} color={group.isUnassigned ? tokens.textMuted : tokens.accent} />
                       </XStack>
                       <YStack gap={2} flex={1}>
-                        <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                          {group.isUnassigned ? 'No Vendor' : group.vendorName}
-                        </Text>
+                        <XStack alignItems="center" gap={6} flexWrap="wrap">
+                          <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                            {group.isUnassigned ? 'No Vendor' : group.vendorName}
+                          </Text>
+                          <StatusBadge
+                            label={currentStage.toUpperCase()}
+                            intent={getStageIntent(currentStage)}
+                            size="sm"
+                          />
+                        </XStack>
                         <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
                           {groupItemCount} {groupItemCount === 1 ? 'item' : 'items'} : <Text fontWeight="800" color={tokens.text}>₹{groupTotal.toLocaleString('en-IN')}</Text>
                         </Text>
                       </YStack>
                     </XStack>
 
-                    {/* Status Badge & Locked Badge */}
-                    <XStack alignItems="center" gap={6}>
-                      {lockedVendorKeys.includes(group.key) && (
+                    {/* Locked Badge */}
+                    {lockedVendorKeys.includes(group.key) && (
+                      <XStack alignItems="center" gap={6}>
                         <XStack
                           alignItems="center"
                           gap={3}
@@ -329,14 +335,8 @@ export function ProductListSection({
                             LOCKED
                           </Text>
                         </XStack>
-                      )}
-
-                      <StatusBadge
-                        label={currentStage.toUpperCase()}
-                        intent={getStageIntent(currentStage)}
-                        size="sm"
-                      />
-                    </XStack>
+                      </XStack>
+                    )}
                   </XStack>
 
                   {/* Top-to-Bottom Dividing Line & Full-Bleed Blue Action Button */}
@@ -370,7 +370,7 @@ export function ProductListSection({
               backgroundColor={tokens.surface}
               borderWidth={isSelected ? 1.5 : 1}
               borderColor={isSelected ? tokens.accent : tokens.border}
-              borderRadius={tokens.radius.md}
+              borderRadius={tokens.radius.xs}
               padding={10}
               gap={8}
             >
@@ -479,27 +479,6 @@ export function ProductListSection({
                     </Pressable>
 
                     <XStack alignItems="center" gap={8}>
-                      {/* Edit Details Sheet Trigger */}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Edit details for ${item.title}`}
-                        onPress={() => onEditProduct(item)}
-                        hitSlop={8}
-                        style={({ pressed }) => ({
-                          width: 28,
-                          height: 28,
-                          borderRadius: tokens.radius.full,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: tokens.surfaceRaised,
-                          borderWidth: 1,
-                          borderColor: tokens.border,
-                          opacity: pressed ? 0.7 : 1,
-                        })}
-                      >
-                        <LuPencil size={13} color={tokens.accent} />
-                      </Pressable>
-
                       {/* Remove Trash button */}
                       <Pressable
                         accessibilityRole="button"

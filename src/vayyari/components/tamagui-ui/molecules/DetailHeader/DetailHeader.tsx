@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XStack, YStack, Text } from 'tamagui';
-import { LuTrash2, LuCheck, LuArrowLeft } from '@/components/tamagui-ui/icons/lu';
+import * as Clipboard from 'expo-clipboard';
+import { LuTrash2, LuCheck, LuArrowLeft, LuCopy } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge, formatAdaptiveTimestamp } from '../../atoms/TimestampBadge';
 
@@ -37,6 +38,18 @@ export function DetailHeader({
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
   const topInset = disableSafeArea ? 0 : insets.top;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyId = async () => {
+    if (!orderId) return;
+    try {
+      await Clipboard.setStringAsync(orderId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy Order ID:', err);
+    }
+  };
 
   // Determine order status text and color intent
   const normStatus = (status || '').toLowerCase().trim();
@@ -104,9 +117,33 @@ export function DetailHeader({
             <LuArrowLeft size={18} color={tokens.text} />
           </Pressable>
         )}
-        <Text fontSize={14} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
-          #{orderId}
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Copy Order ID ${orderId}`}
+          onPress={handleCopyId}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingHorizontal: 6,
+            paddingVertical: 3,
+            borderRadius: tokens.radius.xs,
+            backgroundColor: copied ? `${tokens.success}1A` : pressed ? `${tokens.text}10` : `${tokens.text}08`,
+            borderWidth: 1,
+            borderColor: copied ? `${tokens.success}40` : tokens.border,
+            transform: [{ scale: pressed ? 0.96 : 1 }],
+          })}
+        >
+          <Text fontSize={16} fontWeight="900" color={copied ? tokens.success : tokens.text} letterSpacing={0.3}>
+            #{orderId}
+          </Text>
+          {copied ? (
+            <LuCheck size={14} color={tokens.success} />
+          ) : (
+            <LuCopy size={13} color={tokens.textMuted} />
+          )}
+        </Pressable>
         <TimestampBadge
           date={createdAt}
           compact={true}

@@ -127,8 +127,8 @@ export function OrderIdGeneratorCard({
       borderRadius={tokens.radius.lg}
       borderWidth={1}
       borderColor={tokens.border}
-      padding={16}
-      gap={14}
+      padding={12}
+      gap={12}
       shadowColor="#000"
       shadowOffset={{ width: 0, height: 2 }}
       shadowOpacity={0.04}

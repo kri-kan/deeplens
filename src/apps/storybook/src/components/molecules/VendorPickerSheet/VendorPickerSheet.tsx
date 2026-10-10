@@ -21,11 +21,6 @@ export interface VendorOption {
 
 export const STANDARD_VENDORS: VendorOption[] = [
   { id: 'v-inhouse', name: 'In-House', isStarred: true },
-  { id: 'v-varanasi', name: 'Varanasi Weavers Ltd', isStarred: true },
-  { id: 'v-surat', name: 'Surat Handlooms Factory #2', isStarred: true },
-  { id: 'v-kanchipuram', name: 'Kanchipuram Silks Co', isStarred: false },
-  { id: 'v-chanderi', name: 'Chanderi Crafts Guild', isStarred: false },
-  { id: 'v-jaipur', name: 'Jaipur Block Printers', isStarred: false },
 ];
 
 export interface VendorPickerSheetProps {
@@ -81,8 +76,10 @@ export function VendorPickerSheet({
       : vendors;
 
     return [...filtered].sort((a, b) => {
-      if (a.isStarred && !b.isStarred) return -1;
-      if (!a.isStarred && b.isStarred) return 1;
+      const aStarred = Boolean(a.isStarred);
+      const bStarred = Boolean(b.isStarred);
+      if (aStarred && !bStarred) return -1;
+      if (!aStarred && bStarred) return 1;
       return a.name.localeCompare(b.name);
     });
   }, [vendors, searchQuery]);
@@ -251,55 +248,49 @@ export function VendorPickerSheet({
                   })}
                 >
                   <XStack alignItems="center" justifyContent="space-between">
-                    <XStack alignItems="center" gap={10} flex={1}>
-                      {isItemLocked ? (
-                        <LuLock size={16} color={tokens.textMuted} />
-                      ) : item.isStarred ? (
-                        <LuStar size={16} color="#F59E0B" style={{ fill: '#F59E0B' } as any} />
-                      ) : (
-                        <LuBuilding2 size={16} color={tokens.textMuted} />
+                    <XStack alignItems="center" gap={8} flex={1} flexWrap="wrap">
+                      <Text
+                        fontSize={14}
+                        fontWeight={isSelected ? '800' : item.isStarred ? '700' : '500'}
+                        color={isItemLocked ? tokens.textMuted : isSelected ? tokens.accent : tokens.text}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.code ? (
+                        <Text
+                          fontSize={12}
+                          fontWeight="500"
+                          color={tokens.textMuted}
+                          numberOfLines={1}
+                        >
+                          ({item.code})
+                        </Text>
+                      ) : null}
+                      {isItemLocked && (
+                        <YStack
+                          backgroundColor={`${tokens.textMuted}1A`}
+                          paddingHorizontal={6}
+                          paddingVertical={1}
+                          borderRadius={4}
+                        >
+                          <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
+                            Locked
+                          </Text>
+                        </YStack>
                       )}
-                      <YStack flex={1}>
-                        <XStack alignItems="center" gap={6}>
-                          <Text
-                            fontSize={14}
-                            fontWeight={isSelected ? '800' : item.isStarred ? '700' : '500'}
-                            color={isItemLocked ? tokens.textMuted : isSelected ? tokens.accent : tokens.text}
-                            numberOfLines={1}
-                          >
-                            {item.name}
+                      {!isItemLocked && item.isStarred && (
+                        <YStack
+                          backgroundColor="rgba(245, 158, 11, 0.12)"
+                          paddingHorizontal={6}
+                          paddingVertical={1}
+                          borderRadius={4}
+                        >
+                          <Text fontSize={10} fontWeight="700" color="#D97706">
+                            Starred
                           </Text>
-                          {isItemLocked && (
-                            <YStack
-                              backgroundColor={`${tokens.textMuted}1A`}
-                              paddingHorizontal={6}
-                              paddingVertical={1}
-                              borderRadius={4}
-                            >
-                              <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                                Locked
-                              </Text>
-                            </YStack>
-                          )}
-                          {!isItemLocked && item.isStarred && (
-                            <YStack
-                              backgroundColor="rgba(245, 158, 11, 0.12)"
-                              paddingHorizontal={6}
-                              paddingVertical={1}
-                              borderRadius={4}
-                            >
-                              <Text fontSize={10} fontWeight="700" color="#D97706">
-                                Starred
-                              </Text>
-                            </YStack>
-                          )}
-                        </XStack>
-                        {item.code ? (
-                          <Text fontSize={11} color={tokens.textMuted}>
-                            {item.code}
-                          </Text>
-                        ) : null}
-                      </YStack>
+                        </YStack>
+                      )}
                     </XStack>
 
                     {isSelected && <LuCheck size={16} color={tokens.accent} />}
