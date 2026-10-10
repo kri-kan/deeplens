@@ -508,11 +508,16 @@ export function ForwardOrderLabelModal({
 
         setFeedbackDialog({
           visible: true,
-          title: 'Forward Order Created',
-          message: `Delhivery shipment manifested successfully!\n\nAWB: ${awb}\nPDF shipping label generated.`,
+          title: 'Order Manifested Successfully',
+          message: '',
           intent: 'success',
-          confirmLabel: 'OK',
+          confirmLabel: `Copy AWB: ${awb}`,
           singleButton: true,
+          onConfirm: async () => {
+            await Clipboard.setStringAsync(awb);
+            setCopiedAwb(true);
+            setTimeout(() => setCopiedAwb(false), 2000);
+          },
         });
       } else {
         throw new Error(res?.message || res?.error || 'Failed to manifest shipment with Delhivery');
@@ -1833,8 +1838,9 @@ export function ForwardOrderLabelModal({
           confirmLabel={feedbackDialog.confirmLabel || 'OK'}
           intent={feedbackDialog.intent || 'info'}
           singleButton={feedbackDialog.singleButton ?? true}
-          onConfirm={() => {
-            if (feedbackDialog.onConfirm) feedbackDialog.onConfirm();
+          dismissOnBackdropPress={true}
+          onConfirm={async () => {
+            if (feedbackDialog.onConfirm) await feedbackDialog.onConfirm();
             setFeedbackDialog((prev) => ({ ...prev, visible: false }));
           }}
           onCancel={() => setFeedbackDialog((prev) => ({ ...prev, visible: false }))}

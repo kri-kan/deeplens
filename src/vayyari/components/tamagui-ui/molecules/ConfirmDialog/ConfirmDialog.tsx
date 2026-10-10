@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Modal } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuTrash2, LuTriangleAlert, LuInfo, LuCheckCircle2 } from '@/components/tamagui-ui/icons/lu';
+import { LuTrash2, LuTriangleAlert, LuInfo, LuCheckCircle2, LuCopy } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 
 export interface ConfirmDialogProps {
@@ -21,6 +21,8 @@ export interface ConfirmDialogProps {
   icon?: React.ReactNode;
   /** Whether to show only a single confirmation button (e.g. OK / acknowledgment) */
   singleButton?: boolean;
+  /** Whether tapping the backdrop dismisses the dialog (defaults to true) */
+  dismissOnBackdropPress?: boolean;
   /** Callback fired when the user confirms the action */
   onConfirm: () => void;
   /** Callback fired when the user cancels or dismisses the prompt */
@@ -36,6 +38,7 @@ export function ConfirmDialog({
   intent = 'critical',
   icon,
   singleButton = false,
+  dismissOnBackdropPress = true,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -93,6 +96,13 @@ export function ConfirmDialog({
         role="alert"
         aria-label={title}
       >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss dialog"
+          onPress={dismissOnBackdropPress ? onCancel : undefined}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+
         <YStack
           width="100%"
           maxWidth={340}
@@ -140,9 +150,11 @@ export function ConfirmDialog({
           </XStack>
 
           {/* Message */}
-          <Text fontSize={13} lineHeight={19} color={tokens.textSecondary}>
-            {message}
-          </Text>
+          {Boolean(message) && (
+            <Text fontSize={13} lineHeight={19} color={tokens.textSecondary}>
+              {message}
+            </Text>
+          )}
 
           {/* Actions Row */}
           <XStack gap={10} paddingTop={6}>
@@ -180,12 +192,18 @@ export function ConfirmDialog({
                 backgroundColor: intentColor.base,
                 alignItems: 'center',
                 justifyContent: 'center',
+                paddingHorizontal: 12,
                 opacity: pressed ? 0.8 : 1,
               })}
             >
-              <Text fontSize={13} fontWeight="700" color="#FFFFFF">
-                {confirmLabel}
-              </Text>
+              <XStack alignItems="center" justifyContent="center" gap={6}>
+                {confirmLabel.toLowerCase().includes('copy') && (
+                  <LuCopy size={15} color="#FFFFFF" />
+                )}
+                <Text fontSize={13} fontWeight="700" color="#FFFFFF" numberOfLines={1}>
+                  {confirmLabel}
+                </Text>
+              </XStack>
             </Pressable>
           </XStack>
         </YStack>
