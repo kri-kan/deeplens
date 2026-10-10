@@ -43,6 +43,7 @@ import { shareImageUri } from '@/utils/shareImage';
 import { logisticsService } from '@/services/logistics.service';
 import { searchApiClient } from '@/api/client';
 import { API_ROUTES } from '@/constants/api-routes';
+import { resolveLabelUrl } from '@/utils/api-config';
 
 export interface AddressData {
   name: string;
@@ -191,16 +192,20 @@ export function GroupManagementView({
 
   const handleShareLabel = async () => {
     try {
-      const clipText = `Delhivery Shipping Label\nAWB: ${awbNumber || 'N/A'}\nPackage: ${orderGrpId || orderId}`;
+      const activeAwb = stagedAwb || awbNumber;
+      const rawLabelUrl = stagedLabelUrl || labelUrl;
+      const resolvedUrl = resolveLabelUrl(rawLabelUrl);
+
+      const clipText = `Delhivery Shipping Label\nAWB: ${activeAwb || 'N/A'}\nPackage: ${orderGrpId || orderId}`;
       await Clipboard.setStringAsync(clipText);
 
-      if (labelUrl) {
-        await shareImageUri(labelUrl, `Shipping Label ${awbNumber || ''}`);
+      if (resolvedUrl) {
+        await shareImageUri(resolvedUrl, `Shipping Label ${activeAwb || ''}`);
       }
 
       setShareConfirmTarget({
         type: 'label',
-        title: `Delhivery Label (${awbNumber || 'AWB'})`,
+        title: `Delhivery Label (${activeAwb || 'AWB'})`,
       });
     } catch (err) {
       console.warn('Label share error:', err);

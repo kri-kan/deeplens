@@ -29,12 +29,14 @@ import {
   LuStar,
   LuReceipt,
 } from '@/components/tamagui-ui/icons/lu';
+import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { useTheme } from '@/theme';
 import { logisticsService } from '@/services/logistics.service';
 import { vendorService } from '@/services/vendorService';
 import { searchApiClient } from '@/api/client';
 import { Warehouse } from '@/types/logistics';
 import { shareImageUri } from '@/utils/shareImage';
+import { resolveLabelUrl } from '@/utils/api-config';
 import { AddressData } from './GroupManagementView';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 
@@ -544,9 +546,30 @@ export function ForwardOrderLabelModal({
     setTimeout(() => setCopiedAwb(false), 2000);
   };
 
+  const handleOpenPdfViewer = async () => {
+    const rawUrl = generatedLabelUrl || (initialLabelUrl ? initialLabelUrl : '');
+    const resolvedUrl = resolveLabelUrl(rawUrl);
+    if (!resolvedUrl) return;
+
+    if (Platform.OS === 'web') {
+      window.open(resolvedUrl, '_blank');
+      return;
+    }
+
+    try {
+      await openBrowserAsync(resolvedUrl, {
+        presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
+      });
+    } catch {
+      await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
+    }
+  };
+
   const handleSharePdf = async () => {
-    if (generatedLabelUrl) {
-      await shareImageUri(generatedLabelUrl, `Delhivery Label ${generatedAwb}`);
+    const rawUrl = generatedLabelUrl || (initialLabelUrl ? initialLabelUrl : '');
+    const resolvedUrl = resolveLabelUrl(rawUrl);
+    if (resolvedUrl) {
+      await shareImageUri(resolvedUrl, `Delhivery Label ${generatedAwb}`);
     }
   };
 
@@ -594,7 +617,11 @@ export function ForwardOrderLabelModal({
         {/* ── Main Body Container ── */}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 60 }}
+          contentContainerStyle={{
+            padding: 16,
+            gap: 16,
+            paddingBottom: viewMode === 'pdf' ? insets.bottom + 80 : 60,
+          }}
           showsVerticalScrollIndicator={false}
         >
           {viewMode === 'form' ? (
@@ -1303,45 +1330,6 @@ export function ForwardOrderLabelModal({
                2. PDF & AUDIT VIEW: PDF in place of form + Collapsed Audit Form
                ───────────────────────────────────────────────────────────── */
             <YStack gap={16}>
-              {/* Success Banner */}
-              <XStack
-                backgroundColor={`${tokens.success}1A`}
-                borderWidth={1}
-                borderColor={tokens.success}
-                borderRadius={tokens.radius.sm}
-                padding={12}
-                alignItems="center"
-                justifyContent="space-between"
-              >
-                <XStack alignItems="center" gap={8} flex={1}>
-                  <LuCheck size={20} color={tokens.success} />
-                  <YStack flex={1}>
-                    <Text fontSize={13} fontWeight="800" color={tokens.success}>
-                      FORWARD ORDER CREATED & MANIFESTED
-                    </Text>
-                    <Text fontSize={11} color={tokens.text}>
-                      Courier: Delhivery Express • Ready for dispatch
-                    </Text>
-                  </YStack>
-                </XStack>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit or re-create order"
-                  onPress={() => setViewMode('form')}
-                  style={{
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    borderRadius: 4,
-                    backgroundColor: tokens.surfaceRaised,
-                  }}
-                >
-                  <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                    Edit Form
-                  </Text>
-                </Pressable>
-              </XStack>
-
               {/* ── PDF Shipping Label Preview Tile ── */}
               <YStack
                 borderRadius={tokens.radius.md}
@@ -1351,7 +1339,7 @@ export function ForwardOrderLabelModal({
                 overflow="hidden"
                 gap={0}
               >
-                {/* Tile Header with AWB Tracking Badge */}
+                {/* Tile Header with AWB Tracking Badge & Full Preview CTA */}
                 <XStack
                   backgroundColor={tokens.surfaceRaised}
                   paddingHorizontal={14}
@@ -1364,24 +1352,18 @@ export function ForwardOrderLabelModal({
                   <XStack alignItems="center" gap={6}>
                     <LuFileText size={16} color={tokens.accent} />
                     <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                      THERMAL SHIPPING LABEL (PDF)
+                      DELHIVERY SHIPPING LABEL
                     </Text>
                   </XStack>
 
-                  {/* AWB with Copy pill */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Copy AWB Number"
-                    onPress={handleCopyAwb}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                      backgroundColor: pressed ? `${tokens.text}10` : 'rgba(0,0,0,0.85)',
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: tokens.radius.sm,
-                    })}
+                  {/* AWB Pill */}
+                  <XStack
+                    alignItems="center"
+                    gap={4}
+                    backgroundColor="rgba(0,0,0,0.85)"
+                    paddingHorizontal={8}
+                    paddingVertical={4}
+                    borderRadius={tokens.radius.sm}
                   >
                     <Text fontSize={9} fontWeight="700" color="#94A3B8">
                       AWB:
@@ -1389,107 +1371,70 @@ export function ForwardOrderLabelModal({
                     <Text fontSize={11} fontWeight="900" color="#FFFFFF">
                       {generatedAwb}
                     </Text>
-                    {copiedAwb ? (
-                      <LuCheck size={12} color={tokens.success} />
-                    ) : (
-                      <LuCopy size={11} color="#94A3B8" />
-                    )}
-                  </Pressable>
+                  </XStack>
                 </XStack>
 
-                {/* PDF Viewer Mockup / Embed Area */}
+                {/* PDF Viewer / Interactive Embed Area */}
                 <YStack
-                  height={240}
+                  height={320}
                   backgroundColor="#F8FAFC"
                   alignItems="center"
                   justifyContent="center"
-                  padding={16}
-                  gap={10}
                   position="relative"
+                  overflow="hidden"
                 >
-                  {Platform.OS === 'web' && generatedLabelUrl && !generatedLabelUrl.includes('example.com') ? (
+                  {Platform.OS === 'web' && resolveLabelUrl(generatedLabelUrl || initialLabelUrl) ? (
                     <iframe
-                      src={generatedLabelUrl}
+                      src={resolveLabelUrl(generatedLabelUrl || initialLabelUrl)}
                       title="Delhivery Shipping Label"
                       style={{ width: '100%', height: '100%', border: 'none' }}
                     />
                   ) : (
-                    <YStack alignItems="center" gap={8}>
-                      <LuFileText size={56} color={tokens.accent} />
-                      <Text fontSize={14} fontWeight="800" color={tokens.text}>
-                        Delhivery Standard Thermal Slip
-                      </Text>
-                      <Text fontSize={11} color={tokens.textMuted} textAlign="center">
-                        AWB #{generatedAwb} • {vendorName} Package
-                      </Text>
-                      <XStack
-                        backgroundColor="#EFF6FF"
-                        borderWidth={1}
-                        borderColor="#BFDBFE"
-                        paddingHorizontal={8}
-                        paddingVertical={3}
-                        borderRadius={4}
+                    <YStack alignItems="center" justifyContent="center" padding={20} gap={12} width="100%">
+                      <YStack
+                        width={64}
+                        height={64}
+                        borderRadius={32}
+                        backgroundColor={`${tokens.accent}14`}
+                        alignItems="center"
+                        justifyContent="center"
                       >
-                        <Text fontSize={10} fontWeight="700" color="#1D4ED8">
-                          Format: 4×6 Thermal PDF • Barcode Ready
+                        <LuFileText size={32} color={tokens.accent} />
+                      </YStack>
+
+                      <YStack alignItems="center" gap={4}>
+                        <Text fontSize={15} fontWeight="800" color={tokens.text}>
+                          Delhivery Thermal Label (PDF)
                         </Text>
-                      </XStack>
+                        <Text fontSize={11} color={tokens.textMuted} textAlign="center">
+                          AWB #{generatedAwb} • 4×6 Barcode Standard
+                        </Text>
+                      </YStack>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Open PDF in Full Screen Viewer"
+                        onPress={handleOpenPdfViewer}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: pressed ? `${tokens.accent}20` : `${tokens.accent}15`,
+                          borderWidth: 1,
+                          borderColor: tokens.accent,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: tokens.radius.sm,
+                        })}
+                      >
+                        <LuExternalLink size={14} color={tokens.accent} />
+                        <Text fontSize={12} fontWeight="800" color={tokens.accent}>
+                          Open PDF Viewer
+                        </Text>
+                      </Pressable>
                     </YStack>
                   )}
                 </YStack>
-
-                {/* Actions Row */}
-                <XStack
-                  padding={10}
-                  gap={10}
-                  borderTopWidth={1}
-                  borderTopColor={tokens.border}
-                  backgroundColor={tokens.surface}
-                >
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Copy AWB number"
-                    onPress={handleCopyAwb}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      height: 38,
-                      borderRadius: tokens.radius.sm,
-                      borderWidth: 1,
-                      borderColor: tokens.border,
-                      backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                    })}
-                  >
-                    <LuCopy size={13} color={tokens.text} />
-                    <Text fontSize={11} fontWeight="700" color={tokens.text}>
-                      {copiedAwb ? 'AWB COPIED ✓' : 'COPY AWB'}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Share PDF shipping label"
-                    onPress={handleSharePdf}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      height: 38,
-                      borderRadius: tokens.radius.sm,
-                      backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                    })}
-                  >
-                    <LuShare2 size={13} color={tokens.accentForeground} />
-                    <Text fontSize={11} fontWeight="800" color={tokens.accentForeground}>
-                      SHARE PDF
-                    </Text>
-                  </Pressable>
-                </XStack>
               </YStack>
 
               {/* ─────────────────────────────────────────────────────────────
@@ -1709,6 +1654,73 @@ export function ForwardOrderLabelModal({
             </YStack>
           )}
         </ScrollView>
+
+        {/* ── Sticky Bottom Action Bar (PDF View Mode) ── */}
+        {viewMode === 'pdf' && (
+          <XStack
+            position="absolute"
+            bottom={0}
+            left={0}
+            right={0}
+            backgroundColor={tokens.surface}
+            borderTopWidth={1}
+            borderTopColor={tokens.border}
+            paddingHorizontal={16}
+            paddingTop={12}
+            paddingBottom={Math.max(insets.bottom, 12)}
+            gap={12}
+            shadowColor="#000"
+            shadowOffset={{ width: 0, height: -2 }}
+            shadowOpacity={0.08}
+            shadowRadius={4}
+            elevation={8}
+            alignItems="center"
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Copy AWB number"
+              onPress={handleCopyAwb}
+              style={({ pressed }) => ({
+                flex: 1,
+                height: 44,
+                borderRadius: tokens.radius.sm,
+                borderWidth: 1.5,
+                borderColor: tokens.border,
+                backgroundColor: pressed ? `${tokens.text}10` : tokens.surfaceRaised,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+              })}
+            >
+              <LuCopy size={16} color={tokens.text} />
+              <Text fontSize={12} fontWeight="800" color={tokens.text}>
+                {copiedAwb ? 'AWB COPIED ✓' : `COPY AWB (${generatedAwb || 'AWB'})`}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share PDF shipping label"
+              onPress={handleSharePdf}
+              style={({ pressed }) => ({
+                flex: 1,
+                height: 44,
+                borderRadius: tokens.radius.sm,
+                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 8,
+              })}
+            >
+              <LuShare2 size={16} color={tokens.accentForeground} />
+              <Text fontSize={12} fontWeight="800" color={tokens.accentForeground}>
+                SHARE PDF
+              </Text>
+            </Pressable>
+          </XStack>
+        )}
 
         {/* ── Sub-Modal: Pickup Warehouse Facility Picker ── */}
         {showWarehousePicker && (
