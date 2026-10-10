@@ -42,6 +42,7 @@ export const API_ROUTES = {
     UPDATE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
     DELETE: (orderId: string) => `/api/v1/orderid/order/${orderId}`,
     CONFIRM: (orderId: string) => `/api/v1/orderid/order/${orderId}/confirm`,
+    CLONE: (orderId: string) => `/api/v1/orderid/order/${orderId}/clone`,
   },
 
   // Product ID generation (separate concern from catalog CRUD)

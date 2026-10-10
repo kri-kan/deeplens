@@ -179,6 +179,18 @@ public class OrderIdController : ControllerBase
     }
 
     /// <summary>
+    /// Clones an existing order including items and delivery address into a new order in Unconfirmed status.
+    /// </summary>
+    [HttpPost("order/{orderId}/clone")]
+    public async Task<ActionResult<OrderDetailDto>> CloneOrder(string orderId)
+    {
+        if (string.IsNullOrWhiteSpace(orderId)) return BadRequest(new { message = "OrderId is required" });
+        var cloned = await _idGenerator.CloneOrderAsync(orderId);
+        if (cloned == null) return NotFound(new { message = $"Order ID {orderId} not found" });
+        return Ok(cloned);
+    }
+
+    /// <summary>
     /// Confirms an unconfirmed order, transitioning it to Confirmed status.
     /// </summary>
     [HttpPost("order/{orderId}/confirm")]

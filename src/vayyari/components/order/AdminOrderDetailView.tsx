@@ -50,6 +50,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
   const [orderData, setOrderData] = useState<OrderIdEntry | null>(null);
 
   const [snackbarVisible, setSnackbarVisible] = useState<boolean>(Boolean(showCreatedSnackbar));
@@ -591,6 +592,44 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     }
   };
 
+  // Clone order with items and address in unconfirmed state
+  const handleCloneOrder = () => {
+    Alert.alert(
+      'Clone Order',
+      `Create a new unconfirmed order copying all items and delivery address from order #${orderId}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clone',
+          onPress: async () => {
+            setIsCloning(true);
+            try {
+              const res = await searchApiClient.post<OrderIdEntry>(API_ROUTES.ORDERS.CLONE(orderId), {});
+              const clonedId = res?.id || (res as any)?.orderId;
+              if (clonedId) {
+                setSnackbarMessage(`Order #${clonedId} cloned in unconfirmed state!`);
+                setSnackbarVisible(true);
+                setTimeout(() => {
+                  router.replace({
+                    pathname: '/utilities/order-details/[id]',
+                    params: { id: clonedId },
+                  } as any);
+                }, 400);
+              } else {
+                throw new Error('No cloned order ID returned');
+              }
+            } catch (err: any) {
+              console.error('Failed to clone order:', err);
+              Alert.alert('Clone Failed', err?.message || 'Could not clone order.');
+            } finally {
+              setIsCloning(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Delete full order
   const handleDeleteOrder = () => {
     setConfirmDialog({
@@ -852,6 +891,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         status={derivedStageTag}
         statusCount={distinctGroupKeys.length > 1 ? distinctGroupKeys.length - 1 : 0}
         onDelete={handleDeleteOrder}
+        onClone={handleCloneOrder}
+        isCloning={isCloning}
         onBack={onBack || (() => router.back())}
       />
 
