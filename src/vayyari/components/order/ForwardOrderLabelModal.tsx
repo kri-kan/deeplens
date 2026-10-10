@@ -36,6 +36,7 @@ import { searchApiClient } from '@/api/client';
 import { Warehouse } from '@/types/logistics';
 import { shareImageUri } from '@/utils/shareImage';
 import { AddressData } from './GroupManagementView';
+import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 
 export interface SubmittedForwardOrderAudit {
   awbNumber: string;
@@ -174,6 +175,21 @@ export function ForwardOrderLabelModal({
     zone: string;
   } | null>(null);
 
+  // Design System Feedback Dialog
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    intent?: 'critical' | 'attention' | 'info' | 'success';
+    singleButton?: boolean;
+    onConfirm?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
   useEffect(() => {
     if (visible) {
       if (initialAwb || initialLabelUrl) {
@@ -302,7 +318,13 @@ export function ForwardOrderLabelModal({
       }
     } catch (err: any) {
       console.warn('Failed to toggle warehouse star:', err);
-      Alert.alert('Error', err?.message || 'Could not toggle star status');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Error',
+        message: err?.message || 'Could not toggle star status',
+        intent: 'critical',
+        singleButton: true,
+      });
     }
   };
 
@@ -334,37 +356,73 @@ export function ForwardOrderLabelModal({
   const handleCreateForwardOrder = async () => {
     const parsedWeight = parseInt(weightGrams, 10);
     if (isNaN(parsedWeight) || parsedWeight <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid weight in grams.');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Validation Error',
+        message: 'Please enter a valid weight in grams.',
+        intent: 'attention',
+        singleButton: true,
+      });
       return;
     }
 
     const parsedQty = parseInt(quantity, 10);
     if (isNaN(parsedQty) || parsedQty <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid items quantity.');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Validation Error',
+        message: 'Please enter a valid items quantity.',
+        intent: 'attention',
+        singleButton: true,
+      });
       return;
     }
 
     const parsedTotal = parseFloat(totalAmount);
     if (isNaN(parsedTotal) || parsedTotal <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid total declared package amount.');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Validation Error',
+        message: 'Please enter a valid total declared package amount.',
+        intent: 'attention',
+        singleButton: true,
+      });
       return;
     }
 
     if (paymentMode === 'COD') {
       const parsedCod = parseFloat(codAmount);
       if (isNaN(parsedCod) || parsedCod <= 0) {
-        Alert.alert('Validation Error', 'Please enter a valid COD collection amount.');
+        setFeedbackDialog({
+          visible: true,
+          title: 'Validation Error',
+          message: 'Please enter a valid COD collection amount.',
+          intent: 'attention',
+          singleButton: true,
+        });
         return;
       }
     }
 
     if (!selectedWarehouse) {
-      Alert.alert('Validation Error', 'Please select a pickup warehouse facility.');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Validation Error',
+        message: 'Please select a pickup warehouse facility.',
+        intent: 'attention',
+        singleButton: true,
+      });
       return;
     }
 
     if (!recipientAddress.trim() || !recipientPincode.trim()) {
-      Alert.alert('Validation Error', 'Please specify customer delivery street address and pincode.');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Validation Error',
+        message: 'Please specify customer delivery street address and pincode.',
+        intent: 'attention',
+        singleButton: true,
+      });
       return;
     }
 
@@ -392,22 +450,10 @@ export function ForwardOrderLabelModal({
         recipientState: recipientState.trim() || '',
       };
 
-      let res: any;
-      try {
-        res = await searchApiClient.post(
-          `/api/v1/orderid/groups/${orderGrpId}/label`,
-          requestPayload
-        );
-      } catch (apiErr) {
-        console.warn('Live label API failed, using synthetic Delhivery fulfillment fallback:', apiErr);
-        // Fallback synthetic Delhivery AWB for local development / Storybook resilience
-        const fallbackAwb = `DEL${Math.floor(1000000000 + Math.random() * 9000000000)}`;
-        res = {
-          awbNumber: fallbackAwb,
-          labelUrl: `https://delhivery.example.com/labels/${fallbackAwb}.pdf`,
-          status: 'generated',
-        };
-      }
+      const res: any = await searchApiClient.post(
+        `/api/v1/orderid/groups/${orderGrpId}/label`,
+        requestPayload
+      );
 
       if (res?.awbNumber) {
         const awb = res.awbNumber;
@@ -460,19 +506,27 @@ export function ForwardOrderLabelModal({
           auditData,
         });
 
-        Alert.alert(
-          'Forward Order Created',
-          `Delhivery shipment manifested successfully!\nAWB: ${awb}\nPDF shipping label generated.`
-        );
+        setFeedbackDialog({
+          visible: true,
+          title: 'Forward Order Created',
+          message: `Delhivery shipment manifested successfully!\n\nAWB: ${awb}\nPDF shipping label generated.`,
+          intent: 'success',
+          confirmLabel: 'OK',
+          singleButton: true,
+        });
       } else {
-        throw new Error(res?.message || 'Failed to generate AWB');
+        throw new Error(res?.message || res?.error || 'Failed to manifest shipment with Delhivery');
       }
     } catch (err: any) {
       console.error('Failed to create forward order:', err);
-      Alert.alert(
-        'Order Creation Failed',
-        err?.message || 'Could not manifest shipment with Delhivery.'
-      );
+      setFeedbackDialog({
+        visible: true,
+        title: 'Order Creation Failed',
+        message: err?.message || 'Could not manifest shipment with Delhivery.',
+        intent: 'critical',
+        confirmLabel: 'OK',
+        singleButton: true,
+      });
     } finally {
       setCreatingOrder(false);
     }
@@ -1770,6 +1824,21 @@ export function ForwardOrderLabelModal({
             </YStack>
           </Modal>
         )}
+
+        {/* ── Design System Feedback Dialog (Success, Validation & Error) ── */}
+        <ConfirmDialog
+          visible={feedbackDialog.visible}
+          title={feedbackDialog.title}
+          message={feedbackDialog.message}
+          confirmLabel={feedbackDialog.confirmLabel || 'OK'}
+          intent={feedbackDialog.intent || 'info'}
+          singleButton={feedbackDialog.singleButton ?? true}
+          onConfirm={() => {
+            if (feedbackDialog.onConfirm) feedbackDialog.onConfirm();
+            setFeedbackDialog((prev) => ({ ...prev, visible: false }));
+          }}
+          onCancel={() => setFeedbackDialog((prev) => ({ ...prev, visible: false }))}
+        />
       </YStack>
   );
 }

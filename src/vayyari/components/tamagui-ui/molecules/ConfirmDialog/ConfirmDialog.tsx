@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Modal } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { LuTrash2, LuTriangleAlert, LuInfo } from '@/components/tamagui-ui/icons/lu';
+import { LuTrash2, LuTriangleAlert, LuInfo, LuCheckCircle2 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 
 export interface ConfirmDialogProps {
@@ -16,9 +16,11 @@ export interface ConfirmDialogProps {
   /** Label for the dismissal/cancel button */
   cancelLabel?: string;
   /** Visual intent controlling danger vs alert coloring */
-  intent?: 'critical' | 'attention' | 'info';
+  intent?: 'critical' | 'attention' | 'info' | 'success';
   /** Optional custom icon node */
   icon?: React.ReactNode;
+  /** Whether to show only a single confirmation button (e.g. OK / acknowledgment) */
+  singleButton?: boolean;
   /** Callback fired when the user confirms the action */
   onConfirm: () => void;
   /** Callback fired when the user cancels or dismisses the prompt */
@@ -33,6 +35,7 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   intent = 'critical',
   icon,
+  singleButton = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -59,6 +62,12 @@ export function ConfirmDialog({
       subtle: tokens.accentSubtle || (isDark ? 'rgba(59, 130, 246, 0.18)' : '#EBF5FF'),
       border: tokens.border || (isDark ? 'rgba(255, 255, 255, 0.15)' : '#E2E8F0'),
       text: tokens.accent || '#3B82F6',
+    },
+    success: {
+      base: tokens.success || '#10B981',
+      subtle: isDark ? 'rgba(16, 185, 129, 0.18)' : '#ECFDF5',
+      border: isDark ? 'rgba(16, 185, 129, 0.38)' : '#A7F3D0',
+      text: isDark ? '#34D399' : '#059669',
     },
   };
 
@@ -116,6 +125,8 @@ export function ConfirmDialog({
                 <LuTrash2 size={20} color={intentColor.text} />
               ) : intent === 'attention' ? (
                 <LuTriangleAlert size={20} color={intentColor.text} />
+              ) : intent === 'success' ? (
+                <LuCheckCircle2 size={20} color={intentColor.text} />
               ) : (
                 <LuInfo size={20} color={intentColor.text} />
               )}
@@ -135,26 +146,28 @@ export function ConfirmDialog({
 
           {/* Actions Row */}
           <XStack gap={10} paddingTop={6}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={cancelLabel}
-              onPress={onCancel}
-              style={({ pressed }) => ({
-                flex: 1,
-                height: 44,
-                borderRadius: tokens.radius.xs,
-                backgroundColor: raisedBg,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text fontSize={13} fontWeight="700" color={tokens.text}>
-                {cancelLabel}
-              </Text>
-            </Pressable>
+            {!singleButton && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={cancelLabel}
+                onPress={onCancel}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 44,
+                  borderRadius: tokens.radius.xs,
+                  backgroundColor: raisedBg,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <Text fontSize={13} fontWeight="700" color={tokens.text}>
+                  {cancelLabel}
+                </Text>
+              </Pressable>
+            )}
 
             <Pressable
               accessibilityRole="button"
