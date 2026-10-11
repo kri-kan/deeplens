@@ -153,6 +153,7 @@ export function GroupManagementView({
   const insets = useSafeAreaInsets();
 
   // Local staged stage and needLabel states
+  const [persistedStage, setPersistedStage] = useState<string>(currentStage);
   const [stagedStage, setStagedStage] = useState<string>(currentStage);
   const [stagedNeedLabel, setStagedNeedLabel] = useState<boolean>(Boolean(needLabel));
   const [stagedAwb, setStagedAwb] = useState<string | undefined>(awbNumber);
@@ -174,6 +175,12 @@ export function GroupManagementView({
   const [isRefreshingPickup, setIsRefreshingPickup] = useState(false);
   const [tilePreviewImageLoading, setTilePreviewImageLoading] = useState(true);
   const [tilePreviewImageError, setTilePreviewImageError] = useState(false);
+
+  // Synchronize persisted stage when incoming currentStage changes from props
+  useEffect(() => {
+    setPersistedStage(currentStage);
+    setStagedStage(currentStage);
+  }, [currentStage]);
 
   // Modern Design System Dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -200,11 +207,17 @@ export function GroupManagementView({
   const [isAddressShared, setIsAddressShared] = useState(false);
   const [addressSharedAt, setAddressSharedAt] = useState<string | null>(null);
 
-  // Sharing is only enabled once the group has moved to Confirmed or later stages
-  const isSharingEnabled = isGroupSharingEnabled(stagedStage);
+  // Stage dirty check: true if local selected stage differs from persisted stage
+  const isStageDirty =
+    (stagedStage || '').toLowerCase() !== (persistedStage || '').toLowerCase();
+
+  // Sharing and manifestation are only enabled once the group has been saved to DB as Confirmed (or later)
+  const isSharingEnabled = isGroupSharingEnabled(persistedStage) && !isStageDirty;
   const isUnconfirmedStage =
     (stagedStage || '').toLowerCase() === 'unconfirmed' ||
     (stagedStage || '').toLowerCase() === 'unformed';
+  const isPersistedConfirmed =
+    !isUnconfirmedStage && !isStageDirty && isGroupSharingEnabled(persistedStage);
 
   const resetAllSharedStatuses = () => {
     setGroupItems((prev) =>
@@ -803,6 +816,7 @@ export function GroupManagementView({
           onConfirm: () => setConfirmDialog((prev) => ({ ...prev, visible: false })),
         });
       }
+      setPersistedStage(stagedStage);
     } catch (err: any) {
       console.error('Failed to save group stage:', err);
       setConfirmDialog({
@@ -2063,7 +2077,7 @@ export function GroupManagementView({
               </YStack>
             ) : (
               /* Manifest Order Card: Big pressable box to open forward order / manifest modal */
-              isUnconfirmedStage ? (
+              !isPersistedConfirmed ? (
                 <YStack
                   minHeight={100}
                   paddingVertical={20}
@@ -2086,11 +2100,15 @@ export function GroupManagementView({
                       textTransform="uppercase"
                       textAlign="center"
                     >
-                      MOVE TO "CONFIRMED" STAGE TO MANIFEST ORDER
+                      {isStageDirty
+                        ? 'SAVE CHANGES TO MANIFEST ORDER'
+                        : 'MOVE TO "CONFIRMED" STAGE TO MANIFEST ORDER'}
                     </Text>
                   </XStack>
                   <Text fontSize={12} fontWeight="600" color={tokens.textSecondary} textAlign="center" lineHeight={17}>
-                    Items in this package are currently unconfirmed and open for editing. Once details are finalized, move this item group to the "Confirmed" stage to manifest the order and generate a Delhivery shipping label.
+                    {isStageDirty
+                      ? 'Package stage has unsaved modifications. Tap the "SAVE" button below to persist "Confirmed" status to the database before manifesting shipping labels or sharing.'
+                      : 'Items in this package are currently unconfirmed and open for editing. Once details are finalized, move this item group to the "Confirmed" stage and save to manifest the order and generate a Delhivery shipping label.'}
                   </Text>
                   {(() => {
                     const cancelledAwb = cancelledShipmentHistories[0]?.awbNumber;
@@ -2106,7 +2124,7 @@ export function GroupManagementView({
                         marginTop={4}
                       >
                         <Text fontSize={10} fontWeight="700" color={tokens.textMuted}>
-                          Previous AWB {cancelledAwb} was cancelled. Move to Confirmed to re-manifest.
+                          Previous AWB {cancelledAwb} was cancelled. {isStageDirty ? 'Save status to re-manifest.' : 'Move to Confirmed and save to re-manifest.'}
                         </Text>
                       </XStack>
                     );
