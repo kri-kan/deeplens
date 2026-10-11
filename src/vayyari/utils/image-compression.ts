@@ -74,46 +74,61 @@ export async function compressImageToWebP(
 
   const webpFileName = buildWebPFileName(preferredFileName || uri);
 
+  // Check if native module is actually compiled into the current binary before importing
+  let hasNativeManipulator = false;
   try {
-    const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
+    const { requireOptionalNativeModule } = require('expo-modules-core');
+    hasNativeManipulator = typeof requireOptionalNativeModule === 'function'
+      ? Boolean(requireOptionalNativeModule('ExpoImageManipulator'))
+      : false;
+  } catch {
+    hasNativeManipulator = false;
+  }
 
-    const actions: any[] = [];
-    const targetDims = calculateTargetDimensions(originalWidth, originalHeight, maxWidth, maxHeight);
-    if (targetDims) {
-      actions.push({ resize: targetDims });
-    }
+  if (hasNativeManipulator) {
+    try {
+      const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
 
-    const manipulated = await manipulateAsync(
-      uri,
-      actions,
-      {
-        compress: quality,
-        format: SaveFormat.WEBP,
+      const actions: any[] = [];
+      const targetDims = calculateTargetDimensions(originalWidth, originalHeight, maxWidth, maxHeight);
+      if (targetDims) {
+        actions.push({ resize: targetDims });
       }
-    );
 
-    return {
-      uri: manipulated.uri,
-      mimeType: 'image/webp',
-      fileName: webpFileName,
-      width: manipulated.width,
-      height: manipulated.height,
-      isCompressed: true,
-    };
-  } catch (err) {
-    console.warn('[compressImageToWebP] Compression skipped (manipulator unavailable), using original image:', err);
-    const ext = (preferredFileName || uri).split('.').pop()?.toLowerCase();
+      const manipulated = await manipulateAsync(
+        uri,
+        actions,
+        {
+          compress: quality,
+          format: SaveFormat.WEBP,
+        }
+      );
+
+      return {
+        uri: manipulated.uri,
+        mimeType: 'image/webp',
+        fileName: webpFileName,
+        width: manipulated.width,
+        height: manipulated.height,
+        isCompressed: true,
+      };
+    } catch (err) {
+      console.warn('[compressImageToWebP] Manipulation failed, falling back:', err);
+    }
+  }
+
+  // Graceful fallback to original image when native manipulator module is absent from binary
+  const ext = (preferredFileName || uri).split('.').pop()?.toLowerCase();
     const fallbackMime = ext === 'png' ? 'image/png' : 'image/jpeg';
     const rawBaseName = (preferredFileName || uri.split('/').pop() || `image_${Date.now()}`).replace(/\.[^/.]+$/, '');
     const fallbackFileName = preferredFileName || `${rawBaseName}.${ext || 'jpg'}`;
 
-    return {
-      uri,
-      mimeType: fallbackMime,
-      fileName: fallbackFileName,
-      width: originalWidth,
-      height: originalHeight,
-      isCompressed: false,
-    };
-  }
+  return {
+    uri,
+    mimeType: fallbackMime,
+    fileName: fallbackFileName,
+    width: originalWidth,
+    height: originalHeight,
+    isCompressed: false,
+  };
 }
