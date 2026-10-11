@@ -227,7 +227,13 @@ public class OrderIdController : ControllerBase
             request?.SellerName,
             request?.SellerAddress,
             request?.WarehouseId,
-            request?.WarehouseCode);
+            request?.WarehouseCode,
+            request?.RecipientName,
+            request?.RecipientPhone,
+            request?.RecipientAddress,
+            request?.RecipientPincode,
+            request?.RecipientCity,
+            request?.RecipientState);
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -408,6 +414,24 @@ public class GenerateGroupLabelRequest
 
     [JsonPropertyName("sellerAddress")]
     public string? SellerAddress { get; set; }
+
+    [JsonPropertyName("recipientName")]
+    public string? RecipientName { get; set; }
+
+    [JsonPropertyName("recipientPhone")]
+    public string? RecipientPhone { get; set; }
+
+    [JsonPropertyName("recipientAddress")]
+    public string? RecipientAddress { get; set; }
+
+    [JsonPropertyName("recipientPincode")]
+    public string? RecipientPincode { get; set; }
+
+    [JsonPropertyName("recipientCity")]
+    public string? RecipientCity { get; set; }
+
+    [JsonPropertyName("recipientState")]
+    public string? RecipientState { get; set; }
 }
 
 public class CancelGroupLabelRequest
