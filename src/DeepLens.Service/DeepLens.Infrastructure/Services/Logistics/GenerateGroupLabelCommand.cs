@@ -34,7 +34,13 @@ public record GenerateGroupLabelCommand(
     string? SellerName = null,
     string? SellerAddress = null,
     Guid? WarehouseId = null,
-    string? WarehouseCode = null) : IRequest<Result<GenerateGroupLabelResponse>>;
+    string? WarehouseCode = null,
+    string? RecipientName = null,
+    string? RecipientPhone = null,
+    string? RecipientAddress = null,
+    string? RecipientPincode = null,
+    string? RecipientCity = null,
+    string? RecipientState = null) : IRequest<Result<GenerateGroupLabelResponse>>;
 
 public record GenerateGroupLabelResponse(
     string OrderGrpId,
@@ -234,6 +240,14 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
             var effectiveReturnPhone = hasExplicitSellerAddress ? pickupPhone : null;
             var effectiveReturnName = !string.IsNullOrWhiteSpace(sellerName) ? sellerName : null;
 
+            // Resolve Recipient Details: prioritize explicit request overrides edited in the manifestation form
+            var effectiveRecipientName = !string.IsNullOrWhiteSpace(request.RecipientName) ? request.RecipientName.Trim() : (order.CustomerName ?? "Customer");
+            var effectiveRecipientPhone = !string.IsNullOrWhiteSpace(request.RecipientPhone) ? request.RecipientPhone.Trim() : (!string.IsNullOrWhiteSpace(order.CustomerPhone) ? order.CustomerPhone : "9999999999");
+            var effectiveRecipientAddress = !string.IsNullOrWhiteSpace(request.RecipientAddress) ? request.RecipientAddress.Trim() : (!string.IsNullOrWhiteSpace(order.ShippingStreet) ? order.ShippingStreet : (order.CustomerAddress ?? "Main Address"));
+            var effectiveRecipientPin = !string.IsNullOrWhiteSpace(request.RecipientPincode) ? request.RecipientPincode.Trim() : (!string.IsNullOrWhiteSpace(order.ShippingPincode) ? order.ShippingPincode : "395002");
+            var effectiveRecipientCity = !string.IsNullOrWhiteSpace(request.RecipientCity) ? request.RecipientCity.Trim() : (!string.IsNullOrWhiteSpace(order.ShippingCity) ? order.ShippingCity : "Surat");
+            var effectiveRecipientState = !string.IsNullOrWhiteSpace(request.RecipientState) ? request.RecipientState.Trim() : (!string.IsNullOrWhiteSpace(order.ShippingState) ? order.ShippingState : "Gujarat");
+
             var payload = new DelhiveryCmuPayload
             {
                 PickupLocation = new DelhiveryPickupLocation
@@ -250,12 +264,12 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                     new DelhiveryShipmentDetail
                     {
                         Order = effectiveOrder,
-                        Name = order.CustomerName ?? "Customer",
-                        Address = !string.IsNullOrWhiteSpace(order.ShippingStreet) ? order.ShippingStreet : (order.CustomerAddress ?? "Main Address"),
-                        Pin = !string.IsNullOrWhiteSpace(order.ShippingPincode) ? order.ShippingPincode : "395002",
-                        City = !string.IsNullOrWhiteSpace(order.ShippingCity) ? order.ShippingCity : "Surat",
-                        State = !string.IsNullOrWhiteSpace(order.ShippingState) ? order.ShippingState : "Gujarat",
-                        Phone = !string.IsNullOrWhiteSpace(order.CustomerPhone) ? order.CustomerPhone : "9999999999",
+                        Name = effectiveRecipientName,
+                        Address = effectiveRecipientAddress,
+                        Pin = effectiveRecipientPin,
+                        City = effectiveRecipientCity,
+                        State = effectiveRecipientState,
+                        Phone = effectiveRecipientPhone,
                         PaymentMode = isCod ? "COD" : "Pre-paid",
                         CodAmount = codAmountVal,
                         TotalAmount = totalAmountVal,
@@ -357,6 +371,23 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                         VendorName = group.VendorName,
                         Metadata = metaJson
                     });
+
+                // Update order recipient details in orderId table so edited form values are persisted to the order record
+                await _orderRepository.UpdateDetailsAsync(
+                    orderId: order.Id,
+                    phone: effectiveRecipientPhone,
+                    address: effectiveRecipientAddress,
+                    sourceId: null,
+                    sourceHandle: null,
+                    paymentModeId: null,
+                    transactionId: null,
+                    customerName: effectiveRecipientName,
+                    shippingStreet: effectiveRecipientAddress,
+                    shippingCity: effectiveRecipientCity,
+                    shippingState: effectiveRecipientState,
+                    shippingPincode: effectiveRecipientPin,
+                    isAddressReviewed: true
+                );
             }
             catch (Exception shipEx)
             {
