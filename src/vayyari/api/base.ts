@@ -223,14 +223,18 @@ export class ApiClient {
       }
       
       if (typeof result.error === 'string') {
+        const errorDetail = result.error;
+        const mainMessage = result.message || result.description;
         error = {
-          code: `HTTP_${response.status}`,
-          message: result.error,
+          code: result.code || `HTTP_${response.status}`,
+          message: mainMessage && mainMessage !== errorDetail
+            ? `${mainMessage}: ${errorDetail}`
+            : (errorDetail || mainMessage || 'Unknown error'),
         };
       } else {
         error = result.error || {
-          code: `HTTP_${response.status}`,
-          message: result.message || response.statusText || 'Unknown error',
+          code: result.code || `HTTP_${response.status}`,
+          message: result.message || result.description || response.statusText || 'Unknown error',
         };
       }
     } catch {

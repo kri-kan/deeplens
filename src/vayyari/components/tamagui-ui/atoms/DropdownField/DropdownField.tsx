@@ -11,6 +11,7 @@ export interface DropdownFieldProps {
   placeholder?: string;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  disabled?: boolean;
 }
 
 export function DropdownField({
@@ -20,6 +21,7 @@ export function DropdownField({
   placeholder = 'Select',
   accessibilityLabel,
   accessibilityHint = 'Tap to choose from list',
+  disabled = false,
 }: DropdownFieldProps) {
   const { tokens } = useTheme();
 
@@ -28,7 +30,9 @@ export function DropdownField({
       accessibilityRole="combobox"
       accessibilityLabel={accessibilityLabel ?? `${label}: ${value || placeholder}`}
       accessibilityHint={accessibilityHint}
-      onPress={onPress}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
       hitSlop={4}
     >
       <YStack
@@ -41,10 +45,15 @@ export function DropdownField({
           {label}
         </Text>
         <XStack alignItems="center" justifyContent="space-between" height={22}>
-          <Text fontSize={13} fontWeight="700" color={value ? tokens.text : tokens.textMuted} numberOfLines={1}>
+          <Text
+            fontSize={13}
+            fontWeight="700"
+            color={value ? (disabled ? tokens.textSecondary : tokens.text) : tokens.textMuted}
+            numberOfLines={1}
+          >
             {value || placeholder}
           </Text>
-          <LuChevronDown size={12} color={tokens.textMuted} />
+          {!disabled && <LuChevronDown size={12} color={tokens.textMuted} />}
         </XStack>
       </YStack>
     </Pressable>

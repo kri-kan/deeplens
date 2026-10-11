@@ -1,7 +1,11 @@
 export type OrderFulfillmentStatus = 
   | 'PendingFulfillment'
+  | 'ReadyToShip'
+  | 'ReadyForPickup'
+  | 'PickupScheduled'
   | 'InProcurement'
   | 'InTransit'
+  | 'OutForDelivery'
   | 'NdrActionNeeded'
   | 'Delivered'
   | 'RTO'
@@ -160,6 +164,8 @@ export interface FulfillmentPackage {
   delhiveryLabelPdfUrl?: string;
   delhiveryRoutingCode?: string;
   delhiveryPickupDate?: string;
+  delhiveryPickupLocation?: string;
+  pickupLocation?: string;
   delhiveryPickupTimeSlot?: string;
   delhiveryPickupScheduled?: boolean;
   delhiveryStatus?: string;
@@ -188,11 +194,22 @@ export interface LogisticsOrder {
   totalOrderValue: number;
   totalCodBalance: number;
   orderDate: string;
+  placedAt?: string;
+  hasLabel?: boolean;
   status: OrderFulfillmentStatus;
   items: FulfillmentItem[];
   packages: FulfillmentPackage[];
   hasNdr: boolean;
   hasEscalation: boolean;
+  notes?: string;
+}
+
+export interface MarkInTransitPayload {
+  orderId: string;
+  packageId?: string;
+  courierName?: string;
+  awbNumber?: string;
+  labelAttachmentUrl?: string;
   notes?: string;
 }
 
@@ -251,6 +268,7 @@ export interface CreateEscalationRequest {
 export interface Warehouse {
   id: string;
   name: string;
+  alias?: string;
   code: string;
   addressLine1?: string;
   addressLine2?: string;
@@ -267,6 +285,7 @@ export interface Warehouse {
 
 export interface CreateWarehouseRequest {
   name: string;
+  alias?: string;
   code: string;
   addressLine1: string;
   addressLine2?: string;
@@ -281,6 +300,7 @@ export interface CreateWarehouseRequest {
 
 export interface UpdateWarehouseRequest {
   name?: string;
+  alias?: string;
   code?: string;
   addressLine1?: string;
   addressLine2?: string;
@@ -318,4 +338,97 @@ export interface ShippingEstimateResponse {
   estimatedDaysFormatted: string;
   zone: string;
   isServiceable: boolean;
+}
+
+export interface SubmittedForwardOrderAudit {
+  awbNumber: string;
+  orderGrpId: string;
+  orderId?: string;
+  quantity?: number;
+  productsDesc?: string;
+  totalAmount?: number;
+  submittedAt: string;
+  pickupFacility: {
+    code: string;
+    name: string;
+    alias?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
+  shippingMode: 'Surface' | 'Express';
+  weightGrams: number;
+  dimensionsCm: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  recipient: {
+    name: string;
+    phone: string;
+    address: string;
+    pincode: string;
+    city?: string;
+    state?: string;
+  };
+  paymentMode: 'COD' | 'Prepaid';
+  collectibleAmount: number;
+}
+
+export interface GroupShipmentHistoryItem {
+  id?: string;
+  orderGrpId?: string;
+  awbNumber: string;
+  status: string;
+  courierPartner?: string;
+  shippingMode?: string;
+  metadata?: {
+    cancelled_at?: string;
+    cancellation_reason?: string;
+    manifestedAt?: string;
+    orderGrpId?: string;
+    pickupLocation?: string;
+    pickupAddress?: string;
+    pickupCity?: string;
+    pickupPin?: string;
+    pickupPhone?: string;
+    shippingMode?: string;
+    weightGrams?: number;
+    lengthCm?: number;
+    widthCm?: number;
+    heightCm?: number;
+    paymentMode?: string;
+    codAmount?: number;
+    totalAmount?: number;
+    quantity?: number;
+    productsDesc?: string;
+    sellerName?: string;
+    sellerAddress?: string;
+    resellerName?: string;
+    orderType?: string;
+    [key: string]: any;
+  } | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PickupRequestDto {
+  pickupLocation: string;
+  pickupDate?: string;
+  pickupTime?: string;
+  expectedPackageCount?: number;
+  orderGrpId?: string;
+  awbNumber?: string;
+}
+
+export interface PickupResponseDto {
+  success: boolean;
+  pickupId?: string;
+  pickupToken?: string;
+  pickupDate?: string;
+  pickupTime?: string;
+  pickupSlot?: string;
+  pickupLocation?: string;
+  message?: string;
+  prExist?: boolean;
 }

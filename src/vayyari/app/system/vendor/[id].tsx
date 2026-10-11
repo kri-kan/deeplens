@@ -1,53 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import { Text, TextInput, Button, useTheme, Switch, Card, Chip, ActivityIndicator, Portal, Modal, IconButton, Surface } from 'react-native-paper';
-import { View, KeyboardAvoidingView, Platform, StyleSheet, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 import { vendorService } from '@/services/vendorService';
 import { logisticsService } from '@/services/logistics.service';
 import { waProcessorService } from '@/services/wa-processor.service';
-import { AddressFormComponent, AddressFormState } from '@/components/utility/customer/AddressFormComponent';
+import {
+  EditVendorView,
+  EditVendorFormData,
+  VendorAddressItem,
+  DelhiveryWarehouseOption,
+  LinkedWhatsAppChat,
+} from '@/components/tamagui-ui/organisms/EditVendorView';
 import type { VendorResponse, VendorAddressResponse } from '@/types/vendors';
 import type { Warehouse } from '@/types/logistics';
-import { ScreenWrapper } from '@/components/layout/ScreenWrapper';
 
 export default function VendorFormScreen() {
-  const { id, prefillWhatsapp, fromJid } = useLocalSearchParams<{ id: string, prefillWhatsapp?: string, fromJid?: string }>();
+  const { id, prefillWhatsapp, fromJid } = useLocalSearchParams<{
+    id: string;
+    prefillWhatsapp?: string;
+    fromJid?: string;
+  }>();
   const router = useRouter();
-  const theme = useTheme();
 
   const isNew = id === 'new';
 
-  const [editingVendor, setEditingVendor] = useState<Partial<VendorResponse>>({ isActive: true });
+  const [vendor, setVendor] = useState<Partial<VendorResponse>>({
+    isActive: true,
+    whatsappPrimary: prefillWhatsapp,
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehousesLoading, setWarehousesLoading] = useState(false);
-  const [warehouseModalVisible, setWarehouseModalVisible] = useState(false);
 
   const [addresses, setAddresses] = useState<VendorAddressResponse[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
+
   const [linkedChats, setLinkedChats] = useState<any[]>([]);
   const [chatsLoading, setChatsLoading] = useState(false);
 
-  const [isEditingAddressInline, setIsEditingAddressInline] = useState(false);
-  const [addressToEdit, setAddressToEdit] = useState<VendorAddressResponse | null>(null);
-  
-  const [addressFormState, setAddressFormState] = useState<AddressFormState>({
-    firstName: '',
-    lastName: '',
-    phone: '',
-    pincode: '',
-    fullAddress: '',
-  });
-  const [isAddressDefault, setIsAddressDefault] = useState(false);
-  const [savingAddress, setSavingAddress] = useState(false);
-
-  useEffect(() => {
-    fetchWarehouses();
-  }, []);
-
-  const fetchWarehouses = async () => {
+  // Load Delhivery warehouses
+  const fetchWarehouses = useCallback(async () => {
     try {
       setWarehousesLoading(true);
       const data = await logisticsService.getWarehouses();
@@ -57,32 +52,37 @@ export default function VendorFormScreen() {
     } finally {
       setWarehousesLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => {
-    if (!isNew && id) {
-      fetchVendor(id);
-      fetchAddresses(id);
-      fetchLinkedChats(id);
-    } else {
-      const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-      setEditingVendor({ isActive: true, vendorCode: `V${randomCode}`, whatsappPrimary: prefillWhatsapp });
+  // Load Vendor Profile Details
+  const fetchVendor = useCallback(async (vendorId: string) => {
+    setLoading(true);
+    try {
+      const data = await vendorService.getVendor(vendorId);
+      setVendor(data);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch vendor details');
+      router.back();
+    } finally {
+      setLoading(false);
     }
-  }, [id, isNew, prefillWhatsapp]);
+  }, [router]);
 
-  const fetchAddresses = async (vendorId: string) => {
+  // Load Vendor Addresses
+  const fetchAddresses = useCallback(async (vendorId: string) => {
     setAddressesLoading(true);
     try {
       const data = await vendorService.getVendorAddresses(vendorId);
-      setAddresses(data);
+      setAddresses(data || []);
     } catch (error) {
       console.error('Failed to fetch addresses', error);
     } finally {
       setAddressesLoading(false);
     }
-  };
+  }, []);
 
-  const fetchLinkedChats = async (vendorId: string) => {
+  // Load Linked WhatsApp Chats
+  const fetchLinkedChats = useCallback(async (vendorId: string) => {
     setChatsLoading(true);
     try {
       const chats = await waProcessorService.getChatsByVendor(vendorId);
@@ -92,102 +92,58 @@ export default function VendorFormScreen() {
     } finally {
       setChatsLoading(false);
     }
-  };
+  }, []);
 
-  const handleOpenAddressForm = (addr?: VendorAddressResponse) => {
-    if (addr) {
-      const names = addr.name.split(' ');
-      setAddressFormState({
-        firstName: names[0] || '',
-        lastName: names.slice(1).join(' '),
-        phone: addr.phone || '',
-        pincode: addr.pincode || '',
-        fullAddress: addr.line1 || '',
-      });
-      setIsAddressDefault(addr.isDefault);
-      setAddressToEdit(addr);
+  useEffect(() => {
+    fetchWarehouses();
+  }, [fetchWarehouses]);
+
+  useEffect(() => {
+    if (!isNew && id) {
+      fetchVendor(id);
+      fetchAddresses(id);
+      fetchLinkedChats(id);
     } else {
-      setAddressFormState({
-        firstName: '',
-        lastName: '',
-        phone: '',
-        pincode: '',
-        fullAddress: '',
+      const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+      setVendor({
+        isActive: true,
+        vendorCode: `V${randomCode}`,
+        whatsappPrimary: prefillWhatsapp,
       });
-      setIsAddressDefault(false);
-      setAddressToEdit(null);
     }
-    setIsEditingAddressInline(true);
-  };
+  }, [id, isNew, prefillWhatsapp, fetchVendor, fetchAddresses, fetchLinkedChats]);
 
-  const handleSaveAddress = async () => {
-    const name = [addressFormState.firstName, addressFormState.lastName].filter(Boolean).join(' ');
-    if (!name.trim() || !addressFormState.phone.trim() || !addressFormState.fullAddress.trim() || !addressFormState.pincode.trim()) {
-      Alert.alert('Validation', 'Please fill in all required address fields.');
-      return;
-    }
-
-    try {
-      setSavingAddress(true);
-      const requestData = {
-        name,
-        phone: addressFormState.phone,
-        line1: addressFormState.fullAddress,
-        pincode: addressFormState.pincode,
-        isDefault: isAddressDefault,
-      };
-
-      if (addressToEdit && addressToEdit.id) {
-        await vendorService.updateVendorAddress(addressToEdit.id, requestData);
-      } else {
-        await vendorService.addVendorAddress(editingVendor.id!, requestData);
-      }
-      setIsEditingAddressInline(false);
-      fetchAddresses(editingVendor.id!);
-    } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to save address');
-    } finally {
-      setSavingAddress(false);
-    }
-  };
-
-  const fetchVendor = async (vendorId: string) => {
-    setLoading(true);
-    try {
-      const data = await vendorService.getVendor(vendorId);
-      setEditingVendor(data);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to fetch vendor details');
-      router.back();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!editingVendor.vendorName) {
+  // Save / Update Vendor
+  const handleSaveVendor = async (formData: EditVendorFormData) => {
+    if (!formData.vendorName.trim()) {
       Alert.alert('Validation Error', 'Vendor Name is required');
       return;
     }
-    if (editingVendor.vendorCode && (editingVendor.vendorCode.length < 3 || editingVendor.vendorCode.length > 8)) {
+    if (formData.vendorCode && (formData.vendorCode.length < 3 || formData.vendorCode.length > 8)) {
       Alert.alert('Validation Error', 'Vendor Code must be between 3 and 8 characters');
       return;
     }
 
     setSaving(true);
     try {
+      const payload: Partial<VendorResponse> = {
+        ...formData,
+        defaultWarehouseId: formData.defaultWarehouseId || undefined,
+      };
+
       let savedVendor: VendorResponse;
-      if (!isNew && editingVendor.id) {
-        savedVendor = await vendorService.updateVendor(editingVendor.id, editingVendor);
+      if (!isNew && (formData.id || id)) {
+        const vendorId = formData.id || id;
+        savedVendor = await vendorService.updateVendor(vendorId, payload);
       } else {
-        savedVendor = await vendorService.createVendor(editingVendor);
+        savedVendor = await vendorService.createVendor(payload);
         if (fromJid) {
           await waProcessorService.assignChatVendor(fromJid, savedVendor.id);
         }
       }
-      
+
       Alert.alert('Success', 'Vendor saved successfully!', [
-        { text: 'OK', onPress: () => router.back() }
+        { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to save vendor');
@@ -196,603 +152,129 @@ export default function VendorFormScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
+  // Add or Update Address
+  const handleSaveAddress = async (
+    addressData: Omit<VendorAddressItem, 'id' | 'createdAt' | 'updatedAt'>,
+    addressId?: string
+  ) => {
+    const currentVendorId = vendor.id || id;
+    if (!currentVendorId) return;
+
+    try {
+      const requestData = {
+        name: addressData.name,
+        phone: addressData.phone,
+        line1: addressData.line1,
+        line2: addressData.line2,
+        pincode: addressData.pincode,
+        city: addressData.city,
+        state: addressData.state,
+        isDefault: !!addressData.isDefault,
+      };
+
+      if (addressId) {
+        await vendorService.updateVendorAddress(addressId, requestData);
+      } else {
+        await vendorService.addVendorAddress(currentVendorId, requestData);
+      }
+      fetchAddresses(currentVendorId);
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to save address');
+    }
+  };
+
+  // Delete Address
+  const handleDeleteAddress = (addressId: string) => {
+    Alert.alert('Delete Address', 'Are you sure you want to delete this address?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await vendorService.deleteVendorAddress(addressId);
+            const currentVendorId = vendor.id || id;
+            if (currentVendorId) fetchAddresses(currentVendorId);
+          } catch (error: any) {
+            Alert.alert('Error', error?.message || 'Failed to delete address');
+          }
+        },
+      },
+    ]);
+  };
+
+  // Deep Link WhatsApp Chat
+  const handleNavigateChat = (chatJid: string) => {
+    router.push(`/utilities/whatsapp/messages/${chatJid}` as any);
+  };
+
+  // Map warehouses to option format
+  const mappedWarehouses: DelhiveryWarehouseOption[] = warehouses.map((w) => ({
+    id: w.id,
+    name: w.name,
+    code: w.code,
+    alias: w.alias,
+    city: w.city,
+    state: w.state,
+    pincode: w.pincode,
+    isCentral: w.isCentral,
+  }));
+
+  // Map addresses
+  const mappedAddresses: VendorAddressItem[] = addresses.map((a) => ({
+    id: a.id,
+    vendorId: a.vendorId,
+    name: a.name,
+    phone: a.phone,
+    line1: a.line1,
+    line2: a.line2,
+    pincode: a.pincode,
+    city: a.city,
+    state: a.state,
+    isDefault: a.isDefault,
+  }));
+
+  // Map linked chats
+  const mappedChats: LinkedWhatsAppChat[] = linkedChats.map((c) => ({
+    jid: c.jid,
+    name: c.name,
+    isGroup: c.isGroup,
+    assignedAt: c.assignedAt,
+  }));
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-      <ScreenWrapper 
-        title={isNew ? 'Create Vendor' : 'Edit Vendor'} 
-        onBack={() => router.back()}
-        withScrollView={true}
-        contentContainerStyle={styles.scroll}
-      >
-        <Text variant="titleSmall" style={styles.sectionTitle}>Basic Info</Text>
-        <TextInput
-          label="Vendor Name *"
-          value={editingVendor.vendorName || ''}
-          onChangeText={(t) => setEditingVendor({ ...editingVendor, vendorName: t })}
-          mode="outlined"
-          style={styles.input}
-          left={<TextInput.Icon icon="store" />}
+    <ScreenWrapper
+      title={isNew ? 'Create Vendor' : (vendor.vendorName || 'Edit Vendor')}
+      subtitle={isNew ? 'Partner Onboarding' : `Vendor Code: ${vendor.vendorCode || 'N/A'}`}
+      onBack={() => router.back()}
+      withScrollView={false}
+    >
+      <View style={styles.container}>
+        <EditVendorView
+          initialVendor={vendor as EditVendorFormData}
+          isNew={isNew}
+          warehouses={mappedWarehouses}
+          warehousesLoading={warehousesLoading}
+          addresses={mappedAddresses}
+          addressesLoading={addressesLoading}
+          linkedChats={mappedChats}
+          chatsLoading={chatsLoading}
+          loading={loading}
+          saving={saving}
+          onSave={handleSaveVendor}
+          onBack={() => router.back()}
+          onSaveAddress={handleSaveAddress}
+          onDeleteAddress={handleDeleteAddress}
+          onNavigateChat={handleNavigateChat}
+          showHeaderTitle={false}
         />
-        <TextInput
-          label="Vendor Code"
-          value={editingVendor.vendorCode || ''}
-          onChangeText={(t) => setEditingVendor({ ...editingVendor, vendorCode: t })}
-          mode="outlined"
-          style={styles.input}
-          left={<TextInput.Icon icon="barcode" />}
-        />
-
-        <Text variant="titleSmall" style={styles.sectionTitle}>Contact Person</Text>
-        <View style={styles.row}>
-          <TextInput
-            label="First Name"
-            value={editingVendor.firstName || ''}
-            onChangeText={(t) => setEditingVendor({ ...editingVendor, firstName: t })}
-            mode="outlined"
-            style={[styles.input, styles.flex1, { marginRight: 8 }]}
-          />
-          <TextInput
-            label="Last Name"
-            value={editingVendor.lastName || ''}
-            onChangeText={(t) => setEditingVendor({ ...editingVendor, lastName: t })}
-            mode="outlined"
-            style={[styles.input, styles.flex1]}
-          />
-        </View>
-
-        <Text variant="titleSmall" style={styles.sectionTitle}>Communication</Text>
-        <TextInput
-          label="Primary WhatsApp"
-          value={editingVendor.whatsappPrimary || ''}
-          onChangeText={(t) => setEditingVendor({ ...editingVendor, whatsappPrimary: t })}
-          mode="outlined"
-          style={styles.input}
-          keyboardType="phone-pad"
-          left={<TextInput.Icon icon="whatsapp" color="#25D366" />}
-        />
-        <TextInput
-          label="Secondary WhatsApp"
-          value={editingVendor.whatsappSecondary || ''}
-          onChangeText={(t) => setEditingVendor({ ...editingVendor, whatsappSecondary: t })}
-          mode="outlined"
-          style={styles.input}
-          keyboardType="phone-pad"
-          left={<TextInput.Icon icon="whatsapp" />}
-        />
-        <TextInput
-          label="Order Group Link"
-          value={editingVendor.orderGroupLink || ''}
-          onChangeText={(t) => setEditingVendor({ ...editingVendor, orderGroupLink: t })}
-          mode="outlined"
-          style={styles.input}
-          left={<TextInput.Icon icon="link" />}
-        />
-        <TextInput
-          label="Email Address"
-          value={editingVendor.email || ''}
-          onChangeText={(t) => setEditingVendor({ ...editingVendor, email: t })}
-          mode="outlined"
-          style={styles.input}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          left={<TextInput.Icon icon="email-outline" />}
-        />
-
-        {!isNew && (
-          <View style={styles.switchContainer}>
-            <Text variant="bodyLarge">Vendor is Active</Text>
-            <Switch
-              value={editingVendor.isActive}
-              onValueChange={(val) => setEditingVendor({ ...editingVendor, isActive: val })}
-            />
-          </View>
-        )}
-
-        {/* Logistics & Fulfillment (Delhivery) */}
-        <Text variant="titleSmall" style={styles.sectionTitle}>Logistics & Fulfillment (Delhivery)</Text>
-        <Card style={styles.sectionCard} elevation={1}>
-          <Card.Content>
-            <View style={{ marginBottom: 12 }}>
-              <Text variant="titleMedium" style={{ fontWeight: '600', marginBottom: 2 }}>
-                Default Pickup Warehouse
-              </Text>
-              <Text variant="bodySmall" style={{ color: '#64748B', marginBottom: 10 }}>
-                Orders fulfilled by this vendor will automatically pre-select this Delhivery pickup facility.
-              </Text>
-
-              {(() => {
-                const wh = warehouses.find(w => w.id === editingVendor.defaultWarehouseId) || 
-                  (editingVendor.defaultWarehouseId ? {
-                    id: editingVendor.defaultWarehouseId,
-                    name: editingVendor.defaultWarehouseName || 'Assigned Warehouse',
-                    code: editingVendor.defaultWarehouseCode || 'WH',
-                    city: '',
-                    state: '',
-                    pincode: '',
-                    isCentral: false
-                  } : null);
-
-                if (wh) {
-                  return (
-                    <Card mode="outlined" style={styles.selectedWarehouseCard}>
-                      <Card.Content>
-                        <View style={styles.whHeaderRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                            <Surface style={styles.whCodeBadge} elevation={0}>
-                              <Text style={styles.whCodeText}>{wh.code}</Text>
-                            </Surface>
-                            <Text variant="titleSmall" style={{ fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
-                              {wh.name}
-                            </Text>
-                            {wh.isCentral && (
-                              <Chip compact style={{ backgroundColor: '#FEF3C7', height: 22 }} textStyle={{ fontSize: 9, color: '#B45309', fontWeight: '700' }}>
-                                CENTRAL
-                              </Chip>
-                            )}
-                          </View>
-                        </View>
-                        {(wh.city || wh.state || wh.pincode) ? (
-                          <Text variant="bodySmall" style={{ color: '#475569', marginTop: 4 }}>
-                            {[wh.city, wh.state].filter(Boolean).join(', ')}{wh.pincode ? ` - ${wh.pincode}` : ''}
-                          </Text>
-                        ) : null}
-                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
-                          <Button
-                            mode="text"
-                            compact
-                            onPress={() => setEditingVendor(prev => ({
-                              ...prev,
-                              defaultWarehouseId: null as any,
-                              defaultWarehouseName: undefined,
-                              defaultWarehouseCode: undefined
-                            }))}
-                            textColor="#EF4444"
-                          >
-                            Clear
-                          </Button>
-                          <Button
-                            mode="outlined"
-                            compact
-                            onPress={() => setWarehouseModalVisible(true)}
-                          >
-                            Change
-                          </Button>
-                        </View>
-                      </Card.Content>
-                    </Card>
-                  );
-                }
-
-                return (
-                  <View style={styles.noWarehouseBox}>
-                    <Text variant="bodySmall" style={{ color: '#64748B', flex: 1 }}>
-                      No warehouse assigned (defaults to Central Fulfillment Hub).
-                    </Text>
-                    <Button
-                      mode="contained-tonal"
-                      compact
-                      icon="warehouse"
-                      onPress={() => setWarehouseModalVisible(true)}
-                    >
-                      Select Warehouse
-                    </Button>
-                  </View>
-                );
-              })()}
-            </View>
-
-            <View style={[styles.switchContainer, { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12, marginTop: 4, marginBottom: 0 }]}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <IconButton icon="star" size={18} iconColor="#F59E0B" style={{ margin: 0, padding: 0, width: 20, height: 20 }} />
-                  <Text variant="bodyLarge" style={{ fontWeight: '600' }}>Favorite Vendor</Text>
-                </View>
-                <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 2 }}>
-                  Pins vendor to the top of directory and order assignment dropdowns.
-                </Text>
-              </View>
-              <Switch
-                value={!!editingVendor.isFavorite}
-                onValueChange={(val) => setEditingVendor(prev => ({ ...prev, isFavorite: val }))}
-                color="#F59E0B"
-              />
-            </View>
-          </Card.Content>
-        </Card>
-
-        <Text variant="titleSmall" style={styles.sectionTitle}>Addresses</Text>
-        {!isNew ? (
-          <Card style={styles.sectionCard} elevation={1}>
-            <Card.Content>
-              {isEditingAddressInline ? (
-                <View>
-                  <View style={styles.sectionHeader}>
-                    <Text variant="titleMedium" style={styles.sectionTitle}>
-                      {addressToEdit ? 'Edit Address' : 'New Address'}
-                    </Text>
-                    <Button 
-                      mode="text" 
-                      compact 
-                      onPress={() => setIsEditingAddressInline(false)}
-                    >
-                      Cancel
-                    </Button>
-                  </View>
-                  <AddressFormComponent
-                    value={addressFormState}
-                    onChange={setAddressFormState}
-                    onSetDefault={setIsAddressDefault}
-                    disabled={savingAddress}
-                  />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-                    <Text style={{ flex: 1 }}>Set as Default Address</Text>
-                    <Switch value={isAddressDefault} onValueChange={setIsAddressDefault} />
-                  </View>
-                  <Button
-                    mode="contained"
-                    onPress={handleSaveAddress}
-                    loading={savingAddress}
-                    disabled={savingAddress}
-                    style={{ marginTop: 16 }}
-                  >
-                    Save Address
-                  </Button>
-                </View>
-              ) : (
-                <View>
-                  <View style={styles.sectionHeader}>
-                    <Text variant="titleMedium" style={styles.sectionTitle}>Saved Addresses</Text>
-                    <Button 
-                      icon="plus" 
-                      mode="outlined" 
-                      compact 
-                      onPress={() => handleOpenAddressForm()}
-                    >
-                      Add
-                    </Button>
-                  </View>
-
-                  {addressesLoading ? (
-                    <ActivityIndicator size="small" style={{ marginVertical: 16 }} />
-                  ) : addresses.length > 0 ? (
-                    addresses.map((addr) => (
-                      <Card key={addr.id} style={styles.addressCard} mode="outlined">
-                        <Card.Content>
-                          <View style={styles.addressTitleRow}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text variant="titleSmall" style={{ fontWeight: 'bold' }}>{addr.name}</Text>
-                              {addr.isDefault && (
-                                <Chip style={[styles.defaultChip, { marginLeft: 8 }]} textStyle={styles.defaultChipText} compact>
-                                  DEFAULT
-                                </Chip>
-                              )}
-                            </View>
-                            <Button
-                              mode="text"
-                              compact
-                              onPress={() => handleOpenAddressForm(addr)}
-                              labelStyle={{ fontSize: 12 }}
-                            >
-                              Edit
-                            </Button>
-                          </View>
-                          <Text variant="bodySmall" style={styles.addressText}>{addr.phone}</Text>
-                          <Text variant="bodySmall" style={styles.addressText}>{addr.line1}</Text>
-                          <Text variant="bodySmall" style={styles.addressText}>
-                            PIN: {addr.pincode}
-                          </Text>
-                        </Card.Content>
-                      </Card>
-                    ))
-                  ) : (
-                    <View style={styles.emptyContainer}>
-                      <Text variant="bodySmall" style={{ opacity: 0.5 }}>No addresses added yet.</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        ) : (
-          <Text variant="bodySmall" style={{ marginBottom: 16, fontStyle: 'italic', opacity: 0.7 }}>
-            You can add addresses after saving the vendor for the first time.
-          </Text>
-        )}
-
-        {!isNew && (
-          <Card style={styles.sectionCard} mode="elevated">
-            <Card.Content>
-              <View style={styles.sectionHeader}>
-                <Text variant="titleMedium" style={styles.sectionTitle}>Linked WhatsApp Chats</Text>
-              </View>
-
-              {chatsLoading ? (
-                <ActivityIndicator size="small" style={{ marginVertical: 16 }} />
-              ) : linkedChats.length > 0 ? (
-                linkedChats.map((chat: any) => (
-                  <Card key={chat.jid} style={styles.addressCard} mode="outlined" onPress={() => router.push(`/utilities/whatsapp/messages/${chat.jid}`)}>
-                    <Card.Content>
-                      <View style={styles.addressTitleRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                          <Text variant="titleSmall" style={{ fontWeight: 'bold' }} numberOfLines={1}>{chat.name || chat.jid}</Text>
-                          {chat.isGroup && (
-                            <Chip style={[styles.defaultChip, { marginLeft: 8 }]} textStyle={styles.defaultChipText} compact>
-                              GROUP
-                            </Chip>
-                          )}
-                        </View>
-                        <Button
-                          icon="arrow-right"
-                          mode="text"
-                          compact
-                          onPress={() => router.push(`/utilities/whatsapp/messages/${chat.jid}`)}
-                          labelStyle={{ fontSize: 12 }}
-                        >
-                          View
-                        </Button>
-                      </View>
-                      {chat.assignedAt && (
-                        <Text variant="bodySmall" style={styles.addressText}>
-                          Linked on: {new Date(chat.assignedAt).toLocaleDateString()}
-                        </Text>
-                      )}
-                    </Card.Content>
-                  </Card>
-                ))
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <Text variant="bodySmall" style={{ opacity: 0.5 }}>No WhatsApp chats linked.</Text>
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        )}
-
-        <Button
-          mode="contained"
-          onPress={handleSave}
-          loading={saving}
-          disabled={saving}
-          style={styles.saveBtn}
-        >
-          Save Changes
-        </Button>
-
-        <View style={{ height: 40 }} />
-      </ScreenWrapper>
-
-      {/* Warehouse Selection Modal */}
-      <Portal>
-        <Modal
-          visible={warehouseModalVisible}
-          onDismiss={() => setWarehouseModalVisible(false)}
-          contentContainerStyle={styles.whModalContent}
-        >
-          <View style={styles.whModalHeader}>
-            <Text variant="titleLarge" style={{ fontWeight: '700' }}>Select Pickup Facility</Text>
-            <IconButton icon="close" size={20} onPress={() => setWarehouseModalVisible(false)} />
-          </View>
-          <Text variant="bodySmall" style={{ color: '#64748B', marginBottom: 12 }}>
-            Choose a registered Delhivery warehouse for this vendor:
-          </Text>
-
-          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-            {/* None Option */}
-            <Card
-              mode="outlined"
-              style={[
-                styles.whOptionCard,
-                !editingVendor.defaultWarehouseId && styles.whOptionCardSelected
-              ]}
-              onPress={() => {
-                setEditingVendor(prev => ({
-                  ...prev,
-                  defaultWarehouseId: null as any,
-                  defaultWarehouseName: undefined,
-                  defaultWarehouseCode: undefined
-                }));
-                setWarehouseModalVisible(false);
-              }}
-            >
-              <Card.Content style={{ paddingVertical: 10 }}>
-                <Text variant="titleSmall" style={{ fontWeight: '600' }}>None (Default to Central Hub)</Text>
-                <Text variant="bodySmall" style={{ color: '#64748B' }}>Uses Central Hub stock & pickup configuration.</Text>
-              </Card.Content>
-            </Card>
-
-            {warehouses.map(wh => {
-              const isSelected = editingVendor.defaultWarehouseId === wh.id;
-              return (
-                <Card
-                  key={wh.id}
-                  mode="outlined"
-                  style={[
-                    styles.whOptionCard,
-                    isSelected && styles.whOptionCardSelected
-                  ]}
-                  onPress={() => {
-                    setEditingVendor(prev => ({
-                      ...prev,
-                      defaultWarehouseId: wh.id,
-                      defaultWarehouseName: wh.name,
-                      defaultWarehouseCode: wh.code
-                    }));
-                    setWarehouseModalVisible(false);
-                  }}
-                >
-                  <Card.Content style={{ paddingVertical: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                        <Surface style={styles.whCodeBadge} elevation={0}>
-                          <Text style={styles.whCodeText}>{wh.code}</Text>
-                        </Surface>
-                        <Text variant="titleSmall" style={{ fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
-                          {wh.name}
-                        </Text>
-                        {wh.isCentral && (
-                          <Chip compact style={{ backgroundColor: '#FEF3C7', height: 20 }} textStyle={{ fontSize: 9, color: '#B45309', fontWeight: '700' }}>
-                            CENTRAL
-                          </Chip>
-                        )}
-                      </View>
-                      {isSelected && <IconButton icon="check-circle" iconColor="#0284C7" size={18} style={{ margin: 0 }} />}
-                    </View>
-                    <Text variant="bodySmall" style={{ color: '#64748B', marginTop: 4 }}>
-                      {wh.city}, {wh.state} ({wh.pincode})
-                    </Text>
-                  </Card.Content>
-                </Card>
-              );
-            })}
-          </ScrollView>
-        </Modal>
-      </Portal>
-
-    </KeyboardAvoidingView>
+      </View>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  center: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scroll: {
-    padding: 24,
-  },
-  sectionTitle: {
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-    opacity: 0.8,
-  },
-  input: {
-    marginBottom: 12,
-    backgroundColor: 'white',
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  flex1: {
-    flex: 1,
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 24,
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-  },
-  saveBtn: {
-    marginTop: 24,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  sectionCard: {
-    marginBottom: 16,
-    backgroundColor: 'white',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  addressCard: {
-    marginBottom: 12,
-    backgroundColor: '#fafafa',
-  },
-  addressTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  addressText: {
-    opacity: 0.7,
-    marginTop: 2,
-  },
-  defaultChip: {
-    backgroundColor: '#e3f2fd',
-    height: 20,
-  },
-  defaultChipText: {
-    fontSize: 10,
-    color: '#1976d2',
-  },
-  emptyContainer: {
-    padding: 16,
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-  },
-  selectedWarehouseCard: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#BAE6FD',
-    marginTop: 4,
-  },
-  whHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  whCodeBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  whCodeText: {
-    color: '#1D4ED8',
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    fontSize: 11,
-  },
-  noWarehouseBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  whModalContent: {
-    backgroundColor: '#FFFFFF',
-    margin: 20,
-    padding: 20,
-    borderRadius: 16,
-    maxHeight: '80%',
-  },
-  whModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  whOptionCard: {
-    marginBottom: 8,
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-  },
-  whOptionCardSelected: {
-    borderColor: '#0284C7',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 2,
   },
 });

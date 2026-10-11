@@ -35,6 +35,9 @@ export interface OrderLedgerPageProps {
   onOrderDetails?: (orderId: string) => void;
   onOrderFulfillment?: (orderId: string) => void;
   onResolveNdr?: (orderId: string) => void;
+  onMarkInTransit?: (orderId: string) => void;
+  onMarkDelivered?: (orderId: string) => void;
+  onFlagIssue?: (orderId: string) => void;
 }
 
 export function OrderLedgerPage({
@@ -51,6 +54,9 @@ export function OrderLedgerPage({
   onOrderDetails,
   onOrderFulfillment,
   onResolveNdr,
+  onMarkInTransit,
+  onMarkDelivered,
+  onFlagIssue,
 }: OrderLedgerPageProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -77,6 +83,7 @@ export function OrderLedgerPage({
     const total = orders.length;
     const pending = orders.filter(
       (o) =>
+        o.status === 'ReadyToShip' ||
         o.status === 'PendingFulfillment' ||
         o.status === 'InProcurement'
     ).length;
@@ -98,6 +105,19 @@ export function OrderLedgerPage({
         count = orders.filter(
           (o) => o.hasNdr || o.status === 'NdrActionNeeded'
         ).length;
+      } else if (f.value === 'ReadyToShip') {
+        count = orders.filter(
+          (o) =>
+            o.status === 'ReadyToShip' ||
+            o.status === 'PendingFulfillment' ||
+            o.status === 'InProcurement'
+        ).length;
+      } else if (f.value === 'PickupScheduled') {
+        count = orders.filter(
+          (o) => o.status === 'PickupScheduled' || o.status === 'ReadyForPickup'
+        ).length;
+      } else if (f.value === 'OutForDelivery') {
+        count = orders.filter((o) => o.status === 'OutForDelivery').length;
       } else {
         count = orders.filter((o) => o.status === f.value).length;
       }
@@ -116,6 +136,25 @@ export function OrderLedgerPage({
       if (activeFilter !== 'All') {
         if (activeFilter === 'NdrActionNeeded') {
           if (!order.hasNdr && order.status !== 'NdrActionNeeded') return false;
+        } else if (activeFilter === 'ReadyToShip') {
+          if (
+            order.status !== 'ReadyToShip' &&
+            order.status !== 'PendingFulfillment' &&
+            order.status !== 'InProcurement'
+          ) {
+            return false;
+          }
+        } else if (activeFilter === 'PickupScheduled') {
+          if (
+            order.status !== 'PickupScheduled' &&
+            order.status !== 'ReadyForPickup'
+          ) {
+            return false;
+          }
+        } else if (activeFilter === 'OutForDelivery') {
+          if (order.status !== 'OutForDelivery') {
+            return false;
+          }
         } else if (order.status !== activeFilter) {
           return false;
         }
@@ -284,6 +323,9 @@ export function OrderLedgerPage({
                 onPressDetails={onOrderDetails}
                 onPressFulfillment={onOrderFulfillment}
                 onPressResolveNdr={onResolveNdr}
+                onPressMarkInTransit={onMarkInTransit}
+                onPressMarkDelivered={onMarkDelivered}
+                onPressFlagIssue={onFlagIssue}
               />
             ))}
           </YStack>

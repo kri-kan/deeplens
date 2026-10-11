@@ -176,6 +176,36 @@ export default function OrderGroupScreen() {
           status: newStage,
         });
       }
+      const wasPlaced = (currentStage || '').toLowerCase() === 'placed';
+      const isNowConfirmed = newStage.toLowerCase() === 'confirmed';
+      if (
+        newStage.toLowerCase() === 'unconfirmed' ||
+        newStage.toLowerCase() === 'unformed' ||
+        (wasPlaced && isNowConfirmed)
+      ) {
+        if (orderData?.items) {
+          const updatedItems = orderData.items.map((it: any) => {
+            const raw = (it.vendorName || it.vendor || '').trim();
+            const isGUnassigned = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+            const matches = isUnassigned ? isGUnassigned : raw.toLowerCase() === effectiveGroupKey.toLowerCase();
+            if (matches) {
+              let meta: any = {};
+              if (it.comments) {
+                try { meta = JSON.parse(it.comments); } catch {}
+              }
+              meta.isShared = false;
+              meta.sharedAt = undefined;
+              return { ...it, comments: JSON.stringify(meta) };
+            }
+            return it;
+          });
+          setOrderData((prev: any) => ({ ...prev, items: updatedItems }));
+          await searchApiClient.put(`/api/v1/orders/${orderId}`, {
+            ...orderData,
+            items: updatedItems,
+          }).catch(console.warn);
+        }
+      }
     } catch (err: any) {
       console.error('Failed to update group stage:', err);
     }
@@ -187,6 +217,36 @@ export default function OrderGroupScreen() {
         await searchApiClient.patch(`/api/v1/orderid/groups/${groupInfo.orderGrpId}/status`, {
           status: newStage,
         });
+      }
+      const wasPlaced = (currentStage || '').toLowerCase() === 'placed';
+      const isNowConfirmed = newStage.toLowerCase() === 'confirmed';
+      if (
+        newStage.toLowerCase() === 'unconfirmed' ||
+        newStage.toLowerCase() === 'unformed' ||
+        (wasPlaced && isNowConfirmed)
+      ) {
+        if (orderData?.items) {
+          const updatedItems = orderData.items.map((it: any) => {
+            const raw = (it.vendorName || it.vendor || '').trim();
+            const isGUnassigned = !raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none';
+            const matches = isUnassigned ? isGUnassigned : raw.toLowerCase() === effectiveGroupKey.toLowerCase();
+            if (matches) {
+              let meta: any = {};
+              if (it.comments) {
+                try { meta = JSON.parse(it.comments); } catch {}
+              }
+              meta.isShared = false;
+              meta.sharedAt = undefined;
+              return { ...it, comments: JSON.stringify(meta) };
+            }
+            return it;
+          });
+          setOrderData((prev: any) => ({ ...prev, items: updatedItems }));
+          await searchApiClient.put(`/api/v1/orders/${orderId}`, {
+            ...orderData,
+            items: updatedItems,
+          }).catch(console.warn);
+        }
       }
       setGroupStages((prev) => ({ ...prev, [effectiveGroupKey]: newStage }));
       Alert.alert('Saved', `Package status updated to ${newStage}.`);

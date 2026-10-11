@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LogisticsOrder, OrderFulfillmentStatus } from '@/types/logistics';
 import { logisticsService } from '@/services/logistics.service';
 import { NdrActionCenter } from '@/components/logistics/NdrActionCenter';
 import { EscalationTracker } from '@/components/logistics/EscalationTracker';
+import { MarkInTransitModal } from '@/components/logistics/MarkInTransitModal';
 import {
   OrderLedgerPage,
 } from '@/components/tamagui-ui/pages/OrderLedgerPage';
@@ -23,6 +25,7 @@ export default function OrdersScreen() {
   // Modals
   const [activeNdrOrder, setActiveNdrOrder] = useState<LogisticsOrder | null>(null);
   const [activeEscalationOrder, setActiveEscalationOrder] = useState<LogisticsOrder | null>(null);
+  const [activeInTransitOrder, setActiveInTransitOrder] = useState<LogisticsOrder | null>(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -64,6 +67,8 @@ export default function OrdersScreen() {
     totalOrderValue: o.totalOrderValue,
     totalCodBalance: o.totalCodBalance,
     orderDate: o.orderDate,
+    placedAt: o.placedAt || o.orderDate,
+    hasLabel: o.hasLabel,
     status: o.status,
     totalItemsCount: o.items ? o.items.length : 0,
     packages: o.packages
@@ -87,6 +92,46 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleMarkInTransit = (orderId: string) => {
+    const target = orders.find((x) => x.id === orderId);
+    if (target) {
+      setActiveInTransitOrder(target);
+    }
+  };
+
+  const handleMarkDelivered = (orderId: string) => {
+    const target = orders.find((x) => x.id === orderId);
+    if (!target) return;
+
+    Alert.alert(
+      'Confirm Delivery',
+      `Confirm that order #${target.orderNumber} for ${target.customerName} has been delivered successfully?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mark Delivered',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await logisticsService.markOrderDelivered(orderId);
+              fetchOrders();
+            } catch (e) {
+              console.warn('[OrdersScreen] Error marking delivered:', e);
+              Alert.alert('Error', 'Failed to update order status to Delivered.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleFlagIssue = (orderId: string) => {
+    const target = orders.find((x) => x.id === orderId);
+    if (target) {
+      setActiveNdrOrder(target);
+    }
+  };
+
   return (
     <>
       <OrderLedgerPage
@@ -102,7 +147,20 @@ export default function OrdersScreen() {
         onOrderDetails={(id) => router.push(`/utilities/order-details/${id}` as any)}
         onOrderFulfillment={(id) => router.push(`/orders/${id}/fulfillment` as any)}
         onResolveNdr={handleResolveNdr}
+        onMarkInTransit={handleMarkInTransit}
+        onMarkDelivered={handleMarkDelivered}
+        onFlagIssue={handleFlagIssue}
       />
+
+      {/* Mark In Transit Modal */}
+      {activeInTransitOrder && (
+        <MarkInTransitModal
+          visible={!!activeInTransitOrder}
+          onDismiss={() => setActiveInTransitOrder(null)}
+          order={activeInTransitOrder}
+          onComplete={fetchOrders}
+        />
+      )}
 
       {/* NDR Modal */}
       {activeNdrOrder && (

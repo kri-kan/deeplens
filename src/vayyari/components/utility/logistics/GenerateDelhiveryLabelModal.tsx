@@ -5,6 +5,7 @@ import { logisticsService } from '@/services/logistics.service';
 import { vendorService } from '@/services/vendorService';
 import { searchApiClient } from '@/api/client';
 import { Warehouse } from '@/types/logistics';
+import { formatDelhiveryErrorMessage } from '@/utils/delhivery-error';
 
 export interface GenerateDelhiveryLabelModalProps {
   visible: boolean;
@@ -140,11 +141,11 @@ export function GenerateDelhiveryLabelModal({
         });
         onDismiss();
       } else {
-        throw new Error(res?.message || 'Failed to generate AWB');
+        throw new Error(formatDelhiveryErrorMessage(res?.message || 'Failed to generate AWB'));
       }
     } catch (err: any) {
       console.error('Failed to generate Delhivery label', err);
-      Alert.alert('Delhivery Generation Error', err?.message || 'Could not manifest shipment with Delhivery.');
+      Alert.alert('Delhivery Generation Error', formatDelhiveryErrorMessage(err?.message || 'Could not manifest shipment with Delhivery.'));
     } finally {
       setGenerating(false);
     }
@@ -187,6 +188,11 @@ export function GenerateDelhiveryLabelModal({
                   <Text variant="titleSmall" style={{ fontWeight: '700', flex: 1 }} numberOfLines={1}>
                     {selectedWarehouse.name}
                   </Text>
+                  {selectedWarehouse.alias ? (
+                    <Chip compact style={{ backgroundColor: '#E0F2FE', height: 20 }} textStyle={{ fontSize: 9, color: '#0369A1', fontWeight: '700' }}>
+                      🏷️ {selectedWarehouse.alias}
+                    </Chip>
+                  ) : null}
                 </View>
                 <Button
                   mode="text"
@@ -419,6 +425,11 @@ export function GenerateDelhiveryLabelModal({
                         <Text style={{ fontWeight: '700', flex: 1 }} numberOfLines={1}>
                           {wh.name}
                         </Text>
+                        {wh.alias ? (
+                          <Chip compact style={{ backgroundColor: '#E0F2FE', height: 20 }} textStyle={{ fontSize: 9, color: '#0369A1', fontWeight: '700' }}>
+                            🏷️ {wh.alias}
+                          </Chip>
+                        ) : null}
                         {wh.isCentral && (
                           <Chip compact style={{ backgroundColor: '#FEF3C7', height: 20 }} textStyle={{ fontSize: 9, color: '#B45309', fontWeight: '700' }}>
                             CENTRAL

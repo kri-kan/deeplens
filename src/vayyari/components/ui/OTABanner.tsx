@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Pressable, BackHandler } from 'react-native';
 import { Surface, Text, ProgressBar, IconButton, ActivityIndicator } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,14 @@ export function OTABanner() {
 
   const mbDownloaded = (bytesDownloaded / (1024 * 1024)).toFixed(1);
   const mbTotal = totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(1) : '?';
+
+  const handleApplyAndRestart = () => {
+    if (Platform.OS === 'android') {
+      BackHandler.exitApp();
+    } else if (Platform.OS === 'web') {
+      window.location.reload();
+    }
+  };
 
   return (
     <View
@@ -53,7 +61,15 @@ export function OTABanner() {
             />
           </View>
         ) : updateReady ? (
-          <View style={styles.content}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Update v${newVersion} is ready. Tap to restart now.`}
+            onPress={handleApplyAndRestart}
+            style={({ pressed }) => [
+              styles.content,
+              pressed && styles.pressedContent,
+            ]}
+          >
             <View style={styles.headerRow}>
               <View style={[styles.iconWrapper, styles.readyIconWrapper]}>
                 <Ionicons name="sparkles" size={20} color="#F59E0B" />
@@ -63,7 +79,7 @@ export function OTABanner() {
                   ✨ Update v{newVersion} Ready!
                 </Text>
                 <Text variant="bodySmall" style={styles.readyDetailText}>
-                  Swipe away and reopen Vayyari to activate.
+                  Tap anywhere to close & activate on next open.
                 </Text>
               </View>
               <IconButton
@@ -71,11 +87,49 @@ export function OTABanner() {
                 size={18}
                 iconColor="#9CA3AF"
                 style={styles.closeButton}
-                onPress={() => setDismissedVersion(newVersion || 'current')}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setDismissedVersion(newVersion || 'current');
+                }}
                 accessibilityLabel="Dismiss update notification"
               />
             </View>
-          </View>
+
+            {/* Actions Row */}
+            <View style={styles.actionsRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Restart app now"
+                onPress={handleApplyAndRestart}
+                style={({ pressed }) => [
+                  styles.restartButton,
+                  pressed && styles.restartButtonPressed,
+                ]}
+              >
+                <Ionicons name="refresh" size={15} color="#0F172A" />
+                <Text style={styles.restartButtonText}>
+                  RESTART NOW
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss update for now"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setDismissedVersion(newVersion || 'current');
+                }}
+                style={({ pressed }) => [
+                  styles.dismissButton,
+                  pressed && styles.dismissButtonPressed,
+                ]}
+              >
+                <Text style={styles.dismissButtonText}>
+                  Dismiss
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
         ) : null}
       </Surface>
     </View>
@@ -109,6 +163,9 @@ const styles = StyleSheet.create({
   },
   content: {
     width: '100%',
+  },
+  pressedContent: {
+    opacity: 0.9,
   },
   headerRow: {
     flexDirection: 'row',
@@ -158,5 +215,46 @@ const styles = StyleSheet.create({
   closeButton: {
     margin: 0,
     padding: 0,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  restartButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  restartButtonPressed: {
+    opacity: 0.8,
+  },
+  restartButtonText: {
+    color: '#0F172A',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  dismissButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  dismissButtonPressed: {
+    opacity: 0.6,
+  },
+  dismissButtonText: {
+    color: '#94A3B8',
+    fontWeight: '600',
+    fontSize: 12,
   },
 });

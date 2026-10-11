@@ -70,7 +70,7 @@ public class AttachmentController : ControllerBase
     }
 
     [HttpGet("download")]
-    public async Task<IActionResult> Download([FromQuery] string path)
+    public async Task<IActionResult> Download([FromQuery] string path, [FromQuery] string? name = null)
     {
         if (string.IsNullOrEmpty(path)) return BadRequest("Path is required");
 
@@ -130,6 +130,35 @@ public class AttachmentController : ControllerBase
                 }
             }
 
+            // On-demand rasterization for shipping label image previews without storing in MinIO
+            if (path.StartsWith("labels/") && path.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+            {
+                var pdfPath = Path.ChangeExtension(path, ".pdf");
+                if (await _storageService.FileExistsAsync(pdfPath))
+                {
+                    _logger.LogInformation("Streaming on-demand PNG preview for {Path} from {PdfPath} without persisting in MinIO", path, pdfPath);
+                    try
+                    {
+                        using var pdfStream = await _storageService.GetFileAsync(pdfPath);
+                        using var ms = new MemoryStream();
+                        await pdfStream.CopyToAsync(ms, HttpContext.RequestAborted);
+                        var pdfBytes = ms.ToArray();
+
+                        var pngBytes = await PdfRasterizer.ConvertPdfToPngAsync(pdfBytes, 200, _logger, HttpContext.RequestAborted);
+                        if (pngBytes != null && pngBytes.Length > 0)
+                        {
+                            // 7-day client-side caching header so mobile device caches image locally
+                            Response.Headers.Append("Cache-Control", "public,max-age=604800,immutable");
+                            return File(new MemoryStream(pngBytes), "image/png", enableRangeProcessing: true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to render on-demand PNG preview for {Path}", path);
+                    }
+                }
+            }
+
             if (!exists)
             {
                 return NotFound("File not found in storage.");
@@ -154,6 +183,10 @@ public class AttachmentController : ControllerBase
 
             Response.Headers.Append("Cache-Control", $"public,max-age={maxAgeSeconds}");
             
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return File(stream, contentType, fileDownloadName: name, enableRangeProcessing: true);
+            }
             return File(stream, contentType, enableRangeProcessing: true);
         }
         catch (Exception ex)

@@ -6,13 +6,14 @@ import { useTheme } from '@/theme';
 export interface CompactFieldProps {
   label: string;
   value: string;
-  onChange: (val: string) => void;
+  onChange?: (val: string) => void;
   onBlur?: () => void;
   onSubmitEditing?: () => void;
   placeholder?: string;
   keyboardType?: 'default' | 'numeric';
   maxLength?: number;
   accessibilityLabel?: string;
+  editable?: boolean;
 }
 
 export function CompactField({
@@ -25,6 +26,7 @@ export function CompactField({
   keyboardType = 'default',
   maxLength,
   accessibilityLabel,
+  editable = true,
 }: CompactFieldProps) {
   const { tokens } = useTheme();
 
@@ -41,7 +43,8 @@ export function CompactField({
       <TextInput
         accessibilityLabel={accessibilityLabel ?? label}
         value={value ?? ''}
-        onChangeText={onChange}
+        editable={editable}
+        onChangeText={editable ? onChange : undefined}
         onBlur={onBlur}
         onSubmitEditing={onSubmitEditing}
         placeholder={placeholder}
@@ -51,7 +54,7 @@ export function CompactField({
         style={{
           fontSize: 13,
           fontWeight: '700',
-          color: tokens.text,
+          color: editable ? tokens.text : tokens.textSecondary,
           height: 22,
           paddingVertical: 0,
           paddingHorizontal: 0,

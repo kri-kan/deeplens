@@ -45,12 +45,13 @@ public class VendorService : IVendorService
 
             // Insert Vendor
             var vendorId = await conn.QuerySingleAsync<Guid>(
-                @"INSERT INTO Vendors (vendor_name, vendor_code, first_name, last_name, whatsapp_primary, whatsapp_secondary, order_group_link, email, website, notes, default_warehouse_id, is_favorite)
-                  VALUES (@VendorName, @VendorCode, @FirstName, @LastName, @WhatsappPrimary, @WhatsappSecondary, @OrderGroupLink, @Email, @Website, @Notes, @DefaultWarehouseId, COALESCE(@IsFavorite, FALSE))
+                @"INSERT INTO Vendors (vendor_name, alias, vendor_code, first_name, last_name, whatsapp_primary, whatsapp_secondary, order_group_link, email, website, notes, default_warehouse_id, is_favorite)
+                  VALUES (@VendorName, @Alias, @VendorCode, @FirstName, @LastName, @WhatsappPrimary, @WhatsappSecondary, @OrderGroupLink, @Email, @Website, @Notes, @DefaultWarehouseId, COALESCE(@IsFavorite, FALSE))
                   RETURNING id",
                 new
                 {
                     request.VendorName,
+                    Alias = string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias.Trim(),
                     request.VendorCode,
                     request.FirstName,
                     request.LastName,
@@ -84,10 +85,10 @@ public class VendorService : IVendorService
         using var conn = await GetConnectionAsync();
 
         var vendor = await conn.QuerySingleOrDefaultAsync<VendorResponse>(
-            @"SELECT v.id, v.vendor_name as VendorName, v.vendor_code as VendorCode, v.first_name as FirstName, v.last_name as LastName, 
+            @"SELECT v.id, v.vendor_name as VendorName, v.alias as Alias, v.vendor_code as VendorCode, v.first_name as FirstName, v.last_name as LastName, 
                      v.whatsapp_primary as WhatsappPrimary, v.whatsapp_secondary as WhatsappSecondary, v.order_group_link as OrderGroupLink, 
                      v.email, v.website, v.notes, v.is_active as IsActive, COALESCE(v.is_favorite, FALSE) as IsFavorite,
-                     v.default_warehouse_id as DefaultWarehouseId, w.name as DefaultWarehouseName, w.code as DefaultWarehouseCode,
+                     v.default_warehouse_id as DefaultWarehouseId, w.name as DefaultWarehouseName, w.code as DefaultWarehouseCode, w.alias as DefaultWarehouseAlias,
                      v.created_at as CreatedAt, v.updated_at as UpdatedAt
               FROM Vendors v
               LEFT JOIN warehouses w ON v.default_warehouse_id = w.id
@@ -109,10 +110,10 @@ public class VendorService : IVendorService
             $@"SELECT COUNT(*) FROM Vendors v {whereClause}");
 
         var vendors = await conn.QueryAsync<VendorResponse>(
-            $@"SELECT v.id, v.vendor_name as VendorName, v.vendor_code as VendorCode, v.first_name as FirstName, v.last_name as LastName, 
+            $@"SELECT v.id, v.vendor_name as VendorName, v.alias as Alias, v.vendor_code as VendorCode, v.first_name as FirstName, v.last_name as LastName, 
                       v.whatsapp_primary as WhatsappPrimary, v.whatsapp_secondary as WhatsappSecondary, v.order_group_link as OrderGroupLink, 
                       v.email, v.website, v.notes, v.is_active as IsActive, COALESCE(v.is_favorite, FALSE) as IsFavorite,
-                      v.default_warehouse_id as DefaultWarehouseId, w.name as DefaultWarehouseName, w.code as DefaultWarehouseCode,
+                      v.default_warehouse_id as DefaultWarehouseId, w.name as DefaultWarehouseName, w.code as DefaultWarehouseCode, w.alias as DefaultWarehouseAlias,
                       v.created_at as CreatedAt, v.updated_at as UpdatedAt
                FROM Vendors v
                LEFT JOIN warehouses w ON v.default_warehouse_id = w.id
@@ -141,6 +142,7 @@ public class VendorService : IVendorService
         parameters.Add("VendorId", vendorId);
 
         if (request.VendorName != null) { updates.Add("vendor_name = @VendorName"); parameters.Add("VendorName", request.VendorName); }
+        if (request.Alias != null) { updates.Add("alias = @Alias"); parameters.Add("Alias", string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias.Trim()); }
         if (request.VendorCode != null)
         {
             var existingVendorCode = await conn.QuerySingleOrDefaultAsync<bool>(

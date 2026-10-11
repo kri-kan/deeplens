@@ -11,6 +11,9 @@ public record CreateVendorRequest
     [JsonPropertyName("vendorName")]
     public required string VendorName { get; init; }
     
+    [JsonPropertyName("alias")]
+    public string? Alias { get; init; }
+    
     [JsonPropertyName("vendorCode")]
     [Required]
     [StringLength(8, MinimumLength = 3, ErrorMessage = "Vendor Code must be between 3 and 8 characters")]
@@ -51,6 +54,9 @@ public record UpdateVendorRequest
 {
     [JsonPropertyName("vendorName")]
     public string? VendorName { get; init; }
+    
+    [JsonPropertyName("alias")]
+    public string? Alias { get; init; }
     
     [JsonPropertyName("vendorCode")]
     [StringLength(8, MinimumLength = 3, ErrorMessage = "Vendor Code must be between 3 and 8 characters")]
@@ -99,6 +105,8 @@ public record VendorResponse
     public Guid TenantId { get; init; }
     [JsonPropertyName("vendorName")]
     public required string VendorName { get; init; }
+    [JsonPropertyName("alias")]
+    public string? Alias { get; init; }
     [JsonPropertyName("vendorCode")]
     public string? VendorCode { get; init; }
     [JsonPropertyName("firstName")]
@@ -126,6 +134,8 @@ public record VendorResponse
     public string? DefaultWarehouseName { get; init; }
     [JsonPropertyName("defaultWarehouseCode")]
     public string? DefaultWarehouseCode { get; init; }
+    [JsonPropertyName("defaultWarehouseAlias")]
+    public string? DefaultWarehouseAlias { get; init; }
     [JsonPropertyName("isFavorite")]
     public bool IsFavorite { get; init; }
     [JsonPropertyName("createdAt")]

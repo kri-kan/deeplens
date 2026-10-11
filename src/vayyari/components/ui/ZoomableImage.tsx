@@ -1,5 +1,5 @@
 import React, { useEffect, forwardRef, useImperativeHandle, useState } from 'react';
-import { StyleSheet, View, Dimensions, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, View, Dimensions, StyleProp, ViewStyle, ActivityIndicator, Text } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -48,6 +48,13 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
   ref
 ) {
   const [isZoomedInternal, setIsZoomedInternal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setHasError(false);
+  }, [uri]);
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -96,9 +103,6 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
     .onUpdate((e) => {
       const nextScale = clamp(savedScale.value * e.scale, MIN_SCALE, MAX_SCALE);
       scale.value = nextScale;
-      if (nextScale > ZOOM_ACTIVE_THRESHOLD && !isZoomedInternal) {
-        runOnJS(updateZoomState)(true);
-      }
     })
     .onEnd(() => {
       if (scale.value <= ZOOM_ACTIVE_THRESHOLD) {
@@ -116,10 +120,9 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
       }
     });
 
-  // Pan gesture is strictly enabled ONLY when zoomed in (isZoomedInternal).
-  // When scale === 1, pan is disabled so horizontal swipe naturally navigates the outer FlatList!
+  // Pan gesture is enabled and active when zoomed in (scale > ZOOM_ACTIVE_THRESHOLD).
+  // Translates the image within scale bounds.
   const panGesture = Gesture.Pan()
-    .enabled(isZoomedInternal)
     .averageTouches(true)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
@@ -137,8 +140,12 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
       }
     })
     .onEnd(() => {
-      savedTranslateX.value = translateX.value;
-      savedTranslateY.value = translateY.value;
+      if (scale.value > ZOOM_ACTIVE_THRESHOLD) {
+        const maxTx = calculateMaxTranslation(scale.value, containerWidth);
+        const maxTy = calculateMaxTranslation(scale.value, containerHeight);
+        savedTranslateX.value = clamp(translateX.value, -maxTx, maxTx);
+        savedTranslateY.value = clamp(translateY.value, -maxTy, maxTy);
+      }
     });
 
   const doubleTapGesture = Gesture.Tap()
@@ -188,16 +195,38 @@ export const ZoomableImage = forwardRef<ZoomableImageRef, ZoomableImageProps>(fu
 
   return (
     <View style={[styles.container, { width: containerWidth, height: containerHeight }, style]}>
-      <GestureDetector gesture={composedGesture}>
-        <Animated.View style={[styles.imageWrapper, animatedStyle]}>
-          <Image
-            source={{ uri }}
-            style={styles.image}
-            contentFit={contentFit}
-            transition={200}
-          />
-        </Animated.View>
-      </GestureDetector>
+      {loading && !hasError && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.loadingText}>Loading shipping label...</Text>
+        </View>
+      )}
+
+      {hasError ? (
+        <View style={styles.errorOverlay}>
+          <Text style={styles.errorText}>Unable to load label preview</Text>
+        </View>
+      ) : (
+        <GestureDetector gesture={composedGesture}>
+          <Animated.View style={[styles.imageWrapper, animatedStyle]}>
+            <Image
+              source={{ uri }}
+              style={styles.image}
+              contentFit={contentFit}
+              transition={200}
+              onLoadStart={() => setLoading(true)}
+              onLoad={() => {
+                setLoading(false);
+                setHasError(false);
+              }}
+              onError={() => {
+                setLoading(false);
+                setHasError(true);
+              }}
+            />
+          </Animated.View>
+        </GestureDetector>
+      )}
     </View>
   );
 });
@@ -207,6 +236,35 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    zIndex: 10,
+    gap: 12,
+  },
+  loadingText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  errorOverlay: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    gap: 8,
+  },
+  errorText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '600',
   },
   imageWrapper: {
     width: '100%',

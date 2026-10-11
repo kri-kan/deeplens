@@ -20,6 +20,9 @@ export const LuEdit3: React.FC<IconProps> = ({ size = 16, color = '#333333', sty
 export const LuPlus: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="plus" size={size} color={color} style={style} />
 );
+export const LuUpload: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
+  <Feather name="upload" size={size} color={color} style={style} />
+);
 export const LuMapPin: React.FC<IconProps> = ({ size = 16, color = '#333333', style }) => (
   <Feather name="map-pin" size={size} color={color} style={style} />
 );
@@ -293,5 +296,18 @@ export const LuFolder: React.FC<IconProps> = ({ size = 16, color = "#333333", st
 export const LuPrinter: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
   <Feather name="printer" size={size} color={color} style={style} />
 );
+
+export const LuMail: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="mail" size={size} color={color} style={style} />
+);
+
+export const LuBarcode: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <MaterialCommunityIcons name="barcode" size={size} color={color} style={style} />
+);
+
+export const LuZoomIn: React.FC<IconProps> = ({ size = 16, color = "#333333", style }) => (
+  <Feather name="zoom-in" size={size} color={color} style={style} />
+);
+
 
 

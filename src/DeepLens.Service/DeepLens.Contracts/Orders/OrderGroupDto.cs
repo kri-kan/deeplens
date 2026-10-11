@@ -53,4 +53,7 @@ public class OrderGroupDto
 
     [JsonPropertyName("items")]
     public List<OrderItemDetailDto> Items { get; set; } = new();
+
+    [JsonPropertyName("shipmentHistory")]
+    public List<GroupShipmentHistoryDto> ShipmentHistory { get; set; } = new();
 }

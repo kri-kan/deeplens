@@ -10,6 +10,7 @@ import type {
   InstagramAccountOption 
 } from '../types/products';
 import { getIdentityApiUrl, getSearchApiUrl, getWhatsappProcessorUrl, getOtelEndpointUrl } from '@/utils/api-config';
+import { uriToBlob } from '@/utils/media-helpers';
 
 
 class ProductService {
@@ -37,10 +38,14 @@ class ProductService {
     }
 
     if (request.files && request.files.length > 0) {
-      request.files.forEach((file) => {
-        // In React Native, FormData.append(name, { uri, type, name }) is the standard for files.
-        formData.append('files', file as any);
-      });
+      for (const file of request.files) {
+        if (file && typeof file === 'object' && 'uri' in file) {
+          const blob = await uriToBlob(file.uri, file.type);
+          formData.append('files', blob, file.name);
+        } else {
+          formData.append('files', file as any);
+        }
+      }
     }
 
     return productMgmtApiClient.postFormData<VendorProduct>(API_ROUTES.PRODUCT_CATALOG.CREATE, formData);

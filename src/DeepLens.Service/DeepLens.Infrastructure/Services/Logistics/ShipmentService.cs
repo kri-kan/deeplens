@@ -205,6 +205,61 @@ public class ShipmentService : IShipmentService
             ? string.Join(", ", request.Items.Select(x => $"{x.ProductName} x{x.Quantity}"))
             : "Fashion Apparel";
 
+        // Determine Seller Name based on OrderType and ResellerName
+        var orderType = request.OrderType;
+        var resellerName = request.ResellerName;
+        if (string.IsNullOrWhiteSpace(orderType) && !string.IsNullOrWhiteSpace(request.OrderNumber))
+        {
+            try
+            {
+                var order = await _orderRepository.GetDetailsAsync(request.OrderNumber);
+                if (order != null)
+                {
+                    orderType = order.OrderType;
+                    resellerName ??= order.ResellerName;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not resolve order details for shipment order {OrderNumber}", request.OrderNumber);
+            }
+        }
+
+        string sellerName;
+        if (request.SellerName != null)
+        {
+            sellerName = request.SellerName.Trim();
+        }
+        else
+        {
+            var isReseller = string.Equals(orderType, "Reseller", StringComparison.OrdinalIgnoreCase);
+            if (isReseller)
+            {
+                sellerName = !string.IsNullOrWhiteSpace(resellerName)
+                    ? $"From: {resellerName.Trim()}"
+                    : string.Empty;
+            }
+            else
+            {
+                sellerName = "From: VAYYARI Fashions";
+            }
+        }
+
+        var hasExplicitSellerAddress = !string.IsNullOrWhiteSpace(request.SellerAddress);
+        var sellerAddress = hasExplicitSellerAddress ? request.SellerAddress!.Trim() : string.Empty;
+        var defaultWarehouseAddress = warehouse?.AddressLine1 ?? "Plot 42, Vayyari Logistics Park";
+        var effectivePickupAddress = hasExplicitSellerAddress ? defaultWarehouseAddress : null;
+        var effectivePickupCity = hasExplicitSellerAddress ? (warehouse?.City ?? "Surat") : null;
+        var effectivePickupPin = hasExplicitSellerAddress ? (warehouse?.Pincode ?? "395002") : null;
+        var effectivePickupPhone = hasExplicitSellerAddress ? (warehouse?.Phone ?? "+91-9876543210") : null;
+
+        var effectiveReturnAddress = hasExplicitSellerAddress ? defaultWarehouseAddress : null;
+        var effectiveReturnCity = hasExplicitSellerAddress ? (warehouse?.City ?? "Surat") : null;
+        var effectiveReturnState = hasExplicitSellerAddress ? warehouse?.State : null;
+        var effectiveReturnPin = hasExplicitSellerAddress ? (warehouse?.Pincode ?? "395002") : null;
+        var effectiveReturnPhone = hasExplicitSellerAddress ? (warehouse?.Phone ?? "+91-9876543210") : null;
+        var effectiveReturnName = !string.IsNullOrWhiteSpace(sellerName) ? sellerName : null;
+
         // Build CMU Payload
         var cmuPayload = new DelhiveryCmuPayload
         {
@@ -229,18 +284,25 @@ public class ShipmentService : IShipmentService
                     Weight = request.WeightGrams > 0 ? request.WeightGrams : 500,
                     ShipmentWidth = request.WidthCm,
                     ShipmentHeight = request.HeightCm,
-                    SellerName = "Vayyari",
+                    SellerName = sellerName,
+                    SellerAddress = sellerAddress,
+                    ReturnName = effectiveReturnName,
+                    ReturnAddress = effectiveReturnAddress,
+                    ReturnCity = effectiveReturnCity,
+                    ReturnState = effectiveReturnState,
+                    ReturnPin = effectiveReturnPin,
+                    ReturnPhone = effectiveReturnPhone,
                     Quantity = request.Items.Sum(x => x.Quantity).ToString()
                 }
             },
             PickupLocation = new DelhiveryPickupLocation
             {
                 Name = pickupLocationName,
-                Address = warehouse?.AddressLine1 ?? "Plot 42, Vayyari Logistics Park",
-                City = warehouse?.City ?? "Surat",
-                PinCode = warehouse?.Pincode ?? "395002",
+                Address = effectivePickupAddress,
+                City = effectivePickupCity,
+                PinCode = effectivePickupPin,
                 Country = "India",
-                Phone = warehouse?.Phone ?? "+91-9876543210"
+                Phone = effectivePickupPhone
             }
         };
 
@@ -248,7 +310,16 @@ public class ShipmentService : IShipmentService
         var cmuResponse = await _delhiveryClient.CreateShipmentAsync(cmuPayload, ct);
 
         var pkg = cmuResponse.Packages?.FirstOrDefault();
-        var awbNumber = pkg?.Waybill ?? $"DEL{DateTime.UtcNow:yyMMdd}{random.Next(1000000, 9999999)}";
+        var awbNumber = pkg?.Waybill;
+
+        if (string.IsNullOrWhiteSpace(awbNumber))
+        {
+            var errRemarks = string.Join("; ", cmuResponse.Packages?.SelectMany(p => p.Remarks ?? Enumerable.Empty<string>()) ?? Enumerable.Empty<string>());
+            var rawErr = !string.IsNullOrWhiteSpace(errRemarks) ? errRemarks : (!string.IsNullOrWhiteSpace(cmuResponse.Error) ? cmuResponse.Error : "Delhivery did not return a valid waybill.");
+            var friendlyMsg = DelhiveryErrorSanitizer.Sanitize(rawErr);
+            _logger.LogError("Delhivery CMU shipment creation failed for order {OrderNumber}: {Error}", request.OrderNumber, friendlyMsg);
+            throw new InvalidOperationException(friendlyMsg);
+        }
 
         // Fetch and persist thermal label PDF to MinIO
         string? minioLabelKey = null;

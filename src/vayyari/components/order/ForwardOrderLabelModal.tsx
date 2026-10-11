@@ -10,8 +10,10 @@ import {
   Platform,
   Linking,
   Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { ZoomableImage } from '@/components/ui/ZoomableImage';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
 import * as Clipboard from 'expo-clipboard';
@@ -20,7 +22,6 @@ import {
   LuArrowLeft,
   LuFileText,
   LuCheck,
-  LuCopy,
   LuMapPin,
   LuTruck,
   LuBox,
@@ -32,8 +33,14 @@ import {
   LuStar,
   LuReceipt,
   LuCalendar,
+  LuCheckCircle2,
+  LuClock,
+  LuRefreshCw,
   LuMaximize2,
+  LuZoomIn,
   LuPrinter,
+  LuUser,
+  LuStore,
 } from '@/components/tamagui-ui/icons/lu';
 import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { useTheme } from '@/theme';
@@ -43,11 +50,16 @@ import { searchApiClient } from '@/api/client';
 import { Warehouse } from '@/types/logistics';
 import { Image } from 'expo-image';
 import { shareImageUri } from '@/utils/shareImage';
+import {
+  buildShippingLabelFileName,
+  resolveWarehouseAlias,
+} from '@/utils/shipping-label-helpers';
 import { openPdfViewer } from '@/utils/viewPdf';
 import { resolveLabelUrl, resolveLabelImageUrl } from '@/utils/api-config';
 import { AddressData } from './GroupManagementView';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 import { SchedulePickupModal } from './SchedulePickupModal';
+import { formatDelhiveryErrorMessage } from '@/utils/delhivery-error';
 
 export interface SubmittedForwardOrderAudit {
   awbNumber: string;
@@ -60,6 +72,7 @@ export interface SubmittedForwardOrderAudit {
   pickupFacility: {
     code: string;
     name: string;
+    alias?: string;
     city?: string;
     state?: string;
     pincode?: string;
@@ -81,6 +94,8 @@ export interface SubmittedForwardOrderAudit {
   };
   paymentMode: 'COD' | 'Prepaid';
   collectibleAmount: number;
+  sellerName?: string;
+  sellerAddress?: string;
 }
 
 export interface ForwardOrderLabelModalProps {
@@ -100,6 +115,8 @@ export interface ForwardOrderLabelModalProps {
     labelUrl: string;
     auditData: SubmittedForwardOrderAudit;
   }) => void;
+  orderType?: string;
+  resellerName?: string;
 }
 
 export function ForwardOrderLabelModal({
@@ -115,6 +132,8 @@ export function ForwardOrderLabelModal({
   labelUrl: initialLabelUrl,
   initialAuditData = null,
   onSuccess,
+  orderType = 'Customer',
+  resellerName = '',
 }: ForwardOrderLabelModalProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -122,7 +141,7 @@ export function ForwardOrderLabelModal({
   if (!visible) return null;
 
   // Mode: 'form' (editable inputs) vs 'pdf' (generated PDF + audit log)
-  const hasInitialLabel = Boolean(initialAwb || initialLabelUrl);
+  const hasInitialLabel = Boolean(initialLabelUrl);
   const [viewMode, setViewMode] = useState<'form' | 'pdf'>(
     hasInitialLabel ? 'pdf' : 'form'
   );
@@ -166,6 +185,35 @@ export function ForwardOrderLabelModal({
     isCod ? (groupTotal || 0).toString() : '0'
   );
 
+  // Helper to compute default Seller Name (on Label)
+  const computeDefaultSellerName = (type?: string, rName?: string) => {
+    if (type?.toLowerCase() === 'reseller') {
+      return rName?.trim() ? `From: ${rName.trim()}` : '';
+    }
+    return 'From: VAYYARI Fashions';
+  };
+
+  // 5. Sender / Seller (on Label) state
+  const [modalOrderType, setModalOrderType] = useState<'customer' | 'reseller'>(
+    orderType?.toLowerCase() === 'reseller' ? 'reseller' : 'customer'
+  );
+  const [modalResellerName, setModalResellerName] = useState<string>(resellerName || '');
+  const [sellerName, setSellerName] = useState<string>(
+    computeDefaultSellerName(orderType, resellerName)
+  );
+
+  const handleToggleOrderType = (newType: 'customer' | 'reseller') => {
+    setModalOrderType(newType);
+    setSellerName(computeDefaultSellerName(newType, modalResellerName));
+  };
+
+  const handleChangeResellerName = (newName: string) => {
+    setModalResellerName(newName);
+    if (modalOrderType === 'reseller') {
+      setSellerName(newName.trim() ? `From: ${newName.trim()}` : '');
+    }
+  };
+
   // Execution & Output state
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [generatedAwb, setGeneratedAwb] = useState<string>(initialAwb || '');
@@ -178,7 +226,18 @@ export function ForwardOrderLabelModal({
   const [isAuditExpanded, setIsAuditExpanded] = useState<boolean>(false);
   const [copiedAwb, setCopiedAwb] = useState(false);
   const [showSchedulePickup, setShowSchedulePickup] = useState(false);
+  const [scheduledPickupInfo, setScheduledPickupInfo] = useState<{
+    pickupDate: string;
+    pickupTime: string;
+    pickupId?: string;
+    displayInfo?: string;
+  } | null>(null);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [showFullPreviewModal, setShowFullPreviewModal] = useState(false);
+  const [previewImageLoading, setPreviewImageLoading] = useState<boolean>(true);
+  const [previewImageError, setPreviewImageError] = useState<boolean>(false);
+  // Default aspect ratio for standard 4x6 thermal shipping label (width: 4, height: 6)
+  const [labelAspectRatio, setLabelAspectRatio] = useState<number>(4 / 6);
 
   // Shipping Rate Estimation state
   const [estimating, setEstimating] = useState(false);
@@ -205,12 +264,16 @@ export function ForwardOrderLabelModal({
 
   useEffect(() => {
     if (visible) {
-      if (initialAwb || initialLabelUrl) {
+      if (initialLabelUrl) {
         setViewMode('pdf');
         setGeneratedAwb(initialAwb || '');
         setGeneratedLabelUrl(initialLabelUrl || '');
+        setSubmittedAudit(initialAuditData);
       } else {
         setViewMode('form');
+        setGeneratedAwb('');
+        setGeneratedLabelUrl('');
+        setSubmittedAudit(null);
         setEstimateResult(null);
         setCustomOrderId(orderGrpId || '');
         setQuantity((itemsCount || 1).toString());
@@ -231,10 +294,45 @@ export function ForwardOrderLabelModal({
           setRecipientCity(address.city || '');
           setRecipientState(address.state || '');
         }
+
+        const currentType = orderType?.toLowerCase() === 'reseller' ? 'reseller' : 'customer';
+        const currentReseller = resellerName || '';
+        setModalOrderType(currentType);
+        setModalResellerName(currentReseller);
+        setSellerName(computeDefaultSellerName(currentType, currentReseller));
       }
       loadWarehouses();
     }
-  }, [visible, initialAwb, initialLabelUrl, itemsCount, isCod, groupTotal, address, vendorName, orderGrpId]);
+  }, [visible, initialAwb, initialLabelUrl, itemsCount, isCod, groupTotal, address, vendorName, orderGrpId, orderType, resellerName]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (orderGrpId && visible) {
+      logisticsService.getGroupShipments(orderGrpId).then((shipments) => {
+        if (!isMounted || !shipments || shipments.length === 0) return;
+        const currentAwb = generatedAwb || initialAwb;
+        const matched = currentAwb
+          ? shipments.find((s) => s.awbNumber === currentAwb && s.status !== 'cancelled')
+          : shipments.find((s) => s.status !== 'cancelled');
+
+        const meta = matched?.metadata;
+        if (meta && (meta.pickup_scheduled_date || meta.pickup_id)) {
+          const pDate = meta.pickup_scheduled_date || '';
+          const pTime = meta.pickup_slot || meta.pickup_scheduled_time || '';
+          const pId = meta.pickup_id || '';
+          setScheduledPickupInfo({
+            pickupDate: pDate,
+            pickupTime: pTime,
+            pickupId: pId ? String(pId) : undefined,
+            displayInfo: pDate && pTime ? `${pDate} • ${pTime}` : (pDate || pTime || 'Scheduled'),
+          });
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [orderGrpId, visible, generatedAwb, initialAwb]);
 
   const sortWarehouses = (list: Warehouse[]): Warehouse[] => {
     return [...list].sort((a: Warehouse, b: Warehouse) => {
@@ -461,6 +559,10 @@ export function ForwardOrderLabelModal({
         recipientPincode: recipientPincode.trim(),
         recipientCity: recipientCity.trim() || '',
         recipientState: recipientState.trim() || '',
+        orderType: modalOrderType === 'reseller' ? 'Reseller' : 'Customer',
+        resellerName: modalOrderType === 'reseller' ? (modalResellerName.trim() || undefined) : undefined,
+        sellerName: sellerName.trim(),
+        sellerAddress: '', // Sent as "" empty string behind the scenes so Delhivery does not print physical warehouse street address
       };
 
       const res: any = await searchApiClient.post(
@@ -483,6 +585,7 @@ export function ForwardOrderLabelModal({
           pickupFacility: {
             code: selectedWarehouse.code,
             name: selectedWarehouse.name,
+            alias: selectedWarehouse.alias,
             city: selectedWarehouse.city,
             state: selectedWarehouse.state,
             pincode: selectedWarehouse.pincode,
@@ -504,6 +607,8 @@ export function ForwardOrderLabelModal({
           },
           paymentMode: paymentMode === 'COD' ? 'COD' : 'Prepaid',
           collectibleAmount: paymentMode === 'COD' ? (parseFloat(codAmount) || 0) : 0,
+          sellerName: sellerName.trim(),
+          sellerAddress: '',
         };
 
         setGeneratedAwb(awb);
@@ -533,14 +638,15 @@ export function ForwardOrderLabelModal({
           },
         });
       } else {
-        throw new Error(res?.message || res?.error || 'Failed to manifest shipment with Delhivery');
+        throw new Error(formatDelhiveryErrorMessage(res?.message || res?.error || 'Failed to manifest shipment with Delhivery'));
       }
     } catch (err: any) {
       console.error('Failed to create forward order:', err);
+      const friendlyMessage = formatDelhiveryErrorMessage(err?.message || 'Could not manifest shipment with Delhivery.');
       setFeedbackDialog({
         visible: true,
         title: 'Order Creation Failed',
-        message: err?.message || 'Could not manifest shipment with Delhivery.',
+        message: friendlyMessage,
         intent: 'critical',
         confirmLabel: 'OK',
         singleButton: true,
@@ -550,9 +656,11 @@ export function ForwardOrderLabelModal({
     }
   };
 
+  const activeAwb = (generatedAwb || initialAwb || '').trim();
+
   const handleCopyAwb = async () => {
-    if (!generatedAwb) return;
-    await Clipboard.setStringAsync(generatedAwb);
+    if (!activeAwb) return;
+    await Clipboard.setStringAsync(activeAwb);
     setCopiedAwb(true);
     setTimeout(() => setCopiedAwb(false), 2000);
   };
@@ -563,6 +671,12 @@ export function ForwardOrderLabelModal({
     (generatedAwb ? `labels/${generatedAwb}.pdf` : '');
   const resolvedPdfUrl = resolveLabelUrl(rawLabelUrl);
   const resolvedPreviewImageUrl = resolveLabelImageUrl(rawLabelUrl);
+
+  useEffect(() => {
+    setPreviewImageLoading(true);
+    setPreviewImageError(false);
+    setLabelAspectRatio(4 / 6);
+  }, [resolvedPreviewImageUrl]);
 
   const handleOpenPdfViewer = async () => {
     if (!resolvedPdfUrl && !resolvedPreviewImageUrl) {
@@ -593,7 +707,25 @@ export function ForwardOrderLabelModal({
       });
       return;
     }
-    await shareImageUri(resolvedPdfUrl, `Delhivery Label ${generatedAwb}`);
+
+    if (activeAwb) {
+      await Clipboard.setStringAsync(activeAwb);
+      setCopiedAwb(true);
+      setTimeout(() => setCopiedAwb(false), 2000);
+    }
+
+    const whAlias =
+      submittedAudit?.pickupFacility?.alias ||
+      selectedWarehouse?.alias ||
+      (await resolveWarehouseAlias(vendorName, submittedAudit, selectedWarehouse));
+    const custName =
+      submittedAudit?.recipient?.name ||
+      recipientName ||
+      address?.name ||
+      '';
+
+    const customFilename = buildShippingLabelFileName(whAlias, custName, activeAwb);
+    await shareImageUri(resolvedPdfUrl, customFilename, customFilename);
   };
 
 
@@ -643,9 +775,9 @@ export function ForwardOrderLabelModal({
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            padding: 16,
-            gap: 16,
-            paddingBottom: viewMode === 'pdf' ? insets.bottom + 80 : 60,
+            padding: viewMode === 'pdf' ? 0 : 16,
+            gap: viewMode === 'pdf' ? 12 : 16,
+            paddingBottom: viewMode === 'pdf' ? insets.bottom + 100 : 60,
           }}
           showsVerticalScrollIndicator={false}
         >
@@ -1327,6 +1459,146 @@ export function ForwardOrderLabelModal({
                 </XStack>
               </YStack>
 
+              {/* 5. Sender / Seller Specifications */}
+              <YStack
+                backgroundColor={tokens.surface}
+                borderRadius={tokens.radius.md}
+                borderWidth={1}
+                borderColor={tokens.border}
+                padding={14}
+                gap={12}
+              >
+                <XStack alignItems="center" justifyContent="space-between">
+                  <Text fontSize={11} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
+                    5. SENDER / SELLER SPECIFICATIONS
+                  </Text>
+                  <XStack
+                    backgroundColor={`${tokens.accent}14`}
+                    paddingHorizontal={6}
+                    paddingVertical={2}
+                    borderRadius={tokens.radius.xs}
+                  >
+                    <Text fontSize={9} fontWeight="800" color={tokens.accent}>
+                      ON LABEL
+                    </Text>
+                  </XStack>
+                </XStack>
+
+                {/* Order Type Segmented Toggle (Customer vs Reseller) */}
+                <XStack
+                  backgroundColor={tokens.surfaceRaised}
+                  borderRadius={tokens.radius.sm}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                  padding={3}
+                  gap={4}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: modalOrderType === 'customer' }}
+                    accessibilityLabel="Customer Order"
+                    onPress={() => handleToggleOrderType('customer')}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      height: 38,
+                      borderRadius: tokens.radius.xs,
+                      backgroundColor: modalOrderType === 'customer' ? tokens.surface : 'transparent',
+                      borderWidth: modalOrderType === 'customer' ? 1.5 : 0,
+                      borderColor: modalOrderType === 'customer' ? tokens.accent : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 7,
+                      opacity: pressed ? 0.8 : 1,
+                      ...(modalOrderType === 'customer'
+                        ? {
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.08,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }
+                        : {}),
+                    })}
+                  >
+                    <LuUser size={15} color={modalOrderType === 'customer' ? tokens.accent : tokens.textMuted} />
+                    <Text
+                      fontSize={13}
+                      fontWeight={modalOrderType === 'customer' ? '800' : '600'}
+                      color={modalOrderType === 'customer' ? tokens.accent : tokens.textSecondary}
+                      letterSpacing={0.2}
+                    >
+                      Customer
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: modalOrderType === 'reseller' }}
+                    accessibilityLabel="Reseller Order"
+                    onPress={() => handleToggleOrderType('reseller')}
+                    style={({ pressed }) => ({
+                      flex: 1,
+                      height: 38,
+                      borderRadius: tokens.radius.xs,
+                      backgroundColor: modalOrderType === 'reseller' ? tokens.surface : 'transparent',
+                      borderWidth: modalOrderType === 'reseller' ? 1.5 : 0,
+                      borderColor: modalOrderType === 'reseller' ? tokens.warning : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 7,
+                      opacity: pressed ? 0.8 : 1,
+                      ...(modalOrderType === 'reseller'
+                        ? {
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 1 },
+                            shadowOpacity: 0.08,
+                            shadowRadius: 2,
+                            elevation: 1,
+                          }
+                        : {}),
+                    })}
+                  >
+                    <LuStore size={15} color={modalOrderType === 'reseller' ? tokens.warning : tokens.textMuted} />
+                    <Text
+                      fontSize={13}
+                      fontWeight={modalOrderType === 'reseller' ? '800' : '600'}
+                      color={modalOrderType === 'reseller' ? tokens.warning : tokens.textSecondary}
+                      letterSpacing={0.2}
+                    >
+                      Reseller
+                    </Text>
+                  </Pressable>
+                </XStack>
+
+                {/* If Reseller: Optional Reseller / Boutique Name Input */}
+                {modalOrderType === 'reseller' && (
+                  <YStack gap={4}>
+                    <Text fontSize={10} fontWeight="700" color={tokens.textSecondary}>
+                      Reseller / Boutique Name (Optional)
+                    </Text>
+                    <TextInput
+                      value={modalResellerName}
+                      onChangeText={handleChangeResellerName}
+                      placeholder="e.g. Priya Silk Sarees (leave empty for blank sender)"
+                      placeholderTextColor={tokens.textMuted}
+                      style={{
+                        height: 38,
+                        borderRadius: tokens.radius.sm,
+                        borderWidth: 1,
+                        borderColor: tokens.border,
+                        backgroundColor: tokens.background,
+                        paddingHorizontal: 10,
+                        fontSize: 12,
+                        fontWeight: '700',
+                        color: tokens.text,
+                      }}
+                    />
+                  </YStack>
+                )}
+              </YStack>
+
               {/* Action Button: Create Forward Order */}
               <Pressable
                 accessibilityRole="button"
@@ -1367,59 +1639,51 @@ export function ForwardOrderLabelModal({
                2. PDF & AUDIT VIEW: PDF in place of form + Collapsed Audit Form
                ───────────────────────────────────────────────────────────── */
             <YStack gap={16}>
-              {/* ── PDF Shipping Label Preview Tile ── */}
+              {/* ── PDF Shipping Label Preview Area (Full Screen Width) ── */}
               <YStack
-                borderRadius={tokens.radius.md}
-                borderWidth={1}
-                borderColor={tokens.border}
-                backgroundColor={tokens.surface}
+                width="100%"
+                backgroundColor="#FFFFFF"
+                borderBottomWidth={1}
+                borderBottomColor={tokens.border}
                 overflow="hidden"
                 gap={0}
               >
-                {/* Tile Header with AWB Tracking Badge & Full Preview CTA */}
-                <XStack
-                  backgroundColor={tokens.surfaceRaised}
-                  paddingHorizontal={14}
-                  paddingVertical={10}
-                  borderBottomWidth={1}
-                  borderBottomColor={tokens.border}
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <XStack alignItems="center" gap={6}>
-                    <LuFileText size={16} color={tokens.accent} />
-                    <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                      DELHIVERY SHIPPING LABEL
-                    </Text>
-                  </XStack>
-
-                  {/* AWB Pill */}
-                  <XStack
-                    alignItems="center"
-                    gap={4}
-                    backgroundColor="rgba(0,0,0,0.85)"
-                    paddingHorizontal={8}
-                    paddingVertical={4}
-                    borderRadius={tokens.radius.sm}
-                  >
-                    <Text fontSize={9} fontWeight="700" color="#94A3B8">
-                      AWB:
-                    </Text>
-                    <Text fontSize={11} fontWeight="900" color="#FFFFFF">
-                      {generatedAwb}
-                    </Text>
-                  </XStack>
-                </XStack>
-
                 {/* PDF Viewer / Interactive Embed Area */}
                 <YStack
-                  height={340}
+                  width="100%"
+                  height={
+                    Platform.OS === 'web' && resolvedPdfUrl
+                      ? Math.max(520, Math.round(screenWidth * 1.45))
+                      : Math.round(screenWidth / (labelAspectRatio || (4 / 6)))
+                  }
                   backgroundColor="#FFFFFF"
                   alignItems="center"
                   justifyContent="center"
                   position="relative"
                   overflow="hidden"
                 >
+                  {/* Floating AWB Badge */}
+                  {generatedAwb ? (
+                    <XStack
+                      position="absolute"
+                      top={12}
+                      right={12}
+                      zIndex={3}
+                      alignItems="center"
+                      gap={4}
+                      backgroundColor="rgba(15, 23, 42, 0.85)"
+                      paddingHorizontal={10}
+                      paddingVertical={5}
+                      borderRadius={tokens.radius.sm}
+                    >
+                      <Text fontSize={10} fontWeight="700" color="#94A3B8">
+                        AWB:
+                      </Text>
+                      <Text fontSize={12} fontWeight="900" color="#FFFFFF">
+                        {generatedAwb}
+                      </Text>
+                    </XStack>
+                  ) : null}
                   {Platform.OS === 'web' && resolvedPdfUrl ? (
                     <iframe
                       src={resolvedPdfUrl}
@@ -1433,27 +1697,129 @@ export function ForwardOrderLabelModal({
                       onPress={handleOpenPdfViewer}
                       style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      <Image
-                        source={{ uri: resolvedPreviewImageUrl }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="contain"
-                      />
-                      <YStack
-                        position="absolute"
-                        bottom={10}
-                        backgroundColor="rgba(15, 23, 42, 0.85)"
-                        paddingHorizontal={12}
-                        paddingVertical={6}
-                        borderRadius={tokens.radius.sm}
-                        flexDirection="row"
-                        alignItems="center"
-                        gap={6}
-                      >
-                        <LuMaximize2 size={13} color="#FFFFFF" />
-                        <Text fontSize={11} fontWeight="800" color="#FFFFFF">
-                          Tap to Zoom / Fullscreen
-                        </Text>
-                      </YStack>
+                      {previewImageLoading && !previewImageError && (
+                        <YStack
+                          position="absolute"
+                          top={0}
+                          left={0}
+                          right={0}
+                          bottom={0}
+                          alignItems="center"
+                          justifyContent="center"
+                          backgroundColor={tokens.surface}
+                          gap={8}
+                          zIndex={2}
+                        >
+                          <ActivityIndicator size="small" color={tokens.accent} />
+                          <Text fontSize={11} color={tokens.textMuted} fontWeight="600">
+                            Loading shipping label preview...
+                          </Text>
+                        </YStack>
+                      )}
+
+                      {previewImageError ? (
+                        <YStack
+                          width="100%"
+                          height="100%"
+                          alignItems="center"
+                          justifyContent="center"
+                          padding={16}
+                          gap={10}
+                          backgroundColor={tokens.surface}
+                        >
+                          <LuFileText size={36} color={tokens.textMuted} />
+                          <Text fontSize={12} fontWeight="700" color={tokens.textSecondary} textAlign="center">
+                            Label image preview unavailable
+                          </Text>
+                          <XStack gap={8}>
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setPreviewImageError(false);
+                                setPreviewImageLoading(true);
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: tokens.radius.sm,
+                                backgroundColor: tokens.surfaceRaised,
+                                borderWidth: 1,
+                                borderColor: tokens.border,
+                              }}
+                            >
+                              <Text fontSize={11} fontWeight="700" color={tokens.text}>
+                                Retry Preview
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleSharePdf();
+                              }}
+                              style={{
+                                paddingHorizontal: 12,
+                                paddingVertical: 6,
+                                borderRadius: tokens.radius.sm,
+                                backgroundColor: tokens.accent,
+                              }}
+                            >
+                              <Text fontSize={11} fontWeight="700" color="#FFFFFF">
+                                Open / Share PDF
+                              </Text>
+                            </Pressable>
+                          </XStack>
+                        </YStack>
+                      ) : (
+                        <Image
+                          source={{ uri: resolvedPreviewImageUrl }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="fill"
+                          onLoadStart={() => setPreviewImageLoading(true)}
+                          onLoad={(e) => {
+                            setPreviewImageLoading(false);
+                            setPreviewImageError(false);
+                            if (e?.source?.width && e?.source?.height) {
+                              const calculatedRatio = e.source.width / e.source.height;
+                              if (calculatedRatio > 0) {
+                                setLabelAspectRatio(calculatedRatio);
+                              }
+                            }
+                          }}
+                          onError={() => {
+                            setPreviewImageLoading(false);
+                            setPreviewImageError(true);
+                          }}
+                        />
+                      )}
+
+                      {!previewImageError && !previewImageLoading && (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Open Fullscreen Preview"
+                          onPress={() => setShowFullPreviewModal(true)}
+                          hitSlop={8}
+                          style={({ pressed }) => ({
+                            position: 'absolute',
+                            bottom: 12,
+                            right: 12,
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: pressed ? 'rgba(15, 23, 42, 0.95)' : 'rgba(15, 23, 42, 0.82)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(255, 255, 255, 0.25)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 3,
+                            elevation: 4,
+                          })}
+                        >
+                          <LuZoomIn size={18} color="#FFFFFF" />
+                        </Pressable>
+                      )}
                     </Pressable>
                   ) : (
                     <YStack alignItems="center" justifyContent="center" padding={20} gap={12} width="100%">
@@ -1507,6 +1873,7 @@ export function ForwardOrderLabelModal({
                  COLLAPSED NON-EDITABLE FORM FOR AUDIT PURPOSE (BELOW PDF)
                  ───────────────────────────────────────────────────────────── */}
               <YStack
+                marginHorizontal={16}
                 backgroundColor={tokens.surface}
                 borderRadius={tokens.radius.md}
                 borderWidth={1}
@@ -1741,28 +2108,97 @@ export function ForwardOrderLabelModal({
             shadowRadius={4}
             elevation={8}
           >
-            {/* Row 1: Schedule Pickup CTA */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Schedule Delhivery Pickup"
-              onPress={() => setShowSchedulePickup(true)}
-              style={({ pressed }) => ({
-                height: 42,
-                borderRadius: tokens.radius.sm,
-                borderWidth: 1.5,
-                borderColor: tokens.accent,
-                backgroundColor: pressed ? `${tokens.accent}15` : `${tokens.accent}0A`,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 8,
-              })}
-            >
-              <LuCalendar size={16} color={tokens.accent} />
-              <Text fontSize={12} fontWeight="800" color={tokens.accent} letterSpacing={0.5}>
-                SCHEDULE PICKUP
-              </Text>
-            </Pressable>
+            {/* Row 1: Schedule Pickup CTA / Scheduled Status Banner */}
+            {scheduledPickupInfo ? (
+              <XStack
+                paddingHorizontal={14}
+                paddingVertical={8}
+                borderRadius={tokens.radius.sm}
+                borderWidth={1.5}
+                borderColor="#16a34a"
+                backgroundColor="#16a34a0D"
+                alignItems="center"
+                justifyContent="space-between"
+              >
+                <XStack alignItems="center" gap={10} flex={1}>
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 14,
+                      backgroundColor: '#16a34a18',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <LuCheckCircle2 size={16} color="#16a34a" />
+                  </View>
+                  <YStack gap={1} flex={1}>
+                    <XStack alignItems="center" gap={6} flexWrap="wrap">
+                      <Text fontSize={12} fontWeight="800" color="#16a34a" letterSpacing={0.3}>
+                        PICKUP SCHEDULED
+                      </Text>
+                      {scheduledPickupInfo.pickupId ? (
+                        <Text fontSize={10} fontWeight="700" color="#64748B">
+                          #{scheduledPickupInfo.pickupId}
+                        </Text>
+                      ) : null}
+                    </XStack>
+                    <XStack alignItems="center" gap={4}>
+                      <LuClock size={11} color="#64748B" />
+                      <Text fontSize={11} fontWeight="600" color={tokens.textSecondary || '#475569'}>
+                        {scheduledPickupInfo.displayInfo || `${scheduledPickupInfo.pickupDate} • ${scheduledPickupInfo.pickupTime}`}
+                      </Text>
+                    </XStack>
+                  </YStack>
+                </XStack>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Reschedule Delhivery Pickup"
+                  onPress={() => setShowSchedulePickup(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: tokens.radius.xs || 4,
+                    borderWidth: 1,
+                    borderColor: tokens.accent,
+                    backgroundColor: pressed ? `${tokens.accent}20` : `${tokens.accent}10`,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                  })}
+                >
+                  <LuRefreshCw size={12} color={tokens.accent} />
+                  <Text fontSize={11} fontWeight="800" color={tokens.accent} letterSpacing={0.3}>
+                    RESCHEDULE
+                  </Text>
+                </Pressable>
+              </XStack>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Schedule Delhivery Pickup"
+                onPress={() => setShowSchedulePickup(true)}
+                style={({ pressed }) => ({
+                  height: 42,
+                  borderRadius: tokens.radius.sm,
+                  borderWidth: 1.5,
+                  borderColor: tokens.accent,
+                  backgroundColor: pressed ? `${tokens.accent}15` : `${tokens.accent}0A`,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                })}
+              >
+                <LuCalendar size={16} color={tokens.accent} />
+                <Text fontSize={12} fontWeight="800" color={tokens.accent} letterSpacing={0.5}>
+                  SCHEDULE PICKUP
+                </Text>
+              </Pressable>
+            )}
 
             {/* Row 2: Copy AWB + Share PDF */}
             <XStack gap={12} alignItems="center">
@@ -1780,12 +2216,14 @@ export function ForwardOrderLabelModal({
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexDirection: 'row',
-                  gap: 8,
                 })}
               >
-                <LuCopy size={16} color={tokens.text} />
-                <Text fontSize={12} fontWeight="800" color={tokens.text}>
-                  {copiedAwb ? 'AWB COPIED ✓' : `COPY AWB (${generatedAwb || 'AWB'})`}
+                <Text fontSize={12} fontWeight="800" color={tokens.text} numberOfLines={1}>
+                  {copiedAwb
+                    ? 'AWB COPIED ✓'
+                    : activeAwb
+                    ? `COPY AWB ${activeAwb}`
+                    : 'COPY AWB'}
                 </Text>
               </Pressable>
 
@@ -1945,168 +2383,101 @@ export function ForwardOrderLabelModal({
           </Modal>
         )}
 
-        {/* ── Fullscreen Shipping Label Preview Modal ── */}
+        {/* ── Fullscreen Shipping Label Preview (Pan & Zoom Image, Dismiss on Back) ── */}
         <Modal
           visible={showFullPreviewModal}
-          transparent={false}
-          animationType="slide"
+          transparent={true}
+          animationType="fade"
           onRequestClose={() => setShowFullPreviewModal(false)}
         >
-          <YStack flex={1} backgroundColor="#0F172A" paddingTop={insets.top}>
-            {/* Header */}
-            <XStack
-              height={56}
-              paddingHorizontal={16}
-              alignItems="center"
-              justifyContent="space-between"
-              backgroundColor="#1E293B"
-              borderBottomWidth={1}
-              borderBottomColor="#334155"
-            >
-              <XStack alignItems="center" gap={10} flex={1}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close Preview"
-                  onPress={() => setShowFullPreviewModal(false)}
-                  hitSlop={12}
-                  style={({ pressed }) => ({
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: pressed ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  })}
-                >
-                  <LuArrowLeft size={22} color="#FFFFFF" />
-                </Pressable>
-                <YStack flex={1}>
-                  <Text fontSize={14} fontWeight="800" color="#FFFFFF" numberOfLines={1}>
-                    Shipping Label Preview
-                  </Text>
-                  <Text fontSize={11} color="#94A3B8" numberOfLines={1}>
-                    AWB {generatedAwb} • Delhivery Thermal (4×6)
-                  </Text>
-                </YStack>
-              </XStack>
-
-              <XStack alignItems="center" gap={8}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Share Label"
-                  onPress={handleSharePdf}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    backgroundColor: pressed ? '#334155' : 'rgba(255,255,255,0.08)',
-                    paddingHorizontal: 12,
-                    paddingVertical: 7,
-                    borderRadius: tokens.radius.sm,
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.15)',
-                  })}
-                >
-                  <LuShare2 size={15} color="#FFFFFF" />
-                  <Text fontSize={12} fontWeight="700" color="#FFFFFF">
-                    Share
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  onPress={() => setShowFullPreviewModal(false)}
-                  hitSlop={8}
-                  style={({ pressed }) => ({
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: pressed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
-                  })}
-                >
-                  <LuX size={20} color="#FFFFFF" />
-                </Pressable>
-              </XStack>
-            </XStack>
-
-            {/* High-res Thermal Label Canvas with Native Pinch, Pan, and Double-Tap Zoom */}
-            <YStack
-              flex={1}
-              alignItems="center"
-              justifyContent="center"
-              padding={16}
-              backgroundColor="#0F172A"
-            >
-              {resolvedPreviewImageUrl ? (
-                <ZoomableImage
-                  uri={resolvedPreviewImageUrl}
-                  containerWidth={Dimensions.get('window').width}
-                  containerHeight={Dimensions.get('window').height - 180}
-                  contentFit="contain"
-                  isActive={showFullPreviewModal}
-                />
-              ) : (
-                <YStack alignItems="center" justifyContent="center" gap={12}>
-                  <LuFileText size={48} color="#94A3B8" />
-                  <Text fontSize={14} color="#94A3B8">
-                    Preview unavailable
-                  </Text>
-                </YStack>
-              )}
-            </YStack>
-
-            {/* Bottom Bar with Actions */}
-            <XStack
-              paddingHorizontal={16}
-              paddingVertical={12}
-              backgroundColor="#1E293B"
-              borderTopWidth={1}
-              borderTopColor="#334155"
-              alignItems="center"
-              justifyContent="space-between"
-              gap={12}
-            >
-              <YStack flex={1}>
-                <Text fontSize={12} fontWeight="700" color="#F1F5F9">
-                  Ready for Thermal Printing
-                </Text>
-                <Text fontSize={10} color="#94A3B8">
-                  Pinch or double tap to zoom in on barcode
-                </Text>
-              </YStack>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <YStack flex={1} backgroundColor="rgba(0, 0, 0, 0.95)" position="relative">
+              {/* Floating Back / Dismiss Button */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Share PDF to Print or External App"
-                onPress={handleSharePdf}
+                accessibilityLabel="Back"
+                onPress={() => setShowFullPreviewModal(false)}
+                hitSlop={14}
                 style={({ pressed }) => ({
-                  flexDirection: 'row',
+                  position: 'absolute',
+                  top: Math.max(insets.top + 12, 24),
+                  left: 16,
+                  zIndex: 20,
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
                   alignItems: 'center',
-                  gap: 6,
-                  backgroundColor: pressed ? '#1D4ED8' : tokens.accent,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: tokens.radius.sm,
+                  justifyContent: 'center',
+                  backgroundColor: pressed ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.75)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.2)',
                 })}
               >
-                <LuShare2 size={16} color="#FFFFFF" />
-                <Text fontSize={13} fontWeight="800" color="#FFFFFF">
-                  Share / Print PDF
-                </Text>
+                <LuArrowLeft size={22} color="#FFFFFF" />
               </Pressable>
-            </XStack>
-          </YStack>
+
+              {/* Floating Share PDF Button */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share PDF"
+                onPress={handleSharePdf}
+                hitSlop={14}
+                style={({ pressed }) => ({
+                  position: 'absolute',
+                  top: Math.max(insets.top + 12, 24),
+                  right: 16,
+                  zIndex: 20,
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: pressed ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.75)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.2)',
+                })}
+              >
+                <LuShare2 size={18} color="#FFFFFF" />
+              </Pressable>
+
+              {/* Immersive Pan & Zoom Image Canvas */}
+              <YStack flex={1} alignItems="center" justifyContent="center">
+                {resolvedPreviewImageUrl ? (
+                  <ZoomableImage
+                    uri={resolvedPreviewImageUrl}
+                    containerWidth={Dimensions.get('window').width}
+                    containerHeight={Dimensions.get('window').height}
+                    contentFit="contain"
+                    isActive={showFullPreviewModal}
+                  />
+                ) : (
+                  <YStack alignItems="center" justifyContent="center" gap={12}>
+                    <LuFileText size={48} color="#94A3B8" />
+                    <Text fontSize={14} color="#94A3B8">
+                      Preview unavailable
+                    </Text>
+                  </YStack>
+                )}
+              </YStack>
+            </YStack>
+          </GestureHandlerRootView>
         </Modal>
 
         {/* ── Schedule Pickup Modal ── */}
         <SchedulePickupModal
           visible={showSchedulePickup}
           onDismiss={() => setShowSchedulePickup(false)}
-          onSuccess={() => setShowSchedulePickup(false)}
+          onSuccess={(pickupInfo) => {
+            setShowSchedulePickup(false);
+            if (pickupInfo) {
+              setScheduledPickupInfo(pickupInfo);
+            }
+          }}
           pickupLocation={selectedWarehouse?.name || 'HYDERABAD'}
           expectedPackageCount={1}
+          orderGrpId={orderGrpId}
+          awbNumber={generatedAwb || initialAwb}
+          isReschedule={Boolean(scheduledPickupInfo)}
         />
 
         {/* ── Design System Feedback Dialog (Success, Validation & Error) ── */}

@@ -20,7 +20,6 @@ import {
   LuMapPin,
   LuPhone,
   LuUser,
-  LuTruck,
 } from 'react-icons/lu';
 import { useTheme } from '../../../theme';
 
@@ -392,7 +391,6 @@ export function DelhiveryWarehousesView({
               const addressLine2 = warehouse.addressLine2 || warehouse.address_line2 || '';
               const contactPerson = warehouse.contactPerson || warehouse.contact_person || '';
               const isCentral = !!(warehouse.isCentral ?? warehouse.is_central);
-              const isRegistered = warehouse.registeredWithDelhivery ?? warehouse.isRegistered ?? true;
 
               return (
                 <YStack
@@ -422,31 +420,6 @@ export function DelhiveryWarehousesView({
                         <YStack>
                           <LuStar size={13.5} color="#F59E0B" fill="#F59E0B" />
                         </YStack>
-                      )}
-
-                      {/* Delhivery Logo Micro-Badge */}
-                      {isRegistered && (
-                        <XStack
-                          alignItems="center"
-                          gap={3.5}
-                          paddingHorizontal={5.5}
-                          paddingVertical={2}
-                          borderRadius={3.5}
-                          backgroundColor="#FEF2F2"
-                          borderWidth={1}
-                          borderColor="#FECACA"
-                        >
-                          <LuTruck size={10} color="#DC2626" />
-                          <Text
-                            fontSize={9}
-                            fontWeight="900"
-                            color="#DC2626"
-                            letterSpacing={0.4}
-                            style={{ includeFontPadding: false } as any}
-                          >
-                            DELHIVERY
-                          </Text>
-                        </XStack>
                       )}
                     </XStack>
 

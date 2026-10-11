@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DeepLens.Infrastructure.Clients.Delhivery;
@@ -270,9 +271,11 @@ public class DelhiveryPickupRequest
 public class DelhiveryPickupResponse
 {
     [JsonPropertyName("pickup_id")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? PickupId { get; set; }
 
     [JsonPropertyName("pickup_token")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? PickupToken { get; set; }
 
     [JsonPropertyName("pickup_time")]
@@ -292,6 +295,54 @@ public class DelhiveryPickupResponse
 
     [JsonPropertyName("message")]
     public string? Message { get; set; }
+
+    [JsonPropertyName("status")]
+    public bool? Status { get; set; }
+
+    [JsonPropertyName("success")]
+    public bool? Success { get; set; }
+
+    [JsonPropertyName("data")]
+    public JsonElement? Data { get; set; }
+
+    [JsonPropertyName("error")]
+    public JsonElement? Error { get; set; }
+
+    public string? GetEffectiveMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(Message))
+            return Message;
+
+        if (Data.HasValue)
+        {
+            if (Data.Value.ValueKind == JsonValueKind.String)
+            {
+                var s = Data.Value.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+            else if (Data.Value.ValueKind == JsonValueKind.Object && Data.Value.TryGetProperty("message", out var dataMsg))
+            {
+                var s = dataMsg.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+        }
+
+        if (Error.HasValue)
+        {
+            if (Error.Value.ValueKind == JsonValueKind.String)
+            {
+                var s = Error.Value.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+            else if (Error.Value.ValueKind == JsonValueKind.Object && Error.Value.TryGetProperty("message", out var errorMsg))
+            {
+                var s = errorMsg.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+        }
+
+        return null;
+    }
 }
 
 // --- 5. Tracking ---
@@ -407,9 +458,11 @@ public class DelhiveryConsignee
     public string? State { get; set; }
 
     [JsonPropertyName("Address1")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? Address1 { get; set; }
 
     [JsonPropertyName("Phone")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
     public string? Phone { get; set; }
 }
 

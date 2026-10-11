@@ -146,7 +146,7 @@ public class LogisticsRepository : ILogisticsRepository
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         var result = await connection.QueryAsync<Warehouse>(@"
             SELECT 
-                id, name, code, 
+                id, name, alias as Alias, code, 
                 address_line1 as AddressLine1, 
                 address_line2 as AddressLine2, 
                 city, state, pincode, phone, 
@@ -167,7 +167,7 @@ public class LogisticsRepository : ILogisticsRepository
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         return await connection.QuerySingleOrDefaultAsync<Warehouse>(@"
             SELECT 
-                id, name, code, 
+                id, name, alias as Alias, code, 
                 address_line1 as AddressLine1, 
                 address_line2 as AddressLine2, 
                 city, state, pincode, phone, 
@@ -186,7 +186,7 @@ public class LogisticsRepository : ILogisticsRepository
         using var connection = await _dbConnectionFactory.CreateConnectionAsync();
         return await connection.QueryFirstOrDefaultAsync<Warehouse>(@"
             SELECT 
-                id, name, code, 
+                id, name, alias as Alias, code, 
                 address_line1 as AddressLine1, 
                 address_line2 as AddressLine2, 
                 city, state, pincode, phone, 
@@ -207,11 +207,11 @@ public class LogisticsRepository : ILogisticsRepository
 
         await connection.ExecuteAsync(@"
             INSERT INTO public.warehouses (
-                id, name, code, address_line1, address_line2, 
+                id, name, alias, code, address_line1, address_line2, 
                 city, state, pincode, phone, contact_person, 
                 is_central, is_starred, is_active, created_at
             ) VALUES (
-                @Id, @Name, @Code, @AddressLine1, @AddressLine2, 
+                @Id, @Name, @Alias, @Code, @AddressLine1, @AddressLine2, 
                 @City, @State, @Pincode, @Phone, @ContactPerson, 
                 @IsCentral, @IsStarred, @IsActive, @CreatedAt
             )",
@@ -219,6 +219,7 @@ public class LogisticsRepository : ILogisticsRepository
             {
                 Id = id,
                 warehouse.Name,
+                Alias = string.IsNullOrWhiteSpace(warehouse.Alias) ? null : warehouse.Alias.Trim(),
                 warehouse.Code,
                 warehouse.AddressLine1,
                 warehouse.AddressLine2,
@@ -242,6 +243,7 @@ public class LogisticsRepository : ILogisticsRepository
         var affected = await connection.ExecuteAsync(@"
             UPDATE public.warehouses SET
                 name = @Name,
+                alias = @Alias,
                 code = @Code,
                 address_line1 = @AddressLine1,
                 address_line2 = @AddressLine2,
@@ -258,6 +260,7 @@ public class LogisticsRepository : ILogisticsRepository
             {
                 warehouse.Id,
                 warehouse.Name,
+                Alias = string.IsNullOrWhiteSpace(warehouse.Alias) ? null : warehouse.Alias.Trim(),
                 warehouse.Code,
                 warehouse.AddressLine1,
                 warehouse.AddressLine2,

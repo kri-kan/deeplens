@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { StyleSheet, ScrollView, View, Alert, RefreshControl, Platform } from 'react-native';
+import { StyleSheet, ScrollView, View, Alert, RefreshControl, Platform, BackHandler } from 'react-native';
 import {
   Surface,
   Text,
@@ -106,8 +106,20 @@ export default function ModalScreen() {
       if (result.updateAvailable && result.applied) {
         Alert.alert(
           'Update Ready',
-          `Version ${result.newVersion || 'latest'} has been downloaded and staged. Please swipe away and restart Vayyari to apply it.`,
-          [{ text: 'OK' }]
+          `Version ${result.newVersion || 'latest'} has been downloaded and staged. Would you like to restart Vayyari now to activate it?`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Restart Now',
+              onPress: () => {
+                if (Platform.OS === 'android') {
+                  BackHandler.exitApp();
+                } else if (Platform.OS === 'web') {
+                  window.location.reload();
+                }
+              },
+            },
+          ]
         );
       } else if (result.updateAvailable && !result.applied) {
         Alert.alert(

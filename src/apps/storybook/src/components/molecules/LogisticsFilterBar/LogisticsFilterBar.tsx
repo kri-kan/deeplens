@@ -28,9 +28,10 @@ export interface LogisticsFilterBarProps {
 
 export const DEFAULT_LOGISTICS_FILTERS: FilterOption[] = [
   { label: 'All', value: 'All' },
-  { label: 'Pending Fulfillment', value: 'PendingFulfillment' },
-  { label: 'In Procurement', value: 'InProcurement' },
+  { label: 'Ready to Ship', value: 'ReadyToShip' },
+  { label: 'Pickup Scheduled', value: 'PickupScheduled' },
   { label: 'In Transit', value: 'InTransit' },
+  { label: 'Out for Delivery', value: 'OutForDelivery' },
   { label: 'NDR Action Needed', value: 'NdrActionNeeded' },
   { label: 'Delivered', value: 'Delivered' },
 ];
@@ -46,11 +47,17 @@ export function LogisticsFilterBar({
 
   const getFilterIcon = (val: string, color: string) => {
     switch (val) {
+      case 'ReadyToShip':
       case 'PendingFulfillment':
+        return <LuPackage size={14} color={color} />;
+      case 'PickupScheduled':
+      case 'ReadyForPickup':
         return <LuClock size={14} color={color} />;
       case 'InProcurement':
-        return <LuPackage size={14} color={color} />;
+        return <LuClock size={14} color={color} />;
       case 'InTransit':
+        return <LuTruck size={14} color={color} />;
+      case 'OutForDelivery':
         return <LuTruck size={14} color={color} />;
       case 'NdrActionNeeded':
         return <LuTriangleAlert size={14} color={color} />;

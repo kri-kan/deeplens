@@ -255,6 +255,7 @@ public class LogisticsController : ControllerBase
             {
                 Id = w.Id,
                 Name = w.Name,
+                Alias = w.Alias,
                 Code = w.Code,
                 AddressLine1 = w.AddressLine1,
                 AddressLine2 = w.AddressLine2,
@@ -292,6 +293,7 @@ public class LogisticsController : ControllerBase
             {
                 Id = w.Id,
                 Name = w.Name,
+                Alias = w.Alias,
                 Code = w.Code,
                 AddressLine1 = w.AddressLine1,
                 AddressLine2 = w.AddressLine2,
@@ -346,6 +348,7 @@ public class LogisticsController : ControllerBase
             {
                 Id = Guid.NewGuid(),
                 Name = request.Name.Trim(),
+                Alias = string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias.Trim(),
                 Code = request.Code.Trim(),
                 AddressLine1 = request.AddressLine1.Trim(),
                 AddressLine2 = request.AddressLine2?.Trim(),
@@ -390,6 +393,7 @@ public class LogisticsController : ControllerBase
             {
                 Id = entity.Id,
                 Name = entity.Name,
+                Alias = entity.Alias,
                 Code = entity.Code,
                 AddressLine1 = entity.AddressLine1,
                 AddressLine2 = entity.AddressLine2,
@@ -431,6 +435,7 @@ public class LogisticsController : ControllerBase
             }
 
             if (!string.IsNullOrWhiteSpace(request.Name)) existing.Name = request.Name.Trim();
+            if (request.Alias != null) existing.Alias = string.IsNullOrWhiteSpace(request.Alias) ? null : request.Alias.Trim();
             if (!string.IsNullOrWhiteSpace(request.Code)) existing.Code = request.Code.Trim();
             if (!string.IsNullOrWhiteSpace(request.AddressLine1)) existing.AddressLine1 = request.AddressLine1.Trim();
             if (request.AddressLine2 != null) existing.AddressLine2 = request.AddressLine2.Trim();
@@ -466,6 +471,7 @@ public class LogisticsController : ControllerBase
             {
                 Id = existing.Id,
                 Name = existing.Name,
+                Alias = existing.Alias,
                 Code = existing.Code,
                 AddressLine1 = existing.AddressLine1,
                 AddressLine2 = existing.AddressLine2,
@@ -819,6 +825,10 @@ public class LogisticsController : ControllerBase
         try
         {
             var response = await _pickupService.SchedulePickupAsync(request, ct);
+            if (!response.Success)
+            {
+                return BadRequest(response);
+            }
             return Ok(response);
         }
         catch (Exception ex)

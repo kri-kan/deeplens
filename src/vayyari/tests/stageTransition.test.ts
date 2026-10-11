@@ -15,7 +15,6 @@ describe('Stage Transition and Sequential Workflow Rules', () => {
     assert.deepStrictEqual(ORDER_STAGES, [
       'Unconfirmed',
       'Confirmed',
-      'Processed',
       'Placed',
       'Delivered',
     ]);
@@ -25,7 +24,6 @@ describe('Stage Transition and Sequential Workflow Rules', () => {
     assert.strictEqual(getStageColor('Unconfirmed'), '#94A3B8');
     assert.strictEqual(getStageColor('unconfirmed'), '#94A3B8');
     assert.strictEqual(getStageColor('Confirmed'), '#F59E0B');
-    assert.strictEqual(getStageColor('Processed'), '#6366F1');
     assert.strictEqual(getStageColor('Placed'), '#2563EB');
     assert.strictEqual(getStageColor('Delivered'), '#10B981');
     assert.strictEqual(getStageColor('Unknown'), '#64748B');
@@ -34,16 +32,14 @@ describe('Stage Transition and Sequential Workflow Rules', () => {
   test('isAdjacentStage allows only index delta of ±1', () => {
     assert.strictEqual(isAdjacentStage('Unconfirmed', 'Confirmed'), true);
     assert.strictEqual(isAdjacentStage('Confirmed', 'Unconfirmed'), true);
-    assert.strictEqual(isAdjacentStage('Confirmed', 'Processed'), true);
-    assert.strictEqual(isAdjacentStage('Processed', 'Confirmed'), true);
-    assert.strictEqual(isAdjacentStage('Processed', 'Placed'), true);
+    assert.strictEqual(isAdjacentStage('Confirmed', 'Placed'), true);
+    assert.strictEqual(isAdjacentStage('Placed', 'Confirmed'), true);
     assert.strictEqual(isAdjacentStage('Placed', 'Delivered'), true);
+    assert.strictEqual(isAdjacentStage('Delivered', 'Placed'), true);
 
     // Skips / non-adjacent
-    assert.strictEqual(isAdjacentStage('Unconfirmed', 'Processed'), false);
     assert.strictEqual(isAdjacentStage('Unconfirmed', 'Placed'), false);
     assert.strictEqual(isAdjacentStage('Unconfirmed', 'Delivered'), false);
-    assert.strictEqual(isAdjacentStage('Confirmed', 'Placed'), false);
     assert.strictEqual(isAdjacentStage('Confirmed', 'Delivered'), false);
   });
 
@@ -66,7 +62,7 @@ describe('Stage Transition and Sequential Workflow Rules', () => {
 
     // Placed requiring label without label
     const labelMissing = canTransitionStage({
-      currentStage: 'Processed',
+      currentStage: 'Confirmed',
       targetStage: 'Placed',
       requiresLabel: true,
       hasLabel: false,
@@ -76,7 +72,7 @@ describe('Stage Transition and Sequential Workflow Rules', () => {
 
     // Placed with label present
     const labelOk = canTransitionStage({
-      currentStage: 'Processed',
+      currentStage: 'Confirmed',
       targetStage: 'Placed',
       requiresLabel: true,
       hasLabel: true,
@@ -101,14 +97,12 @@ describe('Stage Transition and Sequential Workflow Rules', () => {
     assert.deepStrictEqual(placed.nodes, [
       'Unconfirmed',
       'Confirmed',
-      'Processed',
       'Placed',
     ]);
-    assert.strictEqual(placed.transitions.length, 3);
+    assert.strictEqual(placed.transitions.length, 2);
     assert.strictEqual(placed.transitions[0].action, 'Confirmed');
-    assert.strictEqual(placed.transitions[1].action, 'Processed');
-    assert.strictEqual(placed.transitions[2].action, 'Label Ready');
-    assert.strictEqual(placed.transitions[2].actorInitials, 'SK');
+    assert.strictEqual(placed.transitions[1].action, 'Label Ready');
+    assert.strictEqual(placed.transitions[1].actorInitials, 'SK');
   });
 
   test('resolveInitials resolves initials from full name and email', () => {

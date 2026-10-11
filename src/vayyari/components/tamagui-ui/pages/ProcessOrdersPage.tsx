@@ -25,74 +25,24 @@ import {
 import { StatusBadge, StatusIntent } from '../atoms/StatusBadge';
 import { CapsuleSegmentControl } from '../atoms/CapsuleSegmentControl';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-export type ProcessStage = 'confirmed' | 'processed' | 'placed' | 'delivered' | 'archived';
-export type ViewMode = 'groups' | 'orders';
+import {
+  ProcessStage,
+  STAGES,
+  getStatusIntent,
+  stageRank,
+  leastStage,
+  statusToTab,
+} from '@/utils/processOrderRules';
 
-const STAGE_RANK: Record<string, number> = {
-  unconfirmed: 0,
-  confirmed: 1,
-  processed: 2,
-  processing: 2,
-  placed: 3,
-  dispatched: 3,
-  delivered: 4,
-  archived: 5,
+export {
+  ProcessStage,
+  STAGES,
+  stageRank,
+  leastStage,
+  statusToTab,
 };
 
-/** Delivered groups older than this are treated as archived (client-side). */
-const ARCHIVE_THRESHOLD_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
-
-const STAGES: { key: ProcessStage; label: string }[] = [
-  { key: 'confirmed', label: 'Confirmed' },
-  { key: 'processed', label: 'Processed' },
-  { key: 'placed', label: 'Placed' },
-  { key: 'delivered', label: 'Delivered' },
-  { key: 'archived', label: 'Archived' },
-];
-
-function getStatusIntent(stage: string): StatusIntent {
-  const s = (stage || '').toLowerCase();
-  if (s === 'archived') return 'attention';
-  if (s === 'delivered') return 'positive';
-  if (s === 'placed' || s === 'dispatched') return 'info';
-  if (s === 'processed' || s === 'processing') return 'info';
-  if (s === 'confirmed') return 'info';
-  return 'attention';
-}
-
-function stageRank(stage?: string): number {
-  return STAGE_RANK[(stage || 'unconfirmed').toLowerCase()] ?? 0;
-}
-
-/** Derive the least stage from an array of groups belonging to one order. */
-function leastStage(groups: OrderGroup[]): string {
-  if (!groups.length) return 'confirmed';
-  return groups.reduce((least, g) => {
-    return stageRank(g.status) < stageRank(least) ? g.status : least;
-  }, groups[0].status);
-}
-
-/**
- * Map a raw DB status (+ optional updatedAt) to one of the 5 tab keys.
- * Delivered groups older than ARCHIVE_THRESHOLD_MS are treated as 'archived'.
- */
-function statusToTab(status: string, updatedAt?: string, createdAt?: string): ProcessStage {
-  const s = (status || '').toLowerCase();
-  if (s === 'delivered' || s === 'archived') {
-    const deliveredAt = updatedAt || createdAt;
-    if (deliveredAt) {
-      const age = Date.now() - new Date(deliveredAt).getTime();
-      if (age >= ARCHIVE_THRESHOLD_MS) return 'archived';
-    }
-    return 'delivered';
-  }
-  if (s === 'placed' || s === 'dispatched') return 'placed';
-  if (s === 'processed' || s === 'processing') return 'processed';
-  return 'confirmed';
-}
+export type ViewMode = 'groups' | 'orders';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Interfaces
@@ -124,7 +74,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [activeStage, setActiveStage] = useState<ProcessStage>('confirmed');
+  const [activeStage, setActiveStage] = useState<ProcessStage>('unconfirmed');
   const [viewMode, setViewMode] = useState<ViewMode>('groups');
   const [allGroups, setAllGroups] = useState<OrderGroup[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -138,7 +88,7 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
       else setIsLoading(true);
 
       // Fetch across all relevant stages in parallel
-      const stages = ['confirmed', 'processed', 'placed', 'delivered'];
+      const stages = ['unconfirmed', 'confirmed', 'processed', 'placed', 'delivered'];
       const results = await Promise.allSettled(
         stages.map((stage) =>
           searchApiClient.get<OrderGroup[]>(`/api/v1/orderid/groups/processing`, {
@@ -248,8 +198,8 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
   // ─── Count badges per tab ─────────────────────────────────────────────────
   const tabCounts = useMemo(() => {
     const counts: Record<ProcessStage, number> = {
+      unconfirmed: 0,
       confirmed: 0,
-      processed: 0,
       placed: 0,
       delivered: 0,
       archived: 0,

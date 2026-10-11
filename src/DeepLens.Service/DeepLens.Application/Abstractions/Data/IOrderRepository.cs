@@ -48,7 +48,10 @@ public interface IOrderRepository
         string? shippingPincode = null,
         bool? isServiceable = null,
         OrderStatus? status = null,
-        bool? needLabel = null);
+        bool? needLabel = null,
+        string? orderType = null,
+        string? resellerName = null,
+        bool? isAddressReviewed = null);
     Task DeleteItemsAsync(int orderInternalId);
     Task AddOrderItemAsync(
         int orderInternalId, 
@@ -64,11 +67,14 @@ public interface IOrderRepository
         string? itemId = null,
         string? orderGrpId = null);
     Task CreateOrUpdateOrderGroupAsync(OrderGroupDto group);
-    Task UpdateGroupLabelInfoAsync(string orderGrpId, string awbNumber, string labelUrl, string status = "generated");
+    Task UpdateGroupLabelInfoAsync(string orderGrpId, string awbNumber, string labelUrl);
     Task<bool> ConfirmOrderAsync(string orderId);
     Task<IEnumerable<OrderGroupDto>> GetOrderGroupsByStageAsync(string stage);
     Task<bool> UpdateGroupNeedLabelAsync(string orderGrpId, bool needLabel);
     Task<bool> CancelGroupLabelAsync(string orderGrpId, string? awbNumber = null);
+    Task<List<GroupShipmentHistoryDto>> GetGroupShipmentsAsync(string orderGrpId);
+    Task<List<GroupShipmentHistoryDto>> SyncGroupShipmentTrackingAsync(string orderGrpId, string? awbNumber = null);
+    Task<bool> ResetGroupPickupAsync(string orderGrpId, string? awbNumber = null);
     Task<bool> MarkGroupProcessedAsync(string orderGrpId);
     Task<string> FetchGroupDeliveryStatusAsync(string orderGrpId);
     Task<int> GetInternalIdAsync(string orderId);

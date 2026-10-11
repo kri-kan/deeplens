@@ -26,6 +26,7 @@ import { DetailHeader } from '@/components/tamagui-ui/molecules/DetailHeader';
 import { SourceRow, OrderSource, PaymentType } from '@/components/tamagui-ui/molecules/SourceRow';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 import { TransactionReceiptSection } from '@/components/tamagui-ui/molecules/TransactionReceiptSection';
+import { OrderTypeSection, OrderType } from '@/components/tamagui-ui/molecules/OrderTypeSection';
 import { ProductListSection, OrderItem } from './ProductListSection';
 import { GroupManagementView } from './GroupManagementView';
 import { ProductEditSheet } from './ProductEditSheet';
@@ -77,6 +78,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const [address, setAddress] = useState<AddressData | null>(null);
   const [transactionId, setTransactionId] = useState('');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [orderType, setOrderType] = useState<OrderType>('customer');
+  const [resellerName, setResellerName] = useState<string>('');
   const [groupStages, setGroupStages] = useState<Record<string, string>>({});
   const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
 
@@ -84,6 +87,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const [activeItem, setActiveItem] = useState<OrderItem | null>(null);
   const [productSheetOpen, setProductSheetOpen] = useState(false);
   const [addressSheetOpen, setAddressSheetOpen] = useState(false);
+  const [isAddressReviewed, setIsAddressReviewed] = useState(true);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [pickerState, setPickerState] = useState<{
@@ -143,6 +147,10 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         setSourceContact(resolvedContact);
         setPaymentType(res.paymentMode === 'Prepaid' ? 'prepaid' : 'cod');
 
+        const rawOrderType = String(res.orderType || '').toLowerCase();
+        setOrderType(rawOrderType === 'reseller' ? 'reseller' : 'customer');
+        setResellerName(res.resellerName || '');
+
         // Products mapping - strict canonical binding
         if (res.items && res.items.length > 0) {
           setProducts(
@@ -162,25 +170,38 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
               const rawVendor = (parsedMeta.vendor || it.vendorName || (it.vendorId ? String(it.vendorId) : '')).trim();
               const resolvedVendor = (!rawVendor || rawVendor.toLowerCase() === 'unassigned' || rawVendor.toLowerCase() === 'none') ? '' : rawVendor;
 
-              return {
-                id: it.id ? String(it.id) : `item-${idx}`,
-                productId: it.productId ?? '',
-                title: it.productTitle ?? '',
-                size: parsedMeta.size || 'Free Size',
-                quantity: it.quantity ?? 1,
-                costPerPiece: it.unitPrice ?? 0,
-                codChargePerPiece: 0,
-                amountPaid: 0,
-                vendor: resolvedVendor,
-                imageColor: '#f0e6d3',
-                photoUri: parsedMeta.photoUri,
-                catalogImageUrl: catalogImg,
-                image: photo,
-                attachmentId: parsedMeta.attachmentId || (it.attachments && it.attachments[0]?.id),
-                storagePath: parsedMeta.storagePath || (it.attachments && it.attachments[0]?.key),
-                isShared: Boolean(parsedMeta.isShared || parsedMeta.sharedAt),
-                sharedAt: parsedMeta.sharedAt || undefined,
-              };
+                const isUnconfirmed = String(res.status || '').toLowerCase() === '0' || String(res.status || '').toLowerCase() === 'unconfirmed';
+                const parsedCodCharge = typeof parsedMeta.codChargePerPiece === 'number'
+                  ? parsedMeta.codChargePerPiece
+                  : (typeof parsedMeta.codPerPiece === 'number'
+                    ? parsedMeta.codPerPiece
+                    : (typeof parsedMeta['cod/pc'] === 'number'
+                      ? parsedMeta['cod/pc']
+                      : (typeof parsedMeta.codCharge === 'number'
+                        ? parsedMeta.codCharge
+                        : undefined)));
+
+                return {
+                  id: it.id ? String(it.id) : `item-${idx}`,
+                  productId: it.productId ?? '',
+                  title: it.productTitle ?? '',
+                  size: parsedMeta.size || 'Free Size',
+                  quantity: it.quantity ?? 1,
+                  costPerPiece: it.unitPrice ?? 0,
+                  codChargePerPiece: parsedCodCharge !== undefined
+                    ? parsedCodCharge
+                    : (res.paymentMode === 'Prepaid' ? 0 : 50),
+                  amountPaid: 0,
+                  vendor: resolvedVendor,
+                  imageColor: '#f0e6d3',
+                  photoUri: parsedMeta.photoUri,
+                  catalogImageUrl: catalogImg,
+                  image: photo,
+                  attachmentId: parsedMeta.attachmentId || (it.attachments && it.attachments[0]?.id),
+                  storagePath: parsedMeta.storagePath || (it.attachments && it.attachments[0]?.key),
+                  isShared: isUnconfirmed ? false : Boolean(parsedMeta.isShared || parsedMeta.sharedAt),
+                  sharedAt: isUnconfirmed ? undefined : (parsedMeta.sharedAt || undefined),
+                };
             })
           );
         } else {
@@ -210,6 +231,10 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             state: res.shippingState,
             isDelhiveryServiceable: res.isServiceable,
           });
+        }
+
+        if (res.isAddressReviewed !== undefined && res.isAddressReviewed !== null) {
+          setIsAddressReviewed(Boolean(res.isAddressReviewed));
         }
 
         setTransactionId(res.transactionId || '');
@@ -244,7 +269,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   }, [products]);
 
   const groupLabelInfo = React.useMemo(() => {
-    const map: Record<string, { orderGrpId?: string; needLabel?: boolean; awbNumber?: string; labelUrl?: string }> = {};
+    const map: Record<string, { orderGrpId?: string; needLabel?: boolean; awbNumber?: string; labelUrl?: string; shipmentHistory?: any[] }> = {};
     if (orderData?.groups) {
       for (const g of orderData.groups) {
         const rawV = (g.vendorName || '').trim();
@@ -255,6 +280,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           needLabel: g.needLabel ?? (paymentType === 'cod'),
           awbNumber: g.awbNumber,
           labelUrl: g.labelUrl,
+          shipmentHistory: (g as any).shipmentHistory,
         };
       }
     }
@@ -263,10 +289,13 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
   const lockedVendorKeys = React.useMemo(() => {
     return distinctGroupKeys.filter((groupKey) => {
+      const stage = (groupStages[groupKey] || 'Unconfirmed').toLowerCase();
+      if (stage === 'unconfirmed' || stage === 'unformed') {
+        return false;
+      }
       const info = groupLabelInfo[groupKey];
       const isLabelNeeded = info?.needLabel ?? (paymentType === 'cod');
       const hasLabel = Boolean(info?.labelUrl || info?.awbNumber);
-      const stage = (groupStages[groupKey] || 'Unconfirmed').toLowerCase();
 
       if (isLabelNeeded) {
         return hasLabel;
@@ -316,7 +345,11 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     });
   };
 
-  const persistOrderItems = async (itemsList: OrderItem[], stagesOverride?: Record<string, string>) => {
+  const persistOrderItems = async (
+    itemsList: OrderItem[],
+    stagesOverride?: Record<string, string>,
+    orderStatusOverride?: string
+  ) => {
     try {
       const activeStages = stagesOverride || groupStages;
 
@@ -331,18 +364,30 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         )
       );
 
-      const groupsPayload: OrderGroup[] = distinctGroupKeys.map((vName, idx) => ({
-        orderGrpId: `${orderId}-G${idx + 1}`,
-        orderId: orderId,
-        vendorName: vName,
-        status: activeStages[vName] || 'Unconfirmed',
-        needLabel: paymentType === 'cod',
-      }));
+      const allUnconfirmed = distinctGroupKeys.length === 0 || distinctGroupKeys.every((k) => {
+        const st = (activeStages[k] || 'Unconfirmed').toLowerCase();
+        return st === 'unconfirmed' || st === 'unformed';
+      });
+      const effectiveOrderStatus = orderStatusOverride || (allUnconfirmed ? 'Unconfirmed' : 'Confirmed');
+
+      const groupsPayload: OrderGroup[] = distinctGroupKeys.map((vName, idx) => {
+        const info = groupLabelInfo[vName];
+        return {
+          orderGrpId: info?.orderGrpId || `${orderId}-G${idx + 1}`,
+          orderId: orderId,
+          vendorName: vName,
+          status: activeStages[vName] || 'Unconfirmed',
+          needLabel: info?.needLabel ?? (paymentType === 'cod'),
+          awbNumber: info?.awbNumber,
+          labelUrl: info?.labelUrl,
+        };
+      });
 
       const updatePayload: Partial<OrderUpdateRequest> = {
         source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
         sourceHandle: sourceContact || undefined,
         paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
+        status: effectiveOrderStatus as any,
         customerName: address?.name,
         customerPhone: address?.phone,
         customerAddress: address?.address,
@@ -353,19 +398,22 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         transactionId: transactionId || undefined,
         groups: groupsPayload,
         items: itemsList.map((p) => {
-          const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor || p.size || p.sharedAt || p.isShared)
-            ? JSON.stringify({
-                catalogImageUrl: p.catalogImageUrl,
-                photoUri: p.photoUri,
-                image: p.image || p.catalogImageUrl || p.photoUri,
-                attachmentId: p.attachmentId,
-                storagePath: p.storagePath,
-                vendor: p.vendor,
-                size: p.size,
-                sharedAt: p.sharedAt,
-                isShared: p.isShared,
-              })
-            : undefined;
+          const metaObj: Record<string, any> = {};
+          if (p.catalogImageUrl) metaObj.catalogImageUrl = p.catalogImageUrl;
+          if (p.photoUri) metaObj.photoUri = p.photoUri;
+          if (p.image || p.catalogImageUrl || p.photoUri) metaObj.image = p.image || p.catalogImageUrl || p.photoUri;
+          if (p.attachmentId) metaObj.attachmentId = p.attachmentId;
+          if (p.storagePath) metaObj.storagePath = p.storagePath;
+          if (p.vendor) metaObj.vendor = p.vendor;
+          if (p.size) metaObj.size = p.size;
+          if (p.codChargePerPiece !== undefined) {
+            metaObj.codChargePerPiece = p.codChargePerPiece;
+            metaObj['cod/pc'] = p.codChargePerPiece;
+          }
+          if (p.sharedAt) metaObj.sharedAt = p.sharedAt;
+          if (p.isShared) metaObj.isShared = p.isShared;
+
+          const meta = Object.keys(metaObj).length > 0 ? JSON.stringify(metaObj) : undefined;
 
           return {
             productId: p.productId,
@@ -389,7 +437,51 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const handleUpdateGroupStage = (groupKey: string, newStage: string) => {
     const updatedStages = { ...groupStages, [groupKey]: newStage };
     setGroupStages(updatedStages);
-    persistOrderItems(products, updatedStages);
+
+    const wasPlaced = (groupStages[groupKey] || '').toLowerCase() === 'placed';
+    const isNowConfirmed = newStage.toLowerCase() === 'confirmed';
+
+    let nextProducts = products;
+    if (
+      newStage.toLowerCase() === 'unconfirmed' ||
+      newStage.toLowerCase() === 'unformed' ||
+      (wasPlaced && isNowConfirmed)
+    ) {
+      nextProducts = products.map((p) => {
+        const raw = (p.vendor || '').trim();
+        const k = (!raw || raw.toLowerCase() === 'unassigned' || raw.toLowerCase() === 'none') ? 'Unassigned' : raw;
+        if (k === groupKey) {
+          return { ...p, isShared: false, sharedAt: undefined };
+        }
+        return p;
+      });
+      setProducts(nextProducts);
+    }
+
+    const allUnconfirmed = distinctGroupKeys.length === 0 || distinctGroupKeys.every((k) => {
+      const st = (updatedStages[k] || 'Unconfirmed').toLowerCase();
+      return st === 'unconfirmed' || st === 'unformed';
+    });
+    const nextOrderStatus = allUnconfirmed ? 'Unconfirmed' : 'Confirmed';
+
+    setOrderData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        status: nextOrderStatus,
+        groups: prev.groups?.map((g) => {
+          const rawV = (g.vendorName || '').trim();
+          const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
+          const k = isUn ? 'Unassigned' : rawV;
+          if (k === groupKey) {
+            return { ...g, status: newStage };
+          }
+          return g;
+        }),
+      };
+    });
+
+    persistOrderItems(nextProducts, updatedStages, nextOrderStatus);
   };
 
   const handleAddProduct = () => {
@@ -518,26 +610,35 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       let activeGroupStages = { ...groupStages };
       if (confirmAll) {
         distinctGroupKeys.forEach((k) => {
-          const cur = (activeGroupStages[k] || 'Unconfirmed').toLowerCase();
-          if (cur === 'unconfirmed' || cur === 'unformed') {
-            activeGroupStages[k] = 'Confirmed';
-          }
+          activeGroupStages[k] = 'Confirmed';
         });
         setGroupStages(activeGroupStages);
       }
 
-      const groupsPayload: OrderGroup[] = distinctGroupKeys.map((vName, idx) => ({
-        orderGrpId: `${orderId}-G${idx + 1}`,
-        orderId: orderId,
-        vendorName: vName,
-        status: activeGroupStages[vName] || (confirmAll ? 'Confirmed' : 'Unconfirmed'),
-        needLabel: paymentType === 'cod',
-      }));
+      const allUnconfirmed = distinctGroupKeys.length === 0 || distinctGroupKeys.every((k) => {
+        const st = (activeGroupStages[k] || 'Unconfirmed').toLowerCase();
+        return st === 'unconfirmed' || st === 'unformed';
+      });
+      const nextOrderStatus = allUnconfirmed ? 'Unconfirmed' : 'Confirmed';
+
+      const groupsPayload: OrderGroup[] = distinctGroupKeys.map((vName, idx) => {
+        const info = groupLabelInfo[vName];
+        return {
+          orderGrpId: info?.orderGrpId || `${orderId}-G${idx + 1}`,
+          orderId: orderId,
+          vendorName: vName,
+          status: activeGroupStages[vName] || (confirmAll ? 'Confirmed' : 'Unconfirmed'),
+          needLabel: info?.needLabel ?? (paymentType === 'cod'),
+          awbNumber: info?.awbNumber,
+          labelUrl: info?.labelUrl,
+        };
+      });
 
       const updatePayload: Partial<OrderUpdateRequest> = {
         source: source === 'whatsapp' ? 'WhatsApp' : source === 'instagram' ? 'Instagram' : 'None',
         sourceHandle: sourceContact || undefined,
         paymentMode: paymentType === 'cod' ? 'COD' : 'Prepaid',
+        status: nextOrderStatus as any,
         customerName: address?.name,
         customerPhone: address?.phone,
         customerAddress: address?.address,
@@ -546,6 +647,9 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         shippingCity: address?.city,
         shippingState: address?.state,
         transactionId: transactionId || undefined,
+        orderType: orderType === 'reseller' ? 'Reseller' : 'Customer',
+        resellerName: orderType === 'reseller' ? (resellerName?.trim() || undefined) : undefined,
+        isAddressReviewed: isAddressReviewed,
         groups: groupsPayload,
         items: products.map((p) => {
           const meta = (p.catalogImageUrl || p.photoUri || p.image || p.attachmentId || p.storagePath || p.vendor || p.size || p.sharedAt || p.isShared)
@@ -578,13 +682,18 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
       if (confirmAll) {
         await searchApiClient.post(API_ROUTES.ORDERS.CONFIRM(orderId), {});
-        if (orderData) {
-          setOrderData({ ...orderData, status: 'Confirmed' });
-        }
-        setSnackbarMessage(`Order #${orderId} confirmed successfully!`);
-      } else {
-        setSnackbarMessage(`Order #${orderId} saved successfully!`);
       }
+
+      setOrderData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: nextOrderStatus,
+          groups: groupsPayload,
+        };
+      });
+
+      setSnackbarMessage(confirmAll ? 'All item groups confirmed successfully!' : `Order #${orderId} saved successfully!`);
       setSnackbarVisible(true);
     } catch (err: any) {
       console.error('Failed to update/confirm order:', err);
@@ -743,7 +852,10 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   const handleGenerateGroupLabel = async (orderGrpId: string) => {
     try {
       setSaving(true);
-      const res = await searchApiClient.post<any>(`/api/v1/orderid/groups/${orderGrpId}/label`, {});
+      const res = await searchApiClient.post<any>(`/api/v1/orderid/groups/${orderGrpId}/label`, {
+        orderType: orderType,
+        resellerName: orderType === 'reseller' ? (resellerName?.trim() || undefined) : undefined,
+      });
       setSnackbarMessage(`Label generated for ${orderGrpId}! AWB: ${res.awbNumber || res.awb}`);
       setSnackbarVisible(true);
       await loadOrder();
@@ -772,18 +884,18 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
   );
 
   const derivedStageTag = React.useMemo(() => {
-    if (products.length === 0) return '';
+    if (products.length === 0 || distinctGroupKeys.length === 0) {
+      return 'Unconfirmed';
+    }
     if (distinctGroupKeys.length === 1) {
       return groupStages[distinctGroupKeys[0]] || 'Unconfirmed';
     }
     const STAGE_RANK: Record<string, number> = {
       unconfirmed: 0,
       confirmed: 1,
-      processed: 2,
-      processing: 2,
-      placed: 3,
-      dispatched: 3,
-      delivered: 4,
+      placed: 2,
+      dispatched: 2,
+      delivered: 3,
     };
     const sorted = [...distinctGroupKeys].sort((a, b) => {
       const rankA = STAGE_RANK[(groupStages[a] || 'unconfirmed').toLowerCase()] ?? 0;
@@ -793,6 +905,25 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
     const leastStage = groupStages[sorted[0]] || 'Unconfirmed';
     return `${leastStage} +${distinctGroupKeys.length - 1}`;
   }, [products.length, distinctGroupKeys, groupStages]);
+
+  const isOrderConfirmed = React.useMemo(() => {
+    if (products.length === 0 || distinctGroupKeys.length === 0) {
+      return false;
+    }
+    return distinctGroupKeys.every((k) => {
+      const st = (groupStages[k] || 'Unconfirmed').toLowerCase();
+      return st !== 'unconfirmed' && st !== 'unformed';
+    });
+  }, [products.length, distinctGroupKeys, groupStages]);
+
+  const isActiveItemConfirmed = React.useMemo(() => {
+    if (!activeItem) return false;
+    const vName = activeItem.vendor || '';
+    const isUn = !vName || vName.toLowerCase() === 'unassigned' || vName.toLowerCase() === 'none';
+    const k = isUn ? 'Unassigned' : vName;
+    const gStage = (groupStages[k] || 'Unconfirmed').toLowerCase();
+    return gStage !== 'unconfirmed' && gStage !== 'unformed';
+  }, [activeItem, groupStages]);
 
   const vendorGroups = React.useMemo(() => {
     const map = new Map<string, { key: string; vendorName: string; isUnassigned: boolean; items: OrderItem[] }>();
@@ -842,11 +973,14 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           isLocked={lockedVendorKeys.includes(targetGroup.key)}
           items={targetGroup.items}
           address={address}
+          orderType={orderType}
+          resellerName={resellerName}
+          shipmentHistory={labelInfo?.shipmentHistory}
           onUpdateItem={handleUpdateItem}
           onUpdateStage={(newStage) => {
             handleUpdateGroupStage(targetGroup.key, newStage);
           }}
-          onUpdateNeedLabel={(need) => {
+          onUpdateNeedLabel={(need: boolean, labelUpdates?: { awbNumber?: string; labelUrl?: string }) => {
             setOrderData((prev) => {
               if (!prev || !prev.groups) return prev;
               return {
@@ -855,10 +989,24 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                   const rawV = (g.vendorName || '').trim();
                   const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
                   const k = isUn ? 'Unassigned' : rawV;
-                  return k === targetGroup.key ? { ...g, needLabel: need } : g;
+                  if (k === targetGroup.key) {
+                    return {
+                      ...g,
+                      needLabel: need,
+                      awbNumber: labelUpdates !== undefined ? labelUpdates.awbNumber : (need ? g.awbNumber : undefined),
+                      labelUrl: labelUpdates !== undefined ? labelUpdates.labelUrl : (need ? g.labelUrl : undefined),
+                    };
+                  }
+                  return g;
                 }),
               };
             });
+            const grpId = labelInfo?.orderGrpId;
+            if (grpId) {
+              logisticsService.updateNeedLabel(grpId, need).catch((err) => {
+                console.warn('[AdminOrderDetailView] updateNeedLabel failed:', err);
+              });
+            }
           }}
           onSave={(newStage, need) => {
             handleUpdateGroupStage(targetGroup.key, newStage);
@@ -871,10 +1019,21 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
                     const rawV = (g.vendorName || '').trim();
                     const isUn = !rawV || rawV.toLowerCase() === 'unassigned' || rawV.toLowerCase() === 'none';
                     const k = isUn ? 'Unassigned' : rawV;
-                    return k === targetGroup.key ? { ...g, needLabel: need } : g;
+                    return k === targetGroup.key ? {
+                      ...g,
+                      needLabel: need,
+                      awbNumber: !need ? undefined : g.awbNumber,
+                      labelUrl: !need ? undefined : g.labelUrl,
+                    } : g;
                   }),
                 };
               });
+              const grpId = labelInfo?.orderGrpId;
+              if (grpId) {
+                logisticsService.updateNeedLabel(grpId, need).catch((err) => {
+                  console.warn('[AdminOrderDetailView] updateNeedLabel failed in onSave:', err);
+                });
+              }
             }
             setSnackbarMessage(`Package status updated to ${newStage}`);
             setSnackbarVisible(true);
@@ -919,6 +1078,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             source={source}
             sourceContact={sourceContact}
             paymentType={paymentType}
+            orderType={orderType}
+            resellerName={resellerName}
           />
 
 
@@ -953,6 +1114,8 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           {/* Products List Section */}
           <ProductListSection
             orderId={orderId}
+            orderStage={orderData?.status || derivedStageTag}
+            isOrderConfirmed={isOrderConfirmed}
             products={products}
             selectedIds={selectedItemIds}
             isCod={paymentType === 'cod'}
@@ -978,6 +1141,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
           {/* Address Preview Card */}
           <AddressCard
             address={address}
+            isReviewed={isAddressReviewed}
             onEditPress={() => setAddressSheetOpen(true)}
           />
 
@@ -991,6 +1155,16 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
             onUploadReceipt={handleUploadReceipt}
             onRemoveReceipt={handleRemoveReceipt}
           />
+
+          <YStack height={1} backgroundColor={tokens.border} />
+
+          {/* Order Type Section (Customer vs Reseller) */}
+          <OrderTypeSection
+            orderType={orderType}
+            onChangeOrderType={setOrderType}
+            resellerName={resellerName}
+            onChangeResellerName={setResellerName}
+          />
         </YStack>
       </ScrollView>
 
@@ -998,6 +1172,7 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       <ProductEditSheet
         visible={productSheetOpen}
         item={activeItem}
+        readOnly={isActiveItemConfirmed}
         isCod={paymentType === 'cod'}
         lockedVendorNames={lockedVendorKeys}
         onSaveItem={handleSaveItem}
@@ -1020,9 +1195,26 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
         initial={emptyAddress}
         onSave={(data: AddressData) => {
           setAddress(data);
+          setIsAddressReviewed(true);
           setAddressSheetOpen(false);
+          searchApiClient.put(API_ROUTES.ORDERS.UPDATE(orderId), {
+            customerName: data.name,
+            customerPhone: data.phone,
+            customerAddress: data.address,
+            shippingStreet: data.address,
+            shippingPincode: data.pincode,
+            shippingCity: data.city,
+            shippingState: data.state,
+            isAddressReviewed: true,
+          }).catch((err) => console.warn('Failed to persist reviewed address:', err));
         }}
-        onClose={() => setAddressSheetOpen(false)}
+        onClose={() => {
+          setAddressSheetOpen(false);
+          setIsAddressReviewed(true);
+          searchApiClient.put(API_ROUTES.ORDERS.UPDATE(orderId), {
+            isAddressReviewed: true,
+          }).catch((err) => console.warn('Failed to persist address review status:', err));
+        }}
       />
 
       {/* ── Confirmation Modal ── */}
@@ -1097,40 +1289,59 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
 
           {/* Action Buttons: CONFIRM (left) and SAVE (right) */}
           <XStack alignItems="center" gap={8}>
-            {/* CONFIRM Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Confirm order"
-              onPress={() => handleSaveOrder(true)}
-              disabled={saving}
-              style={({ pressed }) => ({
-                paddingHorizontal: 16,
-                height: 40,
-                borderRadius: tokens.radius.sm,
-                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                opacity: saving ? 0.6 : 1,
-                shadowColor: tokens.accent,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 4,
-                elevation: 3,
-              })}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={tokens.accentForeground} />
-              ) : (
-                <>
-                  <LuCheck size={16} color={tokens.accentForeground} />
-                  <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
-                    CONFIRM
-                  </Text>
-                </>
-              )}
-            </Pressable>
+            {/* CONFIRM Button or CONFIRMED Indicator */}
+            {isOrderConfirmed ? (
+              <XStack
+                paddingHorizontal={16}
+                height={40}
+                borderRadius={tokens.radius.sm}
+                backgroundColor={`${tokens.success}15`}
+                borderWidth={1}
+                borderColor={`${tokens.success}40`}
+                alignItems="center"
+                justifyContent="center"
+                gap={6}
+              >
+                <LuCheck size={16} color={tokens.success} />
+                <Text fontSize={12} fontWeight="800" color={tokens.success} letterSpacing={0.5}>
+                  CONFIRMED
+                </Text>
+              </XStack>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Confirm order"
+                onPress={() => handleSaveOrder(true)}
+                disabled={saving}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 16,
+                  height: 40,
+                  borderRadius: tokens.radius.sm,
+                  backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                  opacity: saving ? 0.6 : 1,
+                  shadowColor: tokens.accent,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 3,
+                })}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={tokens.accentForeground} />
+                ) : (
+                  <>
+                    <LuCheck size={16} color={tokens.accentForeground} />
+                    <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
+                      CONFIRM
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )}
 
             {/* SAVE Button */}
             <Pressable

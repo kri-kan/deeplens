@@ -130,6 +130,7 @@ export function BottomSheet({
             <ScrollView
               keyboardShouldPersistTaps="always"
               showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
               contentContainerStyle={{ paddingHorizontal }}
             >
               {children}

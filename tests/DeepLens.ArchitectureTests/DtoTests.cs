@@ -66,16 +66,16 @@ public class DtoTests
                         return false;
                     }
 
-                    // Optional: Check if the value is camelCase
+                    // Check if the property name attribute is camelCase (third-party external webhooks follow provider schema)
                     var jsonAttribute = property.CustomAttributes
                         .FirstOrDefault(a => a.AttributeType.Name == "JsonPropertyNameAttribute");
                     
-                    if (jsonAttribute != null)
+                    if (jsonAttribute != null && !type.Name.Contains("Webhook") && !type.Name.Contains("ScanDetail"))
                     {
                         var jsonName = jsonAttribute.ConstructorArguments[0].Value?.ToString();
                         if (string.IsNullOrEmpty(jsonName) || !char.IsLower(jsonName[0]))
                         {
-                            // return false; // Enforce camelCase here if desired
+                            return false; // Enforce camelCase
                         }
                     }
                 }

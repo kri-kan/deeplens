@@ -28,7 +28,11 @@ public record GenerateGroupLabelCommand(
     decimal? TotalAmount = null,
     string? OrderId = null,
     int? Quantity = null,
-    string? ProductsDesc = null) : IRequest<Result<GenerateGroupLabelResponse>>;
+    string? ProductsDesc = null,
+    string? OrderType = null,
+    string? ResellerName = null,
+    string? SellerName = null,
+    string? SellerAddress = null) : IRequest<Result<GenerateGroupLabelResponse>>;
 
 public record GenerateGroupLabelResponse(
     string OrderGrpId,
@@ -69,11 +73,16 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
 
             // Look up orderId from order_groups first, falling back to stripping group suffix -G\d+
             string? orderId = null;
-            using (var conn = await _dbConnectionFactory.CreateConnectionAsync())
+            try
             {
+                using var conn = await _dbConnectionFactory.CreateConnectionAsync();
                 orderId = await conn.QueryFirstOrDefaultAsync<string>(
                     "SELECT order_id FROM order_groups WHERE order_grp_id = @OrderGrpId LIMIT 1",
                     new { OrderGrpId = request.OrderGrpId });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to query orderId from order_groups for {OrderGrpId}, falling back to regex", request.OrderGrpId);
             }
 
             if (string.IsNullOrWhiteSpace(orderId))
@@ -168,15 +177,57 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
             var effectiveOrder = !string.IsNullOrWhiteSpace(request.OrderId) ? request.OrderId : group.OrderGrpId;
             var productDesc = !string.IsNullOrWhiteSpace(request.ProductsDesc) ? request.ProductsDesc : $"{group.VendorName ?? "Apparel"} ({totalItemsCount} items)";
 
+            // Determine Seller Name: if explicitly specified in request, use it; otherwise derive based on OrderType and ResellerName
+            string sellerName;
+            if (request.SellerName != null)
+            {
+                sellerName = request.SellerName.Trim();
+            }
+            else
+            {
+                var effectiveOrderType = !string.IsNullOrWhiteSpace(request.OrderType) ? request.OrderType : order.OrderType;
+                var effectiveResellerName = request.ResellerName ?? order.ResellerName;
+                var isReseller = string.Equals(effectiveOrderType, "Reseller", StringComparison.OrdinalIgnoreCase);
+
+                if (isReseller)
+                {
+                    sellerName = !string.IsNullOrWhiteSpace(effectiveResellerName)
+                        ? $"From: {effectiveResellerName.Trim()}"
+                        : string.Empty;
+                }
+                else
+                {
+                    sellerName = "From: VAYYARI Fashions";
+                }
+            }
+
+            // Determine Seller Address: default to "" empty string so Delhivery does not print physical warehouse street address under Seller
+            var hasExplicitSellerAddress = !string.IsNullOrWhiteSpace(request.SellerAddress);
+            var sellerAddress = hasExplicitSellerAddress ? request.SellerAddress!.Trim() : string.Empty;
+
+            // If seller address is suppressed, suppress it across shipment seller_add, return_add, and pickup_location
+            // NOTE: Delhivery auto-populates seller address / return address if return_city, return_pin, or pickup_location address fields are passed.
+            var effectivePickupAddress = hasExplicitSellerAddress ? pickupAddress : null;
+            var effectivePickupCity = hasExplicitSellerAddress ? pickupCity : null;
+            var effectivePickupPin = hasExplicitSellerAddress ? pickupPin : null;
+            var effectivePickupPhone = hasExplicitSellerAddress ? pickupPhone : null;
+
+            var effectiveReturnAddress = hasExplicitSellerAddress ? pickupAddress : null;
+            var effectiveReturnCity = hasExplicitSellerAddress ? pickupCity : null;
+            var effectiveReturnState = hasExplicitSellerAddress ? (resolvedWarehouse?.State) : null;
+            var effectiveReturnPin = hasExplicitSellerAddress ? pickupPin : null;
+            var effectiveReturnPhone = hasExplicitSellerAddress ? pickupPhone : null;
+            var effectiveReturnName = !string.IsNullOrWhiteSpace(sellerName) ? sellerName : null;
+
             var payload = new DelhiveryCmuPayload
             {
                 PickupLocation = new DelhiveryPickupLocation
                 {
                     Name = pickupName,
-                    Address = pickupAddress,
-                    City = pickupCity,
-                    PinCode = pickupPin,
-                    Phone = pickupPhone,
+                    Address = effectivePickupAddress,
+                    City = effectivePickupCity,
+                    PinCode = effectivePickupPin,
+                    Phone = effectivePickupPhone,
                     Country = "India"
                 },
                 Shipments = new List<DelhiveryShipmentDetail>
@@ -198,7 +249,15 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                         ShipmentWidth = widthCm,
                         ShipmentHeight = heightCm,
                         Quantity = totalItemsCount.ToString(),
-                        ProductsDesc = productDesc
+                        ProductsDesc = productDesc,
+                        SellerName = sellerName,
+                        SellerAddress = sellerAddress,
+                        ReturnName = effectiveReturnName,
+                        ReturnAddress = effectiveReturnAddress,
+                        ReturnCity = effectiveReturnCity,
+                        ReturnState = effectiveReturnState,
+                        ReturnPin = effectiveReturnPin,
+                        ReturnPhone = effectiveReturnPhone
                     }
                 }
             };
@@ -215,13 +274,79 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
                 var errRemarks = string.Join("; ", shipmentResult.Packages?.SelectMany(p => p.Remarks ?? Enumerable.Empty<string>()) ?? Enumerable.Empty<string>());
                 var errDetail = !string.IsNullOrWhiteSpace(errRemarks) ? errRemarks : (!string.IsNullOrWhiteSpace(shipmentResult.Error) ? shipmentResult.Error : "Delhivery did not return a valid waybill.");
                 _logger.LogError("Delhivery shipment creation failed for group {GroupGrpId}: {Error}", group.OrderGrpId, errDetail);
-                return Result<GenerateGroupLabelResponse>.Failure(new Error("GroupLabel.DelhiveryFailed", $"Delhivery manifestation failed: {errDetail}"));
+
+                var friendlyMessage = DelhiveryErrorSanitizer.Sanitize(errDetail);
+                return Result<GenerateGroupLabelResponse>.Failure(new Error("GroupLabel.DelhiveryFailed", friendlyMessage));
             }
 
             _logger.LogInformation("Generating and persisting PDF thermal label for AWB {Awb}", awbNumber);
             var labelUrl = await _delhiveryClient.GeneratePackingSlipAndPersistAsync(awbNumber, cancellationToken);
 
-            await _orderRepository.UpdateGroupLabelInfoAsync(group.OrderGrpId, awbNumber, labelUrl, "generated");
+            await _orderRepository.UpdateGroupLabelInfoAsync(group.OrderGrpId, awbNumber, labelUrl);
+
+            // Persist shipment in shipments table with form data in metadata JSONB
+            try
+            {
+                var metaDict = new Dictionary<string, object?>
+                {
+                    ["orderGrpId"] = group.OrderGrpId,
+                    ["pickupLocation"] = pickupName,
+                    ["pickupAddress"] = pickupAddress,
+                    ["pickupCity"] = pickupCity,
+                    ["pickupPin"] = pickupPin,
+                    ["pickupPhone"] = pickupPhone,
+                    ["shippingMode"] = shippingMode,
+                    ["weightGrams"] = weightGrams,
+                    ["lengthCm"] = lengthCm,
+                    ["widthCm"] = widthCm,
+                    ["heightCm"] = heightCm,
+                    ["paymentMode"] = isCod ? "COD" : "Pre-paid",
+                    ["codAmount"] = codAmountVal,
+                    ["totalAmount"] = totalAmountVal,
+                    ["quantity"] = totalItemsCount,
+                    ["productsDesc"] = productDesc,
+                    ["sellerName"] = sellerName,
+                    ["sellerAddress"] = sellerAddress,
+                    ["resellerName"] = request.ResellerName,
+                    ["orderType"] = request.OrderType,
+                    ["manifestedAt"] = DateTime.UtcNow
+                };
+                var metaJson = System.Text.Json.JsonSerializer.Serialize(metaDict);
+
+                using var conn = await _dbConnectionFactory.CreateConnectionAsync();
+                await conn.ExecuteAsync(@"
+                    INSERT INTO public.shipments (
+                        id, order_id, order_number, shipment_number, courier_partner, 
+                        awb_number, status, shipping_mode, fulfillment_type, cod_amount, 
+                        label_url, vendor_name, metadata, created_at, updated_at
+                    )
+                    VALUES (
+                        gen_random_uuid(), @OrderIdGuid, @OrderGrpId, @ShipmentNumber, 'Delhivery',
+                        @AwbNumber, 'manifested', @ShippingMode, 'direct_dispatch', @CodAmount,
+                        @LabelUrl, @VendorName, @Metadata::jsonb, NOW(), NOW()
+                    )
+                    ON CONFLICT (shipment_number) DO UPDATE
+                    SET status = 'manifested',
+                        label_url = EXCLUDED.label_url,
+                        metadata = EXCLUDED.metadata,
+                        updated_at = NOW()",
+                    new
+                    {
+                        OrderIdGuid = Guid.TryParse(order.Id, out var oGuid) ? oGuid : (Guid?)null,
+                        OrderGrpId = group.OrderGrpId,
+                        ShipmentNumber = awbNumber.Trim(),
+                        AwbNumber = awbNumber.Trim(),
+                        ShippingMode = shippingMode,
+                        CodAmount = codAmountVal,
+                        LabelUrl = labelUrl,
+                        VendorName = group.VendorName,
+                        Metadata = metaJson
+                    });
+            }
+            catch (Exception shipEx)
+            {
+                _logger.LogWarning(shipEx, "Could not persist shipment record for AWB {Awb}", awbNumber);
+            }
 
             return Result<GenerateGroupLabelResponse>.Success(new GenerateGroupLabelResponse(group.OrderGrpId, awbNumber, labelUrl, "generated"));
         }

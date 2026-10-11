@@ -33,6 +33,7 @@ import { QuickPickerSheet } from '@/components/tamagui-ui/molecules/QuickPickerS
 import { VendorPickerSheet } from '@/components/tamagui-ui/molecules/VendorPickerSheet';
 import { ImageViewerModal } from '@/components/tamagui-ui/molecules/ImageViewerModal';
 import { shareImageUri } from '@/utils/shareImage';
+import { uriToBlob, compressImageToWebP } from '@/utils/media-helpers';
 import {
   CatalogMediaPickerModal,
   CatalogMediaSelection,
@@ -45,6 +46,7 @@ export interface ProductEditSheetProps {
   item: OrderItem | null;
   isCod?: boolean;
   lockedVendorNames?: string[];
+  readOnly?: boolean;
   onSaveItem: (item: OrderItem) => void;
   onDeleteItem?: (item: OrderItem) => void;
   onClose: () => void;
@@ -55,6 +57,7 @@ export function ProductEditSheet({
   item,
   isCod = false,
   lockedVendorNames = [],
+  readOnly = false,
   onSaveItem,
   onDeleteItem,
   onClose,
@@ -82,9 +85,20 @@ export function ProductEditSheet({
     currentValue: '',
   });
 
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<{
+    uri: string;
+    fileName: string;
+    mimeType: string;
+  } | null>(null);
+  const [isPhotoRemoved, setIsPhotoRemoved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   useEffect(() => {
     setForm(item);
     setLinkedCatalogSku(item?.catalogImageUrl ? (item.productId?.trim() || '') : '');
+    setPendingPhotoFile(null);
+    setIsPhotoRemoved(false);
+    setIsSaving(false);
   }, [item]);
 
   if (!visible || !form) return null;
@@ -104,110 +118,46 @@ export function ProductEditSheet({
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        const fileUri = asset.uri;
-        const fileName = asset.fileName || fileUri.split('/').pop() || `order_item_${Date.now()}.jpg`;
-        const mimeType = asset.mimeType || (fileName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const rawFileName = asset.fileName || asset.uri.split('/').pop() || `order_item_${Date.now()}.jpg`;
 
-        const formData = new FormData();
-        if (Platform.OS === 'web') {
-          const res = await fetch(fileUri);
-          const blob = await res.blob();
-          formData.append('file', blob, fileName);
-        } else {
-          formData.append('file', {
-            uri: fileUri,
-            name: fileName,
-            type: mimeType,
-          } as any);
-        }
+        // Compress and convert to high-efficiency WebP format in local device cache
+        const compressed = await compressImageToWebP(asset.uri, rawFileName, {
+          maxWidth: 1920,
+          maxHeight: 1920,
+          quality: 0.8,
+          originalWidth: asset.width,
+          originalHeight: asset.height,
+        });
 
-        // Upload new photo to backend attachment storage
-        const uploadRes = await searchApiClient.postFormData<{
-          id: string;
-          fileName: string;
-          status: string;
-          storagePath?: string;
-          url?: string;
-        }>(`${API_ROUTES.ATTACHMENTS.UPLOAD}?entityType=order_item&tag=reference`, formData);
-
-        const downloadPath = uploadRes.url || (uploadRes.storagePath ? API_ROUTES.ATTACHMENTS.DOWNLOAD(uploadRes.storagePath) : '');
-        const fullImageUrl = downloadPath.startsWith('http') 
-          ? downloadPath 
-          : `${getSearchApiUrl()}${downloadPath}`;
-
-        // Hard-delete the old image from the system to prevent orphaned data
-        const oldPhotoUri = form.photoUri || (form.image && form.image !== form.catalogImageUrl ? form.image : undefined);
-        const oldAttachmentId = form.attachmentId;
-        const oldStoragePath = form.storagePath;
-
-        if (oldAttachmentId) {
-          try {
-            await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(oldAttachmentId));
-            console.log(`[ProductEditSheet] Hard-deleted old attachment by ID: ${oldAttachmentId}`);
-          } catch (delErr) {
-            console.warn('[ProductEditSheet] Failed to delete old attachment by ID:', delErr);
-          }
-        } else if (oldStoragePath) {
-          try {
-            await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldStoragePath));
-            console.log(`[ProductEditSheet] Hard-deleted old attachment by storagePath: ${oldStoragePath}`);
-          } catch (delErr) {
-            console.warn('[ProductEditSheet] Failed to delete old attachment by storagePath:', delErr);
-          }
-        } else if (oldPhotoUri && (oldPhotoUri.includes('/api/v1/Attachment/') || oldPhotoUri.includes('order/'))) {
-          try {
-            await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldPhotoUri));
-            console.log(`[ProductEditSheet] Hard-deleted old attachment by photoUri: ${oldPhotoUri}`);
-          } catch (delErr) {
-            console.warn('[ProductEditSheet] Failed to delete old attachment by photoUri:', delErr);
-          }
-        }
+        // Stage in local state and render preview immediately on the tile from local cache URI
+        // Zero network calls or MinIO uploads occur until user explicitly saves
+        setPendingPhotoFile({
+          uri: compressed.uri,
+          fileName: compressed.fileName,
+          mimeType: compressed.mimeType,
+        });
+        setIsPhotoRemoved(false);
 
         setForm((prev) => (prev ? {
           ...prev,
-          photoUri: fullImageUrl,
-          image: fullImageUrl,
-          attachmentId: uploadRes.id,
-          storagePath: uploadRes.storagePath,
+          photoUri: compressed.uri,
+          image: compressed.uri,
         } : prev));
       }
     } catch (err: any) {
-      console.warn('Failed to pick and upload image:', err);
-      Alert.alert('Upload Failed', err?.message || 'Could not upload image to system.');
+      console.warn('Failed to pick and compress image:', err);
+      Alert.alert('Image Selection Failed', err?.message || 'Could not process selected image.');
     } finally {
       setIsPickingImage(false);
     }
   };
 
-  const handleRemoveUploadedPhoto = async () => {
+  const handleRemoveUploadedPhoto = () => {
     if (!form) return;
-    const oldPhotoUri = form.photoUri || (form.image && form.image !== form.catalogImageUrl ? form.image : undefined);
-    const oldAttachmentId = form.attachmentId;
-    const oldStoragePath = form.storagePath;
+    setPendingPhotoFile(null);
+    setIsPhotoRemoved(true);
 
-    if (oldAttachmentId) {
-      try {
-        await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(oldAttachmentId));
-        console.log(`[ProductEditSheet] Hard-deleted attachment on remove: ${oldAttachmentId}`);
-      } catch (err) {
-        console.warn('Failed to delete attachment on remove:', err);
-      }
-    } else if (oldStoragePath) {
-      try {
-        await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldStoragePath));
-        console.log(`[ProductEditSheet] Hard-deleted storagePath on remove: ${oldStoragePath}`);
-      } catch (err) {
-        console.warn('Failed to delete storagePath on remove:', err);
-      }
-    } else if (oldPhotoUri && (oldPhotoUri.includes('/api/v1/Attachment/') || oldPhotoUri.includes('order/'))) {
-      try {
-        await searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldPhotoUri));
-        console.log(`[ProductEditSheet] Hard-deleted photoUri on remove: ${oldPhotoUri}`);
-      } catch (err) {
-        console.warn('Failed to delete photoUri on remove:', err);
-      }
-    }
-
+    // Staged removal: do NOT delete from MinIO immediately; deletion occurs only upon explicit save
     setForm((prev) => (prev ? {
       ...prev,
       photoUri: undefined,
@@ -215,6 +165,13 @@ export function ProductEditSheet({
       attachmentId: undefined,
       storagePath: undefined,
     } : prev));
+  };
+
+  const handleCancelOrClose = () => {
+    // Staged photo / removal was only kept in local cache; discarding requires zero backend network calls
+    setPendingPhotoFile(null);
+    setIsPhotoRemoved(false);
+    onClose();
   };
 
   const handleOpenSheetPicker = (type: 'size' | 'qty') => {
@@ -265,8 +222,136 @@ export function ProductEditSheet({
     }
   };
 
-  const handleSave = () => {
-    if (!form) return;
+  const cleanupOldAttachment = async (
+    oldItem?: OrderItem | null,
+    newAttachmentId?: string,
+    newStoragePath?: string
+  ) => {
+    if (!oldItem) return;
+
+    const oldAttId = oldItem.attachmentId;
+    const oldStoragePath = oldItem.storagePath;
+    const oldPhoto = oldItem.photoUri || (oldItem.image && oldItem.image !== oldItem.catalogImageUrl ? oldItem.image : undefined);
+
+    const deletePromises: Promise<any>[] = [];
+
+    if (oldAttId && oldAttId !== newAttachmentId) {
+      deletePromises.push(
+        searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(oldAttId)).catch((err) => {
+          console.warn(`[ProductEditSheet] Failed to delete prior attachment by id (${oldAttId}):`, err);
+        })
+      );
+    }
+
+    if (oldStoragePath && oldStoragePath !== newStoragePath) {
+      deletePromises.push(
+        searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldStoragePath)).catch((err) => {
+          console.warn(`[ProductEditSheet] Failed to delete prior attachment by path (${oldStoragePath}):`, err);
+        })
+      );
+    }
+
+    // Fallback: extract path or id from old photo URL if neither id nor storagePath was directly set
+    if (!oldAttId && !oldStoragePath && oldPhoto) {
+      if (oldPhoto.includes('/api/v1/Attachment/download?path=')) {
+        const match = oldPhoto.match(/[?&]path=([^&]+)/);
+        if (match && match[1]) {
+          const decoded = decodeURIComponent(match[1]);
+          if (decoded !== newStoragePath) {
+            deletePromises.push(
+              searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(decoded)).catch(console.warn)
+            );
+          }
+        }
+      } else if (oldPhoto.includes('/api/v1/Attachment/') && !oldPhoto.includes('download')) {
+        const parts = oldPhoto.split('/');
+        const possibleId = parts[parts.length - 1]?.split('?')[0];
+        if (possibleId && possibleId !== newAttachmentId && possibleId.length > 20) {
+          deletePromises.push(
+            searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE(possibleId)).catch(console.warn)
+          );
+        }
+      } else if (oldPhoto.includes('order/') || oldPhoto.includes('reference/')) {
+        deletePromises.push(
+          searchApiClient.delete(API_ROUTES.ATTACHMENTS.DELETE_BY_PATH(oldPhoto)).catch(console.warn)
+        );
+      }
+    }
+
+    if (deletePromises.length > 0) {
+      await Promise.allSettled(deletePromises);
+    }
+  };
+
+  const performSave = async (baseItem: OrderItem) => {
+    let itemToPersist = { ...baseItem };
+
+    // 1. If a new image was staged in cache, upload it to MinIO upon saving, then hard delete old attachment
+    if (pendingPhotoFile) {
+      try {
+        setIsSaving(true);
+        const blob = await uriToBlob(pendingPhotoFile.uri, pendingPhotoFile.mimeType);
+        const formData = new FormData();
+        formData.append('file', blob, pendingPhotoFile.fileName);
+
+        const uploadRes = await searchApiClient.postFormData<{
+          id: string;
+          fileName: string;
+          status: string;
+          storagePath?: string;
+          url?: string;
+        }>(`${API_ROUTES.ATTACHMENTS.UPLOAD}?entityType=order_item&tag=reference`, formData);
+
+        const downloadPath = uploadRes.url || (uploadRes.storagePath ? API_ROUTES.ATTACHMENTS.DOWNLOAD(uploadRes.storagePath) : '');
+        const fullImageUrl = downloadPath.startsWith('http') 
+          ? downloadPath 
+          : `${getSearchApiUrl()}${downloadPath}`;
+
+        // Hard-delete the old attachment from MinIO/database and replace with the new one
+        await cleanupOldAttachment(item, uploadRes.id, uploadRes.storagePath);
+
+        itemToPersist = {
+          ...itemToPersist,
+          photoUri: fullImageUrl,
+          image: fullImageUrl,
+          attachmentId: uploadRes.id,
+          storagePath: uploadRes.storagePath,
+        };
+      } catch (err: any) {
+        console.error('Failed to upload image during save:', err);
+        Alert.alert('Save Failed', err?.message || 'Could not upload photo to server.');
+        setIsSaving(false);
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    } else if (isPhotoRemoved) {
+      // 2. If photo was marked for removal, hard delete the old attachment from MinIO upon saving
+      try {
+        setIsSaving(true);
+        await cleanupOldAttachment(item);
+        itemToPersist = {
+          ...itemToPersist,
+          photoUri: undefined,
+          image: baseItem.catalogImageUrl || undefined,
+          attachmentId: undefined,
+          storagePath: undefined,
+        };
+      } catch (err: any) {
+        console.warn('Failed to clean up removed attachment on save:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
+    onSaveItem(itemToPersist);
+    setPendingPhotoFile(null);
+    setIsPhotoRemoved(false);
+    onClose();
+  };
+
+  const handleSave = async () => {
+    if (!form || isSaving) return;
     const currentSku = (form.productId || '').trim();
 
     const origV = (item?.vendor || '').trim();
@@ -288,12 +373,11 @@ export function ProductEditSheet({
       return;
     }
 
-    onSaveItem(form);
-    onClose();
+    await performSave(form);
   };
 
-  const handleConfirmUnlinkAndSave = () => {
-    if (!form) return;
+  const handleConfirmUnlinkAndSave = async () => {
+    if (!form || isSaving) return;
     setShowUnlinkConfirm(false);
 
     const unlinkedItem: OrderItem = {
@@ -305,8 +389,7 @@ export function ProductEditSheet({
     };
 
     setLinkedCatalogSku('');
-    onSaveItem(unlinkedItem);
-    onClose();
+    await performSave(unlinkedItem);
   };
 
   const codCharge = isCod ? (form.codChargePerPiece ?? 50) : 0;
@@ -314,7 +397,11 @@ export function ProductEditSheet({
   const advancePaid = isCod ? (form.amountPaid || 0) : 0;
   const calculatedTotal = Math.max(0, grossTotal - advancePaid);
 
-  const screenTitle = (item?.title || item?.productId || item?.id) ? 'Edit Line Item' : 'New Line Item';
+  const screenTitle = readOnly
+    ? 'Line Item Details (Locked)'
+    : (item?.title || item?.productId || item?.id)
+    ? 'Edit Line Item'
+    : 'New Line Item';
 
   return (
     <>
@@ -322,7 +409,7 @@ export function ProductEditSheet({
         visible={visible}
         animationType="slide"
         presentationStyle="fullScreen"
-        onRequestClose={onClose}
+        onRequestClose={handleCancelOrClose}
         statusBarTranslucent
       >
         <YStack flex={1} backgroundColor={tokens.background}>
@@ -344,7 +431,7 @@ export function ProductEditSheet({
                 accessibilityRole="button"
                 accessibilityLabel="Back"
                 accessibilityHint="Discard changes and go back"
-                onPress={onClose}
+                onPress={handleCancelOrClose}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
@@ -372,27 +459,29 @@ export function ProductEditSheet({
                 {screenTitle}
               </Text>
 
-              {/* Top Save Button */}
+              {/* Top Save Button (hidden when readOnly) */}
               <XStack minWidth={70} justifyContent="flex-end">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Save line item changes"
-                  onPress={handleSave}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={({ pressed }) => ({
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    borderRadius: tokens.radius.sm,
-                    backgroundColor: tokens.accent,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: pressed ? 0.8 : 1,
-                  })}
-                >
-                  <Text fontSize={13} fontWeight="700" color={tokens.accentForeground}>
-                    Save
-                  </Text>
-                </Pressable>
+                {!readOnly && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Save line item changes"
+                    onPress={handleSave}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 14,
+                      paddingVertical: 7,
+                      borderRadius: tokens.radius.sm,
+                      backgroundColor: tokens.accent,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: pressed ? 0.8 : 1,
+                    })}
+                  >
+                    <Text fontSize={13} fontWeight="700" color={tokens.accentForeground}>
+                      Save
+                    </Text>
+                  </Pressable>
+                )}
               </XStack>
             </XStack>
           </YStack>
@@ -422,8 +511,8 @@ export function ProductEditSheet({
                       accessibilityRole="button"
                       accessibilityLabel="Upload photo for this product"
                       style={{ flex: 1 }}
-                      onPress={handlePickPhoto}
-                      disabled={isPickingImage}
+                      onPress={readOnly ? undefined : handlePickPhoto}
+                      disabled={readOnly || isPickingImage}
                     >
                       <YStack
                         width="100%"
@@ -502,26 +591,28 @@ export function ProductEditSheet({
                                 <LuShare2 size={16} color="#ffffff" />
                               </Pressable>
 
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Remove uploaded photo"
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                onPress={(e) => {
-                                  e.stopPropagation?.();
-                                  handleRemoveUploadedPhoto();
-                                }}
-                                style={({ pressed }) => ({
-                                  width: 32,
-                                  height: 32,
-                                  borderRadius: 16,
-                                  backgroundColor: 'rgba(0, 0, 0, 0.58)',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  opacity: pressed ? 0.75 : 1,
-                                })}
-                              >
-                                <LuTrash2 size={16} color="#ff6b6b" />
-                              </Pressable>
+                              {!readOnly && (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Remove uploaded photo"
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                  onPress={(e) => {
+                                    e.stopPropagation?.();
+                                    handleRemoveUploadedPhoto();
+                                  }}
+                                  style={({ pressed }) => ({
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    opacity: pressed ? 0.75 : 1,
+                                  })}
+                                >
+                                  <LuTrash2 size={16} color="#ff6b6b" />
+                                </Pressable>
+                              )}
                             </XStack>
                           </>
                         ) : null}
@@ -544,7 +635,7 @@ export function ProductEditSheet({
                           <YStack alignItems="center" justifyContent="center" gap={6} paddingBottom={14}>
                             <LuCamera size={26} color={tokens.textMuted} />
                             <Text fontSize={10} fontWeight="600" color={tokens.textMuted}>
-                              Tap to Choose
+                              {readOnly ? 'No Photo' : 'Tap to Choose'}
                             </Text>
                           </YStack>
                         ) : null}
@@ -555,12 +646,12 @@ export function ProductEditSheet({
                           left={0}
                           right={0}
                           paddingVertical={6}
-                          backgroundColor="rgba(0,0,0,0.65)"
+                          backgroundColor={pendingPhotoFile ? 'rgba(37, 99, 235, 0.88)' : 'rgba(0, 0, 0, 0.65)'}
                           alignItems="center"
                           zIndex={3}
                         >
                           <Text fontSize={10} fontWeight="700" color="#fff">
-                            {uploadedPhotoUri ? 'Change Photo' : 'Uploaded Photo'}
+                            {readOnly ? 'Uploaded Photo' : pendingPhotoFile ? 'Staged • Save to Apply' : uploadedPhotoUri ? 'Change Photo' : 'Uploaded Photo'}
                           </Text>
                         </YStack>
                       </YStack>
@@ -571,7 +662,8 @@ export function ProductEditSheet({
                   accessibilityRole="button"
                   accessibilityLabel="Select photo from Catalog PDP gallery"
                   style={{ flex: 1 }}
-                  onPress={() => setCatalogPickerVisible(true)}
+                  onPress={readOnly ? undefined : () => setCatalogPickerVisible(true)}
+                  disabled={readOnly}
                 >
                   <YStack
                     width="100%"
@@ -694,6 +786,7 @@ export function ProductEditSheet({
                 <CompactField
                   label="Product Title / Description"
                   value={form.title}
+                  editable={!readOnly}
                   onChange={(v) => updateField('title', v)}
                   placeholder="e.g. Pure Zari Banarasi Saree"
                 />
@@ -704,6 +797,7 @@ export function ProductEditSheet({
                     <CompactField
                       label="Product ID / SKU"
                       value={form.productId}
+                      editable={!readOnly}
                       onChange={(v) => updateField('productId', v)}
                       onBlur={handleSkuBlur}
                       onSubmitEditing={handleSkuBlur}
@@ -714,6 +808,7 @@ export function ProductEditSheet({
                     <DropdownField
                       label="Size"
                       value={form.size || 'Free Size'}
+                      disabled={readOnly}
                       onPress={() => handleOpenSheetPicker('size')}
                     />
                   </YStack>
@@ -721,6 +816,7 @@ export function ProductEditSheet({
                     <DropdownField
                       label="Qty"
                       value={String(form.quantity || 1)}
+                      disabled={readOnly}
                       onPress={() => handleOpenSheetPicker('qty')}
                     />
                   </YStack>
@@ -734,6 +830,7 @@ export function ProductEditSheet({
                       <CompactField
                         label="Price / Pc (₹)"
                         value={String(form.costPerPiece)}
+                        editable={!readOnly}
                         onChange={(v) => {
                           const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
                           updateField('costPerPiece', digits ? parseInt(digits, 10) : 0);
@@ -748,6 +845,7 @@ export function ProductEditSheet({
                       <CompactField
                         label="COD / Pc (₹)"
                         value={String(form.codChargePerPiece ?? 50)}
+                        editable={!readOnly}
                         onChange={(v) => {
                           const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
                           updateField('codChargePerPiece', digits ? parseInt(digits, 10) : 0);
@@ -762,6 +860,7 @@ export function ProductEditSheet({
                       <CompactField
                         label="Advance Paid (₹)"
                         value={String(form.amountPaid ?? 0)}
+                        editable={!readOnly}
                         onChange={(v) => {
                           const digits = v.replace(/[^0-9]/g, '').slice(0, 4);
                           updateField('amountPaid', digits ? parseInt(digits, 10) : 0);
@@ -780,6 +879,7 @@ export function ProductEditSheet({
                       <CompactField
                         label="Price / Pc (₹)"
                         value={String(form.costPerPiece)}
+                        editable={!readOnly}
                         onChange={(v) => {
                           const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
                           updateField('costPerPiece', digits ? parseInt(digits, 10) : 0);
@@ -797,7 +897,9 @@ export function ProductEditSheet({
                   accessibilityRole="combobox"
                   accessibilityLabel={`Vendor Assignment: ${form.vendor || 'Select Vendor'}`}
                   accessibilityHint="Tap to choose vendor"
-                  onPress={() => setVendorPickerVisible(true)}
+                  accessibilityState={{ disabled: readOnly }}
+                  disabled={readOnly}
+                  onPress={readOnly ? undefined : () => setVendorPickerVisible(true)}
                   hitSlop={4}
                 >
                   <YStack
@@ -815,13 +917,13 @@ export function ProductEditSheet({
                         <Text
                           fontSize={13}
                           fontWeight="700"
-                          color={form.vendor ? tokens.text : tokens.textMuted}
+                          color={form.vendor ? (readOnly ? tokens.textSecondary : tokens.text) : tokens.textMuted}
                           numberOfLines={1}
                         >
                           {form.vendor || 'Select Vendor (e.g. In-House)'}
                         </Text>
                       </XStack>
-                      <LuChevronDown size={14} color={tokens.textMuted} />
+                      {!readOnly && <LuChevronDown size={14} color={tokens.textMuted} />}
                     </XStack>
                   </YStack>
                 </Pressable>
@@ -860,53 +962,85 @@ export function ProductEditSheet({
               shadowOffset={{ width: 0, height: -3 }}
             >
               <XStack gap={10}>
-                {onDeleteItem && (
+                {readOnly ? (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Delete this item from order"
-                    onPress={() => {
-                      onDeleteItem(form);
-                      onClose();
-                    }}
+                    accessibilityLabel="Close line item details"
+                    onPress={onClose}
                     style={({ pressed }) => ({
                       flex: 1,
                       height: 46,
                       borderRadius: tokens.radius.sm,
-                      borderWidth: 1,
-                      borderColor: tokens.error || '#EF4444',
-                      backgroundColor: tokens.errorSubtle || 'rgba(239, 68, 68, 0.12)',
+                      backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      opacity: pressed ? 0.75 : 1,
                     })}
                   >
-                    <XStack alignItems="center" gap={6}>
-                      <LuTrash2 size={16} color={tokens.error || '#EF4444'} />
-                      <Text fontSize={13} fontWeight="800" color={tokens.error || '#EF4444'} letterSpacing={0.3}>
-                        DELETE ITEM
-                      </Text>
-                    </XStack>
+                    <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.4}>
+                      CLOSE
+                    </Text>
                   </Pressable>
-                )}
+                ) : (
+                  <>
+                    {onDeleteItem && (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete this item from order"
+                        onPress={() => {
+                          onDeleteItem(form);
+                          onClose();
+                        }}
+                        style={({ pressed }) => ({
+                          flex: 1,
+                          height: 46,
+                          borderRadius: tokens.radius.sm,
+                          borderWidth: 1,
+                          borderColor: tokens.error || '#EF4444',
+                          backgroundColor: tokens.errorSubtle || 'rgba(239, 68, 68, 0.12)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: pressed ? 0.75 : 1,
+                        })}
+                      >
+                        <XStack alignItems="center" gap={6}>
+                          <LuTrash2 size={16} color={tokens.error || '#EF4444'} />
+                          <Text fontSize={13} fontWeight="800" color={tokens.error || '#EF4444'} letterSpacing={0.3}>
+                            DELETE ITEM
+                          </Text>
+                        </XStack>
+                      </Pressable>
+                    )}
 
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Save line item changes"
-                  onPress={handleSave}
-                  style={({ pressed }) => ({
-                    flex: onDeleteItem ? 1.3 : 1,
-                    height: 46,
-                    borderRadius: tokens.radius.sm,
-                    backgroundColor: tokens.accent,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: pressed ? 0.85 : 1,
-                  })}
-                >
-                  <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.4}>
-                    SAVE ITEM
-                  </Text>
-                </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Save line item changes"
+                      onPress={handleSave}
+                      disabled={isSaving}
+                      style={({ pressed }) => ({
+                        flex: onDeleteItem ? 1.3 : 1,
+                        height: 46,
+                        borderRadius: tokens.radius.sm,
+                        backgroundColor: tokens.accent,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: isSaving ? 0.6 : (pressed ? 0.85 : 1),
+                      })}
+                    >
+                      {isSaving ? (
+                        <XStack alignItems="center" gap={6}>
+                          <ActivityIndicator size="small" color={tokens.accentForeground} />
+                          <Text fontSize={13} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.4}>
+                            SAVING...
+                          </Text>
+                        </XStack>
+                      ) : (
+                        <Text fontSize={14} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.4}>
+                          SAVE ITEM
+                        </Text>
+                      )}
+                    </Pressable>
+                  </>
+                )}
               </XStack>
             </YStack>
           </KeyboardAvoidingView>

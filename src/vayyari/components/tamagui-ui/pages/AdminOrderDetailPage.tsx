@@ -15,6 +15,7 @@ import { SourceRow } from '../molecules/SourceRow';
 import { QuickPickerSheet } from '../molecules/QuickPickerSheet';
 import { ConfirmDialog } from '../molecules/ConfirmDialog';
 import { TransactionReceiptSection } from '../molecules/TransactionReceiptSection';
+import { OrderTypeSection, OrderType } from '../molecules/OrderTypeSection';
 import { ProductListSection, OrderItem } from '../organisms/ProductListSection';
 import { ProductEditSheet } from '../organisms/ProductEditSheet';
 
@@ -39,10 +40,16 @@ export interface AdminOrderDetailPageProps {
   initialSelectedIds?: string[];
   /** Customer delivery address */
   initialAddress?: AddressData | null;
+  /** Whether the address has been reviewed (e.g. false for cloned orders) */
+  initialIsAddressReviewed?: boolean;
   /** Optional transaction ID */
   initialTransactionId?: string;
   /** Optional transaction receipt screenshot URL / placeholder */
   initialReceiptUrl?: string | null;
+  /** Order type (customer or reseller) */
+  initialOrderType?: OrderType;
+  /** Reseller name when order type is reseller */
+  initialResellerName?: string;
   /** Whether the product edit sheet starts open (for Storybook) */
   initialProductSheetOpen?: boolean;
   /** Whether the address sheet starts open (for Storybook) */
@@ -73,8 +80,11 @@ export function AdminOrderDetailPage({
   initialProducts = [],
   initialSelectedIds = [],
   initialAddress = null,
+  initialIsAddressReviewed = true,
   initialTransactionId = '',
   initialReceiptUrl = null,
+  initialOrderType = 'customer',
+  initialResellerName = '',
   initialProductSheetOpen = false,
   initialAddressSheetOpen = false,
   initialConfirmDialogOpen = false,
@@ -90,8 +100,11 @@ export function AdminOrderDetailPage({
   const [products, setProducts] = useState<OrderItem[]>(initialProducts);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>(initialSelectedIds);
   const [address, setAddress] = useState<AddressData | null>(initialAddress);
+  const [isAddressReviewed, setIsAddressReviewed] = useState(initialIsAddressReviewed);
   const [transactionId, setTransactionId] = useState(initialTransactionId ?? '');
   const [receiptUrl, setReceiptUrl] = useState<string | null>(initialReceiptUrl);
+  const [orderType, setOrderType] = useState<OrderType>(initialOrderType);
+  const [resellerName, setResellerName] = useState<string>(initialResellerName);
   const [groupStages, setGroupStages] = useState<Record<string, string>>({});
 
   // Sheets
@@ -281,7 +294,7 @@ export function AdminOrderDetailPage({
   );
 
   const derivedStageTag = React.useMemo(() => {
-    if (products.length === 0) return '';
+    if (products.length === 0 || distinctGroupKeys.length === 0) return 'Unconfirmed';
     if (distinctGroupKeys.length === 1) {
       return groupStages[distinctGroupKeys[0]] || 'Unconfirmed';
     }
@@ -303,17 +316,30 @@ export function AdminOrderDetailPage({
     return `${leastStage} +${distinctGroupKeys.length - 1}`;
   }, [products.length, distinctGroupKeys, groupStages]);
 
+  const isOrderConfirmed = React.useMemo(() => {
+    if (products.length === 0 || distinctGroupKeys.length === 0) {
+      return false;
+    }
+    return distinctGroupKeys.every((k) => {
+      const st = (groupStages[k] || 'Unconfirmed').toLowerCase();
+      return st !== 'unconfirmed' && st !== 'unformed';
+    });
+  }, [products.length, distinctGroupKeys, groupStages]);
+
   const handleSaveOrder = (confirmAll: boolean = false) => {
     let nextStages = { ...groupStages };
     if (confirmAll) {
       distinctGroupKeys.forEach((k) => {
-        const cur = (nextStages[k] || 'Unconfirmed').toLowerCase();
-        if (cur === 'unconfirmed' || cur === 'unformed') {
-          nextStages[k] = 'Confirmed';
-        }
+        nextStages[k] = 'Confirmed';
       });
       setGroupStages(nextStages);
     }
+    const allUnconfirmed = distinctGroupKeys.length === 0 || distinctGroupKeys.every((k) => {
+      const st = (nextStages[k] || 'Unconfirmed').toLowerCase();
+      return st === 'unconfirmed' || st === 'unformed';
+    });
+    const nextOrderStatus = allUnconfirmed ? 'Unconfirmed' : 'Confirmed';
+
     const orderData = {
       orderId,
       createdAt,
@@ -324,11 +350,12 @@ export function AdminOrderDetailPage({
       address,
       transactionId,
       receiptUrl,
+      orderType,
+      resellerName,
       groupStages: nextStages,
-      status: confirmAll ? 'Confirmed' : 'Unconfirmed',
+      status: nextOrderStatus,
     };
     if (onSaveOrder) onSaveOrder(orderData);
-    else alert(`Order #${orderId} ${confirmAll ? 'confirmed' : 'saved'} successfully!`);
   };
 
   const handleDelete = () => {
@@ -374,6 +401,8 @@ export function AdminOrderDetailPage({
             source={source}
             sourceContact={sourceContact}
             paymentType={paymentType}
+            orderType={orderType}
+            resellerName={resellerName}
           />
 
           <YStack height={1} backgroundColor={tokens.border} marginVertical={1} />
@@ -400,6 +429,7 @@ export function AdminOrderDetailPage({
           {/* ── 4. Delivery Address ── */}
           <AddressCard
             address={address}
+            isReviewed={isAddressReviewed}
             onEditPress={() => setAddressSheetOpen(true)}
           />
 
@@ -412,6 +442,16 @@ export function AdminOrderDetailPage({
             receiptUrl={receiptUrl}
             onUploadReceipt={(url) => setReceiptUrl(url)}
             onRemoveReceipt={() => setReceiptUrl(null)}
+          />
+
+          <YStack height={1} backgroundColor={tokens.border} marginVertical={1} />
+
+          {/* ── 6. Order Type Section (Customer vs Reseller) ── */}
+          <OrderTypeSection
+            orderType={orderType}
+            onChangeOrderType={setOrderType}
+            resellerName={resellerName}
+            onChangeResellerName={setResellerName}
           />
         </YStack>
       </ScrollView>
@@ -446,8 +486,15 @@ export function AdminOrderDetailPage({
             pincode: '',
           }
         }
-        onSave={(data) => setAddress(data)}
-        onClose={() => setAddressSheetOpen(false)}
+        onSave={(data) => {
+          setAddress(data);
+          setIsAddressReviewed(true);
+          setAddressSheetOpen(false);
+        }}
+        onClose={() => {
+          setAddressSheetOpen(false);
+          setIsAddressReviewed(true);
+        }}
       />
 
       {/* ── Sticky Bottom Action Bar (SAVE & CONFIRM) ── */}
@@ -481,32 +528,51 @@ export function AdminOrderDetailPage({
 
           {/* Action Buttons: CONFIRM (left) and SAVE (right) */}
           <XStack alignItems="center" gap={8}>
-            {/* CONFIRM Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Confirm order"
-              onPress={() => handleSaveOrder(true)}
-              style={({ pressed }) => ({
-                paddingHorizontal: 16,
-                height: 40,
-                borderRadius: tokens.radius.sm,
-                backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                shadowColor: tokens.accent,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 4,
-                elevation: 3,
-              })}
-            >
-              <LuCheck size={16} color={tokens.accentForeground} />
-              <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
-                CONFIRM
-              </Text>
-            </Pressable>
+            {/* CONFIRM Button or CONFIRMED Indicator */}
+            {isOrderConfirmed ? (
+              <XStack
+                paddingHorizontal={16}
+                height={40}
+                borderRadius={tokens.radius.sm}
+                backgroundColor={`${tokens.success}15`}
+                borderWidth={1}
+                borderColor={`${tokens.success}40`}
+                alignItems="center"
+                justifyContent="center"
+                gap={6}
+              >
+                <LuCheck size={16} color={tokens.success} />
+                <Text fontSize={12} fontWeight="800" color={tokens.success} letterSpacing={0.5}>
+                  CONFIRMED
+                </Text>
+              </XStack>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Confirm order"
+                onPress={() => handleSaveOrder(true)}
+                style={({ pressed }) => ({
+                  paddingHorizontal: 16,
+                  height: 40,
+                  borderRadius: tokens.radius.sm,
+                  backgroundColor: pressed ? `${tokens.accent}D0` : tokens.accent,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 6,
+                  shadowColor: tokens.accent,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 3,
+                })}
+              >
+                <LuCheck size={16} color={tokens.accentForeground} />
+                <Text fontSize={12} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
+                  CONFIRM
+                </Text>
+              </Pressable>
+            )}
 
             {/* SAVE Button */}
             <Pressable

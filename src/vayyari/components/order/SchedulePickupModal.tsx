@@ -14,13 +14,22 @@ import { LuX, LuCalendar, LuClock, LuCheckCircle2, LuTruck } from '@/components/
 import { useTheme } from '@/theme';
 import { searchApiClient } from '@/api/client';
 import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
+import { PickupResponseDto } from '@/types/logistics';
 
 export interface SchedulePickupModalProps {
   visible: boolean;
   onDismiss: () => void;
-  onSuccess: () => void;
+  onSuccess: (pickupInfo?: {
+    pickupDate: string;
+    pickupTime: string;
+    pickupId?: string;
+    displayInfo: string;
+  }) => void;
   pickupLocation: string; // Delhivery registered warehouse name
   expectedPackageCount?: number;
+  orderGrpId?: string;
+  awbNumber?: string;
+  isReschedule?: boolean;
 }
 
 interface DateTile {
@@ -61,6 +70,9 @@ export function SchedulePickupModal({
   onSuccess,
   pickupLocation,
   expectedPackageCount = 1,
+  orderGrpId,
+  awbNumber,
+  isReschedule = false,
 }: SchedulePickupModalProps) {
   const { tokens } = useTheme();
   const insets = useSafeAreaInsets();
@@ -71,6 +83,12 @@ export function SchedulePickupModal({
   const [loading, setLoading] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [scheduledInfo, setScheduledInfo] = useState('');
+  const [lastPickupInfo, setLastPickupInfo] = useState<{
+    pickupDate: string;
+    pickupTime: string;
+    pickupId?: string;
+    displayInfo: string;
+  } | null>(null);
 
   const handleSchedule = async () => {
     if (!pickupLocation) {
@@ -79,17 +97,48 @@ export function SchedulePickupModal({
     }
     setLoading(true);
     try {
-      await searchApiClient.post('/api/v1/logistics/pickups/schedule', {
+      const res = await searchApiClient.post<PickupResponseDto>('/api/v1/logistics/pickups/schedule', {
         pickupLocation: pickupLocation.trim(),
         pickupDate: selectedDate.date,
         pickupTime: selectedSlot.value,
         expectedPackageCount,
+        orderGrpId,
+        awbNumber,
       });
-      setScheduledInfo(`${selectedDate.display} between ${selectedSlot.display}`);
+
+      if (res && res.success === false) {
+        const errMsg = res.message || 'Failed to schedule pickup.';
+        Alert.alert('Pickup Failed', errMsg);
+        return;
+      }
+
+      const pId = res?.pickupId || undefined;
+      const slotText = res?.pickupSlot || selectedSlot.display;
+      setLastPickupInfo({
+        pickupDate: selectedDate.display,
+        pickupTime: slotText,
+        pickupId: pId,
+        displayInfo: `${selectedDate.display} • ${slotText}`,
+      });
+
+      if (res?.prExist || res?.message?.toLowerCase().includes('already exist')) {
+        const idText = pId ? ` (Request ID: ${pId})` : '';
+        setScheduledInfo(
+          `A pickup visit is already confirmed for this warehouse on ${selectedDate.display} between ${slotText}${idText}. This package will be collected during that visit when scanned by Delhivery.`
+        );
+      } else {
+        const idSuffix = pId ? ` (ID: ${pId})` : '';
+        setScheduledInfo(`${selectedDate.display} between ${slotText}${idSuffix}`);
+      }
       setConfirmVisible(true);
     } catch (err: any) {
-      const errMsg = err?.response?.data?.message || err?.message || 'Unknown error';
-      Alert.alert('Pickup Failed', `Failed to schedule pickup. ${errMsg}`);
+      let errMsg = 'Unknown error';
+      if (err?.error?.message) {
+        errMsg = err.error.message;
+      } else if (err?.message) {
+        errMsg = err.message;
+      }
+      Alert.alert('Pickup Failed', errMsg);
     } finally {
       setLoading(false);
     }
@@ -97,7 +146,7 @@ export function SchedulePickupModal({
 
   const handleConfirmClose = () => {
     setConfirmVisible(false);
-    onSuccess();
+    onSuccess(lastPickupInfo || undefined);
   };
 
   return (
@@ -163,7 +212,7 @@ export function SchedulePickupModal({
                 </View>
                 <YStack>
                   <Text fontSize={15} fontWeight="800" color={tokens.text}>
-                    Schedule Pickup
+                    {isReschedule ? 'Reschedule Pickup' : 'Schedule Pickup'}
                   </Text>
                   <Text fontSize={11} color={tokens.textMuted}>
                     {pickupLocation || 'Warehouse'}
@@ -321,7 +370,7 @@ export function SchedulePickupModal({
                   <>
                     <LuTruck size={16} color={tokens.accentForeground} />
                     <Text fontSize={13} fontWeight="800" color={tokens.accentForeground} letterSpacing={0.5}>
-                      SCHEDULE PICKUP
+                      {isReschedule ? 'CONFIRM RESCHEDULE' : 'SCHEDULE PICKUP'}
                     </Text>
                   </>
                 )}
@@ -334,8 +383,18 @@ export function SchedulePickupModal({
       {/* Success Dialog */}
       <ConfirmDialog
         visible={confirmVisible}
-        title="Pickup Scheduled"
-        message={`Your pickup has been scheduled for ${scheduledInfo}.`}
+        title={
+          scheduledInfo.toLowerCase().includes('already confirmed') ||
+          scheduledInfo.toLowerCase().includes('already exist')
+            ? 'Pickup Already Confirmed'
+            : 'Pickup Scheduled'
+        }
+        message={
+          scheduledInfo.toLowerCase().includes('already confirmed') ||
+          scheduledInfo.toLowerCase().includes('already exist')
+            ? scheduledInfo
+            : `Your pickup has been scheduled for ${scheduledInfo}.`
+        }
         intent="success"
         icon={<LuCheckCircle2 size={20} color="#16a34a" />}
         singleButton

@@ -66,6 +66,9 @@ export interface OrderIdEntry {
   orderDetails?: string;
   isDeleted?: boolean;
   customerId?: string;
+  orderType?: 'Customer' | 'Reseller' | 'customer' | 'reseller';
+  resellerName?: string;
+  isAddressReviewed?: boolean;
 }
 
 /**
@@ -92,6 +95,9 @@ export interface OrderUpdateRequest {
   needLabel?: boolean;
   transactionId?: string;
   customerId?: string;
+  orderType?: string;
+  resellerName?: string;
+  isAddressReviewed?: boolean;
   items?: OrderItem[];
   groups?: OrderGroup[];
 }
