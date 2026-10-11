@@ -10,6 +10,9 @@ import {
   LuRefreshCw,
   LuInbox,
   LuChevronDown,
+  LuTrash2,
+  LuCheckSquare,
+  LuSquare,
 } from '../icons/lu';
 import { useTheme } from '@/theme';
 import {
@@ -37,6 +40,13 @@ export interface AllOrdersPageProps {
   paymentModeFilter?: PaymentModeFilter;
   deletedFilter?: DeletedFilter;
   disableSafeArea?: boolean;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: () => void;
+  onEnterSelectionMode?: (initialId?: string) => void;
+  onExitSelectionMode?: () => void;
+  onBatchDelete?: () => void;
   onSearchChange?: (query: string) => void;
   onSortChange?: (sort: OrderSortOption) => void;
   onSourceFilterChange?: (source: OrderSourceFilter) => void;
@@ -66,6 +76,13 @@ export function AllOrdersPage({
   paymentModeFilter = 'all',
   deletedFilter = 'active',
   disableSafeArea = false,
+  selectionMode = false,
+  selectedIds = new Set<string>(),
+  onToggleSelect,
+  onToggleSelectAll,
+  onEnterSelectionMode,
+  onExitSelectionMode,
+  onBatchDelete,
   onSearchChange,
   onSortChange,
   onSourceFilterChange,
@@ -112,10 +129,21 @@ export function AllOrdersPage({
     }
   };
 
+  const selectedCount = selectedIds.size;
+  const isAllSelected = orders.length > 0 && orders.every((o) => selectedIds.has(o.id));
+
   const renderItem = ({ item }: { item: OrderIdHistoryEntry }) => (
     <YStack paddingHorizontal={16} paddingVertical={4}>
       <OrderIdHistoryItem
         item={item}
+        selectionMode={selectionMode}
+        selected={selectedIds.has(item.id)}
+        onToggleSelect={onToggleSelect}
+        onLongPress={(id) => {
+          if (!selectionMode) {
+            onEnterSelectionMode?.(id);
+          }
+        }}
         onPress={(id) => onNavigateToDetails?.(id)}
         onEdit={() => setEditingItem(item)}
         onCopy={onCopy}
@@ -156,60 +184,102 @@ export function AllOrdersPage({
         borderBottomColor={tokens.border}
       >
         <XStack alignItems="center" gap={12}>
-          {onBack && (
+          {selectionMode ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={onBack}
+              accessibilityLabel="Cancel selection mode"
+              onPress={onExitSelectionMode}
               style={{ cursor: 'pointer' } as any}
             >
-              <LuArrowLeft size={20} color={tokens.text} />
+              <LuX size={20} color={tokens.text} />
             </Pressable>
+          ) : (
+            onBack && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={onBack}
+                style={{ cursor: 'pointer' } as any}
+              >
+                <LuArrowLeft size={20} color={tokens.text} />
+              </Pressable>
+            )
           )}
           <YStack gap={1}>
             <XStack alignItems="center" gap={8}>
               <Text fontSize={16} fontWeight="800" color={tokens.text} letterSpacing={0.2}>
-                All Orders
+                {selectionMode ? `${selectedCount} Selected` : 'All Orders'}
               </Text>
-              <XStack
-                paddingHorizontal={7}
-                paddingVertical={2}
-                borderRadius={tokens.radius.full}
-                backgroundColor={tokens.surfaceRaised}
-                borderWidth={1}
-                borderColor={tokens.border}
-              >
-                {shouldShowShimmer && !totalCount && orders.length === 0 ? (
-                  <YStack width={18} height={12} backgroundColor={tokens.border} borderRadius={tokens.radius.xs} opacity={0.6} />
-                ) : (
-                  <Text fontSize={11} fontWeight="700" color={tokens.accent}>
-                    {totalCount || orders.length}
-                  </Text>
-                )}
-              </XStack>
+              {!selectionMode && (
+                <XStack
+                  paddingHorizontal={7}
+                  paddingVertical={2}
+                  borderRadius={tokens.radius.full}
+                  backgroundColor={tokens.surfaceRaised}
+                  borderWidth={1}
+                  borderColor={tokens.border}
+                >
+                  {shouldShowShimmer && !totalCount && orders.length === 0 ? (
+                    <YStack width={18} height={12} backgroundColor={tokens.border} borderRadius={tokens.radius.xs} opacity={0.6} />
+                  ) : (
+                    <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                      {totalCount || orders.length}
+                    </Text>
+                  )}
+                </XStack>
+              )}
             </XStack>
             <Text fontSize={11} color={tokens.textMuted}>
-              Search, filter & manage complete order history
+              {selectionMode ? 'Select orders to perform batch actions' : 'Search, filter & manage complete order history'}
             </Text>
           </YStack>
         </XStack>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Refresh orders list"
-          onPress={onRefresh}
-          style={{ cursor: 'pointer' } as any}
-        >
-          <XStack
-            padding={8}
-            borderRadius={tokens.radius.full}
-            backgroundColor={tokens.surfaceRaised}
-            alignItems="center"
-            justifyContent="center"
+        {selectionMode ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isAllSelected ? 'Deselect all' : 'Select all'}
+            onPress={onToggleSelectAll}
+            style={{ cursor: 'pointer' } as any}
           >
-            <LuRefreshCw size={18} color={tokens.text} />
-          </XStack>
-        </Pressable>
+            <XStack
+              paddingHorizontal={10}
+              paddingVertical={6}
+              borderRadius={tokens.radius.sm}
+              backgroundColor={tokens.surfaceRaised}
+              borderWidth={1}
+              borderColor={tokens.border}
+              alignItems="center"
+              gap={6}
+            >
+              {isAllSelected ? (
+                <LuCheckSquare size={16} color={tokens.accent} />
+              ) : (
+                <LuSquare size={16} color={tokens.textMuted} />
+              )}
+              <Text fontSize={12} fontWeight="600" color={tokens.text}>
+                {isAllSelected ? 'Deselect All' : 'Select All'}
+              </Text>
+            </XStack>
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh orders list"
+            onPress={onRefresh}
+            style={{ cursor: 'pointer' } as any}
+          >
+            <XStack
+              padding={8}
+              borderRadius={tokens.radius.full}
+              backgroundColor={tokens.surfaceRaised}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <LuRefreshCw size={18} color={tokens.text} />
+            </XStack>
+          </Pressable>
+        )}
       </XStack>
 
       {/* Control Bar: Search & Filter Toggle */}
@@ -482,10 +552,86 @@ export function AllOrdersPage({
           ListFooterComponent={renderFooter}
           contentContainerStyle={{
             paddingTop: 12,
-            paddingBottom: Math.max(32, bottomInset + 24),
+            paddingBottom: Math.max(32, bottomInset + (selectionMode ? 80 : 24)),
           }}
           showsVerticalScrollIndicator={false}
         />
+      )}
+
+      {/* Floating Bottom Batch Action Bar in Selection Mode */}
+      {selectionMode && (
+        <XStack
+          position="absolute"
+          bottom={0}
+          left={0}
+          right={0}
+          paddingHorizontal={16}
+          paddingTop={12}
+          paddingBottom={Math.max(16, bottomInset + 8)}
+          backgroundColor={tokens.surface}
+          borderTopWidth={1}
+          borderTopColor={tokens.border}
+          alignItems="center"
+          justifyContent="space-between"
+          shadowColor="#000"
+          shadowOffset={{ width: 0, height: -3 }}
+          shadowOpacity={0.08}
+          shadowRadius={8}
+          elevation={5}
+        >
+          <XStack alignItems="center" gap={8}>
+            <Text fontSize={13} fontWeight="700" color={tokens.text}>
+              {selectedCount} {selectedCount === 1 ? 'order' : 'orders'} selected
+            </Text>
+          </XStack>
+
+          <XStack alignItems="center" gap={8}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel selection"
+              onPress={onExitSelectionMode}
+              style={{ cursor: 'pointer' } as any}
+            >
+              <XStack
+                paddingHorizontal={14}
+                paddingVertical={8}
+                borderRadius={tokens.radius.sm}
+                backgroundColor={tokens.surfaceRaised}
+                borderWidth={1}
+                borderColor={tokens.border}
+              >
+                <Text fontSize={12} fontWeight="600" color={tokens.text}>
+                  Cancel
+                </Text>
+              </XStack>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${selectedCount} selected orders`}
+              disabled={selectedCount === 0}
+              onPress={onBatchDelete}
+              style={{
+                cursor: selectedCount > 0 ? 'pointer' : 'default',
+                opacity: selectedCount > 0 ? 1 : 0.45,
+              } as any}
+            >
+              <XStack
+                paddingHorizontal={14}
+                paddingVertical={8}
+                borderRadius={tokens.radius.sm}
+                backgroundColor={tokens.error}
+                alignItems="center"
+                gap={6}
+              >
+                <LuTrash2 size={15} color="#FFFFFF" />
+                <Text fontSize={12} fontWeight="700" color="#FFFFFF">
+                  Delete ({selectedCount})
+                </Text>
+              </XStack>
+            </Pressable>
+          </XStack>
+        </XStack>
       )}
 
       {/* Inline Edit Sheet */}

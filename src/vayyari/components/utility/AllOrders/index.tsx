@@ -13,6 +13,7 @@ import {
   DeletedFilter,
 } from '@/components/tamagui-ui/pages/AllOrdersPage';
 import { OrderIdHistoryEntry } from '@/components/tamagui-ui/molecules/OrderIdHistoryItem';
+import { ConfirmDialog } from '@/components/tamagui-ui/molecules/ConfirmDialog';
 
 interface PagedOrderApiResponse {
   items: OrderIdEntry[];
@@ -37,6 +38,12 @@ export const AllOrders = () => {
   const [sourceFilter, setSourceFilter] = useState<OrderSourceFilter>('all');
   const [paymentModeFilter, setPaymentModeFilter] = useState<PaymentModeFilter>('all');
   const [deletedFilter, setDeletedFilter] = useState<DeletedFilter>('active');
+
+  // Selection Mode State
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const mapToHistoryEntry = (item: OrderIdEntry): OrderIdHistoryEntry => ({
     id: item.id,
@@ -214,29 +221,124 @@ export const AllOrders = () => {
     await Clipboard.setStringAsync(textToCopy);
   };
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (orders.length > 0 && orders.every((o) => selectedOrderIds.has(o.id))) {
+      setSelectedOrderIds(new Set());
+    } else {
+      setSelectedOrderIds(new Set(orders.map((o) => o.id)));
+    }
+  };
+
+  const handleEnterSelectionMode = (initialId?: string) => {
+    setSelectionMode(true);
+    if (initialId) {
+      setSelectedOrderIds(new Set([initialId]));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  const handleExitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedOrderIds(new Set());
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    if (selectedOrderIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const idsToDelete = Array.from(selectedOrderIds);
+      const results = await Promise.allSettled(
+        idsToDelete.map((id) => searchApiClient.delete(API_ROUTES.ORDERS.DELETE(id)))
+      );
+
+      const failedCount = results.filter((r) => r.status === 'rejected').length;
+      const successIds = new Set(
+        idsToDelete.filter((_, idx) => results[idx].status === 'fulfilled')
+      );
+
+      if (deletedFilter === 'active') {
+        // Active view: remove successfully deleted orders from list
+        setOrders((prev) => prev.filter((o) => !successIds.has(o.id)));
+        setTotalCount((prev) => Math.max(0, prev - successIds.size));
+      } else {
+        // Mark as deleted in state
+        setOrders((prev) =>
+          prev.map((o) => (successIds.has(o.id) ? { ...o, isDeleted: true } : o))
+        );
+      }
+
+      handleExitSelectionMode();
+      setShowDeleteConfirm(false);
+
+      if (failedCount > 0) {
+        Alert.alert('Notice', `Deleted ${successIds.size} orders. Failed to delete ${failedCount} orders.`);
+      }
+    } catch (err) {
+      console.error('[AllOrders] Failed batch delete:', err);
+      Alert.alert('Error', 'Failed to delete selected orders.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <AllOrdersPage
-      orders={orders}
-      totalCount={totalCount}
-      isLoading={isLoading}
-      isLoadingMore={isLoadingMore}
-      hasMore={hasMore}
-      searchQuery={searchQuery}
-      sortBy={sortBy}
-      sourceFilter={sourceFilter}
-      paymentModeFilter={paymentModeFilter}
-      deletedFilter={deletedFilter}
-      onSearchChange={handleSearchChange}
-      onSortChange={handleSortChange}
-      onSourceFilterChange={handleSourceFilterChange}
-      onPaymentModeFilterChange={handlePaymentModeFilterChange}
-      onDeletedFilterChange={handleDeletedFilterChange}
-      onLoadMore={handleLoadMore}
-      onRefresh={handleRefresh}
-      onUpdateOrder={handleUpdate}
-      onCopy={copyToClipboard}
-      onNavigateToDetails={(id) => router.push(`/utilities/order-details/${id}`)}
-      onBack={() => router.back()}
-    />
+    <>
+      <AllOrdersPage
+        orders={orders}
+        totalCount={totalCount}
+        isLoading={isLoading}
+        isLoadingMore={isLoadingMore}
+        hasMore={hasMore}
+        searchQuery={searchQuery}
+        sortBy={sortBy}
+        sourceFilter={sourceFilter}
+        paymentModeFilter={paymentModeFilter}
+        deletedFilter={deletedFilter}
+        selectionMode={selectionMode}
+        selectedIds={selectedOrderIds}
+        onToggleSelect={handleToggleSelect}
+        onToggleSelectAll={handleToggleSelectAll}
+        onEnterSelectionMode={handleEnterSelectionMode}
+        onExitSelectionMode={handleExitSelectionMode}
+        onBatchDelete={() => setShowDeleteConfirm(true)}
+        onSearchChange={handleSearchChange}
+        onSortChange={handleSortChange}
+        onSourceFilterChange={handleSourceFilterChange}
+        onPaymentModeFilterChange={handlePaymentModeFilterChange}
+        onDeletedFilterChange={handleDeletedFilterChange}
+        onLoadMore={handleLoadMore}
+        onRefresh={handleRefresh}
+        onUpdateOrder={handleUpdate}
+        onCopy={copyToClipboard}
+        onNavigateToDetails={(id) => router.push(`/utilities/order-details/${id}`)}
+        onBack={() => router.back()}
+      />
+
+      <ConfirmDialog
+        visible={showDeleteConfirm}
+        title="Delete Selected Orders"
+        message={`Are you sure you want to mark ${selectedOrderIds.size} ${
+          selectedOrderIds.size === 1 ? 'order' : 'orders'
+        } as deleted? This will soft-delete the records.`}
+        confirmLabel={isDeleting ? 'Deleting...' : `Delete (${selectedOrderIds.size})`}
+        cancelLabel="Cancel"
+        intent="critical"
+        onConfirm={handleConfirmBatchDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+    </>
   );
 };
