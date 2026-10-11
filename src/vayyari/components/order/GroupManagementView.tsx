@@ -351,17 +351,37 @@ export function GroupManagementView({
           : data.find((s) => s.status !== 'cancelled');
         const syncStatus = matched?.metadata?.last_sync_status || matched?.status || 'Manifested';
         const syncInst = matched?.metadata?.last_sync_instruction || '';
+        const pickupDate = matched?.metadata?.pickup_scheduled_date;
+        const pickupId = matched?.metadata?.pickup_id;
 
-        setConfirmDialog({
-          visible: true,
-          title: 'Carrier Status Refreshed',
-          message: `Live Delhivery tracking synced successfully.\n\nStatus: ${syncStatus}${syncInst ? `\nDetails: ${syncInst}` : ''}${matched?.metadata?.pickup_scheduled_date ? `\nPickup Date: ${matched.metadata.pickup_scheduled_date}` : ''}`,
-          confirmLabel: 'OK',
-          intent: 'info',
-          icon: <LuCheckCircle2 size={20} color={tokens.accent} />,
-          singleButton: true,
-          onConfirm: () => setConfirmDialog((prev) => ({ ...prev, visible: false })),
-        });
+        if (pickupDate || pickupId) {
+          setConfirmDialog({
+            visible: true,
+            title: 'Carrier Status Refreshed',
+            message: `Live Delhivery tracking synced successfully.\n\nPackage Status: ${syncStatus}${syncInst ? `\nDetails: ${syncInst}` : ''}\nPickup Appointment: Scheduled for ${pickupDate}${pickupId ? ` (ID: ${pickupId})` : ''}`,
+            confirmLabel: 'OK',
+            intent: 'info',
+            icon: <LuCheckCircle2 size={20} color={tokens.accent} />,
+            singleButton: true,
+            onConfirm: () => setConfirmDialog((prev) => ({ ...prev, visible: false })),
+          });
+        } else {
+          setConfirmDialog({
+            visible: true,
+            title: 'Carrier Status Refreshed',
+            message: `Live Delhivery tracking synced successfully.\n\nPackage Status: ${syncStatus}${syncInst ? `\nDetails: ${syncInst}` : ''}\nPickup Status: Ready to Ship (No active pickup scheduled on carrier).\n\nWould you like to schedule a pickup now?`,
+            confirmLabel: 'Schedule Pickup',
+            cancelLabel: 'Close',
+            intent: 'attention',
+            icon: <LuCalendar size={20} color={tokens.accent} />,
+            singleButton: false,
+            onConfirm: () => {
+              setConfirmDialog((prev) => ({ ...prev, visible: false }));
+              setShowSchedulePickup(true);
+            },
+            onCancel: () => setConfirmDialog((prev) => ({ ...prev, visible: false })),
+          });
+        }
       } else {
         setScheduledPickupInfo(null);
       }

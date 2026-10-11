@@ -1001,6 +1001,61 @@ public class OrderRepository : IOrderRepository
 
                     using var connection = await _dbConnectionFactory.CreateConnectionAsync();
 
+                    // Check if existing pickup appointment on Delhivery was cancelled
+                    string? existingPickupDate = null;
+                    string? existingPickupLoc = null;
+                    string? existingPickupId = null;
+
+                    if (targetShipment.Metadata != null && targetShipment.Metadata.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        var root = targetShipment.Metadata.RootElement;
+                        if (root.TryGetProperty("pickup_scheduled_date", out var pDateProp) && pDateProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            existingPickupDate = pDateProp.GetString();
+                        }
+                        if (root.TryGetProperty("pickupLocation", out var pLocProp) && pLocProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            existingPickupLoc = pLocProp.GetString();
+                        }
+                        else if (root.TryGetProperty("pickup_location", out var pLocProp2) && pLocProp2.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            existingPickupLoc = pLocProp2.GetString();
+                        }
+                        if (root.TryGetProperty("pickup_id", out var pIdProp) && pIdProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            existingPickupId = pIdProp.GetString();
+                        }
+                    }
+
+                    // If a pickup was scheduled, verify with Delhivery FM API whether the pickup appointment is still active
+                    if (!string.IsNullOrWhiteSpace(existingPickupDate) && !string.IsNullOrWhiteSpace(existingPickupLoc))
+                    {
+                        try
+                        {
+                            var probe = await _delhiveryClient.SchedulePickupAsync(new DelhiveryPickupRequest
+                            {
+                                PickupLocation = existingPickupLoc,
+                                PickupDate = existingPickupDate,
+                                PickupTime = "14:00:00",
+                                ExpectedPackageCount = 1
+                            });
+
+                            // If Delhivery created a brand new pickup request instead of returning prExist=true (with existing ID),
+                            // or returned a completely different pickup ID, the previous appointment was cancelled or expired
+                            if (probe != null && probe.PrExist != true && !string.IsNullOrWhiteSpace(existingPickupId) && probe.PickupId != existingPickupId)
+                            {
+                                _logger.LogInformation("Carrier pickup {OldId} was cancelled on Delhivery. Resetting pickup schedule for {OrderGrpId}",
+                                    existingPickupId, orderGrpId);
+                                isPickupCancelled = true;
+                            }
+                        }
+                        catch (Exception probeEx)
+                        {
+                            _logger.LogWarning(probeEx, "Could not verify pickup request status for warehouse {Wh} on date {Date}",
+                                existingPickupLoc, existingPickupDate);
+                        }
+                    }
+
                     if (isPickupCancelled)
                     {
                         await connection.ExecuteAsync(@"
@@ -1013,6 +1068,7 @@ public class OrderRepository : IOrderRepository
                                                'last_sync_status', @Status,
                                                'last_sync_code', @StatusCode,
                                                'last_sync_instruction', @Instructions,
+                                               'pickup_reset_at', NOW()::text,
                                                'last_sync_at', NOW()::text
                                            ),
                                 updated_at = NOW()
