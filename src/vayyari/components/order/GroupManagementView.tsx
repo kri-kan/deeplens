@@ -2219,6 +2219,13 @@ export function GroupManagementView({
                 const cancelledAt = meta.cancelled_at || hist.updatedAt || hist.createdAt;
                 const cancelReason = meta.cancellation_reason || meta.cancelled_reason;
 
+                const recipientName = meta.recipientName ?? meta.recipient_name ?? meta.customerName ?? meta.customer_name;
+                const recipientPhone = meta.recipientPhone ?? meta.recipient_phone ?? meta.customerPhone ?? meta.customer_phone;
+                const recipientAddress = meta.recipientAddress ?? meta.recipient_address ?? meta.shippingStreet ?? meta.shipping_street ?? meta.customerAddress;
+                const recipientPin = meta.recipientPincode ?? meta.recipient_pincode ?? meta.shippingPincode ?? meta.shipping_pincode;
+                const recipientCity = meta.recipientCity ?? meta.recipient_city ?? meta.shippingCity ?? meta.shipping_city;
+                const recipientState = meta.recipientState ?? meta.recipient_state ?? meta.shippingState ?? meta.shipping_state;
+
                 return (
                   <YStack
                     key={`${hist.awbNumber || idx}-${idx}`}
@@ -2357,6 +2364,43 @@ export function GroupManagementView({
                         <Text fontSize={9} fontWeight="800" color={tokens.textMuted} textTransform="uppercase">
                           MANIFEST FORM DATA USED
                         </Text>
+
+                        {(Boolean(recipientName) || Boolean(recipientPhone) || Boolean(recipientAddress)) && (
+                          <YStack
+                            backgroundColor={tokens.surfaceRaised}
+                            padding={8}
+                            borderRadius={4}
+                            borderWidth={1}
+                            borderColor={tokens.border}
+                            gap={4}
+                          >
+                            <XStack alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={4}>
+                              <XStack alignItems="center" gap={6}>
+                                <Text fontSize={8} color={tokens.textMuted} fontWeight="700">CONSIGNEE</Text>
+                                {Boolean(recipientName) && (
+                                  <Text fontSize={11} fontWeight="800" color={tokens.text}>
+                                    {recipientName}
+                                  </Text>
+                                )}
+                              </XStack>
+                              {Boolean(recipientPhone) && (
+                                <Text fontSize={11} fontWeight="700" color={tokens.accent}>
+                                  {recipientPhone}
+                                </Text>
+                              )}
+                            </XStack>
+
+                            {(Boolean(recipientAddress) || Boolean(recipientPin)) && (
+                              <YStack gap={2}>
+                                <Text fontSize={8} color={tokens.textMuted} fontWeight="700">DELIVERY ADDRESS</Text>
+                                <Text fontSize={10} color={tokens.textSecondary} lineHeight={14}>
+                                  {[recipientAddress, recipientCity, recipientState].filter(Boolean).join(', ')}
+                                  {Boolean(recipientPin) ? ` - ${recipientPin}` : ''}
+                                </Text>
+                              </YStack>
+                            )}
+                          </YStack>
+                        )}
 
                         <XStack flexWrap="wrap" gap={8}>
                           {Boolean(weight) && (
