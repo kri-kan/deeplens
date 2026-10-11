@@ -32,7 +32,9 @@ public record GenerateGroupLabelCommand(
     string? OrderType = null,
     string? ResellerName = null,
     string? SellerName = null,
-    string? SellerAddress = null) : IRequest<Result<GenerateGroupLabelResponse>>;
+    string? SellerAddress = null,
+    Guid? WarehouseId = null,
+    string? WarehouseCode = null) : IRequest<Result<GenerateGroupLabelResponse>>;
 
 public record GenerateGroupLabelResponse(
     string OrderGrpId,
@@ -116,12 +118,25 @@ public class GenerateGroupLabelCommandHandler : IRequestHandler<GenerateGroupLab
             // Resolve pickup warehouse
             Warehouse? resolvedWarehouse = null;
 
-            if (!string.IsNullOrWhiteSpace(request.PickupLocation))
+            if (request.WarehouseId.HasValue && request.WarehouseId.Value != Guid.Empty)
+            {
+                resolvedWarehouse = await _logisticsRepository.GetWarehouseByIdAsync(request.WarehouseId.Value);
+            }
+
+            if (resolvedWarehouse == null && !string.IsNullOrWhiteSpace(request.PickupLocation))
             {
                 var allWarehouses = await _logisticsRepository.GetAllWarehousesAsync();
                 resolvedWarehouse = allWarehouses.FirstOrDefault(w =>
-                    w.Code.Equals(request.PickupLocation, StringComparison.OrdinalIgnoreCase) ||
-                    w.Name.Equals(request.PickupLocation, StringComparison.OrdinalIgnoreCase));
+                    w.Name.Equals(request.PickupLocation, StringComparison.OrdinalIgnoreCase))
+                    ?? allWarehouses.FirstOrDefault(w =>
+                    w.Code.Equals(request.PickupLocation, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (resolvedWarehouse == null && !string.IsNullOrWhiteSpace(request.WarehouseCode))
+            {
+                var allWarehouses = await _logisticsRepository.GetAllWarehousesAsync();
+                resolvedWarehouse = allWarehouses.FirstOrDefault(w =>
+                    w.Code.Equals(request.WarehouseCode, StringComparison.OrdinalIgnoreCase));
             }
 
             if (resolvedWarehouse == null && !string.IsNullOrWhiteSpace(group.VendorName))

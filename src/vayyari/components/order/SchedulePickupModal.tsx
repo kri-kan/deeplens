@@ -26,6 +26,8 @@ export interface SchedulePickupModalProps {
     displayInfo: string;
   }) => void;
   pickupLocation: string; // Delhivery registered warehouse name
+  warehouseId?: string;
+  warehouseCode?: string;
   expectedPackageCount?: number;
   orderGrpId?: string;
   awbNumber?: string;
@@ -69,6 +71,8 @@ export function SchedulePickupModal({
   onDismiss,
   onSuccess,
   pickupLocation,
+  warehouseId,
+  warehouseCode,
   expectedPackageCount = 1,
   orderGrpId,
   awbNumber,
@@ -97,14 +101,18 @@ export function SchedulePickupModal({
     }
     setLoading(true);
     try {
-      const res = await searchApiClient.post<PickupResponseDto>('/api/v1/logistics/pickups/schedule', {
+      const payload: Record<string, any> = {
         pickupLocation: pickupLocation.trim(),
         pickupDate: selectedDate.date,
         pickupTime: selectedSlot.value,
         expectedPackageCount,
         orderGrpId,
         awbNumber,
-      });
+      };
+      if (warehouseId) payload.warehouseId = warehouseId;
+      if (warehouseCode) payload.warehouseCode = warehouseCode;
+
+      const res = await searchApiClient.post<PickupResponseDto>('/api/v1/logistics/pickups/schedule', payload);
 
       if (res && res.success === false) {
         const errMsg = res.message || 'Failed to schedule pickup.';

@@ -225,7 +225,9 @@ public class OrderIdController : ControllerBase
             request?.OrderType,
             request?.ResellerName,
             request?.SellerName,
-            request?.SellerAddress);
+            request?.SellerAddress,
+            request?.WarehouseId,
+            request?.WarehouseCode);
         var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
@@ -353,6 +355,12 @@ public class NeedLabelUpdateRequest
 
 public class GenerateGroupLabelRequest
 {
+    [JsonPropertyName("warehouseId")]
+    public Guid? WarehouseId { get; set; }
+
+    [JsonPropertyName("warehouseCode")]
+    public string? WarehouseCode { get; set; }
+
     [JsonPropertyName("pickupLocation")]
     public string? PickupLocation { get; set; }
 

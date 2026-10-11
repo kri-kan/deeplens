@@ -213,6 +213,15 @@ export interface MarkInTransitPayload {
   notes?: string;
 }
 
+export interface SelectedPickupFacility {
+  displayName: string;     // e.g. "Hyd apartment (hyd)"
+  alias: string;           // e.g. "hyd"
+  canonicalName: string;   // e.g. "Hyd apartment" (registered with Delhivery)
+  code: string;            // e.g. "HYD-APT"
+  id: string;              // UUID
+  pincode: string;
+}
+
 export interface GenerateDelhiveryAwbRequest {
   orderId: string;
   packageId: string;
@@ -224,6 +233,9 @@ export interface GenerateDelhiveryAwbRequest {
   };
   codAmount: number;
   pickupLocationName?: string;
+  warehouseId?: string;
+  warehouseCode?: string;
+  canonicalPickupLocation?: string;
 }
 
 export interface GenerateDelhiveryAwbResponse {
@@ -419,6 +431,8 @@ export interface PickupRequestDto {
   expectedPackageCount?: number;
   orderGrpId?: string;
   awbNumber?: string;
+  warehouseId?: string;
+  warehouseCode?: string;
 }
 
 export interface PickupResponseDto {
