@@ -35,16 +35,64 @@ public class PickupService : IPickupService
             ? "14:00:00"
             : request.PickupTime;
 
+        // Resolve registered Delhivery warehouse name.
+        // If pickupLocation was passed as an alias or internal code (e.g. 'hyd'), resolve the canonical registered name ('Hyd apartment').
+        var effectiveLocation = request.PickupLocation?.Trim() ?? string.Empty;
+        try
+        {
+            using var lookupConn = await _dbConnectionFactory.CreateConnectionAsync();
+
+            // 1. If AWB or OrderGrpId provided, check if shipment metadata has the exact pickup_location used during manifest
+            if (!string.IsNullOrWhiteSpace(request.AwbNumber) || !string.IsNullOrWhiteSpace(request.OrderGrpId))
+            {
+                var manifestLocation = await lookupConn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT COALESCE(metadata->>'pickupLocation', metadata->>'pickup_location')
+                    FROM shipments
+                    WHERE (@AwbNumber IS NOT NULL AND awb_number = @AwbNumber)
+                       OR (@OrderGrpId IS NOT NULL AND (order_number = @OrderGrpId OR shipment_number = @OrderGrpId))
+                    ORDER BY created_at DESC
+                    LIMIT 1",
+                    new { AwbNumber = request.AwbNumber, OrderGrpId = request.OrderGrpId });
+
+                if (!string.IsNullOrWhiteSpace(manifestLocation))
+                {
+                    effectiveLocation = manifestLocation.Trim();
+                }
+            }
+
+            // 2. If not resolved from shipment, lookup by alias, code, or name from warehouses table
+            if (string.IsNullOrWhiteSpace(effectiveLocation) || effectiveLocation.Length <= 10)
+            {
+                var whName = await lookupConn.QueryFirstOrDefaultAsync<string>(@"
+                    SELECT name
+                    FROM warehouses
+                    WHERE LOWER(alias) = LOWER(@Loc)
+                       OR LOWER(code) = LOWER(@Loc)
+                       OR LOWER(name) = LOWER(@Loc)
+                    LIMIT 1",
+                    new { Loc = effectiveLocation });
+
+                if (!string.IsNullOrWhiteSpace(whName))
+                {
+                    effectiveLocation = whName.Trim();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve canonical warehouse name for pickup location {Loc}", request.PickupLocation);
+        }
+
         var delhiveryRequest = new DelhiveryPickupRequest
         {
-            PickupLocation = request.PickupLocation,
+            PickupLocation = effectiveLocation,
             PickupDate = pickupDate,
             PickupTime = pickupTime,
             ExpectedPackageCount = request.ExpectedPackageCount > 0 ? request.ExpectedPackageCount : 1
         };
 
         _logger.LogInformation("Scheduling pickup with Delhivery at location {Location} for date {Date} and count {Count}",
-            request.PickupLocation, pickupDate, request.ExpectedPackageCount);
+            effectiveLocation, pickupDate, request.ExpectedPackageCount);
 
         var res = await _delhiveryClient.SchedulePickupAsync(delhiveryRequest, ct);
 

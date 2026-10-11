@@ -169,6 +169,7 @@ export function GroupManagementView({
     displayInfo: string;
     statusText?: string;
   } | null>(null);
+  const [pickupFacilityName, setPickupFacilityName] = useState<string>('');
   const [isRefreshingPickup, setIsRefreshingPickup] = useState(false);
   const [tilePreviewImageLoading, setTilePreviewImageLoading] = useState(true);
   const [tilePreviewImageError, setTilePreviewImageError] = useState(false);
@@ -303,6 +304,13 @@ export function GroupManagementView({
       : shipments.find((s) => s.status !== 'cancelled');
 
     const meta = matched?.metadata;
+    if (meta) {
+      const registeredLoc = meta.pickupLocation || meta.pickup_location || meta.pickupFacility?.name || '';
+      if (registeredLoc) {
+        setPickupFacilityName(registeredLoc);
+      }
+    }
+
     if (meta && (meta.pickup_scheduled_date || meta.pickup_id)) {
       const pDate = meta.pickup_scheduled_date || '';
       const pTime = meta.pickup_slot || meta.pickup_scheduled_time || '';
@@ -2774,7 +2782,7 @@ export function GroupManagementView({
             });
           }
         }}
-        pickupLocation={auditData?.pickupFacility?.name || warehouseAlias || vendorName || 'HYDERABAD'}
+        pickupLocation={pickupFacilityName || auditData?.pickupFacility?.name || warehouseAlias || vendorName || 'HYDERABAD'}
         expectedPackageCount={1}
         orderGrpId={orderGrpId}
         awbNumber={stagedAwb || awbNumber}
