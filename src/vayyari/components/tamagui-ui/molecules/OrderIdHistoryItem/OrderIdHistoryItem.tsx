@@ -6,6 +6,7 @@ import { LuCopy, LuCheck, LuPencil, LuTag } from '../../icons/lu';
 import { useTheme } from '@/theme';
 import { TimestampBadge } from '../../atoms/TimestampBadge';
 import { StatusBadge } from '../../atoms/StatusBadge';
+import { CustomCheckbox } from '../../atoms/CustomCheckbox';
 import { openPlatformHandle, formatDisplayHandle } from '@/utils/platformLink';
 
 export interface OrderGroupSummary {
@@ -133,6 +134,10 @@ export interface OrderIdHistoryItemProps {
   onCopy?: (id: string, includePrefix?: boolean) => void;
   onEdit?: (id: string) => void;
   onOpenPlatform?: (source: string, handle?: string) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onLongPress?: (id: string) => void;
 }
 
 const WHATSAPP_GREEN = '#25D366';
@@ -144,6 +149,10 @@ export function OrderIdHistoryItem({
   onCopy,
   onEdit,
   onOpenPlatform,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onLongPress,
 }: OrderIdHistoryItemProps) {
   const { tokens } = useTheme();
   const [copiedType, setCopiedType] = useState<'raw' | 'prefix' | null>(null);
@@ -176,79 +185,108 @@ export function OrderIdHistoryItem({
   };
 
   return (
-    <XStack
-      backgroundColor={tokens.surface}
-      borderRadius={0}
-      borderWidth={1}
-      borderColor={tokens.border}
-      paddingVertical={10}
-      paddingHorizontal={12}
-      alignItems="center"
-      justifyContent="space-between"
-      opacity={item.isDeleted ? 0.55 : 1}
-      shadowColor="#000"
-      shadowOffset={{ width: 0, height: 1 }}
-      shadowOpacity={0.03}
-      shadowRadius={4}
+    <Pressable
+      onLongPress={() => onLongPress?.(item.id)}
+      onPress={() => {
+        if (selectionMode) {
+          onToggleSelect?.(item.id);
+        } else {
+          onPress?.(item.id);
+        }
+      }}
+      delayLongPress={250}
+      style={{ width: '100%' }}
     >
-      {/* Left: Platform Icon & Order Details */}
-      <XStack alignItems="center" gap={8} flex={1} minWidth={0}>
-        {/* Platform Circle Badge (Clickable Deep-Link) */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          accessibilityRole="link"
-          accessibilityLabel={`Open ${item.source} chat or profile`}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={handleOpenPlatform}
-          style={{ cursor: 'pointer' } as any}
-        >
-          <XStack
-            width={32}
-            height={32}
-            borderRadius={tokens.radius.full}
-            backgroundColor={
-              isWhatsApp
-                ? `${WHATSAPP_GREEN}18`
-                : isInstagram
-                ? `${INSTAGRAM_PINK}18`
-                : tokens.surfaceRaised
-            }
-            alignItems="center"
-            justifyContent="center"
+      <XStack
+        backgroundColor={selected ? `${tokens.accent}12` : tokens.surface}
+        borderRadius={0}
+        borderWidth={1}
+        borderColor={selected ? tokens.accent : tokens.border}
+        paddingVertical={10}
+        paddingHorizontal={12}
+        alignItems="center"
+        justifyContent="space-between"
+        opacity={item.isDeleted ? 0.55 : 1}
+        shadowColor="#000"
+        shadowOffset={{ width: 0, height: 1 }}
+        shadowOpacity={0.03}
+        shadowRadius={4}
+      >
+        {/* Left: Checkbox (in selection mode) + Platform Icon & Order Details */}
+        <XStack alignItems="center" gap={8} flex={1} minWidth={0}>
+          {selectionMode && (
+            <XStack marginRight={4} justifyContent="center" alignItems="center">
+              <CustomCheckbox
+                checked={selected}
+                onToggle={() => onToggleSelect?.(item.id)}
+                size={20}
+                accessibilityLabel={`Select order ${item.id}`}
+              />
+            </XStack>
+          )}
+
+          {/* Platform Circle Badge (Clickable Deep-Link) */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${item.source} chat or profile`}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={handleOpenPlatform}
+            style={{ cursor: 'pointer' } as any}
           >
-            {isWhatsApp ? (
-              <RiWhatsappFill size={18} color={WHATSAPP_GREEN} />
-            ) : isInstagram ? (
-              <RiInstagramFill size={18} color={INSTAGRAM_PINK} />
-            ) : (
-              <LuTag size={16} color={tokens.textMuted} />
-            )}
-          </XStack>
-        </TouchableOpacity>
-
-        {/* Text Info */}
-        <YStack gap={2} flex={1} minWidth={0}>
-          <XStack alignItems="center" gap={5} flexWrap="nowrap">
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={`View details for order ${item.id}`}
-              onPress={() => onPress?.(item.id)}
+            <XStack
+              width={32}
+              height={32}
+              borderRadius={tokens.radius.full}
+              backgroundColor={
+                isWhatsApp
+                  ? `${WHATSAPP_GREEN}18`
+                  : isInstagram
+                  ? `${INSTAGRAM_PINK}18`
+                  : tokens.surfaceRaised
+              }
+              alignItems="center"
+              justifyContent="center"
             >
-              <Text
-                fontSize={14}
-                fontWeight="800"
-                color={tokens.accent}
-                letterSpacing={0.3}
-              >
-                #{item.id}
-              </Text>
-            </Pressable>
+              {isWhatsApp ? (
+                <RiWhatsappFill size={18} color={WHATSAPP_GREEN} />
+              ) : isInstagram ? (
+                <RiInstagramFill size={18} color={INSTAGRAM_PINK} />
+              ) : (
+                <LuTag size={16} color={tokens.textMuted} />
+              )}
+            </XStack>
+          </TouchableOpacity>
 
-            {item.isDeleted && (
-              <XStack
-                backgroundColor={`${tokens.error}18`}
-                paddingHorizontal={5}
-                paddingVertical={2}
+          {/* Text Info */}
+          <YStack gap={2} flex={1} minWidth={0}>
+            <XStack alignItems="center" gap={5} flexWrap="nowrap">
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`View details for order ${item.id}`}
+                onPress={() => {
+                  if (selectionMode) {
+                    onToggleSelect?.(item.id);
+                  } else {
+                    onPress?.(item.id);
+                  }
+                }}
+              >
+                <Text
+                  fontSize={14}
+                  fontWeight="800"
+                  color={tokens.accent}
+                  letterSpacing={0.3}
+                >
+                  #{item.id}
+                </Text>
+              </Pressable>
+
+              {item.isDeleted && (
+                <XStack
+                  backgroundColor={`${tokens.error}18`}
+                  paddingHorizontal={5}
+                  paddingVertical={2}
                 borderRadius={tokens.radius.xs}
               >
                 <Text fontSize={9} fontWeight="700" color={tokens.error}>
@@ -378,6 +416,7 @@ export function OrderIdHistoryItem({
         )}
       </XStack>
     </XStack>
+    </Pressable>
   );
 }
 
