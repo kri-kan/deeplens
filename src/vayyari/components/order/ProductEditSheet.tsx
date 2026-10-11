@@ -315,17 +315,9 @@ export function ProductEditSheet({
     if (pendingPhotoFile) {
       try {
         setIsSaving(true);
+        const blob = await uriToBlob(pendingPhotoFile.uri, pendingPhotoFile.mimeType);
         const formData = new FormData();
-        if (Platform.OS === 'web') {
-          const blob = await uriToBlob(pendingPhotoFile.uri, pendingPhotoFile.mimeType);
-          formData.append('file', blob, pendingPhotoFile.fileName);
-        } else {
-          formData.append('file', {
-            uri: pendingPhotoFile.uri,
-            name: pendingPhotoFile.fileName,
-            type: pendingPhotoFile.mimeType,
-          } as any);
-        }
+        formData.append('file', blob, pendingPhotoFile.fileName);
 
         const uploadRes = await searchApiClient.postFormData<{
           id: string;
