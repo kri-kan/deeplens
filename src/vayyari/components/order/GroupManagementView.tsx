@@ -10,6 +10,7 @@ import {
   View,
   Linking,
   Alert,
+  Share,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YStack, XStack, Text } from 'tamagui';
@@ -509,9 +510,10 @@ export function GroupManagementView({
       const rawLabelUrl = stagedLabelUrl || labelUrl;
       const resolvedUrl = resolveLabelUrl(rawLabelUrl);
 
-      // 1. Copy AWB directly to clipboard
-      if (activeAwb) {
-        await Clipboard.setStringAsync(activeAwb);
+      // 1. Copy Order ID directly to clipboard so user can paste it when sharing label
+      const idToCopy = (orderId || orderGrpId || '').trim();
+      if (idToCopy) {
+        await Clipboard.setStringAsync(idToCopy);
       }
 
       // 2. Resolve filename as "warehouse alias" + "customer name"
@@ -538,13 +540,20 @@ export function GroupManagementView({
   const handleShareAddress = async () => {
     if (!isSharingEnabled) return;
     try {
-      const clipText = [
+      const addressLines = [
         `Delivery Address:`,
         address?.name || 'Customer',
         address?.address || '',
         `PIN: ${address?.pincode || ''}`,
         `Phone: ${address?.phone || ''}`,
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean);
+
+      const resolvedOrderGrpId = (orderGrpId || (orderId ? `${orderId}-${vendorName}` : '')).trim();
+      if (resolvedOrderGrpId) {
+        addressLines.push(`Order Group ID: ${resolvedOrderGrpId}`);
+      }
+
+      const clipText = addressLines.join('\n');
 
       await Clipboard.setStringAsync(clipText);
 
@@ -554,9 +563,13 @@ export function GroupManagementView({
         }
       } else {
         try {
-          const RNShare = require('react-native-share').default;
-          await RNShare.open({ title: 'Customer Delivery Address', message: clipText, failOnCancel: false });
-        } catch {}
+          await Share.share({ title: 'Customer Delivery Address', message: clipText });
+        } catch {
+          try {
+            const RNShare = require('react-native-share').default;
+            await RNShare.open({ title: 'Customer Delivery Address', message: clipText, failOnCancel: false });
+          } catch {}
+        }
       }
 
       setShareConfirmTarget({
@@ -872,17 +885,6 @@ export function GroupManagementView({
           >
             <LuArrowLeft size={22} color={tokens.text} />
           </Pressable>
-
-          <XStack
-            width={32}
-            height={32}
-            borderRadius={tokens.radius.full}
-            backgroundColor={isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}1A`}
-            alignItems="center"
-            justifyContent="center"
-          >
-            <LuBuilding2 size={18} color={isUnassigned ? tokens.textMuted : tokens.accent} />
-          </XStack>
 
           <YStack flex={1}>
             <Text fontSize={15} fontWeight="800" color={tokens.text} numberOfLines={1}>

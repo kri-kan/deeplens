@@ -1057,6 +1057,11 @@ export const AdminOrderDetailView: React.FC<AdminOrderDetailViewProps> = ({
       {/* ── Detail Header ── */}
       <DetailHeader
         orderId={orderId}
+        orderGrpId={
+          orderData?.groups?.length === 1 && orderData.groups[0]?.orderGrpId
+            ? orderData.groups[0].orderGrpId
+            : undefined
+        }
         createdAt={createdAt}
         status={derivedStageTag}
         statusCount={distinctGroupKeys.length > 1 ? distinctGroupKeys.length - 1 : 0}

@@ -18,7 +18,6 @@ import {
   LuX,
   LuRefreshCw,
   LuInbox,
-  LuBuilding2,
   LuChevronRight,
   LuPackage,
 } from '../icons/lu';
@@ -268,16 +267,6 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
             gap={8}
           >
             <XStack alignItems="center" gap={8} flex={1}>
-              <XStack
-                width={28}
-                height={28}
-                borderRadius={tokens.radius.full}
-                backgroundColor={isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
-                alignItems="center"
-                justifyContent="center"
-              >
-                <LuBuilding2 size={15} color={isUnassigned ? tokens.textMuted : tokens.accent} />
-              </XStack>
               <YStack gap={2} flex={1}>
                 <XStack alignItems="center" gap={6} flexWrap="wrap">
                   <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
@@ -469,16 +458,6 @@ export function ProcessOrdersPage({ disableSafeArea = false, onBack }: ProcessOr
           gap={8}
         >
           <XStack alignItems="center" gap={8} flex={1}>
-            <XStack
-              width={26}
-              height={26}
-              borderRadius={tokens.radius.full}
-              backgroundColor={isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <LuBuilding2 size={14} color={isUnassigned ? tokens.textMuted : tokens.accent} />
-            </XStack>
             <YStack flex={1} gap={2}>
               <XStack alignItems="center" gap={6} flexWrap="wrap">
                 <Text fontSize={12.5} fontWeight="800" color={tokens.text} numberOfLines={1}>
