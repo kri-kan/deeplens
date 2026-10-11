@@ -110,6 +110,16 @@ export function ProductEditSheet({
   const handlePickPhoto = async () => {
     try {
       setIsPickingImage(true);
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Media library access is required to attach product photos.'
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
@@ -119,33 +129,48 @@ export function ProductEditSheet({
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const rawFileName = asset.fileName || asset.uri.split('/').pop() || `order_item_${Date.now()}.jpg`;
+        const rawExt = rawFileName.split('.').pop()?.toLowerCase() || 'jpg';
+        const rawMimeType = asset.mimeType || (rawExt === 'png' ? 'image/png' : 'image/jpeg');
 
-        // Compress and convert to high-efficiency WebP format in local device cache
-        const compressed = await compressImageToWebP(asset.uri, rawFileName, {
-          maxWidth: 1920,
-          maxHeight: 1920,
-          quality: 0.8,
-          originalWidth: asset.width,
-          originalHeight: asset.height,
-        });
+        // Stage photo safely in local cache; attempt WebP compression but gracefully fall back to original URI if manipulator fails
+        let stagedUri = asset.uri;
+        let stagedFileName = rawFileName;
+        let stagedMimeType = rawMimeType;
+
+        try {
+          const compressed = await compressImageToWebP(asset.uri, rawFileName, {
+            maxWidth: 1920,
+            maxHeight: 1920,
+            quality: 0.8,
+            originalWidth: asset.width,
+            originalHeight: asset.height,
+          });
+          if (compressed?.uri) {
+            stagedUri = compressed.uri;
+            stagedFileName = compressed.fileName;
+            stagedMimeType = compressed.mimeType;
+          }
+        } catch (compressionErr) {
+          console.warn('[handlePickPhoto] Compression fallback to original asset:', compressionErr);
+        }
 
         // Stage in local state and render preview immediately on the tile from local cache URI
         // Zero network calls or MinIO uploads occur until user explicitly saves
         setPendingPhotoFile({
-          uri: compressed.uri,
-          fileName: compressed.fileName,
-          mimeType: compressed.mimeType,
+          uri: stagedUri,
+          fileName: stagedFileName,
+          mimeType: stagedMimeType,
         });
         setIsPhotoRemoved(false);
 
         setForm((prev) => (prev ? {
           ...prev,
-          photoUri: compressed.uri,
-          image: compressed.uri,
+          photoUri: stagedUri,
+          image: stagedUri,
         } : prev));
       }
     } catch (err: any) {
-      console.warn('Failed to pick and compress image:', err);
+      console.warn('Failed to pick image:', err);
       Alert.alert('Image Selection Failed', err?.message || 'Could not process selected image.');
     } finally {
       setIsPickingImage(false);
@@ -290,9 +315,17 @@ export function ProductEditSheet({
     if (pendingPhotoFile) {
       try {
         setIsSaving(true);
-        const blob = await uriToBlob(pendingPhotoFile.uri, pendingPhotoFile.mimeType);
         const formData = new FormData();
-        formData.append('file', blob, pendingPhotoFile.fileName);
+        if (Platform.OS === 'web') {
+          const blob = await uriToBlob(pendingPhotoFile.uri, pendingPhotoFile.mimeType);
+          formData.append('file', blob, pendingPhotoFile.fileName);
+        } else {
+          formData.append('file', {
+            uri: pendingPhotoFile.uri,
+            name: pendingPhotoFile.fileName,
+            type: pendingPhotoFile.mimeType,
+          } as any);
+        }
 
         const uploadRes = await searchApiClient.postFormData<{
           id: string;
