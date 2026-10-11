@@ -99,6 +99,14 @@ export function useShareIntent() {
     router.push('/utilities/create-product');
   };
 
+  const handleAppendToOrder = () => {
+    setModalVisible(false);
+    setSharedMedia(modalMedia, modalSessionId);
+    setModalMedia([]);
+    setModalSessionId(undefined);
+    router.push('/utilities/append-to-order');
+  };
+
   const handleDiscard = async () => {
     if (modalSessionId) {
       await mediaStagingService.purgeSession(modalSessionId);
@@ -114,6 +122,7 @@ export function useShareIntent() {
     modalSessionId,
     handleCreateOrder,
     handleCreateProduct,
+    handleAppendToOrder,
     handleDiscard,
   };
 }

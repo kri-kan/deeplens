@@ -189,22 +189,11 @@ export const shareMedia = async (
  * This helper produces a real Blob that FormData accepts across all platforms.
  */
 export const uriToBlob = async (uri: string, mimeType?: string): Promise<Blob> => {
-  try {
-    const res = await fetch(uri);
-    const blob = await res.blob();
-    if (mimeType && (!blob.type || blob.type === 'application/octet-stream')) {
-      return new Blob([blob], { type: mimeType });
-    }
-    return blob;
-  } catch (err) {
-    console.warn('[uriToBlob] fetch(uri) failed, attempting File/FileSystem fallback:', err);
+  // On native platforms (or local file/content URIs), fetch(file://) in React Native
+  // returns an empty 14-byte fake response ("File not found") instead of the real file data.
+  // Use expo-file-system directly to read the true file bytes into a Blob.
+  if (Platform.OS !== 'web' || uri.startsWith('file://') || uri.startsWith('content://')) {
     try {
-      const { File } = await import('expo-file-system');
-      const file = new File(uri);
-      const buffer = await file.arrayBuffer();
-      return new Blob([buffer], { type: mimeType || 'image/jpeg' });
-    } catch (fallbackErr) {
-      console.warn('[uriToBlob] File.arrayBuffer fallback failed, trying legacy base64:', fallbackErr);
       const { readAsStringAsync, EncodingType } = await import('expo-file-system/legacy');
       const base64 = await readAsStringAsync(uri, { encoding: EncodingType.Base64 });
       const binaryString = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('binary');
@@ -214,7 +203,21 @@ export const uriToBlob = async (uri: string, mimeType?: string): Promise<Blob> =
         bytes[i] = binaryString.charCodeAt(i);
       }
       return new Blob([bytes], { type: mimeType || 'image/jpeg' });
+    } catch (fsErr) {
+      console.warn('[uriToBlob] expo-file-system read failed, falling back to fetch:', fsErr);
     }
+  }
+
+  try {
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    if (mimeType && (!blob.type || blob.type === 'application/octet-stream')) {
+      return new Blob([blob], { type: mimeType });
+    }
+    return blob;
+  } catch (err) {
+    console.error('[uriToBlob] All blob conversions failed:', err);
+    throw err;
   }
 };
 

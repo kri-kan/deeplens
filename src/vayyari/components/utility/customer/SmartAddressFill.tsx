@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { TextInput, Button, useTheme } from 'react-native-paper';
 
 export interface SmartAddressData {
+    name?: string;
     firstName?: string;
     lastName?: string;
     phone?: string;
@@ -22,15 +23,29 @@ export const SmartAddressFill: React.FC<SmartAddressFillProps> = ({ onFill, onCa
     const handleSmartFill = () => {
         if (!smartFillText) return;
         const text = smartFillText;
+        const nameMatch = text.match(/^name:\s*(.+)/im) || text.match(/customer_name:\s*(.+)/i);
         const firstNameMatch = text.match(/first_name:\s*(.+)/i);
         const lastNameMatch = text.match(/last_name:\s*(.+)/i);
         const phoneMatch = text.match(/phone_number:\s*(.+)/i) || text.match(/phone:\s*(.+)/i);
         const pinMatch = text.match(/pincode:\s*(.+)/i) || text.match(/pin:\s*(.+)/i);
         const addrMatch = text.match(/address:\s*([\s\S]+)/i);
 
+        let parsedName = nameMatch ? nameMatch[1].trim() : undefined;
+        let firstName = firstNameMatch ? firstNameMatch[1].trim() : undefined;
+        let lastName = lastNameMatch ? lastNameMatch[1].trim() : undefined;
+
+        if (parsedName && !firstName && !lastName) {
+            const parts = parsedName.split(' ');
+            firstName = parts[0] || '';
+            lastName = parts.slice(1).join(' ') || '';
+        } else if (!parsedName && (firstName || lastName)) {
+            parsedName = [firstName, lastName].filter(Boolean).join(' ');
+        }
+
         onFill({
-            firstName: firstNameMatch ? firstNameMatch[1].trim() : undefined,
-            lastName: lastNameMatch ? lastNameMatch[1].trim() : undefined,
+            name: parsedName,
+            firstName,
+            lastName,
             phone: phoneMatch ? phoneMatch[1].trim() : undefined,
             pincode: pinMatch ? pinMatch[1].trim() : undefined,
             address: addrMatch ? addrMatch[1].trim() : undefined,
@@ -43,7 +58,7 @@ export const SmartAddressFill: React.FC<SmartAddressFillProps> = ({ onFill, onCa
         <View style={{ gap: 8 }}>
             <TextInput
                 label="Paste Template Here"
-                placeholder={"first_name: Krishna\nlast_name: Kanth\nphone_number: 9876543210\npincode: 500090\naddress:"}
+                placeholder={"name: Krishna Kanth\nphone: 9876543210\npincode: 500090\naddress:"}
                 value={smartFillText}
                 onChangeText={setSmartFillText}
                 mode="outlined"

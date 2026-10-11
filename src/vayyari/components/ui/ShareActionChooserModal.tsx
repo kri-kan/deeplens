@@ -9,6 +9,7 @@ interface ShareActionChooserModalProps {
   sessionId?: string;
   onCreateOrder: () => void;
   onCreateProduct: () => void;
+  onAppendToOrder?: () => void;
   onDiscard: () => void;
 }
 
@@ -18,6 +19,7 @@ export const ShareActionChooserModal: React.FC<ShareActionChooserModalProps> = (
   sessionId,
   onCreateOrder,
   onCreateProduct,
+  onAppendToOrder,
   onDiscard,
 }) => {
   const theme = useTheme();
@@ -181,6 +183,58 @@ export const ShareActionChooserModal: React.FC<ShareActionChooserModalProps> = (
                 </View>
               </TouchableRipple>
             </Surface>
+
+            {/* Append to Order Tile (Single media only) */}
+            {onAppendToOrder && mediaItems.length === 1 && (
+              <Surface
+                style={[
+                  styles.actionTileSurface,
+                  {
+                    backgroundColor: (theme.colors as any).surfaceContainerLowest || theme.colors.elevation.level1,
+                    borderColor: (theme.colors as any).outlineVariant || 'rgba(0,0,0,0.1)',
+                  },
+                ]}
+                elevation={1}
+              >
+                <TouchableRipple
+                  onPress={onAppendToOrder}
+                  style={styles.actionTileRipple}
+                  rippleColor="rgba(0, 0, 0, 0.08)"
+                >
+                  <View style={styles.actionTileContent}>
+                    <View
+                      style={[
+                        styles.iconBadge,
+                        {
+                          backgroundColor: (theme.colors as any).tertiaryContainer || '#FFD8E4',
+                        },
+                      ]}
+                    >
+                      <Icon
+                        source="attachment"
+                        size={22}
+                        color={(theme.colors as any).onTertiaryContainer || theme.colors.tertiary}
+                      />
+                    </View>
+
+                    <View style={styles.tileTextContainer}>
+                      <Text variant="titleMedium" style={[styles.tileTitle, { color: theme.colors.onSurface }]}>
+                        Append to Order
+                      </Text>
+                      <Text variant="bodySmall" style={[styles.tileSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+                        Attach as an item or shipping label to an existing order
+                      </Text>
+                    </View>
+
+                    <Icon
+                      source="chevron-right"
+                      size={24}
+                      color={theme.colors.onSurfaceVariant}
+                    />
+                  </View>
+                </TouchableRipple>
+              </Surface>
+            )}
 
             {/* Discard & Cancel Button */}
             <Button
