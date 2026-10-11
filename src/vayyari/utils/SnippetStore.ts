@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { searchApiClient } from '@/api/client';
 
 const STORAGE_KEY = '@deeplens/copy_snippets';
 const RECENT_KEY = '@deeplens/recent_copies';
@@ -10,7 +11,9 @@ export interface Snippet {
   color: string;
   content: string;
   sortOrder: number;
+  isActive?: boolean;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface RecentCopy {
@@ -21,7 +24,7 @@ export interface RecentCopy {
   copiedAt: number;
 }
 
-/** Default snippets seeded on first launch */
+/** Fallback default snippets seeded if offline on first launch */
 const DEFAULT_SNIPPETS: Snippet[] = [
   {
     id: 'address',
@@ -75,12 +78,24 @@ const DEFAULT_SNIPPETS: Snippet[] = [
   },
 ];
 
-/** Read all snippets from AsyncStorage; seeds defaults if empty */
+/** Read all snippets: fetches from centralized API and caches to AsyncStorage with offline fallback */
 export async function getSnippets(): Promise<Snippet[]> {
+  try {
+    const response = await searchApiClient.get<Snippet[]>('/api/v1/snippets');
+    if (Array.isArray(response) && response.length > 0) {
+      const sorted = response.sort((a, b) => a.sortOrder - b.sortOrder);
+      await saveLocalSnippets(sorted);
+      return sorted;
+    }
+  } catch (apiErr) {
+    console.warn('[SnippetStore] Failed to fetch centralized snippets from API, falling back to local cache:', apiErr);
+  }
+
+  // Fallback to local AsyncStorage cache
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      await saveAllSnippets(DEFAULT_SNIPPETS);
+      await saveLocalSnippets(DEFAULT_SNIPPETS);
       return DEFAULT_SNIPPETS;
     }
     const parsed: Snippet[] = JSON.parse(raw);
@@ -90,36 +105,72 @@ export async function getSnippets(): Promise<Snippet[]> {
   }
 }
 
-/** Persist the full snippets array */
-async function saveAllSnippets(snippets: Snippet[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snippets));
-}
-
-/** Add or update a single snippet */
-export async function upsertSnippet(snippet: Snippet): Promise<void> {
-  const all = await getSnippets();
-  const idx = all.findIndex((s) => s.id === snippet.id);
-  if (idx >= 0) {
-    all[idx] = snippet;
-  } else {
-    snippet.sortOrder = all.length;
-    all.push(snippet);
+/** Persist snippets locally in AsyncStorage for offline access */
+async function saveLocalSnippets(snippets: Snippet[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snippets));
+  } catch (err) {
+    console.warn('[SnippetStore] Failed to save snippets to AsyncStorage:', err);
   }
-  await saveAllSnippets(all);
 }
 
-/** Delete a snippet by ID */
+/** Add or update a single snippet in database and update local cache */
+export async function upsertSnippet(snippet: Snippet): Promise<Snippet> {
+  let savedSnippet: Snippet = snippet;
+  try {
+    const res = await searchApiClient.post<Snippet>('/api/v1/snippets', {
+      id: snippet.id,
+      label: snippet.label,
+      emoji: snippet.emoji,
+      color: snippet.color,
+      content: snippet.content,
+      sortOrder: snippet.sortOrder,
+    });
+    if (res && res.id) {
+      savedSnippet = res;
+    }
+  } catch (apiErr) {
+    console.warn('[SnippetStore] Failed to upsert snippet to centralized API, falling back to local state:', apiErr);
+  }
+
+  // Update local cache
+  const all = await getLocalSnippets();
+  const idx = all.findIndex((s) => s.id === savedSnippet.id);
+  if (idx >= 0) {
+    all[idx] = savedSnippet;
+  } else {
+    savedSnippet.sortOrder = all.length;
+    all.push(savedSnippet);
+  }
+  await saveLocalSnippets(all);
+  return savedSnippet;
+}
+
+/** Delete a snippet by ID in database and update local cache */
 export async function deleteSnippet(id: string): Promise<void> {
-  const all = await getSnippets();
+  try {
+    await searchApiClient.delete(`/api/v1/snippets/${id}`);
+  } catch (apiErr) {
+    console.warn('[SnippetStore] Failed to delete snippet from centralized API:', apiErr);
+  }
+
+  // Update local cache
+  const all = await getLocalSnippets();
   const filtered = all.filter((s) => s.id !== id);
-  // Re-index sortOrder
   filtered.forEach((s, i) => (s.sortOrder = i));
-  await saveAllSnippets(filtered);
+  await saveLocalSnippets(filtered);
 }
 
-/** Reorder snippets (drag & drop / future use) */
+/** Reorder snippets according to the given array of IDs */
 export async function reorderSnippets(orderedIds: string[]): Promise<void> {
-  const all = await getSnippets();
+  try {
+    await searchApiClient.put('/api/v1/snippets/reorder', { orderedIds });
+  } catch (apiErr) {
+    console.warn('[SnippetStore] Failed to sync reordered snippets to centralized API:', apiErr);
+  }
+
+  // Update local cache
+  const all = await getLocalSnippets();
   const map = new Map(all.map((s) => [s.id, s]));
   const reordered = orderedIds
     .map((id, i) => {
@@ -128,16 +179,27 @@ export async function reorderSnippets(orderedIds: string[]): Promise<void> {
       return s;
     })
     .filter(Boolean) as Snippet[];
-  await saveAllSnippets(reordered);
+  await saveLocalSnippets(reordered);
+}
+
+/** Helper to read cached local snippets directly without API roundtrip */
+async function getLocalSnippets(): Promise<Snippet[]> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_SNIPPETS;
+    return JSON.parse(raw) as Snippet[];
+  } catch {
+    return DEFAULT_SNIPPETS;
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Recent Copies
+// Recent Copies (Kept local to device by design)
 // ---------------------------------------------------------------------------
 
 const MAX_RECENT = 10;
 
-/** Record a copy event in recents */
+/** Record a copy event in recents on this device */
 export async function recordCopy(snippet: Snippet): Promise<void> {
   const existing = await getRecentCopies();
   const entry: RecentCopy = {
@@ -147,13 +209,12 @@ export async function recordCopy(snippet: Snippet): Promise<void> {
     preview: snippet.content.slice(0, 80).replace(/\n/g, ' '),
     copiedAt: Date.now(),
   };
-  // Remove previous entry for same snippet to avoid duplicates, then prepend
   const filtered = existing.filter((r) => r.snippetId !== snippet.id);
   const updated = [entry, ...filtered].slice(0, MAX_RECENT);
   await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(updated));
 }
 
-/** Read recent copies list */
+/** Read recent copies list from this device */
 export async function getRecentCopies(): Promise<RecentCopy[]> {
   try {
     const raw = await AsyncStorage.getItem(RECENT_KEY);
