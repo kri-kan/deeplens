@@ -63,6 +63,7 @@ function InnerRootLayout() {
     modalSessionId,
     handleCreateOrder,
     handleCreateProduct,
+    handleAppendToOrder,
     handleDiscard,
   } = useShareIntent();
 
@@ -141,6 +142,7 @@ function InnerRootLayout() {
                 sessionId={modalSessionId}
                 onCreateOrder={handleCreateOrder}
                 onCreateProduct={handleCreateProduct}
+                onAppendToOrder={handleAppendToOrder}
                 onDiscard={handleDiscard}
               />
             </NavigationThemeProvider>

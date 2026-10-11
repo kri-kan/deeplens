@@ -94,6 +94,7 @@ class MainActivity : ReactActivity() {
           val targetAction = when {
             componentClass.endsWith("ShareOrderActivity") -> "order"
             componentClass.endsWith("ShareProductActivity") -> "product"
+            componentClass.endsWith("ShareAppendOrderActivity") -> "append"
             else -> "chooser"
           }
           val encodedUris = localUris.joinToString(",") { Uri.encode(it) }

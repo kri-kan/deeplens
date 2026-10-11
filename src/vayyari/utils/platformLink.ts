@@ -86,14 +86,11 @@ export async function openPlatformHandle(
         return true;
       }
 
-      // Native mobile: try native app scheme first, fallback to https://wa.me
-      const appUrl = `whatsapp://send?phone=${finalPhone}`;
-      const canOpen = await Linking.canOpenURL(appUrl).catch(() => false);
-      if (canOpen) {
-        await Linking.openURL(appUrl);
-      } else {
-        await Linking.openURL(`https://wa.me/${finalPhone}`);
-      }
+      // Universal Link (https://wa.me): Unlike the proprietary 'whatsapp://' scheme
+      // which Android binds exclusively to the primary package, universal https links
+      // trigger Android's Intent Chooser, allowing the operator to pick between Base and Cloned WhatsApp.
+      const universalUrl = `https://wa.me/${finalPhone}`;
+      await Linking.openURL(universalUrl);
       return true;
     }
 

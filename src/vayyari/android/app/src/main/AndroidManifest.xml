@@ -42,7 +42,7 @@
     <activity-alias
       android:name=".ShareOrderActivity"
       android:targetActivity=".MainActivity"
-      android:label="Vayyari: Create Order"
+      android:label="Create Order"
       android:icon="@mipmap/ic_launcher"
       android:exported="true">
       <intent-filter>
@@ -61,7 +61,7 @@
     <activity-alias
       android:name=".ShareProductActivity"
       android:targetActivity=".MainActivity"
-      android:label="Vayyari: Add Product"
+      android:label="Add Product"
       android:icon="@mipmap/ic_launcher"
       android:exported="true">
       <intent-filter>
@@ -72,6 +72,19 @@
       </intent-filter>
       <intent-filter>
         <action android:name="android.intent.action.SEND_MULTIPLE"/>
+        <data android:mimeType="image/*"/>
+        <data android:mimeType="video/*"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".ShareAppendOrderActivity"
+      android:targetActivity=".MainActivity"
+      android:label="Append to Order"
+      android:icon="@mipmap/ic_launcher"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND"/>
         <data android:mimeType="image/*"/>
         <data android:mimeType="video/*"/>
         <category android:name="android.intent.category.DEFAULT"/>

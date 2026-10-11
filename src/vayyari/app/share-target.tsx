@@ -44,6 +44,8 @@ export default function ShareTargetScreen() {
         router.replace('/utilities/order-create');
       } else if (action === 'product') {
         router.replace('/utilities/create-product');
+      } else if (action === 'append') {
+        router.replace('/utilities/append-to-order');
       } else {
         // Fallback to tabs where chooser modal will be handled or show
         router.replace('/(tabs)');

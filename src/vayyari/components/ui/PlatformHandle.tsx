@@ -36,13 +36,8 @@ export const PlatformHandle = ({
             if (isWhatsApp) {
                 const cleanPhone = handle.replace(/\D/g, '');
                 const finalPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-                const url = `whatsapp://send?phone=${finalPhone}`;
-                const supported = await Linking.canOpenURL(url);
-                if (supported) {
-                    await Linking.openURL(url);
-                } else {
-                    await Linking.openURL(`https://wa.me/${finalPhone}`);
-                }
+                const url = `https://wa.me/${finalPhone}`;
+                await Linking.openURL(url);
             } 
             else if (isInstagram) {
                 let username = handle;

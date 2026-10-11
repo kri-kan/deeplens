@@ -360,27 +360,15 @@ export function AddressSheet({ visible, initial, onSave, onClose }: AddressSheet
   };
 
   const parseAndApplyText = async (text: string) => {
-    const pinMatch = text.match(/\b(\d{6})\b/);
-    const phoneMatch = text.match(/(\+?91[\s-]?)?[6-9]\d{9}/);
-    const pin = pinMatch ? pinMatch[1] : form.pincode;
-    const phone = phoneMatch ? phoneMatch[0].replace(/\s+/g, '') : form.phone;
-
-    let cleanAddress = text;
-    if (pinMatch) cleanAddress = cleanAddress.replace(pinMatch[0], '');
-    if (phoneMatch) cleanAddress = cleanAddress.replace(phoneMatch[0], '');
-    cleanAddress = cleanAddress.replace(/[,|\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-    const updated: AddressData = {
-      ...form,
-      phone: phone || form.phone,
-      pincode: pin || form.pincode,
-      address: cleanAddress || form.address,
-    };
-    setForm(updated);
-    setFillState('smart-parsed');
-
-    if (pin && pin.length === 6) {
-      handlePincodeChange(pin);
+    try {
+      const extracted = await extractAddressFromText(text);
+      setForm(extracted);
+      setFillState('smart-parsed');
+      if (extracted.pincode && extracted.pincode.length === 6) {
+        setPinServiceable(extracted.isDelhiveryServiceable ?? null);
+      }
+    } catch {
+      setFillState('idle');
     }
   };
 

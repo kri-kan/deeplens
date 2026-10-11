@@ -45,3 +45,5 @@ export {
   type ForwardOrderLabelModalProps,
   type SubmittedForwardOrderAudit,
 } from './ForwardOrderLabelModal';
+
+export { AppendToOrderScreen } from './AppendToOrderScreen';

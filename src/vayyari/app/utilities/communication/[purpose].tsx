@@ -305,17 +305,11 @@ export default function PurposeDetailScreen() {
     const safeBody = body || '';
     await Clipboard.setStringAsync(safeBody);
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const url = `whatsapp://send?phone=${cleanPhone}&text=${encodeURIComponent(safeBody)}`;
-    const fallbackUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(safeBody)}`;
+    const universalUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(safeBody)}`;
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        await Linking.openURL(fallbackUrl);
-      }
+      await Linking.openURL(universalUrl);
     } catch {
-      await Linking.openURL(fallbackUrl);
+      Alert.alert('Error', 'Unable to open WhatsApp.');
     }
   };
 
