@@ -102,15 +102,23 @@ describe('Warehouse Alias Resolution Rules', () => {
 });
 
 describe('Clipboard Copy Behavior on Share Label Click', () => {
-  it('copies pure AWB string rather than multi-line verbose metadata', () => {
-    const stagedAwb = '148291038592';
-    const awbNumber = '148291038592';
-    const activeAwb = (stagedAwb || awbNumber || '').trim();
+  it('copies pure Order ID into clipboard so user can paste it into vendor chat when sharing label', () => {
+    const orderId = '00020';
+    const orderGrpId = '00020-G1';
+    const idToCopy = (orderId || orderGrpId || '').trim();
 
-    // Verify pure AWB is copied without extra lines
-    assert.strictEqual(activeAwb, '148291038592');
-    assert.doesNotMatch(activeAwb, /Delhivery Shipping Label/);
-    assert.doesNotMatch(activeAwb, /\n/);
+    // Verify pure Order ID is copied without extra lines or prefix
+    assert.strictEqual(idToCopy, '00020');
+    assert.doesNotMatch(idToCopy, /Delhivery Shipping Label/);
+    assert.doesNotMatch(idToCopy, /\n/);
+  });
+
+  it('falls back to Order Group ID if orderId is missing', () => {
+    const orderId = '';
+    const orderGrpId = '00020-G1';
+    const idToCopy = (orderId || orderGrpId || '').trim();
+
+    assert.strictEqual(idToCopy, '00020-G1');
   });
 
   it('formats copy AWB button label without brackets around AWB number', () => {
@@ -124,6 +132,40 @@ describe('Clipboard Copy Behavior on Share Label Click', () => {
     assert.doesNotMatch(formatCopyAwbLabel(false, '148291038592'), /\)/);
     assert.strictEqual(formatCopyAwbLabel(false, undefined), 'COPY AWB');
     assert.strictEqual(formatCopyAwbLabel(true, '148291038592'), 'AWB COPIED ✓');
+  });
+});
+
+describe('Address Sharing with Vendor Rules', () => {
+  it('appends order group id in a separate last line when sharing delivery address to vendor', () => {
+    const address = {
+      name: 'Sunita Roy',
+      address: 'Flat 402, Lotus Towers, Jubilee Hills, Hyderabad',
+      pincode: '500033',
+      phone: '9848022338',
+    };
+    const orderGrpId = '00020-G1';
+
+    const addressLines = [
+      `Delivery Address:`,
+      address.name || 'Customer',
+      address.address || '',
+      `PIN: ${address.pincode || ''}`,
+      `Phone: ${address.phone || ''}`,
+    ].filter(Boolean);
+
+    if (orderGrpId) {
+      addressLines.push(`Order Group ID: ${orderGrpId}`);
+    }
+
+    const clipText = addressLines.join('\n');
+    const lines = clipText.split('\n');
+
+    assert.strictEqual(lines[lines.length - 1], 'Order Group ID: 00020-G1');
+    assert.strictEqual(lines[0], 'Delivery Address:');
+    assert.strictEqual(lines[1], 'Sunita Roy');
+    assert.strictEqual(lines[2], 'Flat 402, Lotus Towers, Jubilee Hills, Hyderabad');
+    assert.strictEqual(lines[3], 'PIN: 500033');
+    assert.strictEqual(lines[4], 'Phone: 9848022338');
   });
 });
 

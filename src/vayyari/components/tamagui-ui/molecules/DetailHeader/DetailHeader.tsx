@@ -9,6 +9,7 @@ import { TimestampBadge, formatAdaptiveTimestamp } from '../../atoms/TimestampBa
 
 export interface DetailHeaderProps {
   orderId: string;
+  orderGrpId?: string;
   createdAt: string | Date;
   status?: string;
   statusCount?: number;
@@ -27,6 +28,7 @@ export const formatOrderDate = (d: string | Date) => formatAdaptiveTimestamp(d).
 
 export function DetailHeader({
   orderId,
+  orderGrpId,
   createdAt,
   status = '',
   statusCount = 0,
@@ -149,6 +151,20 @@ export function DetailHeader({
             <LuCopy size={13} color={tokens.textMuted} />
           )}
         </Pressable>
+        {orderGrpId && orderGrpId !== orderId && (
+          <YStack
+            backgroundColor={`${tokens.accent}14`}
+            borderWidth={1}
+            borderColor={`${tokens.accent}30`}
+            paddingHorizontal={6}
+            paddingVertical={2}
+            borderRadius={tokens.radius.xs}
+          >
+            <Text fontSize={11} fontWeight="800" color={tokens.accent}>
+              {orderGrpId}
+            </Text>
+          </YStack>
+        )}
         <TimestampBadge
           date={createdAt}
           compact={true}

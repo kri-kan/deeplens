@@ -167,11 +167,9 @@ export const shareMedia = async (
 
     const normalizedUri = result.uri.startsWith('file://') ? result.uri : `file://${result.uri}`;
 
-    const RNShare = require('react-native-share').default;
-    await RNShare.open({
-      urls: [normalizedUri],
-      failOnCancel: false,
-    });
+    // Use robust shareImageUri which handles ExpoSharing, FileProvider, RNShare, and Share.share fallbacks
+    const { shareImageUri } = require('./shareImage');
+    await shareImageUri(normalizedUri, 'Vayyari Product Media', filename);
   } catch (error: any) {
     const msg = String(error?.message ?? '');
     if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('dismiss')) {
