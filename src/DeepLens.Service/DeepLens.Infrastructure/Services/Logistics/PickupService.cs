@@ -36,14 +36,39 @@ public class PickupService : IPickupService
             : request.PickupTime;
 
         // Resolve registered Delhivery warehouse name.
-        // If pickupLocation was passed as an alias or internal code (e.g. 'hyd'), resolve the canonical registered name ('Hyd apartment').
         var effectiveLocation = request.PickupLocation?.Trim() ?? string.Empty;
         try
         {
             using var lookupConn = await _dbConnectionFactory.CreateConnectionAsync();
 
-            // 1. If AWB or OrderGrpId provided, check if shipment metadata has the exact pickup_location used during manifest
-            if (!string.IsNullOrWhiteSpace(request.AwbNumber) || !string.IsNullOrWhiteSpace(request.OrderGrpId))
+            // 1. If WarehouseId provided, lookup canonical name directly: SELECT name FROM warehouses WHERE id = @Id
+            if (request.WarehouseId.HasValue && request.WarehouseId.Value != Guid.Empty)
+            {
+                var directWhName = await lookupConn.QueryFirstOrDefaultAsync<string>(
+                    "SELECT name FROM public.warehouses WHERE id = @Id LIMIT 1",
+                    new { Id = request.WarehouseId.Value });
+
+                if (!string.IsNullOrWhiteSpace(directWhName))
+                {
+                    effectiveLocation = directWhName.Trim();
+                }
+            }
+
+            // 2. Check if request.PickupLocation matches an existing registered warehouse name directly
+            if (string.IsNullOrWhiteSpace(effectiveLocation) && !string.IsNullOrWhiteSpace(request.PickupLocation))
+            {
+                var directMatch = await lookupConn.QueryFirstOrDefaultAsync<string>(
+                    "SELECT name FROM public.warehouses WHERE LOWER(name) = LOWER(@Loc) LIMIT 1",
+                    new { Loc = request.PickupLocation.Trim() });
+
+                if (!string.IsNullOrWhiteSpace(directMatch))
+                {
+                    effectiveLocation = directMatch.Trim();
+                }
+            }
+
+            // 3. Fallback: If not resolved yet, check shipment metadata from previous manifest if AWB or OrderGrpId provided
+            if (string.IsNullOrWhiteSpace(effectiveLocation) && (!string.IsNullOrWhiteSpace(request.AwbNumber) || !string.IsNullOrWhiteSpace(request.OrderGrpId)))
             {
                 var manifestLocation = await lookupConn.QueryFirstOrDefaultAsync<string>(@"
                     SELECT COALESCE(metadata->>'pickupLocation', metadata->>'pickup_location')
@@ -60,7 +85,7 @@ public class PickupService : IPickupService
                 }
             }
 
-            // 2. If not resolved from shipment, lookup by alias, code, or name from warehouses table
+            // 4. Fallback: Lookup by alias or code from warehouses table
             if (string.IsNullOrWhiteSpace(effectiveLocation) || effectiveLocation.Length <= 10)
             {
                 var whName = await lookupConn.QueryFirstOrDefaultAsync<string>(@"
@@ -70,7 +95,7 @@ public class PickupService : IPickupService
                        OR LOWER(code) = LOWER(@Loc)
                        OR LOWER(name) = LOWER(@Loc)
                     LIMIT 1",
-                    new { Loc = effectiveLocation });
+                    new { Loc = !string.IsNullOrWhiteSpace(effectiveLocation) ? effectiveLocation : (request.WarehouseCode ?? request.PickupLocation) });
 
                 if (!string.IsNullOrWhiteSpace(whName))
                 {

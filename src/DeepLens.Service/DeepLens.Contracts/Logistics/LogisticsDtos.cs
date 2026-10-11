@@ -845,6 +845,12 @@ public class PincodeCheckResponse
 
 public class PickupRequestDto
 {
+    [JsonPropertyName("warehouseId")]
+    public Guid? WarehouseId { get; set; }
+
+    [JsonPropertyName("warehouseCode")]
+    public string? WarehouseCode { get; set; }
+
     [JsonPropertyName("pickupLocation")]
     public string PickupLocation { get; set; } = string.Empty;
 

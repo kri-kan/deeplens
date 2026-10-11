@@ -547,7 +547,9 @@ export function ForwardOrderLabelModal({
         totalAmount: parsedTotal,
         paymentMode: paymentMode === 'COD' ? 'COD' : 'Pre-paid',
         codAmount: paymentMode === 'COD' ? (parseFloat(codAmount) || 0) : 0,
-        pickupLocation: selectedWarehouse.code || selectedWarehouse.name,
+        pickupLocation: selectedWarehouse.name,
+        warehouseId: selectedWarehouse.id,
+        warehouseCode: selectedWarehouse.code,
         shippingMode,
         weightGrams: parsedWeight,
         lengthCm: parseFloat(lengthCm) || 40.0,
@@ -2474,6 +2476,8 @@ export function ForwardOrderLabelModal({
             }
           }}
           pickupLocation={selectedWarehouse?.name || 'HYDERABAD'}
+          warehouseId={selectedWarehouse?.id}
+          warehouseCode={selectedWarehouse?.code}
           expectedPackageCount={1}
           orderGrpId={orderGrpId}
           awbNumber={generatedAwb || initialAwb}

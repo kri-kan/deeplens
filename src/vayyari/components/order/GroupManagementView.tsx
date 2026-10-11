@@ -2782,7 +2782,8 @@ export function GroupManagementView({
             });
           }
         }}
-        pickupLocation={pickupFacilityName || auditData?.pickupFacility?.name || warehouseAlias || vendorName || 'HYDERABAD'}
+        pickupLocation={auditData?.pickupFacility?.name || pickupFacilityName || warehouseAlias || vendorName || 'HYDERABAD'}
+        warehouseId={(auditData?.pickupFacility as any)?.id}
         expectedPackageCount={1}
         orderGrpId={orderGrpId}
         awbNumber={stagedAwb || awbNumber}
