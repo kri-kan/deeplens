@@ -25,7 +25,7 @@ export default function CreateProductUtility() {
   }), [params]);
 
   return (
-    <ScreenWrapper title="Create Product">
+    <ScreenWrapper title="Create Product" withScrollView={false}>
       <View style={styles.container}>
         <ProductCreationForm
           initialData={initialData as any}

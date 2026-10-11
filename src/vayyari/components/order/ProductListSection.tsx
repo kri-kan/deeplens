@@ -8,12 +8,12 @@ import {
   LuChevronRight,
   LuChevronDown,
   LuX,
-  LuBuilding2,
   LuEye,
   LuShare2,
   LuHelpCircle,
   LuCheck,
   LuLock,
+  LuBuilding2,
 } from '@/components/tamagui-ui/icons/lu';
 import { useTheme } from '@/theme';
 import { CustomCheckbox } from '@/components/tamagui-ui/atoms/CustomCheckbox';
@@ -263,6 +263,9 @@ export function ProductListSection({
               return acc + Math.max(0, grossLineTotal - paidAmount);
             }, 0);
 
+            const labelInfo = groupLabelInfo?.[group.key];
+            const orderGrpId = labelInfo?.orderGrpId || (orderId ? `${orderId}-${group.key}` : undefined);
+
             return (
               <YStack
                 key={group.key}
@@ -273,10 +276,10 @@ export function ProductListSection({
                 overflow="hidden"
                 gap={0}
               >
-                {/* ── Group Header: Vendor Info, Subtitle, Status Badge & Full-Bleed Blue Chevron Action Button ── */}
+                {/* ── Group Header: Vendor Info (Order Group ID & Name), Subtitle, Status Badge & Full-Bleed Blue Chevron Action Button ── */}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Manage package for ${group.isUnassigned ? 'No Vendor' : group.vendorName}, currently ${currentStage}`}
+                  accessibilityLabel={`Manage package for ${orderGrpId ? `${orderGrpId} ` : ''}${group.isUnassigned ? 'No Vendor' : group.vendorName}, currently ${currentStage}`}
                   onPress={() => {
                     if (onManageGroup) {
                       onManageGroup(group.key);
@@ -292,7 +295,7 @@ export function ProductListSection({
                     borderBottomColor: tokens.border,
                   })}
                 >
-                  {/* Left & Center: Vendor Icon + Name + Subtitle + Status Badge */}
+                  {/* Left & Center: Vendor Info (Order Group ID & Name) + Subtitle + Status Badge (No icon next to vendor name) */}
                   <XStack
                     flex={1}
                     paddingLeft={12}
@@ -302,22 +305,14 @@ export function ProductListSection({
                     justifyContent="space-between"
                     gap={8}
                   >
-                    {/* Vendor Icon + Name + Subtitle (n items : ₹xxxx) */}
+                    {/* Vendor Name + Subtitle (n items : ₹xxxx) */}
                     <XStack alignItems="center" gap={8} flex={1}>
-                      <XStack
-                        width={28}
-                        height={28}
-                        borderRadius={tokens.radius.full}
-                        backgroundColor={group.isUnassigned ? `${tokens.textMuted}14` : `${tokens.accent}18`}
-                        alignItems="center"
-                        justifyContent="center"
-                      >
-                        <LuBuilding2 size={15} color={group.isUnassigned ? tokens.textMuted : tokens.accent} />
-                      </XStack>
                       <YStack gap={2} flex={1}>
                         <XStack alignItems="center" gap={6} flexWrap="wrap">
                           <Text fontSize={13} fontWeight="800" color={tokens.text} numberOfLines={1}>
-                            {group.isUnassigned ? 'No Vendor' : group.vendorName}
+                            {orderGrpId
+                              ? `${orderGrpId} • ${group.isUnassigned ? 'No Vendor' : group.vendorName}`
+                              : (group.isUnassigned ? 'No Vendor' : group.vendorName)}
                           </Text>
                           <StatusBadge
                             label={currentStage.toUpperCase()}
@@ -603,10 +598,9 @@ export function ProductListSection({
                     </Pressable>
                   </XStack>
 
-                  {/* Line 3: Vendor Name placed below SKU ID */}
+                  {/* Line 3: Vendor Name placed below SKU ID (No icon maintained for vendors) */}
                   {item.vendor ? (
                     <XStack alignItems="center" gap={4} paddingTop={1}>
-                      <LuBuilding2 size={11} color={tokens.textMuted} />
                       <Text fontSize={11} color={tokens.textMuted} numberOfLines={1}>
                         {item.vendor}
                       </Text>

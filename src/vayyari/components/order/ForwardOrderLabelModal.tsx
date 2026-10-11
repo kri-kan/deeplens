@@ -710,10 +710,9 @@ export function ForwardOrderLabelModal({
       return;
     }
 
-    if (activeAwb) {
-      await Clipboard.setStringAsync(activeAwb);
-      setCopiedAwb(true);
-      setTimeout(() => setCopiedAwb(false), 2000);
+    const idToCopy = (orderGrpId || '').trim();
+    if (idToCopy) {
+      await Clipboard.setStringAsync(idToCopy);
     }
 
     const whAlias =
